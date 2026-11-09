@@ -153,6 +153,7 @@
 / @private
 .qetl.io.write_hdb:{[root;partition_col;target;batch]
     if[0=count batch; :0];
+    .qetl.io.restore_retired[root;target];
     data:.qetl.io.hdb_rows[root;partition_col;target;batch];
     days:.qetl.io.days_of[root;data`time];
     / Every date's types are checked before any is touched, and before .Q.en
@@ -271,6 +272,7 @@
 / @private
 .qetl.io.write_hdb_keyed:{[root;partition_col;target;batch;opts]
     strategy:.qetl.io.require_strategy opts`on_conflict;
+    .qetl.io.restore_retired[root;target];
     if[`append=strategy; :.qetl.io.write_hdb[root;partition_col;target;batch]];
     / Shaped even when empty: a `replace of a day the source has emptied
     / still needs the target's columns to resolve against.
@@ -382,7 +384,8 @@
 / directory, and the call that exchanges two (renameat2) is Linux-only. So a
 / reader can, for an instant, find the table absent from that date - never
 / half-written - and a kill between the two renames leaves the old copy in
-/ `old`, which the next recover restores.
+/ `old`, which the next recover restores, or the next write, flush, finish
+/ or retire of that table, whichever comes first (restore_retired, #2496).
 
 / Private: the staging area for `root`, as a path string.
 / @param root the HDB root, a file symbol
@@ -442,6 +445,12 @@
 .qetl.io.swap:{[root;d;t]
     live:.qetl.io.part_path[root;d;t];
     old:.qetl.io.staged[root;`old;d;t];
+    / A retired copy whose live table is missing is the only copy of the
+    / partition (#2496): a writer killed between the renames left it.
+    / Refused, never deleted - restore_retired puts it back first.
+    if[(()~key hsym `$live) and not ()~key hsym `$old;
+        '"hdb: ",string[t]," on ",string[d]," is only in ",old," - a killed write left it there; ",
+         "refusing to delete it (run recover)"];
     .qetl.io.sh["rm -rf";old];
     .qetl.io.sh["mkdir -p";(.qetl.io.staging[root]),"/old/",string d];
     / The date directory, whatever its segment: the live path less its table.
@@ -470,6 +479,7 @@
 / @return 1b when a table was removed, 0b when there was none
 / @eg .qetl.io.retire[`:/tmp/qio_eg_hdb;2026.01.02;`iodeals]
 .qetl.io.retire:{[root;d;t]
+    .qetl.io.restore_retired[root;t];
     live:.qetl.io.part_path[root;d;t];
     if[()~key hsym `$live; :0b];
     old:.qetl.io.staged[root;`old;d;t];
@@ -517,6 +527,24 @@
     / general empty list, `sum` leaves it `()`, and recover's `restored>0`
     / threw 'type - every recover of a table with no old staging failed.
     sum "j"$restored}
+
+/ Private: sweep_staging for one table at the start of a write, flush, finish
+/ or retire, not only at a run's start (#2496).
+/ .
+/ Every writer holds the root's lock for the whole call, so anything in staging
+/ for this table now was left by a writer that died. A kill between a swap's
+/ two renames leaves the date without the table and every row of it in `old`.
+/ A sibling worker already mid-run, whose own recover ran before the kill, read
+/ that date as empty, staged only its window, and its swap deleted the `old`
+/ copy: the rest of the partition was gone for good.
+/ @return how many tables were restored
+/ @private
+.qetl.io.restore_retired:{[root;target]
+    restored:.qetl.io.sweep_staging[root;target];
+    if[restored>0;
+        @[{.qetl.log.ch.warn[`storage;"restored a partition a killed write left in staging";x]};
+          `table`restored!(target;restored);{[e] (::)}]];
+    restored}
 
 / Private: set aside a table whose .d lists a column that has no file (#2185).
 / .
@@ -648,6 +676,7 @@
 .qetl.io.finish_parts:{[root;todo]
     / Nothing to finish: and PeachQ throws 'nyi on each-both over empty lists.
     if[0=count todo; :0];
+    .qetl.io.restore_retired[root;] each distinct todo`tbl;
     {[root;d;t]
         / Gone since it was queued (quarantined by recover, or retired): nothing to finish.
         if[()~key hsym `$.qetl.io.part_path[root;d;t],"/.d"; :(::)];

@@ -20,7 +20,8 @@ from uqs.paths import CATALOG_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
 from uqs.scaffold import write
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE
 from uqs.scaffold.external import external_feed, external_files
-from uqs.scaffold.profile import PROFILES_FILE
+from uqs.scaffold.plan import WriteMode
+from uqs.scaffold.profile import PROFILES_FILE, UNPROFILED_FILE
 from uqs.scaffold.remove import plan_removal
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
@@ -61,8 +62,35 @@ def test_the_generated_python_compiles_and_never_sends_time():
     streamer = _body(plan, "ws_streamer.py")
     compile(streamer, "ws_streamer.py", "exec")
     compile(_body(plan, "ws_feed.py"), "ws_feed.py", "exec")
-    assert "FIELDS = ['sym', 'px']" in streamer, ".u.upd stamps time; the publisher must not"
+    assert 'FIELDS = ["sym", "px"]' in streamer, ".u.upd stamps time; the publisher must not"
     assert "SCAFFOLDED" in streamer and "NotImplementedError" in streamer
+
+
+@pytest.mark.parametrize("name", ["ws", "kfeed"])
+def test_the_generated_python_passes_the_repos_ruff(name):
+    """#2504: an untouched scaffold is committable - the pinned ruff the
+    pre-commit hooks run (lint, isort, format) accepts every Python file it
+    writes, read with this repository's own configuration."""
+    plan = external_feed(
+        name,
+        f"{name}_raw",
+        f"{name}_out",
+        "sym:symbol, px:float",
+        known_tables={"quote"},
+        unprofiled="a test feed",
+    )
+    created = [a for a in plan.actions if a.path.suffix == ".py" and a.mode is WriteMode.CREATE]
+    assert len(created) == 3
+    for action in created:
+        for check in (["check", "--no-fix"], ["format", "--check"]):
+            result = subprocess.run(
+                [sys.executable, "-m", "ruff", *check, "--stdin-filename", str(action.path), "-"],
+                input=action.body,
+                text=True,
+                capture_output=True,
+                cwd=UQF_ROOT,
+            )
+            assert result.returncode == 0, f"ruff {check[0]} {action.path}:\n{result.stdout}"
 
 
 def test_the_generated_publisher_sends_a_list_of_columns_in_field_order(monkeypatch):
@@ -139,6 +167,7 @@ def tree(tmp_path: Path) -> Path:
     for rel in (
         STACK_TABLES_TEST,
         PROFILES_FILE,
+        UNPROFILED_FILE,
         STACK_PAGE,
         SHOWCASE_PAGE,
     ):

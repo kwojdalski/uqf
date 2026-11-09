@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import functools
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -389,8 +390,9 @@ def kdbx(request, qcmd):
 @pytest.fixture
 def plant_tree():
     """Write a stand-in tree's src/etl/plant_tables.q that q can load - this
-    tree's plant runtime (the API before its first table) plus `tables`, each
-    `name:([]...)` line qualified under .qetl.plant - and have q evaluate it
+    tree's plant runtime (src/etl/plant_registry.q, copied beside it, and the
+    header before the first table) plus `tables`, each `name:([]...)` line
+    qualified under .qetl.plant - and have q evaluate it
     into the tree's schema metadata (#1781). Every reader of a tree's plant
     reads that metadata, never the text, so a stand-in needs it too. Skips
     the test when there is no q interpreter."""
@@ -398,7 +400,7 @@ def plant_tree():
 
     from uqs.interpreter import q_interpreter
     from uqs.model import plant_metadata_gen
-    from uqs.paths import TABLES_FILE, repo_root
+    from uqs.paths import PLANT_REGISTRY_FILE, TABLES_FILE, repo_root
 
     if q_interpreter() is None:
         pytest.skip("no q interpreter - a stand-in plant tree is evaluated by q")
@@ -414,6 +416,7 @@ def plant_tree():
         ]
         (root / TABLES_FILE).parent.mkdir(parents=True, exist_ok=True)
         (root / TABLES_FILE).write_text(runtime + "".join(lines))
+        shutil.copy2(repo_root() / PLANT_REGISTRY_FILE, root / PLANT_REGISTRY_FILE)
         plant_metadata_gen.write(root)
         return root
 

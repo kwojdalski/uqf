@@ -32,13 +32,13 @@ from uqs.scaffold.columns import (
     definition_columns,
     nested_declaration,
     parse_columns,
-    parse_raw_columns,
     plant_declarations,
     resolve_shape,
     sorting_declaration,
     table_columns,
     table_definition,
 )
+from uqs.scaffold.raw_columns import parse_raw_columns
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 VENDORED = UQF_ROOT / "lib" / "torq-finance-starter-pack" / "database.q"

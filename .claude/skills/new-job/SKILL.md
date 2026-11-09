@@ -75,7 +75,7 @@ uqs job new fill_marks --kind horizon --subscribe-to executions,market_data \
 
 # reaction: recompute each time a bounded worker publishes a window of a dataset.
 # No process of its own - it runs in the worker's. --outputs puts it in the job graph
-uqs job new rebuild_positions --triggered-by demo_deals --outputs positions --dry-run
+uqs job new deal_volume --triggered-by demo_deals --outputs deal_volume --dry-run
 ```
 
 A reaction's DATASET must be one a bounded worker fills: only a worker's window
@@ -121,12 +121,15 @@ that off unless the user asks: a new process in the default start counts against
 the licence's connection budget, and the profile tests pin the default set.
 
 After writing, `uqs job new` regenerates the derived files and, where q is
-installed, re-exports the contract surface. Without q it says so, and the
-`contract-surface` hook fails until `derive.py contract-surface` is run.
+installed, `q_facts.py`, `tableproperties.csv` and the contract surface. Without
+q it names the `derive.py q-facts`, `table-properties` and `contract-surface`
+runs to do, and their hooks fail until they are run.
 
 **Always `--dry-run` first** and show the user what it would write. It appends
 to `plant_tables.q` and the table list in `test_stack_tables.q`, which are files
-they may have opinions about.
+they may have opinions about. `plant_tables.q` holds only the declarations; the
+`.qetl.plant` API they call is `plant_registry.q`, which a scaffold never edits
+(#2503).
 
 `kind` is derived for a streaming job --- no `--subscribe-to` means a feed ---
 so do not ask for it. `--outputs` takes a comma list. A table the plant already
@@ -163,18 +166,21 @@ So after scaffolding, the tree is in a known state:
   tests/qrun/test_worked_examples.py runs it.
 - A new streaming job or normalizer is in **no profile** unless you said which:
   `--profile NAME` adds it to one in `python/uqs/src/uqs/model/profiles.py`, and
-  `--unprofiled "REASON"` exempts it in `UNPROFILED`. Ask the user which - it is
-  a judgement about what runs together. Without either, `test_profiles.py` fails
+  `--unprofiled "REASON"` exempts it in `UNPROFILED`
+  (`python/uqs/src/uqs/model/unprofiled.py`). Ask the user which - it is a
+  judgement about what runs together. Without either, `test_profiles.py` fails
   until one is written. Bounded workers are exempt - a backfill is triggered,
   not started with the stack.
 - For a job that defines a NEW table, the scaffold appends a SCAFFOLDED
-  `.qcat.describe` line to `scripts/processes/uqs_catalog.q`. The description is
-  for someone choosing a table, so it is yours to write. If the desk should not
-  see the table, delete that line and add the table to `.qcat.hidden` with the
-  reason - `tests/q/test_catalog.q` refuses a published table that is in neither
-  list. Only the prose is scaffolded: columns and types come from `meta` on a
-  running process, so a column type the front end cannot coerce no longer blocks
-  the entry.
+  `.qcat.describe` line and a SCAFFOLDED `.qcat.unbounded` reason to
+  `scripts/processes/uqs_catalog.q`. The description is for someone choosing a
+  table, so it is yours to write; the reason says why a whole select is safe, or
+  gives way to a `querypolicy.csv` row. If the desk should not see the table,
+  delete both and add the table to `.qcat.hidden` with the reason -
+  `tests/q/test_catalog.q` refuses a published table that is in neither list.
+  Only the prose is scaffolded: columns and types come from `meta` on a running
+  process, so a column type the front end cannot coerce no longer blocks the
+  entry.
 - A streaming job that subscribes AND publishes gets a `contract_driver` in its
   scaffolded test file, which throws until written: the batch
   `tests/q/test_job_output_contracts.q` pushes through the job to hold every

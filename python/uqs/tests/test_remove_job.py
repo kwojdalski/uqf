@@ -23,7 +23,7 @@ from uqs.scaffold.columns import definition_columns, parse_columns, table_defini
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE
 from uqs.scaffold.horizon import horizon_job
 from uqs.scaffold.normalizer import normalizer
-from uqs.scaffold.profile import PROFILES_FILE
+from uqs.scaffold.profile import PROFILES_FILE, UNPROFILED_FILE
 from uqs.scaffold.reaction import reaction
 from uqs.scaffold.remove import plan_removal
 
@@ -34,6 +34,7 @@ _TRACKED = (
     CATALOG_FILE,
     STACK_TABLES_TEST,
     PROFILES_FILE,
+    UNPROFILED_FILE,
     STACK_PAGE,
     SHOWCASE_PAGE,
 )
@@ -42,10 +43,10 @@ _TRACKED = (
 @pytest.fixture
 def tree(tmp_path: Path) -> Path:
     """A copy of what scaffolding and removal touch: src/, the plant's q files,
-    the test list, profiles.py and the two doc pages a process is named on."""
+    the test list, profiles.py, unprofiled.py and the two doc pages a process is named on."""
     shutil.copytree(UQF_ROOT / "src", tmp_path / "src")
     shutil.copytree(UQF_ROOT / "scripts" / "processes", tmp_path / "scripts" / "processes")
-    for rel in (STACK_TABLES_TEST, PROFILES_FILE, STACK_PAGE, SHOWCASE_PAGE):
+    for rel in (STACK_TABLES_TEST, PROFILES_FILE, UNPROFILED_FILE, STACK_PAGE, SHOWCASE_PAGE):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(UQF_ROOT / rel, tmp_path / rel)
     return tmp_path
@@ -415,7 +416,7 @@ def test_a_feed_with_a_list_column_round_trips_with_its_nested_declaration(tree)
 
 
 def _literal(text: str, name: str):
-    """The dict literal `name` is assigned in profiles.py's source."""
+    """The dict literal `name` is assigned in a profiles module's source."""
     import ast
 
     for node in ast.parse(text).body:
@@ -425,7 +426,7 @@ def _literal(text: str, name: str):
             and node.value is not None
         ):
             return ast.literal_eval(node.value)
-    raise AssertionError(f"no {name} in profiles.py")
+    raise AssertionError(f"no {name} in that source")
 
 
 @pytest.mark.parametrize("proc", ["default", "crypto"])
@@ -439,14 +440,15 @@ def test_removing_a_process_named_like_a_profile_keeps_that_profile(proc):
     joined = profile._with_member(before, "arbitrage", proc)
     after = _drop_from_profiles(joined, proc)
     assert _literal(after, "PROFILES") == _literal(before, "PROFILES")
-    assert _literal(after, "UNPROFILED") == _literal(before, "UNPROFILED")
+    exempt = UNPROFILED_FILE.read_text()
+    assert _drop_from_profiles(exempt, proc) == exempt
 
 
 def test_removing_an_exempt_process_named_like_a_profile_drops_only_its_exemption():
     from uqs.scaffold import profile
     from uqs.scaffold.remove import _drop_from_profiles
 
-    before = PROFILES_FILE.read_text()
+    before = UNPROFILED_FILE.read_text()
     exempt = profile._with_unprofiled(
         before, profile._unprofiled_entry("default", "a demo, started by hand")
     )

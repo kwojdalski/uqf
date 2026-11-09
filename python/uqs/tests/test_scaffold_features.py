@@ -25,6 +25,7 @@ from uqs.scaffold.normalizer import normalizer
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 PROFILES_TEXT = (UQF_ROOT / profile.PROFILES_FILE).read_text()
+UNPROFILED_TEXT = (UQF_ROOT / profile.UNPROFILED_FILE).read_text()
 KNOWN = ("default", "fx", "crypto", "essential")
 
 runner = PlainRunner()  # CI renders usage errors in colour
@@ -174,12 +175,39 @@ def test_a_second_worker_needs_another_partition(tmp_path):
 # ------------------------------------------------------------------ profiles
 
 
-def _applied(actions) -> str:
-    text = PROFILES_TEXT
+def _edited(actions) -> dict:
+    """Each file the actions edit, as they leave it, each still compiling."""
+    texts = {profile.PROFILES_FILE: PROFILES_TEXT, profile.UNPROFILED_FILE: UNPROFILED_TEXT}
     for action in actions:
-        text = profile.apply(text, action)
-    compile(text, str(profile.PROFILES_FILE), "exec")
-    return text
+        texts[action.path] = profile.apply(texts[action.path], action)
+    for path, text in texts.items():
+        compile(text, str(path), "exec")
+    return texts
+
+
+def _applied(actions) -> str:
+    return "".join(_edited(actions).values())
+
+
+def test_neither_answer_takes_a_module_past_its_line_budget():
+    """profiles.py sat at the package's 400-line budget, so writing the three
+    lines of an exemption into it failed test_no_module_is_still_oversized on
+    the first `--unprofiled` scaffold; a member edits its profile's one line
+    (#2462)."""
+    for kwargs in ({"unprofiled": "a diagnostic started by hand"}, {"profile": "fx"}):
+        kwargs = {"profile": None, "unprofiled": None, **kwargs}
+        actions, _ = profile.membership(
+            "tapx1", start_with_all=False, known_profiles=KNOWN, **kwargs
+        )
+        assert actions
+        for path, text in _edited(actions).items():
+            assert len(text.splitlines()) <= 400, (path, kwargs)
+    actions, _ = profile.membership(
+        "tapx1", profile="fx", unprofiled=None, start_with_all=False, known_profiles=KNOWN
+    )
+    assert len(_edited(actions)[profile.PROFILES_FILE].splitlines()) == len(
+        PROFILES_TEXT.splitlines()
+    )
 
 
 def test_a_profile_takes_the_process_and_the_module_still_compiles():
@@ -228,14 +256,14 @@ def test_an_exemption_is_written_with_its_reason():
     ],
 )
 def test_an_exemption_reads_back_as_the_reason_given(reason):
-    """--unprofiled REASON -> profiles.py -> UNPROFILED: the reason the module
+    """--unprofiled REASON -> unprofiled.py -> UNPROFILED: the reason the module
     holds is the one given, not an escaped near-copy of it."""
     import ast
 
     actions, _ = profile.membership(
         "tapx1", profile=None, unprofiled=reason, start_with_all=False, known_profiles=KNOWN
     )
-    tree = ast.parse(_applied(actions))
+    tree = ast.parse(_edited(actions)[profile.UNPROFILED_FILE])
     (unprofiled,) = [
         node.value
         for node in tree.body
@@ -557,11 +585,12 @@ def test_a_transform_registered_under_transforms_is_loaded_before_workers():
 def test_a_twin_reuses_an_existing_source_without_columns_it_never_passed():
     """#1582: a twin's columns come from its job's table, not from --schema.
     When its source and table both exist already, nothing is shaped by them,
-    so they are not a reason to refuse the plan."""
+    so they are not a reason to refuse the plan. A derive: hdb_executions'
+    fixture is not executions' shape, so a passthrough is refused (#2501)."""
     plan = create_backfill.backfill_plan(
         UQF_ROOT, "exec_refill", None, None,
         width=None, source="hdb_executions", procname=None, transport=None, partition=None,
-        check=False, transform=None, start_with_all=False, twin_of="executions",
+        check=False, transform="derive", start_with_all=False, twin_of="executions",
         definitions=_plant(),
     )  # fmt: skip
     written = [str(a.path) for a in plan.actions]
@@ -605,3 +634,30 @@ def test_a_passthrough_from_a_new_source_of_the_targets_shape_is_planned():
 def test_a_derivation_between_two_shapes_is_still_planned():
     plan = _backfill_into_audit_t("sym:symbol, qty:long", "derive")
     assert plan.name == "audit_bf_backfill"
+
+
+def _second_worker(name: str, source: str, dataset: str, shape: str | None, transform=None):
+    return create_backfill.backfill_plan(
+        UQF_ROOT, name, dataset, shape,
+        width=None, source=source, procname=None, transport=None, partition="EURUSD",
+        check=False, transform=transform, start_with_all=False, definitions=_plant(),
+    )  # fmt: skip
+
+
+def test_a_passthrough_from_a_reused_source_into_another_shape_is_refused():
+    """#2501: over an existing source the shape check was skipped, and the
+    passthrough declared demo_deals' plant shape - `time` and all - against a
+    fixture with none, so the whole tree stopped loading."""
+    with pytest.raises(UqsError, match=r"source demo_deals's columns .*--transform derive"):
+        _second_worker("deals_eu", "demo_deals", "demo_deals", None)
+
+
+def test_a_passthrough_from_a_reused_source_of_the_targets_shape_is_planned():
+    shape = "sym:symbol, action:symbol, side:long, size:float, price:float, order_id:long, pip_factor:long"  # noqa: E501
+    plan = _second_worker("tape_copy", "demo_events", "tape_copy", shape)
+    assert plan.name == "tape_copy_backfill"
+
+
+def test_a_derivation_from_a_reused_source_is_still_planned():
+    plan = _second_worker("deals_eu", "demo_deals", "demo_deals", None, "derive")
+    assert plan.name == "deals_eu_backfill"

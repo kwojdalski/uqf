@@ -15,6 +15,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import polars as pl
+
+from uqf_frontend.routes.common import _wire
+
 #: Pending and running queries on the gateway, with the status it derives
 #: from a null submittime. Read on the gateway itself.
 QUEUE = ".gw.getqueue[]"
@@ -168,7 +172,7 @@ def merge_usage(results: list[Any]) -> tuple[list[dict[str, Any]], list[dict[str
         if not result.ok:
             unreachable.append({"process": result.process, "error": result.error or "unknown"})
             continue
-        for row in _as_rows(result.value):
+        for row in _wired_rows(result.value):
             rows.append({"source_process": result.process, **row})
 
     rows.sort(key=lambda r: r.get("time") or "", reverse=True)
@@ -195,13 +199,23 @@ def merge_process_clients(
         if not result.ok:
             unreachable.append({"process": result.process, "error": result.error or "unknown"})
             continue
-        for row in _as_rows(result.value):
+        for row in _wired_rows(result.value):
             rows.append({"source_process": result.process, **row})
 
     # Busiest first: a client that has sent nothing is the least interesting
     # row, and a recorder that has stopped sending is the most.
     rows.sort(key=lambda r: r.get("lastp") or "", reverse=True)
     return rows, unreachable
+
+
+def _wired_rows(value: Any) -> list[dict[str, Any]]:
+    """One process's rows as a route sends them. A q table is put through
+    `_wire`, as every other route's rows are: a timestamp as UTC text to the
+    nanosecond, which is also what the merge sorts on (fixed width, so text
+    order is time order), and an infinity as "inf" rather than null (#2470)."""
+    if isinstance(value, pl.DataFrame):
+        return _wire(value)
+    return _as_rows(value)
 
 
 def _as_rows(value: Any) -> list[dict[str, Any]]:

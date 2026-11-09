@@ -63,8 +63,9 @@
 / READINESS IS PER SOURCE, AND BOUNDED (#1523, #1524). With retain_by, `hi` alone
 / (the best of the sources) would call an event ready once ONE source passed the
 / horizon, scoring it without a slower source's book that is still in flight.
-/ So every series with a book within max_age of the horizon must have advanced
-/ to it; the lookback reach is waived likewise. Both wait only until
+/ So every series held must have advanced to it - however far behind it runs, as
+/ its books stamped inside max_age of the horizon may still be in flight (#2455);
+/ the lookback reach is waived likewise. Both wait only until
 / event_time + horizon + lateness on the plant clock, after which a book
 / stamped earlier cannot still arrive: a source that never delivers, or books
 / that start inside the lookback, then leave the affected horizons unavailable

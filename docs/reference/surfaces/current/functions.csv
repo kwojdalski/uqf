@@ -1104,6 +1104,7 @@ qetl.verify,snapshot,function,1,dataset
 qetl.verify,statuses,value,,
 qetl.verify,type_name,function,1,c
 qetl.verify,type_names,dict,,
+qetl.verify,typed_scope,function,2,m scope
 qetl.webhook,address,function,1,u
 qetl.webhook,auth_header,function,1,cred
 qetl.webhook,check,function,1,raw
@@ -1530,6 +1531,7 @@ qpipe.job.demo_deals_feed,handle,value,,
 qpipe.job.demo_deals_feed,next_cursor,function,1,page
 qpipe.job.demo_deals_feed,normalize,function,1,page
 qpipe.job.demo_deals_feed,publish,value,,
+qpipe.job.demo_deals_feed,start_cursor,function,1,instant
 qpipe.job.demo_events_backfill,checkpoint,function,1,cursor
 qpipe.job.demo_events_backfill,cleanup,function,1,
 qpipe.job.demo_events_backfill,facts,function,1,batch

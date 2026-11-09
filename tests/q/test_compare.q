@@ -202,6 +202,22 @@
     .qunit.assertThrows[.qetl.compare.browse_filters[m];enlist .qetl.compare.parse_filter "venue=x";"filter on venue: no such column*";"no column"];
     .qunit.assertThrows[.qetl.compare.browse_filters[m];enlist .qetl.compare.parse_filter "px=abc";"filter on px: \"abc\" is not a float (f)*";"not a float"]};
 
+/ #2472: the value a /query filter means - a timespan in nanoseconds, a
+/ timestamp with its offset applied - not q's bare "N"$ / "P"$ parse.
+.qt.qetl.compare.test_a_digit_timespan_is_nanoseconds:{[t]
+    .qunit.assertEquals[.qetl.compare.typed["n";"1234"];0D00:00:00.000001234;"1234 ns, not 12:34"];
+    .qunit.assertEquals[.qetl.compare.typed["n";"-5"];neg 0D00:00:00.000000005;"a negative count"];
+    .qunit.assertEquals[.qetl.compare.typed["n";"0D00:01:00"];0D00:01:00;"a span with a D is q's"]};
+
+.qt.qetl.compare.test_a_timestamp_has_its_offset_applied:{[t]
+    .qunit.assertEquals[.qetl.compare.typed["p";"2026-09-13T06:00:00+02:00"];2026.09.13D04:00;"+02:00 applied"];
+    .qunit.assertEquals[.qetl.compare.typed["p";"2026-09-13T06:00:00.000000001Z"];2026.09.13D06:00:00.000000001;"Z, to the ns"];
+    .qunit.assertEquals[.qetl.compare.typed["p";"2026.09.13D06:00:00"];2026.09.13D06:00;"q's own spelling"]};
+
+.qt.qetl.compare.test_a_char_value_of_more_than_one_character_is_refused:{[t]
+    .qunit.assertEquals[.qetl.compare.typed["c";"A"];"A";"one character"];
+    .qunit.assertThrows[.qetl.compare.typed["c"];"ABC";"\"ABC\" is not a char (c)";"never its first character"]};
+
 / demo_deals with a venue column the other side does not have (#2069).
 .qt.qetl.compare.with_venue:{[] update venue:`X from .qt.qetl.compare.deals[]}
 

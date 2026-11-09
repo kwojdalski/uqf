@@ -79,6 +79,21 @@ def test_a_job_name_is_checked_before_it_reaches_q(job):
         uptime.gaps(paths_for_root(UQF_ROOT), job, *DAY)
 
 
+def test_an_unknown_job_is_a_lookup_miss_not_a_q_trace(monkeypatch):
+    """A name no streaming job has is answered in one line before any q
+    starts, not with q's backtrace headed "reading the run ledger" (#2466)."""
+
+    def no_q(*_a, **_k):
+        raise AssertionError("q must not be started for an unknown job")
+
+    monkeypatch.setattr(uptime.runs, "query", no_q)
+    with pytest.raises(UqsError, match=r"^no streaming job 'nosuchjob' - `uqs job list`") as e:
+        uptime.gaps(paths_for_root(UQF_ROOT), "nosuchjob", *DAY)
+    assert "\n" not in str(e.value)
+    with pytest.raises(UqsError, match="demo_deals_backfill is a bounded worker.*uqs job runs"):
+        uptime.gaps(paths_for_root(UQF_ROOT), "demo_deals_backfill", *DAY)
+
+
 def test_an_empty_range_is_refused():
     with pytest.raises(UqsError, match="the range is empty"):
         uptime.gaps(paths_for_root(UQF_ROOT), "fx_markout", DAY[1], DAY[0])

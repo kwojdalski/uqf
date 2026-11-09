@@ -267,7 +267,7 @@ def new_job(
 
     Reaction, run each time a bounded worker publishes a window of demo_deals:
 
-        uqs job new rebuild_positions --triggered-by demo_deals --outputs positions
+        uqs job new deal_volume --triggered-by demo_deals --outputs deal_volume
     """
     subs = [s.strip() for s in (subscribe_to or "").split(",") if s.strip()]
     repo_root = _paths().repo_root

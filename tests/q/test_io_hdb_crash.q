@@ -165,6 +165,23 @@
     m[`finish][::];
     .qunit.assertEquals[.qt.qetl.hdb_crash.read[root;`hcrash];.qt.qetl.hdb_crash.sorted[];"the next write is whole and sorted"]};
 
+/ --- #2496: a later write restores a dead writer's retired copy first -----------
+
+.qt.qetl.hdb_crash.keyed_rows:{[ids] ([] time:2026.01.02D10:00:00.000000000+60000000000*ids; sym:(count ids)#`EURUSD; id:ids; px:(count ids)#1.1)}
+
+/ A writer killed between the two renames leaves the date with no table and every row in
+/ staging/old. A sibling writer under the root lock, which runs no recover, must put it back
+/ before it reads the date - not read it as empty and then delete the retired copy in its swap.
+.qt.qetl.hdb_crash.test_a_write_after_a_kill_between_renames_keeps_the_retired_rows:{[t]
+    root:.qt.qetl.hdb_crash.root[]; m:.qetl.io.hdb[root;`time];
+    o:`on_conflict`row_key`time_column`range_from`range_to!(`upsert;`sym`id;`time;2026.01.02D00:00:00.000000000;2026.01.03D00:00:00.000000000);
+    m[`write_keyed][`hkeyed;.qt.qetl.hdb_crash.keyed_rows[1 2];o];
+    fired:.qt.qetl.hdb_crash.kill_at[`live_retired;{[m;o;u] m[`write_keyed][`hkeyed;.qt.qetl.hdb_crash.keyed_rows[1 2 3];o]}[m;o]];
+    m[`write_keyed][`hkeyed;.qt.qetl.hdb_crash.keyed_rows[enlist 4];o];
+    got:.qt.qetl.hdb_crash.read[root;`hkeyed];
+    .qunit.assertEquals[(fired;asc got`id);(1b;1 2 4);"the rows the killed writer retired are back, with the new key"];
+    .qunit.assertEquals[key hsym `$(.qetl.io.staging root),"/old/2026.01.02";`symbol$();"and nothing is left in staging"]};
+
 / --- #2187: every path is one shell word -------------------------------------
 
 .qt.qetl.hdb_crash.test_a_root_with_a_space_touches_only_its_own_paths:{[t]

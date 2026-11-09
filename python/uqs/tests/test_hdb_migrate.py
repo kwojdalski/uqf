@@ -113,6 +113,28 @@ def test_rename_and_lossless_type_change_keep_rows_and_a_rollback_copy(hdb, q_bi
     assert hdb_types.type_changes(hdb, hdb.torqapphome / "database.q", found) == []
 
 
+@pytest.mark.parametrize(
+    ("renames", "casts", "said"),
+    [
+        ({"nosuch": "foo"}, set(), "rename target is not declared: foo"),
+        ({"px": "price", "time": "sym"}, {"price"}, "two target columns read the same source"),
+        ({"px": "sym"}, set(), "source is missing price"),
+        ({"px": "price"}, {"price", "nosuchcol"}, "cast target is not declared: nosuchcol"),
+        ({"px": "price"}, set(), "needs --cast price"),
+    ],
+)
+def test_the_dry_run_refuses_what_apply_would_refuse(hdb, renames, casts, said):
+    """The plan is the migration's own check without the write: a rename or
+    cast the stage would refuse is refused by the dry run, with the stage's
+    message, and changes nothing (#2463)."""
+    live = hdb.hdb_dir / "2026.01.01" / "trade"
+    before = _snapshot(live)
+    with pytest.raises(UqsError, match=said):
+        hdb_migrate.migrate(hdb, "trade", DAY, renames, casts)
+    assert _snapshot(live) == before
+    assert sorted(p.name for p in hdb.hdb_dir.iterdir()) == ["2026.01.01", "sym"]
+
+
 def test_an_hdb_named_by_hdb_is_the_one_migrated_and_locked(hdb, tmp_path):
     """#2237: `data migrate --hdb DIR` - the root it migrates, and the one whose
     write lock it takes, is DIR, not this runtime's."""

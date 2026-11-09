@@ -217,7 +217,8 @@
 
 .qt.qetl.job.stream.rolling.test_the_buffer_is_bounded_by_the_longest_window_plus_lateness:{[t]
     nm:.qt.qetl.job.stream.rolling.job`rt_i;
-    / one event a second for two hours, a publication every ten seconds
+    / one event a second for two hours, a tick every ten seconds, which
+    / publishes the ten 1s grid points since the last (#2457)
     sizes:{[nm;s]
         .qt.qetl.job.stream.rolling.feed[nm;.qt.qetl.job.stream.rolling.t0+0D00:00:01*s;`a;1f];
         n:0N;
@@ -227,7 +228,7 @@
     / 5m + 10s of lateness at one row a second, and a tick's worth
     .qunit.assertTrue[biggest<=320;"never more than the span of rows the longest window and lateness keep"];
     .qunit.assertTrue[biggest>=300;"and not fewer: the window's own rows are kept"];
-    .qunit.assertEquals[count distinct (.qt.qetl.job.stream.rolling.published[])`as_of;720;"a publication every ten seconds"]};
+    .qunit.assertEquals[count distinct (.qt.qetl.job.stream.rolling.published[])`as_of;7191;"every grid point from the first tick on, the nine between ticks too"]};
 
 .qt.qetl.job.stream.rolling.test_a_replay_is_bounded_too:{[t]
     nm:.qt.qetl.job.stream.rolling.job`rt_j;
@@ -482,11 +483,13 @@
     rows:raze {x 2} each sc where not `tick=sc[;1];
     / A twin reads history, which holds every row, the one dropped as too late
     / included; the live job had only what had arrived by each instant and
-    / accepted. Given the same input - the rows received by the instant and
-    / within the lateness - the two are the same series.
+    / accepted. Given the same input - the rows received by the tick and
+    / within the lateness - the two are the same series. Each tick publishes
+    / every 1s grid point since the one before (#2457).
     accepted:rows where (rows[`time]-rows`t)<=0D00:00:10;
-    grid:.qt.qetl.job.stream.rolling.t0+0D00:00:30 0D00:01:30 0D00:05:00 0D00:05:30 0D00:07:00;
-    twin:raze {[nm;accepted;a] .qetl.job.stream.rolling.series[nm;select from accepted where time<=a;enlist a]}[nm;accepted] each grid;
+    ticks:.qt.qetl.job.stream.rolling.t0+0D00:00:30 0D00:01:30 0D00:05:00 0D00:05:30 0D00:07:00;
+    owed:(enlist enlist first ticks),{[a;b] a+0D00:00:01*1+til "j"$(b-a) div 0D00:00:01}'[-1_ticks;1_ticks];
+    twin:raze {[nm;accepted;tk;pts] .qetl.job.stream.rolling.series[nm;select from accepted where time<=tk;pts]}[nm;accepted]'[ticks;owed];
     .qunit.assertTrue[0<count twin;"the twin produces a series"];
     .qunit.assertEquals[twin;.qt.qetl.job.stream.rolling.published[];"the same input, one statistic, two lifecycles"];
     / and the full history differs from the live series exactly where a row came late:

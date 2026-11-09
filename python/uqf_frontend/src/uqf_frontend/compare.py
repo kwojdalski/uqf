@@ -47,7 +47,9 @@ _COLUMN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 def _value_text(column: str, value: Any) -> str:
     """One value as q's parse_filter reads it: no comma, which would make it
-    a list, and nothing that is not a string, a number or a boolean."""
+    a list, no leading `=`, which q would read as part of the operator (`<`
+    and `=1.5` is `<=1.5`, #2479), and nothing that is not a string, a number
+    or a boolean."""
     if isinstance(value, bool):
         return "1" if value else "0"
     if not isinstance(value, str | int | float):
@@ -57,6 +59,11 @@ def _value_text(column: str, value: Any) -> str:
         raise ValidationFailed(
             f"filter on {column}: a value is not empty and holds no comma - "
             "give several values with the `in` operator"
+        )
+    if text.startswith("="):
+        raise ValidationFailed(
+            f"filter on {column}: a value does not start with `=`, which would be "
+            "read as part of the operator"
         )
     return text
 

@@ -249,6 +249,7 @@
         '"define: ",string[source],"'s query must be a function (parameterised, never concatenated)"];
     if[not .qetl.declared.callable decl`fixture;
         '"define: ",string[source],"'s fixture must be a niladic function (the path must be exercisable with no driver)"];
+    .qetl.source.check_arity[source;decl];
     if[not -11h=type decl`tz;
         '"define: ",string[source],"'s tz must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\""];
     / The window is taken on time_column, so time_column must be a field this
@@ -369,6 +370,22 @@
     .[{.qetl.log.ch.dbg[x;y;z]};(`config;"source registered";
         `source`columns`time_column`tz`transport`row_key!(source;decl`columns;decl`time_column;decl`tz;tr;key_cols));::];
     source}
+
+/ Private: refuse a query or fixture lambda of the wrong arity - now, rather
+/ than at the first live window's bare 'rank (#2484). Only a lambda's parameter
+/ list is readable. A bracketless `{...}` reports the implicit x it is called
+/ with, (::), so it counts as niladic like `{[] ...}`. Apart from define,
+/ whose locals are at q's limit once coverage instruments it.
+/ @private
+.qetl.source.check_arity:{[source;decl]
+    if[(.qetl.declared.lambda decl`query) and 3<>count (value decl`query) 1;
+        '"define: ",string[source],"'s query must take 3 arguments (h; range_from; range_to)"];
+    if[not .qetl.declared.lambda decl`fixture; :()];
+    params:(value decl`fixture) 1;
+    implicit:((enlist `x)~params) and not "{["~2#string decl`fixture;
+    if[not ((enlist `)~params) or implicit;
+        '"define: ",string[source],"'s fixture must take no arguments, {[] ...}"];
+    }
 
 / Every registered source's name.
 / .

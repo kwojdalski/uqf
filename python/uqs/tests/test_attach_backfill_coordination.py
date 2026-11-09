@@ -32,8 +32,8 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import backfill_coordination as coordination
+from uqs.attach import backfill_fence, facts
 from uqs.attach import backfill_plan as planning
-from uqs.attach import facts
 from uqs.attach.facts import Host, filesystem_of
 from uqs.attach.remote import Endpoint, KolaIpc, source
 from uqs.interpreter import PEACHQ, q_impl, q_interpreter
@@ -657,7 +657,7 @@ ROLL_17 = {
 
 def _fence_codes(state, days):
     found: list = []
-    coordination.fence(state, days, timedelta(hours=1), found)
+    backfill_fence.fence(state, days, timedelta(hours=1), found)
     return [f.code for f in found]
 
 

@@ -7,6 +7,7 @@ own files are left as they were.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -87,6 +88,24 @@ def test_a_streaming_job_may_subscribe_to_a_bundle_table(tmp_path, monkeypatch, 
     assert "mock_mids:([]" in (folder / "tables.q").read_text()
 
 
+def test_a_bundle_job_passes_the_nested_contexts_gate(tmp_path, monkeypatch, tree_files):
+    """#2502: a bundle's job file is written fully qualified, as a tree one is:
+    the nested-contexts gate scans sidecars/, and installing copies it to src/."""
+    spec = importlib.util.spec_from_file_location(
+        "nested_contexts_2502", UQF_ROOT / "scripts/gates/policy/nested_contexts.py"
+    )
+    assert spec is not None and spec.loader is not None
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    folder = tmp_path / "sidecars" / "bx"
+    argv = ["bx", "--subscribe-to", "trades", "--outputs", "bx_out",
+            "--schema", "sym:symbol, px:float", "--bundle", str(folder)]  # fmt: skip
+    _out, refused = _job_new(argv, monkeypatch)
+    assert refused == [] and (folder / "bx.q").is_file()
+    assert gate.problems(tmp_path) == []
+    assert ".qpipe.job.bx.on_batch:" in (folder / "bx.q").read_text()
+
+
 def test_a_dry_run_writes_nothing(tmp_path, monkeypatch, tree_files):
     folder = tmp_path / "mockups"
     out, refused = _job_new([*TRADES, "--bundle", str(folder), "--dry-run"], monkeypatch)
@@ -99,6 +118,21 @@ def test_a_profile_option_is_refused(tmp_path, monkeypatch, option):
     argv = ["mock_ticks", "--outputs", "mock_ticks", "--schema", "sym:symbol", *option]
     _out, refused = _job_new([*argv, "--bundle", str(tmp_path / "mockups")], monkeypatch)
     assert refused and "does not apply with --bundle" in refused[0]
+
+
+def test_a_bundle_job_is_told_how_it_joins_a_stack_not_to_pick_a_profile(
+    tmp_path, monkeypatch, tree_files
+):
+    """--profile and --unprofiled are refused with --bundle, so a note telling
+    the operator to pass one led straight into that refusal (#2488)."""
+    argv = ["mock_q2", "--outputs", "mock_q2", "--schema",
+            "source_time:timestamp, sym:symbol, px:float",
+            "--bundle", str(tmp_path / "mockups"), "--dry-run"]  # fmt: skip
+    out, refused = _job_new(argv, monkeypatch)
+    assert refused == []
+    notes = [line for line in out.splitlines() if "note:" in line]
+    assert not [n for n in notes if "--profile" in n or "--unprofiled" in n], notes
+    assert any("runtime_bundles.json" in n and "uqs deploy push --jobs" in n for n in notes)
 
 
 def test_a_folder_that_cannot_name_a_bundle_is_refused(tmp_path):

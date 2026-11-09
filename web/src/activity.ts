@@ -83,15 +83,16 @@ const DEBUG_PER_SECOND = 5;
 export type Transport = (
   events: BrowserEvent[],
   lost: BrowserDrop[],
+  batchId: string | null,
 ) => Promise<void>;
 
 /** POST the batch. A 422 is not retried: the same events would be refused again. */
-const httpTransport: Transport = async (events, lost) => {
+const httpTransport: Transport = async (events, lost, batchId) => {
   const response = await fetch("/activity/events", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     // `drops`, as GET /activity names the same records (#2242).
-    body: JSON.stringify({ events, drops: lost }),
+    body: JSON.stringify({ events, drops: lost, batch_id: batchId }),
     // Lets the last batch out as the tab closes.
     keepalive: true,
   });
@@ -108,6 +109,10 @@ let serverLevel: SessionLevel = "actions";
 let heldLevel: SessionLevel | null = null;
 /** Events not sent, by `level:reason`, waiting to be reported. */
 let drops = new Map<string, number>();
+/** A drop report sent and not yet acknowledged. It is sent again as it is,
+ *  under its own id, until one send succeeds: the server counts an id once,
+ *  so a report whose answer was lost is not counted twice (#2480). */
+let unacknowledged: { id: string; drops: BrowserDrop[] } | null = null;
 let tokens = DEBUG_BURST;
 let refilled = 0;
 /** False when the server's access policy does not let this caller record
@@ -131,6 +136,7 @@ export function configureActivity(options: {
   setSessionLevel(null);
   queue = [];
   drops = new Map();
+  unacknowledged = null;
   tokens = DEBUG_BURST;
   refilled = 0;
   recordingAllowed = true;
@@ -145,6 +151,7 @@ export function allowRecording(allowed: boolean): void {
   if (!allowed) {
     queue = [];
     drops = new Map();
+    unacknowledged = null;
     clearTimeout(timer);
     timer = undefined;
   }
@@ -246,7 +253,13 @@ function countDrop(level: ActivityLevel, reason: BrowserDropReason, n = 1) {
 
 /** What has not been sent and not yet been reported - for tests and the view. */
 export function pendingDrops(): BrowserDrop[] {
-  return [...drops.entries()].map(([key, count]) => {
+  const all = new Map<string, number>();
+  for (const d of unacknowledged?.drops ?? []) {
+    const key = `${d.level}:${d.reason}`;
+    all.set(key, (all.get(key) ?? 0) + d.count);
+  }
+  for (const [key, n] of drops) all.set(key, (all.get(key) ?? 0) + n);
+  return [...all.entries()].map(([key, count]) => {
     const [level, reason] = key.split(":");
     return {
       level: level as ActivityLevel,
@@ -254,6 +267,23 @@ export function pendingDrops(): BrowserDrop[] {
       count,
     };
   });
+}
+
+/** The drop report the next send carries: the one not yet acknowledged, as
+ *  it was, or a new one of what has been counted since - or none. */
+function nextReport(): { id: string; drops: BrowserDrop[] } | null {
+  if (unacknowledged) return unacknowledged;
+  if (!drops.size) return null;
+  const counted = [...drops.entries()].map(([key, count]) => {
+    const [level, reason] = key.split(":");
+    return {
+      level: level as ActivityLevel,
+      reason: reason as BrowserDropReason,
+      count,
+    };
+  });
+  drops = new Map();
+  return { id: newId(), drops: counted };
 }
 
 /** debug's token bucket: whether one more event may go now. */
@@ -334,15 +364,16 @@ export function record(
 
 /** Send what is queued, and the count of what was not. A failed send keeps
  *  both for the next one - the server ignores an event id it already has,
- *  so a retry is harmless. */
+ *  and a drop report's batch id (#2480), so a retry is harmless. */
 export async function flushActivity(): Promise<void> {
-  while (queue.length || drops.size) {
+  while (queue.length || drops.size || unacknowledged) {
     const batch = queue.slice(0, BATCH);
-    const dropped = pendingDrops();
+    const report = nextReport();
+    unacknowledged = report;
     queue = queue.slice(batch.length);
-    drops = new Map();
     try {
-      await transport(batch, dropped);
+      await transport(batch, report?.drops ?? [], report?.id ?? null);
+      unacknowledged = null;
     } catch {
       // record() may have refilled the queue while the send was in flight:
       // what no longer fits is counted, as record() counts it (#2408).
@@ -353,7 +384,6 @@ export async function flushActivity(): Promise<void> {
       ))
         countDrop(KIND_LEVEL[lost.kind], "queue_overflow");
       queue = merged.slice(-MAX_QUEUE);
-      for (const d of dropped) countDrop(d.level, d.reason, d.count);
       return;
     }
   }

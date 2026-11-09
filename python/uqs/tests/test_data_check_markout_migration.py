@@ -34,6 +34,7 @@ VENDORED = "quote:([] sym:`symbol$(); bid:`float$())\n"
 #: as it stood before the change - every column but config_id - plus the three that
 #: were folded. argv[0] is the HDB root.
 BUILD = r"""
+\l src/etl/plant_registry.q
 \l src/etl/plant_tables.q
 root:hsym `$first .z.x;
 d:delete config_id from 0#.qetl.plant.crypto_markout;

@@ -1,6 +1,6 @@
 {
   "exporter_version": 3,
-  "fingerprint": {"tree": "761bd4915810e8583db2f99f5720b9bb99a7a9774368d0bb11d536649425970d", "vendored": "bd01ad22bebd109843fee381ff497883e3ba511d4d16dfcc3e3f2fe5d011345f"},
+  "fingerprint": {"tree": "99f6065065f3cb0ee3efc753b369ce12ffce05eead70c0bd7ab1e89f40031deb", "vendored": "b3f66911a6d52eb8567033383738c9858c19ae3660858661153f577968f69a20"},
   "bindings": ["adopt_vendored", "bases", "clocks", "column_problems", "columns", "elements", "equivalence", "equivalence_of", "instrument_exceptions", "instrument_in", "materialise", "names", "nested", "nested_columns", "own", "problems", "published", "read_instrument_column", "read_time_column", "require_clock", "row_ids", "schema", "shape", "sort_rules", "sorting", "time_column", "undeclared", "vendored", "vendored_path", "with_flat"],
   "tables": {
     "quote": {"vendored": true, "columns": [{"name": "time", "type": "p", "attribute": ""}, {"name": "sym", "type": "s", "attribute": "g"}, {"name": "bid", "type": "f", "attribute": ""}, {"name": "ask", "type": "f", "attribute": ""}, {"name": "bsize", "type": "j", "attribute": ""}, {"name": "asize", "type": "j", "attribute": ""}, {"name": "mode", "type": "c", "attribute": ""}, {"name": "ex", "type": "c", "attribute": ""}, {"name": "src", "type": "s", "attribute": ""}], "nested": {}, "sorting": [], "time_column": "", "instrument_column": ""},

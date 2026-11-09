@@ -33,6 +33,7 @@
 \c 400 1000
 \l src/init.q
 \l src/etl/core/log.q
+\l src/etl/plant_registry.q
 \l src/etl/plant_tables.q
 / This script holds the tables itself, so it wants them at the root.
 .qetl.plant.materialise .qetl.plant.own[];

@@ -165,7 +165,7 @@
 / The columns getdata reads a dataset a worker writes by (#1869), exported to
 / uqs as q_facts.BOUNDED_DATASET_TIME_COLUMNS and ..._INSTRUMENT_COLUMNS. A
 / dataset that is a plant table is read as the plant says
-/ (.qetl.plant.read_time_column, src/etl/plant_tables.q): that definition is
+/ (.qetl.plant.read_time_column, src/etl/plant_registry.q): that definition is
 / the shape stored, whatever the worker's own output omits - duckdb_deals'
 / transform leaves `time` out, the HDB writer stamps it, and the plant table
 / is read by it. Any other dataset is stored as its transform's output with

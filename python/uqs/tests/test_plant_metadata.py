@@ -29,7 +29,15 @@ from uqs.model.plant_metadata import (
     VENDORED_DEFAULT,
     SchemaMetadataError,
 )
-from uqs.paths import CATALOG_FILE, SOURCE_DIR, STREAM_DIR, TABLES_FILE, TORQAPPHOME_ENV, WORKER_DIR
+from uqs.paths import (
+    CATALOG_FILE,
+    PLANT_REGISTRY_FILE,
+    SOURCE_DIR,
+    STREAM_DIR,
+    TABLES_FILE,
+    TORQAPPHOME_ENV,
+    WORKER_DIR,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 PACK = ROOT / VENDORED_DEFAULT.parent
@@ -54,10 +62,12 @@ def _wrapped(text: str) -> str:
 
 
 def _tree(root: Path, text: str | None = None, *, metadata: bool = True) -> Path:
-    """A tree holding plant_tables.q (`text`, default the real one) and, with
-    `metadata`, this checkout's committed metadata."""
+    """A tree holding plant_tables.q (`text`, default the real one) beside the
+    real plant_registry.q it calls and, with `metadata`, this checkout's
+    committed metadata."""
     (root / TABLES_FILE).parent.mkdir(parents=True, exist_ok=True)
     (root / TABLES_FILE).write_text(text if text is not None else (ROOT / TABLES_FILE).read_text())
+    shutil.copy2(ROOT / PLANT_REGISTRY_FILE, root / PLANT_REGISTRY_FILE)
     if metadata:
         (root / PLANT_SCHEMA_FILE).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / PLANT_SCHEMA_FILE, root / PLANT_SCHEMA_FILE)
@@ -110,7 +120,7 @@ def test_the_metadata_matches_q_introspection(tmp_path, q_binary, monkeypatch):
     monkeypatch.delenv(TORQAPPHOME_ENV, raising=False)
     meta = plant_metadata.load()
     tables = {**meta.own(), **meta.vendored()}
-    lines = [f"\\l {TABLES_FILE}", "bad:();"]
+    lines = [f"\\l {PLANT_REGISTRY_FILE}", f"\\l {TABLES_FILE}", "bad:();"]
     for name, t in tables.items():
         lines.append(f"tmp:0#{t.definition().split(':', 1)[1]};")
         lines.append(f"if[not (meta tmp)~meta .qetl.plant.schema`{name}; bad,:enlist `{name}];")
@@ -347,16 +357,27 @@ def test_a_comment_only_edit_keeps_the_metadata_fresh(tmp_path, edit):
 
 
 @pytest.mark.parametrize(
-    "edit",
+    ("file", "edit"),
     [
-        lambda t: t.replace("fill_id:`symbol$())", "fill_id:`symbol$(); venue:`symbol$())", 1),
-        lambda t: t.replace('"plant: no table "', '"plant: no such table "', 1),  # in a string
+        (
+            TABLES_FILE,
+            lambda t: t.replace("fill_id:`symbol$())", "fill_id:`symbol$(); venue:`symbol$())", 1),
+        ),
+        # in a string, in the registry the declarations call (#2503)
+        (
+            PLANT_REGISTRY_FILE,
+            lambda t: t.replace('"plant: no table "', '"plant: no such table "', 1),
+        ),
+        (
+            PLANT_REGISTRY_FILE,
+            lambda t: t.replace(".qetl.plant.bases:`events`", ".qetl.plant.bases:`", 1),
+        ),
     ],
-    ids=["column", "string"],
+    ids=["column", "registry-string", "registry-code"],
 )
-def test_a_code_edit_makes_the_metadata_stale(tmp_path, edit):
+def test_a_code_edit_makes_the_metadata_stale(tmp_path, file, edit):
     root = _tree(tmp_path)
-    plant = root / TABLES_FILE
+    plant = root / file
     text = plant.read_text()
     plant.write_text(edit(text))
     assert plant.read_text() != text

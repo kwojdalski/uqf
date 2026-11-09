@@ -493,7 +493,9 @@ def test_setting_a_field_returns_the_effective_row(writeable, monkeypatch):
     written: dict[str, Any] = {}
     _patch_core(
         monkeypatch,
-        set_process_config=lambda p, n, f, v: written.update(proc=n, field=f, value=v),
+        set_process_config=lambda p, n, f, v, dry_run=False: (
+            None if dry_run else written.update(proc=n, field=f, value=v)
+        ),
         get_process_config=lambda p, n, base_port=6050: {"procname": n, "startwithall": "1"},
     )
     body = writeable.put(

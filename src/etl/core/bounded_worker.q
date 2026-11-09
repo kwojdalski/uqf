@@ -1011,14 +1011,14 @@
 / HDB partition leaves that partition unsorted, without p#sym - correct rows
 / that as-of joins read wrongly. Coverage now calls the window done, so a
 / re-run plans nothing for it and finishes nothing, forever. Read off the
-/ files, because the to-do list the killed run held died with it. Not on a
-/ dry run, which changes nothing on disk.
+/ files (the killed run's to-do list died with it), for the dataset AND its
+/ reactions' outputs, which the same manager finishes (#2494). Not on a dry run.
 / @return how many partitions were queued
 / @private
 .qetl.job.bounded.recover_unfinished:{[worker]
     if[not .qetl.job.bounded.runtime.allows`finish_store; :0];
-    s:.qetl.job.bounded.spec worker;
-    n:.qetl.io.recover[.qetl.io.for_cfg .qetl.job.bounded.def worker;(.qetl.job.bounded.def worker)`dataset;s`range_from;s`range_to];
+    s:.qetl.job.bounded.spec worker; ds:(.qetl.job.bounded.def worker)`dataset;
+    n:sum {[w;s;t] .qetl.io.recover[.qetl.io.for_cfg .qetl.job.bounded.def w;t;s`range_from;s`range_to]}[worker;s] each distinct ds,.qetl.reaction.written_by ds;
     if[n>0;
         .qetl.log.ch.warn[`storage;"found partitions an earlier run wrote and never finished - finishing them with this run";
             (enlist[`worker]!enlist worker),enlist[`partitions]!enlist n]];

@@ -251,6 +251,10 @@ def test_each_operator_reaches_uqs_as_its_text(registry, asked, sent, text):
         ({"column": "sym", "op": "in", "value": "EURUSD"}, "`in` takes a non-empty list"),
         ({"column": "sym", "op": "eq", "value": {"a": 1}}, "a string, a number or a boolean"),
         ({"column": "sym=x", "op": "eq", "value": "y"}, "is not a column name"),
+        # #2479: sent as px<=1.5 / px>=1.5, q would read le / ge
+        ({"column": "px", "op": "lt", "value": "=1.5"}, "does not start with `=`"),
+        ({"column": "px", "op": "gt", "value": "=1.5"}, "does not start with `=`"),
+        ({"column": "sym", "op": "in", "value": ["=A", "B"]}, "does not start with `=`"),
     ],
 )
 def test_a_filter_that_cannot_be_rendered_is_refused_before_uqs(registry, asked, sent, said):
@@ -258,6 +262,16 @@ def test_a_filter_that_cannot_be_rendered_is_refused_before_uqs(registry, asked,
     assert r.status_code == 422, r.text
     assert r.json()["error"] == "ValidationFailed" and said in r.json()["detail"]
     assert not asked[0]
+
+
+def test_a_value_q_would_read_as_part_of_the_operator_is_refused():
+    """#2479: `lt` with `=1.5` must not reach uqs as `px<=1.5`."""
+    from uqf_frontend.compare import filter_texts
+    from uqf_frontend.errors import ValidationFailed
+    from uqf_frontend.models.query import Filter
+
+    with pytest.raises(ValidationFailed, match="does not start with `=`"):
+        filter_texts([Filter(column="px", op="lt", value="=1.5")])
 
 
 def test_every_query_operator_has_its_text():
@@ -305,6 +319,47 @@ def test_q_reads_each_rendered_filter_back_as_the_operator_sent(tmp_path):
     ).stdout
     read = dict(line.split() for line in out.splitlines() if line.strip())
     assert read == {op: op for op in compare.TEXT_OPS}, out
+
+
+@pytest.mark.skipif(q_interpreter() is None, reason="no q interpreter")
+def test_q_types_a_compare_filter_as_query_coerces_it(tmp_path):
+    """#2472: the same Filter is the same predicate on /compare as on /query -
+    a timespan of 1234 is 1234 ns, and a timestamp's offset is applied."""
+    from uqf_frontend import compare, queries
+    from uqf_frontend.catalog import QType
+    from uqf_frontend.models.query import Filter
+
+    sent = [
+        Filter(column="skew", op="eq", value=1234),
+        Filter(column="time", op="ge", value="2026-09-13T06:00:00+02:00"),
+        Filter(column="time", op="lt", value="2026-09-13T06:00:00.000000001Z"),
+    ]
+    span = queries.coerce(1234, QType.TIMESPAN, "skew", as_list=False)
+    stamps = [queries.coerce(f.value, QType.TIMESTAMP, "time", as_list=False) for f in sent[1:]]
+    texts = compare.filter_texts(sent)
+    script = tmp_path / "typed.q"
+    script.write_text(
+        "\\l src/init.q\n\\l src/etl/init.q\n"
+        'm:([] c:`skew`time; t:"np");\n'
+        "fs:.qetl.compare.parse_filter each (" + ";".join(f'"{t}"' for t in texts) + ");\n"
+        "v:last .qetl.compare.browse_filters[m;fs];\n"
+        '-1 string "j"$v 0;\n'
+        '-1 string "j"$v 1;\n'
+        '-1 string "j"$v 2;\n'
+        "exit 0\n"
+    )
+    out = subprocess.run(
+        [str(q_interpreter()), str(script), "-q"],
+        cwd=default_paths().repo_root,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        stdin=subprocess.DEVNULL,
+    ).stdout.split()
+    # q counts a timestamp's nanoseconds from 2000; polars from 1970
+    epoch_2000 = 946_684_800 * 10**9
+    assert int(out[0]) == span.dt.total_nanoseconds().item(), out
+    assert [int(n) + epoch_2000 for n in out[1:]] == [s.cast(int).item() for s in stamps], out
 
 
 # --------------------------------------------- the coverage slice (#2221)

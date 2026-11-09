@@ -283,7 +283,7 @@ function ResourceStatus<T>({
           <strong>
             {resource.error.transient
               ? "Temporarily unavailable"
-              : resource.error.status === 409
+              : resource.error.error === "CoverageIncomplete"
                 ? "Coverage incomplete"
                 : "Request failed"}
           </strong>

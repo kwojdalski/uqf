@@ -40,7 +40,7 @@ scaffold all_fills:
   append to docs/services/README.md
   note: implement .qpipe.job.all_fills.from_trades and its example
   note: implement .qpipe.job.all_fills.from_crypto_trades and its example
-  note: describe all_fills: replace its SCAFFOLDED line in scripts/processes/uqs_catalog.q - or, if the desk should not see it, delete that line and add the table to .qcat.hidden with the reason
+  note: describe all_fills: replace its two SCAFFOLDED lines in scripts/processes/uqs_catalog.q - the description, and the .qcat.unbounded reason (or swap that for a querypolicy.csv row) - or, if the desk should not see it, delete both and add the table to .qcat.hidden with the reason
   note: describe all_fills1: replace its SCAFFOLDED card in docs/services/README.md and its SCAFFOLDED comment in docs/architecture/stack.md
   note: add all_fills1 to a profile (--profile NAME), or exempt it with --unprofiled REASON - `uqs profile list` shows the sets and their connection budget
   note: start it with its producers: crypto_trades trades

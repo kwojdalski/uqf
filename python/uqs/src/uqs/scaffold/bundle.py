@@ -42,9 +42,12 @@ from uqs.paths import (
     TEST_DIR,
     WORKER_DIR,
     UqsError,
+    repo_root,
 )
+from uqs.scaffold import profile
 from uqs.scaffold.external import EXTERNAL_DIR, PY_TEST_DIR
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
+from uqs.scaffold.write import flat_source
 from uqs.stack import bundles
 
 #: Tree folders whose new files are a bundle's job files.
@@ -137,6 +140,12 @@ def into_bundle(plan: ScaffoldPlan, bundle_dir: Path) -> ScaffoldPlan:
             # test runs beside the installed copies (scripts/dev/bundle_suite.py),
             # where the streamer is a top-level module, not uqs.external's.
             action = FileAction(action.path, connector_text(action.body), action.mode)
+        elif target is not None and action.path.parent in _JOB_DIRS and action.path.suffix == ".q":
+            # Written fully qualified, as apply_plan writes it into src/: the
+            # bundle's path no longer says src/, and installing copies it there
+            # verbatim, so `\d .qpipe.job.<name>` would fail nested-contexts
+            # in both places (#2502).
+            action = FileAction(action.path, flat_source(action.body, repo_root()), action.mode)
         if target is None:
             dropped.append(action.path)
             continue
@@ -160,9 +169,12 @@ def into_bundle(plan: ScaffoldPlan, bundle_dir: Path) -> ScaffoldPlan:
     for note in plan.notes:
         if any(str(p) in note for p in dropped):
             continue
+        if m := profile.NO_CHOICE.match(note):
+            note = profile.bundle_route(m[1])
         if ".qcat.hidden" in note:
             # The installer refuses a bundle table its catalog.q leaves out.
             note = note.split(" - or,")[0] + " - a bundle describes every table it defines"
+            note = note.replace(" (or swap that for a querypolicy.csv row)", "")
         for old, new in renamed.items():
             note = note.replace(old, new)
         note = note.replace(f"{EXTERNAL_DIR}/", f"{bundle_dir}/")

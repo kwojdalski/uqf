@@ -1548,27 +1548,42 @@
     .qunit.assertEquals[d`check;.qpipe.job.market_data.check;"market_data's check is declared"];
     .qunit.assertEquals[d`on_fail;`drop;"one venue's bad book must not hold the others"]};
 
-.qt.qetl.job.stream.test_market_data_check_names_crossed_and_stale_rows:{[t]
+.qt.qetl.job.stream.test_market_data_check_names_crossed_rows:{[t]
     t0:2026.09.19D10:00:00.000000000;
     book:{[s;ts;b;a] ([] sym:enlist s; source:enlist `LP_A; market:enlist `fx; source_time:enlist ts;
         bid_prices:enlist enlist b; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist a; ask_sizes:enlist enlist 1e6; clock:enlist `receipt)};
     rows:raze (book[`EURUSD;t0;1.1;1.2];book[`GBPUSD;t0;1.3;1.2];book[`USDJPY;t0-0D00:10;150.0;150.1]);
     f:.qpipe.job.market_data.check rows;
     .qunit.assertEquals[exec row from f where check=`crossed_book;enlist 1;"GBPUSD is crossed"];
-    .qunit.assertEquals[exec row from f where check=`stale_quote;enlist 2;"USDJPY lags the batch by ten minutes"];
+    .qunit.assertEquals[2 in f`row;0b;"USDJPY ten minutes behind its batch is not withheld (#2456)"];
     .qunit.assertEquals[count .qpipe.job.market_data.check book[`EURUSD;t0;1.1;1.2];0;"a clean book passes"];
     .qunit.assertEquals[count .qpipe.job.market_data.check update bid_prices:enlist `float$(), bid_sizes:enlist `float$() from book[`EURUSD;t0;1.1;1.2];0;"an empty side is a withdrawal, not a failure"]};
 
-.qt.qetl.job.stream.test_market_data_check_judges_staleness_per_sym_and_source:{[t]
-    / #1050: binance and kraken quote BTC-USDT at 10:10:00, okx at 10:00:00.
-    / Two fresh venues must not let okx's ten-minute-old book through.
-    t0:2026.09.19D10:10:00.000000000;
-    book:{[v;ts] ([] sym:enlist `$"BTC-USDT"; source:enlist v; market:enlist `crypto; source_time:enlist ts;
-        bid_prices:enlist enlist 100f; bid_sizes:enlist enlist 1f; ask_prices:enlist enlist 101f; ask_sizes:enlist enlist 1f; clock:enlist `venue)};
-    rows:raze (book[`binance;t0];book[`kraken;t0];book[`okx;t0-0D00:10]);
-    f:.qpipe.job.market_data.check rows;
-    .qunit.assertEquals[exec row from f where check=`stale_quote;enlist 2;"okx lags the batch by ten minutes"];
-    .qunit.assertEquals[count .qpipe.job.market_data.check 2#rows;0;"the two fresh venues pass"]};
+/ #2456: a book's age against the newest row of its batch depended on what the
+/ plant happened to deliver with it, so the same book was withheld in a
+/ two-venue message and published on its own. The gate judges what a book IS;
+/ how old it may be is each consumer's max_age (.qf.mkt.reference_max_age).
+.qt.qetl.job.stream.test_market_data_publishes_a_book_whatever_message_carries_it:{[t]
+    now:.z.p;
+    cb:{[now;st;v;bid] ([] time:enlist now; source_time:enlist st; venue:enlist v; sym:enlist `$"BTC-USDT";
+        bid_prices:enlist bid-0 1f; bid_sizes:enlist 1 2f; ask_prices:enlist bid+10 11f; ask_sizes:enlist 3 4f)}[now];
+    a:cb[now-0D00:06;`a;62000f];
+    b:cb[now;`b;62100f];
+    run:{[msgs]
+        `.qt.qetl.job.stream.md_pubs set ();
+        .qetl.job.stream.reset `market_data;
+        .qetl.job.stream.wire[`market_data;{[t;x] .qt.qetl.job.stream.md_pubs,:enlist x; count x}];
+        h:.qetl.job.stream.handler `market_data;
+        {[h;x] h[`crypto_book;x]}[h] each msgs;
+        r:raze {x`source} each .qt.qetl.job.stream.md_pubs;
+        .qetl.job.stream.reset `market_data;
+        r};
+    keep:.qpipe.job.market_data.publish;
+    apart:run (a;b);
+    together:run enlist a,b;
+    .qpipe.job.market_data.publish:keep;
+    .qunit.assertEquals[apart;`a`b;"two messages: both venues"];
+    .qunit.assertEquals[together;apart;"one message: the same venues"]};
 
 / #1021: what a book must be is judged once, where every book enters, not
 / by each consumer: a level 0 that is not a price, and a stamp from the
@@ -1603,8 +1618,8 @@
     bad:.qpipe.job.market_data.from_quote update bid:-1.1 from q;
     .qunit.assertEquals[exec row from .qpipe.job.market_data.check bad where check=`bad_level;enlist 0;"a negative price with a size is still not a price; the pulled one stays a withdrawal"]};
 
-/ #1542: a future-dated quote is withheld as bad_time but must not set the
-/ stale reference, or every healthy row in its batch reads as stale.
+/ #1542: a future-dated quote is withheld as bad_time and fails nothing else
+/ in its batch (it once set a stale reference; #2456 removed the reference).
 .qt.qetl.job.stream.test_market_data_check_stale_reference_ignores_future_rows:{[t]
     now:.z.p;
     book:{[s;v;ts] ([] sym:enlist s; source:enlist v; market:enlist `fx; source_time:enlist ts;
@@ -1617,7 +1632,7 @@
     .qunit.assertEquals[count select from f where check=`stale_quote;0;"healthy rows are not stale"];
     old:rows,book[`USDCHF;`LP_A;now-0D00:10];
     g:.qpipe.job.market_data.check old;
-    .qunit.assertEquals[exec row from g where check=`stale_quote;enlist 4;"a genuinely stale row is still caught"]};
+    .qunit.assertEquals[4 in g`row;0b;"an old row is not withheld for its age either (#2456)"]};
 
 / #1063: superbook reads the shared lead when a batch arrives, not a copy
 / taken at load, so tuning it moves superbook and market_data's check together.

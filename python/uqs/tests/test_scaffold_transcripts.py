@@ -107,3 +107,54 @@ def test_the_transcript_is_what_a_dry_run_prints(transcript: Transcript, monkeyp
     (plan,) = plans
     printed = "\n".join(COUNT.sub("", line) for line in plan.render().splitlines())
     assert transcript.body == printed, f"{transcript} differs from what the scaffold prints"
+
+
+#: Where else a reader copies a `uqs job new` from: the command's own --help and
+#: the new-job skill (#2505). Each must scaffold as written, at least in a dry run.
+SKILL = UQF_ROOT / ".claude" / "skills" / "new-job" / "SKILL.md"
+
+
+def _commands(text: str) -> list[str]:
+    """Every `uqs job new` command line in text, continuations joined."""
+    joined = text.replace("\\\n", " ")
+    return [
+        " ".join(line.split())
+        for line in joined.splitlines()
+        if line.strip().startswith("uqs job new ")
+    ]
+
+
+def _skill_commands() -> list[str]:
+    blocks = re.findall(r"^```bash\n(.*?)^```$", SKILL.read_text(), flags=re.M | re.S)
+    return _commands("\n".join(blocks))
+
+
+HELP_EXAMPLES = _commands(create.new_job.__doc__ or "")
+SKILL_EXAMPLES = _skill_commands()
+
+
+def test_the_help_and_the_skill_carry_examples():
+    """A rewrite that dropped them would empty the check below silently."""
+    assert HELP_EXAMPLES and SKILL_EXAMPLES
+    assert any("--triggered-by" in c for c in HELP_EXAMPLES)
+    assert any("--triggered-by" in c for c in SKILL_EXAMPLES)
+
+
+@pytest.mark.parametrize("command", HELP_EXAMPLES + SKILL_EXAMPLES)
+def test_a_documented_example_scaffolds_in_a_dry_run(command: str, monkeypatch):
+    def record(plan: ScaffoldPlan, repo_root: Path, *, dry_run: bool) -> None:
+        assert dry_run, "the check must never write"
+
+    def refuse(exc: Exception) -> None:
+        raise AssertionError(f"`{command}` is refused: {exc}")
+
+    for module in (create, create_reaction):
+        monkeypatch.setattr(module, "write_plan", record)
+        monkeypatch.setattr(module, "_die", refuse)
+    argv = shlex.split(command)[1:]
+    if "--dry-run" not in argv:
+        argv.append("--dry-run")
+    result = CliRunner().invoke(cli.app, argv)
+    if result.exception and not isinstance(result.exception, SystemExit):
+        raise result.exception
+    assert result.exit_code == 0, result.output

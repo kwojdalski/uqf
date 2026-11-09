@@ -50,6 +50,14 @@ def test_torq_is_the_starter_pack_alone(monkeypatch):
     assert torq["data_dir"] == "output/uqs-torq" and torq["base_port"] == 6150
 
 
+def test_data_dir_is_where_the_data_is_when_uqs_data_root_moves_it(monkeypatch, tmp_path):
+    """A deployed release sets UQS_DATA_ROOT: the listing names the directory
+    each runtime uses there, not output/<dir>, so it agrees with `data` (#2467)."""
+    monkeypatch.setenv("UQS_DATA_ROOT", str(tmp_path))
+    for name, row in _rows(monkeypatch).items():
+        assert row["data_dir"] == str(tmp_path / RUNTIMES[name].data_dir), name
+
+
 def test_running_counts_only_this_runtimes_processes(monkeypatch):
     monkeypatch.setattr(alive, "running", lambda paths, base_port=None: {"rdb1", "fxfeed1"})
     rows = _rows(monkeypatch)

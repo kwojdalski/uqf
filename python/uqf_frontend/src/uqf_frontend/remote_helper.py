@@ -372,7 +372,13 @@ def describe(fd, name):
 
 
 def list_dir(fd, limit):
-    """(entries, total or None when the scan stopped early, truncated)."""
+    """(entries, total or None when the scan stopped early, truncated).
+
+    Directories first, then by name - what an operator scans for - and in
+    that order BEFORE the cut, so `limit` keeps the first entries of the
+    order shown rather than dropping a directory whose name sorts late
+    (#2478). Whether an entry is a directory is asked without following it,
+    as `describe` asks."""
     names = []
     complete = True
     try:
@@ -381,13 +387,15 @@ def list_dir(fd, limit):
                 if len(names) >= SCAN_CAP:
                     complete = False
                     break
-                names.append(entry.name)
+                try:
+                    is_dir = entry.is_dir(follow_symlinks=False)
+                except OSError:
+                    is_dir = False
+                names.append((not is_dir, entry.name))
     except PermissionError:
         raise Refusal("denied", "the directory cannot be listed") from None
     names.sort()
-    shown = [describe(fd, n) for n in names[:limit]]
-    # directories first, then by name: what an operator scans for
-    shown.sort(key=lambda e: (e["kind"] != "dir", e["name"]))
+    shown = [describe(fd, n) for _, n in names[:limit]]
     truncated = len(names) > limit or not complete
     return shown, (len(names) if complete else None), truncated
 

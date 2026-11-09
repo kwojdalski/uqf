@@ -16,8 +16,9 @@ from __future__ import annotations
 
 from uqs.model import transports
 from uqs.model.qnames import credential_var
-from uqs.scaffold.columns import TIME_COLUMN, raw_contract, sample_value, type_char
+from uqs.scaffold.columns import TIME_COLUMN, sample_value, type_char
 from uqs.scaffold.poll import symbol_list
+from uqs.scaffold.raw_columns import raw_contract
 from uqs.scaffold.transform import worker_transform
 
 

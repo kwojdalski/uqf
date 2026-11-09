@@ -62,6 +62,7 @@ def history(tmp_path) -> tuple[Path, TestClient]:
                        subject="GET /ops/queue", outcome="succeeded", duration_ms=3.0),
             ],
             "drops": [{"level": "debug", "reason": "sampled", "count": 5}],
+            "batch_id": activity.new_id(),
         },
     )  # fmt: skip
     store: activity.ActivityStore = client.app.state.activity  # ty: ignore[unresolved-attribute]
@@ -243,3 +244,22 @@ def test_list_prints_a_path_holding_markup_literally(history, tmp_path):
         src.backup(dst)  # the WAL too, which a file copy would miss
     out = _run("activity", "list", "--db", str(odd), "--outcome", "accepted")
     assert "x]" in " ".join(out.split()), out
+
+
+@pytest.mark.parametrize(
+    ("command", "limit"),
+    [("list", "0"), ("list", "-3"), ("list", "1001"), ("export", "0"), ("export", "100001")],
+)
+def test_an_out_of_range_limit_is_refused_not_clamped(history, command, limit):
+    """`select` clamped --limit to [1, max] in silence: 5000 returned 1000 with
+    nothing saying so, and 0 or -3 returned one event (#2469)."""
+    db, _ = history
+    result = CliRunner().invoke(app, ["activity", command, "--db", str(db), "--limit", limit])
+    assert result.exit_code == 2, result.output
+    assert "--limit" in result.output and "range" in result.output
+
+
+def test_the_largest_list_limit_is_accepted(history):
+    db, _ = history
+    doc = json.loads(_run("activity", "list", "--db", str(db), "--limit", "1000", "--json"))
+    assert len(doc["events"]) == 5

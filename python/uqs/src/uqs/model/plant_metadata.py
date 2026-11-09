@@ -4,7 +4,8 @@ q is the authority on what `src/etl/plant_tables.q` declares. uqs used to
 find out by matching `name:([]...)` in the file's TEXT, five times over, so
 `name: ([]...)` - which q loads exactly the same - lost the table from every
 Python reader while q still had it. Now q is asked once:
-scripts/generate/export_plant_schema.q loads plant_tables.q alone (no init.q,
+scripts/generate/export_plant_schema.q loads plant_tables.q - after
+plant_registry.q, the .qetl.plant API it calls - and nothing else (no init.q,
 no feed, no worker) and prints each table's columns in order, with q's type
 character and attribute, its nested columns' element types and its sort
 rule. This module writes that to `src/etl/generated/plant_schema.json`, and
@@ -13,9 +14,11 @@ is the one reader of it.
 ORDINARY READS NEED NO q. The JSON is committed, ships in every release (it
 sits under src/), and a read only hashes the inputs to check it is current:
 
-  * `tree`     - plant_tables.q, the exporter and EXPORTER_VERSION. Checked on
-                 every read: a table this tree defines is never answered from
-                 metadata for some other plant_tables.q.
+  * `tree`     - plant_tables.q, plant_registry.q (what the declarations call,
+                 so what they evaluate to: #2503), the exporter and
+                 EXPORTER_VERSION. Checked on every read: a table this tree
+                 defines is never answered from metadata for some other
+                 plant_tables.q.
   * `vendored` - the starter pack's database.q (q reads $TORQAPPHOME's when it
                  is set, as `.qetl.plant.vendored_path` does). Checked only when
                  a vendored table (quote, trade, packets) is asked for, so a
@@ -48,7 +51,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.generated.q_facts import Q_ATTRIBUTES, Q_TYPE_NAMES
-from uqs.paths import DERIVE_SCRIPT, ETL_DIR, TABLES_FILE, TORQAPPHOME_ENV, UqsError, repo_root
+from uqs.paths import (
+    DERIVE_SCRIPT,
+    ETL_DIR,
+    PLANT_REGISTRY_FILE,
+    TABLES_FILE,
+    TORQAPPHOME_ENV,
+    UqsError,
+    repo_root,
+)
 
 #: What q evaluates TABLES_FILE (and the starter pack's database.q) to declare.
 PLANT_SCHEMA_FILE = ETL_DIR / "generated" / "plant_schema.json"
@@ -59,7 +70,7 @@ EXPORTER_VERSION = 3
 #: The q that exports, relative to the tree of the uqs doing the reading.
 EXPORTER = Path("scripts/generate/export_plant_schema.q")
 #: The vendored starter pack's schema when $TORQAPPHOME is unset - the same
-#: default as `.qetl.plant.vendored_path` in plant_tables.q.
+#: default as `.qetl.plant.vendored_path` in plant_registry.q.
 VENDORED_DEFAULT = Path("lib/torq-finance-starter-pack/database.q")
 
 #: q's type characters and the type names a definition casts with, as q exports
@@ -173,17 +184,26 @@ def q_code(text: str) -> str:
     return "\n".join(out)
 
 
+def _code_sha(path: Path) -> str:
+    """`path` as q code, hashed: its comments do not count."""
+    if not path.is_file():
+        return "absent"
+    return hashlib.sha256(q_code(path.read_text()).encode()).hexdigest()
+
+
 def tree_fingerprint(root: Path) -> str:
-    """plant_tables.q at `root` as q code - its comments do not count, so
-    editing one leaves the metadata current - the exporter and its version."""
+    """plant_tables.q and plant_registry.q at `root` as q code - their comments
+    do not count, so editing one leaves the metadata current - the exporter
+    and its version. Both files: the declarations are evaluated by the
+    registry's functions (`nested`, `sorting`, the vendored adoption), so a
+    change to either changes what q reports (#2503)."""
     exporter = _sha(repo_root() / EXPORTER)
-    plant = root / TABLES_FILE
-    code = (
-        hashlib.sha256(q_code(plant.read_text()).encode()).hexdigest()
-        if plant.is_file()
-        else "absent"
+    return _combine(
+        f"v{EXPORTER_VERSION}",
+        exporter,
+        _code_sha(root / TABLES_FILE),
+        _code_sha(root / PLANT_REGISTRY_FILE),
     )
-    return _combine(f"v{EXPORTER_VERSION}", exporter, code)
 
 
 def vendored_fingerprint(vendored: Path) -> str:
@@ -205,7 +225,8 @@ class Metadata:
     tables: dict[str, Table]
     #: the vendored fingerprint the file was made with
     vendored_print: str
-    #: every other name plant_tables.q binds in .qetl.plant: its API and registries
+    #: every other name bound in .qetl.plant: plant_registry.q's API and registries,
+    #: and plant_tables.q's few non-table helpers
     bindings: frozenset[str] = frozenset()
 
     def own(self) -> dict[str, Table]:
@@ -288,7 +309,13 @@ def load(root: Path | None = None) -> Metadata:
     regenerate it. Cached while none of its inputs change on disk."""
     root = (root or repo_root()).resolve()
     path = root / PLANT_SCHEMA_FILE
-    key = (root, _stamp(path), _stamp(root / TABLES_FILE), _stamp(repo_root() / EXPORTER))
+    key = (
+        root,
+        _stamp(path),
+        _stamp(root / TABLES_FILE),
+        _stamp(root / PLANT_REGISTRY_FILE),
+        _stamp(repo_root() / EXPORTER),
+    )
     if (hit := _CACHE.get(key)) is not None:
         return hit
     if not path.is_file():
@@ -309,7 +336,8 @@ def load(root: Path | None = None) -> Metadata:
         )
     if recorded_tree != tree_fingerprint(root):
         raise SchemaMetadataError(
-            f"{path} is stale: {root / TABLES_FILE} (or the exporter) changed since it "
+            f"{path} is stale: {root / TABLES_FILE} (or {PLANT_REGISTRY_FILE.name}, or the "
+            f"exporter) changed since it "
             f"was generated - {_guidance(root)}"
         )
     found = Metadata(root, tables, recorded_vendored, bindings)

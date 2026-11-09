@@ -27,6 +27,15 @@ from uqs.scaffold.plan import ScaffoldPlan
 #: path relative to the tree's root.
 #: The contract surface, which a scaffold makes stale too but which needs q.
 _CONTRACT_SURFACE = (str(DERIVE_SCRIPT), "contract-surface")
+#: What else needs q, in order (#2461): q_facts.py, which records a new
+#: source's transport and a worker's dataset - `uqs config sources stub` reads
+#: it - then tableproperties.csv, which reads q_facts.py for getdata's table
+#: list, then the contract surface.
+_WITH_Q: tuple[tuple[str, ...], ...] = (
+    (str(DERIVE_SCRIPT), "q-facts"),
+    (str(DERIVE_SCRIPT), "table-properties"),
+    _CONTRACT_SURFACE,
+)
 _DERIVED: tuple[tuple[str, ...], ...] = (
     (str(DERIVE_SCRIPT), "plant-schema"),
     (str(DERIVE_SCRIPT), "operational-docs"),
@@ -58,32 +67,64 @@ def _regenerate_derived(repo_root: Path) -> list[subprocess.CompletedProcess[str
     ]
 
 
-def _export_contract_surface(repo_root: Path) -> subprocess.CompletedProcess[str] | None:
-    """Re-export the contract surface, or None when no q is installed.
+def _regenerate_with_q(repo_root: Path) -> list[subprocess.CompletedProcess[str]] | None:
+    """Run each of _WITH_Q in order, or None when no q is installed.
 
-    Separate from `_regenerate_derived` because it needs q: it loads the tree
-    to read what is defined. Every scaffold adds `.qpipe.job.<name>` names, so
-    without this the contract-surface hook fails on the next commit, for a
-    change nobody made by hand.
+    Separate from `_regenerate_derived` because these need q: they load the
+    tree to read what is defined. Every scaffold adds `.qpipe.job.<name>`
+    names, and a new table or source changes q_facts.py and getdata's table
+    list, so without this their hooks and test_catalog.q fail on the next
+    commit, for a change nobody made by hand.
     """
     if q_interpreter() is None:
         return None
-    return subprocess.run(
-        [sys.executable, str(repo_root / DERIVE_SCRIPT), *_CONTRACT_SURFACE[1:]],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    return [
+        subprocess.run(
+            [sys.executable, str(repo_root / script), *args],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        for script, *args in _WITH_Q
+    ]
+
+
+def _report(derived: tuple[str, ...], regen: subprocess.CompletedProcess[str]) -> None:
+    if regen.returncode == 0:
+        console.print(f"[green]regenerated[/] via {' '.join(derived)}")
+    else:
+        console.print(
+            f"[red]could not regenerate[/] - run `{derived_command(derived)}` "
+            f"and fix what it reports:\n{regen.stdout}{regen.stderr}"
+        )
+
+
+def report_regeneration(repo_root: Path) -> None:
+    """Regenerate everything a tree edit made stale, saying what each run did.
+
+    Not fatal: the edit is already written, and a refusal here (the generator
+    verifies every declared edge first) is information about the tree to act
+    on, not a reason to pretend the edit did not happen."""
+    for derived, regen in zip(_DERIVED, _regenerate_derived(repo_root), strict=True):
+        _report(derived, regen)
+    with_q = _regenerate_with_q(repo_root)
+    if with_q is None:
+        steps = ", ".join(f"`{derived_command(d)}`" for d in _WITH_Q)
+        console.print(
+            f"[yellow]no q on PATH[/] - run {steps} where q is installed, or their "
+            "--check hooks fail on the next commit"
+        )
+        return
+    for derived, regen in zip(_WITH_Q, with_q, strict=True):
+        _report(derived, regen)
 
 
 def write_plan(plan: ScaffoldPlan, repo_root: Path, *, dry_run: bool) -> None:
     """Print a plan and, unless --dry-run, write it and regenerate what it
     makes stale. The same for every shape."""
     console.print(plan.render())
-    console.print(
-        "  then regenerate: " + ", ".join(" ".join(d) for d in (*_DERIVED, _CONTRACT_SURFACE))
-    )
+    console.print("  then regenerate: " + ", ".join(" ".join(d) for d in (*_DERIVED, *_WITH_Q)))
     if dry_run:
         console.print(dry_run_note())
         return
@@ -93,29 +134,6 @@ def write_plan(plan: ScaffoldPlan, repo_root: Path, *, dry_run: bool) -> None:
         _die(exc)
         return
     console.print(f"\n[green]scaffolded {len(written)} file(s)[/]")
-    # Not fatal: the job's files are already written, and a refusal here (the
-    # generator verifies every declared edge first) is information about the
-    # tree to act on, not a reason to pretend the scaffold did not happen.
-    for derived, regen in zip(_DERIVED, _regenerate_derived(repo_root), strict=True):
-        if regen.returncode == 0:
-            console.print(f"[green]regenerated[/] via {' '.join(derived)}")
-        else:
-            console.print(
-                f"[red]could not regenerate[/] - run `{derived_command(derived)}` "
-                f"and fix what it reports:\n{regen.stdout}{regen.stderr}"
-            )
-    surface = _export_contract_surface(repo_root)
-    if surface is None:
-        console.print(
-            f"[yellow]no q on PATH[/] - run `{derived_command(_CONTRACT_SURFACE)}` where "
-            "q is installed, or the contract-surface hook fails on the next commit"
-        )
-    elif surface.returncode == 0:
-        console.print(f"[green]regenerated[/] via {' '.join(_CONTRACT_SURFACE)}")
-    else:
-        console.print(
-            f"[red]could not export the contract surface[/] - the new files may not load in q:\n"
-            f"{surface.stdout}{surface.stderr}"
-        )
+    report_regeneration(repo_root)
     for note in plan.notes:
         console.print(f"  [yellow]next[/] {note}")

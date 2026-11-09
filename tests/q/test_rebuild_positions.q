@@ -230,6 +230,24 @@
         (1000000 -2500000 750000 -3000000 1250000f;5#1j);
         "one row per day in the partitions after two releases, not two"]};
 
+/ #2494: a kill between the two renames of the swap that finishes deal_positions
+/ leaves that date's table only in staging/old - the disk state is made here by
+/ hand, after a run whose reaction outcomes are recorded. The rerun is idle, so
+/ only its recovery can put it back, and that swept the worker's own dataset.
+.qt.qpipe.job.rebuild_positions.test_a_rerun_restores_a_reaction_output_a_killed_swap_left_in_staging:{[t]
+    system "rm -rf build/test_hdb_rebuild_positions_kill build/test_hdb_rebuild_positions_kill.staging";
+    saved:.qetl.io.default;
+    .qetl.io.default:.qetl.io.hdb[`:build/test_hdb_rebuild_positions_kill;`deal_time];
+    @[.qt.qpipe.job.rebuild_positions.run_worker;`rp10;{x}];
+    system "mkdir -p build/test_hdb_rebuild_positions_kill.staging/old/2026.09.11";
+    system "mv build/test_hdb_rebuild_positions_kill/2026.09.11/deal_positions build/test_hdb_rebuild_positions_kill.staging/old/2026.09.11/";
+    r:@[.qt.qpipe.job.rebuild_positions.run_worker;`rp10;{x}];
+    .qetl.io.default:saved;
+    px:@[get;`:build/test_hdb_rebuild_positions_kill/2026.09.11/deal_positions/net_notional;{[e] `missing}];
+    .qunit.assertEquals[(r`state;px;key `:build/test_hdb_rebuild_positions_kill.staging/old/2026.09.11);
+        (`idle;enlist 1000000f;`symbol$());
+        "the idle rerun put the reaction's partition back from staging, and left staging empty"]};
+
 .qt.qpipe.job.rebuild_positions.test_a_dry_run_builds_nothing:{[t]
     setenv[`UQF_DRY_RUN;"true"];
     .qt.qpipe.job.rebuild_positions.run_worker `rp5;

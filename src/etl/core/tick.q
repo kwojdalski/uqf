@@ -112,7 +112,11 @@
     unknown:t where not t in key .qetl.tick.schemas;
     if[count unknown;
         '"subscribe: no schema for ",(", " sv string unknown)," - declare it with .qetl.tick.schema before subscribing, so a subscriber cannot wait forever on a typo"];
-    `.qetl.tick.subscribers upsert ([] sink:(count t)#enlist sink; tbl:t; registered:(count t)#.z.p);
+    / A sink already subscribed to a table is not added again (#2491): two
+    / rows for one sink sent it every batch of that table twice.
+    held:.qetl.tick.subscribers[`tbl] where {[s;x] s~x}[sink] each .qetl.tick.subscribers`sink;
+    add:(distinct t) except held;
+    `.qetl.tick.subscribers upsert ([] sink:(count add)#enlist sink; tbl:add; registered:(count add)#.z.p);
     t!.qetl.tick.schemas t}
 
 / Drop every subscription held by a sink - what a process calls from .z.pc
@@ -240,8 +244,19 @@
     / compares the column with itself, is true for every row, and sends
     / every table to every subscriber. It reads correct and is not.
     dst:exec sink from .qetl.tick.subscribers where tbl=name;
-    {[name;batch;sink] sink (`upd;name;batch)}[name;batch] each dst;
+    / Each sink under its own trap (#2492): the batch is already logged, so
+    / the plant has accepted it. A sink that throws costs that sink the
+    / batch and no other - untrapped, it stopped delivery to every later
+    / subscriber and reached the publisher as a refusal, whose retry then
+    / logged the batch twice.
+    {[name;batch;sink] @[sink;(`upd;name;batch);.qetl.tick.sink_failed[name;sink]]}[name;batch] each dst;
     count dst}
+
+/ Private: record a subscriber that threw on a batch, and carry on.
+/ @private
+.qetl.tick.sink_failed:{[name;sink;err]
+    .[{.qetl.log.ch.err[`ipc;"a subscriber threw on a batch - it alone misses it";x]};
+        enlist `table`sink`error!(name;.Q.s1 sink;err);::];}
 
 / ---------------------------------------------------------------- THE LOG
 

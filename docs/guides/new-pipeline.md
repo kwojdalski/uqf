@@ -122,13 +122,16 @@ A backfill also gets a worked example, `scripts/examples/<name>_example.q`: it
 runs the worker once on its fixture into a throwaway HDB and shows what it
 published, with no stack running.
 
-A new table's desk catalog entry is written for you: a SCAFFOLDED line in
-[`uqs_catalog.q`](../../scripts/processes/uqs_catalog.q). The description is
-yours: it is read by someone deciding whether your table is the one they want,
-and the table's own name there would pass every test and tell them nothing. If
-the desk should not see the table, delete that line and add the table to
-`.qcat.hidden` with the reason --- `tests/q/test_catalog.q` refuses a published
-table that is in neither list.
+A new table's desk catalog entry is written for you: a SCAFFOLDED description in
+[`uqs_catalog.q`](../../scripts/processes/uqs_catalog.q), and a SCAFFOLDED
+`.qcat.unbounded` reason beside it. The description is yours: it is read by
+someone deciding whether your table is the one they want, and the table's own
+name there would pass every test and tell them nothing. The reason says why a
+whole select of the table is safe to read; replace it with a `querypolicy.csv`
+row where it is not. If the desk should not see the table, delete both and add
+the table to `.qcat.hidden` with the reason --- `tests/q/test_catalog.q` refuses
+a published table that is in neither list, and a browsable one with neither a
+policy row nor an unbounded reason.
 
 Everything that IS derived - `processes.md`, `src/etl/generated/pipeline_dag.q`
 and `docs/man.q` - it regenerates before it returns.
@@ -532,10 +535,6 @@ In a q session from the repository root:
 \l src/init.q
 \l scripts/processes/torq_pipeline.q
 \l src/etl/init.q
-
-setenv[`UQF_FIXTURE_WRITES;enlist "1"];   / no credential yet: write the fixture
-.qpipe.job.fx_rates_backfill.init[`source_version`range_from`range_to!(`v1;2026.09.11D00:00;2026.09.16D00:00)];
-.qpipe.job.fx_rates_backfill.run[]
 ```
 
 `scripts/processes/torq_pipeline.q` is easy to forget and the failure is
@@ -543,14 +542,19 @@ obscure: it defines `.qtorq`, which is where the status and lock directories
 come from, and without it `init` dies inside `mkdir` on a path built from
 nothing.
 
-The run reports:
+There is no credential yet, so ask for the fixture, then run it:
 
-```
-state:             completed
-windows completed: 5
-rows published:    5
-rows in target:    5
-covered:           1
+<!-- q-example: transcript -->
+```q
+q)setenv[`UQF_FIXTURE_WRITES;enlist "1"];
+q).qpipe.job.fx_rates_backfill.init[`source_version`range_from`range_to!(`v1;2026.09.11D00:00;2026.09.16D00:00)];
+q).qpipe.job.fx_rates_backfill.run[]
+state            | `completed
+windows_completed| 5
+windows_failed   | 0
+rows_published   | 5
+cursor           | 2026.09.16D00:00:00.000000000
+reactions_owed   | 0
 ```
 
 Five daily windows over a five-day range, each published and recorded.
@@ -603,10 +607,16 @@ completed window, including an empty one. That is what makes "we ran and there
 was nothing" distinguishable from "we never ran", and a derived ledger cannot
 express the difference at all.
 
+<!-- q-example: transcript -->
 ```q
-q).qetl.coverage.is_covered[`fx_rates;`;`v1;.z.p;2026.09.11D00:00;2026.09.16D00:00]
+q).qetl.coverage.is_covered[`fx_rates;`;`$"v1~fixture";.z.p;2026.09.11D00:00;2026.09.16D00:00]
 1b
+q).qetl.coverage.is_covered[`fx_rates;`;`v1;.z.p;2026.09.11D00:00;2026.09.16D00:00]
+0b
 ```
+
+The version is `` `$"v1~fixture" `` because step 4 wrote the fixture, which is
+recorded apart from `v1`; a live run's coverage is under `v1`.
 
 The `` ` `` is the partition, and it is required on every read for the reason
 `source_version` is: an optional filter is one a caller forgets, and forgetting
@@ -615,6 +625,7 @@ no partition dimension" --- see below.
 
 Run it a second time and it is **idle**, not failed:
 
+<!-- q-example: transcript -->
 ```q
 q).qpipe.job.fx_rates_backfill.run[][`state]
 `idle
@@ -794,13 +805,18 @@ it that. `.qtorq.safe_timer` remains the tool for that question.
 
 ## Filling one dataset with several workers
 
-One worker per `(dataset, partition)` pair. Declare a `partition` and two
-workers can fill one dataset at once:
+One worker per `(dataset, partition)` pair. Declare a `partition`, and the
+`partition_column` of the output that holds it, and two workers can fill one
+dataset at once:
 
+<!-- q-example: run -->
 ```q
 .qetl.job.bounded.define[`fx_rates_eurusd;
-    `source`outputs`width`transform`partition!(`fx_rates;enlist `fx_rates;1D;`fx_rates_pips;`EURUSD)];
+    `source`outputs`width`transform`partition`partition_column!(`fx_rates;enlist `fx_rates;1D;`fx_rates_pips;`EURUSD;`sym)];
 ```
+
+`define` refuses a `partition` without its column: publish uses it to refuse
+another partition's rows, and a `replace` to clear only this partition's.
 
 Coverage is then recorded and read under that partition, and **no read unions
 across partitions** --- a range covered for `` `EURUSD `` says nothing about

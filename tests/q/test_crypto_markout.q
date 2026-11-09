@@ -56,7 +56,7 @@
 
 / The worked books, as the plant carries them, and one closing book per (pair, source) after the furthest
 / horizon quoting what that series last quoted: the reference covers an instant only once a book at or after
-/ it has arrived, and readiness waits for every source with a book inside max_age of the horizon.
+/ it has arrived, and readiness waits for every source held (#2455).
 .qt.qpipe.job.crypto_markout.books:{[] update time:source_time+0D00:00:00.1, market:`crypto from .qpipe.transform.crypto_markout_outputs.sample_books[]}
 
 .qt.qpipe.job.crypto_markout.close_after:{[b;t]
@@ -205,6 +205,28 @@
     .qunit.assertTrue[0<count live;"the live job scored"];
     .qunit.assertEquals[live;twin;"identical rows: the same calculation, the same inputs"];
     .qunit.assertEquals[asc exec distinct fill_id from live;`f1`f2`f3;"the EURUSD fill is excluded by both"]};
+
+/ #2455: venue b's feed is in order but runs 6s behind - more than max_age (5s), well inside the
+/ lateness (30s). At the wall's t+h its newest book is older than max_age; its books stamped up to t+h
+/ are still in flight. Driven message by message in receipt order with the timer every 100ms, the live
+/ job must wait for them and score as the twin does on the same rows.
+.qt.qpipe.job.crypto_markout.test_a_source_lagging_past_max_age_is_waited_for_and_scored_as_the_twin_does:{[tc]
+    t0:.qt.qpipe.job.crypto_markout.t;
+    btc:.qt.qpipe.job.crypto_markout.btc;
+    bk:{[st;src;mid;lag] update time:st+lag from .qt.qpipe.job.crypto_markout.bk[st;`$"BTC-USDT";src;mid-1;mid+1;`venue]};
+    books:raze {[bk;st] bk[st;`a;62000f;0D00:00:00.1],bk[st;`b;62100f;0D00:00:06]}[bk] each t0+0D00:00:01*til 31;
+    fill:.qt.qpipe.job.crypto_markout.ex[t0+0D00:00:05;t0+0D00:00:05.2;`a;btc;1;62000f;`f1;`venue];
+    n:count books; ticks:t0+0D00:00:00.1*til 600; m:count ticks;
+    / every message in receipt order, a tick after the messages of its instant
+    evs:`at`k xasc ([] at:books[`time],fill[`time],ticks; k:((1+n)#0),m#1;
+        tb:(n#`market_data),(enlist `executions),m#`tick; i:(til n),0,m#0N);
+    {[books;fill;e] $[`tick=e`tb; .qt.qpipe.job.crypto_markout.tick e`at;
+        .qt.qpipe.job.crypto_markout.feed[e`tb;$[`executions=e`tb; fill; books (),e`i]]]}[books;fill] each evs;
+    live:.qt.qpipe.job.crypto_markout.key_order[.qt.qpipe.job.crypto_markout.published[]];
+    f:`executions`market_data!((cols .qpipe.source.hdb_crypto_markouts.raw_executions[])#fill;(cols .qpipe.source.hdb_crypto_markouts.raw_market_data[])#books);
+    twin:.qt.qpipe.job.crypto_markout.key_order[delete time from .qetl.transform.apply[`hdb_crypto_markout_long;f]];
+    .qunit.assertTrue[0<count live;"the live job scored"];
+    .qunit.assertEquals[live;twin;"venue b's 10s book is in the live score, as in the twin's"]};
 
 / --- the bps are the retired job's, on one clock ---------------------------------------------
 

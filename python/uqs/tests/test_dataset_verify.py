@@ -70,7 +70,7 @@ def test_the_script_calls_the_one_q_function_with_the_scope_and_window(monkeypat
         default_paths(), "demo_deals", {"sym": "EURUSD", "book": "7"}, window(), behaviours=False
     )
     assert (
-        ".qetl.verify.run[`demo_deals;`sym`book!(`EURUSD;7j);2026.09.11D00:00:00.000000000;"
+        '.qetl.verify.run[`demo_deals;`sym`book!("EURUSD";"7");2026.09.11D00:00:00.000000000;'
         "2026.09.14D00:00:00.000000000;(::);0b]" in sent["script"]
     )
 
@@ -78,7 +78,17 @@ def test_the_script_calls_the_one_q_function_with_the_scope_and_window(monkeypat
 def test_one_scope_column_is_a_one_entry_dictionary(monkeypatch):
     sent = fake_q(monkeypatch, report(ALL_PASS))
     dataset_verify.verify(default_paths(), "demo_deals", {"sym": "EURUSD"}, window())
-    assert "enlist[`sym]!enlist `EURUSD;" in sent["script"]
+    assert 'enlist[`sym]!enlist "EURUSD";' in sent["script"]
+
+
+def test_a_scope_value_goes_to_q_as_text_for_its_column_to_type(monkeypatch):
+    """Not typed from how the text looks: `0005` was sent as the long 5, a date
+    or a float as a symbol, and each matched no row (#2473)."""
+    sent = fake_q(monkeypatch, report(ALL_PASS))
+    scope = {"sym": "0005", "day": "2026.09.13", "px": "1.5"}
+    dataset_verify.verify(default_paths(), "demo_deals", scope, window())
+    assert '`sym`day`px!("0005";"2026.09.13";"1.5")' in sent["script"]
+    assert "0005j" not in sent["script"]
 
 
 def test_a_gateway_becomes_the_getdata_reader(monkeypatch):

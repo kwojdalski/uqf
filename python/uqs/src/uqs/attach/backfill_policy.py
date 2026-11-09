@@ -76,6 +76,18 @@ POLICY: dict[str, Policy] = {
 }
 
 
+def blocker(code: str, component: str, message: str, **facts: object) -> Finding:
+    """A coordination blocker: `code` must be in POLICY, `facts` what was observed."""
+    return Finding(
+        "blocker",
+        code,
+        component,
+        message,
+        action=POLICY[code].action,
+        facts={k: "" if v is None else str(v) for k, v in facts.items()},
+    )
+
+
 #: The one coordination finding a backfill may waive, and the guardrail that waives it.
 EOD_FENCE = "eod-fence"
 #: What a waived fence means, in the words the plan and the run print.

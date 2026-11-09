@@ -129,7 +129,7 @@ call goes through `.pm.req`, and a login can run only what its roles grant.
   window instead. Every plant table and every dataset a bounded worker writes is
   listed for getdata (`tableproperties.csv` is generated, one derived row each,
   from the columns q declares each table is read by -
-  `.qetl.plant.instrument_exceptions` in `src/etl/plant_tables.q` names
+  `.qetl.plant.instrument_exceptions` in `src/etl/plant_registry.q` names
   `order_quality`'s instrument column, `book`), and listing a table grants
   nothing: the policies decide. A worker dataset that is not a plant table is
   handed to a runtime only while its HDB's newest partition holds it, because

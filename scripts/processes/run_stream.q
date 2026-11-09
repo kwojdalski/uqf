@@ -181,12 +181,41 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
         {[dt] .qetl.tick.has_log dt};
         {[] .qproc.standalone.roll_of .qetl.tick.plant_day[]})}
 
+/ The handle to a plant in another process, null until connect opens it.
+.qproc.standalone.h:0Ni
+
+/ Each table a job in this process subscribes to over a remote plant, and
+/ the handlers of every job subscribed to it (#2491).
+.qproc.standalone.routes:(`symbol$())!()
+
+/ The handlers routed a table, or none. Not `routes t`: a missing key in a
+/ dictionary of lists gives a null, not an empty list.
+/ @param t the table
+/ @return the handlers, a list
+.qproc.standalone.handlers_of:{[t] $[t in key .qproc.standalone.routes; .qproc.standalone.routes t; ()]}
+
+/ Root upd under the remote transport: hand a batch to every job subscribed
+/ to its table. Each handler is trapped, so one job's failure costs no other
+/ job the batch.
+/ @param t the table
+/ @param x the rows
+.qproc.standalone.route:{[t;x]
+    {[t;x;h] .[h;(t;x);{[t;e] .qetl.log.ch.err[`ipc;"a job's handler threw on a batch";`table`error!(t;e)];}[t]]}[t;x]
+        each .qproc.standalone.handlers_of t;}
+
 / The transport for a plant in ANOTHER process, on port `tp`.
 / .
 / The plant has to call this process back, so it needs a sink addressed at
 / it - which only the REMOTE can build, out of its own .z.w: send it a
 / lambda to apply. What comes back is (`upd;table;rows), evaluated here as
-/ upd[table;rows], so the handler has to BE root upd.
+/ upd[table;rows] - ONE root upd for the whole process, while -job may start
+/ several jobs on this transport. So root upd is a router (#2491): each job's
+/ subscribe adds its handler to .qproc.standalone.routes under its tables,
+/ and upd hands a batch to every handler registered for that table. Setting
+/ upd to each job's handler in turn kept only the last one. The plant is
+/ connected ONCE and subscribes this process once per table (its subscribe
+/ ignores a sink already subscribed to a table), so a table two jobs share
+/ crosses the wire once and reaches each of them once.
 / .
 / Publishing is NOT a bare handle. A handle is an integer, which
 / .qetl.job.stream.wire rejects (functions only), and `h[tbl;rows]` would
@@ -207,26 +236,39 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
 / declaring replay 1b used to be warned and started without it, so
 / fx_positions rebuilt its book with the plant in its own process and started
 / flat with the plant in another.
+/ .
+/ A plant that goes away is SEEN (#2493): .z.pc nulls the handle when it
+/ closes, and `subscribed` answers 0b from then on, so the uptime beat's
+/ subscription watch records the job failing and its outage reads as a gap -
+/ not a healthy job that receives nothing. It does not reconnect: a
+/ restarted plant has to be met by restarting the job, which replays.
 / @param tp the plant's port
 / @return the transport dictionary
 .qproc.standalone.remote_transport:{[tp]
-    `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log`plant_roll!(
+    `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log`plant_roll`subscribed!(
         {[tp]
+            if[not null .qproc.standalone.h; :()];
+            `.z.pc set {[h] if[h=.qproc.standalone.h; `.qproc.standalone.h set 0Ni];};
             .qetl.log.ch.info[`ipc;"connecting to the plant";enlist[`port]!enlist tp];
             `.qproc.standalone.h set @[hopen;tp;{[tp;e]
                 '"run_stream: cannot connect to the plant on port ",string[tp]," (",e,") - is it running? start one with -plant ",string tp}[tp]];}[tp];
         {[] {[h;t;x] h(`.qetl.tick.publish;t;x)}[.qproc.standalone.h]};
         {[tbls;handler;replay]
-            `upd set handler;
-            if[not replay; .qproc.standalone.h({[want] .qetl.tick.subscribe[want;neg .z.w]};tbls); :()];
-            msgs:.qproc.standalone.h({[want] .qetl.tick.replay_then_subscribe[want;neg .z.w]};tbls);
+            tbls:(),tbls;
+            `upd set .qproc.standalone.route;
+            msgs:$[replay; .qproc.standalone.h({[want] .qetl.tick.replay_then_subscribe[want;neg .z.w]};tbls);
+                [.qproc.standalone.h({[want] .qetl.tick.subscribe[want;neg .z.w]};tbls); ()]];
             {[h;m] h . m}[handler] each msgs;
-            if[count msgs; -1 "run_stream: recovered ",string[count msgs]," message(s) from the plant's log"];};
+            if[count msgs; -1 "run_stream: recovered ",string[count msgs]," message(s) from the plant's log"];
+            / Routed only AFTER the replay: a live batch the plant sent before
+            / it answered is in the replay too, and reaches this job once.
+            .qproc.standalone.routes[tbls]:{[h;t] .qproc.standalone.handlers_of[t],enlist h}[handler] each tbls;};
         .qproc.standalone.add_timer;
         {[tbls;first_day;last_day] .qproc.standalone.h({[w;a;b] .qetl.tick.earlier_days[w;a;b]};tbls;first_day;last_day)};
         {[] .qproc.standalone.h({[] .qetl.tick.plant_day[]};())};
         {[dt] .qproc.standalone.h({[d] .qetl.tick.has_log d};dt)};
-        {[] .qproc.standalone.roll_of .qproc.standalone.h({[] .qetl.tick.plant_day[]};())})}
+        {[] .qproc.standalone.roll_of .qproc.standalone.h({[] .qetl.tick.plant_day[]};())};
+        {[] not null .qproc.standalone.h})}
 
 / The jobs to run for `jobs` with the plant in this process: every in-tree
 / producer upstream of them, producers first, then `jobs` themselves.

@@ -66,6 +66,24 @@ it("shows failed and idle workers distinctly, including unreadable files", async
   expect(screen.getByText("Source unavailable")).toBeInTheDocument();
   expect(screen.getByText("bad.json")).toBeInTheDocument();
 });
+it("heads a 409 by its error type, not its status (#2481)", async () => {
+  mockApi(() => ({
+    ok: false,
+    status: 409,
+    json: async () => ({
+      error: "TargetNotScoped",
+      detail:
+        "GET /ops/backfill reads this server's own stack only, so it is not available in workspace box - switch to local for it",
+      transient: false,
+    }),
+  }));
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: /Backfills/ }));
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("Request failed");
+  expect(alert).toHaveTextContent("switch to local for it");
+  expect(alert).not.toHaveTextContent("Coverage incomplete");
+});
 it("builds filters from the catalog and renders a 409 with its missing range", async () => {
   const fetcher = mockApi((path) =>
     path === "/catalog"
