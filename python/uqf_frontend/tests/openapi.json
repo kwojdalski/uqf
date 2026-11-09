@@ -1717,7 +1717,7 @@
     "/activity/export": {
       "get": {
         "summary": "Export Activity",
-        "description": "The history as a file: JSON Lines, CSV, or a timeline a person\nreads (activity_export.render) - oldest first, under the same filters as\nGET /activity, at most activity_log.EXPORT_MAX events.",
+        "description": "The history as a file: JSON Lines, CSV, or a timeline a person\nreads (activity_export.render) - oldest first, under the same filters as\nGET /activity, at most activity_log.EXPORT_MAX events. Cut at the\nlimit, it says so: a header line in text, and X-UQF-Truncated.",
         "operationId": "export_activity_activity_export_get",
         "parameters": [
           {

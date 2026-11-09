@@ -267,18 +267,27 @@ def export_(
     filters = {"session": session, "request": request, "action": action, "subject": subject,
                "outcome": outcome, "recorded_by": recorded_by, "level": level}  # fmt: skip
     try:
-        q = _query(range_from, range_to, day, last, filters, limit)
-        _, events, drops = _read(db, q, activity_log.EXPORT_MAX)
+        # one past the limit says whether older events matched (#2527)
+        limit = max(1, min(limit, activity_log.EXPORT_MAX))
+        q = _query(range_from, range_to, day, last, filters, limit + 1)
+        _, events, drops = _read(db, q, activity_log.EXPORT_MAX + 1)
     except UqsError as exc:
         _die(exc)
         return
+    truncated = len(events) > limit
+    events = events[:limit]
     body = activity_export.render(
         events,
         str(fmt),
         exported_at=dt.datetime.now(dt.UTC),
         filters=q.described(),
         drops=drops,
+        truncated=truncated,
     )
+    if truncated and fmt != "text":
+        # jsonl and csv have no header line to say it in; stderr, so a file
+        # piped from stdout stays the export alone
+        sys.stderr.write(f"{activity_export.TRUNCATED_NOTE}\n")
     if output is None:
         sys.stdout.write(body)
         return
