@@ -76,7 +76,7 @@ cands:@[.qdev.cbench.parse_candidates;arg[`candidates;.qdev.cbench.default_candi
 num:{[k;d] v:arg[k;""]; $[count v; "J"$v; d]};
 reps:1|num[`reps;3];
 o:`points`probes`range`seed!(num[`points;100];num[`probes;1000];num[`range;0Nj];num[`seed;42]);
-qbin:arg[`qbin;first .z.X];
+qbin:.qdev.cbench.resolve[getenv `PATH;arg[`qbin;first .z.X]];
 
 / The scratch directory is checked before it is made: as text against the HDB as named and as
 / found, then again once it exists, through any symbolic link.
@@ -141,7 +141,7 @@ run_child:{[root;s;traced]
     out:tmp,"/trace.txt";
     cmd:.qdev.cbench.command[env;$[traced; counter; `none];out;core[root;s]];
     lines:@[system;cmd;{[e] enlist "error|",e}];
-    r:lines where lines like "result|*";
+    r:lines where {x like "result|*"} each lines;
     if[0=count r; :(0n;0Nj;0Nj;"|" sv lines)];
     f:"|" vs first r;
     reads:$[traced; .qdev.cbench.parse_reads[counter;@[read0;hsym `$out;{()}]]; 0Nj];

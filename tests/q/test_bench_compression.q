@@ -125,6 +125,8 @@ system "l scripts/dev/bench_compression_lib.q";
 .qt.qdev.cbench.test_on_path_reads_the_directories:{[t]
     d:first system "mktemp -d";
     (hsym `$d,"/strace") 0: enlist "";
+    .qunit.assertEquals[.qdev.cbench.resolve["/nonexistent:",d;"strace"];d,"/strace";"a bare name, found"];
+    .qunit.assertEquals[.qdev.cbench.resolve["/nonexistent";"q"];enlist "q";"not found: as given"];
     .qunit.assertTrue[.qdev.cbench.on_path["/nonexistent:",d;`strace];"in the second directory"];
     .qunit.assertFalse[.qdev.cbench.on_path["/nonexistent:",d;`dtruss];"not there"];
     .qunit.assertFalse[.qdev.cbench.on_path["";`strace];"an empty PATH"];

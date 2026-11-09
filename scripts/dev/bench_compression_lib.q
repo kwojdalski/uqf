@@ -388,6 +388,19 @@
     ds:d where 0<count each d:":" vs path;
     any {[p;d] not ()~key hsym `$d,"/",string p}[prog] each ds}
 
+/ A program's path: as given when it names a directory, else the first match on the PATH.
+/ It matters for q itself: system "q ..." is q's own \q, which would exit this process.
+/ @param path the PATH, a string
+/ @param prog the program, a string
+/ @return a string; prog unchanged when it is on no directory of the PATH
+/ @eg .qdev.cbench.resolve["/nonexistent";"/opt/q/q"]  ->  "/opt/q/q"
+.qdev.cbench.resolve:{[path;prog]
+    prog:(),prog;
+    if["/" in prog; :prog];
+    ds:d where 0<count each d:":" vs path;
+    hit:ds where {[p;d] not ()~key hsym `$d,"/",p}[prog] each ds;
+    $[count hit; (first hit),"/",prog; prog]}
+
 / A shell command that runs `core` with the environment prefix, under the tracer.
 / @param env the environment assignments, a string ("" for none)
 / @param counter `strace, `dtruss or `none
