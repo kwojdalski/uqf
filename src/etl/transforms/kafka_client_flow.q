@@ -12,7 +12,8 @@
 / topic is DECLARED in streaming/kafka_flow.q, beside the job that owns it.
 / .
 / A trade that cannot be a trade is REFUSED, by name, rather than published: a
-/ quantity or price that is not positive. The row goes to kafka_dead_letter with
+/ quantity or price that is not positive and finite, a side other than buy or
+/ sell, or a null sym or trade_id (#2575). The row goes to kafka_dead_letter with
 / reason `mapping` and this message, and its neighbours in the batch publish
 / normally (kafka_ingest.q maps a refused batch row by row).
 / .
@@ -26,14 +27,18 @@
 .qpipe.transform.kafka_client_flow.message:([] topic:`symbol$(); partition:`long$(); offset:`long$(); broker_time:`timestamp$();
     sym:`symbol$(); side:`symbol$(); qty:`float$(); price:`float$(); client:`symbol$(); trade_id:`long$())
 
-/ The mapping: refuse a non-positive quantity or price, else reorder into client_flow's columns.
+/ The mapping: refuse a record that cannot be a trade, else reorder into client_flow's columns.
 / @param m the decoded records
 / @return message_index (which record each row came from), then client_flow's payload columns (the provenance is appended by the framework)
-/ @throws error naming the offending offsets when any quantity or price is not positive
+/ @throws error naming each reason and its offending offsets: a quantity or price that is not positive and finite (a null is not positive), a side other than buy or sell, a null sym or trade_id
 / @eg cols .qpipe.transform.kafka_client_flow.map .qpipe.transform.kafka_client_flow.message
 .qpipe.transform.kafka_client_flow.map:{[m]
-    bad:(m[`qty]<=0f) or m[`price]<=0f;
-    if[any bad; '"quantity and price must be positive: offsets ",", " sv string m[`offset] where bad];
+    why:("quantity must be positive and finite";"price must be positive and finite";
+        "side must be buy or sell";"sym must not be null";"trade_id must not be null");
+    bad:((m[`qty]<=0f) or m[`qty]=0w; (m[`price]<=0f) or m[`price]=0w;
+        not m[`side] in `buy`sell; null m`sym; null m`trade_id);
+    hit:where any each bad;
+    if[count hit; '"; " sv {[w;b;o] w,": offsets ",", " sv string o where b}[;;m`offset]'[why hit;bad hit]];
     select message_index:`long$i, sym, side, qty, price, client, trade_id from m}
 
 .qetl.transform.define[`kafka_client_flow;`inputs`output`fn`examples!(
