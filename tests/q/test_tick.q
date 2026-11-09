@@ -163,6 +163,18 @@
         "a batch of the schema's shape still publishes"];
     .qunit.assertEquals[count .qt.qetl.tick.received;1;"and is delivered"]};
 
+/ #2492: fan_out applied each sink untrapped, so one that threw stopped
+/ delivery to every later subscriber and reached the publisher as a refusal
+/ of a batch the log already held - and its retry logged it again.
+.qt.qetl.tick.test_a_sink_that_throws_costs_no_other_subscriber_the_batch:{[t]
+    .qt.qetl.tick.fresh_log[];
+    .qetl.tick.subscribe[`tt_trade;{[m] '"sink exploded"}];
+    .qetl.tick.subscribe[`tt_trade;.qt.qetl.tick.recorder];
+    .qunit.assertEquals[.qetl.tick.publish[`tt_trade;([] sym:enlist `EURUSD; px:enlist 1.085)];1;
+        "the batch is logged, so the plant has accepted it and says so"];
+    .qunit.assertEquals[count .qt.qetl.tick.received;1;"the subscriber after the failing one still gets it"];
+    .qunit.assertEquals[.qetl.tick.msg_count;1;"and the log holds it once"]};
+
 .qt.qetl.tick.test_a_learned_schema_refuses_a_later_batch_of_another_shape:{[t]
     .qetl.tick.reset[];
     .qetl.tick.publish[`tt_new;([] sym:enlist `EURUSD; px:enlist 1.085)];
