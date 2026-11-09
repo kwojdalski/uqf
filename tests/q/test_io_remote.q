@@ -118,6 +118,16 @@
     .qunit.assertThrows[{[ignored;b] .qt.qetl.io.remote.send[`append;b]}[::];.qt.qetl.io.remote.batch[];
         "remote: nothing is granted for deals of attachment uat";"refused"]};
 
+.qt.qetl.io.remote.test_two_distinct_pairs_never_share_a_grant:{[t]
+    / joined with "|", (a|b; c) and (a; b|c) were one key (#2316)
+    .qt.qetl.io.remote.reset[];
+    g:{[tgt] `mgr`target`schema`max_rows`users!(.qetl.io.memory;tgt;.qt.qetl.io.remote.schema[];100;`symbol$())};
+    .qetl.io.remote.serve[`$"a|b";`c;g `ra];
+    .qetl.io.remote.serve[`a;`$"b|c";g `rb];
+    .qunit.assertEquals[count 1_key .qetl.io.remote.grants;2;"two grants"];
+    .qunit.assertEquals[.qetl.io.remote.withdraw[`a;`$"b|c"];1b;"the second is withdrawn"];
+    .qunit.assertEquals[.qetl.io.remote.grant_for[`$"a|b";`c]`target;`ra;"the first is still granted, to its own target"]};
+
 .qt.qetl.io.remote.test_a_user_the_grant_does_not_name_is_refused:{[t]
     .qt.qetl.io.remote.reset[];
     .qt.qetl.io.remote.grant[.qetl.io.memory;enlist `extractor];

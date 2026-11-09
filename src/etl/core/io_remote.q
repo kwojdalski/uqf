@@ -111,9 +111,12 @@
 .qetl.io.remote.reloads:([] attachment:`symbol$(); dataset:`symbol$(); at:`timestamp$(); final:`boolean$();
     finished:`long$(); outcome:`symbol$(); error:())
 
-/ Private: the key a grant is filed under.
+/ Private: the key a grant is filed under. The attachment's length leads, so
+/ no two (attachment; dataset) pairs share a key whatever "|" either holds (#2316).
 / @private
-.qetl.io.remote.grant_key:{[attachment;dataset] `$string[attachment],"|",string dataset}
+.qetl.io.remote.grant_key:{[attachment;dataset]
+    a:string attachment;
+    `$string[count a],":",a,"|",string dataset}
 
 / Open the receiver's journal: load what an earlier receiver persisted, so a
 / restarted receiver still knows which batches it committed.
