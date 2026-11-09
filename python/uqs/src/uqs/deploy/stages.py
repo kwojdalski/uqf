@@ -36,7 +36,8 @@ log = get_logger()
 #: argv[1] (epoch seconds, the server's clock): a verdict for each streaming
 #: process among argv[2] (comma-separated), from the release's own
 #: stream_health reader and pipeline registry. .z.p, which each record's `at`
-#: is, is UTC.
+#: is, is UTC; .j.j writes it `2026-11-09T11:35:54.823627317` on KDB-X and
+#: with a `D` for the `T` on PeachQ, and fromisoformat takes either (#2392).
 SOAK_PY = r"""
 import json, sys
 from datetime import UTC, datetime
@@ -52,7 +53,8 @@ out = {}
 def verdict(r):
     if r is None:
         return "no beat", "it wrote no stream_health record"
-    at = datetime.strptime(str(r.get("at", ""))[:26], "%Y.%m.%dD%H:%M:%S.%f")
+    stamp, _, fraction = str(r.get("at", "")).partition(".")
+    at = datetime.fromisoformat(f"{stamp}.{(fraction or '0')[:6].ljust(6, '0')}")
     if at.replace(tzinfo=UTC).timestamp() < since:
         return "no beat", f"its last record is from {r['at']}, before the soak"
     if r.get("failing"):
