@@ -17,7 +17,13 @@
 / cycle commits a partition's offset only after .qetl publish of the record
 / RETURNED. Over the TorQ transport that call is a synchronous .u.upd to the
 / segmented tickerplant, so "returned" means the STP ran its update handler
-/ without error. In its default batch mode (`defaultbatch`) that handler has
+/ without error - which is the publisher's to prove, because the STP's error
+/ mode (its default) swallows a failing update and answers success. The TorQ
+/ publisher (.qtorq.publish, #2192) therefore throws when the plant refused the
+/ batch: it counts as a publish that threw, below. The batch is RETRIED, not
+/ quarantined - it stays in the backlog and publish_errors rises each cycle -
+/ because a refusal of the fixed envelope is the plant's state (a schema skew
+/ mid-deploy), not the records', and it clears when the plant does. In its default batch mode (`defaultbatch`) that handler has
 / also handed the record to its log file's write handle; in `memorybatch` it
 / has not even done that, and in either mode the write is the operating
 / system's to flush, not an fsync. So the claim is "the tickerplant had the
@@ -412,7 +418,7 @@
 .qetl.kafka.take:{[tr;st]
     r:.qetl.kafka.try[tr`poll;enlist .qetl.kafka.poll_max];
     if[not first r;
-        .qetl.log.err[`kafka;"poll failed";enlist[`error]!enlist last r];
+        .qetl.log.ch.err[`source;"poll failed";enlist[`error]!enlist last r];
         :.qetl.kafka.bump[st;`poll_errors;1]];
     msgs:last r;
     ev:.qetl.kafka.events[msgs];
@@ -471,7 +477,7 @@
 .qetl.kafka.reset_restarted:{[st;b]
     back:.qetl.kafka.restarted[st`marks;b];
     if[0=count back; :st];
-    .qetl.log.warn[`kafka;"partition offsets went backwards - its mark is reset and the new records are published";enlist[`partitions]!enlist count back];
+    .qetl.log.ch.warn[`source;"partition offsets went backwards - its mark is reset and the new records are published";enlist[`partitions]!enlist count back];
     st[`marks]:.qetl.kafka.forget[st`marks;back];
     st}
 
@@ -485,7 +491,7 @@
     fresh:.qetl.kafka.admit[st`marks;b];
     r:.qetl.kafka.try[{[tr;f] if[count f; tr[`publish][`kafka_message;f]]; count f};(tr;fresh)];
     if[not first r;
-        .qetl.log.err[`kafka;"publish failed - nothing will be committed";`rows`error!(count fresh;last r)];
+        .qetl.log.ch.err[`ipc;"publish failed - nothing will be committed";`rows`error!(count fresh;last r)];
         :.qetl.kafka.bump[st;`publish_errors;1]];
     st[`marks]:.qetl.kafka.advance_runs[st`marks;fresh];
     st:.qetl.kafka.plan_commit[st;b];
@@ -514,7 +520,7 @@
     pend:0!st`pending;
     mine:.qetl.kafka.pair_key[pend`topic;pend`partition] in held;
     if[not all mine;
-        .qetl.log.warn[`kafka;"partitions revoked - their uncommitted offsets are dropped; the broker redelivers and the marks absorb it";enlist[`partitions]!enlist sum not mine];
+        .qetl.log.ch.warn[`source;"partitions revoked - their uncommitted offsets are dropped; the broker redelivers and the marks absorb it";enlist[`partitions]!enlist sum not mine];
         st[`pending]:.qetl.kafka.keep[st`pending;mine];
         st:.qetl.kafka.bump[st;`revoked;sum not mine]];
     mk:0!st`marks;
@@ -531,11 +537,11 @@
     if[first r;
         st[`pending]:.qetl.kafka.keep[st`pending;not pend[`topic]=t];
         :.qetl.kafka.bump[st;`commits;count p]];
-    .qetl.log.warn[`kafka;"offset commit failed - kept for the next cycle";`topic`error!(t;last r)];
+    .qetl.log.ch.warn[`ipc;"offset commit failed - kept for the next cycle";`topic`error!(t;last r)];
     pend:update tries:tries+1 from pend where topic=t;
     spent:pend[`tries]>=.qetl.kafka.commit_tries;
     if[any spent;
-        .qetl.log.err[`kafka;"offset commit given up on - the broker redelivers and the marks absorb it";`topic`partitions!(t;sum spent)]];
+        .qetl.log.ch.err[`ipc;"offset commit given up on - the broker redelivers and the marks absorb it";`topic`partitions!(t;sum spent)]];
     st[`pending]:`topic`partition xkey pend where not spent;
     .qetl.kafka.bump[st;`commit_errors;1]}
 

@@ -31,7 +31,7 @@
 
 / A worker over dataset ppx filling one partition.
 .qt.qetl.partition_replace.decl:{[p;extra]
-    ((`source`dataset`width`transform`partition!(`demo_deals;`ppx;1D;`demo_deals_passthrough;p)),extra)}
+    ((`source`outputs`width`transform`partition!(`demo_deals;enlist `ppx;1D;`demo_deals_passthrough;p)),extra)}
 
 / n deals of symbol s, ids from `from_id`, inside the window starting at d 0.
 .qt.qetl.partition_replace.deals:{[s;from_id;n]
@@ -159,7 +159,7 @@
 
 .qt.qetl.partition_replace.test_a_partition_column_needs_a_partition:{[t]
     .qunit.assertThrows[{.qetl.job.bounded.define[`ppx_eur;x]};
-        `source`dataset`width`transform`partition_column!(`demo_deals;`ppx;1D;`demo_deals_passthrough;`sym);
+        `source`outputs`width`transform`partition_column!(`demo_deals;enlist `ppx;1D;`demo_deals_passthrough;`sym);
         "define: ppx_eur's partition_column needs a partition*";
         "a column that holds a partition's value means nothing without one"]};
 

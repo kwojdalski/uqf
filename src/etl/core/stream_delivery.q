@@ -54,7 +54,7 @@
 / Private: refuse a malformed `row_key` or `ack` in a poll declaration.
 / Called by poll_declared.
 / @param job the job's name
-/ @param decl the declaration, carrying `poll` and `publishes`
+/ @param decl the declaration, carrying `poll` and `outputs`
 / @return nothing - it throws naming the job and the key
 / @private
 .qetl.job.stream.delivery.check:{[job;decl]
@@ -66,7 +66,7 @@
         k:(),k;
         if[`time in k;
             '"define: ",string[job],"'s poll row_key includes time - the tickerplant stamps its own, so a republished row never matches"];
-        plant:((),decl`publishes) inter .qetl.plant.names[];
+        plant:((),decl`outputs) inter .qetl.plant.names[];
         if[count bad:plant where not all each k in/: cols each .qetl.plant.published each plant;
             '"define: ",string[job],"'s poll row_key ",(", " sv string k)," is not in the columns of ",", " sv string bad]];
     if[(`ack in key p) and not -1h=type p`ack;
@@ -84,9 +84,8 @@
 / @eg .qetl.job.stream.delivery.wire[`fx_feed;`present`logged!({[t;k] (count k)#0b};{[t] 0})]  ->  `fx_feed
 .qetl.job.stream.delivery.wire:{[job;hooks]
     if[not 99h=type hooks; '"delivery.wire: ",string[job],"'s hooks must be a dictionary of ",", " sv string .qetl.job.stream.delivery.hook_keys];
-    if[count bad:(key hooks) except .qetl.job.stream.delivery.hook_keys;
-        '"delivery.wire: ",string[job]," was given ",(", " sv string bad),", which is not a delivery hook"];
-    if[count bad:(key hooks) where not .qetl.job.stream.is_callable each value hooks;
+    .qetl.declared.refuse_unknown["delivery.wire: ",string job;"a delivery hook set";hooks;.qetl.job.stream.delivery.hook_keys];
+    if[count bad:(key hooks) where not .qetl.declared.callable each value hooks;
         '"delivery.wire: ",string[job],"'s ",(", " sv string bad)," must be functions"];
     / enlisted, read back with first (hook): a bare indexed write can collapse a registry (#1030)
     if[`present in key hooks; .qetl.job.stream.delivery.present[job]:enlist hooks`present];
@@ -150,7 +149,7 @@
     if[m~(::); :m];
     if[current~m`to;
         .qetl.job.stream.delivery.unmark[name];
-        .[{.qetl.log.dbg[x;y;z]};(name;"in-flight marker cleared - its page was saved";`from`to!m`from`to);::];
+        .[{.qetl.log.ch.dbg[`coverage;y;(enlist[`job]!enlist x),z]};(name;"in-flight marker cleared - its page was saved";`from`to!m`from`to);::];
         :(::)];
     m}
 
@@ -178,12 +177,12 @@
         out:(key out)!kept;
         n:sum count each kept;
         .qetl.stream_health.record_doubt[job;1b;sent-n;m];
-        .[{.qetl.log.warn[x;y;z]};(job;"in-doubt page resolved by row key";
+        .[{.qetl.log.ch.warn[`coverage;y;(enlist[`job]!enlist x),z]};(job;"in-doubt page resolved by row key";
             `from`to`fetched`already_published`publishing!(m`from;m`to;sent;sent-n;n));::];
         :out];
     why:$[`row_key in key p; "no reader of the published tables is wired"; "the job declares no poll row_key"];
     .qetl.stream_health.record_doubt[job;0b;sent;m];
-    .[{.qetl.log.warn[x;y;z]};(job;"in-doubt page published again - possibly duplicated";
+    .[{.qetl.log.ch.warn[`coverage;y;(enlist[`job]!enlist x),z]};(job;"in-doubt page published again - possibly duplicated";
         `from`to`rows`reason!(m`from;m`to;sent;why));::];
     out}
 
@@ -230,7 +229,7 @@
         '"tick: ",string[job],"'s publish of ",string[n]," row(s) onto ",string[t],
          " was not acknowledged - the tickerplant's logged count went from ",string[before]," to ",string[after],
          ", so the cursor stays and the page is in doubt"];
-    .[{.qetl.log.dbg[x;y;z]};(job;"publish acknowledged";`table`rows`logged!(t;n;after));::];
+    .[{.qetl.log.ch.dbg[`ipc;y;(enlist[`job]!enlist x),z]};(job;"publish acknowledged";`table`rows`logged!(t;n;after));::];
     r}
 
 \d .

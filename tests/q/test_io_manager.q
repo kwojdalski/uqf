@@ -665,7 +665,7 @@
 / A stream job's row and its backfill twin's, one key, stamped either side of
 / midnight: the live copy by receipt (half a second after), the twin's by the
 / event (#884). Partitioned on `time`, keyed without it.
-.qt.qetl.io.spill_opts:`on_conflict`row_key`time_column`range_from`range_to!(`replace;`sym`trade_time;`time;2026.01.02D00:00:00.000000000;2026.01.03D00:00:00.000000000)
+.qt.qetl.io.spill_opts:`on_conflict`row_key`time_column`range_from`range_to!(`replace;`sym`px;`trade_time;2026.01.02D00:00:00.000000000;2026.01.03D00:00:00.000000000)
 .qt.qetl.io.live_rows:{[] ([] time:2026.01.03D00:00:00.500000000 2026.01.03D10:00:00.000000000;
     sym:`EURUSD`EURUSD; trade_time:2026.01.02D23:59:59.000000000 2026.01.03D09:59:59.000000000; px:1.1 1.2)}
 .qt.qetl.io.twin_row:{[] ([] time:enlist 2026.01.02D23:59:59.900000000; sym:enlist `EURUSD;
@@ -719,6 +719,18 @@
     .qetl.io.write[m;`iospill;.qt.qetl.io.live_rows[]];
     .qetl.io.write_keyed[m;`iospill;.qt.qetl.io.twin_row[];@[.qt.qetl.io.spill_opts;`row_key;:;`sym`time]];
     .qunit.assertEquals[count .qt.qetl.io.part[root;2026.01.03;`iospill];2;"both rows of the 3rd are still there"]};
+
+/ #2197: a key without the time column recurs from day to day (one balance per account per day).
+/ The next-day case is in test_io_hdb_scoped.q, whose fresh-process reader sees the partition on disk.
+.qt.qetl.io.balances:{[d;v] ([] time:2#`timestamp$d+0D17; sym:`ACC1`ACC2; account:`A1`A2; bal:v)}
+.qt.qetl.io.balance_opts:`on_conflict`row_key`time_column`range_from`range_to!(`replace;`account;`time;2026.01.01D00:00:00.000000000;2026.01.02D00:00:00.000000000)
+
+.qt.qetl.io.test_replace_without_a_time_column_is_refused:{[t]
+    o:.qt.qetl.io.balance_opts;
+    .qunit.assertThrows[{[o;ignored] .qetl.io.write_keyed[.qetl.io.memory;`iobal_mem;.qt.qetl.io.balances[2026.01.01;100 200f];o]}[@[o;`time_column;:;`nope]];::;
+        "on_conflict replace: iobal_mem has no time column*";"a time column the table lacks"];
+    .qunit.assertThrows[{[o;ignored] .qetl.io.write_keyed[.qetl.io.memory;`iobal_mem;.qt.qetl.io.balances[2026.01.01;100 200f];o]}[enlist[`time_column]_o];::;
+        "on_conflict replace: iobal_mem has no time column*";"no time_column at all"]};
 
 .qt.qetl.io.test_hdb_fail_writes_nothing_when_a_key_clashes:{[t]
     root:.qt.qetl.io.hdb_dir[];
@@ -805,7 +817,7 @@
     / At DEFINE time, not at first write. A worker with a broken manager
     / should fail before it has fetched a window it cannot store.
     .qunit.assertError[{.qetl.job.bounded.define[`io_broken;x]};
-        `source`dataset`width`transform`io!(`demo_deals;`io_broken_ds;1D;`demo_deals_passthrough;42);
+        `source`outputs`width`transform`io!(`demo_deals;enlist `io_broken_ds;1D;`demo_deals_passthrough;42);
         "a malformed io manager stops the worker at declaration"]};
 
 .qt.qetl.io.test_a_custom_manager_receives_the_target_and_batch:{[t]
@@ -837,7 +849,7 @@
     / had could not be registered at all. Registration order silently decided
     / which declarations were legal.
     .qunit.assertEquals[.qetl.job.bounded.define[`io_newkey;
-        `source`dataset`width`transform`io!(`demo_deals;`io_newkey_ds;1D;`demo_deals_passthrough;.qetl.io.discard)];
+        `source`outputs`width`transform`io!(`demo_deals;enlist `io_newkey_ds;1D;`demo_deals_passthrough;.qetl.io.discard)];
         `io_newkey;
         "a worker declaring an optional key registers regardless of order"]};
 

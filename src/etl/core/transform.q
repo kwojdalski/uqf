@@ -163,6 +163,7 @@
 .qetl.transform.define:{[name;decl]
     who:"define: transform ",string[name];
     if[not 99h=type decl; '"define: a transform declaration must be a dictionary"];
+    .qetl.declared.refuse_unknown[who;"a transform";decl;.qetl.transform.required_keys,`as_of];
     missing:.qetl.transform.required_keys where not .qetl.transform.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     ins:decl`inputs;
@@ -176,9 +177,9 @@
     clock:$[`as_of in key decl; decl`as_of; 0b];
     if[not -1h=type clock; 'who,"'s as_of must be a boolean"];
     fn:decl`fn;
-    if[not (type fn) within 100 112h; 'who,"'s fn must be a function"];
+    .qetl.declared.require_callable[who;`fn;fn;"a function"];
     arity:(count ins)+clock;
-    if[(100h=type fn) and not arity=count (value fn) 1;
+    if[(.qetl.declared.lambda fn) and not arity=count (value fn) 1;
         'who,"'s fn must take ",string[arity]," argument(s): ",
          (", " sv string key ins),$[clock;", as_of";""]];
     exs:decl`examples;
@@ -287,7 +288,7 @@
     out:(d`fn) . args;
     p:.qetl.transform.problems[d`output;out;1b];
     if[count p; '"transform ",string[name]," output: ","; " sv p];
-    .[{.qetl.log.dbg[x;y;z]};(name;"transform applied";
+    .[{.qetl.log.ch.dbg[`transform;y;(enlist[`transform]!enlist x),z]};(name;"transform applied";
         `rows_in`rows_out!(count each given key ins;count out));::];
     out}
 

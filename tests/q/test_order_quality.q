@@ -77,7 +77,7 @@
     d:.qetl.job.stream.rolling.def `order_quality;
     .qunit.assertEquals[(d`windows;d`by;d`event_time);(0D00:01 0D00:05 0D01;enlist `book;`source_time);"the declaration: cut on the source's time, not the plant's"];
     .qunit.assertEquals[(.qetl.job.stream.def `order_quality)`subscribe_to;enlist `order_outcomes;"it reads the contract, not an order table"];
-    .qunit.assertEquals[(.qetl.job.stream.def `order_quality)`publishes;enlist `order_quality;"and writes order_quality"]};
+    .qunit.assertEquals[(.qetl.job.stream.def `order_quality)`outputs;enlist `order_quality;"and writes order_quality"]};
 
 / As of 10:10:00. london's orders: 10:00:00 filled, 10:01:00 cancelled, 10:02:00
 / rejected, 10:05:00 rejected, 10:06:00 filled, 10:09:30 filled, 10:09:45

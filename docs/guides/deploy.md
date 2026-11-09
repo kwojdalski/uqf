@@ -90,7 +90,7 @@ equal to the list preflight checks. Every release's manifest records them as
   | `bash`, `tar` with `gzip`, `timeout`, `find`, `sed`, `awk`, `grep`, `nohup`, and the coreutils every POSIX shell script uses (`mktemp`, `chmod`, `ln`, `readlink`, `date`, `id`, `head`, `cut`, `tr`) | the push's server scripts, and `torq.sh`                                                                                                                                                                                                                                                                   | preflight, by name for each but the plain coreutils                             |
   | `python3`, 3.8 or later, standard library only                                                                                                                                                        | the push's own checks on the server (sha256s, the runtime check, prune's listing, atomic renames), and running the installer. It is never the release's Python                                                                                                                                             | preflight runs it                                                               |
   | `envsubst` (gettext), `pgrep` (procps), `lsof`, `hostname` that takes `-I` and `-A`                                                                                                                   | `torq.sh start` substitutes `process.csv` fields with `envsubst`, finds a running process with `pgrep` and matches its host against `hostname -I`/`-A`; `torq.sh stop` finds the pid listening on a port with `lsof`                                                                                       | preflight, `hostname -I` by running it                                          |
-  | `rlwrap`                                                                                                                                                                                              | uqs refuses to run `torq.sh` without it (`uqs.paths.check_prerequisites`), though `torq.sh` uses it only for `qcon` and `debug`                                                                                                                                                                            | preflight                                                                       |
+  | `rlwrap`                                                                                                                                                                                              | uqs refuses to run `torq.sh` without it (`uqs.stack.prerequisites`), though `torq.sh` uses it only for `qcon` and `debug`                                                                                                                                                                                  | preflight                                                                       |
   | `sshd`, with `scp`, reachable from where you run `push`; for `--remote-user`, a `sudo -n -iu <user>` rule                                                                                             | how the push reaches the server and runs as the service account                                                                                                                                                                                                                                            | ssh itself; `check_sudo` in preflight                                           |
   | a writable `--dest`                                                                                                                                                                                   | the releases, the runtimes and the lock live there                                                                                                                                                                                                                                                         | preflight                                                                       |
 
@@ -124,15 +124,17 @@ first 12 characters of the revision:
 Inside the artifact:
 
 - **The tree.** The tracked files under an allowlist (`src`, `scripts`, the
-  three Python packages, `pyproject.toml`, `uv.lock`, and `lib/kx-dbmaint`), at
-  their repository paths, because the q loaders and `uqs` find each other by
-  layout. `lib/kx-dbmaint` is KX's `dbmaint.q` with its Apache-2.0 licence and
-  notice, the one part of `lib/` a release carries: the HDB repair below loads
-  it, offline, from `scripts/gates/fill_hdb_partitions.q`'s own location, and
-  the licence has to travel with the copy. Never shipped: the rest of `lib/`
-  (TorQ, the starter pack and the other vendored trees), `.env`, `.envrc`, keys
-  and licences, virtual environments, runtime data, logs, tests, build output,
-  and `scripts/torqconfig/permissions/gateway_users.csv`, which holds the demo
+  three Python packages, `pyproject.toml`, `uv.lock`, `lib/kx-dbmaint`, and one
+  file of `docs/`: `reference/surfaces/current/transports.csv`, which
+  `uqs config sources` and the backfill capabilities read at run time), at their
+  repository paths, because the q loaders and `uqs` find each other by layout.
+  `lib/kx-dbmaint` is KX's `dbmaint.q` with its Apache-2.0 licence and notice,
+  the one part of `lib/` a release carries: the HDB repair below loads it,
+  offline, from `scripts/gates/fill_hdb_partitions.q`'s own location, and the
+  licence has to travel with the copy. Never shipped: the rest of `lib/` (TorQ,
+  the starter pack and the other vendored trees), `.env`, `.envrc`, keys and
+  licences, virtual environments, runtime data, logs, tests, build output, and
+  `scripts/torqconfig/permissions/gateway_users.csv`, which holds the demo
   gateway passwords.
 - **`.release/`.** `requirements.txt`, the dependencies of `uqs` pinned with
   hashes from the committed `uv.lock`. `wheels/` holds the `uqs` wheel and a
@@ -180,9 +182,12 @@ manifest records. Building needs `uv`, and network access to fetch the wheels.
 
 `.github/workflows/release.yml` builds the artifacts for a tag `v*`, or for a
 tag given to its manual run. It builds them only after `ci.yml`'s checks pass on
-that commit, and never with `--override allow-dirty`. Each release gets two: the
-plain artifact, and one with its q converted for kdb+ 4.0 (`--q-version 4.0`).
-Each comes with its `.sha256` and `.manifest.json`. Deploy one by tag or by URL:
+that commit, and never with `--override allow-dirty`. The tag is resolved to one
+commit first and `ci.yml` checks out exactly that commit, whichever branch
+started the run; the build fails unless it is building the commit `ci.yml`
+checked. Each release gets two: the plain artifact, and one with its q converted
+for kdb+ 4.0 (`--q-version 4.0`). Each comes with its `.sha256` and
+`.manifest.json`. Deploy one by tag or by URL:
 
 ```bash
 uqs deploy push v1.4.0 --ssh uqf-server --dest /opt/uqf ... --dry-run
@@ -252,11 +257,14 @@ failure, and `status`, `rollback`, `prune` and `history TARGET`. `status`,
 `rollback` and `prune` also take a server a push from here registered (see
 `uqs deploy history`). `--ssh`, `--dest`, `--remote-user` and
 `--connect-timeout` remain for a server no target declares, and read the same on
-every command. Given beside a TARGET, they override its values.
-`push --target A,B`, the spelling before #1736, still works for one release and
-prints the new one. So does `--host`, the ssh destination's name before #1768:
-`--ssh` now, as `uqs target add` spells it, since every other command's `--host`
-is a q host.
+every command. Given beside a TARGET, they override its values. With neither,
+`status`, which only reads a server, reads the most recent deployment's, as
+`uqs target check` does, and exits 1 when nothing was deployed; `rollback` and
+`prune` change a server, so they are refused (exit 2) until one is named:
+`uqs deploy rollback TARGET` (#2243). `push --target A,B`, the spelling before
+#1736, still works for one release and prints the new one. So does `--host`, the
+ssh destination's name before #1768: `--ssh` now, as `uqs target add` spells it,
+since every other command's `--host` is a q host.
 
 - **The keys.** Each key is a `push` option, spelt as its parameter (`torq_home`
   for `--torq-home`). The values go through the same checks as the flags, and an
@@ -303,10 +311,14 @@ Each layer overrides the one above it in this table:
 - **Same checks.** Every layer's keys are checked, and a refusal names the layer
   and the key. An undeclared environment is refused. The merged values go
   through the same checks as the flags.
+- **Spans of time.** Each `*_timeout` key and `soak` takes what its flag takes:
+  a DURATION string (`verify_timeout = "5m"`) or a number of seconds
+  (`verify_timeout = 300`).
 - **Never in a file.** No layer may set the artifact, `--dry-run`, or a named
   override.
 - **Listing.** `uqs target list` shows each target with its layers merged. It
-  adds an `environment` column when a target names one.
+  adds an `environment` column when a target names one, and an `inspection`
+  column when a target is inspection-only.
 
 ### Changing targets
 
@@ -314,7 +326,7 @@ Edit the file by hand, or change it through `uqs`:
 
 ```bash
 uqs target add prd --ssh svc@prd.example --dest /srv/uqf --label tier=prod --reach
-uqs target set prd host=svc@prd2.example connect_timeout=20
+uqs target set prd ssh=svc@prd2.example connect_timeout=20
 uqs target set prd launch_mode=source launch_python=/opt/py/bin/python3 \
     launch_env_file=/srv/uqf/current/output/uqs/setenv.sh
 uqs target set prd labels.owner=desk environment=uat
@@ -368,6 +380,80 @@ is discarded on request, leaving the file untouched.
 its block before the change, comments included. It is a change like any other:
 checked, logged, and revertible. It is refused when a table has changed again
 since, rather than overwriting the later change.
+
+### A target's config push history
+
+Files pushed to a target's `shared/config/` through the frontend's file browser
+are kept, on the server only, in `shared/config/.uqf-history/<push-id>/`: what
+each file replaced (`before/`), what the push wrote (`after/`) and a
+`manifest.json` naming who pushed what, when, with each file's sha256 before and
+after. The frontend lists, diffs and restores from it, and so does `uqs`:
+
+```bash
+uqs target config history prd           # newest first; --json, --limit N
+uqs target config show prd PUSH         # each file: created or replaced, hashes, now
+uqs target config diff prd PUSH         # text under 256 KiB; hashes for anything else
+uqs target config restore prd PUSH -n   # what restoring would write and delete
+uqs target config restore prd PUSH      # asks first; --yes does not
+```
+
+A restore writes each replaced file's earlier content back and deletes each file
+the push created, as a push of its own, so it can be restored in turn. It is
+refused, writing nothing, when a file has changed since the push. Each target
+keeps its newest `UQF_FRONTEND_CONFIG_HISTORY_MAX_KEPT` pushes (50), none older
+than `UQF_FRONTEND_CONFIG_HISTORY_RETENTION_DAYS` (90); a pruned push's restore
+says so.
+
+### Inspection-only targets
+
+A target can be read from this machine but not changed through it. Set
+`inspection = true` on the target, or on its environment or `[defaults]`:
+
+```toml
+[environments.production]
+inspection = true
+
+[targets.prd]
+environment = "production"
+ssh = "deploy@prd"
+dest = "/srv/uqf"
+```
+
+While it is set, every `uqs` command that would change the target is refused
+before anything reaches it, and `--yes` does not get past it:
+
+- `uqs --target prd <command>` for a command that may change state: `start`,
+  `stop`, `restart`, a backfill, or a server-side confirmation such as
+  `data check --apply`. `status`, `summary`, `query` and every `--dry-run` still
+  run.
+- `uqs target shell prd`, which can change anything there.
+- `uqs deploy push`, `rollback` and `prune`, except with `--dry-run`. A list of
+  targets with one inspection target in it pushes to none of them.
+- `uqs target config restore prd PUSH`, except with `-n`.
+- `uqs target adopt NAME --ssh ... --dest ... --apply`, under any new name: the
+  dry run without `--apply` still reports what the server holds.
+
+A server is matched by name **and** by its ssh destination and `dest`, so
+`--ssh deploy@prd --dest /srv/uqf` is refused too, and so is any other declared
+target with the same ssh and `dest`. The comparison is of the server, not the
+spelling, and errs towards refusing:
+
+- the login is ignored, so `prd`, `deploy@prd` and `root@prd` are one server;
+- the host is compared without case, scheme, port or trailing `.`, and a bare
+  name matches the first label of a qualified one (`prd` is `prd.example.com`);
+- the `dest` is compared as a normalised path (`/srv/uqf/.` is `/srv/uqf`).
+
+An alias in `~/.ssh/config` that points at another host name is not resolved.
+
+The frontend reads the same key and matches the same way, and its API refuses
+every write to that target (see the frontend's
+[README](../../python/uqf_frontend/README.md#inspection-mode)). The value must
+be `true` or `false`; anything else is refused, naming the line.
+
+This is a policy of `uqs` and the frontend on this machine. It does not make
+ssh, a tunnel or the server read-only. Anyone who can ssh to the server, or who
+edits this file, can still change it. It stops accidents through these tools,
+not a change made on purpose around them.
 
 ## Requirements and named overrides
 
@@ -658,10 +744,16 @@ uqs --target uat start piggybankgeneralledger1   # asks first; --yes skips the q
   this machine only: `--target` refuses them. See [Changing
   targets](#changing-targets).
 - **Confirmation.** A command that can change the server, such as `start`,
-  `stop`, `restart`, `exec`, `job backfill`, `config set` or `data seed`, asks
-  first and names the target. Without a terminal it needs `--yes`. So do
-  `query`, which can send any q, and `status -i`, whose browser starts and stops
-  processes. Read-only commands run directly: `status`, `logs`, `schema`,
+  `stop`, `restart`, `exec`, `job backfill` or `config set`, asks first and
+  names the target. Without a terminal it needs `--yes`. So do `query`, which
+  can send any q, and `status -i`, whose browser starts and stops processes. A
+  command that rewrites data with `--apply` - `data check`, `alter`, `compress`,
+  `migrate`, `replay`, `seed` - is not asked about here: it shows its plan on
+  the server and asks there. One `uqs --target T --yes` answers whichever
+  question the command asks, here or on the server: it is passed on to every
+  command that takes `--yes` (#2247), so
+  `uqs --target uat --yes data migrate quote --date 2026.09.13 --apply` needs no
+  second `--yes`. Read-only commands run directly: `status`, `logs`, `schema`,
   `list`, `graph`, `job gaps`, `job runs show` and `connector logs`, as does
   `--help` and a `--dry-run` (not `job backfill`'s, which starts a process).
   Each command declares which it is, and the command line is parsed as the
@@ -867,10 +959,20 @@ Each stage stops the deployment if it fails:
   | report    | `deploy-report.json` is written into the release **before** activation, and a failed write fails the deployment: the next upgrade reads it to know which processes to stop                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
   | activate  | `current` moves to the new release in a single rename. The previous release stays where it was                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
-The tool prints a report as JSON when it finishes, and leaves it in the release
-as `deploy-report.json`. The report names the release, the source revision, each
-process and what it answered, the stage that failed if one did, and, separately,
-how the rollback went. Any unsuccessful deployment exits 1.
+The tool prints what happened when it finishes, and leaves the report in the
+release as `deploy-report.json`. The report names the release, the source
+revision, the ssh destination (`ssh`), each process and what it answered, the
+stage that failed if one did, and, separately, how the rollback went. Any
+unsuccessful deployment exits 1.
+
+Without `--json` it prints a line or two per target. With `--json` stdout is one
+document, `{ok, deployments: [...]}`, with one report per target in the order
+they were pushed - on a dry run too, each `status` then `planned`. Everything
+else - the plan of a dry run, its note, a new server's registration - goes to
+stderr, so a CD script parses stdout whatever happened. A push refused part-way
+prints `{ok: false, error, deployments}`, holding the targets it did push
+(#2125). A report a release wrote before #2123 names the ssh destination `host`;
+everything that reads one takes either spelling.
 
 ## The shared HDB and a new schema
 
@@ -943,6 +1045,7 @@ What a server runs, without ssh-ing in:
 
 ```bash
 uqs deploy status prod-a
+uqs deploy status                                           # the most recent deployment
 uqs deploy status prod-a --json                             # to script against
 uqs deploy status --ssh uqf-server --dest /opt/uqf          # a server no target declares
 ```
@@ -976,15 +1079,25 @@ processes, starts the target's from the target's own release, and moves
 verify is stopped, and the current release's processes are started and verified
 again, so the server ends where it began. Nothing is deleted.
 
-`--dry-run` prints the plan - what it would stop and what it would start - as
-JSON on stdout, and the dry-run note on stderr, so stdout still parses. It takes
-no lock (#1902), and `prune --dry-run` none either: taking it writes on the
-server - the lock directory, its owner and heartbeat, and `--dest` itself when
-it is missing - and a dry run promises to change nothing. The lock keeps two
-runs that act from acting at once; a dry run does not act, and the real run
-decides again under the lock. So a dry run reads the lock instead, and warns,
-naming the holder, when another deployment holds it: the plan it prints is the
-server as it is now, and may not survive that deployment.
+An interrupted rollback - Ctrl-C in the target's verify wait, say - is undone
+the same way before the command exits with the interruption (#2175), and its log
+says which way it ended: the current release restored, or not restored, in which
+case neither release may be running and `current` still names the release rolled
+back from. A second Ctrl-C during that restore stops it, and the log says so. An
+interruption while `current` moves leaves the verified target running, and the
+log names what `current` points to.
+
+`--dry-run` prints the plan - what it would stop and what it would start - and
+the dry-run note; with `--json`, the plan is the one document on stdout,
+`{ok, rollback: "planned", from, to, stop, start}`, and the note goes to stderr,
+so stdout still parses. It takes no lock (#1902), and `prune --dry-run` none
+either: taking it writes on the server - the lock directory, its owner and
+heartbeat, and `--dest` itself when it is missing - and a dry run promises to
+change nothing. The lock keeps two runs that act from acting at once; a dry run
+does not act, and the real run decides again under the lock. So a dry run reads
+the lock instead, and warns, naming the holder, when another deployment holds
+it: the plan it prints is the server as it is now, and may not survive that
+deployment.
 
 A target is verified with `uqs deploy check`, so a release from before that
 command existed (#835) cannot be a rollback target: its verification fails and
@@ -998,12 +1111,14 @@ Every push leaves its release, with its own offline `.venv`, in `releases/`.
 `uqs deploy prune` removes all but the newest `--keep N`, under the deploy lock.
 It names each release it would remove and asks first; `--yes` does not ask.
 `--dry-run` takes no lock, as for [a rollback](#rolling-back), and ends with the
-dry-run note on stderr after its JSON:
+dry-run note - on stderr under `--json`, whose document is
+`{ok, prune, kept, removed, freed_bytes}`. `--keep` defaults to the target's own
+`keep`, the one `deploy push` prunes to (#2123):
 
 ```bash
 uqs deploy prune prod-a --keep 3 --dry-run
 uqs deploy prune prod-a --keep 3          # asks
-uqs deploy prune prod-a --keep 3 --yes    # from a script
+uqs deploy prune prod-a --yes             # from a script, to the target's keep
 ```
 
 Three releases are never removed, whatever `--keep` is, even 0:
@@ -1019,7 +1134,11 @@ named like a release id is ever removed. A [bundled TorQ](#a-bundled-torq) or
 it. `--dry-run` lists the removals and removes nothing.
 `uqs deploy push --keep N` prunes the same way once the new release is current,
 while it still holds the lock. If that prune fails, the deployment still counts
-as a success, and its report records the failure.
+as a success, and its report records the failure. The same holds when the prune
+is interrupted (#2174): nothing is rolled back, the report says `deployed` with
+`pruned.prune: interrupted`, as does the deployment history, and the push then
+exits with the interruption. Its summary reads "deployed ...; prune incomplete"
+and names the `uqs deploy prune` that finishes it.
 
 ## Deploying as a service user
 

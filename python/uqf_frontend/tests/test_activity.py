@@ -23,12 +23,26 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from uqf_frontend import activity, control, models
-from uqf_frontend.activity import ActivityStore, Query
+from uqf_frontend import activity, control
+from uqf_frontend.activity import ActivityStore
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import BackfillNotStarted
 from uqf_frontend.gateway import FakeGateway
+from uqf_frontend.models.activity import (
+    ActivityDropReason,
+    ActivityExportFormat,
+    ActivityKind,
+    ActivityLevel,
+    ActivityOutcome,
+    ActivitySource,
+    ActivityTrigger,
+    BrowserDropReason,
+    BrowserKind,
+    SessionLevel,
+)
+from uqs import activity_log
+from uqs.activity_log import Query
 
 TOKEN = "s3cret-write-token-do-not-store"
 SESSION = "session-abc12345"
@@ -82,13 +96,18 @@ def _event(**over: Any) -> dict[str, Any]:
     body = {
         "event_id": activity.new_id(),
         "session_id": SESSION,
-        "ts": "2026-11-03T10:00:00Z",
+        "time": "2026-11-03T10:00:00Z",
         "kind": "navigate",
         "action": "view.open",
-        "target": "Control",
+        "subject": "Control",
         "trigger": "keyboard",
     }
     return {**body, **over}
+
+
+def _uniform(retention_days: int, max_rows: int) -> dict[str, activity.Bound]:
+    """The same bound at every level."""
+    return dict.fromkeys(activity_log.EVENT_LEVELS, activity.Bound(retention_days, max_rows))
 
 
 def _dump(path: Path) -> str:
@@ -119,6 +138,34 @@ def test_every_state_changing_route_is_named_in_server_actions():
     assert _write_routes() == set(activity.SERVER_ACTIONS)
 
 
+#: The one action prefix each area of state-changing routes is audited under,
+#: by the start of the route template (#2110). `GET /activity?action=` matches
+#: a dotted prefix, so `?action=files` must find every file write - and a
+#: route of an area with a stray prefix (`file.upload` beside `files.delete`)
+#: would hide from it.
+_ACTION_AREAS = {
+    "/services/{target}/files": "files",
+    "/services/{target}/config/": "config",
+    "/control/lifecycle/": "process",
+    "/control/processes/": "process",
+    "/control/worker/": "worker",
+    "/control/backfill": "backfill",
+    "/settings/": "settings",
+}
+
+
+def test_every_server_action_shares_its_areas_prefix():
+    params = {"target": "t", "procname": "p", "push_id": "1"}
+    stray = {}
+    for (method, route), name_of in activity.SERVER_ACTIONS.items():
+        (prefix,) = [p for start, p in _ACTION_AREAS.items() if route.startswith(start)] or [None]
+        for action in ("start", "stop", "restart", "other"):
+            name = name_of({**params, "action": action})
+            if prefix is None or (name != prefix and not name.startswith(prefix + ".")):
+                stray[(method, route)] = (name, prefix)
+    assert stray == {}
+
+
 def test_the_reads_sent_as_posts_are_not_actions():
     assert not activity.is_audited("POST", "/query")
     assert not activity.is_audited("POST", "/activity/events")
@@ -131,13 +178,13 @@ def test_a_caller_that_bypasses_the_ui_is_audited(tmp_path, monkeypatch):
     with an id it made up and echoed back."""
     _patch_core(monkeypatch, start=lambda *a, **k: _Done())
     c = _client(_settings(tmp_path))
-    r = c.post("/control/process/start", json={"procs": "rdb1 rdb2"})
+    r = c.post("/control/lifecycle/start", json={"procs": "rdb1 rdb2"})
     assert r.status_code == 200
     request_id = r.headers[activity.REQUEST_ID_HEADER]
     assert r.headers[activity.AUDIT_HEADER] == "recorded"
     (row,) = _history(c, source="server")
     assert row["action"] == "process.start"
-    assert row["target"] == "rdb1 rdb2"
+    assert (row["target"], row["subject"]) == ("local", "rdb1 rdb2")
     assert row["outcome"] == "succeeded"
     assert row["request_id"] == request_id
     assert row["session_id"] is None
@@ -145,8 +192,8 @@ def test_a_caller_that_bypasses_the_ui_is_audited(tmp_path, monkeypatch):
     assert row["method"] == "POST"
     assert row["duration_ms"] >= 0
     assert row["items"] == [
-        {"target": "rdb1", "outcome": "succeeded"},
-        {"target": "rdb2", "outcome": "succeeded"},
+        {"subject": "rdb1", "outcome": "succeeded"},
+        {"subject": "rdb2", "outcome": "succeeded"},
     ]
     assert row["detail"]["exit_code"] == 0
 
@@ -160,8 +207,8 @@ def test_the_browser_and_the_server_rows_share_the_request_id(tmp_path, monkeypa
         json={"events": [_event(kind="confirm", action="process.stop", request_id=rid)]},
     )
     c.post(
-        "/control/process/stop",
-        json={"procs": "rdb1"},
+        "/control/lifecycle/stop",
+        json={"procs": "rdb1", "confirmed": True},
         headers={activity.REQUEST_ID_HEADER: rid, activity.SESSION_ID_HEADER: SESSION},
     )
     rows = _history(c, request_id=rid)
@@ -176,7 +223,7 @@ def test_a_malformed_request_id_is_replaced_not_stored(tmp_path, monkeypatch):
     _patch_core(monkeypatch, start=lambda *a, **k: _Done())
     c = _client(_settings(tmp_path))
     r = c.post(
-        "/control/process/start",
+        "/control/lifecycle/start",
         json={"procs": "rdb1"},
         headers={activity.REQUEST_ID_HEADER: "x'; drop table activity;--"},
     )
@@ -189,7 +236,10 @@ def test_a_malformed_request_id_is_replaced_not_stored(tmp_path, monkeypatch):
 
 def test_a_request_without_the_token_is_audited_as_refused(tmp_path):
     c = TestClient(create_app(gateway=FakeGateway(), settings=_settings(tmp_path)))
-    assert c.post("/control/process/stop", json={"procs": "all"}).status_code == 401
+    assert (
+        c.post("/control/lifecycle/stop", json={"procs": "all", "confirmed": True}).status_code
+        == 401
+    )
     (row,) = _history(c, source="server")
     assert (row["action"], row["outcome"], row["status_code"]) == ("process.stop", "refused", 401)
 
@@ -198,7 +248,7 @@ def test_writes_disabled_is_refused_and_names_the_error_type(tmp_path):
     c = TestClient(
         create_app(gateway=FakeGateway(), settings=Settings(activity_db=tmp_path / "a.sqlite3"))
     )
-    assert c.post("/control/process/start", json={"procs": "all"}).status_code == 403
+    assert c.post("/control/lifecycle/start", json={"procs": "all"}).status_code == 403
     (row,) = _history(c)
     assert row["outcome"] == "refused"
     assert row["detail"] == {"error": "WritesDisabled"}
@@ -209,7 +259,7 @@ def test_a_nonzero_exit_is_failed_and_its_items_unknown(tmp_path, monkeypatch):
     process failed, so no item is claimed failed or succeeded."""
     _patch_core(monkeypatch, restart=lambda *a, **k: _Done(returncode=3))
     c = _client(_settings(tmp_path))
-    c.post("/control/process/restart", json={"procs": "rdb1 hdb1"})
+    c.post("/control/lifecycle/restart", json={"procs": "rdb1 hdb1", "confirmed": True})
     (row,) = _history(c)
     assert row["outcome"] == "failed"
     assert {i["outcome"] for i in row["items"]} == {"unknown"}
@@ -225,7 +275,7 @@ def test_a_lifecycle_that_times_out_after_starting_is_unknown_not_refused(tmp_pa
 
     _patch_core(monkeypatch, start=slow)
     c = _client(_settings(tmp_path))
-    assert c.post("/control/process/start", json={"procs": "all"}).status_code == 422
+    assert c.post("/control/lifecycle/start", json={"procs": "all"}).status_code == 422
     (row,) = _history(c)
     assert row["outcome"] == "unknown"
     assert row["detail"]["error"] == "ValidationFailed"
@@ -233,7 +283,7 @@ def test_a_lifecycle_that_times_out_after_starting_is_unknown_not_refused(tmp_pa
 
 def test_an_invalid_action_is_refused_before_acting(tmp_path):
     c = _client(_settings(tmp_path))
-    assert c.post("/control/process/obliterate", json={"procs": "all"}).status_code == 422
+    assert c.post("/control/lifecycle/obliterate", json={"procs": "all"}).status_code == 404
     (row,) = _history(c)
     assert (row["action"], row["outcome"]) == ("process", "refused")
 
@@ -241,7 +291,7 @@ def test_an_invalid_action_is_refused_before_acting(tmp_path):
 def test_a_detached_backfill_is_accepted_not_succeeded(tmp_path, monkeypatch):
     def fake(settings, **kw):
         control._acting()
-        return {**kw, "procname": "x1", "status_path": "/ops/backfill"}
+        return {**kw, "process": "x1", "status_path": "/ops/backfill"}
 
     monkeypatch.setattr(control, "start_backfill", fake)
     c = _client(_settings(tmp_path))
@@ -253,7 +303,7 @@ def test_a_detached_backfill_is_accepted_not_succeeded(tmp_path, monkeypatch):
     }
     assert c.post("/control/backfill", json=body).status_code == 200
     (row,) = _history(c)
-    assert (row["action"], row["target"], row["outcome"]) == (
+    assert (row["action"], row["subject"], row["outcome"]) == (
         "backfill.start",
         "demo_deals_backfill",
         "accepted",
@@ -290,17 +340,17 @@ def test_a_worker_config_outcome_is_whether_it_took_effect(tmp_path, answer, out
     gw = FakeGateway()
     gw._responses[control.SET_WORKER_CONFIG] = answer
     c = _client(_settings(tmp_path), gw)
-    c.put("/control/worker-config", json={"key": "dry_run", "value": "1"})
+    c.put("/control/worker/config", json={"key": "dry_run", "value": "1"})
     (row,) = _history(c)
-    assert (row["action"], row["target"], row["outcome"]) == ("worker.config", "dry_run", outcome)
+    assert (row["action"], row["subject"], row["outcome"]) == ("worker.config", "dry_run", outcome)
 
 
 def test_a_row_left_pending_by_a_restart_is_settled_unknown(tmp_path):
     path = tmp_path / "a.sqlite3"
-    store = ActivityStore(path, retention_days=30, max_rows=100)
+    store = ActivityStore(path, bounds=_uniform(30, 100))
     store.add(source="server", kind="request", action="process.stop", outcome="pending")
     store.close()
-    (row,) = ActivityStore(path, retention_days=30, max_rows=100).query(Query())
+    (row,) = ActivityStore(path, bounds=_uniform(30, 100)).query(Query())
     assert row["outcome"] == "unknown"
     assert "stopped before the outcome" in row["detail"]["reason"]
 
@@ -308,7 +358,7 @@ def test_a_row_left_pending_by_a_restart_is_settled_unknown(tmp_path):
 def test_a_claimed_user_is_stored_as_claimed_and_never_more(tmp_path, monkeypatch):
     _patch_core(monkeypatch, start=lambda *a, **k: _Done())
     c = _client(_settings(tmp_path), headers={"x-uqf-user": "alice"})
-    c.post("/control/process/start", json={"procs": "rdb1"})
+    c.post("/control/lifecycle/start", json={"procs": "rdb1"})
     (row,) = _history(c)
     assert row["claimed_user"] == "alice"
     assert "user" not in row and "identity" not in row, "no field may imply it was verified"
@@ -321,11 +371,11 @@ def test_the_write_token_never_reaches_the_database(tmp_path, monkeypatch):
     """Sent as a header on every action, accepted and refused alike."""
     _patch_core(monkeypatch, start=lambda *a, **k: _Done())
     c = _client(_settings(tmp_path))
-    c.post("/control/process/start", json={"procs": "rdb1"})
+    c.post("/control/lifecycle/start", json={"procs": "rdb1"})
     TestClient(
         create_app(gateway=FakeGateway(), settings=_settings(tmp_path)),
         headers={"Authorization": f"Bearer {TOKEN}-wrong"},
-    ).post("/control/process/start", json={"procs": "rdb1"})
+    ).post("/control/lifecycle/start", json={"procs": "rdb1"})
     dump = _dump(tmp_path / "activity.sqlite3")
     assert dump.count("process.start") == 2
     assert TOKEN not in dump
@@ -342,8 +392,8 @@ def test_a_typed_config_value_is_never_stored(tmp_path, monkeypatch):
     gw = FakeGateway()
     gw._responses[control.SET_WORKER_CONFIG] = ["overrides", b"x"]
     c = _client(_settings(tmp_path), gw)
-    c.put("/control/process/rdb1/config", json={"field": "extras", "value": "hunter2-secret"})
-    c.put("/control/worker-config", json={"key": "api_key", "value": "sk-live-PRIVATE"})
+    c.put("/control/processes/rdb1/config", json={"field": "extras", "value": "hunter2-secret"})
+    c.put("/control/worker/config", json={"key": "api_key", "value": "sk-live-PRIVATE"})
     dump = _dump(tmp_path / "activity.sqlite3")
     assert "process.config" in dump and "worker.config" in dump
     assert "hunter2-secret" not in dump
@@ -364,7 +414,7 @@ def test_a_detail_key_outside_the_allowlist_is_dropped_and_counted(tmp_path, key
     assert r.json()["dropped_detail"] == 1
     (row,) = _history(c)
     assert row["detail"] == {"view": "Control"}
-    assert row["dropped"] == 1
+    assert row["dropped_detail"] == 1
     assert "PRIVATE-VALUE" not in _dump(tmp_path / "activity.sqlite3")
 
 
@@ -373,7 +423,7 @@ def test_a_detail_key_outside_the_allowlist_is_dropped_and_counted(tmp_path, key
     [
         ("error", "ValidationFailed: unknown action 'secret'"),  # a message, not a type
         ("sha256", "not-a-hash"),
-        ("size_bytes", -1),
+        ("size", -1),
         ("range_from", "drop table"),
         ("dataset", 'x"; y'),
     ],
@@ -392,17 +442,48 @@ def test_an_unknown_top_level_field_is_refused(tmp_path):
     assert c.get("/activity").json()["events"] == []
 
 
-def test_a_target_that_is_not_a_name_is_stored_as_invalid(tmp_path):
+def test_a_subject_that_is_not_a_name_is_stored_as_invalid(tmp_path):
     c = _client(_settings(tmp_path))
-    c.post("/activity/events", json={"events": [_event(target='{"password": "p"}')]})
+    c.post("/activity/events", json={"events": [_event(subject='{"password": "p"}')]})
     (row,) = _history(c)
-    assert row["target"] == "(invalid)"
+    assert row["subject"] == "(invalid)"
 
 
 def test_a_naive_browser_timestamp_is_refused(tmp_path):
     c = _client(_settings(tmp_path))
-    r = c.post("/activity/events", json={"events": [_event(ts="2026-11-03T10:00:00")]})
+    r = c.post("/activity/events", json={"events": [_event(time="2026-11-03T10:00:00")]})
     assert r.status_code == 422
+
+
+#: Aware instants Python holds but cannot convert to UTC: astimezone raises
+#: OverflowError, which was a 500 (#2021).
+EDGE_INSTANTS = ["0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00"]
+
+
+@pytest.mark.parametrize("ts", EDGE_INSTANTS)
+def test_a_browser_timestamp_utc_cannot_hold_refuses_the_whole_batch(tmp_path, ts):
+    """A 422 naming the field, and no event of the batch stored - not a 500
+    after the events before the bad one were written."""
+    c = TestClient(
+        create_app(gateway=FakeGateway(), settings=_settings(tmp_path)),
+        raise_server_exceptions=False,
+    )
+    r = c.post("/activity/events", json={"events": [_event(), _event(time=ts)]})
+    assert r.status_code == 422, r.text
+    assert "time" in r.text
+    assert _history(c) == []
+
+
+@pytest.mark.parametrize("bound", ["since", "until"])
+@pytest.mark.parametrize("ts", EDGE_INSTANTS)
+def test_a_time_filter_utc_cannot_hold_is_a_422(tmp_path, bound, ts):
+    c = TestClient(
+        create_app(gateway=FakeGateway(), settings=_settings(tmp_path)),
+        raise_server_exceptions=False,
+    )
+    r = c.get("/activity", params={bound: ts})
+    assert r.status_code == 422, r.text
+    assert bound in r.json()["detail"]
 
 
 def test_an_upload_records_metadata_through_the_hook_never_contents():
@@ -410,39 +491,39 @@ def test_an_upload_records_metadata_through_the_hook_never_contents():
     have no key to be kept under."""
     audit = activity.Audit()
     audit.note(
-        file_name="deals.csv",
-        size_bytes=1234,
+        path="deals.csv",
+        size=1234,
         sha256="a" * 64,
         content=b"secret,row\n",
         file_contents="secret,row",
     )
     kept, dropped = activity.clean_detail(audit.detail)
-    assert kept == {"file_name": "deals.csv", "size_bytes": 1234, "sha256": "a" * 64}
+    assert kept == {"path": "deals.csv", "size": 1234, "sha256": "a" * 64}
     assert dropped == 2
 
 
 # ------------------------------------------------------- history: filters, retention
 
 
-def test_events_are_filtered_by_session_action_target_outcome_and_time(tmp_path):
+def test_events_are_filtered_by_session_action_subject_outcome_and_time(tmp_path):
     c = _client(_settings(tmp_path))
     c.post(
         "/activity/events",
         json={
             "events": [
-                _event(ts="2026-11-01T00:00:00Z", action="view.open", target="Desk"),
+                _event(time="2026-11-01T00:00:00Z", action="view.open", subject="Desk"),
                 _event(
-                    ts="2026-11-02T00:00:00Z",
+                    time="2026-11-02T00:00:00Z",
                     kind="result",
                     action="process.stop",
-                    target="rdb1",
+                    subject="rdb1",
                     outcome="failed",
                 ),
                 _event(
-                    ts="2026-11-03T00:00:00Z",
+                    time="2026-11-03T00:00:00Z",
                     session_id="other-session-1",
                     action="process.start",
-                    target="rdb1",
+                    subject="rdb1",
                     outcome="succeeded",
                 ),
             ]
@@ -455,7 +536,7 @@ def test_events_are_filtered_by_session_action_target_outcome_and_time(tmp_path)
     ]
     assert len(_history(c, action="process")) == 2, "a dotted prefix matches"
     assert _history(c, action="proc") == [], "but not a bare prefix"
-    assert len(_history(c, target="rdb1")) == 2
+    assert len(_history(c, subject="rdb1")) == 2
     assert [e["outcome"] for e in _history(c, outcome="failed")] == ["failed"]
     window = _history(c, since="2026-11-02T00:00:00Z", until="2026-11-03T00:00:00Z")
     assert [e["action"] for e in window] == ["process.stop"]
@@ -505,7 +586,7 @@ class _Clock:
 
 def test_rows_older_than_the_retention_window_are_pruned(tmp_path):
     clock = _Clock(dt.datetime(2026, 1, 1, tzinfo=dt.UTC))
-    store = ActivityStore(tmp_path / "a.sqlite3", retention_days=7, max_rows=100, clock=clock)
+    store = ActivityStore(tmp_path / "a.sqlite3", bounds=_uniform(7, 100), clock=clock)
     store.add(source="browser", kind="navigate", action="view.open")
     clock.at += dt.timedelta(days=8)
     store.add(source="browser", kind="navigate", action="view.close")
@@ -514,22 +595,126 @@ def test_rows_older_than_the_retention_window_are_pruned(tmp_path):
 
 
 def test_only_the_newest_max_rows_are_kept(tmp_path):
-    store = ActivityStore(tmp_path / "a.sqlite3", retention_days=30, max_rows=5)
+    store = ActivityStore(tmp_path / "a.sqlite3", bounds=_uniform(30, 5))
     for i in range(activity.PRUNE_EVERY):
-        store.add(source="browser", kind="select", action="table.select", target=f"t{i}")
+        store.add(source="browser", kind="select", action="desk.table", subject=f"t{i}")
     assert store.count() == 5, "pruned on its own, every PRUNE_EVERY inserts"
-    assert [r["target"] for r in store.query(Query())] == [
+    assert [r["subject"] for r in store.query(Query())] == [
         f"t{i}" for i in range(activity.PRUNE_EVERY - 1, activity.PRUNE_EVERY - 6, -1)
     ]
 
 
 def test_retention_is_applied_at_startup(tmp_path):
     path = tmp_path / "a.sqlite3"
-    store = ActivityStore(path, retention_days=30, max_rows=100)
+    store = ActivityStore(path, bounds=_uniform(30, 100))
     for _ in range(10):
-        store.add(source="browser", kind="select", action="table.select")
+        store.add(source="browser", kind="select", action="desk.table")
     store.close()
-    assert ActivityStore(path, retention_days=30, max_rows=3).count() == 3
+    assert ActivityStore(path, bounds=_uniform(30, 3)).count() == 3
+
+
+# ------------------------------------------------------- the audit cannot be erased (#2019)
+
+
+def _audited_worker_config(tmp_path: Path, **kw: Any) -> tuple[Any, TestClient]:
+    """An app whose history holds one authorised action, and the operator's
+    client: (app, client)."""
+    gw = FakeGateway()
+    gw._responses[control.SET_WORKER_CONFIG] = ["overrides", b"1"]
+    app = create_app(gateway=gw, settings=_settings(tmp_path, **kw))
+    op = TestClient(app, headers={"Authorization": f"Bearer {TOKEN}"})
+    assert op.put("/control/worker/config", json={"key": "k", "value": "v"}).status_code == 200
+    return app, op
+
+
+def _store(app: Any) -> ActivityStore:
+    return app.state.activity
+
+
+def test_browser_events_without_the_token_cannot_evict_the_server_audit(tmp_path, monkeypatch):
+    """POST /activity/events needs no token. Its rows used to share the one
+    row cap with the server's audit, so anyone who reached the port could
+    prune the record of a stop or a delete. Each now has its own cap."""
+    monkeypatch.setattr(activity, "BROWSER_EVENT_BURST", 10_000)
+    app, op = _audited_worker_config(tmp_path, activity_max_kept=50)
+    stranger = TestClient(app)
+    for _ in range(3):
+        events = [_event() for _ in range(100)]
+        assert stranger.post("/activity/events", json={"events": events}).status_code == 200
+    _store(app).prune()
+    (row,) = _history(op, source="server")
+    assert row["action"] == "worker.config"
+    assert _store(app).count() == 50 + 1, "the browser's own history is capped as before"
+
+
+@pytest.mark.parametrize(
+    ("base_url", "headers", "status"),
+    [
+        ("http://evil.example", {}, 403),  # the Host check: DNS rebinding
+        ("http://testserver", {}, 401),  # no token
+        ("http://testserver", {"Authorization": f"Bearer {TOKEN}"}, 404),  # unrouted
+    ],
+)
+def test_refused_and_unrouted_requests_cannot_evict_the_audit(tmp_path, base_url, headers, status):
+    """A page in the operator's own browser can send no-cors text/plain
+    POSTs: each was a server row, written before the Host and token checks,
+    in the same bucket as the audit. They are still recorded - an attempt is
+    worth seeing - but as `attempt` rows under their own, smaller cap."""
+    app, op = _audited_worker_config(tmp_path, activity_max_kept=50)
+    evil = TestClient(app, base_url=base_url, headers=headers)
+    path = "/x" if status == 404 else "/control/lifecycle/stop"
+    for _ in range(250):
+        r = evil.post(path, content=b"a", headers={"content-type": "text/plain"})
+        assert r.status_code == status
+    _store(app).prune()
+    audit = _history(op, source="server", limit=1000)
+    assert [r["action"] for r in audit if r["kind"] == "request"] == ["worker.config"]
+    attempts = [r for r in audit if r["kind"] == activity.ATTEMPT_KIND]
+    assert len(attempts) == min(activity.MAX_ATTEMPT_ROWS, 50), "bounded"
+    assert {(r["outcome"], r["status_code"]) for r in attempts} == {("refused", status)}
+
+
+def test_with_writes_off_every_audited_request_is_an_attempt(tmp_path):
+    """Nothing can be authorised while writes are off, so nothing sent then
+    may compete with the audit an earlier run with writes on kept."""
+    c = TestClient(
+        create_app(gateway=FakeGateway(), settings=Settings(activity_db=tmp_path / "a.sqlite3"))
+    )
+    assert c.post("/control/lifecycle/start", json={"procs": "all"}).status_code == 403
+    (row,) = _history(c)
+    assert row["kind"] == activity.ATTEMPT_KIND
+
+
+def test_unauthenticated_browser_events_are_rate_limited(tmp_path, monkeypatch):
+    """Their own cap keeps them off the audit; the rate keeps a stranger from
+    flushing the browser history in seconds. 429 is transient: the UI's
+    queue sends the batch again later."""
+    monkeypatch.setattr(activity, "BROWSER_EVENT_BURST", 150)
+    monkeypatch.setattr(activity, "BROWSER_EVENTS_PER_SECOND", 0.0)
+    c = TestClient(create_app(gateway=FakeGateway(), settings=_settings(tmp_path)))
+    batch = {"events": [_event() for _ in range(100)]}
+    assert c.post("/activity/events", json=batch).status_code == 200
+    r = c.post("/activity/events", json={"events": [_event() for _ in range(100)]})
+    assert r.status_code == 429, r.text
+    assert r.json()["transient"] is True
+    assert len(_history(c, limit=1000)) == 100, "a refused batch stores nothing"
+    authorised = TestClient(c.app, headers={"Authorization": f"Bearer {TOKEN}"})
+    more = {"events": [_event() for _ in range(100)]}
+    assert authorised.post("/activity/events", json=more).status_code == 200, (
+        "the operator's token is not rate-limited"
+    )
+
+
+def test_a_browser_batch_over_the_size_limit_is_refused_before_it_is_read(tmp_path):
+    c = TestClient(create_app(gateway=FakeGateway(), settings=_settings(tmp_path)))
+    padding = "x" * (activity.MAX_BATCH_BYTES + 1)
+    r = c.post(
+        "/activity/events",
+        content=b'{"events": [], "pad": "' + padding.encode() + b'"}',
+        headers={"content-type": "application/json"},
+    )
+    assert r.status_code == 413, r.text
+    assert _history(c) == []
 
 
 # ------------------------------------------------------- when persistence fails
@@ -543,7 +728,7 @@ def test_a_failed_write_does_not_block_the_action_and_is_reported(tmp_path, monk
     store: ActivityStore = typing.cast(Any, c.app).state.activity
     with store._lock:
         store._db.execute("DROP TABLE activity")
-    r = c.post("/control/process/start", json={"procs": "rdb1"})
+    r = c.post("/control/lifecycle/start", json={"procs": "rdb1"})
     assert r.status_code == 200
     assert r.headers[activity.AUDIT_HEADER] == "unrecorded"
     assert store.persistence.failures >= 1
@@ -562,7 +747,9 @@ def test_a_history_file_that_cannot_be_opened_stops_the_api(tmp_path):
 
 def test_retention_must_be_positive(tmp_path):
     with pytest.raises(ValueError, match="positive"):
-        ActivityStore(None, retention_days=0, max_rows=1)
+        ActivityStore(None, bounds=_uniform(0, 1))
+    with pytest.raises(ValueError, match="missing for levels"):
+        ActivityStore(None, bounds={"actions": activity.Bound(1, 1)})
 
 
 # ------------------------------------------------------- vocabulary
@@ -571,15 +758,25 @@ def test_retention_must_be_positive(tmp_path):
 @pytest.mark.parametrize(
     ("literal", "words"),
     [
-        (models.ActivitySource, activity.SOURCES),
-        (models.BrowserKind, activity.BROWSER_KINDS),
-        (models.ActivityKind, (*activity.BROWSER_KINDS, activity.SERVER_KIND)),
-        (models.ActivityOutcome, activity.OUTCOMES),
-        (models.ActivityTrigger, activity.TRIGGERS),
+        (ActivitySource, activity_log.SOURCES),
+        (BrowserKind, activity.BROWSER_KINDS),
+        (ActivityKind, (*activity.BROWSER_KINDS, *activity.SERVER_KINDS)),
+        (ActivityOutcome, activity_log.OUTCOMES),
+        (ActivityTrigger, activity.TRIGGERS),
+        (SessionLevel, activity_log.LEVELS),
+        (ActivityLevel, activity_log.EVENT_LEVELS),
+        (ActivityDropReason, activity_log.DROP_REASONS),
+        (ActivityExportFormat, activity_log.EXPORT_FORMATS),
     ],
 )
 def test_the_models_offer_exactly_the_stores_words(literal, words):
     assert set(typing.get_args(literal)) == set(words)
+
+
+def test_the_browser_reports_only_the_drops_it_makes():
+    """It samples and it overflows its queue; a cap or an age is the server's."""
+    reported = set(typing.get_args(BrowserDropReason))
+    assert reported == set(activity_log.DROP_REASONS) - {"row_cap", "retention"}
 
 
 def test_the_stack_puts_history_beside_its_data():
@@ -597,10 +794,31 @@ def test_the_environment_names_the_file_and_the_bounds(monkeypatch, tmp_path):
     monkeypatch.delenv("UQF_FRONTEND_STACK_ROOT", raising=False)
     monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_DB", str(tmp_path / "h.sqlite3"))
     monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_RETENTION_DAYS", "7")
-    monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_MAX_ROWS", "500")
+    monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_MAX_KEPT", "500")
     s = Settings.from_env()
-    assert (s.activity_db, s.activity_retention_days, s.activity_max_rows) == (
+    assert (s.activity_db, s.activity_retention_days, s.activity_max_kept) == (
         tmp_path / "h.sqlite3",
         7,
         500,
     )
+
+
+def test_a_history_cut_at_the_limit_says_so(tmp_path):
+    """The Activity view showed the newest `limit` events as if they were the
+    whole history (#2220)."""
+    from uqf_frontend import activity
+
+    app = create_app(gateway=FakeGateway(), settings=_settings(tmp_path))
+    c = TestClient(app, headers={"Authorization": f"Bearer {TOKEN}"})
+    for i in range(3):
+        app.state.activity.add(
+            source="server",
+            kind=activity.SERVER_KIND,
+            action=activity.PRUNE_ACTION,
+            target=f"t{i}",
+            outcome="succeeded",
+        )
+    cut = c.get("/activity", params={"limit": 2}).json()
+    assert (len(cut["events"]), cut["truncated"]) == (2, True)
+    whole = c.get("/activity", params={"limit": 3}).json()
+    assert (len(whole["events"]), whole["truncated"]) == (3, False)

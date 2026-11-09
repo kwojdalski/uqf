@@ -88,14 +88,56 @@ def test_every_traced_code_field_is_one_q_writes():
     field name. Renaming either in q alone would stop the block rendering, and
     nothing else would notice."""
     sources = [
-        p.read_text() for p in (UQF_ROOT / "src").rglob("*.q") if ".qetl.log.trc" in p.read_text()
+        p.read_text()
+        for p in (UQF_ROOT / "src").rglob("*.q")
+        if ".qetl.log.ch.trc" in p.read_text()
     ]
     for event, field in CODE_FIELDS.items():
         call = re.compile(rf'"{re.escape(event)}";\s*\(?\s*\(?enlist\[`{re.escape(field)}\]', re.S)
         assert any(call.search(src) for src in sources), (
-            f'no q .qetl.log.trc call logs "{event}" with a `{field} field - '
+            f'no q .qetl.log.ch.trc call logs "{event}" with a `{field} field - '
             "trace_render.CODE_FIELDS would never render it"
         )
+
+
+LOG_CALL = re.compile(r"\.qetl\.log\.(trc|dbg|info|warn|err)\b")
+CHANNEL_CALL = re.compile(r"\.qetl\.log\.ch\.(?:trc|dbg|info|warn|err)\[\s*`(\w+)")
+
+
+def log_sources() -> list[Path]:
+    """Every q file the ETL log calls live in: src/ and scripts/, but not log.q
+    (which defines them) and not the tests (which assert on the refusals)."""
+    roots = (UQF_ROOT / "src", UQF_ROOT / "scripts")
+    return [p for root in roots for p in root.rglob("*.q")]
+
+
+def test_no_id_first_log_call_remains():
+    """#2279: `.qetl.log.info[worker;...]` passed a worker or source name as
+    TorQ's `id`, so `uqs logs --channel` could not select it. The helpers are
+    gone; a call must go through `.qetl.log.ch` with a declared channel."""
+    offenders = [
+        f"{p.relative_to(UQF_ROOT)}:{n}"
+        for p in log_sources()
+        for n, line in enumerate(p.read_text().splitlines(), 1)
+        if LOG_CALL.search(line)
+    ]
+    assert not offenders, f"id-first .qetl.log call(s) remain: {offenders}"
+
+
+def test_every_literal_log_channel_is_declared():
+    """A channel the call passes as a literal must be one .qetl.log.channels
+    declares. Inside a protected eval a refusal would be swallowed, so the
+    misspelling would otherwise lose the line silently."""
+    declared = set(q_facts.LOG_CHANNELS)
+    bad = sorted(
+        {
+            (str(p.relative_to(UQF_ROOT)), name)
+            for p in log_sources()
+            for name in CHANNEL_CALL.findall(p.read_text())
+            if name not in declared
+        }
+    )
+    assert not bad, f"undeclared log channel(s): {bad}"
 
 
 def q_definition(file: str, name: str) -> str:

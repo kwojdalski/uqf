@@ -75,8 +75,8 @@ Watching today:
   | `cross_arbitrage` | `notional`, `max_skew` — the size every edge is quoted at, and how far apart a route's legs may be |
 
 A job that watches anything must also declare `config_change` among its
-`publishes`, because the audit publishes through the job's own seam. A test
-holds the two together.
+`outputs`, because the audit publishes through the job's own seam. A test holds
+the two together.
 
 ## Why every process, not one
 

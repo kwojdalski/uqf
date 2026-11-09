@@ -5,8 +5,8 @@ WHAT RUNS. remote_helper.py's source goes in on ssh's stdin to
 `<dest>/current/.venv/bin/python -I -`, the interpreter `uqs deploy push`
 installed with the release. Nothing else is tried: a release without that
 interpreter is refused with NO_PYTHON and its own message, and nothing is
-installed. The helper reads one directory and one deploy report; it never
-deploys, starts, stops or writes anything.
+installed. Listing reads one directory and one deploy report. Confirmed deletion removes
+regular files and empty directories; neither operation deploys or restarts services.
 
 WHERE. Only a target the registry declares (deploy_targets.toml, read as
 GET /services reads it) can be browsed, by its name: the ssh destination,
@@ -37,6 +37,23 @@ never came is UploadOutcomeUncertain: the helper publishes in one step at
 the very end, so the file may or may not be there, and it is never retried
 here - the operator lists the directory and decides.
 
+PUSH HISTORY (#2002). An upload is one file of a push (remote_helper's PUSH
+HISTORY): `open_push` mints the push id and opens its history on the server,
+each upload names it, and `close_push` closes it. `history_list`,
+`history_show` and `history_diff` read the history, over the same ssh, and
+`restore` writes a push's before state back as a push of its own. These
+functions take a target as `control.Remote`, so `uqs target config` drives
+the same helper with no API in between. A restore that timed out or lost its
+answer is RestoreOutcomeUncertain and, like an upload, never retried.
+
+DELETE (#1953). A deletion changes the server, so a failure after ssh was
+started is not "nothing happened": a timeout, ssh exiting 255 (it may have
+dropped midway), a crashed helper or an answer that cannot be read is
+DeleteOutcomeUncertain - some paths may be gone. Never transient, never
+retried here; the operator lists the directory first (#2023). A restore and a
+delete pass `_run` the same `uncertain` pair: the error, and what may be half
+done.
+
 Each failure says which side failed: ssh could not connect (255), no
 release (NO_RELEASE), no release Python (NO_PYTHON), the helper refused the
 path (its ERRORS word), or the helper itself failed.
@@ -44,8 +61,10 @@ path (its ERRORS word), or the helper itself failed.
 
 from __future__ import annotations
 
+import datetime as dt
 import hashlib
 import json
+import os
 import shlex
 import subprocess
 from collections.abc import Callable
@@ -67,7 +86,7 @@ DEFAULT_LIMIT = 500
 #: Bytes of helper output read as an answer; more is a failure, not a parse.
 MAX_ANSWER = 8 * 1024 * 1024
 #: Seconds one upload may take, connection included: a whole MAX_UPLOAD file
-#: over a slow link. The browser waits longer (web/src/api.ts).
+#: over a slow link. The browser waits longer (web/src/api/).
 UPLOAD_TIMEOUT = 120
 #: The fixed program an upload runs with `python -I -c`: read one decimal
 #: line N, then N bytes of the helper's source, run it, and hand it the rest
@@ -79,6 +98,9 @@ BOOTSTRAP = (
     "exec(compile(i.read(n),'remote_helper.py','exec'),g);"
     "sys.exit(g['main'](sys.argv,i))"
 )
+#: Seconds a push-history call may take: a restore copies up to a push's
+#: files, and `history_show` hashes them as they are now.
+HISTORY_TIMEOUT = 120
 #: Where the release's interpreter is, under the deployment root.
 PYTHON = "current/.venv/bin/python"
 #: ssh's own exit status when it, not the remote command, failed.
@@ -96,12 +118,16 @@ class TargetNotFound(FrontendError):
 
 
 class BrowseRefused(FrontendError):
-    """The helper refused the path: outside the root, a link, not a directory."""
+    """The helper refused the path: outside the root, a link, not a directory.
+    422, a refusal of what the caller sent (#2225)."""
 
-    status_code = 400
+    status_code = 422
 
 
 class PathNotFound(FrontendError):
+    """No such path below the target's root - on a browse and an upload alike
+    (#2225): a named thing that does not exist is 404."""
+
     status_code = 404
 
 
@@ -119,15 +145,26 @@ class RemoteFailed(FrontendError):
 
 
 class RemoteTimedOut(FrontendError):
+    """A read timed out: nothing changed, so it may be retried."""
+
     status_code = 504
     transient = True
 
 
+class DeleteOutcomeUncertain(FrontendError):
+    """ssh timed out or dropped, the helper crashed, or its answer was lost
+    after a deletion started: some paths may have been deleted. Never
+    transient - list the directory before deleting again (#2023)."""
+
+    status_code = 504
+
+
 class UploadRefused(FrontendError):
     """The destination is not one an upload may write: outside shared/config,
-    unsafe, a link, a directory - nothing was written."""
+    unsafe, a link, a directory - nothing was written. 422, a refusal of what
+    the caller sent (#2225)."""
 
-    status_code = 400
+    status_code = 422
 
 
 class UploadExists(FrontendError):
@@ -154,6 +191,25 @@ class UploadOutcomeUncertain(FrontendError):
     status_code = 504
 
 
+class HistoryPruned(FrontendError):
+    """The push's history was removed by retention: nothing to show or restore."""
+
+    status_code = 410
+
+
+class RestoreConflict(FrontendError):
+    """A file changed since the push a restore would undo - nothing written."""
+
+    status_code = 409
+
+
+class RestoreOutcomeUncertain(FrontendError):
+    """ssh timed out, dropped, or the answer was lost mid-restore: some files
+    may have been restored. Never transient - read the history instead."""
+
+    status_code = 504
+
+
 #: The helper's refusal words, as the API's errors.
 _REFUSALS: dict[str, type[FrontendError]] = {
     "bad_request": ValidationFailed,
@@ -169,12 +225,24 @@ _UPLOAD_REFUSALS: dict[str, type[FrontendError]] = {
     "bad_request": ValidationFailed,
     "refused": UploadRefused,
     "unsupported": UploadRefused,
-    "not_found": UploadRefused,
+    "not_found": PathNotFound,
     "not_a_directory": UploadRefused,
     "denied": UploadRefused,
     "exists": UploadExists,
     "too_large": UploadTooLarge,
     "incomplete": UploadIncomplete,
+    "pruned": HistoryPruned,
+}
+
+#: The helper's refusal words for the push history. Each wrote nothing.
+_HISTORY_REFUSALS: dict[str, type[FrontendError]] = {
+    **_REFUSALS,
+    "unsupported": UploadRefused,
+    "exists": UploadExists,
+    "too_large": UploadTooLarge,
+    "incomplete": RemoteFailed,
+    "pruned": HistoryPruned,
+    "conflict": RestoreConflict,
 }
 
 _UNCERTAIN = (
@@ -195,6 +263,18 @@ def check_path(path: str) -> None:
         remote_helper.split_path(path)
     except remote_helper.Refusal as exc:
         raise _REFUSALS[exc.error](exc.detail) from None
+
+
+def new_push_id(now: dt.datetime | None = None) -> str:
+    """A push id (remote_helper.PUSH_ID): when, UTC, to the millisecond, then
+    8 random hex digits."""
+    moment = (now or dt.datetime.now(dt.UTC)).astimezone(dt.UTC)
+    return f"{moment:%Y%m%dT%H%M%S}{moment.microsecond // 1000:03d}Z-{os.urandom(4).hex()}"
+
+
+def check_push_id(push_id: str) -> None:
+    if not remote_helper.PUSH_ID.fullmatch(push_id):
+        raise ValidationFailed("a push id is YYYYMMDDTHHMMSSmmmZ- and 8 hex digits")
 
 
 def check_upload_path(path: str) -> None:
@@ -253,33 +333,93 @@ def remote_command(
 def browse(
     settings: Settings, name: str, path: str, limit: int, runner: Runner = subprocess.run
 ) -> dict[str, Any]:
-    """List `path` under target `name`'s deployment root: the helper's
-    answer, with the root it was listed under."""
+    check_path(path)
+    return _run(target(settings, name), name, {"op": "list", "path": path, "limit": limit}, runner)
+
+
+def delete(
+    settings: Settings,
+    name: str,
+    paths: list[str],
+    runner: Runner = subprocess.run,
+    on_begin: Callable[[], None] | None = None,
+) -> dict[str, Any]:
+    """Delete `paths` below a target's root. The request was confirmed:
+    models.RemoteDeleteRequest refuses one that is not (#2244), and the
+    helper on the server refuses an unconfirmed request again."""
+    if not 1 <= len(paths) <= remote_helper.MAX_DELETE:
+        raise ValidationFailed(f"select between 1 and {remote_helper.MAX_DELETE} paths")
+    for path in paths:
+        check_path(path)
+        if not remote_helper.split_path(path):
+            raise BrowseRefused("the deployment root cannot be deleted")
+    return _run(
+        target(settings, name),
+        name,
+        {"op": "delete", "paths": paths, "confirmed": True},
+        runner,
+        on_begin=on_begin,
+        uncertain=(
+            DeleteOutcomeUncertain,
+            "its outcome is unknown: some paths may have been deleted - list the directory "
+            "before deleting again; nothing is retried automatically",
+        ),
+    )
+
+
+def _run(
+    r: Any,
+    name: str,
+    payload: dict[str, Any],
+    runner: Runner,
+    *,
+    on_begin: Callable[[], None] | None = None,
+    timeout: int = TIMEOUT,
+    refusals: dict[str, type[FrontendError]] = _REFUSALS,
+    uncertain: tuple[type[FrontendError], str] | None = None,
+) -> dict[str, Any]:
+    """Run one helper request on target `r` (a control.Remote): its answer,
+    with the root.
+
+    `uncertain` is for an op that changes the server - a restore, a delete:
+    the error to raise and what may have been left half done, when a
+    timeout, a dropped connection, a crashed helper or a lost answer leaves
+    the outcome unknown. Without it those are a read's failures - a timeout
+    transient, the rest RemoteFailed. A refusal the helper answered with is
+    certain either way."""
     from uqs.deploy import control
     from uqs.deploy.remote import diagnostic
 
-    check_path(path)
-    r = target(settings, name)
     root = r.dest.rstrip("/") or "/"
-    request = {"protocol": remote_helper.PROTOCOL, "op": "list", "root": root,
-               "path": path, "limit": limit}  # fmt: skip
+    request = {**payload, "protocol": remote_helper.PROTOCOL, "root": root}
     command = remote_command(r.dest, r.remote_user, remote_helper.encode(request))
     argv = control.ssh_argv(r, (), tty=False, command=command)
     try:
+        if on_begin is not None:
+            on_begin()
         done = runner(
             argv, input=helper_source(), capture_output=True, text=True,
-            timeout=TIMEOUT, check=False,
+            timeout=timeout, check=False,
         )  # fmt: skip
     except subprocess.TimeoutExpired:
-        raise RemoteTimedOut(f"target {name}: browsing did not finish within {TIMEOUT}s") from None
+        if uncertain is not None:
+            error, what = uncertain
+            raise error(f"target {name}: no answer within {timeout}s - {what}") from None
+        raise RemoteTimedOut(
+            f"target {name}: remote operation timed out after {timeout}s"
+        ) from None
     except OSError as exc:
         raise RemoteFailed(f"could not run ssh: {exc}") from None
     code = done.returncode
     if code == SSH_FAILED:
-        raise RemoteFailed(
+        reach = (
             f"could not reach target {name} ({r.host}) over ssh - check that "
             f"`ssh -o BatchMode=yes {r.host} true` works: a key loaded, the host key known"
         )
+        if uncertain is not None:
+            error, what = uncertain
+            raise error(f"{reach}; or it dropped midway - {what}")
+        raise RemoteFailed(reach)
     if code == NO_RELEASE:
         raise TargetUnusable(f"target {name} has no deployed release under {root}")
     if code == NO_PYTHON:
@@ -290,8 +430,115 @@ def browse(
         )
     if code:
         said = diagnostic(done) or "nothing"
-        raise RemoteFailed(f"target {name}: the browser helper failed (exit {code}): {said}")
-    return {**_answer(name, done.stdout or ""), "root": root}
+        failed = f"target {name}: the browser helper failed (exit {code}): {said}"
+        if uncertain is not None:
+            error, what = uncertain
+            raise error(f"{failed} - {what}")
+        raise RemoteFailed(failed)
+    try:
+        answer = _answer(name, done.stdout or "", refusals)
+    except RemoteFailed as exc:
+        if uncertain is not None:
+            error, what = uncertain
+            raise error(f"{exc} - {what}") from None
+        raise
+    return {**answer, "dest": root}
+
+
+# ------------------------------------------------------------ push history (#2002)
+
+
+def open_push(
+    r: Any,
+    name: str,
+    *,
+    config_dir: str,
+    file_count: int,
+    total_bytes: int,
+    user: str | None,
+    via: str,
+    max_kept: int,
+    retention_days: int,
+    runner: Runner = subprocess.run,
+) -> dict[str, Any]:
+    """Open a push on target `r`: its id, and the pushes retention pruned."""
+    check_path(config_dir)
+    payload = {"op": "push_open", "push_id": new_push_id(), "config_dir": config_dir,
+               "file_count": file_count, "total_bytes": total_bytes, "user": user,
+               "target": name, "via": via, "max_kept": max_kept,
+               "retention_days": retention_days}  # fmt: skip
+    return _run(r, name, payload, runner, refusals=_HISTORY_REFUSALS)
+
+
+def close_push(
+    r: Any,
+    name: str,
+    push_id: str,
+    reported: list[dict[str, str]],
+    runner: Runner = subprocess.run,
+) -> dict[str, Any]:
+    """Close a push, with what the browser saw of files the server never
+    recorded; the closed manifest."""
+    check_push_id(push_id)
+    payload = {"op": "push_close", "push_id": push_id, "reported": reported}
+    return _run(r, name, payload, runner, refusals=_HISTORY_REFUSALS)
+
+
+def history_list(
+    r: Any, name: str, limit: int = remote_helper.MAX_HISTORY_LIST, runner: Runner = subprocess.run
+) -> dict[str, Any]:
+    payload = {"op": "history_list", "limit": limit}
+    return _run(r, name, payload, runner, timeout=HISTORY_TIMEOUT, refusals=_HISTORY_REFUSALS)
+
+
+def history_show(
+    r: Any, name: str, push_id: str, runner: Runner = subprocess.run
+) -> dict[str, Any]:
+    check_push_id(push_id)
+    payload = {"op": "history_show", "push_id": push_id}
+    return _run(r, name, payload, runner, timeout=HISTORY_TIMEOUT, refusals=_HISTORY_REFUSALS)
+
+
+def history_diff(
+    r: Any, name: str, push_id: str, path: str | None, runner: Runner = subprocess.run
+) -> dict[str, Any]:
+    check_push_id(push_id)
+    if path is not None:
+        check_upload_path(path)
+    payload = {"op": "history_diff", "push_id": push_id, "path": path}
+    return _run(r, name, payload, runner, timeout=HISTORY_TIMEOUT, refusals=_HISTORY_REFUSALS)
+
+
+def restore(
+    r: Any,
+    name: str,
+    restores: str,
+    *,
+    dry_run: bool,
+    user: str | None,
+    via: str,
+    max_kept: int,
+    retention_days: int,
+    runner: Runner = subprocess.run,
+    on_begin: Callable[[], None] | None = None,
+) -> dict[str, Any]:
+    """Restore push `restores`'s before state on target `r`, as a push
+    of its own - or, `dry_run`, only say what that would take. Run once,
+    never retried: a lost answer is RestoreOutcomeUncertain."""
+    check_push_id(restores)
+    payload = {"op": "restore", "restores": restores, "dry_run": dry_run,
+               "confirmed": not dry_run, "push_id": new_push_id(), "user": user,
+               "target": name, "via": via, "max_kept": max_kept,
+               "retention_days": retention_days}  # fmt: skip
+    return _run(
+        r, name, payload, runner, on_begin=on_begin, timeout=HISTORY_TIMEOUT,
+        refusals=_HISTORY_REFUSALS,
+        uncertain=None if dry_run else (
+            RestoreOutcomeUncertain,
+            "some files may have been restored - read the push history before restoring "
+            "again; nothing is retried automatically",
+        ),
+    )  # fmt: skip
 
 
 def upload(
@@ -300,22 +547,25 @@ def upload(
     path: str,
     data: bytes,
     overwrite: bool,
+    push_id: str,
     runner: Runner = subprocess.run,
 ) -> dict[str, Any]:
-    """Write `data` to `path` below target `name`'s shared/config: the
-    helper's answer, with the root it was written under. Run once, never
-    retried."""
+    """Write `data` to `path` below target `name`'s shared/config, as one
+    file of push `push_id`: the helper's answer, with the root it was
+    written under. Run once, never retried."""
     from uqs.deploy import control
     from uqs.deploy.remote import diagnostic
 
     check_upload_path(path)
+    check_push_id(push_id)
     if len(data) > remote_helper.MAX_UPLOAD:
         raise UploadTooLarge(f"a file may be at most {remote_helper.MAX_UPLOAD} bytes")
     r = target(settings, name)
     root = r.dest.rstrip("/") or "/"
     digest = hashlib.sha256(data).hexdigest()
     request = {"protocol": remote_helper.PROTOCOL, "op": "upload", "root": root, "path": path,
-               "size": len(data), "sha256": digest, "overwrite": overwrite}  # fmt: skip
+               "size": len(data), "sha256": digest, "overwrite": overwrite,
+               "push_id": push_id}  # fmt: skip
     command = remote_command(r.dest, r.remote_user, remote_helper.encode(request), payload=True)
     argv = control.ssh_argv(r, (), tty=False, command=command)
     source = helper_source().encode("utf-8")
@@ -360,7 +610,7 @@ def upload(
         raise UploadOutcomeUncertain(
             f"target {name}: the helper confirmed other bytes - {_UNCERTAIN}"
         )
-    return {**answer, "root": root}
+    return {**answer, "dest": root}
 
 
 def _text(out: bytes | str | None) -> str:

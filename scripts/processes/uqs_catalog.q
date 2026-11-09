@@ -47,7 +47,7 @@ describe[`crypto_book_1s]:
 describe[`crypto_sim_fills]:
     "Simulated (paper) fills from cryptorust's OMS fill model, run against live market data - not confirmed executions; those are crypto_trades. Kept apart so a P&L number always says which of the two it came from";
 describe[`crypto_trades]:
-    "Real confirmed exchange executions recorded from the OMS";
+    "Real confirmed exchange executions recorded from the OMS. source_time is the venue's own time for the fill (null for a row recorded before the column existed or by a recorder that predates it); time is when the plant received it";
 describe[`demo_deals]:
     "Generic analogue of an external relational deal source, landed by the demo_deals_backfill bounded worker. Synthetic by design - the real source is bank-internal and out of scope for this repository";
 describe[`etl_coverage]:
@@ -151,6 +151,8 @@ unbounded[`fx_markout]:
     enlist "a row per component per horizon per execution - about 18 rows a second at one execution a second, not ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`fx_markout_wide]:
     enlist "a row per horizon per execution - about 4 rows a second at one execution a second, not ticks; its policy row is due once a desk reads it through the gateway";
+unbounded[`eq_markout]:
+    enlist "a row per component per horizon per equity fill (six a fill at the shipped grid), at the rate fills arrive - orders of magnitude below ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`deal_positions]:
     enlist "one row per pair per published window of demo_deals";
 unbounded[`kafka_dead_letter]:
@@ -195,8 +197,10 @@ surface:{[]
     "A Kafka record kafka_flow1 could not turn into a row, kept instead of dropped: its coordinates, key and payload exactly as received, a reason (no_mapping, empty_payload, malformed or mapping) and what the decoder said. The count by reason is the health of a topic";
 .qcat.describe[`trades_copy]:
     "One trade copied out of another kdb+ HDB on this machine by hdb_transfer_backfill, with its notional (price times size, in the quote currency) added on the way - the worked example of moving data from one kdb+ database into another; scripts/examples/hdb_transfer_example.q runs it end to end";
-.qcat.describe[`crypto_execution_quality]:
-    "Post-trade markout per real crypto fill per horizon, in bps against the best mid across venues; a null markout_bps means no venue had a live book at that horizon, not a zero markout";
+.qcat.describe[`crypto_markout]:
+    "Markout of a real crypto fill, one row per fill, horizon and component (kind: total, or execution for the move from the fill to the reference at the fill): the markout in bps (markout_bps, 10000 times the signed move over the price) against the best mid across venues, the fee in the quote currency and in bps, and the markout net of it on the total row. Built on the markout contract's core columns, so the clock the fill and the reference share, the conversion to report_ccy and the status are on every row; a null markout_bps with status unavailable means no venue had a live book at that horizon, with status clock_mismatch that the fill was not on the books' clock - never a zero";
+.qcat.describe[`eq_markout]:
+    "Markout of an equity fill, one row per fill, horizon and component (kind: total, or execution for the move from the fill to the reference at the fill): the markout in bps (markout_bps, 10000 times the signed move over the price) against the mid of the venue's book. Built on the markout contract's core columns, so the clock, the conversion to report_ccy and the status are on every row; status unavailable with a null move means no book covered the horizon or the pair crossed the session close or a halt (never an overnight gap), clock_mismatch that the fill was not on the books' clock - never a zero";
 .qcat.describe[`last_value]:
     "One change to a pair's current price: the newest level-0 bid, ask and mid across sources, FX and crypto, with the source that quoted it and its own source_time. Appended only when a newer book replaces the held one, so read the latest row per sym (select by sym) for the one shared current price";
 .qcat.describe[`fx_markout]:

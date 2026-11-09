@@ -205,12 +205,15 @@ def worker_body(
     check: bool = False,
     transform: str = "passthrough",
     shared: tuple[str, str] | None = None,
+    twin_of: str | None = None,
 ) -> str:
     """The worker file. `partition` scopes it to one slice of its dataset,
     which is what lets a second worker fill the same dataset; `check` adds a
     quality check stub; `transform` is `passthrough` or `derive`, and
     `shared` a twin's stream job and the transform it declares - see
-    scaffold/transform.py."""
+    scaffold/transform.py. `twin_of` declares the live job this worker repairs: q
+    then refuses the worker if that job stops publishing its dataset, whatever the
+    schemas say (#2103), and `shared` adds the promise that both apply one transform."""
     check_stub = _CHECK_STUB.format(worker=worker) if check else ""
     derive_stub, transform_decl, transform_name = worker_transform(
         transform, worker, src, dataset, shared
@@ -219,6 +222,20 @@ def worker_body(
     extra_values = (f";.qpipe.job.{worker}.quality_check" if check else "") + (
         f";`{partition};`{partition_column or 'sym'}" if partition else ""
     )
+    twin_note = ""
+    if twin_of is not None:
+        extra_keys += "`twin_of" + ("`twin_calculation" if shared is not None else "")
+        extra_values += f";`{twin_of}" + (";`shared" if shared is not None else "")
+        promise = (
+            "twin_calculation `shared holds both to one registered transform."
+            if shared is not None
+            else f"{twin_of} declares no transform, so calculation equivalence is not established."
+        )
+        twin_note = (
+            f"/ `twin_of` names the live job this worker repairs: q refuses the pair if {twin_of}\n"
+            f"/ stops publishing {dataset}, or this transform's output breaks the dataset's\n"
+            f"/ contract, even when another table has the same columns. {promise}\n"
+        )
     return f"""/ {worker}.q - the {src} bounded worker (.qpipe.job.{worker}).
 / .
 / SCAFFOLDED. Mostly a declaration: the lifecycle - windowing, retries,
@@ -239,29 +256,29 @@ facts:{{[batch]
 {transform_decl}
 / `procname` is the process that runs this worker - the process registry is
 / read from this declaration, so there is no entry to add anywhere else.
-.qetl.job.bounded.define[`{worker};
-    `source`dataset`width`transform`facts{extra_keys}`procname`note!
-        (`{src};`{dataset};{width};`{transform_name};.qpipe.job.{worker}.facts{extra_values};
+{twin_note}.qetl.job.bounded.define[`{worker};
+    `source`outputs`width`transform`facts{extra_keys}`procname`note!
+        (`{src};enlist `{dataset};{width};`{transform_name};.qpipe.job.{worker}.facts{extra_values};
          `{proc};
          "SCAFFOLDED: bounded - say what this backfill is for")];
 """
 
 
-def reaction_body(name: str, dataset: str, writes: list[str], producers: list[str]) -> str:
+def reaction_body(name: str, dataset: str, outputs: list[str], producers: list[str]) -> str:
     """A reaction file: a handler that throws, registered on `dataset`.
 
-    `writes` switches `on` for `on_writing`, which puts the reaction in the job
+    `outputs` switches `on` for `on_writing`, which puts the reaction in the job
     graph as a node that writes those tables - a CLAIM, since a handler can
     write anywhere (`derived` is 0b; see .qetl.reaction.on).
     """
     runs_in = ", ".join(producers)
-    if writes:
-        outputs = f"enlist `{writes[0]}" if len(writes) == 1 else "`" + "`".join(writes)
+    if outputs:
+        declared = f"enlist `{outputs[0]}" if len(outputs) == 1 else "`" + "`".join(outputs)
         register = (
-            f".qetl.reaction.on_writing[`{dataset};`{name};{outputs};.qpipe.job.{name}.handler];"
+            f".qetl.reaction.on_writing[`{dataset};`{name};{declared};.qpipe.job.{name}.handler];"
         )
         claim = (
-            f"/ on_writing, because this handler writes {', '.join(writes)}: that puts it in\n"
+            f"/ on_writing, because this handler writes {', '.join(outputs)}: that puts it in\n"
             "/ the job graph, where a cycle is refused at load. It is a CLAIM nothing\n"
             "/ checks - keep it true when you write the handler.\n"
         )

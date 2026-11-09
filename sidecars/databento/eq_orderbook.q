@@ -104,7 +104,7 @@
 / @eg count .qpipe.job.eq_orderbook.to_market_data[.qpipe.job.eq_orderbook.book_in] -> 0
 .qpipe.job.eq_orderbook.to_market_data:{[batch]
     n:count batch;
-    ([] sym:batch`sym; source:n#.qpipe.job.eq_orderbook.market_source; market:n#`equity; source_time:batch`ts_event;
+    .qetl.plant.with_flat ([] sym:batch`sym; source:n#.qpipe.job.eq_orderbook.market_source; market:n#`equity; source_time:batch`ts_event;
         bid_prices:`float$/:batch`bid_prices; bid_sizes:`float$/:batch`bid_sizes;
         ask_prices:`float$/:batch`ask_prices; ask_sizes:`float$/:batch`ask_sizes; clock:n#`venue)}
 
@@ -167,10 +167,11 @@
         ([] sym:`AAPL`AAPL; source:`XNAS`XNAS; market:`equity`equity;
             source_time:2026.09.17D13:30:00.000123456 2026.09.17D13:30:01.000000000;
             bid_prices:(189.5 189.49;enlist 189.5); bid_sizes:(300 500f;enlist 200f);
-            ask_prices:(189.52 189.53;`float$()); ask_sizes:(100 400f;`float$()); clock:`venue`venue)))];
+            ask_prices:(189.52 189.53;`float$()); ask_sizes:(100 400f;`float$()); clock:`venue`venue;
+            bid:189.5 189.5; ask:189.52 0n; rid:2#0N)))];
 
 .qetl.job.stream.define[`eq_orderbook;
-    `procname`subscribe_to`publishes`on_batch`transform`check`on_fail`note!(
+    `procname`subscribe_to`outputs`on_batch`transform`check`on_fail`note!(
         `databento1;
         enlist `databento_mbp10;
         `eq_orderbook`market_data;

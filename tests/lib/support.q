@@ -9,10 +9,36 @@
 // True if actual and expected are within tol of each other. Reduced with
 // `all` so it also works when actual/expected are equal-length vectors
 // (assertThat needs a single boolean, not a vector of them).
-.qt.support.approx:{[tol;a;b] all tol>=abs a-b};
+// Null positions must match: q orders a null difference below any tolerance.
+.qt.support.approx:{[tol;a;b]
+    missing_a:null a;
+    missing_b:null b;
+    matched_nulls:missing_a & missing_b;
+    numeric:(not missing_a) & not missing_b;
+    all matched_nulls | numeric & (tol>=abs a-b)};
 
 // assertThat wrapper for approximate numeric equality.
 .qt.support.assertApprox:{[actual;expected;tol;msg] .qunit.assertThat[actual;.qt.support.approx[tol];expected;msg]};
+
+// The top of book of some market_data rows (#2288), in the shape the markout core takes:
+// sym, source, source_time, bid, ask and clock, arranged - sorted by sym, source, source_time with
+// p# on sym. The ladders are folded to their level 0 by the plant's own rule (.qetl.plant.with_flat),
+// so a fixture written as ladders prices exactly as the normalizers' flat columns would.
+// A table that already carries bid and ask is only arranged.
+// @param rows market_data rows with source_time, sym, source, the four ladders (or bid and ask) and clock
+// @return the arranged top of book
+.qt.support.flat_books:{[rows]
+    flat:$[`bid in cols rows; rows; .qetl.plant.with_flat rows];
+    .qetl.mapped.arrange select source_time, sym, source, bid, ask, clock from flat}
+
+// market_data rows as an HDB holds them (#2288), for a stand-in that runs queries in this process:
+// sorted by sym, source, source_time, a `date` column in place of the partition, and `rid`, each row's
+// position in its date's partition. Tests that stand a table in for the mapped HDB build it with this.
+// @param rows market_data rows with source_time, sym, source, bid, ask and clock
+// @return the rows in the order and with the columns a partition has
+.qt.support.stand_in_market_data:{[rows]
+    t:`sym`source`source_time xasc update date:`date$source_time from rows;
+    update rid:til count i by date from t}
 
 // A genuinely empty etl_coverage ledger, whatever shape it currently has.
 //
@@ -44,6 +70,15 @@
         range_from:`timestamp$();
         range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$();
         superseded_at:`timestamp$(); run_id:0#0Ng)};
+
+// Start a suite with no configuration snapshots, in the status directory it has set:
+// the table, the file and what this process remembers having verified (#1999). Like the
+// coverage ledger the store is persisted, so emptying the table alone is not a reset.
+.qt.support.reset_snapshots:{[]
+    @[{![`.;();0b;enlist `etl_config_snapshots]};::;{[e] (::)}];
+    @[{system"rm -rf ",x,"*"};.qetl.snapshot.path[];{[e] (::)}];
+    `.qetl.snapshot.verified set `symbol$();
+    .qetl.snapshot.attach[]};
 
 .qt.support.reset_coverage_ledger:{[]
     ![`.;();0b;enlist `etl_coverage];
@@ -331,6 +366,26 @@
 // it runs, so the children run the binary the runner itself was started with.
 .qt.support.q_interpreter:{[] $[""~getenv `QCMD; "q"; getenv `QCMD]}
 
+// A port nothing answers on, for a child q this process starts (#2259).
+//
+// The OS picks it: listening on 0W takes an ephemeral port, clear of the
+// fixed ranges TorQ stacks use, so a busy machine never hands out a taken one
+// the way a random draw from 5010+ did. One that answers anyway - something
+// took it in between - is skipped rather than tested as the child, and a
+// taken port never fails the caller: only ten in a row does. The caller's own
+// listening port, if any, is restored.
+.qt.support.free_port:{[]
+    own:system"p";
+    answers:{not null @[{hclose h:hopen (`$":localhost:",string x;200); h};x;{0Ni}]};
+    tries:0; port:0Ni;
+    while[(null port) and tries<10;
+        system"p 0W"; p:system"p"; system"p 0";
+        if[not answers p; port:p];
+        tries+:1];
+    system"p ",string own;
+    if[null port; '"free_port: ten ports in a row already answered"];
+    port}
+
 // Every .q file under a directory, recursively.
 //
 // `key` on a directory returns a symbol LIST (11h) and on a file an atom
@@ -579,3 +634,11 @@ setenv[`UQF_FIXTURE_WRITES;enlist "1"];
 // Which namespaces are suites, and the layout rules that keep a renamed suite
 // from silently ceasing to run.
 system "l tests/lib/discovery.q";
+
+// A defined bounded worker's configuration, shaped as the declaration that
+// would define it again: the dataset it fills is `outputs`, a list of one
+// (#2102). The stored configuration keeps the dataset as `dataset`, derived;
+// a test that re-defines a worker from it with one field changed starts here.
+.qt.support.declaration:{[worker]
+    cfg:.qetl.job.bounded.def worker;
+    (enlist[`outputs]!enlist enlist cfg`dataset),`dataset _ cfg};

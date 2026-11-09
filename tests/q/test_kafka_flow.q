@@ -298,7 +298,7 @@
     .qunit.assertEquals[.qt.qpipe.job.kafka_flow.calls[];0;"an empty batch is legal and produces no write"]};
 
 .qt.qpipe.job.kafka_flow.test_the_job_publishes_every_declared_topics_output_and_the_dead_letters:{[t]
-    p:(.qetl.job.stream.def `kafka_flow)`publishes;
+    p:(.qetl.job.stream.def `kafka_flow)`outputs;
     .qunit.assertTrue[all `client_flow`kafka_dead_letter in p;"client_flow for the client topic, and the dead letters"]};
 
 / --- the output contract ---------------------------------------------------

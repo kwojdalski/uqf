@@ -36,7 +36,7 @@
 / Every table the orchestrator's generated database.q is expected to carry.
 / A floor AND a list: a missing name is caught, and so is a new one added to
 / the q file without a thought about who consumes it.
-.qt.qetl.plant.tables.expected:`fx_orderbook`wide_orderbook`mkt_orderbook`kafka_message`kafka_dead_letter`crypto_book`crypto_sim_fills`crypto_trades`trades`position`executions`orders`fx_position`fx_limit_breach`fx_position_open`position_open`cross_arbitrage`config_change`market_data`superbook`arbitrage`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar`duckdb_deals`client_flow`deal_positions`trades_copy`crypto_execution_quality`exec_bar`crypto_book_1s`book_liquidity_1m`last_value`order_quality`order_outcomes`fx_markout`fx_markout_wide`demo_deals
+.qt.qetl.plant.tables.expected:`fx_orderbook`wide_orderbook`mkt_orderbook`kafka_message`kafka_dead_letter`crypto_book`crypto_sim_fills`crypto_trades`trades`position`executions`orders`fx_position`fx_limit_breach`fx_position_open`position_open`cross_arbitrage`config_change`market_data`superbook`arbitrage`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar`duckdb_deals`client_flow`deal_positions`trades_copy`crypto_markout`eq_markout`exec_bar`crypto_book_1s`book_liquidity_1m`last_value`order_quality`order_outcomes`fx_markout`fx_markout_wide`demo_deals
 
 / Tables an installed sidecar bundle added, read from its ledger
 / (src/etl/installed_bundles.json). The bundle defines and describes them
@@ -192,7 +192,7 @@
         nms:key[ns] except `;
         nms:nms where {[ns;nm] 98h=type get ` sv ns,nm}[ns] each nms;
         ([] job:(count nms)#job; tbl:nms;
-            role:{[d;nm] $[nm in d`subscribe_to;`subscribe_to;nm in d`publishes;`publishes;`internal]}[d] each nms)
+            role:{[d;nm] $[nm in d`subscribe_to;`subscribe_to;nm in d`outputs;`outputs;`internal]}[d] each nms)
       } each .qetl.job.stream.defined[]}
 
 .qt.qetl.plant.tables.test_every_job_declares_the_shape_the_plant_actually_carries:{[t]
@@ -202,7 +202,7 @@
     {[row]
         plant:cols .qt.qetl.plant.tables.tbl row`tbl;
         theirs:cols get ` sv (.qetl.job.stream.namespace row`job),row`tbl;
-        want:$[row[`role]=`publishes; 1_plant; plant];
+        want:$[row[`role]=`outputs; 1_plant; plant];
         if[not theirs~want;
             `.qt.qetl.plant.tables.bad set .qt.qetl.plant.tables.bad,enlist
                 (string[row`job],"/",string[row`tbl]," (",string[row`role],"): job has ",
@@ -257,7 +257,8 @@
 .qt.qetl.plant.tables.test_both_canonical_tables_end_in_a_symbol_clock_column:{[t]
     / LAST, so a partition the history fill appended `clock to has the same column
     / order as one written from this declaration, and no positional read moves.
-    {[tbl] s:.qetl.plant.schema tbl;
-        .qunit.assertEquals[last cols s;`clock;string[tbl]," ends in clock"];
-        .qunit.assertEquals[type s`clock;11h;string[tbl],"'s clock is a symbol"]} each `executions`market_data;
+    / market_data gained the flat top after it (#2288), in the same convention: appended, so nothing before it moves
+    .qunit.assertEquals[last cols .qetl.plant.schema `executions;`clock;"executions ends in clock"];
+    .qunit.assertEquals[-4#cols .qetl.plant.schema `market_data;`clock`bid`ask`rid;"market_data's clock is followed only by the columns added after it: the flat top and the row number"];
+    {[tbl] .qunit.assertEquals[type (.qetl.plant.schema tbl)`clock;11h;string[tbl],"'s clock is a symbol"]} each `executions`market_data;
     .qunit.assertEquals[.qetl.plant.clocks;`venue`receipt;"the two clocks a source_time can be on; `unknown is the history fill's, and is refused"]};

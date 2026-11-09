@@ -3,6 +3,16 @@
 Everything in this repository is MIT licensed (see [`LICENSE`](LICENSE)),
 **except** the seven vendored dependencies below:
 
+Every tree under `lib/` is recorded in [`lib/VENDORED.toml`](lib/VENDORED.toml):
+its upstream, pinned commit, licence and what was copied, with each file's git
+blob id in `lib/.vendored/<tree>.tsv`. They are never edited here: the
+`vendored` pre-commit hook (`python3 scripts/gates/check.py vendored`)
+recomputes every file's blob id and fails on any byte that is not upstream's,
+and `python3 scripts/dev/revendor.py <tree> [--commit SHA]` is the one way to
+change a tree - it refetches upstream and rewrites the record in the same
+commit. Four trees carry whitespace changes made when they were vendored; they
+are listed, not accepted, in `lib/.vendored/<tree>.drift.tsv`.
+
 - `tests/lib/qunit.q`, vendored from [TimeStored's
   qUnit](https://github.com/timestored/kdb/blob/master/qunit/qunit.q) (see also
   [the guide](https://www.timestored.com/kdb-guides/kdb-regression-unit-tests)),
@@ -30,6 +40,15 @@ Everything in this repository is MIT licensed (see [`LICENSE`](LICENSE)),
   target platform before it could be loaded. KDB-X also bundles its own official
   parquet module at `~/.kx/mod/kx/pq/`, worth checking as a licensed alternative
   first.
+- `lib/unparse/`, vendored from
+  [patmok/unparse](https://github.com/patmok/unparse) at commit `079b8a2`,
+  unchanged. **Upstream has no LICENSE file** - no explicit grant of rights
+  exists, so ordinary copyright applies and **no redistribution right is granted
+  until upstream adds a licence**. Vendored here at the repo owner's explicit
+  choice (#2263); see `lib/unparse/NOTICE.md`. It is loaded only when present,
+  by `src/etl/core/qsql_text.q`, to print a source's query as qSQL in the TRACE
+  log. A release carries no `lib/` but `kx-dbmaint`, so a released tree never
+  ships it and falls back to the full parse tree.
 - `lib/torq/`, vendored from
   [DataIntellectTech/TorQ](https://github.com/DataIntellectTech/TorQ) at commit
   `a6cee6c`, distributed under the MIT License (full text at

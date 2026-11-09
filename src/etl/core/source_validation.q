@@ -40,7 +40,7 @@
     decl:.qetl.source.def[source];
     if[count decl`supporting; :.qetl.source.validate_inputs[source;decl;tbl]];
     .qetl.source.check_table[source;"";decl`columns;decl`types;tbl];
-    .[{.qetl.log.dbg[x;y;z]};(source;"contract satisfied";`rows`columns!(count tbl;count decl`columns));::];
+    .[{.qetl.log.ch.dbg[`source;y;(enlist[`source]!enlist x),z]};(source;"contract satisfied";`rows`columns!(count tbl;count decl`columns));::];
     1b}
 
 / Private: refuse `tbl` unless it carries `columns` with `types`, naming
@@ -84,7 +84,7 @@
     {[source;given;nm;contract]
         .qetl.source.check_table[source;"'s input ",string nm;cols contract;.qetl.source.type_chars[contract];given nm]
       }[source;given]'[key decl`supporting;value decl`supporting];
-    .[{.qetl.log.dbg[x;y;z]};(source;"contract satisfied";
+    .[{.qetl.log.ch.dbg[`source;y;(enlist[`source]!enlist x),z]};(source;"contract satisfied";
         `rows`inputs!(count given decl`table_name;names));::];
     1b}
 

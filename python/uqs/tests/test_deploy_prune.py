@@ -8,7 +8,6 @@ under tmp_path, so the listing program and the removals are the server's own.
 
 from __future__ import annotations
 
-import io
 import json
 import re
 import subprocess
@@ -66,10 +65,10 @@ def dest(tmp_path: Path) -> Path:
 
 
 def _prune(dest: Path, keep: int, dry_run: bool = False):
-    remote, out = LocalRemote(), io.StringIO()
-    cfg = make_config(artifact="", host="uqf-server", dest=str(dest), profile="prune")
-    code = prune.prune(cfg, remote, keep=keep, dry_run=dry_run, out=out)
-    return code, json.loads(out.getvalue()), remote
+    remote = LocalRemote()
+    cfg = make_config(artifact="", ssh="uqf-server", dest=str(dest), profile="prune")
+    code, result = prune.prune(cfg, remote, keep=keep, dry_run=dry_run)
+    return code, result, remote
 
 
 def _left(dest: Path) -> list[str]:
@@ -121,17 +120,21 @@ def test_a_dry_run_under_a_held_lock_plans_and_says_the_lock_is_held(dest, log_t
 
 
 def test_the_command_ends_a_dry_run_with_the_note_on_stderr_after_the_json(dest, monkeypatch):
-    """#1902: stdout stays the JSON report a program parses."""
+    """#1902, #2125: under --json stdout is the one document a program parses,
+    and the note goes to stderr; without it, the text and then the note."""
     from uqs.cli import deploy_server
 
     monkeypatch.setattr(deploy_server, "Remote", lambda *a, **k: LocalRemote())
-    r = CliRunner().invoke(
-        cli.app,
-        ["deploy", "prune", "--ssh", "h", "--dest", str(dest), "--keep", "0", "--dry-run"],
-    )
+    argv = ["deploy", "prune", "--ssh", "h", "--dest", str(dest), "--keep", "0", "--dry-run"]
+    r = CliRunner().invoke(cli.app, [*argv, "--json"])
     assert r.exit_code == 0, r.output
+    doc = json.loads(r.stdout)
+    assert doc["ok"] is True and doc["prune"] == "planned" and doc["removed"] == [R3, R5]
     assert r.stderr.strip().splitlines()[-1] == NOTE
-    assert NOTE not in r.stdout
+    text = CliRunner().invoke(cli.app, argv)
+    assert text.exit_code == 0, text.output
+    assert text.stdout.startswith("would remove 2 release(s)")
+    assert text.stdout.strip().splitlines()[-1] == NOTE
 
 
 def test_the_lock_is_held_from_before_the_listing_until_after_the_removal(dest):
@@ -167,7 +170,7 @@ def test_only_a_name_shaped_like_a_release_is_ever_removed(dest):
 
 def test_a_server_with_no_releases_has_nothing_to_prune(tmp_path):
     _, result, _ = _prune(tmp_path / "empty", 0)
-    assert result == {"prune": "done", "kept": [], "removed": [], "freed_bytes": 0}
+    assert result == {"ok": True, "prune": "done", "kept": [], "removed": [], "freed_bytes": 0}
 
 
 def test_decide_keeps_the_newest_by_name_which_is_by_time():
@@ -191,15 +194,36 @@ def test_prune_asks_with_what_would_go_and_removes_nothing_unless_told_yes(dest,
     """#1854: a removed release cannot be brought back, so `deploy prune` asks
     (`--yes` does not): the question is decided under the same lock as the removal."""
     asked: list[dict] = []
-    remote, out = LocalRemote(), io.StringIO()
-    cfg = make_config(artifact="", host="uqf-server", dest=str(dest), profile="prune")
+    remote = LocalRemote()
+    cfg = make_config(artifact="", ssh="uqf-server", dest=str(dest), profile="prune")
     before = _left(dest)
-    code = prune.prune(
-        cfg, remote, keep=0, out=out, confirm=lambda planned: asked.append(planned) or answer
+    code, result = prune.prune(
+        cfg, remote, keep=0, confirm=lambda planned: asked.append(planned) or answer
     )
     assert [a["removed"] for a in asked] == [[R3, R5]]
-    result = json.loads(out.getvalue())
+    assert result["ok"] is bool(answer)
     if answer:
         assert code == 0 and result["prune"] == "done" and _left(dest) == [R1, R2, R4]
     else:
         assert code == 1 and result["prune"] == "declined" and _left(dest) == before
+
+
+def test_json_without_yes_is_refused_before_the_server_is_reached(dest, monkeypatch, terminal):
+    """#2229: `deploy prune --json` asked on the terminal, in the middle of a
+    --json run; it is refused, exit 1, as every --json command without --yes."""
+    from uqs.cli import deploy_server
+
+    def never(*_a, **_k):
+        raise AssertionError("the server was reached")
+
+    monkeypatch.setattr(deploy_server, "Remote", lambda *a, **k: LocalRemote())
+    monkeypatch.setattr(prune, "prune", never)
+    argv = ["deploy", "prune", "--ssh", "h", "--dest", str(dest), "--keep", "0", "--json"]
+    before = _left(dest)
+    monkeypatch.setattr("sys.argv", ["uqs", *argv])  # json_requested reads it
+    r = CliRunner().invoke(cli.app, argv, input="y\n")
+    assert r.exit_code == 1, r.output
+    doc = json.loads(r.stdout)
+    assert doc["ok"] is False
+    assert "--json cannot ask for confirmation: add --yes to remove releases" in doc["error"]
+    assert _left(dest) == before

@@ -24,7 +24,7 @@ import pytest
 
 from uqs.checks import schema_view
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import listing, runtime
+from uqs.stack import listing, runtime, table_export
 
 #: Tables whose `meta` exercises each translation schema_view makes.
 SCHEMA_SCRIPT = """
@@ -55,6 +55,17 @@ def _no_port_check(monkeypatch):
     from uqs.stack import occupancy
 
     monkeypatch.setattr(occupancy, "refuse_if_taken", lambda *_a, **_k: None)
+
+
+@pytest.fixture(autouse=True)
+def _no_stack_lock(monkeypatch):
+    """The stand-in paths' $TORQDATA cannot be created, so the stack's lock
+    file cannot be either; test_generated_files.py covers the lock."""
+    from contextlib import nullcontext
+
+    from uqs.stack import generated
+
+    monkeypatch.setattr(generated, "lifecycle_lock", lambda *_a, **_k: nullcontext())
 
 
 @pytest.fixture(scope="module")
@@ -244,19 +255,19 @@ def test_render_fits_the_given_width_and_puts_the_servers_back(q_port):
 
 def test_export_writes_csv_from_a_list_of_rows(tmp_path):
     target = tmp_path / "out.csv"
-    runtime.export_table([{"procname": "rdb1", "port": "6052"}], target)
+    table_export.export_table([{"procname": "rdb1", "port": "6052"}], target)
     assert target.read_text().splitlines() == ["procname,port", "rdb1,6052"]
 
 
 def test_export_writes_parquet_from_a_dataframe(tmp_path):
     target = tmp_path / "out.parquet"
-    runtime.export_table(pl.DataFrame({"sym": ["EURUSD"], "px": [1.1]}), target)
+    table_export.export_table(pl.DataFrame({"sym": ["EURUSD"], "px": [1.1]}), target)
     assert pl.read_parquet(target).to_dicts() == [{"sym": "EURUSD", "px": 1.1}]
 
 
 def test_export_matches_the_extension_case_insensitively(tmp_path):
     target = tmp_path / "OUT.CSV"
-    runtime.export_table([{"a": 1}], target)
+    table_export.export_table([{"a": 1}], target)
     assert target.exists()
 
 
@@ -264,12 +275,12 @@ def test_a_scalar_result_is_refused_rather_than_wrapped(tmp_path):
     """`count trades` is a number, not rows. Wrapping it in a one-cell table
     would write a file that looks like data and is not."""
     with pytest.raises(UqsError, match="tabular"):
-        runtime.export_table(2, tmp_path / "out.csv")
+        table_export.export_table(2, tmp_path / "out.csv")
 
 
 def test_an_unknown_extension_is_refused(tmp_path):
     with pytest.raises(UqsError, match=r"\.csv or \.parquet"):
-        runtime.export_table([{"a": 1}], tmp_path / "out.xlsx")
+        table_export.export_table([{"a": 1}], tmp_path / "out.xlsx")
 
 
 # ---------------------------------------------------- schema_view, live meta

@@ -123,9 +123,31 @@
     bad:{[s;k] $[k in key s; (`$lower s k) in .qetl.livecheck.tls_off k; 0b]}[s] each key .qetl.livecheck.tls_off;
     $[any bad; (string k),"=",s k:first key[.qetl.livecheck.tls_off] where bad; ""]}
 
+/ Private: the (start;end) a window reads, end excluded: a timespan back from
+/ now, or the two timestamps of a past window (#2249).
+/ @private
+/ @param window a timespan, or (start;end) timestamps
+/ @return (start;end) timestamps
+/ @eg .qetl.livecheck.bounds[(2026.09.13D00:00;2026.09.14D00:00)]  ->  2026.09.13D00:00:00.000000000 2026.09.14D00:00:00.000000000
+.qetl.livecheck.bounds:{[window]
+    if[-16h=type window; n:.z.p; :(n-window;n)];
+    if[not (12h=type window) and 2=count window;
+        '"livecheck: window is a timespan or (start;end) timestamps, not type ",string type window];
+    if[not window[0]<window 1; '"livecheck: the window is empty - its start is not before its end"];
+    window}
+
+/ Private: a window as a diagnostic says it: "last 0D01:00:00.000000000", or
+/ "window [start, end)".
+/ @private
+/ @eg .qetl.livecheck.said[0D01]  ->  "last 0D01:00:00.000000000"
+.qetl.livecheck.said:{[window]
+    $[-16h=type window; "last ",string window;
+        "window [",string[window 0],", ",string[window 1],")"]}
+
 / Check one source, live.
 / @param source a registered source
-/ @param window how far back the bounded read reaches, a timespan
+/ @param window what the bounded read reaches: a timespan, up to now; or the
+/        (start;end) timestamps of a past window, end excluded (#2249)
 / @return dict source, transport, status (`ok`empty`failed), stage, rows, elapsed_ms, diagnostic
 .qetl.livecheck.check:{[source;window]
     t0:.z.p;
@@ -152,8 +174,8 @@
     / From here the handle is open: every path below closes it.
     outcome:@[{[source;window;h]
         .qetl.source.validate_live[source;h];
-        now:.z.p;
-        got:.qetl.source.fetch_window[source;h;now-window;now];
+        span:.qetl.livecheck.bounds[window];
+        got:.qetl.source.fetch_window[source;h;span 0;span 1];
         / The whole read is the contract - a dict of every input for a source
         / with supporting ones (#1078) - and its primary table the row count.
         .qetl.source.validate[source;got 1];
@@ -163,8 +185,8 @@
         e:last outcome;
         stage:$[e like "validate_live*"; `schema; e like "validate:*"; `output; `read];
         why:$[stage=`schema; e;
-            stage=`output; "the read of the last ",string[window]," ran, but its rows break the adapter's declared output: ",e;
-            "the bounded read of the last ",string[window]," failed: ",e];
+            stage=`output; "the read of the ",.qetl.livecheck.said[window]," ran, but its rows break the adapter's declared output: ",e;
+            "the bounded read of the ",.qetl.livecheck.said[window]," failed: ",e];
         :finish r,`stage`diagnostic!(stage;.qetl.livecheck.redact[why;cred])];
     finish r,`status`stage`rows!($[0=last outcome; `empty; `ok];`done;last outcome)}
 

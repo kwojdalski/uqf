@@ -139,12 +139,36 @@ def _declaration_reference(decl: ModuleType, root: Path) -> int:
     )
 
 
+def _markout_mapped(mapped: ModuleType, root: Path) -> int:
+    """A markout's path selects market_data by its date alone and reads no depth (#2288)."""
+    return report(
+        "markout-mapped",
+        mapped.problems(root),
+        f"{len(mapped.PATH)} markout files select market_data by date alone and read no depth",
+    )
+
+
 def _tool_pins(pins: ModuleType, root: Path) -> int:
     """Every copy of a tool's version pin agrees with its authority (#1838)."""
     return report(
         "tool-pins",
         pins.problems(root),
         f"every copy of {len(pins.PINS)} tool pins agrees with its authority",
+    )
+
+
+def _vendored(vendored: ModuleType, root: Path) -> int:
+    """Every tree under lib/ holds the bytes its record says, upstream's (#2157)."""
+    findings = vendored.problems(root)
+    return report(
+        "vendored",
+        findings,
+        vendored.summary(root) if not findings else "",
+        footer=(
+            f"\n{len(findings)} problem(s) under lib/. Vendored trees are never edited here:"
+            " restore upstream's bytes with `python3 scripts/dev/revendor.py TREE`,"
+            " or move to another upstream commit with `--commit SHA`."
+        ),
     )
 
 
@@ -183,6 +207,12 @@ CHECKS: dict[str, Check] = {
             _registry_enlist,
         ),
         Check(
+            "markout-mapped",
+            "a markout's path selects market_data by its date alone and reads no depth (#2288)",
+            "markout_mapped",
+            _markout_mapped,
+        ),
+        Check(
             "env-reference",
             "docs/reference/environment.md and .env.example match the variables the code reads",
             "env_reference",
@@ -199,6 +229,12 @@ CHECKS: dict[str, Check] = {
             "every copy of a tool's version (uv, pre-commit, Python...) matches its authority",
             "tool_pins",
             _tool_pins,
+        ),
+        Check(
+            "vendored",
+            "every tree under lib/ is byte-identical to the upstream commit it records",
+            "vendored",
+            _vendored,
         ),
     )
 }

@@ -11,13 +11,16 @@ draws the topology.
 - [Reading the database's shape](#reading-the-databases-shape) --- including
   [one table, in any HDB](#one-table-in-any-hdb)
 - [Commands](#commands)
+- [Compressing the HDB](#compressing-the-hdb)
 - [Replaying a tickerplant log](#replaying-a-tickerplant-log)
 - [Checking a dataset's producers](#checking-a-datasets-producers)
+- [Comparing a table on two endpoints](#comparing-a-table-on-two-endpoints)
 - [Listing things](#listing-things)
 - [What actually starts](#what-actually-starts) --- including
   [runtimes](#runtimes) and [profiles](#profiles)
 - [Changing a process's config](#changing-a-processs-config)
-- [Logs](#logs)
+- [Logs](#logs) --- including [the frontend's activity
+  history](#the-frontends-activity-history)
 - [Connecting](#connecting)
 - [Services](#services)
 - [Adding a process](#adding-a-process) --- including [installing jobs from
@@ -135,6 +138,49 @@ case-sensitively against the names the process reported. An exact name is just a
 pattern that matches itself, so there is one behaviour rather than two - quote
 the pattern, or the shell will try to expand it against your filenames first.
 
+### How the HDB is compressed
+
+```
+uqs data compress --report            # per table and column: algorithm, block size, ratio
+uqs data compress --report --json     # the same, as one document
+uqs --target uat data compress --report
+uqs --target kdb_prd data compress --report --hdb /data/hdb   # a TorQ server without uqf
+```
+
+`--report` reads what the HDB holds now and changes nothing (#2149). It walks
+the HDB with TorQ's own `.cmp.hdbstructure` - the walker `.cmp` compresses by -
+and reads each column file's header with `-21!`, through uqf's wrapper over
+`.cmp` (`scripts/processes/torq_compress.q`). Per table and column it lists the
+algorithm, the block size (log2, as `compressionconfig.csv`'s `cblocksize`) and
+the ratio over the compressed files; then the largest uncompressed partitions
+(`--limit`, 10 by default); then every partition that is not in the order, or
+lacks the attribute, that `sort.csv` declares - the order and attribute TorQ's
+wdb gives a partition at end of day, read from the first config layer that has
+the file, as TorQ reads it. The plant schema's `g#sym` is an in-memory index the
+tickerplant and RDB keep, not what a partition on disk carries, so it is not
+what this judges. Unsorted data compresses far worse - KX's whitepaper
+(<https://code.kx.com/q/wp/compress/>) measures 669x against 10x - but the
+report never re-sorts: it names the partitions, and the fix is the wdb's. It
+writes nothing, but on a large HDB reading every header and every partition's
+sort columns is still substantial read I/O.
+
+`--hdb DIR` names the directory instead. Under `--target`, DIR is on that target
+and nowhere is it checked against this machine (#2219): the command runs here,
+and reaches the target by its own declared `ssh`, account and connect timeout,
+with one ssh session that writes the report script, `torq_compress.q` and the
+two TorQ files they load into a temporary directory there, runs the target's q
+(its `q_cmd`, else the account's `$QCMD`, else `q` on its `PATH`, else
+`$QHOME`'s), and removes the directory however it ends. So the target needs q
+and the HDB - an existing TorQ deployment - and no uqf, release or `deploy.env`.
+Sorting is judged only against `--sort-csv FILE` (a path on the target); without
+it the report says "sorting not checked", and `--json` gives
+`sort_checked: false` and `unsorted: null`, never the empty list that means
+every partition is sorted. It is a read, so an inspection-only target runs it;
+`--apply` with `--hdb` under `--target` is refused before anything reaches the
+target, because compressing goes through a managed deployment's writer lock,
+policy and reload. Without `--hdb`, `--target` runs the release's own command on
+its configured HDB, as before.
+
 ### The `clock` column on `executions` and `market_data` (#1925)
 
 Every row of `executions` and `market_data` says whose clock its `source_time`
@@ -162,14 +208,81 @@ person (a column rewrite, as for any stored value). A partition with no
 `market`/`source` (or `venue`) column to read is `unknown` throughout. The run
 prints how many rows of each partition got each clock.
 
+### The markout configuration columns: folded into snapshots (#1999)
+
+A markout row used to repeat `contract_version`, `rate_timing` and `report_ccy`.
+It now carries one `config_id`, the write-once configuration snapshot it was
+produced under (`uqs data snapshot list`, `uqs data snapshot show ID`). A
+partition of `fx_markout`, `fx_markout_wide` or `crypto_markout` written the old
+way is migrated by `uqs data check --apply`, which says so when it asks:
+
+1. one **legacy** snapshot is recorded for each distinct
+   `(contract_version, rate_timing, report_ccy)` in the partition, in the status
+   directory (`markout_legacy_...`; the same triple in two partitions is one
+   snapshot);
+2. a `config_id` column is written naming each row's;
+3. only then are the three columns dropped.
+
+An interruption between 2 and 3 leaves the old columns beside a good
+`config_id`, and the next run only drops them. A partition older than the
+columns holds none to read: its rows are contract version 1, with the rate
+timing and reporting currency unknown. The bootstrap fill that runs with every
+`uqs` command **never** does this - it leaves an existing markout partition as
+it was, and `uqs data check` reports its missing `config_id` until `--apply` -
+because it is the one repair here that deletes a column. The run prints each
+partition's snapshots and the columns it dropped.
+
+### `crypto_trades.source_time`: history has no venue time (#1936)
+
+cryptorust's fills recorder began sending the venue's own time for each fill as
+`crypto_trades.source_time`. A partition written before that has no such column,
+and `uqs data check --apply` adds it as **null**, never as a copy of `time`:
+`time` is when the plant received the fill, and a receipt time in a venue-time
+column is what the markout contract (#1923) exists to refuse. The `executions`
+mapping reads a null `source_time` as "no venue stamp" and puts the fill on the
+`receipt` clock, so history scores as it always did and is never compared
+against venue-clock books. `clock` is the only column the fill derives; this one
+is deliberately not.
+
+### `market_data`: the flat top, the order and the row numbers (#2288)
+
+A markout joins against the memory-mapped `market_data` and must never copy it
+into a heap (`docs/architecture/markout-memory.md`), which needs three things of
+a partition that older ones lack:
+
+- `bid` and `ask`, the level-0 top as plain floats - what `.qf.mkt.top_sides`
+  takes from the ladders, null for a side the source withdrew or a level that is
+  no price;
+- `rid`, the row's position in its partition;
+- the rows sorted by `sym`, `source`, `source_time` with `p#` on `sym`.
+
+`uqs data check` lists, per partition, the columns it lacks and the partitions
+out of that order (`unsorted` in `--json`), and changes nothing.
+`uqs data check --apply` asks - **stop the stack first**, as for any migration -
+and then, per partition, derives `bid` and `ask` from the stored ladders (a
+chunk of rows at a time, so the ladders stay mapped), rewrites a partition that
+is not in order in the HDB writer's staging area and swaps it in whole under the
+write lock (a kill leaves the old partition or the new one, never a half-sorted
+one), and numbers its rows. A partition already in order with its numbers right
+is not touched, and a second run changes nothing. Memory needed is a partition's
+three key columns and the permutation, not its ladders.
+
+The bootstrap fill that runs with every `uqs` command **never** does this: a
+null `bid` would read as a withdrawn book, and deriving it reads every ladder.
+Partitions written from now on arrive in this shape: the mappings write `bid`
+and `ask`, and the sort that finishes a partition - uqf's own, or TorQ's
+end-of-day sort through `scripts/torqconfig/sort.csv` - writes the order and the
+numbers. `uqs data compress --report` reads the same `sort.csv`, so it names a
+partition that does not follow it.
+
 ### Renamed or retyped HDB columns
 
 `data check --apply` does not rewrite existing columns. When a release renames
 or changes one, stop the stack and migrate each affected date/table explicitly:
 
 ```
-uqs data migrate trade 2026-01-01 --rename old_price:price --cast price
-uqs data migrate trade 2026-01-01 --rename old_price:price --cast price --apply
+uqs data migrate trade --date 2026-01-01 --rename old_price:price --cast price
+uqs data migrate trade --date 2026-01-01 --rename old_price:price --cast price --apply
 uqs data check
 uqs restart hdb1
 ```
@@ -182,6 +295,20 @@ partition before exchanging it with the old one; it prints the old directory's
 backup path for rollback. A source column not named in the current schema must
 be mapped with `--rename` rather than silently dropped. The command refuses
 segmented HDBs.
+
+An empty table that kept an obsolete schema (so a backfill cannot publish into
+it) is rebuilt from its current declaration instead (#2251):
+
+```
+uqs data migrate trade --date 2026-01-01 --reset-empty          # eligibility and the schema change; writes nothing
+uqs data migrate trade --date 2026-01-01 --reset-empty --apply  # after asking; --yes does not ask
+```
+
+q refuses unless every stored column file, obsolete ones included, is readable
+and holds no rows, and checks again under the writer lock just before staging.
+It cannot be combined with `--rename` or `--cast`, uses the shared `sym` file,
+leaves other partitions alone, and keeps the old table at the reported backup
+path.
 
 ### One table, in any HDB
 
@@ -336,6 +463,21 @@ uqs connector stop kafka
 eval "$(uqs setup odbc env)"                       # this shell, on the private ODBC setup
 ```
 
+`uqs data snapshot` reads the write-once configuration snapshots that markout
+rows name by `config_id` (#1999). Both commands only read:
+`list [--dataset NAME]` gives each snapshot's id, the datasets it configures,
+when it was recorded (UTC), by whom and why, and whether its digest still
+matches its content - one that does not is shown in red and the command exits 1 -
+and `show SNAPSHOT_ID` prints every field and parameter of one, refusing a
+snapshot whose digest fails. An id nothing is recorded under is a usage error
+naming it. Both read q's own store in the status directory; the other direction,
+from a result to its snapshot, is the `config_id` column.
+
+```bash
+uqs data snapshot list --dataset fx_markout
+uqs data snapshot show markout_5cefbe2bdcc61b7f --json | jq '.parameters.rate_timing'
+```
+
 Putting a release on a server is `uqs deploy` (`history` lists what this machine
 deployed): see [Deploying to a server](deploy.md).
 
@@ -361,13 +503,15 @@ message torn.
 
 ### Cleaning up
 
-`uqs clean` wipes `output/uqs/`. `--match REGEX` keeps only the entries whose
-path *under* `output/uqs/` the regex finds:
+`uqs clean` wipes `output/uqs/`, the HDB included. It lists what would go, with
+sizes, and asks first; `--yes` does not ask, and without a terminal it is
+needed. `--match REGEX` keeps only the entries whose path *under* `output/uqs/`
+the regex finds:
 
 ```
 uqs clean --dry-run                           # what a full wipe would remove
 uqs clean --match '^logs$' --dry-run          # the logs alone, still removing nothing
-uqs clean --match '^(logs|tplogs)$'           # and now actually remove them
+uqs clean --match '^(logs|tplogs)$'           # and now remove them, after asking
 uqs clean --match 'out_rdb1'                  # one process's files, wherever they sit
 uqs job checkpoint remove demo_deals_backfill # one backfill worker's resume point
 ```
@@ -377,15 +521,74 @@ which is how `out_rdb1` is found without naming `logs`. The match is a search,
 so anchor with `^`/`$` to be exact. `--dry-run` (`-n`) lists what would go, with
 sizes - worth running first, since none of this is reversible.
 
+## Compressing the HDB
+
+`data compress` brings the HDB's older partitions to the compression policy
+([docs/reference/compression-policy.md](../reference/compression-policy.md)) -
+and uqs compresses nothing itself. TorQ's `.cmp` plans and compresses, in
+`housekeeping1`, TorQ's own HDB-maintenance process; `.qtorq.compress`
+(`scripts/processes/torq_compress.q`) checks every file it changed and asks the
+HDBs to reload. Without `--apply` nothing changes (`--report`, earlier on this
+page, reads how the HDB is compressed now):
+
+```bash
+uqs data compress                              # the plan, the estimate, the disk it needs
+uqs data compress --table market_data --older-than 30d
+uqs data compress --date 2026-11-02 --apply    # that day now, whatever the policy's minage
+uqs data compress --apply                      # asks, then one partition at a time
+uqs --target prod data compress                # a release's own HDB, run there
+```
+
+The plan names each table's **policy** - its own, or the stack default when none
+is declared - and, per table partition, the columns `.cmp` would compress or
+decompress and those `-21!` already shows compressed. The **estimate** comes
+from `.cmp` itself: the newest planned partition of each table, its first
+100,000 rows of each column copied into a temporary directory and compressed
+there through the same wrapper. The **disk** line sets each filesystem's free
+space against the most one partition writes there - its new files, held beside
+the old until the HDB reloads.
+
+Partitions the coverage ledger says are **still being written** - rows a
+backfill wrote that its readers have not been released to see
+(`.qetl.coverage.unreleased`) - are `held`, and never run, until it finishes.
+
+`--table` (repeatable) and `--older-than` (a DURATION in whole days, on top of
+the policy's own minimum age) narrow a run. **Named days** - `--date D`,
+`--from`/`--to` (half-open: `--to`'s day is not in; whole days only) or `--last`
+(whole days before today) - compress the partitions in them on demand, the
+policy's minimum age set aside; the plan says so for each ("compressing it
+although the policy's minage is 7"). `--algo`, `--blocksize` and `--gzip-level`
+change one run's algorithm, block size or gzip level. Every one of these selects
+or sets rows of `.cmp`'s own plan table (`.cmp.showcomp`), which
+`.cmp.compressfromtable` then compresses, so the plan shown and the run are the
+same rows; a one-off setting is checked by `.cmp.checkcsv` first.
+
+`--apply` asks first (`--yes` answers), and is refused before anything is
+written when a filesystem is short of the space it needs. It then holds the HDB
+write lock - a backfill or `data migrate` waits - and runs one partition at a
+time, oldest first - `.cmp`'s swap, then the read-back check - and asks the HDBs
+to reload once, after the last. The first file that did not reach its target
+state stops the run with `.qtorq.compress`'s error, naming it; every partition
+already done is valid, and a second run continues where this one stopped. Each
+run is one row of the activity history, with an item per partition:
+`uqs activity list --action hdb.compress`.
+
+Under `uqs --target T` it runs on the release and asks there; an inspection-only
+target refuses `--apply` before it leaves this machine.
+
 ## Replaying a tickerplant log
 
 `data replay` is TorQ's own `tickerlogreplay` - the `tpreplay1` process - with
 the aiming done for you:
 
 ```
-uqs data replay --dry-run
-uqs data replay --date 2026-09-22 --table quote --table trade
+uqs data replay                                                   # the plan; runs nothing
+uqs data replay --date 2026-09-22 --table quote --table trade --apply
 ```
+
+A replay empties the tables it replays in the partitions it touches before it
+writes them, so it is a dry run unless `--apply`, which shows the plan and asks
+first; `--yes` answers that (#2235). `--dry-run` is refused: it is the default.
 
 What it replays, and into what, is read off the processes that are **running**,
 not off the configuration that describes them:
@@ -458,6 +661,54 @@ above is decided in q (`.qetl.verify.run`); the command only reads the range and
 prints. It exits 1 on `FAIL`, and with `--fail-unverified` on `UNVERIFIED`.
 `--json` prints the report.
 
+## Comparing a table on two endpoints
+
+Validating local processing against production used to mean querying both and
+comparing by hand. `uqs data diff` compares one table, or several, on two
+endpoints named explicitly - `local` for this machine's stack, or a deploy
+target, whose gateway is reached through an ssh tunnel for the call:
+
+```
+uqs data diff --left local --right prod --table demo_deals --date 2026-09-11 \
+    --filter sym=EURUSD --limit 5000 --source-version v1
+```
+
+It compares three things, each read through the contract the stack already
+serves:
+
+- **schema** - `meta` on each side's RDB: a column one side lacks, or holds as
+  another type.
+- **rows** - at most `--limit` rows per side in the window (and `--filter`s),
+  read with `.uqf.browse` under the gateway's query policy, then paired on the
+  row key and equivalence basis the table's producers declare, as
+  `uqs job check` pairs them (a table nobody keys is matched row by whole row).
+  `time` is stamped on receipt, so it is left out: two environments receive a
+  row at different moments.
+- **coverage** - with `--source-version` (and `--slice`), the coverage ledger's
+  current claims for the window on each side, composed and gapped by
+  `.qetl.coverage`.
+
+Each table reaches one outcome, the first that applies:
+
+  | outcome                | means                                                                                      |
+  | ---------------------- | ------------------------------------------------------------------------------------------ |
+  | `endpoint_unavailable` | a side could not be reached, or did not answer - with its reason                           |
+  | `missing_table`        | a side has no such table                                                                   |
+  | `differs`              | the schemas, the published coverage or the rows differ - each difference named             |
+  | `not_comparable`       | the table declares no row key and a sample was cut at `--limit`: no row could be judged    |
+  | `incomplete_coverage`  | the sides agree, but neither has published the whole window                                |
+  | `equal_in_sample`      | nothing differs in what was read                                                           |
+
+`equal_in_sample` is never "the tables are equal". Its label says whether every
+row in the window was read on both sides, or the read stopped at `--limit` - a
+truncated sample says it is NOT proof, and because each side was cut at its own
+place, a key only one sample holds is counted as unpaired rather than reported
+missing. Narrow the window or raise `--limit` to read it all.
+
+Everything that decides the result is q's (`.qetl.compare.run`,
+src/etl/core/compare.q); the command opens the tunnels and prints. It exits 1 on
+anything but `equal_in_sample`, and `--json` prints the report.
+
 ## Listing things
 
 Each noun lists its own records - `uqs process list`, `uqs profile list`,
@@ -485,6 +736,9 @@ The stack's own tables:
   `FIELD` accepts)
 - `uqs config env` - `build_env()`'s resolved `KDBBASEPORT`/`KDBHDB`/... values
   (the same env `config show`'s placeholder resolution and `torq.sh` use)
+- `uqs config housekeeping show` - `housekeeping1`'s effective schedule: when it
+  runs each day, and each rule - its function, what it matches, and how old a
+  match must be - with paths resolved as TorQ resolves them
 - `uqs graph --upstream --offline` - what each process needs, and who publishes
   it, before starting it on its own
 - `uqs job attachment status` - every attached destination a
@@ -696,9 +950,14 @@ compare it with `uqf` on the same history, copy `uqf`'s partitions of the tables
 both declare:
 
 ```
-uqs --runtime torq data seed --from-runtime uqf     # every table torq declares
-uqs --runtime torq data seed --from-runtime uqf --table trade --table quote --from 2026-09-01 --to 2026-10-01
+uqs --runtime torq data seed --from-runtime uqf             # the partitions it would copy
+uqs --runtime torq data seed --from-runtime uqf --apply     # every table torq declares
+uqs --runtime torq data seed --from-runtime uqf --table trade --table quote --from 2026-09-01 --to 2026-10-01 --apply
 ```
+
+Like `data replay`, it is a dry run unless `--apply`, which names the partitions
+and asks first; `--yes` answers that. With `--on-conflict replace` it copies
+over each table already here, every partition when no range is given.
 
 The partitions copied are those whose date lies in the [time
 range](#cli-conventions); either bound may be left off. `--from RUNTIME` and
@@ -733,6 +992,17 @@ refuses before anything starts, naming the stack and how to stop it:
 $ uqs start
 ERROR    | the torq runtime's stack (base port 6050) is already using ports this start needs: stp1 :6050 (pid 4242), ... Stop it with `uqs --runtime torq stop --base-port 6050`, or start this one elsewhere with --base-port.
 ```
+
+A port held by anything else - a q started by hand, which answers like an empty
+stack - is refused the same way, with the pid and command line of what listens
+on it (#2180).
+
+torq.sh returns once each process is forked, not once it is up. So after the
+launch, `start` and `restart` (without `--follow`) wait `--grace` (3 seconds by
+default) and check every process they started the way `uqs status` does: by its
+pid, and by who listens on its port. One that died while loading, or whose port
+another process answers, fails the command with a non-zero exit, naming it, why,
+and the last lines of its log. A one-shot such as `tpreplay1` is not checked.
 
 `uqs status` names the runtime and base port it is reporting on in its title.
 
@@ -787,7 +1057,7 @@ The uqf runtime's profiles, against the community licence's fourteen slots
   | ---         | ---                                                                                                              | ---       | ---                  |
   | `all`       | `arbitrage1`, `cross1`, `crossarb1`, `fxorderbookfeed1`, `fxpositions1`, `last_value1`, `posbook1`, `vectorize1` | 29        | 19/14 - over the cap |
   | `arbitrage` | `arbitrage1`, `crossarb1`                                                                                        | 20        | 10/14                |
-  | `crypto`    | `cryptomock1`, `crypto_markout1`, `crypto_book_1s1`                                                              | 17        | 7/14                 |
+  | `crypto`    | `cryptomock1`, `crypto_markout1`, `crypto_book_1s1`                                                              | 19        | 9/14                 |
   | `default`   | `posbook1`, `fxpositions1`, `fxorderbookfeed1`                                                                   | 22        | 12/14                |
   | `depth`     | `vectorize1`, `cross1`                                                                                           | 18        | 8/14                 |
   | `essential` | none - the TorQ stack alone                                                                                      | 14        | 4/14                 |
@@ -840,6 +1110,30 @@ bootstrap with an error. `tpreplay1` starts and exits: it is the one-shot replay
 HDB, and started without them it exits at startup, before it reads or empties
 anything - so expect it shown down. Composing `essential` with a job profile -
 `--profile essential,fx` - starts both sets.
+
+**`housekeeping1` keeps tickerplant logs replayable.** On a runtime with this
+tree's overlays it doesn't read the site's `appconfig/housekeeping.csv`, which
+tars tickerplant log directories a day after they are written, into a form
+replay cannot read. It reads `housekeeping.csv` in the data directory, which
+bootstrap writes on every start (`python/uqs/src/uqs/stack/housekeeping.py`).
+Process logs are kept as the starter pack keeps them. A tickerplant log
+directory is left exactly as written for `TPLOG_REPLAY_RETENTION_DAYS` (7) days,
+then gzipped, and only on Linux, where TorQ's replay reads a gzipped log. No
+rule deletes or tars a tickerplant log.
+
+**`housekeeping1` compresses the HDB by the declared policy.** Its last rule,
+`hdbcompress`, runs TorQ's `.cmp` with the compression policy
+(`compressionconfig.csv` in the data directory, declared in
+`src/etl/compression_policy.q`) through `.qtorq.compress.run_held`, which
+selects exactly what `uqs data compress --apply` would: each file is checked
+after it is swapped, and the HDBs are told to reload when anything changed. A
+partition younger than its table's `minage` is left alone, and so is one the
+coverage ledger says a backfill is still writing; each partition is compressed
+holding the HDB write lock backfills take. A failed run is logged as an error
+and doesn't stop the other rules; the next run continues from where it stopped.
+It never uses housekeeping's own `kdbzip`, which compresses every file one
+hard-coded way. The rules run daily at `HOUSEKEEPING_RUNTIMES` (02:00), and
+`uqs config housekeeping show` shows the schedule in effect.
 
 **TorQ discovers only what the profile started.** `process.csv` still lists
 every process, but TorQ's discovery would hand all of them out, so under
@@ -983,9 +1277,10 @@ uqs status --sort Status --columns status
 is the question behind every `up, but idle` line above. A table produced from
 outside the process list is named as external. A backfill subscribes and
 publishes nothing on the plant, so its row shows what its bounded worker
-declares instead: the `source` it reads, marked `(source)`, and the `dataset` it
-writes. A process with no declared edges - every vendored TorQ one - shows a
-dash. On a narrow terminal, `--columns status` drops the graph columns.
+declares instead: the `source` it reads, marked `(source)`, and the dataset it
+writes (its one `outputs`). A process with no declared edges - every vendored
+TorQ one - shows a dash. On a narrow terminal, `--columns status` drops the
+graph columns.
 
 ### Responds column
 
@@ -1162,6 +1457,14 @@ uqs logs fxorderbookfeed1 -f --level WARNING   # live tail, warnings/errors only
 Lines are sorted by the log's own timestamp. `-f` keeps following across
 restarts and the daily roll. `--level` filters to that level and above.
 
+Values are coloured by what they look like: numbers magenta (red when negative),
+q symbols yellow, dates and timestamps green, UUIDs and 32/40/64-digit hex
+digests light blue, and other `key=value` values light cyan. Each element of a
+vector such as `sizes=1000000 2e+07` or `` symbols=`EURUSD`GBPUSD `` is coloured
+on its own, and so is each atom of a list such as `` x=(1;`a) ``. Text in double
+quotes is never looked inside. The colours change nothing else: with colour off
+the line is the log's text exactly.
+
 An attached backfill or receiver is no TorQ process and has no `out_` log.
 `uqs logs --attachment NAME --worker WORKER` reads its latest run instead, with
 the same `-f`, `-n` and `--level`; `--run` picks an older run
@@ -1182,24 +1485,77 @@ uqs logs --multitail stp1 -l 100 --show-command        # show the multitail comm
 A process that has never started has no log and gets no pane; a name that is not
 a process is refused. Press `q` to leave multitail.
 
-`uqs logs --channel` subscribes to the lines the processes publish instead of
+### Channels: which subsystem a line concerns
+
+A line has three things to say apart: **which process** wrote it, **how severe**
+it is (`--level`), and **which subsystem** it concerns - its *channel*. TorQ's
+log line has a column for each, `time|host|proctype|proc|level|id|message`; the
+ETL layer fills `proc` with the process that actually wrote the line (its
+procname) and `id` with the channel. The worker, source, run and window a line
+is about stay in the message as `key=value` fields, never in a channel of their
+own.
+
+  | Channel     | Scope                                                          |
+  | ---         | ---                                                            |
+  | `lifecycle` | process and job startup, shutdown, run and window completion   |
+  | `ipc`       | connections, requests, responses, timeouts, retries            |
+  | `source`    | source readiness, fetching, queries                            |
+  | `transform` | normalisation, matching, calculations, rejected rows           |
+  | `storage`   | writes, persistence, sorting, compression                      |
+  | `coverage`  | coverage updates, checkpoints, replay decisions                |
+  | `eod`       | rollover, handover, reload coordination                        |
+  | `config`    | configuration, file loading, declarations                      |
+
+`uqs logs` shows the channel beside the process, and `--channel NAME` keeps only
+that subsystem's lines. It repeats - `--channel source --channel ipc` keeps
+either - and it combines with the process names and `--level`, for the recent
+lines and for `-f` alike:
+
+```
+uqs logs rdb1 --channel source                       # recent lines of one subsystem
+uqs logs rdb1 -f --channel source --channel ipc --level DEBUG
+uqs logs --json --channel coverage                   # each line carries "channel"
+```
+
+**`--channel` filters what you view. It does not stop a record being generated
+or rendered:** whether a line is written at all is its level's decision
+(`.qetl.log.debug[1b]`, `.qetl.log.trace[1b]`), and a hidden channel's lines are
+still produced, still in the file and still published where the level is
+published. Per-channel verbosity, a runtime switch per channel and a file per
+channel are not built.
+
+A channel name has to be one of the eight above; anything else is refused with
+the list, because a misspelt channel would read as a quiet subsystem. A line
+whose `id` is not a channel - one TorQ's own code wrote (`main`, `dotz`, ...),
+or an older line that still names a worker - is shown as it is, never dropped.
+It has no channel to select, so `--channel` leaves it out. In the file the
+channel is the `id` field: a TorQ process started with `-jsonlogs` writes it as
+`"id"`, and a published `logmsg` row carries it in its `id` column, with the
+emitting process in `sym`.
+
+Two names changed with this (#2274), with no alias: `--id` was the filter on the
+same column and is refused, naming `--channel`; the old `--channel`, which took
+no value and subscribed, is now `--subscribe`.
+
+`uqs logs --subscribe` subscribes to the lines the processes publish instead of
 reading their files. Every TorQ process publishes its log to a `logmsg` table
-through its own pub/sub, which is what TorQ's monitor reads. A channel picks the
-processes, the worker or component (`--id`, repeatable) and a minimum `--level`,
-and prints matching lines live until Ctrl-C:
+through its own pub/sub, which is what TorQ's monitor reads. A subscription
+picks the processes, the channels (`--channel`, repeatable) and a minimum
+`--level`, and prints matching lines live until Ctrl-C:
 
 ```
-uqs logs all --channel --level ERROR                  # every error, from every process
-uqs logs fxpositions1 --channel --id fx_positions     # one job's warnings and errors
+uqs logs all --subscribe --level ERROR                  # every error, from every process
+uqs logs fxpositions1 --subscribe --channel source      # one process's source warnings and errors
 ```
 
-Only what a process publishes reaches a channel. WARNING and ERROR are published
-by default, INFO and below are not (`scripts/torqconfig/settings/default.q` maps
-`.lg.pubmap` onto these names). A process that is down, or restarts, is reported
-once and resubscribed. Each subscribed process holds one more connection, so on
-a stack near its licence connection limit, name processes rather than `all`.
-`-f` reads the files, so it is the one to use when a process is not running or
-is not a TorQ process, such as the external feeds.
+Only what a process publishes reaches a subscription. WARNING and ERROR are
+published by default, INFO and below are not
+(`scripts/torqconfig/settings/default.q` maps `.lg.pubmap` onto these names);
+`--channel` here is again only a filter on the arriving rows. A process that is
+down, or restarts, is reported once and resubscribed. Each subscribed process
+holds one more connection, so on a stack near its licence connection limit, name
+processes rather than `all`. `-f` reads the files, so it is the one to use when
+a process is not running or is not a TorQ process, such as the external feeds.
 
 **`uqs start --follow` (`-f`) is the foreground form of all this**: it starts
 what `start` would - the same names, `all`, or `--profile` - then streams those
@@ -1333,6 +1689,35 @@ It also prints each process's load time on its latest start:
 │              │                     │           │ stopped while loading       │
 └──────────────┴─────────────────────┴───────────┴─────────────────────────────┘
 ```
+
+### The frontend's activity history
+
+The frontend API keeps a history of what operators did in the browser and an
+audit of every request that changed something (python/uqf_frontend/README.md,
+"Activity history and the action audit"). `uqs activity` reads the same SQLite
+file, read-only, with no API running: `--db FILE`, else the file
+`UQF_FRONTEND_ACTIVITY_DB` names, else this stack's
+`$TORQDATA/frontend/activity.sqlite3`.
+
+```bash
+uqs activity list --last 1h --level interactions     # newest first, as the Activity view
+uqs activity list --request 0a1b2c3d... --json       # one operation, browser and server
+uqs activity export --date 2026-11-03 --format csv -o day.csv
+uqs activity export --recorded-by server             # the audit alone, as a timeline
+```
+
+Both take the Activity view's filters - `--from/--to/--date/--last`,
+`--session`, `--request`, `--action` (a dotted prefix matches: `process` is
+every `process.*`), `--subject` (what was acted on: a process selector, a cfg
+key, a worker, a view - not the deployment target), `--outcome`, `--recorded-by` -
+and `--level`, the most detailed level shown: `actions`, `interactions` (and
+actions) or `debug` (everything). `export` writes `--format text` (the default:
+one event a line,
+`UTC time · session · level · action · target · subject · outcome · duration`,
+each browser action grouped under the server request it caused), `csv` or
+`jsonl`, oldest first - the document `GET /activity/export` serves, byte for
+byte. Events a level's bounds evicted, or the browser had to sample or drop, are
+counted, and both commands say how many.
 
 ## Services
 
@@ -1520,20 +1905,86 @@ This is not `uqs --target NAME query ...`, which runs `uqs query` on the server
 form names a different machine to run the query, so giving both `--target`
 options is refused.
 
+### A standing tunnel: plan and check
+
+`query --tunnel` opens a tunnel for one call. For a tunnel that stays open while
+you work, `uqs target tunnel plan` prints which processes it forwards and the
+ssh command that opens it. The command holds the ssh destination and the ports,
+never a password. `uqs target tunnel check` then tests each forward.
+
+```
+uqs target tunnel plan prod                        # every rdb, hdb, wdb and gateway
+uqs target tunnel plan prod rdb1 hdb1 --local rdb1:7002 --json
+uqs target tunnel check prod --password-env PROD_Q_PASSWORD
+```
+
+The processes, their proctypes and their remote ports come from the target's
+release, as `query --tunnel` reads them. A local port is the remote port plus
+`--local-offset` (10000) unless `--local PROC:PORT` names one. The plan refuses
+a process that is not declared there, one that is not an rdb, hdb, wdb or
+gateway, a port out of range, and two forwards sharing one local port. Each
+refusal under `--json` carries a `kind`: `discovery`, `unknown_process`,
+`unsupported_proctype`, `invalid_port` or `port_conflict`.
+
+The check tests each endpoint in the order a connection is made, and the first
+layer that fails gives the endpoint's status:
+
+- `ssh`: the target cannot be reached.
+- `unreachable`: nothing listens on the remote port. This is asked on the
+  server, so a closed port is never mistaken for a refused login.
+- `auth_refused`: the q login was refused.
+- `identity_mismatch`: `.proc.procname` named another process.
+- `not_ready`: a gateway has no active server.
+- `local_bind`: the planned local port is held by something other than this
+  process's tunnel.
+
+Every endpoint is checked, so one failure does not hide the others. Each one
+that passes is recorded in `tunnel_checks.json`, beside `deploy_targets.toml`
+(or wherever `UQS_TUNNEL_CHECKS` points). The plan reads that record to mark
+each mapping `verified`, `stale` (checked more than an hour ago, or for other
+ports) or `unverified`. The frontend's Services view calls the same two
+functions.
+
 ## MCP server
 
-`uqs-mcp` exposes the CLI's operations as MCP tools (`uqs_start`, `uqs_status`,
-`uqs_query`, ... - [`mcp.py`](../../python/uqs/src/uqs/mcp.py) has the list),
-for an MCP client to drive the stack. `exec` is not exposed. Point the client's
-server command at:
+`uqs-mcp` exposes the CLI's operations as MCP tools, for an MCP client to drive
+the stack. `exec` is not exposed. Point the client's server command at:
 
 ```
 uv run uqs-mcp
 ```
 
-(stdio transport). `uqs_query` returns row dicts for a table. `uqs_start` takes
-a `profile` too, and refuses what `uqs start` refuses: an unknown process or an
-unrunnable profile.
+(stdio transport). Each tool is one CLI command, named after it, and takes that
+command's options spelled as identifiers (#2120):
+
+  | Tool                                                                                                                                                                                                                | CLI command                         |
+  | ---                                                                                                                                                                                                                 | ---                                 |
+  | `uqs_start`, `uqs_stop`, `uqs_restart`, `uqs_status`, `uqs_clean`                                                                                                                                                   | `uqs start`, ...                    |
+  | `uqs_query`                                                                                                                                                                                                         | `uqs query`                         |
+  | `uqs_logs`                                                                                                                                                                                                          | `uqs logs --json`                   |
+  | `uqs_config_show`, `uqs_config_set`                                                                                                                                                                                 | `uqs config show`, `uqs config set` |
+  | `uqs_process_list`, `uqs_profile_list`, `uqs_config_field_list`, `uqs_config_list`, `uqs_config_env`, `uqs_job_list`, `uqs_target_list`, `uqs_runtime_list`, `uqs_job_attachment_list`, `uqs_job_attachment_status` | each noun's `list`                  |
+  | `uqs_connector_start`, `uqs_connector_stop`, `uqs_connector_status`                                                                                                                                                 | `uqs connector ...`                 |
+
+So `base_port` is the stack's base port wherever a stack is meant, and `port` is
+only ever one process's - `uqs_query`'s, as `--port` is on the CLI. `procs` is a
+list of process names, `proc` one; `uqs_query` takes `password_env`, the name of
+the variable holding the password, never the password; `uqs_start` takes
+`profile`, and `dry_run=true` for the start lines alone. `uqs_start` refuses
+what `uqs start` refuses: an unknown process or an unrunnable profile.
+`uqs_clean` is a dry run: it returns each entry it would remove, with its bytes,
+and deletes nothing. MCP has no terminal to ask on, so `confirm=true` is
+`uqs clean`'s `--yes`, the only way it deletes (#2257); a call that still gives
+`dry_run` is refused, naming `confirm`.
+
+Every tool returns one JSON object - a list tool its noun's `--json` document,
+`uqs_query` `{"expression", "result"}` - and every failure is the CLI's one
+refusal, `{"ok": false, "error": "..."}`, marked as an error: a refused start,
+an unknown tool, a bad argument and a query that cannot connect alike. A retired
+tool or parameter (`uqs_summary`, `uqs_list`, `uqs_print`, `uqs_get_config`,
+`uqs_crypto_*`, `port` for a base port, `passwd`, `procname`, `min_level`) is
+refused naming what replaced it. `python/uqs/tests/test_mcp_vocabulary.py` holds
+every tool to its CLI command's names and types.
 
 ## Other commands
 
@@ -1591,20 +2042,21 @@ command that breaks a rule, and on a listed exception that has since been fixed.
    fleet's last start left it, and is refused, naming `uqs start`, when that
    directory is not bootstrapped; it rehearses against the real coverage ledger,
    which a scratch directory would not hold. What the worker itself writes - its
-   log and its status file - is the rehearsal's output. `deploy prune` and
-   `deploy rollback` print a JSON report, so their note goes to stderr; their
-   dry runs read the deploy lock and take nothing
+   log and its status file - is the rehearsal's output. Under `--json`,
+   `deploy push`, `prune` and `rollback` put their note on stderr, after the one
+   document on stdout; their dry runs read the deploy lock and take nothing
    ([deploy.md](deploy.md#rolling-back)).
 6. **A rename ships with a hidden alias for one release**, which prints the new
    spelling; the release after removes it.
 7. **Help says one thing one way** (#1883). A positional is shown as an
    upper-case word of one vocabulary - `PROC`, `JOB`, `TARGET`, `TABLE`,
-   `DATASET`, `SOURCE`, `ATTACHMENT`, `CONNECTOR`, `RUNTIME`, `RUN`, ... - and a
-   placeholder in a command's help is one of that command's own (no `WORKER`, no
-   bare `NAME`). A command's first help paragraph is one line, the one its group
-   lists; option help starts with a capital or a backtick; and help names no
-   issue numbers. Help is text, not Rich markup, so `[process]` in a documented
-   JSON shape stays in it. `-h` is `--help` everywhere.
+   `DATASET`, `SOURCE`, `ATTACHMENT`, `CONNECTOR`, `RUNTIME`, `RUN`,
+   `SNAPSHOT_ID`, ... - and a placeholder in a command's help is one of that
+   command's own (no `WORKER`, no bare `NAME`). A command's first help paragraph
+   is one line, the one its group lists; option help starts with a capital or a
+   backtick; and help names no issue numbers. Help is text, not Rich markup, so
+   `[process]` in a documented JSON shape stays in it. `-h` is `--help`
+   everywhere.
 
 Output into a pipe or a file is neither cut nor wrapped (#1883): a table is as
 wide as its widest row and a line is never broken, so
@@ -1624,54 +2076,76 @@ Every command exits the same way for the same outcome (#1885), and
   contradictory option, a time range given two ways. Click's own usage errors
   and the command's (`UqsUsageError`) alike.
 - **1** also when a question is answered no, or not at all.
+- **3**: done in part, with the rest to retry (`EXIT_PARTIAL`, #2226). Only
+  `job backfill --attachment --wait` exits 3: its rows are written and covered,
+  but a reader has not reloaded them, and running the same command again asks
+  the readers again. The attached runner's own refusal (its exit 2) is a refusal
+  here, 1, never a usage error.
 
 A command asks through one helper, `safety.ask`/`safety.confirm`: `[y/N]`, so
 the default is no; an EOF or Ctrl-C is a no; and with no terminal to ask on it
 refuses at once, naming `--yes`, instead of prompting into the void.
 
 A time range is given one way, on every command that takes one (`job backfill`,
-`job gaps`, `job preview`, `job check`, `job runs audit`, `data seed`,
-`data replay`), and read by one parser, `uqs.timerange`:
+`job gaps`, `job preview`, `job check`, `job runs list`, `job runs audit`,
+`data seed`, `data replay`, `data compress`, `data migrate`, `data diff`,
+`activity list`, `activity export`, `config sources check`), all four options or
+none (#2249), and read by one parser, `uqs.timerange`:
 
 - `--from A --to B` is `[A, B)`: `B` is excluded. A bound is a date or a
   timestamp, ISO-8601 or a q literal - `2026-09-13`, `2026-09-13T06:00`,
   `2026-09-13T06:00+02:00`, `2026.09.13D06:00` - and is UTC without an offset;
 - `--date D` is one day, `--from D --to D+1`;
-- `--last DURATION` is up to now, `--from now-DURATION --to now`: `30s`, `5m`,
-  `2h`, `7d`, `500ms`.
+- `--last DURATION` is up to now, `--from now-DURATION --to now`: `300`
+  (seconds), `30s`, `1.5m`, `2h`, `7d`, `500ms` - the DURATION every span of
+  time takes.
 
-A command whose unit is coarser takes the range in that unit: `data replay`
-replays one day's log, so its range must be one whole day; `data seed` copies
-the date partitions whose date lies in the range.
+A command that acts on whole HDB partitions - `data replay`, `data seed`,
+`data compress`, `data migrate` - takes whole days only, and refuses rather than
+rounds anything else (#2245): a `--from` or `--to` that is not a UTC midnight is
+refused naming the days either side ("`data seed` copies whole partitions:
+--from 2026-09-13T06:00:00 is not a day boundary; give --from 2026-09-13 or
+2026-09-14"), and `--last` must be whole days - `--last 3d` is the three days
+before today, so today's live partition is never in it. `data replay` replays
+one day's log, and `data migrate` rebuilds one partition, so each takes one day:
+`--date D`, `--from D --to D+1`, or `--last 1d` (yesterday).
+
+`config sources check` reads a bounded window over the same range, and only it
+has a default: with no range at all, `--last 1h`. A source quiet now - a
+weekend, out of hours - is checked over a window that had data with `--date D`
+or `--from`/`--to` (#2249).
 
 The verbs of rule 4:
 
-  | verb                                          | means                                                     |
-  | ---                                           | ---                                                       |
-  | `status`                                      | the state of something running or installed               |
-  | `check`                                       | actively probe; exit non-zero on a problem                |
-  | `list`                                        | many records                                              |
-  | `show`                                        | one record                                                |
-  | `set`                                         | change one setting                                        |
-  | `add` `remove`                                | create or delete one thing                                |
-  | `start` `stop` `restart` `logs`               | the stack's lifecycle, and a connector's                  |
-  | `clean`                                       | delete the runtime state the stack wrote                  |
-  | `exec`                                        | run any other torq.sh verb, passed straight through       |
-  | `query` `graph` `schema`                      | read a running stack                                      |
-  | `new` `install`                               | write a job into the tree, or place one built elsewhere   |
-  | `backfill` `preview` `gaps` `audit` `receive` | operate a job and its runs                                |
-  | `export` `approve`                            | a receiver contract, on each side                         |
-  | `replay` `seed` `migrate`                     | move data into the HDB                                    |
-  | `upgrade`                                     | bring a store an older uqs wrote up to today's layout     |
-  | `alter`                                       | change one table in every HDB partition holding it        |
-  | `diff` `prepare`                              | compare runtimes; install a runtime's bundles             |
-  | `stub`                                        | add a placeholder source row                              |
-  | `env`                                         | print variables to source                                 |
-  | `build` `push` `rollback` `prune` `history`   | releases and their deployment                             |
-  | `shell`                                       | a shell on a target                                       |
-  | `unset` `rename` `edit`                       | a target's settings: remove one, rename it, edit the file |
-  | `log` `revert`                                | a target's change log, and undoing one change in it       |
-  | `adopt`                                       | take over a release copied onto a server by hand          |
+  | verb                                          | means                                                                            |
+  | ---                                           | ---                                                                              |
+  | `status`                                      | the state of something running or installed                                      |
+  | `check`                                       | actively probe; exit non-zero on a problem                                       |
+  | `list`                                        | many records                                                                     |
+  | `show`                                        | one record                                                                       |
+  | `set`                                         | change one setting                                                               |
+  | `add` `remove`                                | create or delete one thing                                                       |
+  | `start` `stop` `restart` `logs`               | the stack's lifecycle, and a connector's                                         |
+  | `clean`                                       | delete the runtime state the stack wrote                                         |
+  | `exec`                                        | run any other torq.sh verb, passed straight through                              |
+  | `query` `graph` `schema`                      | read a running stack                                                             |
+  | `new` `install`                               | write a job into the tree, or place one built elsewhere                          |
+  | `backfill` `preview` `gaps` `audit` `receive` | operate a job and its runs                                                       |
+  | `export` `approve`                            | a receiver contract, on each side                                                |
+  | `replay` `seed` `migrate`                     | move data into the HDB                                                           |
+  | `upgrade`                                     | bring a store an older uqs wrote up to today's layout                            |
+  | `alter`                                       | change one table in every HDB partition holding it                               |
+  | `compress`                                    | an HDB's compression: report it, plan it, or run TorQ's .cmp over it             |
+  | `diff` `prepare`                              | compare runtimes, or a table on two endpoints; install a runtime's bundles       |
+  | `stub`                                        | add a placeholder source row                                                     |
+  | `env`                                         | print variables to source                                                        |
+  | `build` `push` `rollback` `prune` `history`   | releases and their deployment                                                    |
+  | `shell`                                       | a shell on a target                                                              |
+  | `unset` `rename` `edit`                       | a target's settings: remove one, rename it, edit the file                        |
+  | `log` `revert`                                | a target's change log, and undoing one change in it                              |
+  | `adopt`                                       | take over a release copied onto a server by hand                                 |
+  | `restore`                                     | a config push's files back as they were, as a new push                           |
+  | `plan`                                        | what a tunnel to a target forwards, without opening it                           |
 
 Three of these sit beside a near neighbour on purpose (#1756): `log` is a
 record's change history, where `logs` is processes' output and `history` what
@@ -1692,8 +2166,9 @@ retired.
   | a process as a property or a filter           | `--proc NAME`                        | a name; repeatable where several fit      |
   | a job acted on                                | `JOB`                                | a name                                    |
   | a span of time                                | `--*-timeout`, `--every`, `--soak`   | a DURATION: `30` (seconds), `500ms`, `5m` |
-  | a time range up to now                        | `--last DURATION`                    | `30s`, `5m`, `2h`, `7d`                   |
+  | a time range up to now                        | `--last DURATION`                    | a DURATION                                |
   | the readiness wait of a deploy                | `--verify-timeout`                   | a DURATION                                |
+  | a span of time written into q                 | `job new --period/--horizon/--width` | a DURATION, or a q timespan as written    |
   | a source with no credential on its fixture    | `--fixture/--live`                   | a flag pair; the default is the command's |
   | what a write does with a row already there    | `--on-conflict POLICY`               | upsert, replace, ignore, append, fail     |
   | a private ODBC setup                          | `--odbc-home DIR`                    | a path                                    |
@@ -1794,8 +2269,8 @@ One safety vocabulary (#1732):
   | `data migrate` (dry by default)                             | still dry by default; `--apply` writes, after asking (#1854) |
 
 Every command that changes state now takes `--dry-run`/`-n`, among them `stop`,
-`restart`, `config set`, `data seed`, `job receiver start`, `job backfill`
-(`--dry-run`), `job runs upgrade`, `job attachment contract approve`,
+`restart`, `config set`, `job receiver start`, `job backfill` (`--dry-run`),
+`job runs upgrade`, `job attachment contract approve`,
 `connector start`/`stop`/`restart`, `setup odbc install`/`rollback`,
 `deploy component build` and `target add`/`remove`. The old
 `--accept-...`/`--skip-...` options each took their own reason; given together,
@@ -1803,15 +2278,18 @@ their reasons are joined into the one `--reason`.
 
 One write model per kind of change (#1854). A command that changes this machine
 writes by default and takes `--dry-run`/`-n`. A command that rewrites data in
-place - `data check`, `data alter`, `data migrate`, `target adopt` - is a dry
-run by default and writes only with `--apply`, which shows the plan and asks;
-`--yes`/`-y` answers that question, and nothing else. Their `--dry-run` says
-nothing more than the default: it still parses for one release, hidden, and is
-refused beside `--apply`. `data migrate`'s default, which was to flip to
-writing, stays a dry run. Every deletion that cannot be undone asks first and
-takes `--yes`/`-y`: `deploy prune`, `job checkpoint remove`, `target remove`
-(which `target revert` can undo), beside `job remove` and
-`job attachment remove`.
+place - `data check`, `data alter`, `data compress`, `data migrate`,
+`data replay`, `data seed`, `target adopt` - is a dry run by default and writes
+only with `--apply`, which shows the plan and asks; `--yes`/`-y` answers that
+question, and nothing else. Their `--dry-run` says nothing more than the
+default: it still parses for one release, hidden, and is refused beside
+`--apply`. `data migrate`'s default, which was to flip to writing, stays a dry
+run. Every deletion that cannot be undone asks first and takes `--yes`/`-y`:
+`clean` (the whole data directory, the HDB with it, unless `--match` narrows
+it), `deploy prune`, `job checkpoint remove`, `target remove` (which
+`target revert` can undo), beside `job remove` and `job attachment remove`. On
+`uqs-mcp`, which cannot ask, the tool for each is a dry run unless it is given
+`confirm=true`.
 
 Every bypass is a named override with a reason (#1852): the bare flags that
 lifted a refusal and recorded no reason are `--override NAME --reason TEXT`,
@@ -1861,8 +2339,7 @@ A fixed verb vocabulary (#1733):
 `status` is the state of something running, `check` a probe that exits non-zero
 on a problem, `list` many records and `show` one. A push or rollback asks a
 release for `deploy check`, or for `deploy verify` on a release from before it.
-The MCP tool `uqs_summary` is `uqs_status`, and `uqs_summary` stays for one
-release.
+The MCP tool `uqs_summary` is `uqs_status`, and is refused naming it.
 
 One vocabulary (#1857):
 
@@ -1881,7 +2358,8 @@ One vocabulary (#1857):
   | `setup odbc ... --home DIR`                                   | `--odbc-home DIR`                     |
 
 A duration that was a bare number still is one - seconds - so only `--window`'s
-minutes changed meaning, and its old spelling is converted. `deploy push` asks
+minutes changed meaning; its old spelling was converted for one release, and is
+refused now, naming the time range that replaced it (#2249). `deploy push` asks
 the release it verifies which spelling its `deploy check` takes, so a push or a
 rollback to a release from before this still verifies.
 
@@ -1931,6 +2409,31 @@ pairs of verbs stay apart on purpose: `clean` deletes what the stack wrote where
 rule, and `job runs upgrade` changes the ledger's layout where `data migrate`
 changes an HDB partition's schema. None of the hidden aliases has passed its one
 release yet (`cli/rename_expiry.py`), so none is removed.
+
+"Partition" is an HDB date partition (#2239), as kdb+ has it; the old spelling
+is refused naming the new one, with no alias:
+
+  | old                                      | new                                      |
+  | ---                                      | ---                                      |
+  | `data diff --partition KEY`              | `--slice KEY`, the coverage slice        |
+  | `job new --partition SYM`                | `--slice SYM`                            |
+  | `job new --partition-column COL`         | `--slice-column COL`                     |
+  | `data migrate TABLE PARTITION`           | `data migrate TABLE --date D`            |
+
+`data check --template DATE` keeps its name: it is a date partition.
+
+Every `data` command that reads or writes one HDB names it the same ways
+(#2237): `--hdb DIR` (a directory on this machine), `--attachment NAME` (an
+attached stack's pinned HDB, else its live wdb's), `uqs --target TARGET` (a
+release's own), and otherwise this runtime's - one help each, from
+`cli/hdb_scope.py`. `data migrate --hdb` and `data seed --hdb` (the destination)
+are new. A command that cannot act on an attachment's HDB knows the option and
+refuses it saying why: `data replay`, `data migrate` and `data seed` cannot
+check or pause an attached stack's writers, as `data check` and `data alter` do,
+and `data compress` plans and runs through this stack's housekeeping1 (its
+`--report` reads an attachment's HDB when it is on this machine). `data diff`
+compares two endpoints, and `data snapshot` reads the configuration snapshots,
+so neither takes them.
 
 One meaning per word (#1855):
 
@@ -2018,6 +2521,13 @@ document `{"ok": false, "error": "..."}`, so stdout always parses: exit code 1
 for a refusal, 2 for a usage error - Click's own, a missing argument or an
 unknown option, and the command's (#1882, #1885).
 
+`--json` never asks a question. A command that would ask before changing
+something - `data check`/`alter`/`compress`/`migrate`/`replay`/`seed --apply`,
+`deploy prune`, `job attachment add`/`remove` - is refused under `--json`
+without `--yes`, even at a terminal: exit 1,
+`{"ok": false, "error": "--json cannot ask for confirmation: add --yes to ..."}`,
+nothing changed (#2229).
+
 One contract holds for every document (#1882):
 
 - it is an object, never a bare list: a list command prints `{<kind>: [...]}` -
@@ -2028,13 +2538,33 @@ One contract holds for every document (#1882):
   cell shows: a port is a number, a flag `true`/`false`, a set of names a list.
   Where the table shows words for a missing value - `(chosen at start)`,
   `no cap`, `(nothing declares it)` - the document has `null` or `[]`;
-- a process is `process`, wherever the table calls it `procname`;
+- one concept has one key, at every depth of the document, not only on a list's
+  records (#2122): a process is `process` wherever the table calls it
+  `procname`, the start-all flag `start_with_all` (process.csv's
+  `startwithall`), a job `job` (the run ledger's `worker`), a stack's base port
+  `base_port` (an attached destination's `stack_id`), and a time range
+  `range_from`/`range_to`, never a `range` object;
 - a document that reports a verdict says it as `ok`, `false` exactly when the
   command exits non-zero (`deploy check` keeps `passed` beside it, which a
-  deploying uqs of another version reads; `job check` keeps `worst`);
+  deploying uqs of another version reads, and so does `deploy status`'s
+  `health`; `job check` keeps `worst`). `ok` is a bool wherever it appears: a
+  row with a richer result says it under `outcome` beside it - `data alter`'s
+  readers are `{process, ok, outcome, detail}`, `outcome` one of `reloaded`,
+  `failed`, `down`, `skipped`, `not asked`, and only `reloaded` is `ok`. `uqs`
+  refuses to print a document that breaks this, rather than print one a script
+  would misread;
+- what a document carries as data - a `query`'s result, `job preview`'s sampled
+  rows, `data diff`'s rows - keeps the data's own column names;
 - a time is ISO-8601 with an explicit offset: q's local `.z.P` (a log line,
   TorQ's clock) carries this machine's, a ledger's `.z.p` `+00:00`, and a
-  fraction of a second keeps all its digits.
+  fraction of a second keeps all its digits;
+- a log line is one record, `{time, level, message}`, plus what the command adds
+  (#2241): `logs` adds `host`, `process`, `proctype` and `id`, and
+  `connector logs` parses its connector's own lines into the same three, with
+  `time` and `level` null where a line names none. Its level is `level`, the
+  name of the `--level` that filters it, never TorQ's `loglevel`; and
+  `activity list`'s events say when and how severe under the same `time` and
+  `level`, as the frontend API's record and the history file do (#2254).
 
 ```bash
 uqs job runs list --json | jq -r '.runs[] | select(.status == "failed") | .run_id'
@@ -2056,28 +2586,38 @@ adds `findings` beside `error`: one record per blocker with its `code` (such as
 
 Each command's `--help` names its document. The commands #1731 added:
 
-  | command                                     | document                                                                                                                                                                                                                                                                         |
-  | ---                                         | ---                                                                                                                                                                                                                                                                              |
-  | `status`                                    | `{interpreter: {binary, actual, problem, runnable, connection_limit, summary}, processes: [{time, process, status, pid, port, heartbeat, responds, batches, depends_on, inputs, outputs, port_source}], silent, failing, starved: [{process, reasons}], heartbeats_collected}`   |
-  | `graph`                                     | `{direction, trees: [{process, status, tables, repeat, children}]}`                                                                                                                                                                                                              |
-  | `query [PROC] EXPR`                         | `{expression, result}`: a table is a list of records                                                                                                                                                                                                                             |
-  | `schema [PROC] [TABLE]`                     | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                                                                                           |
-  | `logs`                                      | `{lines: [{time, host, process, proctype, loglevel, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                                                                                           |
-  | `config show PROC [FIELD]`                  | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                                                                                              |
-  | `job gaps`                                  | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{worker, range_from, range_to, command}], today_not_refillable}`                                                                                                                                          |
-  | `job preview`                               | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                                                                                      |
-  | `job check`                                 | `{dataset, range_from, range_to, producers: [{producer, mode, source}], readonly, checks: [{category, status, dataset, scope, range_from, range_to, basis, reason, findings}], behaviours: [...], worst, ok}`                                                                    |
-  | `job runs list [--unfinished]`              | `{runs: [{run_id, worker, dataset, status, range_from, range_to, ...}]}`                                                                                                                                                                                                         |
-  | `job runs show RUN`                         | `{run, facts, logs, rerun}`                                                                                                                                                                                                                                                      |
-  | `job runs audit`                            | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                                                                                                |
-  | `connector status`                          | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                                                                                                 |
-  | `setup odbc status`                         | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                                                                                        |
-  | `deploy check`                              | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                                                                                   |
-  | `deploy history`                            | `{deployments: [{default, at, target, host, dest, release, profile, status, stage}]}`                                                                                                                                                                                            |
-  | `target check`                              | `{ok, target, host, dest, remote_user, release}`                                                                                                                                                                                                                                 |
-  | `data check`                                | `{ok, hdb, present, segmented, partitions, missing_tables, missing_columns, types_checked, type_changes}`                                                                                                                                                                        |
-  | `config sources check SOURCE...`            | `{ok, sources: [{source, status, stage, rows, elapsed_ms, diagnostic}]}` - one document, not a line per source                                                                                                                                                                   |
-  | `data check --table`, `data alter`          | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                                                                                   |
+  | command                                     | document                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+  | ---                                         | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+  | `status`                                    | `{interpreter: {binary, actual, problem, runnable, connection_limit, summary}, processes: [{time, process, status, pid, port, heartbeat, responds, batches, depends_on, inputs, outputs, port_source}], silent, failing, starved: [{process, reasons}], heartbeats_collected}`                                                                                                                                                                                                                                                                                                                                       |
+  | `graph`                                     | `{direction, trees: [{process, status, tables, repeat, children}]}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+  | `query [PROC] EXPR`                         | `{expression, result}`: a table is a list of records                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+  | `schema [PROC] [TABLE]`                     | `{process, port, tables: [{table, rows, columns}]}`, or with a TABLE `{process, port, columns: [{table, column, type, q, attribute}]}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+  | `logs`                                      | `{lines: [{time, host, process, proctype, level, id, message}]}`; not with `--follow`, `--channel` or `--multitail`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+  | `config show PROC [FIELD]`                  | `{process, fields: [{field, value}]}`, or `{process, field, value}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+  | `job gaps`                                  | `{job, gaps: [{range_from, range_to}], sessions, refillable, refills: [{job, range_from, range_to, command}], today_not_refillable}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+  | `job preview`                               | the preview's own result: `{job, mode, state, live, cursor, next_cursor, advances, fetched, rows, sample, failures, trace}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+  | `job check`                                 | `{dataset, range_from, range_to, producers: [{producer, mode, source}], readonly, checks: [{category, status, dataset, scope, range_from, range_to, basis, reason, findings}], behaviours: [...], worst, ok}`                                                                                                                                                                                                                                                                                                                                                                                                        |
+  | `job runs list [--unfinished]`              | `{runs: [{run_id, job, dataset, status, range_from, range_to, ...}]}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+  | `job runs show RUN`                         | `{run, facts, logs, rerun}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+  | `job runs audit`                            | `{facts: [{run_id, dataset, range_from, range_to, label, text}]}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+  | `job backfill --wait`                       | `{..., state, ok, exit_code, error}` locally, `{mode, job, plan, ..., result, state, ok, exit_code}` with `--attachment`: `ok` false exactly when it exits non-zero; `exit_code` 0, 1, or 3 (`--attachment`: written, not yet queryable)                                                                                                                                                                                                                                                                                                                                                                             |
+  | `data snapshot list`                        | `{snapshots: [{id, kind, datasets, digest, created_at, actor, reason, digest_ok}], ok}`; exits 1 when a digest does not match its content                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+  | `data snapshot show SNAPSHOT_ID`            | `{snapshot: {id, kind, datasets, digest, created_at, actor, reason, digest_ok}, parameters: {name: value as q text}}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+  | `connector status`                          | `{connectors: [{name, running, pid, log, ...}]}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+  | `connector logs NAME`                       | `{name, log, lines: [{time, level, message}]}`: a line's time and level are null where it names none, and its message the whole line; not with `--follow`                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+  | `setup odbc status`                         | `{home, current, previous, versions}`; without `--json` it is now a table                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+  | `deploy check`                              | its report without the `DEPLOY_VERIFY_OK`/`FAILED` marker line                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+  | `deploy push`                               | `{ok, deployments: [{target, release, revision, artifact, ssh, dest, profile, status, stage, error, rollback, ...}]}`: a report per target, `status` `planned` on a dry run                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+  | `deploy rollback`                           | `{ok, rollback, from, to, stop, start, current}`: `rollback` is `planned`, `done` or `failed`, with `reason` and `restore` when it failed                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+  | `deploy prune`                              | `{ok, prune, kept: [{release, why}], removed, freed_bytes, runtimes}`: `prune` is `planned`, `done` or `declined`; ok false when declined                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+  | `activity list`                             | `{db, events: [{event_id, time, recorded_at, level, source, kind, action, target, subject, outcome, session_id, request_id, claimed_user, trigger, method, status_code, duration_ms, items, detail, dropped_detail}], drops: [{level, reason, count, last_at}]}`, events newest first                                                                                                                                                                                                                                                                                                                                |
+  | `deploy history`                            | `{deployments: [{default, at, target, ssh, dest, release, profile, status, stage}]}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+  | `target check`                              | `{ok, target, ssh, dest, remote_user, release}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+  | `data check`                                | `{ok, hdb, present, segmented, partitions, missing_tables, missing_columns, types_checked, type_changes}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+  | `config sources check SOURCE...`            | `{ok, sources: [{source, status, stage, rows, elapsed_ms, diagnostic}]}` - one document, not a line per source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+  | `data check --table`, `data alter`          | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+  | `data compress --report`                    | `{hdb, target, present, columns: [{table, column, files, compressed, algos, blocksizes, bytes, raw_bytes, ratio, compressed_ratio}], largest_uncompressed: [{table, partition, files, bytes}], sort_checked, sort_csv, unsorted: [{table, partition, rows, sort_by, sorted, missing_attr, declared_attr}]}`: `unsorted` is null when `sort_checked` is false                                                                                                                                                                                                                                                         |
+  | `data compress`                             | `{ok, hdb, process, scope: {tables, older_than_days, days, change}, config, policies: [{table, policy, algo, blocksize, level, minage, columns}], held: [{dataset, date}], partitions: [{table, partition, age, status, policy_minage, early, dir, compress, decompress, skip, compressed, files, bytes_now, bytes_after, bytes_written}], sample, ratios, disk: [{filesystem, needed_bytes, free_bytes, ok}], totals, result}`: `result` is null without `--apply`, else `{partitions: [{partition, tables, files, bytes_before, bytes_after}], failed, reload, audit}`; ok false when a partition failed           |
 
 ## Installing
 

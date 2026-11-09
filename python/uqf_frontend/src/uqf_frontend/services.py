@@ -71,18 +71,29 @@ def read(settings: Settings) -> Registry:
         rows = history.target_rows(where)
     except (DeployError, UqsError, OSError) as exc:
         return Registry(source=str(path), declared=True, invalid=str(exc))
+    except (ValueError, TypeError, AttributeError) as exc:
+        # The backstop (#2026): whatever uqs did not turn into its own refusal
+        # reading a hand-edited or corrupt file is still that file's problem,
+        # and one such file must not blank the view with a 500.
+        return Registry(
+            source=str(path),
+            declared=True,
+            invalid=f"{path} or its deploy history could not be read: {exc}",
+        )
     out = []
     for row in rows:
         last = row.get("last_deployed")
         out.append(
             {
-                "name": row["target"],
+                "target": row["target"],
                 "ssh": row["ssh"],
                 "dest": row["dest"],
                 "remote_user": row["remote_user"] or None,
                 # The column appears only when some target names one.
                 "environment": row.get("environment") or None,
                 "labels": row["labels"],
+                # the column appears only when some target is in inspection mode
+                "inspection": row.get("inspection") is True,
                 "last_deployed": last.value if isinstance(last, Shown) else last,
             }
         )

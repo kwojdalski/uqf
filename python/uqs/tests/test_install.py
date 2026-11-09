@@ -24,10 +24,12 @@ from uqs.stack import install
 from uqs.stack.install import Kind, Mode, Status
 
 SOURCE = "source_name:`acme\n.qetl.source.define[source_name;`columns!enlist `time];\n"
-WORKER = ".qetl.job.bounded.define[`acme_backfill;`source`dataset`width!(`acme;`acme_tape;1D)];\n"
+WORKER = (
+    ".qetl.job.bounded.define[`acme_backfill;`source`outputs`width!(`acme;enlist `acme_tape;1D)];\n"
+)
 STREAM = (
     ".qetl.job.stream.define[`acme_spread;"
-    "`procname`subscribe_to`publishes!(`acme_spread1;enlist `quote;enlist `acme_spread)];\n"
+    "`procname`subscribe_to`outputs!(`acme_spread1;enlist `quote;enlist `acme_spread)];\n"
 )
 
 
@@ -37,7 +39,7 @@ def repo(tmp_path: Path, plant_tree) -> Path:
     for directory in (SOURCE_DIR, WORKER_DIR, STREAM_DIR):
         (root / directory).mkdir(parents=True)
     (root / STREAM_DIR / "quotes.q").write_text(
-        ".qetl.job.stream.define[`quotes;`procname`publishes!(`quotes1;enlist `quote)];\n"
+        ".qetl.job.stream.define[`quotes;`procname`outputs!(`quotes1;enlist `quote)];\n"
     )
     plant_tree(root, "quote:([]time:`timestamp$();sym:`symbol$())\n")
     return root
@@ -218,7 +220,7 @@ DIRECT_SOURCE = (
 )
 DIRECT_POLL = (
     "fetch:{[c] h({[c] select from t where time>c};c)}\n"
-    ".qetl.job.stream.define[`acme_poll;`procname`publishes`period`poll!"
+    ".qetl.job.stream.define[`acme_poll;`procname`outputs`period`poll!"
     "(`acme_poll1;enlist `quote;1s;`fetch`normalize`next_cursor!(fetch;{x};{x}))];\n"
 )
 

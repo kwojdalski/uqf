@@ -217,6 +217,9 @@ GENERATORS = {
     "contract-surface": "contract_surface",
     "q-facts": "q_facts",
     "plant-schema": "uqs.model.plant_metadata_gen",
+    "compression-config": "compression_config",
+    "housekeeping-config": "housekeeping_config",
+    "environment-tables": "environment_tables",
 }
 
 
@@ -394,3 +397,160 @@ def test_plant_schema_reports_a_refusal_without_a_traceback(monkeypatch, capsys)
     monkeypatch.setattr(plant_metadata_gen, "generate", no_q)
     assert derive.main(["plant-schema", "--check"]) == 1
     assert "plant-schema: no q interpreter" in capsys.readouterr().err
+
+
+# -------------------------------------------------------- compression-config
+
+
+def test_compression_config_check_reports_a_stale_file_and_writes_nothing(monkeypatch, capsys):
+    """Without q: the render is replaced by the committed text with a row changed."""
+    config = derive.load("compression_config")
+    committed = config.OUT.read_text()
+    changed = committed.replace("default,7,default,2,16,6", "default,8,default,2,16,6")
+    assert changed != committed
+    monkeypatch.setattr(config, "render", lambda: changed)
+    assert derive.main(["compression-config", "--check"]) == 1
+    err = capsys.readouterr().err
+    assert "compressionconfig.csv is stale" in err and "derive.py compression-config" in err
+    assert config.OUT.read_text() == committed
+
+
+def test_compression_config_without_q_refuses(monkeypatch):
+    config = derive.load("compression_config")
+    import uqs.interpreter
+
+    monkeypatch.setattr(uqs.interpreter, "q_interpreter", lambda env=None: None)
+    with pytest.raises(SystemExit, match="no q interpreter"):
+        config.render()
+
+
+def test_the_committed_compression_config_passes_torqs_own_checkcsv():
+    """The point of the file: the vendored `.cmp` accepts it. Its loader and
+    checkcsv (lib/torq/code/common/compress.q, read only) run over the committed
+    CSV, so a policy row that function would reject cannot be committed."""
+    config = derive.load("compression_config")
+    text = config.OUT.read_text()
+    assert config.torq_check(text) == len(text.splitlines()) - 1
+
+
+@pytest.mark.parametrize(
+    "row, message",
+    [
+        ("t,7,default,4,16,6", "incorrect compression algo"),
+        ("t,7,default,5,16,6", "incorrect compression algo"),
+        ("t,7,default,2,21,6", "incorrect compression blocksize"),
+        ("t,7,default,2,16,10", "incorrect compression level"),
+    ],
+)
+def test_torqs_checkcsv_refuses_what_the_policy_must_never_render(row, message):
+    """The control for the test above: the same harness fails when it should, so
+    its passing is not the harness accepting anything."""
+    config = derive.load("compression_config")
+    with pytest.raises(SystemExit, match=message):
+        config.torq_check(config.OUT.read_text() + row + "\n")
+
+
+# -------------------------------------------------------- housekeeping-config
+
+
+def test_housekeeping_config_is_current_and_its_check_writes_nothing():
+    out = REPO / "scripts" / "torqconfig"
+    files = [out / "housekeeping.csv", out / "housekeeping_schedule.csv"]
+    before = [f.stat().st_mtime_ns for f in files]
+    result = _run("housekeeping-config", "--check")
+    assert result.returncode == 0, result.stderr
+    assert [f.stat().st_mtime_ns for f in files] == before
+
+
+def test_housekeeping_config_is_what_bootstrap_writes(tmp_path):
+    """The committed rendering and housekeeping1's generated copy are one text."""
+    from uqs.paths import UqsPaths
+    from uqs.stack import housekeeping
+
+    paths = UqsPaths(
+        repo_root=tmp_path, torqhome=tmp_path, torqapphome=tmp_path, torqdata=tmp_path / "data",
+        scripts_dir=tmp_path, orchestrator_dir=tmp_path, runtime="uqf",
+    )  # fmt: skip
+    housekeeping.write_housekeeping_config(paths)
+    out = REPO / "scripts" / "torqconfig"
+    assert housekeeping.config_path(paths).read_text() == (out / "housekeeping.csv").read_text()
+    assert (
+        housekeeping.schedule_path(paths).read_text()
+        == (out / "housekeeping_schedule.csv").read_text()
+    )
+
+
+def test_housekeeping_config_check_fails_when_a_rule_changes(monkeypatch, capsys):
+    from uqs.stack import housekeeping
+
+    monkeypatch.setattr(housekeeping, "TPLOG_REPLAY_RETENTION_DAYS", 8)
+    assert derive.main(["housekeeping-config", "--check"]) == 1
+    err = capsys.readouterr().err
+    assert "housekeeping.csv is stale" in err and "derive.py housekeeping-config" in err
+
+
+# -------------------------------------------------------- environment-tables
+
+
+def test_environment_tables_are_current_and_their_check_writes_nothing():
+    page = derive.REPO / "docs" / "reference" / "environment.md"
+    before = page.read_bytes()
+    result = _run("environment-tables", "--check")
+    assert result.returncode == 0, result.stderr
+    assert page.read_bytes() == before
+
+
+def test_environment_tables_declare_what_the_gate_documents():
+    """One list: the variables the gate treats as documented are the rows the
+    page renders, and every one is in the page."""
+    gate = derive.load("environment_tables")._gate()
+    exact, prefixes = gate.documented(derive.REPO)
+    page = (derive.REPO / gate.DOC).read_text()
+    for name in sorted(exact | {p + "<" for p in prefixes}):
+        assert f"| `{name}" in page, name
+
+
+def test_environment_tables_check_fails_on_a_hand_edit_and_on_an_unrendered_row(
+    monkeypatch, tmp_path, capsys
+):
+    import shutil
+
+    tables = derive.load("environment_tables")
+    root = tmp_path
+    for rel in ("docs/reference/environment.md", "docs/reference/environment/read.csv"):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(derive.REPO / rel, root / rel)
+    shutil.copy(
+        derive.REPO / "docs/reference/environment/produced.csv",
+        root / "docs/reference/environment/produced.csv",
+    )
+    monkeypatch.setattr(tables, "REPO", root)
+    monkeypatch.setattr(derive, "REPO", root)
+    assert derive.main(["environment-tables", "--check"]) == 0
+
+    page = root / "docs/reference/environment.md"
+    good = page.read_text()
+    page.write_text(good.replace("| `UQF_MODE` |", "| `UQF_MODE_X` |", 1))
+    assert derive.main(["environment-tables", "--check"]) == 1
+    assert "derive.py environment-tables" in capsys.readouterr().err
+
+    page.write_text(good)
+    csv_file = root / "docs/reference/environment/read.csv"
+    csv_file.write_text(csv_file.read_text() + "UQF_NEW,somewhere,no,nothing\n")
+    assert derive.main(["environment-tables", "--check"]) == 1
+
+
+def test_environment_tables_survive_the_formatter_untouched():
+    """The block is fenced from panache, which would realign a padded table on
+    every change; if panache is installed, it must leave the page as it is."""
+    import shutil
+    import subprocess
+
+    panache = shutil.which("panache")
+    if panache is None:
+        pytest.skip("panache is not installed")
+    page = derive.REPO / "docs" / "reference" / "environment.md"
+    result = subprocess.run(
+        [panache, "format", "--check", str(page)], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

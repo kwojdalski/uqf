@@ -228,34 +228,34 @@
 / side=`ask. Nulls out a row with fewer than 3 levels rather than
 / indexing out of bounds.
 / @private
-.qf.mkt.book_convexity_one:{[prices;side]
+.qf.mkt.book_convexity_one:{[prices;book_side]
     $[3>count prices;
         0n;
         [raw:(prices[0]-prices[1])-(prices[1]-prices[2]);
-         $[side=`ask; neg raw; raw]]]};
+         $[book_side=`ask; neg raw; raw]]]};
 
 / Book convexity: (P0-P1)-(P1-P2), measuring curvature of the price
-/ ladder away from the touch. Negated when side=`ask - bid prices
+/ ladder away from the touch. Negated when book_side=`ask - bid prices
 / decrease level-by-level while ask prices increase, so mirroring the
 / ask-side sign keeps convexity comparably signed across both sides
 / (a "cheaper to go deeper than the first step implies" book reads the
 / same sign whichever side it's on). Needs >=3 levels; a shorter row is
 / nulled, not an error.
 / @param prices a vector of vectors, one level-0-first vector per row
-/ @param side `bid or `ask - which side prices belongs to
+/ @param book_side `bid or `ask - which side prices belongs to
 / @return a vector, convexity per row
-/ @throws error if side isn't `bid or `ask - checked once here, because
-/   book_convexity_one's `$[side=`ask; ...]` reads anything else as the bid
+/ @throws error if book_side isn't `bid or `ask - checked once here, because
+/   book_convexity_one's `$[book_side=`ask; ...]` reads anything else as the bid
 /   side and returns a plausible number with the wrong sign (#415)
 / @eg .qf.mkt.book_convexity[enlist 1.1000 1.0998 1.0995;`bid]  -> ,-0.0001
-.qf.mkt.book_convexity:{[prices;side]
-    if[not $[-11h=type side; side in `bid`ask; 0b];
-        '"book_convexity: side must be `bid or `ask, got ",.Q.s1 side];
+.qf.mkt.book_convexity:{[prices;book_side]
+    if[not $[-11h=type book_side; book_side in `bid`ask; 0b];
+        '"book_convexity: book_side must be `bid or `ask, got ",.Q.s1 book_side];
     n:count prices;
     result:n#0n;
     i:0;
     while[i<n;
-        result[i]:.qf.mkt.book_convexity_one[prices i;side];
+        result[i]:.qf.mkt.book_convexity_one[prices i;book_side];
         i+:1];
     result};
 
@@ -342,21 +342,21 @@
 / returning one improves. Callers null row 0.
 / @param sub quotes for one sym, in time order
 / @param level the level index, 0 the touch
-/ @param side `bid or `ask
+/ @param book_side `bid or `ask
 / @return dict `move`size`prev_size, each a vector with one value per row
 / @private
-.qf.mkt.side_transition:{[sub;level;side]
-    bid:side=`bid;
+.qf.mkt.side_transition:{[sub;level;book_side]
+    bid:book_side=`bid;
     px:.qf.mkt.level_at[sub $[bid;`bid_prices;`ask_prices];level];
     if[not bid; px:0w^px];
     sz:0^.qf.mkt.level_at[sub $[bid;`bid_sizes;`ask_sizes];level];
-    .qf.mkt.transition[side;px;sz;prev px;prev sz]};
+    .qf.mkt.transition[book_side;px;sz;prev px;prev sz]};
 
 / Private: side_transition's rule on read prices/sizes and the prior row's; the stream's too (#1111).
 / @private
-.qf.mkt.transition:{[side;px;sz;prev_px;prev_sz]
+.qf.mkt.transition:{[book_side;px;sz;prev_px;prev_sz]
     / Arithmetic, not a nested ?[]: PeachQ makes that () on no rows (#1047).
-    `move`size`prev_size!($[side=`bid;1;-1]*(px>prev_px)-px<prev_px;sz;prev_sz)};
+    `move`size`prev_size!($[book_side=`bid;1;-1]*(px>prev_px)-px<prev_px;sz;prev_sz)};
 
 / Private: Cont-Kukanov-Stoikov per-side flow: new size if improved, size
 / change if held, minus the prior size if worsened (that queue is gone).
@@ -372,15 +372,15 @@
 / 0n. For the raw size change, use `deltas level_at[...;0]`.
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute depletion for
-/ @param side `bid or `ask
+/ @param book_side `bid or `ask
 / @return a vector, one depletion rate per quote row for target_sym, in time order
-/ @throws error if quotes is missing a required column, or side isn't `bid or `ask
+/ @throws error if quotes is missing a required column, or book_side isn't `bid or `ask
 / @eg .qf.mkt.queue_depletion_rate[quotes;`EURUSD;`bid]
-.qf.mkt.queue_depletion_rate:{[quotes;target_sym;side]
+.qf.mkt.queue_depletion_rate:{[quotes;target_sym;book_side]
     sub:.qf.mkt.quotes_for_sym[`queue_depletion_rate;quotes;target_sym];
-    if[not $[-11h=type side; side in `bid`ask; 0b];
-        '"queue_depletion_rate: side must be `bid or `ask, got ",.Q.s1 side];
-    tr:.qf.mkt.side_transition[sub;0;side];
+    if[not $[-11h=type book_side; book_side in `bid`ask; 0b];
+        '"queue_depletion_rate: book_side must be `bid or `ask, got ",.Q.s1 book_side];
+    tr:.qf.mkt.side_transition[sub;0;book_side];
     held:(0|tr[`prev_size]-tr`size)%tr`prev_size;
     rate:?[0=tr`move; held; ?[1=tr`move; 0f; 1f]];
     "f"$@[rate;til 1&count rate;:;0n]};
@@ -1006,16 +1006,12 @@
 / Private: a stream's configuration with defaults filled in, refused when
 / malformed.
 / @private
-.qf.mkt.stream_config:{[config]
+.qf.mkt.stream_config:{[opts]
     / (::) or a dictionary, and nothing else. Anything else used to become the
     / defaults without a word: `window!enlist 5 is ENUMERATION (type 20), not
     / a dictionary, and ran every metric over 20 rows while each refusal below
-    / was bypassed (#804).
-    if[not (config~(::)) or 99h=type config;
-        '"stream: config must be (::) for the defaults, or a dictionary such as enlist[`window]!enlist 20 - got type ",string type config];
-    c:.qf.mkt.stream_defaults,$[99h=type config; config; ()!()];
-    if[count extra:(key c) except key .qf.mkt.stream_defaults;
-        '"stream: unknown config key(s) ",", " sv string extra];
+    / was bypassed (#804). resolve_opts refuses it, and an unknown key too.
+    c:.qf.util.resolve_opts[`stream;opts;.qf.mkt.stream_defaults];
     w:c`window;
     if[not (type w) in -5 -6 -7h; '"stream: window must be a positive integer number of rows"];
     if[w<1; '"stream: window must be a positive integer number of rows"];
@@ -1049,19 +1045,20 @@
 
 / Start a stream: an empty, versioned state for the chosen metrics.
 / @param metrics a subset of `ofi`rolling_ofi`return_variance`signed_trade_flow
-/ @param config (::) for the defaults, or a dict of window (rows, default
-/   20), window_mode (`count) and late (`reject or `drop)
+/ @param opts (::) for the defaults, or a dict of window (rows, default
+/   20), window_mode (`count) and late (`reject or `drop); an unknown key
+/   is refused
 / @return the state dict: version, metrics, config, quotes, trades (per-sym
 /   state, keyed tables, empty) and dropped (0)
-/ @throws error naming an unknown metric or a malformed config
+/ @throws error naming an unknown metric or a malformed opts
 / @eg (.qf.mkt.stream_init[`ofi`rolling_ofi;(::)])`version  -> 1
-.qf.mkt.stream_init:{[metrics;config]
+.qf.mkt.stream_init:{[metrics;opts]
     m:(),metrics;
     if[0=count m; '"stream_init: name at least one metric of ",", " sv string .qf.mkt.stream_metrics];
     if[count bad:m except .qf.mkt.stream_metrics;
         '"stream_init: unknown metric(s) ",(", " sv string bad)," - expected some of ",", " sv string .qf.mkt.stream_metrics];
     `version`metrics`config`quotes`trades`dropped!(
-        .qf.mkt.stream_version;distinct m;.qf.mkt.stream_config[config];.qf.mkt.quote_states0[];.qf.mkt.trade_states0[];0)}
+        .qf.mkt.stream_version;distinct m;.qf.mkt.stream_config[opts];.qf.mkt.quote_states0[];.qf.mkt.trade_states0[];0)}
 
 / Private: the late rows of one sym's slice, by its last processed time.
 / @private
@@ -1121,27 +1118,27 @@
 / per-sym state, and run `step` on each sym's accepted rows. Returns
 / (per-sym state; dropped count; output table with sym and time).
 / @private
-.qf.mkt.stream_side:{[what;tbl;states;state0;config;step]
+.qf.mkt.stream_side:{[what;tbl;states;state0;cfg;step]
     tbl:update row:i from tbl;
     syms:distinct tbl`sym;
     acc:(states;0;());
-    run_sym:{[what;tbl;state0;config;step;acc;s]
+    run_sym:{[what;tbl;state0;cfg;step;acc;s]
         sub:select from tbl where sym=s;
         .qf.mkt.require_sorted[what;sub`time];
         known:select from acc 0 where sym=s;
         st:$[count known; (first 0!known) _ `sym; state0[]];
         late:.qf.mkt.late_rows[st`time;sub`time];
         if[any late;
-            if[`reject=config`late;
+            if[`reject=cfg`late;
                 '"stream_update: ",string[sum late]," late ",what," row(s) for ",string[s],
-                 " - earlier than ",string[st`time],", the last already processed. Pass config late:`drop to skip them"];
+                 " - earlier than ",string[st`time],", the last already processed. Pass opts late:`drop to skip them"];
             sub:sub where not late];
         if[0=count sub; :(acc 0;(acc 1)+sum late;acc 2)];
         r:step[st;sub];
         out:([] sym:(count sub)#s; time:sub`time),'r 1;
         row:enlist (enlist[`sym]!enlist s),r 0;
         ((acc 0) upsert row;(acc 1)+sum late;(acc 2),enlist out)};
-    acc:run_sym[what;tbl;state0;config;step]/[acc;syms];
+    acc:run_sym[what;tbl;state0;cfg;step]/[acc;syms];
     out:$[count acc 2; `row xasc raze acc 2; ()];
     (acc 0;acc 1;out)}
 
@@ -1158,18 +1155,18 @@
 / prefix, however the history is chunked.
 / @param state from stream_init or a previous stream_update
 / @param batch dict of quotes and/or tape tables
-/ @param config the stream's config - must match the one it was started with
+/ @param opts the stream's options - must match the one it was started with
 / @return dict state (the new state), quotes (row, sym, time and the chosen
 /   quote metrics) and trades (row, sym, time, signed_flow, cum_flow)
 / @throws error for a state of another version, a changed config, a batch
 /   carrying a table no chosen metric reads, unsorted rows, or late rows
 /   under `reject
 / @eg (.qf.mkt.stream_update[.qf.mkt.stream_init[`ofi;(::)];(enlist `quotes)!enlist ([] time:2026.01.02D10:00:00 2026.01.02D10:00:01; sym:`EURUSD`EURUSD; bid_prices:(enlist 1.1;enlist 1.1); bid_sizes:(enlist 5f;enlist 7f); ask_prices:(enlist 1.2;enlist 1.2); ask_sizes:(enlist 4f;enlist 4f));(::)])[`quotes;`ofi]  -> 0n 2
-.qf.mkt.stream_update:{[state;batch;config]
+.qf.mkt.stream_update:{[state;batch;opts]
     if[not 99h=type state; '"stream_update: state must come from stream_init or stream_update"];
     if[not (state`version)~.qf.mkt.stream_version;
         '"stream_update: state is version ",(.Q.s1 state`version),", this code reads version ",string .qf.mkt.stream_version];
-    cfg:.qf.mkt.stream_config[config];
+    cfg:.qf.mkt.stream_config[opts];
     if[not cfg~state`config;
         '"stream_update: config differs from the one this stream started with - a changed window would mix two metrics in one state"];
     if[not 99h=type batch; '"stream_update: batch must be a dict of `quotes and/or `tape tables"];

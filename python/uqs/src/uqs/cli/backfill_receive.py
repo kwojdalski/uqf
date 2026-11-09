@@ -45,7 +45,7 @@ def extract(
 ) -> None:
     """`uqs job backfill --attachment ATTACHMENT --writer HOST:PORT`: plan or start the extractor.
     With `force`, HOST:PORT is any q process (a wdb), written to with nothing checked."""
-    from uqs.cli.backfill_attached import _outcome_text, _report, logs_command
+    from uqs.cli.backfill_attached import _outcome_text, _report, exit_code, logs_command, outcome
 
     if fixture:
         _die(
@@ -93,7 +93,7 @@ def extract(
     except UqsError as exc:
         _die(exc)
         return
-    info = {"mode": mode, "worker": worker, "writer": writer, "plan": plan, **run_.as_dict()}
+    info = {"mode": mode, "job": worker, "writer": writer, "plan": plan, **run_.as_dict()}
     if not wait:
         _report(
             info,
@@ -106,9 +106,10 @@ def extract(
         console.print(
             f"[dim]following {worker} (pid {run_.pid}); Ctrl-C stops waiting, not the run[/]"
         )
-    code, result = backfill_run.follow(run_)
+    runner, result = backfill_run.follow(run_)
+    code = exit_code(runner)
     _report(
-        {**info, "result": result, "exit_code": code},
+        {**info, "result": result, **outcome(result.get("state") or "unknown", code)},
         as_json,
         _outcome_text(worker, run_, code, result),
     )
@@ -144,7 +145,7 @@ ListenPortOpt = Annotated[
 _STARTED = '{"attachment", "dataset", "contract", "port", "hdb_dir", "pid", "log", ...}'
 ReceiverJson = json_opt(_STARTED)
 ReceiveJson = json_opt(_STARTED, 'With --stop, {"stopped": [...]}')
-StoppedJson = json_opt('{"stopped": [{worker, pid, ...}], "dry_run"}')
+StoppedJson = json_opt('{"stopped": [{job, pid, ...}], "dry_run"}')
 
 
 @receiver_app.command("start", cls=ChangesState)

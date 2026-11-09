@@ -1,0 +1,43 @@
+"""Writing a listing or a query's result to a file: what `--export` does.
+
+Split from stack/runtime.py, which drives torq.sh and queries processes; this
+only writes rows that a command already has.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from uqs.paths import UqsError
+
+
+def export_table(rows: Any, path: Path) -> None:
+    """Write *rows* to *path* as CSV or Parquet, format inferred from the
+    file extension. *rows* is either a list[dict] (list_items/config show's
+    own shape) or a polars.DataFrame (what kola's query() returns for a
+    table-shaped q result - kola is a Polars interface to q, so this is
+    already the native return type for `select ... from t`, no conversion
+    needed). Anything else (a q scalar/atom from query(), e.g. `count t`)
+    isn't rows, so it's rejected rather than silently wrapped into a bogus
+    one-cell table.
+    """
+    import polars as pl
+
+    if isinstance(rows, pl.DataFrame):
+        df = rows
+    elif isinstance(rows, list):
+        df = pl.DataFrame(rows)
+    else:
+        raise UqsError(
+            f"can't export a {type(rows).__name__} result to a table - --export needs "
+            "tabular output (a process/config list, or a query returning a table)"
+        )
+
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        df.write_csv(path)
+    elif suffix == ".parquet":
+        df.write_parquet(path)
+    else:
+        raise UqsError(f"unsupported export extension {suffix!r} - use .csv or .parquet")

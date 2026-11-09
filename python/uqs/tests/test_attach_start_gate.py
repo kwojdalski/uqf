@@ -25,9 +25,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from mcp_support import call, refused
 from typer.testing import CliRunner
 
-from uqs import cli, mcp
+from uqs import cli
 from uqs.attach import config, service
 from uqs.attach.config import AttachmentError
 from uqs.attach.manifest import Manifest
@@ -250,18 +251,17 @@ def test_the_cli_refuses(unverified, argv, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "call",
+    "tool_call",
     [
-        lambda: mcp.uqs_start(),
-        lambda: mcp.uqs_start("all", port=STACK),
-        lambda: mcp.uqs_restart(),
-        lambda: mcp.uqs_start(PUBLISHER, port=STACK),
+        lambda: call("uqs_start"),
+        lambda: call("uqs_start", procs=["all"], base_port=STACK),
+        lambda: call("uqs_restart"),
+        lambda: call("uqs_start", procs=[PUBLISHER], base_port=STACK),
     ],
     ids=["start", "start all", "restart", "start name"],
 )
-def test_the_mcp_server_refuses(unverified, call):
-    said = call()
-    assert said.startswith("ERROR:") and "publisher of attachment ex-uat" in said
+def test_the_mcp_server_refuses(unverified, tool_call):
+    assert "publisher of attachment ex-uat" in refused(tool_call())
 
 
 @pytest.mark.parametrize("action", ["start", "restart"])

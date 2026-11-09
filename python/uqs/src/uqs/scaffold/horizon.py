@@ -40,7 +40,7 @@ from uqs.scaffold.jobs import (
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.scaffold.profile import membership, profile_names
 from uqs.scaffold.templates import test_stub
-from uqs.scaffold.timespan import check_positive_timespan
+from uqs.scaffold.timespan import q_timespan
 
 #: What the file binds in the job's namespace besides the output NAME (#1573).
 _GENERATED = {
@@ -85,15 +85,18 @@ def horizon_job(
             "--kind horizon needs --subscribe-to EVENTS,REFERENCE: the table whose rows "
             "are evaluated, then the table they are evaluated against"
         )
+    if subscribe_to[0] == subscribe_to[1]:
+        raise UqsError("a horizon job needs distinct events and reference tables")
     if publishes:
-        raise UqsError("a horizon job publishes its own NAME - drop --publishes")
+        raise UqsError("a horizon job publishes its own NAME - drop --outputs")
     if not columns:
         raise UqsError("--kind horizon needs --schema: the table it publishes")
     if not horizon:
         raise UqsError(
-            f"--kind horizon needs --horizon, a q timespan such as 0D00:00:10, not {horizon!r}"
+            "--kind horizon needs --horizon, a DURATION (10s) or a q timespan such as "
+            f"0D00:00:10, not {horizon!r}"
         )
-    check_positive_timespan(horizon, "--horizon", "0D00:00:10")
+    horizon = q_timespan(horizon, "--horizon")
     if name in known_tables:
         raise UqsError(f"{name!r} is already a plant table - a horizon job owns its output")
     if name in _GENERATED:
@@ -174,12 +177,12 @@ score:{{[events;reference]
 / SCAFFOLDED. Optional keys, each off until declared (src/etl/core/horizon.q):
 / event_time (e.g. `source_time), ready_on `reference with legs and lookback,
 / identity, expire_after.
-.qetl.job.stream.at_horizons[`{name};`procname`events`reference`transform`publishes`horizon`period{swa_key}`note`ephemeral!(
+.qetl.job.stream.at_horizons[`{name};`procname`events`reference`transform`outputs`horizon`period{swa_key}`note`ephemeral!(
     `{proc};
     `{events};
     `{reference};
     `{name};
-    `{name};
+    enlist `{name};
     {horizon};
     0D00:00:01;{swa_value}
     "SCAFFOLDED: say why this exists, and why it does or does not start with the stack";

@@ -558,7 +558,7 @@
 
 .qt.qetl.source.test_ipc_traces_the_lambda_and_its_bounds:{[t]
     lines:.qt.qetl.source.logged {.qetl.source.ipc[.qt.qetl.source.fake_handle;{[a;b] ([] x:a,b)};1;2]};
-    .qunit.assertEquals[lines[;0 1 2];((`TRACE;`ipc;"query sent");(`TRACE;`ipc;"query returned"));
+    .qunit.assertEquals[lines[;0 1 2];((`TRACE;`source;"query sent");(`TRACE;`source;"query returned"));
         "one TRACE line before the call, one after"];
     sent:(first lines)[3];
     .qunit.assertEquals[(sent`call;sent`range_from;sent`range_to;(last lines)[3]`rows);
@@ -572,7 +572,7 @@
     / run the fetch BEFORE logged installs its recorder.
     `.qt.qetl.source.h set {`.qt.qetl.source.sent set x; ([] deal_id:`long$())};
     lines:.qt.qetl.source.logged {.qetl.source.fetch_window[`demo_deals;.qt.qetl.source.h;.qt.qetl.source.d[1];.qt.qetl.source.d[2]]};
-    .qunit.assertEquals[`ipc`ipc;2#lines[;1] where `TRACE=lines[;0];"the live query is traced, sent and returned"];
+    .qunit.assertEquals[`source`source;2#lines[;1] where `TRACE=lines[;0];"the live query is traced, sent and returned"];
     .qunit.assertEquals[(type first .qt.qetl.source.sent;1_.qt.qetl.source.sent);(100h;(.qt.qetl.source.d[1];.qt.qetl.source.d[2]));
         "the handle is sent (lambda;from;to) - a UTC source's bounds unchanged"]};
 
@@ -587,7 +587,7 @@
 
 .qt.qetl.source.test_ipc_call_traces_the_lambda_and_its_arguments:{[t]
     lines:.qt.qetl.source.logged {.qetl.source.ipc_call[.qt.qetl.source.fake_handle;{[c] ([] x:enlist c)};enlist 5]};
-    .qunit.assertEquals[lines[;0 1 2];((`TRACE;`ipc;"query sent");(`TRACE;`ipc;"query returned"));
+    .qunit.assertEquals[lines[;0 1 2];((`TRACE;`source;"query sent");(`TRACE;`source;"query returned"));
         "the same two events .qetl.source.ipc logs, so --trace renders it the same"];
     sent:(first lines)[3];
     .qunit.assertEquals[(sent`call;sent`args;(last lines)[3]`rows);("{[c] ([] x:enlist c)}";enlist 5;1);
@@ -764,7 +764,16 @@
     .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;@[rr;`date_skew;:;-1]];"*date_skew*";"a negative skew"];
     .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;@[rr;`lookback_cap;:;0Wn]];"*lookback_cap*";"a cap that is no cap"];
     .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;@[rr;`symbols;:;{[x] x}]];"*symbols*";"a symbols lambda takes spec and rows"];
-    .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;@[rr;`extra;:;1]];"*which it does not take*";"an unknown key"]};
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};@[d;`reference_read;:;@[rr;`extra;:;1]];"*extra, which a reference_read does not take*";"an unknown key"]};
 
 .qt.qetl.source.test_reference_read_needs_supporting_inputs:{[t]
     .qunit.assertThrows[{.qetl.source.define[`t;x]};@[.qt.qetl.source.decl[];`reference_read;:;.qt.qetl.source.rr[]];"*no supporting inputs*";"there is no reference to read"]};
+
+.qt.qetl.source.test_registering_a_source_is_on_the_config_channel:{[t]
+    lines:.qt.support.captured_log[0b;{.qetl.log.debug[1b]; .qetl.source.define[`t;.qt.qetl.source.decl[]]; .qetl.log.debug[0b]}];
+    .qunit.assertEquals[(lines[;1];lines[;2]);(enlist `config;enlist "source registered");"declaration loading is the config channel's"]};
+
+.qt.qetl.source.test_fetching_is_on_the_source_channel:{[t]
+    .qetl.source.define[`t;.qt.qetl.source.decl[]];
+    lines:.qt.support.captured_log[0b;{.qetl.log.debug[1b]; .qetl.source.fetch_window_via[`t;0Ni;2026.09.11D00:00;2026.09.12D00:00;{[h;a;b] ()}]; .qetl.log.debug[0b]}];
+    .qunit.assertEquals[(lines[;1];lines[;2]);(`source`source;("fetching";"fetched"));"the fetch is the source channel's"]};

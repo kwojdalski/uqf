@@ -28,6 +28,17 @@
 /                        book gives report_ccy per quote_ccy, and whether it is
 /                        inverted to do so.
 /   keys       required  the spec keys the domain owns (symbols, possibly none).
+/   name       optional  the domain's name, a symbol, recorded in the configuration
+/                        snapshot (default `unnamed).
+/   revision   optional  the revision of the rules that price an instrument - its
+/                        quote currency, legs and inversion, its conversion pairs -
+/                        a symbol, bumped by whoever changes those rules, and
+/                        recorded in the configuration snapshot so a result can
+/                        be tied to the rules it was priced under (default
+/                        `unversioned, which a reader of a snapshot sees as such).
+/   datasets   optional  the datasets the domain's spec produces, a symbol list, recorded
+/                        in the snapshot so a reader can list the snapshots of one
+/                        dataset (default none).
 /   validate   optional  {[spec]} -> spec, throwing on a domain key it refuses.
 /   available  optional  {[spec;frame]} -> a boolean per (execution, horizon):
 /                        0b marks the pair unpriced for a domain reason.
@@ -56,7 +67,9 @@
 / answer is a change to that name and nowhere else:
 / .
 /   1 2 3  core_cols and long_key_cols (the column list is `result`)
-/   5      contract_version, and the name of that column in `result`
+/   5      contract_version (config_markout.q), which a result no longer repeats on
+/          its rows: it is a field of the configuration snapshot the row's config_id
+/          names (#1999)
 /   6      the report_amount line of `finish`
 /   7      the rates spec key (core_keys)
 /   8      required_keys
@@ -75,8 +88,12 @@
 / The executions columns the core reads. clock is #1925's: `venue or `receipt.
 .qpipe.transform.markout_core.executions_in:([] source_time:`timestamp$(); venue:`symbol$(); sym:`symbol$(); side:`long$(); size:`float$(); price:`float$(); fill_id:`symbol$(); clock:`symbol$())
 
-/ The market_data columns the core reads: the sources' books, one row per snapshot, and the clock each is stamped on.
-.qpipe.transform.markout_core.market_data_in:([] source_time:`timestamp$(); sym:`symbol$(); source:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); clock:`symbol$())
+/ The market_data columns the core reads (#2288): each source's TOP OF BOOK, one row per snapshot, flat - the
+/ level-0 bid and ask as floats - and the clock each is stamped on. No ladder: the core scores against the best
+/ bid and ask only, and a ladder is a nested column a select would copy into the heap. The table must arrive
+/ ARRANGED for an as-of join - sorted by sym, source, source_time with p# on sym - which the storage layer
+/ guarantees and the core checks (.qetl.mapped.require_arranged); it never sorts or copies it.
+.qpipe.transform.markout_core.market_data_in:([] source_time:`timestamp$(); sym:`symbol$(); source:`symbol$(); bid:`float$(); ask:`float$(); clock:`symbol$())
 
 / The names a declared markout transform reads its two inputs under. They are not
 / `executions` and `market_data` yet: an input with a plant table's name is held
@@ -85,17 +102,13 @@
 / takes its inputs positionally, so nothing else changes.
 .qpipe.transform.markout_core.input_names:`markout_executions`markout_market_data
 
-/ The contract version (open question 5: a long starting at 1, apart from FX's
-/ own `version`). A change to anything the contract fixes bumps it.
-.qpipe.transform.markout_core.contract_version:1
-
 / The clocks a row may be on. Anything else - null, `unknown, a typo - is never scored.
 .qpipe.transform.markout_core.clocks:`venue`receipt
 
 / The contract's core columns, in the contract's order (open question 1: a
 / subsequence, with domain columns between them). kind and step are
 / long_key_cols: required in every long dataset, not core (open question 3).
-.qpipe.transform.markout_core.core_cols:`time`source_time`clock`venue`fill_id`sym`side`size`horizon`price`quote_ccy`ref_t0`ref_t1`move`quote_amount`report_ccy`rate`rate_source`rate_sym`rate_time`rate_timing`report_amount`status`contract_version
+.qpipe.transform.markout_core.core_cols:`time`source_time`clock`venue`fill_id`sym`side`size`horizon`price`quote_ccy`ref_t0`ref_t1`move`quote_amount`rate`rate_source`rate_sym`rate_time`report_amount`status`config_id
 
 / The long layout's two extra columns, placed after horizon.
 .qpipe.transform.markout_core.long_key_cols:`kind`step
@@ -103,8 +116,8 @@
 / The core's result: one row per (execution, horizon, component).
 .qpipe.transform.markout_core.result:([] time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`symbol$(); side:`long$(); size:`float$();
     horizon:`timespan$(); kind:`symbol$(); step:`long$(); price:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); quote_amount:`float$();
-    report_ccy:`symbol$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); rate_timing:`symbol$(); report_amount:`float$();
-    status:`symbol$(); contract_version:`long$())
+    rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); report_amount:`float$();
+    status:`symbol$(); config_id:`symbol$())
 
 / The status a row takes when its only reference is on another clock (open
 / question 12). Set it to `unavailable to count the mismatch in the run's facts
@@ -134,12 +147,12 @@
 / ------------------------------------------------------------------- SPEC
 
 / The keys the core owns, and the ones a spec must carry (open questions 7, 8).
-.qpipe.transform.markout_core.core_keys:`horizons`max_age`report_ccy`rates`rate_timing
+.qpipe.transform.markout_core.core_keys:`horizons`max_age`report_ccy`rates`rate_timing`reference
 .qpipe.transform.markout_core.required_keys:`horizons`report_ccy`rate_timing
 
 / What a spec leaves out: max_age is the shared .qf.mkt.reference_max_age (#1410),
 / and no rates means every quote currency but the reporting one is `no_rate.
-.qpipe.transform.markout_core.spec_defaults:`max_age`rates!(.qf.mkt.reference_max_age;(`symbol$())!())
+.qpipe.transform.markout_core.spec_defaults:`max_age`rates`reference!(.qf.mkt.reference_max_age;(`symbol$())!();.qetl.reference.default)
 
 / A rate source: one declared in the spec's rates, as `source`sym (read from market_data) or a float (fixed).
 / @param entry a value of the spec's rates
@@ -149,6 +162,82 @@
     $[11h=type entry; $[(2=count entry) and not any null entry; `market; `];
       -9h=type entry; $[(entry>0f) and entry<0w; `fixed; `];
       `]}
+
+/ ------------------------------------------------------------ THE HORIZON GRID
+/ .
+/ A job's horizons are declared once, in its spec, and everything that depends on
+/ them reads that one list through the functions below: the reference fetch
+/ (reach, lookback), the calculation (frame), the configuration snapshot (its
+/ content), the output naming (horizon_labels, horizon_columns) and the live holdback
+/ (wait). A second copy of the grid, or a column name typed by hand, is a copy that
+/ drifts from it; the contract refuses a grid it cannot name before any of them runs.
+/ .
+/ A horizon is an exact whole number of milliseconds, signed: the label is that count,
+/ with `neg_` for a negative one (-1s is neg_1000, 0 is 0, +500ms is 500). Finer than a
+/ millisecond is refused rather than rounded, because two horizons a microsecond
+/ apart would otherwise share a column.
+
+/ Refuse a horizon grid that cannot be scored or named, naming the first problem.
+/ @param hs the horizons
+/ @return the horizons, unchanged
+/ @throws error when hs is not a non-empty timespan list, holds a null or infinite horizon, a sub-millisecond offset, or a duplicate
+/ @eg .qpipe.transform.markout_core.require_horizons[-0D00:00:01 0D 0D00:00:00.500]  ->  -0D00:00:01 0D 0D00:00:00.500
+.qpipe.transform.markout_core.require_horizons:{[hs]
+    if[not (16h=type hs) and 0<count hs; '"markout_core: horizons must be a non-empty list of timespans, e.g. 0D00:00:01 0D00:00:10"];
+    if[any null hs; '"markout_core: horizons must not contain a null timespan"];
+    if[any (hs=0Wn) or hs=-0Wn; '"markout_core: horizons must be finite, not an infinite timespan"];
+    if[any 0<>(abs "j"$hs) mod 1000000; '"markout_core: horizons must be whole milliseconds, got a sub-millisecond offset"];
+    if[not (count hs)=count distinct hs; '"markout_core: horizons must be distinct"];
+    hs}
+
+/ The validated horizons of a spec: what every consumer of the grid reads.
+/ @param spec dict with a `horizons` key
+/ @return the horizons in the spec's order
+/ @throws error when the spec has no horizons or the grid is refused by require_horizons
+/ @eg .qpipe.transform.markout_core.horizons_of[enlist[`horizons]!enlist 0D00:00:01 0D00:00:10]  ->  0D00:00:01 0D00:00:10
+.qpipe.transform.markout_core.horizons_of:{[spec]
+    if[not (99h=type spec) and `horizons in key spec; '"markout_core: spec is missing horizons"];
+    .qpipe.transform.markout_core.require_horizons[spec`horizons]}
+
+/ The label of each horizon: its exact milliseconds, `neg_` before a negative one.
+/ @param horizons the horizons, a timespan list
+/ @return a dictionary from each horizon to its label symbol, in input order
+/ @throws error when the grid is refused by require_horizons
+/ @eg .qpipe.transform.markout_core.horizon_labels[-0D00:00:01 0D 0D00:00:00.500]  ->  (-0D00:00:01;0D;0D00:00:00.500)!`neg_1000`0`500
+.qpipe.transform.markout_core.horizon_labels:{[horizons]
+    hs:.qpipe.transform.markout_core.require_horizons[horizons];
+    ms:("j"$hs) div 1000000;
+    hs!`$?[ms<0;"neg_",/:string abs ms;string ms]}
+
+/ The output column of a stem at each horizon: stem_label, e.g. markout_neg_1000.
+/ @param stem a symbol
+/ @param horizons the horizons, a timespan list
+/ @return a dictionary from each horizon to its column name, in input order
+/ @throws error when stem is not a non-null symbol atom or the grid is refused
+/ @eg .qpipe.transform.markout_core.horizon_columns[`pips;-0D00:00:01 0D00:00:00.500]  ->  (-0D00:00:01;0D00:00:00.500)!`pips_neg_1000`pips_500
+.qpipe.transform.markout_core.horizon_columns:{[stem;horizons]
+    if[not $[-11h=type stem; not null stem; 0b]; '"markout_core: stem must be a non-null symbol"];
+    named:.qpipe.transform.markout_core.horizon_labels[horizons];
+    key[named]!`$(string[stem],"_"),/:string value named}
+
+/ How long a job waits before scoring: the furthest horizon, but never less than settle.
+/ @param spec the spec
+/ @param settle the least wait, a timespan
+/ @return the wait the horizon kind declares
+/ @eg .qpipe.transform.markout_core.wait[enlist[`horizons]!enlist -0D00:00:01 0D00:00:10;0D00:00:01]  ->  0D00:00:10
+.qpipe.transform.markout_core.wait:{[spec;settle] settle|max .qpipe.transform.markout_core.horizons_of spec}
+
+/ How far BEFORE an execution the reference is read: the most negative horizon, or none.
+/ @param spec the spec
+/ @return a timespan of zero or more
+/ @eg .qpipe.transform.markout_core.lookback[enlist[`horizons]!enlist -0D00:00:30 0D00:00:01]  ->  0D00:00:30
+.qpipe.transform.markout_core.lookback:{[spec] 0D|neg min .qpipe.transform.markout_core.horizons_of spec}
+
+/ How far AFTER an execution the reference is read: the furthest horizon, or none.
+/ @param spec the spec
+/ @return a timespan of zero or more
+/ @eg .qpipe.transform.markout_core.reach[enlist[`horizons]!enlist -0D00:00:30 0D00:00:01]  ->  0D00:00:01
+.qpipe.transform.markout_core.reach:{[spec] 0D|max .qpipe.transform.markout_core.horizons_of spec}
 
 / Refuse a spec the core cannot honour, naming the first problem, and complete it.
 / .
@@ -172,13 +261,11 @@
     spec:.qpipe.transform.markout_core.spec_defaults,spec;
     / the domain completes its own keys first: its conversion reads them (an FX convention) when the rates are checked below
     if[`validate in key domain; spec:domain[`validate] spec];
-    hs:spec`horizons;
-    if[not (16h=type hs) and 0<count hs; '"markout_core: horizons must be a non-empty list of timespans, e.g. 0D00:00:01 0D00:00:10"];
-    if[any null hs; '"markout_core: horizons must not contain a null timespan"];
-    if[not (count hs)=count distinct hs; '"markout_core: horizons must be distinct"];
+    .qpipe.transform.markout_core.require_horizons[spec`horizons];
     if[not (-16h=type spec`max_age) and spec[`max_age]>0D; '"markout_core: max_age must be a positive timespan, 0Wn for as of however old"];
     if[not (-11h=type spec`report_ccy) and not null spec`report_ccy; '"markout_core: report_ccy must be a non-null symbol"];
     if[not (-11h=type spec`rate_timing) and spec[`rate_timing] in `execution`horizon; '"markout_core: rate_timing must be `execution or `horizon"];
+    if[not $[-11h=type spec`reference; spec[`reference] in key .qetl.reference.variants; 0b]; '"markout_core: reference must be a registered variant (",(", " sv string key .qetl.reference.variants),")"];
     rt:spec`rates;
     if[not (99h=type rt) and (11h=type key rt) or 0=count rt; '"markout_core: rates must be a dictionary from quote currency to rate source"];
     kinds:.qpipe.transform.markout_core.rate_kind each value rt;
@@ -321,35 +408,16 @@
 .qpipe.transform.markout_core.last_delivery:{[exe]
     $[0=count exe; exe; exe asc last each value group flip exe`venue`fill_id]}
 
-/ The level-0 top of each source's book, one row per snapshot: the input of
-/ .qf.mkt.best_across_venues. A side the source withdrew is null, which is how a
-/ withdrawal outlives the older book.
-/ @param md market_data rows
-/ @return table time, sym, venue (the source), clock, bid, ask
-/ @eg count .qpipe.transform.markout_core.tops[0#.qpipe.transform.markout_core.market_data_in]  ->  0
-.qpipe.transform.markout_core.tops:{[md]
-    md:md where not null md`source_time;
-    s:.qf.mkt.top_sides md;
-    ([] time:md`source_time; sym:md`sym; venue:md`source; clock:md`clock; bid:s`bid; ask:s`ask)}
-
-/ One leg's book at each instant, oriented. An absent leg (a route shorter than
-/ the longest) is the identity: bid and ask 1, no mid.
-/ @param tob tops of market_data
-/ @param max_age the oldest a source's book may be and still count
+/ One leg's price at each instant, oriented: the reference variant's answer for the leg's sym, flipped when the
+/ route inverts it. An absent leg (a route shorter than the longest) is the identity: bid and ask 1, no mid.
 / @param syms the leg per row, null where the route has no such leg
 / @param inverted whether the route inverts that leg, per row
-/ @param times the instant per row
+/ @param r the variant's price per row: table bid, ask, mid
 / @return table bid, ask (oriented), mid (the leg's own, un-oriented)
-/ @eg .qpipe.transform.markout_core.leg_at[0#.qpipe.transform.markout_core.tops[0#.qpipe.transform.markout_core.market_data_in];0Wn;enlist `EURUSD;enlist 0b;enlist 2026.09.17D10:00:00]`mid  ->  enlist 0n
-.qpipe.transform.markout_core.leg_at:{[tob;max_age;syms;inverted;times]
-    n:count syms;
-    live:where not null syms;
-    b:.qf.mkt.best_across_venues[tob;([] sym:syms live; time:times live);max_age];
-    flip_it:inverted live;
-    bid:@[n#1f;live;:;?[flip_it;1f%b`ask;b`bid]];
-    ask:@[n#1f;live;:;?[flip_it;1f%b`bid;b`ask]];
-    mid:@[n#0n;live;:;b`mid];
-    ([] bid:bid; ask:ask; mid:mid)}
+/ @eg .qpipe.transform.markout_core.orient[enlist `EURUSD;enlist 1b;([] bid:enlist 1.25; ask:enlist 1.5; mid:enlist 1.375)]`bid  ->  enlist 0.6666666666666666
+.qpipe.transform.markout_core.orient:{[syms;inverted;r]
+    live:not null syms;
+    ([] bid:?[live;?[inverted;1f%r`ask;r`bid];1f]; ask:?[live;?[inverted;1f%r`bid;r`ask];1f]; mid:?[live;r`mid;0n])}
 
 / The mid of a chain of oriented legs: half the sum of the products of their bids and asks.
 / @param books a list of tables bid, ask, one per leg
@@ -360,22 +428,16 @@
     asks:{x`ask} each books;
     0.5*(prd bids)+prd asks}
 
-/ Private: every leg's oriented book at the given instants. Rows are grouped by
-/ their clock and each group reads only books on that clock; same = 0b reads
-/ every book, which is how a mismatch is told from a gap.
+/ Private: every leg's oriented book at the given instants, under the spec's reference variant: `same`, from
+/ books on each row's own clock, and `any`, from every book - how a mismatch is told from a gap.
 / @private
-.qpipe.transform.markout_core.leg_books:{[tob;max_age;lg;times;clk;same]
-    n:count times;
-    depth:count lg`legs;
-    groups:$[same; value group clk; enlist til n];
-    one:{[tob;max_age;lg;times;clk;same;idx]
-        tb:$[same; select from tob where clock=clk first idx; tob];
-        {[tb;max_age;lg;times;idx;k] .qpipe.transform.markout_core.leg_at[tb;max_age;((lg`legs) k) idx;((lg`invs) k) idx;times idx]}[tb;max_age;lg;times;idx] each til count lg`legs
-      }[tob;max_age;lg;times;clk;same] each groups;
-    / scatter each group's rows back into row order, leg by leg
-    {[n;groups;one;k]
-        col:{[n;groups;one;k;c] @[n#0n;raze groups;:;raze {[k;c;o] (o k) c}[k;c] each one]}[n;groups;one;k];
-        ([] bid:col`bid; ask:col`ask; mid:col`mid)}[n;groups;one] each til depth}
+.qpipe.transform.markout_core.leg_books:{[variant;tob;max_age;lg;times;clk]
+    per:{[variant;tob;max_age;lg;times;clk;k]
+        syms:(lg`legs) k;
+        flips:(lg`invs) k;
+        r:.qetl.reference.at[variant;tob;max_age;syms;times;clk];
+        `same`any!(.qpipe.transform.markout_core.orient[syms;flips;r`same];.qpipe.transform.markout_core.orient[syms;flips;r`any])}[variant;tob;max_age;lg;times;clk] each til count lg`legs;
+    `same`any!(per[;`same];per[;`any])}
 
 / Private: apply one patch - the rows, rates, sources, syms and times a group
 / of rows found - to the rate columns.
@@ -407,17 +469,13 @@
     sy:def 1;
     inverted:def 2;
     ix:idx g;
-    k:count ix;
-    tb:select from tob where venue=src, sym=sy;
-    if[.qpipe.transform.markout_core.rate_same_clock; tb:select from tb where clock=clk first ix];
-    if[0=count tb; :(`long$();`float$();`symbol$();`symbol$();`timestamp$())];
-    tb:`sym`time xasc select sym, time, bid, ask, quoted:time from tb;
-    j:aj[`sym`time;([] sym:k#sy; time:times ix);tb];
-    live:(not null j`quoted) and (.qpipe.transform.markout_core.rate_max_age[spec]>=(j`time)-j`quoted) and (not null j`bid) and not null j`ask;
-    ob:?[inverted;1f%j`ask;j`bid];
-    oa:?[inverted;1f%j`bid;j`ask];
+    clocks:$[.qpipe.transform.markout_core.rate_same_clock; (count ix)#clk first ix; ()];
+    b:.qetl.reference.book_at[tob;.qpipe.transform.markout_core.rate_max_age[spec];src;sy;times ix;clocks];
+    live:b`live;
+    ob:?[inverted;1f%b`ask;b`bid];
+    oa:?[inverted;1f%b`bid;b`ask];
     mid:0.5*ob+oa;
-    (ix where live;mid where live;(sum live)#src;(sum live)#sy;(j`quoted) where live)}
+    (ix where live;mid where live;(sum live)#src;(sum live)#sy;(b`quoted) where live)}
 
 / Private: the conversion rate of each row at the given instants, with where it
 / came from. A quote currency equal to the reporting one has rate 1; a declared
@@ -438,7 +496,7 @@
 / resolution, the horizon and the two instants.
 / @private
 .qpipe.transform.markout_core.frame:{[domain;spec;exe]
-    hs:spec`horizons;
+    hs:.qpipe.transform.markout_core.horizons_of[spec];
     n:count exe;
     m:count hs;
     rows:exe "j"$raze m#'til n;
@@ -468,7 +526,7 @@
 
 / Private: the money, the conversion and the status of every component row.
 / @private
-.qpipe.transform.markout_core.finish:{[spec;fr;rt;c]
+.qpipe.transform.markout_core.finish:{[cid;fr;rt;c]
     f:fr c`ri;
     r:(key rt)!(value rt)@\:c`ri;
     qa:(f`size)*c`move;
@@ -478,9 +536,9 @@
     st:?[(c`cause)<>`ok; c`cause; ?[null r`rate; `no_rate; c`dstatus]];
     ([] time:f`time; source_time:f`source_time; clock:f`clock; venue:f`venue; fill_id:f`fill_id; sym:f`sym; side:f`side; size:f`size;
         horizon:f`horizon; kind:c`kind; step:c`step; price:f`price; quote_ccy:f`quote_ccy; ref_t0:f`ref_t0; ref_t1:f`ref_t1;
-        move:c`move; quote_amount:qa; report_ccy:(count c)#spec`report_ccy; rate:r`rate; rate_source:r`rate_source;
-        rate_sym:r`rate_sym; rate_time:r`rate_time; rate_timing:(count c)#spec`rate_timing; report_amount:ra;
-        status:st; contract_version:(count c)#.qpipe.transform.markout_core.contract_version)}
+        move:c`move; quote_amount:qa; rate:r`rate; rate_source:r`rate_source;
+        rate_sym:r`rate_sym; rate_time:r`rate_time; report_amount:ra;
+        status:st; config_id:(count c)#cid)}
 
 / Score executions against market_data at every horizon of the spec.
 / .
@@ -489,9 +547,9 @@
 / @param domain the domain dictionary (resolve, convert, keys and optionally validate, available, attribute)
 / @param spec dict horizons, report_ccy, rate_timing and optionally max_age, rates and the domain's keys
 / @param exe executions: source_time, venue, sym, side, size, price, fill_id, clock
-/ @param md market_data: source_time, sym, source, the four ladders and clock
+/ @param md the top of book (market_data_in): source_time, sym, source, bid, ask and clock, ARRANGED - sorted by sym, source, source_time with p# on sym; read as it is, never sorted or copied
 / @return the core's result, in execution order then horizon order then component order
-/ @throws error when the spec or the domain is malformed or an input lacks a column
+/ @throws error when the spec or the domain is malformed, an input lacks a column or md is not arranged
 / @eg count .qpipe.transform.markout_core.calc[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.fixture_spec;0#.qpipe.transform.markout_core.executions_in;0#.qpipe.transform.markout_core.market_data_in]  ->  0
 .qpipe.transform.markout_core.calc:{[domain;spec;exe;md]
     spec:.qpipe.transform.markout_core.validate[domain;spec];
@@ -501,14 +559,18 @@
     if[0=count exe; :0#.qpipe.transform.markout_core.result];
     fr:.qpipe.transform.markout_core.frame[domain;spec;exe];
     lg:.qpipe.transform.markout_core.chain_legs[fr];
-    tob:.qpipe.transform.markout_core.tops[md];
+    / the input is read as it is - checked, never sorted or copied (a mapped partition must stay mapped)
+    tob:.qetl.mapped.require_arranged[`markout_core;md];
     ma:spec`max_age;
-    bk0:.qpipe.transform.markout_core.leg_books[tob;ma;lg;fr`t0;fr`clock;1b];
-    bk1:.qpipe.transform.markout_core.leg_books[tob;ma;lg;fr`t1;fr`clock;1b];
+    vr:spec`reference;
+    b0:.qpipe.transform.markout_core.leg_books[vr;tob;ma;lg;fr`t0;fr`clock];
+    b1:.qpipe.transform.markout_core.leg_books[vr;tob;ma;lg;fr`t1;fr`clock];
+    bk0:b0`same;
+    bk1:b1`same;
     ref0:.qpipe.transform.markout_core.chain_mid[bk0];
     ref1:.qpipe.transform.markout_core.chain_mid[bk1];
-    any0:.qpipe.transform.markout_core.chain_mid[.qpipe.transform.markout_core.leg_books[tob;ma;lg;fr`t0;fr`clock;0b]];
-    any1:.qpipe.transform.markout_core.chain_mid[.qpipe.transform.markout_core.leg_books[tob;ma;lg;fr`t1;fr`clock;0b]];
+    any0:.qpipe.transform.markout_core.chain_mid[b0`any];
+    any1:.qpipe.transform.markout_core.chain_mid[b1`any];
     fr:update ref_t0:ref0, ref_t1:ref1 from fr;
     xc:`symbol$();
     avail:$[`available in key domain; domain[`available][spec;fr]; (count fr)#1b];
@@ -531,20 +593,30 @@
         c:c uj $[count xc; arows,'xc#a; arows]];
     c:`ri`ord xasc c;
     rt:.qpipe.transform.markout_core.rates_at[domain;spec;tob;fr`quote_ccy;fr`clock;$[spec[`rate_timing]=`execution; fr`t0; fr`t1]];
-    out:.qpipe.transform.markout_core.finish[spec;fr;rt;c];
+    out:.qpipe.transform.markout_core.finish[.qpipe.transform.config_markout.id[domain;spec];fr;rt;c];
     out:(cols .qpipe.transform.markout_core.result)#out;
     $[count xc; out,'xc#c; out]}
 
-/ Refuse a result written under another contract version (a consumer pins one).
-/ @param rows a markout dataset's rows
-/ @param version the contract version the consumer reads
-/ @return the rows
-/ @throws error when any row carries another version
-/ @eg count .qpipe.transform.markout_core.require_version[0#.qpipe.transform.markout_core.result;1]  ->  0
-.qpipe.transform.markout_core.require_version:{[rows;version]
-    other:distinct (rows`contract_version) except version;
-    if[count other; '"markout_core: contract version ",(", " sv string other)," is not the pinned ",string version];
-    rows}
+/ The top of book in the order the core requires, for an INPUT THAT IS NOT ALREADY IN IT: a live job's buffer
+/ (rows in arrival order) or a hand-built example. A table that is arranged - what a twin's source reads from the
+/ mapped HDB - is returned untouched, so nothing a partition holds is ever copied here.
+/ @param md a top-of-book table
+/ @return md itself when arranged, else its rows sorted by sym, source, source_time with p# on sym
+/ @eg attr .qpipe.transform.markout_core.arranged[([] source_time:2#2026.09.17D10:00:00.000000000; sym:`GBPUSD`EURUSD; source:2#`a; bid:2#1f; ask:2#2f; clock:2#`venue)]`sym  ->  `p
+.qpipe.transform.markout_core.arranged:{[md]
+    $[count .qetl.mapped.arranged md; .qetl.mapped.arrange md; md]}
+
+/ Score executions against a top of book that may arrive in any order: `calc` after `arranged`. What a domain's
+/ transform calls, so a live buffer and a twin's read take the same road; `calc` stays the strict core.
+/ @param domain the domain dictionary
+/ @param spec the spec
+/ @param exe executions
+/ @param md the top of book, in any order
+/ @return the core's result, as calc
+/ @throws error as calc
+/ @eg count .qpipe.transform.markout_core.score[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.fixture_spec;0#.qpipe.transform.markout_core.executions_in;0#.qpipe.transform.markout_core.market_data_in]  ->  0
+.qpipe.transform.markout_core.score:{[domain;spec;exe;md]
+    .qpipe.transform.markout_core.calc[domain;spec;exe;.qpipe.transform.markout_core.arranged md]}
 
 / Declare a markout transform of a domain under a spec.
 / .
@@ -562,7 +634,7 @@
     .qetl.transform.define[name;`inputs`output`fn`examples!(
         (.qpipe.transform.markout_core.input_names)!(.qpipe.transform.markout_core.executions_in;.qpipe.transform.markout_core.market_data_in);
         .qpipe.transform.markout_core.result;
-        .qpipe.transform.markout_core.calc[domain;spec;;];
+        .qpipe.transform.markout_core.score[domain;spec;;];
         examples)]}
 
 / ------------------------------------------------------ A TABLE-DRIVEN DOMAIN
@@ -574,7 +646,7 @@
 / without the core knowing any asset class.
 / @param inst table sym, quote_ccy, legs, invert
 / @param conv table quote_ccy, report_ccy, leg, invert
-/ @return a domain dictionary with resolve, convert and no keys
+/ @return a domain dictionary with resolve, convert, no keys, the name `table and a revision that is the digest of the two tables
 / @eg .qpipe.transform.markout_core.table_domain[([] sym:enlist `ACME; quote_ccy:enlist `USD; legs:enlist enlist `ACME; invert:enlist enlist 0b);0#([] quote_ccy:`symbol$(); report_ccy:`symbol$(); leg:`symbol$(); invert:`boolean$())][`resolve][()!();enlist `ACME]`quote_ccy  ->  enlist `USD
 .qpipe.transform.markout_core.table_domain:{[inst;conv]
     resolve:{[inst;spec;syms]
@@ -587,7 +659,9 @@
             $[count r; (1b;first r`leg;first r`invert); (0b;`;0b)]}[conv;rep];
         rows:pick each qs;
         ([] ok:`boolean$rows[;0]; leg:`symbol$rows[;1]; invert:`boolean$rows[;2])}[conv];
-    `resolve`convert`keys!(resolve;convert;`symbol$())}
+    / the rules ARE the two tables, so their digest is their revision
+    rev:.qpipe.transform.config_markout.table_revision[inst;conv];
+    `resolve`convert`keys`name`revision`datasets!(resolve;convert;`symbol$();`table;rev;`symbol$())}
 
 / ------------------------------------------------------------- THE EXAMPLES
 
@@ -610,8 +684,7 @@
 / @eg count .qpipe.transform.markout_core.fixture_examples[]  ->  3
 .qpipe.transform.markout_core.fixture_examples:{[]
     t:2026.09.17D10:00:00;
-    bk:{[tm;sym;src;clk;bid;ask] ([] source_time:enlist tm; sym:enlist sym; source:enlist src; bid_prices:enlist enlist bid; bid_sizes:enlist enlist 1e6;
-        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6; clock:enlist clk)};
+    bk:{[tm;sym;src;clk;bid;ask] ([] source_time:enlist tm; sym:enlist sym; source:enlist src; bid:enlist bid; ask:enlist ask; clock:enlist clk)};
     fx_e:([] source_time:enlist t; venue:enlist `a; sym:enlist `USDJPY; side:enlist 1; size:enlist 1e6; price:enlist 150f; fill_id:enlist `fx1; clock:enlist `venue);
     fx_m:(bk[t-0D00:00:01;`USDJPY;`a;`venue;150f;150f]),(bk[t+0D00:00:09;`USDJPY;`a;`venue;150.05;150.05]);
     cr_e:([] source_time:enlist t; venue:enlist `x; sym:enlist `$"BTC-USDT"; side:enlist 1; size:enlist 0.5; price:enlist 61998f; fill_id:enlist `cr1; clock:enlist `venue);
@@ -623,8 +696,8 @@
     row:{[d]
         ([] time:2#d[`t]+0D00:00:10; source_time:2#d`t; clock:2#d`clock; venue:2#d`venue; fill_id:2#d`id; sym:2#d`sym; side:2#d`side; size:2#d`size;
             horizon:2#0D00:00:10; kind:`total`execution; step:2#0; price:2#d`price; quote_ccy:2#d`qccy; ref_t0:2#d`r0; ref_t1:2#d`r1;
-            move:d`moves; quote_amount:(d`size)*d`moves; report_ccy:2#`USD; rate:2#d`rate; rate_source:2#d`rsrc; rate_sym:2#d`rsym; rate_time:2#d`rtime;
-            rate_timing:2#`execution; report_amount:(d`rate)*(d`size)*d`moves; status:2#`ok; contract_version:2#1)};
+            move:d`moves; quote_amount:(d`size)*d`moves; rate:2#d`rate; rate_source:2#d`rsrc; rate_sym:2#d`rsym; rate_time:2#d`rtime;
+            report_amount:(d`rate)*(d`size)*d`moves; status:2#`ok; config_id:2#.qpipe.transform.config_markout.id[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.validate[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.fixture_spec]])};
     / USDJPY buy of 1,000,000 at 150.00; the reference is 150.00 at the execution and 150.05 at +10s
     / (the book of +9s is within max_age): total move 0.05 JPY, 50,000 JPY, at 1/150.00 USD per JPY.
     / The move is written as 150.05-150 because 0.05 is not what that subtraction yields in a float.

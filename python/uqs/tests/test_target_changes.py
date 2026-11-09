@@ -126,6 +126,15 @@ def test_set_changes_one_value_and_nothing_else(declared):
     assert targets.read(ROOT)["prod"]["connect_timeout"] == 20
 
 
+def test_set_takes_a_span_of_time_as_its_flag_does(declared):
+    """#2121: `target set a verify_timeout=5m` was refused as "the wrong
+    type"; the file now holds the DURATION as written, read as seconds."""
+    r = uqs("target", "set", "prod", "verify_timeout=5m")
+    assert r.exit_code == 0, r.output
+    assert 'verify_timeout = "5m"' in declared.read_text()
+    assert targets.read(ROOT)["prod"]["verify_timeout"] == 300
+
+
 def test_remove_takes_its_block_and_its_own_comment_only(declared):
     block = (
         "# production: careful\n[targets.prod]\n"
@@ -153,7 +162,7 @@ def test_unset_set_and_rename_keep_the_rest_byte_for_byte(declared):
     after = declared.read_text()
     _outside(HAND_WRITTEN, after, uat)
     assert targets.read(ROOT)["staging"] == {
-        "profile": "essential", "dest": "/srv/uat", "host": "deploy@uat",
+        "profile": "essential", "dest": "/srv/uat", "ssh": "deploy@uat",
         "labels": {"owner": "desk"}, "live": True,
     }  # fmt: skip
     assert "uat" not in targets.read(ROOT)
@@ -181,13 +190,15 @@ def test_add_appends_a_block_and_a_remove_takes_it_away_again(declared):
         ),
         (["set", "prod", "launch_mode=venv"], "launch_mode 'venv' is not one of"),
         (["set", "prod", "accept_digest=x"], "an override is given on the command line"),
-        (["set", "prod", "connect_timeout=soon"], "wrong type"),
+        (["set", "prod", "connect_timeout=soon"],
+         r"line \d+: target prod: connect_timeout 'soon': a duration is a number of seconds, "
+         "or a number and a unit"),
         (["set", "prod", "environment=nowhere"], "environment 'nowhere' is not declared"),
         (["set", "prod", "dest=relative"], "dest 'relative' must be an absolute path"),
         (["add", "uat", "--ssh", "h", "--dest", "/d"], "target uat is already declared"),
         (["add", "Bad", "--ssh", "h", "--dest", "/d"], "target name 'Bad'"),
         (["rename", "prod", "uat"], "target uat is already declared"),
-        (["remove", "nope"], "no target 'nope'.*declares: prod, uat"),
+        (["remove", "nope"], "no target nope - .*declares: prod, uat; `uqs target list`"),
         (["unset", "prod", "jobs"], "target prod sets no jobs"),
     ],
 )  # fmt: skip
@@ -400,7 +411,7 @@ def test_rename_keeps_the_deployments_recorded_under_the_old_name(declared):
 def _cfg(host: str, dest: str):
     from types import SimpleNamespace
 
-    return SimpleNamespace(host=host, dest=dest, remote_user=None, target=None, runtime="uqf")
+    return SimpleNamespace(ssh=host, dest=dest, remote_user=None, target=None, runtime="uqf")
 
 
 def _deployed():

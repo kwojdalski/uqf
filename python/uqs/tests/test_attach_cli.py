@@ -446,14 +446,21 @@ def test_a_failed_start_is_reported_with_its_recovery(world, monkeypatch):
 # ------------------------------------------------------------- confirmations
 
 
-def test_json_execution_without_yes_refuses_with_a_json_error(world):
-    result = run("add", *new(world, "--json"))
+def test_json_execution_without_yes_refuses_with_a_json_error(world, terminal):
+    """#2229: --json never asks, even with a terminal that would answer y -
+    refused, exit 1, the one message every command gives."""
+    refusal = "--json cannot ask for confirmation: add --yes to change the stack"
+    result = run("add", *new(world, "--json"), input="y\n")
     assert result.exit_code == 1
     data = json.loads(result.output)
-    assert data["ok"] is False and "--yes" in data["error"]
+    assert data["ok"] is False and refusal in data["error"]
     assert changes(world) == [] and not world.state_dir.exists()
-    detach = run("remove", "pb-uat", "--json")
-    assert detach.exit_code == 1 and json.loads(detach.output)["ok"] is False
+    assert run("add", *new(world, "--yes")).exit_code == 0
+    before = changes(world)
+    detach = run("remove", "pb-uat", "--json", input="y\n")
+    data = json.loads(detach.output)
+    assert detach.exit_code == 1 and data["ok"] is False and refusal in data["error"]
+    assert changes(world) == before and world.started == ["pb_ledger1"], "nothing was detached"
 
 
 # ---------------------------------------------------------------- redaction
@@ -484,7 +491,7 @@ def test_the_credential_is_redacted_in_every_output_mode(world, monkeypatch, mod
         assert data["plan"]["stack"]["password_env"] == "ATTACH_PW"
         assert ("debug" in data) is debug
     if "--json" in mode:
-        gw = next(c for c in data["plan"]["components"] if c["procname"] == "gw1")
+        gw = next(c for c in data["plan"]["components"] if c["process"] == "gw1")
         assert gw["endpoint"] == ":testhost:6007:admin:***"
         if debug:
             assert any(line.startswith("configuration: new") for line in data["debug"])

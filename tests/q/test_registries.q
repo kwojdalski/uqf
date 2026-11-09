@@ -87,9 +87,9 @@
     / with identical fields, so `jobs` became a keyed table, and markout's
     / declaration - which carries an on_batch the feeds do not - was
     / refused with a bare `mismatch. It is enlisted now.
-    .qetl.job.stream.define[`regtest_feed;`procname`subscribe_to`publishes`period`on_timer!(
+    .qetl.job.stream.define[`regtest_feed;`procname`subscribe_to`outputs`period`on_timer!(
         `regtest_feed1;`symbol$();enlist `regtest_out;0D00:00:01;{[] })];
-    .qetl.job.stream.define[`regtest_sub;`procname`subscribe_to`publishes`on_batch!(
+    .qetl.job.stream.define[`regtest_sub;`procname`subscribe_to`outputs`on_batch!(
         `regtest_sub1;enlist `regtest_in;enlist `regtest_out2;{[a;b] })];
     feed:.qetl.job.stream.def `regtest_feed;
     sub:.qetl.job.stream.def `regtest_sub;
@@ -217,9 +217,9 @@
 / partition and a note: each keeps what it declared and gets the default for
 / what it did not - (::) for an omitted check, ` for an omitted partition.
 .qt.qetl.registries.test_workers_with_different_optional_fields_coexist:{[t]
-    base:`source`dataset`width`transform!(`demo_deals;`regtest_ds;1D;`demo_deals_passthrough);
+    base:`source`outputs`width`transform!(`demo_deals;enlist `regtest_ds;1D;`demo_deals_passthrough);
     .qetl.job.bounded.define[`regtest_checked;base,enlist[`check]!enlist {[b] .qetl.job.bounded.no_failures[]}];
-    .qetl.job.bounded.define[`regtest_sliced;@[base;`dataset;:;`regtest_ds2],`partition`partition_column`note!(`EURUSD;`sym;"a slice")];
+    .qetl.job.bounded.define[`regtest_sliced;@[base;`outputs;:;enlist `regtest_ds2],`partition`partition_column`note!(`EURUSD;`sym;"a slice")];
     c:.qetl.job.bounded.def `regtest_checked;
     s:.qetl.job.bounded.def `regtest_sliced;
     .qunit.assertEquals[(c`partition;c`note;s`check);(`;"";::);
@@ -229,7 +229,7 @@
     .qt.qetl.registries.forget[`.qetl.job.bounded.worker_cfg;`regtest_checked`regtest_sliced]};
 
 .qt.qetl.registries.test_a_worker_key_no_column_holds_is_refused_by_name:{[t]
-    decl:`source`dataset`width`transform`colour!(`demo_deals;`regtest_ds;1D;`demo_deals_passthrough;`red);
+    decl:`source`outputs`width`transform`colour!(`demo_deals;enlist `regtest_ds;1D;`demo_deals_passthrough;`red);
     .qunit.assertThrows[.qetl.job.bounded.define[`regtest_bad];decl;"*declares colour*";
         "an unknown key is refused naming it"];
     .qunit.assertFalse[`regtest_bad in .qetl.job.bounded.defined[];"and nothing is registered"]};

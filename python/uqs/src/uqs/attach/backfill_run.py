@@ -80,6 +80,12 @@ def q_date(day: date) -> str:
     return day.strftime("%Y.%m.%d")
 
 
+def calendar_flags(co: dict[str, Any]) -> list[str]:
+    """`-calendar` when the stack files rows other than by UTC midnight (#2193): the q runner
+    loads TorQ's own eodtime.q over it, so rows land in the partition the stack names."""
+    return ["-calendar", co["calendar"]] if co.get("calendar") else []
+
+
 def bounds_of(plan: dict[str, Any]) -> tuple[date, datetime | None]:
     """(last date this run may write, instant its writes stop) from a fresh admission; the
     instant is None when the end-of-day fence was waived, and only then."""
@@ -137,9 +143,10 @@ def runner_flags(
         "-owner",
         str(owner),
         "-readers",
-        ",".join(f"{r['procname']}@{host}:{r['port']}" for r in plan["reload_targets"]) or "_none_",
+        ",".join(f"{r['process']}@{host}:{r['port']}" for r in plan["reload_targets"]) or "_none_",
         "-user",
         user,
+        *calendar_flags(plan["coordination"]),
     ]
 
 
@@ -257,7 +264,7 @@ def _destination(plan: dict[str, Any]) -> dict[str, Any]:
     d = plan["destination"]
     return {
         "attachment": d["attachment"],
-        "stack_id": d["stack_id"],
+        "stack_id": d["base_port"],
         "host": d["host"],
         "hdb_dir": Path(d["hdb_dir"]),
         "dataset": d["dataset"],
@@ -267,9 +274,10 @@ def _destination(plan: dict[str, Any]) -> dict[str, Any]:
 
 
 def follow(run: Launched, *, poll: float = 0.5, timeout: float | None = None) -> tuple[int, dict]:
-    """Wait for the runner; its exit code and what it reported. The code is the lifecycle's: 0
-    for completed or idle, non-zero for anything that did not do its job, and EXIT_NOT_QUERYABLE
-    for rows written and covered that a reader has not yet reloaded."""
+    """Wait for the runner; its exit code and what it reported. The code is the runner's own: 0
+    for completed or idle, 2 for a refusal, EXIT_NOT_QUERYABLE for rows written and covered that
+    a reader has not yet reloaded, and another non-zero for anything that did not do its job.
+    `uqs job backfill` exits with it as the CLI's (cli/backfill_attached.exit_code, #2226)."""
     started = time.monotonic()
     while True:
         code = run.process.poll()

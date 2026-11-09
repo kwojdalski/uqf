@@ -67,7 +67,9 @@
 / previous day's last half hour. Nothing is published at the roll; there is
 / no day to close. The cost is on RESTART: the plant's log is per day, so a
 / replay after midnight holds only today's rows. The job records `covered_from`,
-/ the plant's local midnight before the first clock it saw (the log begins at the roll),
+/ the instant the plant says its log began (the transport's plant_roll, #2191: run_stream's rolls
+/ at local midnight, the TorQ STP at its own roll zone, GMT by default) or, where it cannot say,
+/ the first clock it saw,
 / and publishes a window length only when its whole span is covered - a 1h
 / window restarted at 00:30 is withheld until 01:00, logged when the set of
 / withheld windows changes, rather than publishing a rate over half the hour.
@@ -94,12 +96,20 @@
 
 .qetl.job.stream.registries:distinct .qetl.job.stream.registries,`.qetl.job.stream.rolling.registry;
 
+/ job -> the transport's plant_roll (#2191), ENLISTED: a niladic function giving
+/ the UTC instant the plant's log began, or null. Recorded by .qetl.job.stream.start.
+/ The plant owns that fact - run_stream's rolls at the host's local midnight, the
+/ TorQ STP at .eodtime.rolltimezone - so no zone is assumed here. A transport
+/ without the key, or whose plant cannot say, leaves the job claiming only from
+/ the first clock it sees. A job not started through start has no entry.
+.qetl.job.stream.rolling.roll_hooks:(`symbol$())!()
+
 / What every rolling job declares.
-.qetl.job.stream.rolling.required_keys:`procname`events`transform`publishes`windows`lateness`period
+.qetl.job.stream.rolling.required_keys:`events`transform`outputs`windows`lateness`period
 
 / What it may declare besides: the grouping columns (default `sym) and the
 / column the window is read from (default `time).
-.qetl.job.stream.rolling.optional_keys:`by`event_time,.qetl.job.stream.passthrough_keys
+.qetl.job.stream.rolling.optional_keys:`procname`by`event_time,.qetl.job.stream.passthrough_keys
 
 / The columns the shell adds to the transform's input, with their types.
 .qetl.job.stream.rolling.shell_columns:`window`as_of`inside!"npb"
@@ -114,7 +124,7 @@
 / Declare a job that keeps a statistic over rolling windows.
 / @param name the job's name
 / @param decl dict of procname, events (the table read), transform (one input:
-/   the events plus window, as_of and inside), publishes (the table written),
+/   the events plus window, as_of and inside), outputs (a one-table symbol list: the table written),
 /   windows (the window lengths, timespans), lateness (a timespan, 0D for
 /   none) and period (the timer, and the grid the windows end on); optionally
 /   by (grouping columns, default `sym), event_time (default `time),
@@ -125,12 +135,15 @@
 .qetl.job.stream.rolling.define:{[name;decl]
     who:"define: rolling job ",string[name];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
+    .qetl.job.stream.refuse_publishes[who;decl];
+    decl:.qetl.job.stream.with_lateness[who;decl];
+    .qetl.declared.refuse_unknown[who;"a rolling job";decl;.qetl.job.stream.rolling.required_keys,.qetl.job.stream.rolling.optional_keys];
     missing:.qetl.job.stream.rolling.required_keys where not .qetl.job.stream.rolling.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
-    unknown:(key decl) except .qetl.job.stream.rolling.required_keys,.qetl.job.stream.rolling.optional_keys;
-    if[count unknown; 'who," declares ",(", " sv string unknown),", which a rolling job does not take"];
-    if[not all -11h=type each decl`events`transform`publishes;
-        'who,"'s events, transform and publishes must each be one table or transform name, a symbol"];
+    if[not all -11h=type each decl`events`transform;
+        'who,"'s events, transform must each be one table or transform name, a symbol"];
+    if[not $[11h=type decl`outputs; 1=count decl`outputs; 0b];
+        'who,"'s outputs must be a symbol list of exactly one table - the table it publishes, e.g. enlist `my_table"];
     ws:(),decl`windows;
     if[not $[16h=type ws; $[count ws; all ws>0D; 0b]; 0b];
         'who,"'s windows must be timespans, each positive"];
@@ -171,17 +184,17 @@
     (` sv ns,`on_endofday) set .qetl.job.stream.rolling.end_of_day[name;];
     (` sv ns,`on_timer) set {[ns;tick] (get ` sv ns,`evaluate) (get ` sv ns,`now)[]}[ns]; / noqa: QF016 on_timer callback signature
     extra:(.qetl.job.stream.passthrough decl),enlist[`state]!enlist `pending`dropped`last_as_of`covered_from`withheld;
-    .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch`period`on_timer`transform`on_endofday`replay`restore_from!(
-        decl`procname;
+    .qetl.job.stream.define[name;(`procname`subscribe_to`outputs`on_batch`period`on_timer`transform`on_endofday`replay`restore_from!(
+        .qetl.job.procname_of[name;decl];
         enlist decl`events;
-        enlist decl`publishes;
+        decl`outputs;
         get ` sv ns,`on_batch;
         decl`period;
         get ` sv ns,`on_timer;
         decl`transform;
         get ` sv ns,`on_endofday;
         1b;
-        enlist decl`publishes)),extra];
+        decl`outputs)),extra];
     .qetl.job.stream.rolling.registry[name]:enlist d;
     name}
 
@@ -270,7 +283,7 @@
 .qetl.job.stream.rolling.on_batch:{[name;t;x]
     d:.qetl.job.stream.rolling.def[name];
     ns:.qetl.job.stream.namespace name;
-    if[t=d`publishes; :.qetl.job.stream.rolling.mark_published[ns;x]];
+    if[t=first d`outputs; :.qetl.job.stream.rolling.mark_published[ns;x]];
     if[(t<>d`events) or 0=count x; :()];
     pq:` sv ns,`pending;
     now:(get ` sv ns,`now)[];
@@ -286,11 +299,11 @@
         why:?[null et;`no_event_time;`late];
         gone:(x where out),'flip enlist[`reason]!enlist why where out;
         (` sv ns,`dropped) set -1000 sublist (get ` sv ns,`dropped),gone;
-        .qetl.log.warn[name;"row dropped - late or without an event time";`rows`first_event!(count gone;min gone tc)]];
+        .qetl.log.ch.warn[`transform;"row dropped - late or without an event time";(enlist[`transform]!enlist name),`rows`first_event!(count gone;min gone tc)]];
     pq insert x where not out;
     stamps:rcv where not null rcv;
     if[count stamps;
-        .qetl.job.stream.rolling.mark_covered[ns;min stamps];
+        .qetl.job.stream.rolling.mark_covered[name;ns;min stamps];
         span:(last d`windows)+d`lateness;
         / anchored on the grid point the next publication cuts at, as evaluate is:
         / a batch landing after a boundary but before the timer must not evict
@@ -299,12 +312,34 @@
         .qetl.job.stream.evict[pq;((get pq) tc)<=keep_from]];
     }
 
-/ Private: the buffer is complete from the start of the day of the first clock
-/ the job saw - the plant's log begins at the roll - and never earlier.
+/ Private: the instant the plant's log began, as the transport reports it
+/ (plant_roll, #2191), never the host's zone: the TorQ STP rolls at
+/ .eodtime.rolltimezone, run_stream's plant at the host's local midnight, and
+/ #1250 and #2191 each broke the other by assuming one. Null when the plant
+/ cannot say. A job not started through a transport (a test driving on_batch)
+/ has no hook and gets the in-process plant's convention, the local midnight.
+/ A failing hook is a warning and a null, never a stopped job.
 / @private
-.qetl.job.stream.rolling.mark_covered:{[ns;clock]
+.qetl.job.stream.rolling.plant_roll:{[name;clock]
+    h:.qetl.job.stream.rolling.roll_hooks;
+    if[not name in key h; :.qetl.job.stream.rolling.day_start clock];
+    r:@[{(1b;x[])};first h name;{(0b;x)}];
+    if[not first r;
+        .qetl.log.ch.warn[`transform;"the plant could not say when its log began - covering from the first message";(enlist[`transform]!enlist name),enlist[`error]!enlist last r];
+        :0Np];
+    $[-12h=type last r; last r; 0Np]}
+
+/ Private: the buffer is complete from the instant the plant's log began and
+/ never earlier. Where the plant cannot say, from the first clock the job saw:
+/ the first message is never before the log's start, so the claim can only
+/ under-state - a window withheld longer, never one published over part of
+/ its span. A roll the hook reports after the first clock is not believed.
+/ @private
+.qetl.job.stream.rolling.mark_covered:{[name;ns;clock]
     cf:` sv ns,`covered_from;
-    if[null get cf; cf set .qetl.job.stream.rolling.day_start clock];
+    if[null get cf;
+        roll:.qetl.job.stream.rolling.plant_roll[name;clock];
+        cf set $[null roll; clock; roll<=clock; roll; clock]];
     }
 
 / Private: grid points the log or the plant says are published.
@@ -327,11 +362,11 @@
     pq:` sv ns,`pending; lq:` sv ns,`last_as_of;
     as_of:(d`period) xbar now;
     if[$[null get lq; 0b; as_of<=get lq]; :0];
-    .qetl.job.stream.rolling.mark_covered[ns;now];
+    .qetl.job.stream.rolling.mark_covered[name;ns;now];
     cf:get ` sv ns,`covered_from;
     .qetl.job.stream.rolling.note_withheld[name;ns;as_of;cf];
     out:.qetl.job.stream.rolling.compute[name;get pq;as_of;cf];
-    if[count out; (get ` sv ns,`publish)[d`publishes;out]];
+    if[count out; (get ` sv ns,`publish)[first d`outputs;out]];
     lq set as_of;
     span:(last d`windows)+d`lateness;
     keep_from:as_of-span;
@@ -348,8 +383,8 @@
     if[now_withheld~get wq; :()];
     wq set now_withheld;
     $[count now_withheld;
-        .qetl.log.warn[name;"windows withheld until the buffer covers them - the day's log begins at the roll";`windows`covered_from!(now_withheld;cf)];
-        .qetl.log.info[name;"every window is covered";enlist[`covered_from]!enlist cf]];
+        .qetl.log.ch.warn[`transform;"windows withheld until the buffer covers them - the replayed log began later than they reach";(enlist[`transform]!enlist name),`windows`covered_from!(now_withheld;cf)];
+        .qetl.log.ch.info[`transform;"every window is covered";(enlist[`transform]!enlist name),enlist[`covered_from]!enlist cf]];
     }
 
 / The plant's day has ended. A rolling window is not day-bucketed, so nothing
@@ -360,14 +395,14 @@
 / @eg .qpipe.job.order_quality.on_endofday 2026.10.09
 .qetl.job.stream.rolling.end_of_day:{[name;dt]
     n:count get ` sv (.qetl.job.stream.namespace name),`pending;
-    .qetl.log.info[name;"end of day - windows roll on across it";`date`buffered!(dt;n)];
+    .qetl.log.ch.info[`eod;"end of day - windows roll on across it";(enlist[`transform]!enlist name),`date`buffered!(dt;n)];
     n}
 
 \d .
 
 / Declare a streaming job that keeps a statistic over rolling windows.
 / @param name the job name
-/ @param decl events, transform, publishes, windows, lateness, period and the process declaration
+/ @param decl events, transform, outputs, windows, lateness, period and the process declaration
 / @return the registered streaming job name
 / @throws error when the transform is not a one-input contract carrying window, as_of and inside
 .qetl.job.stream.at_rolling:{[name;decl] .qetl.job.stream.rolling.define[name;decl]}

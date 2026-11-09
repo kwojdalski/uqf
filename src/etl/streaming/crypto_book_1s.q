@@ -48,13 +48,13 @@
 / stamp reaches the plant a few tens of milliseconds late, see the transform),
 / looked for every second. The kind also closes the day's last windows at end of
 / day and restores open ones from the log.
-.qetl.job.stream.at_bars[`crypto_book_1s;`procname`events`event_time`by`transform`publishes`width`lateness`period`start_with_all`note!(
+.qetl.job.stream.at_bars[`crypto_book_1s;`procname`events`event_time`by`transform`outputs`width`lateness`period`start_with_all`note!(
     `crypto_book_1s1;
     `crypto_book;
     `source_time;
     `venue`sym;
     `crypto_book_1s;
-    `crypto_book_1s;
+    enlist `crypto_book_1s;
     .qpipe.transform.crypto_book_1s.width;
     .qpipe.transform.crypto_book_1s.lateness;
     0D00:00:01;

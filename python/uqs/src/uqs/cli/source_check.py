@@ -7,7 +7,6 @@ how, and uqs.stack.odbc_home for --odbc-home.
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import Annotated
 
@@ -17,7 +16,8 @@ from rich.table import Table
 from uqs import timerange
 from uqs.cli.concepts import SourcesArg
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.renames import old_spelling, warn_renamed
+from uqs.cli.range_options import DateOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.renames import refused
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths, console
 from uqs.cli.sources import sources_app
@@ -33,25 +33,35 @@ SourcesJson = json_opt(
 )
 
 
-#: `--window N` was minutes back; a duration is a DURATION on every command,
-#: and "up to now" is `--last` (#1857). The old spelling's value is minutes,
-#: so it is read and converted here, not renamed by name.
-@sources_app.command("check", cls=ReadOnly)
+#: How far back `config sources check` reads when no range is given (#2249).
+DEFAULT_LAST = "1h"
+
+#: `--window N` was minutes back; the bounded read takes the shared time range
+#: now, so the old spelling is refused naming it (#2249), not converted.
+_WINDOW = {
+    "--window": "`--window MINUTES` is now the shared time range: --last DURATION (--last 90m), "
+    "or --from/--to/--date for a past window (#2249)",
+}
+
+
+@sources_app.command("check", cls=refused(_WINDOW, ReadOnly))
 def sources_check(
     sources: SourcesArg,
     timeout: Annotated[
         float, duration("--timeout", help="Seconds (a DURATION) for every check together")
     ] = 120.0,
+    range_from: RangeFromOpt = None,
+    range_to: RangeToOpt = None,
+    day: DateOpt = None,
     last: Annotated[
-        str,
-        typer.Option(
+        float | None,
+        duration(
             "--last",
-            help="A DURATION up to now - 30s, 5m, 2h, 7d: how far back the bounded read "
-            "reaches (default 1h)",
+            help="Up to now, a DURATION - the same as --from now-DURATION --to now. With no "
+            f"range given at all, the default: {DEFAULT_LAST}",
             show_default=False,
         ),
-    ] = "1h",
-    window: Annotated[int | None, old_spelling("--last", "--window")] = None,
+    ] = None,
     odbc: Annotated[
         Path | None,
         typer.Option(
@@ -66,12 +76,14 @@ def sources_check(
 
     Connects to each source with its real credential and driver, checks its
     declared tables and column types, and reads a bounded window - publishing
-    nothing and recording nothing. Exits 1 when any source fails."""
-    if window is not None:  # #1857: minutes, where every duration is a DURATION now
-        warn_renamed(f"--window {window}", f"--last {window}m")
-        last = f"{window}m"
+    nothing and recording nothing. The window is the time range, given the
+    way every command takes one; with none, the last hour. A past window with
+    data (--date D, a day it traded) checks a source quiet now. Exits 1 when
+    any source fails."""
     try:
-        minutes = math.ceil(timerange.parse_duration("--last", last).total_seconds() / 60)
+        if all(v is None for v in (range_from, range_to, day, last)):
+            last = timerange.parse_duration("--last", DEFAULT_LAST).total_seconds()
+        window = timerange.resolve(range_from, range_to, day, last)
         env = None
         if odbc is not None:
             version = odbc_home.current(odbc)
@@ -80,9 +92,7 @@ def sources_check(
                     f"{odbc} has no current ODBC version - `uqs setup odbc install` first"
                 )
             env = odbc_home.env_vars(version)
-        results = live_check.check(
-            _paths(), sources, timeout=timeout, window_minutes=minutes, odbc_env=env
-        )
+        results = live_check.check(_paths(), sources, timeout=timeout, window=window, odbc_env=env)
     except UqsError as exc:
         _die(exc)
         return

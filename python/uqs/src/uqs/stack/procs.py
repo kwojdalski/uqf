@@ -16,23 +16,23 @@ edited - every run regenerates the merged copy from scratch."""
 from __future__ import annotations
 
 import csv
-import re
 from collections.abc import Iterable
-from string import Template
 
-from uqs import portexpr
 from uqs.logger import get_logger
 from uqs.model.pipelines import _pipeline_rows
 from uqs.model.runtime_members import pipeline_procnames
-from uqs.paths import UqsError, UqsPaths
+from uqs.paths import UqsPaths, UqsUnknownProcess
+from uqs.stack import housekeeping
 from uqs.stack import overrides as override_files
 from uqs.stack.carriable import refuse_unsafe_override
+from uqs.stack.compression import with_cmp
 from uqs.stack.env import build_env
 from uqs.stack.monitor_budget import (
     MONITOR_QUIET_EXTRAS,
     monitor_connection_extras,
     monitor_dropped,
 )
+from uqs.stack.placeholders import resolve_process_config
 from uqs.stack.site_fields import declared, refuse_unknown_field
 
 log = get_logger()
@@ -66,13 +66,11 @@ VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 #: Extra q a vendored process loads, as (before, after) its vendored `load`
 #: column: each path is pathed through an env var torq.sh's envsubst expands.
 #:
-#: gateway1 - the desk catalog, after.
-#: `.qcat` is the desk catalog's authored half - what each table is for, and
-#: which are deliberately not browsable. It has to answer on the process the
-#: BFF already talks to, and that is the gateway: `Gateway.call` runs a
-#: program on the gateway process itself, while `route` reaches the data
-#: tiers. The columns and types come from the tiers via `meta`; only the
-#: prose lives here.
+#: gateway1 - the desk catalog, after. `.qcat` is the desk catalog's authored half - what
+#: each table is for, and which are deliberately not browsable. It has to answer on the
+#: process the BFF already talks to, and that is the gateway: `Gateway.call` runs a program
+#: on the gateway process itself, while `route` reaches the data tiers. The columns and
+#: types come from the tiers via `meta`; only the prose lives here.
 #:
 #: Not the generated database.q, which would have been the obvious carrier:
 #: only stp1 is given `-schemafile`, so nothing else would see it.
@@ -95,10 +93,13 @@ VENDORED_STARTWITHALL_OVERLAY = {"monitor1": "1", "feed1": "0"}
 #: after its own script, and uqs_dqe_config.q BEFORE it, because dqe.q reads
 #: `.dqe.configcsv` once as it loads (stack/dqe.py). hdb2 is not a DQE target.
 #:
-#: reporter1 - uqs_reporter_config.q BEFORE reporter.q, which reads
-#: `.rp.inputcsv` once as it loads: after every settings layer, so the site's
-#: own settings cannot point it back at a reporter.csv naming tables this
-#: deployment does not publish (stack/reporter.py, #1209).
+#: hdb1 also loads mapped_books.q and mapped_depth.q (a markout's as-of join runs where the
+#: partitions are mapped); wdb1, sort1, sortworker1/2 load uqs_row_ids.q (#2288).
+#:
+#: reporter1, housekeeping1 - uqs_reporter_config.q / housekeeping.LOAD_BEFORE (#2150) BEFORE
+#: reporter.q / housekeeping.q, each reading `.rp.inputcsv` / `.hk.inputcsv` once as it loads,
+#: after every settings layer (stack/reporter.py #1209, stack/housekeeping.py #2155).
+ROW_IDS_LOAD = "${UQF_SCRIPTS}/processes/uqs_row_ids.q"
 VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "gateway1": (
         (),
@@ -110,12 +111,21 @@ VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "${UQF_SCRIPTS}/processes/uqs_catalog.q",
         ),
     ),
-    "hdb1": ((), ("${UQF_ROOT}/src/metadata/metatables.q",)),
+    "hdb1": (
+        (),
+        (
+            "${UQF_ROOT}/src/metadata/metatables.q",
+            "${UQF_ROOT}/src/etl/core/mapped_books.q",
+            "${UQF_ROOT}/src/etl/core/mapped_depth.q",
+        ),
+    ),
     "dqe1": (
         ("${UQF_SCRIPTS}/processes/uqs_dqe_config.q",),
         ("${UQF_ROOT}/src/metadata/metatables.q", "${UQF_SCRIPTS}/processes/torq_metatables.q"),
     ),
     "reporter1": (("${UQF_SCRIPTS}/processes/uqs_reporter_config.q",), ()),
+    **{p: ((), (ROW_IDS_LOAD,)) for p in ("wdb1", "sort1", "sortworker1", "sortworker2")},
+    "housekeeping1": with_cmp((housekeeping.LOAD_BEFORE, ())),
 }
 
 
@@ -130,6 +140,12 @@ VENDORED_LOAD_OVERLAY: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 #: (scripts/torqcode/gateway/querypolicy.q). Each runtime is started with a
 #: copy holding only its own tables (stack/gateway_access.py).
 DATAACCESS_PROCTYPES = frozenset({"gateway", "rdb", "hdb"})
+#: On PeachQ an hdb maps no partitioned database (no .Q.pv/.Q.pd), so TorQ's
+#: `meta` there sees no table, .dataaccess.init finds every listed one
+#: "Missing table from HDB in schema" and the hdb exits 3 while loading -
+#: which `uqs start` then reports (#2180). It could serve none of them
+#: anyway, so a PeachQ runtime's hdb starts without the data-access API (#2281).
+PEACHQ_NO_DATAACCESS = frozenset({"hdb"})
 DATAACCESS_EXTRAS = "-dataaccess ${TORQDATA}/tableproperties.csv"
 
 #: Access lists (the `U` column, q's `-U`) written by bootstrap
@@ -168,7 +184,9 @@ def _composed_rows(paths: UqsPaths) -> list[dict[str, str]]:
             if row["procname"] in VENDORED_LOAD_OVERLAY:
                 before, after = VENDORED_LOAD_OVERLAY[row["procname"]]
                 row["load"] = " ".join(x for x in (*before, row["load"], *after) if x)
-            if row["proctype"] in DATAACCESS_PROCTYPES:
+            if row["proctype"] in DATAACCESS_PROCTYPES and not (
+                declared.interpreter == "peachq" and row["proctype"] in PEACHQ_NO_DATAACCESS
+            ):
                 row["extras"] = " ".join(x for x in (row["extras"], DATAACCESS_EXTRAS) if x)
             if row["procname"] in ACCESS_LIST_OVERLAY:
                 row["U"] = ACCESS_LIST_OVERLAY[row["procname"]]
@@ -279,14 +297,14 @@ def list_process_names(paths: UqsPaths) -> list[str]:
     return [row["procname"] for row in effective_process_rows(paths)]
 
 
-def unknown_processes(names: list[str] | str, then: str = "") -> UqsError:
+def unknown_processes(names: list[str] | str, then: str = "") -> UqsUnknownProcess:
     """The one refusal for a process name this runtime does not declare (#1885):
     the names asked for and where the real ones are - it was phrased four ways,
     two dumping all 65 names as a Python list. `then` says what was not done."""
     names = [names] if isinstance(names, str) else names
     word = "process" if len(names) == 1 else "processes"
     then = f". {then}" if then else ""
-    return UqsError(
+    return UqsUnknownProcess(
         f"no {word} {', '.join(names)} in this runtime - `uqs process list` names them{then}"
     )
 
@@ -335,26 +353,6 @@ def list_process_choices(paths: UqsPaths) -> list[dict[str, str]]:
     return out
 
 
-# process.csv's two placeholder styles: `${VAR}` / `$VAR` (shell parameter
-# expansion, resolved via envsubst at runtime - handled here by
-# string.Template, which uses the same syntax) inside e.g. `load`/`U`/
-# `extras`; and the `port` grammar (`{VAR}`, `{VAR}+N`, `{VAR}-N`, a literal),
-# which uqs.portexpr owns and the occupancy check and the frontend share.
-_BRACE_PLACEHOLDER = re.compile(r"^\{\w+\}(?:[+-]\d+)?$")
-
-
-def _resolve_value(value: str, env: dict[str, str]) -> str:
-    if _BRACE_PLACEHOLDER.match(value):
-        port = portexpr.resolve(value, env)
-        # unknown/non-numeric var - leave the placeholder as-is
-        return value if port is None else str(port)
-    return Template(value).safe_substitute(env)
-
-
-def resolve_process_config(row: dict[str, str], env: dict[str, str]) -> dict[str, str]:
-    return {field: _resolve_value(value, env) for field, value in row.items()}
-
-
 def get_process_config(
     paths: UqsPaths,
     procname: str,
@@ -386,9 +384,11 @@ def set_process_config(
     only file this touches; the vendored process.csv is never edited.
     With `dry_run`, every check runs and nothing is written.
     """
-    refuse_unknown_field(field, "unknown process.csv field")
+    # The process first: a name that is not there is answered as such (404 on
+    # the frontend's route, #2224), whatever the field and value say.
     if procname not in list_process_names(paths):
         raise unknown_processes(procname)
+    refuse_unknown_field(field, "unknown process.csv field")
     refuse_unsafe_override(procname, field, value)
     if dry_run:
         return

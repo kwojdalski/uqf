@@ -1,7 +1,7 @@
 """Which `uqs job new` options shape which kind of job.
 
 An option that shapes one kind is refused on the others rather than ignored:
-`--partition` on a streaming job would otherwise be dropped in silence, and
+`--slice` on a streaming job would otherwise be dropped in silence, and
 the job scaffolded as though it had been honoured.
 """
 
@@ -56,10 +56,9 @@ _STANDING = ("streaming", "normalizer", "connector", "horizon")
 SHAPES: dict[str, tuple[str, ...]] = {
     "--transform": ("backfill", "streaming"),
     "--transport": _BACKFILL,
-    "--partition": _BACKFILL,
-    "--partition-column": _BACKFILL,
+    "--slice": _BACKFILL,
+    "--slice-column": _BACKFILL,
     "--check": _BACKFILL,
-    "--dataset": _BACKFILL,
     "--source": _BACKFILL,
     "--width": _BACKFILL,
     "--twin-of": _BACKFILL,
@@ -75,8 +74,8 @@ SHAPES: dict[str, tuple[str, ...]] = {
     "--unprofiled": _STANDING,
     # every kind declares whether `uqs start all` starts it (#1893)
     "--start-with-all": SCAFFOLD_KINDS,
-    # a normalizer and a horizon job publish their own NAME; a backfill fills --dataset
-    "--publishes": ("streaming", "connector"),
+    # a normalizer and a horizon job publish their own NAME; a backfill fills its one output
+    "--outputs": ("streaming", "connector", "backfill"),
     # a backfill reads its source, a connector job --raw-table
     "--subscribe-to": ("streaming", "normalizer", "horizon"),
 }
@@ -99,7 +98,7 @@ def misplaced(kind: str, used: dict[str, bool]) -> str | None:
 
 
 #: The options that are not a job's shape: a reaction's own, and how to write.
-NOT_SHAPING = frozenset({"--triggered-by", "--writes", "--bundle", "--dry-run"})
+NOT_SHAPING = frozenset({"--triggered-by", "--bundle", "--dry-run"})
 
 
 def given_options(ctx: Any, exclude: frozenset[str] = NOT_SHAPING) -> dict[str, bool]:

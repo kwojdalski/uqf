@@ -44,7 +44,7 @@ class LocalRemote:
 def _dep(remote, dest="/opt/uqf", fix_hdb=False, data_dir=None) -> Deployment:
     cfg = make_config(
         artifact="",
-        host="h",
+        ssh="h",
         dest=dest,
         profile="essential",
         fix_hdb="the test fills it" if fix_hdb else None,

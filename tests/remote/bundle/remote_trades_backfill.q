@@ -17,7 +17,7 @@
 .qetl.transform.passthrough[`remote_trades_passthrough;`remote_trades;.qetl.plant.shape `remote_trades;.qpipe.source.remote_trades.fixture[]];
 
 .qetl.job.bounded.define[`remote_trades_backfill;
-    `source`dataset`width`transform`facts`procname`note!
-        (`remote_trades;`remote_trades;1D;`remote_trades_passthrough;.qpipe.job.remote_trades_backfill.facts;
+    `source`outputs`width`transform`facts`procname`note!
+        (`remote_trades;enlist `remote_trades;1D;`remote_trades_passthrough;.qpipe.job.remote_trades_backfill.facts;
          `remote_trades_backfill1;
          "Synthetic FX trades for the remote-stack lane: extracted on one machine, written on the stack's")];

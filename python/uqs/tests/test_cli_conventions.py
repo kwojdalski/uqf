@@ -39,10 +39,11 @@ from typing import Any
 
 import pytest
 import typer.main
+from plain_cli import PlainRunner
 from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
-from uqs import paths
+from uqs import duration, paths
 from uqs.cells import cell as cell_text
 from uqs.cli import lists, rendering, safety, shared, skip_options, vocabulary
 from uqs.cli.shared import app
@@ -123,64 +124,18 @@ def _hold(rule: str, found: set, allowed: dict) -> None:
 
 # --------------------------------------------------------------------- vocabulary
 
-#: Rule 4's core verbs, each meaning one thing (#1733).
-CORE_VERBS = {
-    "status": "the state of something running or installed",
-    "check": "actively probe; exit non-zero on a problem",
-    "list": "many records",
-    "show": "one record",
-    "set": "change one setting",
-    "add": "create one thing",
-    "remove": "delete one thing",
-}
-
-#: Rule 4's domain verbs: the words a domain needs that the core does not cover,
-#: including the few nouns kept as views of a running stack (graph, schema, ...).
-DOMAIN_VERBS = {
-    "start": "the stack's lifecycle (also a connector's)",
-    "stop": "the stack's lifecycle (also a connector's)",
-    "restart": "the stack's lifecycle (also a connector's)",
-    "exec": "run any other torq.sh verb, passed straight through",
-    "logs": "read processes' logs",
-    "clean": "delete the runtime state the stack wrote",
-    "query": "run a q expression on a process",
-    "graph": "draw the process graph",
-    "schema": "describe a process's tables",
-    "new": "scaffold a job into the tree",
-    "install": "place files built elsewhere",
-    "backfill": "run a bounded worker over a range",
-    "preview": "fetch a feed's rows without publishing them",
-    "gaps": "a job's missing ranges",
-    "audit": "one window across runs",
-    "receive": "take an extractor's batches into an HDB",
-    "export": "write a record out for another machine",
-    "approve": "accept a record another machine exported",
-    "replay": "replay a tickerplant log into the HDB",
-    "seed": "copy another runtime's HDB",
-    "migrate": "migrate an HDB partition's schema",
-    "alter": "change one table in every HDB partition holding it",
-    "upgrade": "bring a store an older uqs wrote up to today's layout",
-    "diff": "compare two runtimes",
-    "prepare": "install the bundles a runtime declares",
-    "stub": "add a placeholder row",
-    "env": "print the environment to source",
-    "build": "build a release",
-    "push": "deploy a release onto a server",
-    "rollback": "return to the previous release or version",
-    "prune": "remove old releases",
-    "history": "what was deployed",
-    "shell": "open a shell on a target",
-    # a target's own changes (#1756): the core verbs cover add, set and remove
-    "unset": "remove a setting, so the layer beneath's value applies - `set` cannot say it",
-    "rename": "give a thing a new name, keeping what is recorded under the old one",
-    "edit": "change a file in $EDITOR, checked before it is saved",
-    "log": "a record's change history - `logs` is processes' output, `history` deployments",
-    "revert": "undo one recorded change, itself recorded - not `rollback`'s release",
-    "adopt": "take over what was installed by hand, so uqs can drive it",
-}
+# The verbs (CORE_VERBS, DOMAIN_VERBS) are declared in uqs/cli/vocabulary.py (#2170).
 
 #: Rule 1: a group named after one of these is a verb with nouns under it.
-GROUP_VERBS = set(CORE_VERBS) | {"start", "stop", "restart", "delete", "get", "create", "run"}
+GROUP_VERBS = set(vocabulary.CORE_VERBS) | {
+    "start",
+    "stop",
+    "restart",
+    "delete",
+    "get",
+    "create",
+    "run",
+}
 
 
 # ------------------------------------------------------------- rule 1: groups
@@ -267,7 +222,7 @@ RULE4_MISUSED: dict[str, str] = {}
 
 
 def test_rule4_every_leaf_is_named_by_a_vocabulary_verb():
-    verbs = set(CORE_VERBS) | set(DOMAIN_VERBS)
+    verbs = set(vocabulary.VERBS)
     found = {path for path in LEAVES if path.split()[-1] not in verbs}
     _hold("rule 4", found, RULE4_ALLOWLIST)
 
@@ -347,7 +302,7 @@ VERB_FLAGS = {
 
 
 def test_no_flag_turns_its_command_into_another_verb():
-    verbs = set(CORE_VERBS) | set(DOMAIN_VERBS)
+    verbs = set(vocabulary.VERBS)
     found = {
         (path, _long(p))
         for path, c in LEAVES.items()
@@ -360,7 +315,9 @@ def test_no_flag_turns_its_command_into_another_verb():
 
 
 #: A time range is given in full wherever one is taken (#1858): `data replay`
-#: had no --last.
+#: had no --last. Any one of the four brings the other three (#2249): `config
+#: sources check` took `--last` alone, with a default, and no --from it was
+#: held to.
 RANGE = ("--from", "--to", "--date", "--last")
 
 
@@ -368,9 +325,107 @@ def test_a_command_taking_a_time_range_takes_all_of_it():
     partial = {
         path: [o for o in RANGE if c.option(o) is None]
         for path, c in LEAVES.items()
-        if c.option("--from") is not None and any(c.option(o) is None for o in RANGE)
+        if any(c.option(o) is not None for o in RANGE) and any(c.option(o) is None for o in RANGE)
     }
     assert not partial
+
+
+#: The commands that act on whole HDB partitions (#2245): each takes the range
+#: in whole days and refuses, never rounds, a bound off a midnight - data
+#: seed and data compress used to drop a partial first day and take a partial
+#: last one whole, past --to.
+WHOLE_DAY_COMMANDS = {"data replay", "data seed", "data compress", "data migrate"}
+
+
+def test_a_whole_partition_command_takes_whole_days_only():
+    whole = {
+        path
+        for path, c in LEAVES.items()
+        if c.option("--from") is not None and "whole days only" in (c.option("--from").help or "")
+    }
+    assert whole == WHOLE_DAY_COMMANDS
+    for path in WHOLE_DAY_COMMANDS:
+        days = LEAVES[path].option("--last").help or ""
+        assert "whole days" in days and "never in it" in days, path
+    # and each resolves it through the one refusal, never a rounding of its own
+    for module in ("compress_plan", "seed", "replay", "migrate"):
+        text = inspect.getsource(__import__(f"uqs.cli.{module}", fromlist=["_"]))
+        assert ".partition_dates(" in text or ".day(" in text, module
+
+
+#: The `data` commands that do not act on one HDB (#2237): `diff` compares two
+#: endpoints' tables through their gateways; `snapshot`'s list and show read
+#: the markout configuration snapshots in the status directory.
+NOT_ONE_HDB = {"data diff", "data snapshot list", "data snapshot show"}
+
+
+def test_every_data_command_names_its_hdb_the_same_ways():
+    """#2237: check and alter took --hdb and --attachment, compress and replay
+    --hdb only (replay's with a help of its own), migrate and seed neither. A
+    `data` command that reads or writes one HDB takes both, with
+    cli/hdb_scope.py's one help each; one that cannot act on an attachment's
+    HDB refuses it saying why (hdb_scope.local_hdb), rather than not knowing it."""
+    from uqs.cli import hdb_scope
+
+    def helps(opt) -> str:
+        return opt.__metadata__[0].help if hasattr(opt, "__metadata__") else opt.help
+
+    want = {"--hdb": helps(hdb_scope.HdbOpt), "--attachment": helps(hdb_scope.AttachOpt)}
+    data = {path: c for path, c in LEAVES.items() if path.startswith("data ")}
+    assert NOT_ONE_HDB <= set(data)
+    wrong = {
+        (path, name): c.option(name) and c.option(name).help
+        for path, c in data.items()
+        if path not in NOT_ONE_HDB
+        for name, help_text in want.items()
+        if c.option(name) is None or c.option(name).help != help_text
+    }
+    assert not wrong, f"data commands naming their HDB another way: {wrong}"
+
+
+@pytest.mark.parametrize(
+    ("module", "argv", "said"),
+    [
+        ("replay", ["data", "replay"], "data replay cannot take --attachment pb-uat: a replay"),
+        (
+            "migrate",
+            ["data", "migrate", "trade", "--date", "2026-09-13", "--cast", "px"],
+            "data migrate cannot take --attachment pb-uat: a migration",
+        ),
+        (
+            "seed",
+            ["data", "seed", "--from-runtime", "uqf"],
+            "data seed cannot take --attachment pb-uat: a seed",
+        ),
+        ("compress", ["data", "compress"], "--attachment is for --report"),
+    ],
+)
+def test_a_data_command_that_cannot_reach_an_attachment_says_why(monkeypatch, module, argv, said):
+    """#2237: `No such option` was all an operator got for --attachment on
+    compress, migrate, replay and seed; each now knows it, and refuses it with
+    its reason before reaching anything."""
+    mod = __import__(f"uqs.cli.{module}", fromlist=["_"])
+    died: list[Exception] = []
+    monkeypatch.setattr(mod, "_die", died.append)
+    CliRunner().invoke(app, [*argv, "--attachment", "pb-uat"])
+    assert len(died) == 1 and isinstance(died[0], paths.UqsUsageError), died
+    assert said in str(died[0])
+
+
+@pytest.mark.parametrize("module", ["replay", "migrate", "seed"])
+def test_hdb_and_attachment_together_are_refused_as_check_refuses_them(monkeypatch, module):
+    mod = __import__(f"uqs.cli.{module}", fromlist=["_"])
+    died: list[Exception] = []
+    monkeypatch.setattr(mod, "_die", died.append)
+    argv = {
+        "replay": ["data", "replay"],
+        "migrate": ["data", "migrate", "trade", "--date", "2026-09-13", "--cast", "px"],
+        "seed": ["data", "seed", "--from-runtime", "uqf"],
+    }[module]
+    CliRunner().invoke(app, [*argv, "--attachment", "pb-uat", "--hdb", "/tmp"])
+    assert [str(e) for e in died] == [
+        "give one of --target, --attachment and --hdb: each names an HDB"
+    ]
 
 
 def test_schema_and_query_reach_a_process_the_same_ways():
@@ -439,7 +494,7 @@ def test_the_guide_lists_the_same_vocabulary():
     section = text.split("\n## CLI conventions\n", 1)[1].split("\n## ", 1)[0].split("\n### ", 1)[0]
     rows = re.findall(r"^\s*\|\s*(`[^|]*`)\s*\|", section, flags=re.M)
     documented = {w for row in rows for w in re.findall(r"`([a-z-]+)`", row)}
-    assert documented == set(CORE_VERBS) | set(DOMAIN_VERBS)
+    assert documented == set(vocabulary.VERBS)
 
 
 # ----------------------------------------------------- rule 3: option meaning
@@ -455,6 +510,14 @@ class Meaning:
 #: text that does not match the pattern is a second meaning.
 OPTIONS = {
     "--allow-dirty": Meaning("retired: --override allow-dirty", None),
+    # the frontend's activity history (#2000): one filter each, on list and export alike
+    "--action": Meaning("an activity action, or its dotted prefix", r"dotted prefix"),
+    "--db": Meaning("the activity history's SQLite file", r"activity history's SQLite file"),
+    "--outcome": Meaning("how an activity event ended", r"^only events that ended so"),
+    "--recorded-by": Meaning("the browser or the server's audit", r"^only events recorded by"),
+    "--request": Meaning("one operation's request id", r"correlated by this request id"),
+    "--session": Meaning("one browser session's events", r"browser session id"),
+    "--subject": Meaning("what an activity event is about", r"^only events about this name"),
     "--apply": Meaning("make the changes; without it, a dry run", r"without it, a dry run"),
     "--arch": Meaning("the servers' CPU architecture", r"x86_64"),
     "--attach": Meaning("retired: --attachment - a verb naming a noun (#1855)", None),
@@ -469,7 +532,10 @@ OPTIONS = {
     "--command-timeout": Meaning("seconds per remote step", r"remote step"),
     "--connect-timeout": Meaning("ssh/scp seconds", r"ssh/scp"),
     "--date": Meaning("one day of a time range: --from D --to D+1", r"--from D --to D\+1"),
-    "--dataset": Meaning("the dataset a bounded worker fills", r"table it fills"),
+    "--dataset": Meaning(
+        "the markout dataset a snapshot configures (a job's tables are --outputs, #2102)",
+        r"snapshots that configure this markout dataset",
+    ),
     "--debug": Meaning("log at DEBUG", r"^Log at DEBUG\. Same as LOG_LEVEL"),
     "--dest": Meaning(
         "the absolute directory on the server", r"(directory|root) on the server|installs, absolute"
@@ -481,6 +547,10 @@ OPTIONS = {
     "--every": Meaning("re-read every DURATION", r"^with -i, re-read every DURATION"),
     "--stop-on-exit": Meaning(
         "with --follow: stop what it started when the stream ends", r"stop what this started"
+    ),
+    "--grace": Meaning(
+        "how long a start waits before it fails on a process that died",
+        r"fail if a process this started has died",
     ),
     "--export": Meaning("also write the rows to FILE", r"write output to FILE"),
     "--follow": Meaning("keep streaming log lines until Ctrl-C", r"streaming (new|every)"),
@@ -500,15 +570,27 @@ OPTIONS = {
     "--json": Meaning("one JSON document on stdout", r"^Print (one )?JSON"),
     "--keep": Meaning("how many newest releases to keep", r"newest (n )?releases"),
     "--last": Meaning("a time range up to now", r"up to now"),
+    # a log record's id column IS its subsystem channel (#2274): `--channel` is the filter, the
+    # old `--id` is refused naming it, and the old `--channel` (subscribe) is `--subscribe`
+    "--channel": Meaning("a log channel to show, repeatable", r"^Only show lines on this channel"),
+    "--id": Meaning("retired: --channel, a log record's id is its channel (#2274)", None),
+    "--subscribe": Meaning(
+        "read the published log lines, not the files", r"^Subscribe to the lines"
+    ),
     "--level": Meaning("the lowest log level shown", r"this level and above"),
     "--limit": Meaning("show at most N records", r"(most recent|at most) N"),
     "--lines": Meaning("how many lines of a log to show", r"^lines (of|per)\b"),
+    "--local": Meaning("one process's local port in a tunnel plan", r"this local port"),
+    "--local-offset": Meaning("added to each remote port in a tunnel plan", r"each remote port"),
     "--live": Meaning("retired as its own flag: the other side of --fixture/--live", None),
     "--mode": Meaning("backfill's validate/plan/run mode", r"validate"),
     "--odbc-home": Meaning("a private ODBC setup", r"private ODBC setup"),
     "--on-conflict": Meaning(
         "what a write does with a row already there",
         r"what a (write|copy) (may )?do(es)? with a (row|partition)",
+    ),
+    "--outputs": Meaning(
+        "the tables a job produces: published, filled or written", r"tables it produces"
     ),
     "--output": Meaning("a FILE to write instead of stdout", r"^write it to this file"),
     "--output-dir": Meaning("a directory to write into", r"^directory to write"),
@@ -539,10 +621,15 @@ OPTIONS = {
     "--release": Meaning("a release on the server, by name - not a path", r"^the release\b"),
     "--remote-user": Meaning("run as this account through sudo", r"sudo"),
     "--rename": Meaning("rename a column", r"rename"),
+    "--reset-empty": Meaning("rebuild an empty table from its declaration", r"^Rebuild a table"),
     "--reverse": Meaning("sort descending", r"descending"),
     "--schema": Meaning("tables' columns and their types", r"^its table's schema"),
     "--schema-file": Meaning("a tickerplant's schema file", r"^(load|pin) (this|the) schema file"),
     "--sort": Meaning("sort by a column", r"sort by"),
+    "--source-version": Meaning(
+        "a source release coverage is recorded under", r"^the source_version\b"
+    ),
+    "--slice": Meaning("the coverage slice of a dataset", r"^the slice of\b"),
     "--start-with-all": Meaning("whether a `start all` starts the process", r"start all"),
     "--ssh": Meaning("the ssh destination of a target", r"ssh destination"),
     "--table": Meaning("one table to act on", r"this table"),
@@ -693,7 +780,9 @@ def test_the_vocabulary_holds_every_command_to_its_names_and_types():
 OWN_UNIT = {"--interval-ms", "--poll-interval-ms"}
 
 #: What makes an option a span of time: its name, or its help naming a unit.
-_TIME_NAME = re.compile(r"-timeout$|^--(every|soak|deadline|window)$")
+#: `--last` is how far back, and `job new`'s `--period`, `--horizon` and
+#: `--width` a span written into q (#2121).
+_TIME_NAME = re.compile(r"-timeout$|^--(every|soak|deadline|window|last|period|horizon|width)$")
 _TIME_HELP = re.compile(r"\b(seconds|minutes|milliseconds)\b", re.I)
 
 
@@ -709,6 +798,39 @@ def test_every_duration_is_a_duration():
         and not _is_duration(p)
     }
     assert not found, f"spans of time that are no DURATION: {sorted(found)}"
+
+
+#: A grammar spelt out in a help: two or more examples of a duration in a row.
+_GRAMMAR_LIST = re.compile(r"\b\d+(?:\.\d+)?(?:ms|s|m|h|d)\b(?:,\s*\d+(?:\.\d+)?(?:ms|s|m|h|d)\b)+")
+
+
+def test_an_option_documented_as_a_duration_reads_it_with_the_shared_parser():
+    """#2121: `--last`'s help said DURATION and its parser refused `30` and
+    `1.5m`, which every other DURATION takes. An option whose help or metavar
+    says DURATION is parsed by uqs/duration.py, through one of
+    vocabulary.PARSERS; one parsed so says DURATION, by its metavar and its
+    help; and no help spells out a grammar of its own beside the shared one."""
+    unparsed, unsaid, own_grammar = set(), set(), set()
+    for cmd in TREE:
+        for p in cmd.options:
+            said = "DURATION" in (p.help or "") or p.metavar == "DURATION"
+            if said and not _is_duration(p):
+                unparsed.add((cmd.path, _long(p)))
+            if _is_duration(p) and not (p.metavar == "DURATION" and "DURATION" in (p.help or "")):
+                unsaid.add((cmd.path, _long(p)))
+            if _GRAMMAR_LIST.search(p.help or ""):
+                own_grammar.add((cmd.path, _long(p)))
+    assert not unparsed, f"documented as a DURATION, parsed otherwise: {sorted(unparsed)}"
+    assert not unsaid, f"parsed as a DURATION, not documented as one: {sorted(unsaid)}"
+    assert not own_grammar, f"a grammar of its own in the help: {sorted(own_grammar)}"
+
+
+def test_the_shared_parsers_read_the_shared_grammar():
+    """The parsers the gate above looks for are the grammar's, not a copy."""
+    assert vocabulary.seconds("1.5m") == duration.seconds("1.5m") == 90.0
+    assert vocabulary.whole_seconds("500ms") == duration.whole_seconds("500ms") == 1
+    assert vocabulary.timespan("5s") == "0D00:00:05"
+    assert vocabulary.timespan("1D") == "1D"
 
 
 def test_a_negative_flag_has_its_positive():
@@ -859,6 +981,12 @@ WORDS = {
     "runtime": Meaning("a uqs runtime: uqf, torq, peachq, ...", r"\buqf\b"),
     "attach": Meaning("retired: the noun is attachment (--attachment)", None),
     "stack-id": Meaning("retired: the stack's base port is --base-port", None),
+    # #2239: an HDB date partition, as kdb+ says it (`.Q.par`); the coverage
+    # slice a worker fills was `--partition` too, and is `--slice` now
+    "partition": Meaning("an HDB date partition", r"\b(date|day)\b"),
+    "slice": Meaning(
+        "a coverage slice of a dataset, never a date", r"\bslice\b.*\bnot a date\b|--slice\b"
+    ),
 }
 
 #: (command, option or metavar) -> the issue that renames it
@@ -971,7 +1099,8 @@ ASKS = {c.path for c in TREE if c.path in LEAVES and _kind(c.path) == CONFIRMS} 
 #: give it --yes/-y, then list the module here.
 PROMPTING_MODULES = {
     "attach", "cleanup", "deploy_server", "hdb_scope", "install", "install_bundle", "migrate",
-    "remove", "target", "target_adopt", "target_edit",
+    "remove", "replay", "seed", "target", "target_adopt", "target_config", "target_edit",
+    "compress_plan",
 }  # fmt: skip
 
 #: leaf -> the issue that adds its --json. Empty since #1731: keep it so.
@@ -1018,8 +1147,8 @@ def test_rule5_the_marks_beyond_an_effect_are_declared_where_their_command_is():
     a process even in a dry run, or act under an option are marks on the
     commands (`safety.marked`), which `uqs --target` reads too - so a new
     command with one of these properties cannot skip being confirmed."""
-    assert set(OWN_OUTPUT) == {"exec", "job attachment contract export", "setup odbc env",
-                               "target shell"}  # fmt: skip
+    assert set(OWN_OUTPUT) == {"activity export", "exec", "job attachment contract export",
+                               "setup odbc env", "target shell"}  # fmt: skip
     assert set(NO_DRY_RUN) == {"query"}
     starts = set(_marked("dry_run_starts"))
     assert starts == {"job backfill"}
@@ -1093,6 +1222,50 @@ def test_rule5c_yes_y_exactly_on_what_asks():
     _hold("rule 5c", found, RULE5C_ALLOWLIST)
 
 
+#: Every command whose deletion cannot be undone (docs/guides/uqs.md's rule):
+#: each asks first and takes --yes/-y. `clean`, which removes the HDB with the
+#: rest of the data directory, asked nothing (#2233).
+IRREVERSIBLE = {
+    "clean", "deploy prune", "job checkpoint remove", "target remove", "job remove",
+    "job attachment remove",
+}  # fmt: skip
+
+
+def test_rule5c_every_irreversible_deletion_asks():
+    missing = {p for p in IRREVERSIBLE if p not in ASKS or not _flag(LEAVES[p], "--yes", "-y")}
+    assert not missing, sorted(missing)
+    guide = (Path(__file__).resolve().parents[3] / "docs/guides/uqs.md").read_text()
+    rule = " ".join(guide[guide.index("Every deletion that cannot be undone") :].split()[:60])
+    unnamed = {p for p in IRREVERSIBLE if f"`{p}`" not in rule.replace("`uqs ", "`")}
+    assert not unnamed, f"the guide's rule does not name {sorted(unnamed)}"
+
+
+def test_rule5c_every_irreversible_deletion_asks_on_mcp_too():
+    """uqs-mcp has no terminal and no --yes, and its `uqs_clean` deleted the
+    data directory, the HDB with it, in one call (#2257). A tool mirroring an
+    IRREVERSIBLE command is a dry run unless confirm=true - required, never a
+    default - and takes no dry_run or yes beside it; no other tool takes it."""
+    from mcp_support import tools
+
+    from uqs import mcp, mcp_server
+
+    schemas = {t.name: t.input_schema for t in tools()}
+    mirrored = {path: name for name, path in mcp.MIRRORS.items()}
+    assert "clean" in mirrored, "uqs_clean is the tool #2257 is about"
+    wrong = {}
+    for path in IRREVERSIBLE & set(mirrored):
+        schema = schemas[mirrored[path]]
+        props = schema["properties"]
+        default = props.get(mcp_server.CONFIRM, {}).get("default")
+        if default is not False or {"dry_run", "yes"} & set(props):
+            wrong[path] = sorted(props)
+    assert not wrong, f"irreversible tools not a dry run unless {mcp_server.CONFIRM}=true: {wrong}"
+    confirming = {
+        mcp.MIRRORS[n] for n, s in schemas.items() if mcp_server.CONFIRM in s["properties"]
+    }
+    assert confirming <= IRREVERSIBLE, sorted(confirming - IRREVERSIBLE)
+
+
 def test_rule5c_the_commands_that_ask_are_the_known_ones():
     """Every question is asked through safety.ask, confirm or choose (#1885):
     one default (No), one refusal without a terminal, one exit code for a no.
@@ -1109,6 +1282,44 @@ def test_rule5c_the_commands_that_ask_are_the_known_ones():
         stem for stem, text in texts.items() if re.search(r"safety\.(ask|confirm|choose)\(", text)
     }
     assert asking == PROMPTING_MODULES
+
+
+#: Every leaf that takes --json and --yes -> the test that runs it with --json
+#: and no --yes, a terminal ready to answer y, and holds it to the one refusal
+#: (#2229): exit 1, `{"ok": false}` naming --yes, nothing asked or changed.
+#: Three behaviours were one mistake's: exit 2 (data check/alter/compress),
+#: exit 1 (job attachment add/remove) and a prompt mid-run (deploy prune).
+JSON_WITHOUT_YES = {
+    "data alter": "test_hdb_alter_cli.py::test_json_without_yes_is_refused_and_writes_nothing",
+    "data check": "test_hdb_alter_cli.py::test_json_without_yes_is_refused_and_writes_nothing",
+    "data compress": "test_data_compress.py::test_json_cannot_ask",
+    "data migrate": "test_hdb_migrate.py::test_json_without_yes_apply_is_refused",
+    "data replay": "test_replay.py::test_json_is_the_plan_and_without_yes_apply_is_refused",
+    "data seed": "test_hdb_seed.py::test_json_without_yes_apply_is_refused",
+    "deploy prune": (
+        "test_deploy_prune.py::test_json_without_yes_is_refused_before_the_server_is_reached"
+    ),
+    "job attachment add": (
+        "test_attach_cli.py::test_json_execution_without_yes_refuses_with_a_json_error"
+    ),
+    "job attachment remove": (
+        "test_attach_cli.py::test_json_execution_without_yes_refuses_with_a_json_error"
+    ),
+}
+
+
+def test_rule5f_json_without_yes_is_one_refusal():
+    both = {p for p, c in LEAVES.items() if _flag(c, "--json") and _flag(c, "--yes")}
+    assert both == set(JSON_WITHOUT_YES), "name the test that holds each to safety.json_needs_yes"
+    here = Path(__file__).parent
+    for path, test in JSON_WITHOUT_YES.items():
+        file, name = test.split("::")
+        assert re.search(rf"^def {name}\(", (here / file).read_text(), re.M), (path, test)
+    cli_dir = Path(shared.__file__).parent
+    worded = {
+        f.stem for f in cli_dir.glob("*.py") if "cannot ask for confirmation" in f.read_text()
+    }
+    assert worded == {"safety"}, "the refusal is safety.json_needs_yes's alone"
 
 
 def test_rule5e_one_write_model_per_kind_of_change():
@@ -1309,11 +1520,15 @@ def _defaults() -> dict[tuple[str, str], object]:
     """(command, option) -> the authority for a default its help states where
     the option's own default is not it: one a feed, a target or the scaffold
     applies when the option is not given."""
+    from uqs.cli import source_check
     from uqs.cli.external import FEEDS
     from uqs.deploy import config
     from uqs.scaffold import worker
 
-    out: dict[tuple[str, str], object] = {("job new", "--width"): worker.DEFAULT_WIDTH}
+    out: dict[tuple[str, str], object] = {
+        ("job new", "--width"): worker.DEFAULT_WIDTH,
+        ("config sources check", "--last"): source_check.DEFAULT_LAST,
+    }
     for command in ("deploy push", "deploy rollback", "deploy prune"):
         out[(command, "--command-timeout")] = config.DEFAULT_COMMAND_TIMEOUT
     for command in ("deploy push", "deploy rollback"):
@@ -1370,7 +1585,8 @@ def test_job_new_kind_tags_are_shapes():
 
 def test_job_new_refuses_a_misplaced_option_it_was_never_told_about(monkeypatch):
     """`used` is read from Click, so every SHAPES row is checked: a backfill
-    given --publishes was scaffolded with it dropped (#1893)."""
+    given --outputs was scaffolded with it dropped (#1893). A normalizer and a
+    horizon job publish their own NAME, so --outputs shapes neither (#2102)."""
     from typer.testing import CliRunner
 
     from uqs.cli import create
@@ -1382,9 +1598,9 @@ def test_job_new_refuses_a_misplaced_option_it_was_never_told_about(monkeypatch)
         raise SystemExit(1)
 
     monkeypatch.setattr(create, "_die", record)
-    argv = ["job", "new", "x", "--kind", "backfill", "--publishes", "t", "--dry-run"]
+    argv = ["job", "new", "x", "--kind", "normalizer", "--outputs", "t", "--dry-run"]
     CliRunner().invoke(app, argv)
-    assert refused == ["--publishes does not apply to --kind backfill"]
+    assert refused == ["--outputs does not apply to --kind normalizer"]
 
 
 def test_status_presets_are_one_table():
@@ -1539,13 +1755,50 @@ def test_each_concept_completes_with_its_completer():
 
 def test_the_target_argument_is_one_definition():
     """#1884: a TARGET is TARGET everywhere and completes targets; a command
-    that only reads a server falls back to the latest deployment."""
+    that only reads a server falls back to the latest deployment. #2243: one
+    that changes a server never does - `deploy rollback` and `prune` take
+    --ssh/--dest in its place, so their TARGET is optional, but their help
+    claims no default and a bare call is refused."""
     for path in ("target check", "target shell", "deploy status"):
         param = next(p for p in LEAVES[path].command.params if p.metavar == "TARGET")
         assert not param.required, path
+        assert LATEST in _help(param), path
     for path in ("target set", "target unset", "target remove"):
         param = next(p for p in LEAVES[path].command.params if p.metavar == "TARGET")
         assert param.required, path
+    for path in ("deploy rollback", "deploy prune"):
+        param = next(p for p in LEAVES[path].command.params if p.metavar == "TARGET")
+        assert LATEST not in _help(param), path
+
+
+#: What a TARGET's help says when the command falls back to the latest deployment.
+LATEST = "default: the most recent deployment"
+
+
+def _help(param) -> str:
+    return getattr(param, "help", None) or ""
+
+
+#: Commands that change state and still fall back to the latest deployment, each with why.
+LATEST_THOUGH_IT_CHANGES = {
+    "target shell": "it does nothing by itself: it says which server it connected to, then a "
+    "person types - the shell is marked as changing state because what they type can",
+}
+
+
+def test_only_a_command_that_reads_a_server_falls_back_to_the_latest_deployment():
+    """#2243: `deploy rollback`'s help promised it would act on whichever server was
+    deployed last - a command that changes a server must be told which. Every TARGET
+    that claims the fallback is on a command that only reads."""
+    found = {
+        c.path
+        for c in TREE
+        if c.path in LEAVES
+        for p in c.command.params
+        if p.metavar == "TARGET" and LATEST in _help(p)
+        and effect_of(c.command) is not safety.Effect.READ_ONLY
+    }  # fmt: skip
+    _hold("a TARGET that changes a server falls back to nothing", found, LATEST_THOUGH_IT_CHANGES)
 
 
 def test_a_comma_separated_option_says_so_in_its_metavar():
@@ -1651,7 +1904,8 @@ def test_every_date_shaped_parameter_uses_the_shared_forms():
 
 @pytest.mark.parametrize("partition", ["2026-01-02", "2026.01.02"])
 def test_data_migrate_takes_both_day_forms(monkeypatch, partition):
-    """`data migrate TABLE PARTITION` refused 2026.01.02, the form on disk (#1884)."""
+    """`data migrate TABLE PARTITION` refused 2026.01.02, the form on disk (#1884);
+    the day is `--date` now (#2239)."""
     from datetime import date
 
     from typer.testing import CliRunner
@@ -1665,8 +1919,37 @@ def test_data_migrate_takes_both_day_forms(monkeypatch, partition):
         raise SystemExit(0)
 
     monkeypatch.setattr(hdb_migrate, "migrate", migrate)
-    CliRunner().invoke(app, ["data", "migrate", "trade", partition])
+    CliRunner().invoke(app, ["data", "migrate", "trade", "--date", partition])
     assert seen == [date(2026, 1, 2)]
+
+
+def test_data_migrate_hdb_names_the_root_it_migrates(monkeypatch, tmp_path):
+    """#2237: `data migrate` could only reach this runtime's HDB."""
+    from uqs.stack import hdb_migrate
+
+    seen = []
+
+    def migrate(*_a, hdb=None, **_k):
+        seen.append(hdb)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(hdb_migrate, "migrate", migrate)
+    argv = ["data", "migrate", "trade", "--date", "2026-01-02", "--hdb", str(tmp_path)]
+    CliRunner().invoke(app, argv)
+    assert seen == [tmp_path]
+
+
+def test_data_migrate_refuses_a_positional_date_naming_date(monkeypatch):
+    """#2239: a positional PARTITION read as a slice key to anyone who knows
+    `--partition` from `job new`; the day is the shared `--date`."""
+    from uqs.stack import hdb_migrate
+
+    monkeypatch.setattr(hdb_migrate, "migrate", lambda *a, **k: pytest.fail("migrated"))
+    argv = ["data", "migrate", "trade", "2026-01-02", "--cast", "px"]
+    result = PlainRunner().invoke(app, argv)  # CI renders usage errors in colour
+    assert result.exit_code == 2
+    said = " ".join(re.sub("[│╭╮╰╯─]", " ", result.output).split())
+    assert "is now `data migrate TABLE --date D`" in said
 
 
 def test_every_override_name_is_one_spelling():
@@ -1708,7 +1991,7 @@ def test_every_exception_names_the_issue_that_removes_it(allowlist):
 VOCABULARY = {
     "PROC", "JOB", "TARGET", "TABLE", "DATASET", "SOURCE", "KIND", "EXPR", "FIELD",
     "VALUE", "PARTITION", "RUNTIME", "RUN", "ATTACHMENT", "FILE", "CONNECTOR",
-    "PACKAGE", "ARTIFACT", "COMPONENT", "BUNDLE", "KEY", "CHANGE", "NEW",
+    "PACKAGE", "ARTIFACT", "COMPONENT", "BUNDLE", "KEY", "CHANGE", "NEW", "PUSH", "SNAPSHOT_ID",
 }  # fmt: skip
 #: Placeholders the vocabulary replaced: in help they may only name a command's
 #: own option (`--override NAME`), never stand for one of the things above.
@@ -1919,3 +2202,70 @@ def test_a_start_line_is_not_broken_into_a_pipe():
     (line,) = [ln for ln in run.stdout.splitlines() if "-procname rdb1" in ln]
     assert line.split()[0].endswith("nohup") or "torq.q" in line
     assert "torq.q" in line and "-proctype rdb" in line
+
+
+@pytest.mark.parametrize("old", ["--publishes", "--dataset", "--writes"])
+def test_job_new_refuses_the_retired_output_options(old):
+    """`--publishes`, `--dataset` and `--writes` are all `--outputs` now (#2102);
+    none survives as an alias, so each is an unknown option."""
+    from typer.testing import CliRunner
+
+    result = CliRunner().invoke(app, ["job", "new", "x", old, "t", "--dry-run"])
+    assert result.exit_code == 2
+    assert "No such option" in result.output
+
+
+# ------------------------------------------- #2274: a log's id is its channel
+
+
+class _Said:
+    """What `_die` hands the log, kept: loguru does not write into CliRunner's output."""
+
+    def __init__(self) -> None:
+        self.messages: list[str] = []
+
+    def error(self, message: str, *args) -> None:
+        self.messages.append(str(message).format(*args))
+
+    def __getattr__(self, _name: str):
+        return lambda *a, **kw: None
+
+
+def _refusal(monkeypatch, *argv: str) -> str:
+    """What `uqs logs ARGV` says when it refuses (exit 2): Click's usage box or the
+    command's own error, whitespace and box lines folded."""
+    said = _Said()
+    monkeypatch.setattr(shared, "log", said)
+    result = PlainRunner().invoke(app, ["logs", *argv])  # CI renders usage errors in colour
+    assert result.exit_code == 2, result.output
+    box = re.sub("[│╭╰╮╯─]", " ", result.output)
+    return " ".join(" ".join([box, *said.messages]).split())
+
+
+def test_logs_id_is_refused_naming_channel_with_no_alias(monkeypatch):
+    """`--id` filtered TorQ's id column, which is the channel now: refused, not accepted
+    beside `--channel` (#2274, and the repo's no-aliases rule)."""
+    for argv in (["--id", "fx_positions"], ["--id=fx_positions"]):
+        assert "`--id` was renamed `--channel`" in _refusal(monkeypatch, *argv)
+    assert "--id" not in {o for p in _params(LEAVES["logs"]) for o in p.opts}
+
+
+def test_the_old_channel_meaning_is_refused_naming_subscribe(monkeypatch):
+    """`--channel` took no value and subscribed; it takes a channel now. The old use is
+    answered with where it went, whether it is last or followed by another option."""
+    for argv in (["--channel"], ["--channel", "--level", "ERROR"], ["rdb1", "--channel", "-f"]):
+        assert "renamed `--subscribe`" in _refusal(monkeypatch, *argv), argv
+
+
+def test_logs_channel_takes_only_the_declared_channels(monkeypatch):
+    from uqs.generated import q_facts
+
+    said = _refusal(monkeypatch, "--channel", "fx_positions")
+    assert "is not a channel" in said
+    assert all(channel in said for channel in q_facts.LOG_CHANNELS)
+
+
+def test_logs_subscribe_is_the_subscription_and_channel_the_filter():
+    options = {o: p for p in _params(LEAVES["logs"]) for o in p.opts}
+    assert options["--subscribe"].is_flag and not options["--channel"].is_flag
+    assert options["--channel"].multiple, "several channels match any of them"

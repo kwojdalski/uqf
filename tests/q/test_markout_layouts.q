@@ -34,6 +34,29 @@
     .qunit.assertTrue[(`venue`fill_id`horizon`kind`step xasc r)~`venue`fill_id`horizon`kind`step xasc lg;"a reshuffled long holds the same rows"];
     .qunit.assertEquals[r`horizon;asc r`horizon;"canonically ordered by horizon within the one execution"]};
 
+.qt.qpipe.transform.markout_layouts.test_wide_orders_executions_from_all_components_first_appearance:{[tc]
+    sp:.qpipe.transform.markout_layouts.sample_spec[];
+    a:update venue:`z from .qpipe.transform.markout_layouts.sample_long[];
+    b:update venue:`a from .qpipe.transform.markout_layouts.sample_long[];
+    / z appears first as a part; its total rows arrive after a's.
+    lg:(enlist a 1),b,a 0 2 3;
+    w:.qpipe.transform.markout_layouts.wide[sp;lg];
+    .qunit.assertEquals[w`venue;`z`z`a`a;"first appearance includes non-base components"];
+    .qunit.assertEquals[w`horizon;4#0D00:00:01 0D00:00:10;"horizons ascend within each execution"]};
+
+.qt.qpipe.transform.markout_layouts.test_nested_preserves_execution_order_in_an_exact_round_trip:{[tc]
+    sp:.qpipe.transform.markout_layouts.sample_spec[];
+    a:update venue:`z from .qpipe.transform.markout_layouts.sample_long[];
+    b:update venue:`a from .qpipe.transform.markout_layouts.sample_long[];
+    lg:a,b;
+    w:.qpipe.transform.markout_layouts.wide[sp;lg];
+    n:.qpipe.transform.markout_layouts.nested[sp;lg];
+    .qunit.assertEquals[n`venue;`z`a;"grouping must not sort executions by key"];
+    .qunit.assertEquals[.qpipe.transform.markout_layouts.unnest[n];w;
+        "the exact wide rows and their order come back"];
+    .qunit.assertEquals[.qpipe.transform.markout_layouts.long[sp;.qpipe.transform.markout_layouts.unnest[n]];lg;
+        "the exact canonical long rows come back too"]};
+
 .qt.qpipe.transform.markout_layouts.test_nested_wide_goes_through_wide_to_the_same_long:{[tc]
     sp:.qt.qpipe.transform.markout_layouts.fx_spec[];
     lg:.qt.qpipe.transform.markout_layouts.fx_two[];
@@ -80,6 +103,44 @@
     .qunit.assertEquals[w`part1_move;1 2f;"derived by key"];
     .qunit.assertEquals[.qpipe.transform.markout_layouts.long[sp;w];lg;"and back"]};
 
+.qt.qpipe.transform.markout_layouts.assert_exact_round_trips:{[sp;lg]
+    w:.qpipe.transform.markout_layouts.wide[sp;lg];
+    .qunit.assertEquals[.qpipe.transform.markout_layouts.long[sp;w];lg;
+        "every original column and value survives wide to long"];
+    n:.qpipe.transform.markout_layouts.nested[sp;lg];
+    .qunit.assertEquals[.qpipe.transform.markout_layouts.unnest[n];w;
+        "nested wide preserves the same columns and values"]};
+
+.qt.qpipe.transform.markout_layouts.assert_scratch_measure_round_trips:{[col]
+    sp:.qpipe.transform.markout_layouts.sample_spec[];
+    sp[`columns]:?[sp[`columns]=`move;col;sp`columns];
+    sp[`own]:col,`status;
+    lg:sp[`columns] xcol .qpipe.transform.markout_layouts.sample_long[];
+    .qt.qpipe.transform.markout_layouts.assert_exact_round_trips[sp;lg]};
+
+.qt.qpipe.transform.markout_layouts.test_a_measure_named_zz_ord_is_preserved:{[tc]
+    .qt.qpipe.transform.markout_layouts.assert_scratch_measure_round_trips[`zz_ord]};
+
+.qt.qpipe.transform.markout_layouts.test_a_measure_named_zz_hz_is_preserved:{[tc]
+    .qt.qpipe.transform.markout_layouts.assert_scratch_measure_round_trips[`zz_hz]};
+
+.qt.qpipe.transform.markout_layouts.test_a_measure_named_zz_row_is_preserved:{[tc]
+    .qt.qpipe.transform.markout_layouts.assert_scratch_measure_round_trips[`zz_row]};
+
+.qt.qpipe.transform.markout_layouts.test_a_measure_named_zz_comp_is_preserved:{[tc]
+    .qt.qpipe.transform.markout_layouts.assert_scratch_measure_round_trips[`zz_comp]};
+
+.qt.qpipe.transform.markout_layouts.test_scratch_names_are_valid_in_every_column_role:{[tc]
+    sp:.qpipe.transform.markout_layouts.sample_spec[];
+    sp[`columns]:`zz_ord`fill_id`zz_hz`kind`step`zz_row`zz_comp`status;
+    sp[`execution]:`zz_ord`fill_id;
+    sp[`horizon]:`zz_hz;
+    sp[`shared]:enlist `zz_row;
+    sp[`own]:`zz_comp`status;
+    sp[`per_execution]:enlist `zz_row;
+    lg:sp[`columns] xcol .qpipe.transform.markout_layouts.sample_long[];
+    .qt.qpipe.transform.markout_layouts.assert_exact_round_trips[sp;lg]};
+
 .qt.qpipe.transform.markout_layouts.test_wide_is_derived_by_key_never_recalculated:{[tc]
     sp:.qt.qpipe.transform.markout_layouts.fx_spec[];
     lg:.qpipe.transform.fx_markout_outputs.sample_result[];
@@ -115,11 +176,10 @@
     inst:([] sym:enlist `USDJPY; quote_ccy:enlist `JPY; legs:enlist enlist `USDJPY; invert:enlist enlist 0b);
     conv:([] quote_ccy:enlist `JPY; report_ccy:enlist `USD; leg:enlist `USDJPY; invert:enlist 1b);
     dom:.qpipe.transform.markout_core.table_domain[inst;conv];
-    bk:{[tm;bid;ask] ([] source_time:enlist tm; sym:enlist `USDJPY; source:enlist `a; bid_prices:enlist enlist bid; bid_sizes:enlist enlist 1e6;
-        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6; clock:enlist `venue)};
+    bk:{[tm;bid;ask] ([] source_time:enlist tm; sym:enlist `USDJPY; source:enlist `a; bid:enlist bid; ask:enlist ask; clock:enlist `venue)};
     md:raze (bk[t-0D00:00:01;150f;150f];bk[t+0D00:00:09;150.05;150.05]);
     ex:([] source_time:enlist t; venue:enlist `a; sym:enlist `USDJPY; side:enlist 1; size:enlist 1e6; price:enlist 150f; fill_id:enlist `f1; clock:enlist `venue);
-    res:.qpipe.transform.markout_core.calc[dom;.qpipe.transform.markout_core.fixture_spec;ex;md];
+    res:.qpipe.transform.markout_core.score[dom;.qpipe.transform.markout_core.fixture_spec;ex;md];
     sp:.qpipe.transform.markout_layouts.core_spec[cols res;([] kind:enlist `execution; step:enlist 0);`symbol$()];
     w:.qpipe.transform.markout_layouts.wide[sp;res];
     .qunit.assertEquals[count w;count distinct res`horizon;"a row per horizon"];

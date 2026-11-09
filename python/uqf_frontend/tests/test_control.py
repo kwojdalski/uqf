@@ -31,6 +31,9 @@ from uqf_frontend.config import Settings
 from uqf_frontend.errors import ValidationFailed
 from uqf_frontend.gateway import FakeGateway
 
+#: The real lock, before conftest's autouse fixture stands it in.
+REAL_HOLDING = control._holding
+
 
 @dataclass
 class FakeCompleted:
@@ -78,7 +81,7 @@ def test_writes_on_without_a_token_refuses_to_start(gw):
 def test_a_control_action_without_the_token_is_a_401(gw, authorization):
     headers = {} if authorization is None else {"Authorization": authorization}
     c = TestClient(create_app(gateway=gw, settings=_writes_on()), headers=headers)
-    r = c.post("/control/process/start", json={"procs": "rdb1"})
+    r = c.post("/control/lifecycle/start", json={"procs": "rdb1"})
     assert r.status_code == 401, r.text
     assert r.headers["www-authenticate"] == "Bearer"
     assert TOKEN not in r.text, "a refusal must never echo the secret"
@@ -99,7 +102,7 @@ def test_a_host_this_api_was_not_told_it_is_is_refused_while_writes_are_on(gw):
         create_app(gateway=gw, settings=_writes_on()),
         headers={"Authorization": f"Bearer {TOKEN}", "Host": "evil.example"},
     )
-    for r in (c.get("/control"), c.post("/control/process/start", json={"procs": "rdb1"})):
+    for r in (c.get("/control"), c.post("/control/lifecycle/start", json={"procs": "rdb1"})):
         assert r.status_code == 403, r.text
         assert "evil.example" in r.json()["detail"]
 
@@ -110,6 +113,23 @@ def test_an_allowed_host_matches_with_or_without_its_port(gw):
     for host in ("localhost", "localhost:8000", "LOCALHOST:8000", "[::1]:8000"):
         r = TestClient(app, headers={"Host": host}).get("/control")
         assert r.status_code == 200, (host, r.text)
+
+
+@pytest.mark.parametrize("path", ["/control/worker/config", "/services/box/files"])
+def test_a_root_path_prefix_does_not_take_a_route_out_of_the_token_check(gw, path):
+    """Behind a reverse proxy the API is served under a prefix (`uvicorn
+    --root-path /api`). The router strips it; the token check must judge the
+    same path the router routes, or every control action and ssh operation
+    runs without the token (#2018)."""
+    c = TestClient(create_app(gateway=gw, settings=_writes_on()), root_path="/api")
+    r = (
+        c.put(f"/api{path}", json={"key": "k", "value": "v"})
+        if "worker" in path
+        else c.get(f"/api{path}")
+    )
+    assert r.status_code == 401, r.text
+    assert r.json()["error"] == "WriteTokenRequired"
+    assert gw.calls == [], "the handler must not have run"
 
 
 def test_with_writes_off_neither_check_applies(gw):
@@ -126,11 +146,11 @@ def test_with_writes_off_neither_check_applies(gw):
 @pytest.mark.parametrize(
     ("method", "path", "body"),
     [
-        ("post", "/control/process/start", {"procs": "all"}),
-        ("post", "/control/process/stop", {"procs": "rdb1"}),
-        ("post", "/control/process/restart", {"procs": "all"}),
-        ("put", "/control/process/rdb1/config", {"field": "startwithall", "value": "1"}),
-        ("put", "/control/worker-config", {"key": "dry_run", "value": "true"}),
+        ("post", "/control/lifecycle/start", {"procs": "all"}),
+        ("post", "/control/lifecycle/stop", {"procs": "rdb1", "confirmed": True}),
+        ("post", "/control/lifecycle/restart", {"procs": "all", "confirmed": True}),
+        ("put", "/control/processes/rdb1/config", {"field": "startwithall", "value": "1"}),
+        ("put", "/control/worker/config", {"key": "dry_run", "value": "true"}),
         (
             "post",
             "/control/backfill",
@@ -154,7 +174,7 @@ def test_the_refusal_names_the_variable_that_would_enable_it(client):
     """ "Forbidden" alone sends an operator to check the policy. The cause
     here is different - nobody may, anywhere, yet - and the fix is a server
     setting, so the message says which."""
-    resp = client.post("/control/process/start", json={"procs": "all"})
+    resp = client.post("/control/lifecycle/start", json={"procs": "all"})
     assert "UQF_FRONTEND_ENABLE_WRITES" in resp.json()["detail"]
 
 
@@ -195,8 +215,8 @@ def test_the_control_status_route_lists_the_processes_a_selector_may_name(writea
     )
     body = writeable.get("/control").json()
     assert body["processes"] == [
-        {"procname": "rdb1", "proctype": "rdb", "start_with_all": True},
-        {"procname": "cross1", "proctype": "metrics", "start_with_all": False},
+        {"process": "rdb1", "proctype": "rdb", "start_with_all": True},
+        {"process": "cross1", "proctype": "metrics", "start_with_all": False},
     ]
 
 
@@ -217,7 +237,7 @@ def test_start_calls_the_orchestrator_with_the_selector(writeable, monkeypatch):
         return FakeCompleted()
 
     _patch_core(monkeypatch, start=fake_start)
-    resp = writeable.post("/control/process/start", json={"procs": "rdb1 hdb1"})
+    resp = writeable.post("/control/lifecycle/start", json={"procs": "rdb1 hdb1"})
     assert resp.status_code == 200
     assert seen["procs"] == "rdb1 hdb1", "the selector passes through unreinterpreted"
     assert seen["capture"] is True, "an HTTP caller cannot read the server's stdout"
@@ -235,7 +255,7 @@ def test_each_lifecycle_verb_reaches_its_own_function(writeable, monkeypatch, ac
         stop=lambda *a, **k: called.append("stop") or FakeCompleted(),
         restart=lambda *a, **k: called.append("restart") or FakeCompleted(),
     )
-    writeable.post(f"/control/process/{action}", json={"procs": "all"})
+    writeable.post(f"/control/lifecycle/{action}", json={"procs": "all", "confirmed": True})
     assert called == [action]
 
 
@@ -244,7 +264,7 @@ def test_a_nonzero_exit_is_reported_rather_than_swallowed(writeable, monkeypatch
     into ok/not-ok loses the thing an operator acts on, so the exit code is
     carried through."""
     _patch_core(monkeypatch, start=lambda *a, **k: FakeCompleted(returncode=3, stdout="boom"))
-    body = writeable.post("/control/process/start", json={"procs": "all"}).json()
+    body = writeable.post("/control/lifecycle/start", json={"procs": "all"}).json()
     assert body["exit_code"] == 3
     assert body["ok"] is False
     assert "boom" in body["output"]
@@ -257,19 +277,19 @@ def test_a_lifecycle_request_without_procs_is_refused_not_read_as_all(writeable,
     and nothing runs."""
     called: list[str] = []
     _patch_core(monkeypatch, stop=lambda *a, **k: called.append("stop") or FakeCompleted())
-    resp = writeable.post("/control/process/stop", json=body)
+    resp = writeable.post("/control/lifecycle/stop", json=body)
     assert resp.status_code == 422, resp.text
     assert called == []
-    locs = [tuple(e["loc"]) for e in resp.json()["detail"]]
+    locs = [tuple(e["loc"]) for e in resp.json()["errors"]]
     assert ("body", "procs") in locs, "the refusal names the missing field"
 
 
 @pytest.mark.parametrize(
     ("method", "path", "body"),
     [
-        ("post", "/control/process/stop", {"procs": "rdb1"}),
-        ("put", "/control/process/rdb1/config", {"field": "startwithall", "value": "1"}),
-        ("put", "/control/worker-config", {"key": "dry_run", "value": "true"}),
+        ("post", "/control/lifecycle/stop", {"procs": "rdb1", "confirmed": True}),
+        ("put", "/control/processes/rdb1/config", {"field": "startwithall", "value": "1"}),
+        ("put", "/control/worker/config", {"key": "dry_run", "value": "true"}),
         (
             "post",
             "/control/backfill",
@@ -291,15 +311,16 @@ def test_a_control_request_with_an_unknown_key_is_refused(
     resp = getattr(writeable, method)(path, json={**body, "stale": "x"})
     assert resp.status_code == 422, resp.text
     assert called == []
-    (error,) = resp.json()["detail"]
+    (error,) = resp.json()["errors"]
     assert error["type"] == "extra_forbidden"
     assert tuple(error["loc"]) == ("body", "stale")
 
 
 def test_an_unknown_action_is_refused(writeable, monkeypatch):
     _patch_core(monkeypatch, start=lambda *a, **k: FakeCompleted())
-    resp = writeable.post("/control/process/obliterate", json={"procs": "all"})
-    assert resp.status_code == 422
+    resp = writeable.post("/control/lifecycle/obliterate", json={"procs": "all"})
+    assert resp.status_code == 404
+    assert resp.json()["error"] == "ActionNotFound"
 
 
 def test_clean_is_not_reachable(writeable):
@@ -307,8 +328,160 @@ def test_clean_is_not_reachable(writeable):
     sample data - the one orchestrator verb whose blast radius is DATA, and
     not something to offer to anyone who can reach the port on a deployment
     with a claimed identity. `uqs clean` remains, at a terminal."""
-    assert writeable.post("/control/process/clean", json={"procs": "all"}).status_code == 422
+    assert writeable.post("/control/lifecycle/clean", json={"procs": "all"}).status_code == 404
     assert "clean" not in control.LIFECYCLE_ACTIONS
+
+
+# ------------------------------------- lifecycle against the stack as it is now (#2027)
+
+
+def _stack_root(tmp_path, base_port: int):
+    """A stack root uqs accepts, bootstrapped at *base_port*: its setenv.sh."""
+    from uqs import paths as stack_paths
+
+    root = tmp_path / "stack"
+    (root / "src" / "etl").mkdir(parents=True)
+    (root / "python" / "uqs").mkdir(parents=True)
+    paths = stack_paths.paths_for_root(root)
+    paths.torqdata.mkdir(parents=True)
+    paths.generated_setenv.write_text(f'export KDBBASEPORT="{base_port}"\n')
+    return root, paths
+
+
+def _observed(monkeypatch, *states: dict[str, list[int]]) -> list[int]:
+    """Answer the process table with *states* in turn - before the action,
+    then each look after it - the last repeating. Returns the base ports asked."""
+    asked: list[int] = []
+    queue = list(states)
+
+    def observe(paths, base_port):
+        asked.append(base_port)
+        return queue.pop(0) if len(queue) > 1 else queue[0]
+
+    monkeypatch.setattr(control, "_observe", observe)
+    monkeypatch.setattr(control, "VERIFY_POLL_SECONDS", 0)
+    return asked
+
+
+def test_a_stop_after_a_base_port_change_runs_at_the_new_base_port(tmp_path, monkeypatch):
+    """`uqs restart all --base-port 7050` under a running frontend: its Stop
+    used to run torq.sh at 6050, which found nothing, exited 0 - and the API
+    said ok while rdb1 kept running at 7050."""
+    from uqs.stack import runtime
+
+    root, paths = _stack_root(tmp_path, 6050)
+    settings = Settings(enable_writes=True, write_token=TOKEN, stack_root=root, base_port=6050)
+    paths.generated_setenv.write_text('export KDBBASEPORT="7050"\n')
+    seen: dict[str, Any] = {}
+
+    def stop(p, procs, base_port=None, **k):
+        seen.update(bp=base_port)
+        return FakeCompleted()
+
+    monkeypatch.setattr(runtime, "stop", stop)
+    asked = _observed(monkeypatch, {"rdb1": [41]}, {"rdb1": []})
+    result = control.lifecycle(settings, "stop", "rdb1")
+    assert seen["bp"] == 7050
+    assert set(asked) == {7050}
+    assert result.ok
+
+
+def test_torq_sh_finding_nothing_to_stop_is_not_success_when_the_process_was_up(
+    tmp_path, monkeypatch
+):
+    """torq.sh prints "not currently running" and exits 0 when it looked in
+    the wrong place. The process was up a moment before: that is a failure."""
+    from uqs.stack import runtime
+
+    root, _ = _stack_root(tmp_path, 6050)
+    settings = Settings(enable_writes=True, write_token=TOKEN, stack_root=root)
+    monkeypatch.setattr(
+        runtime,
+        "stop",
+        lambda *a, **k: FakeCompleted(stdout="10:00:00 | rdb1 is not currently running"),
+    )
+    _observed(monkeypatch, {"rdb1": [41]})
+    result = control.lifecycle(settings, "stop", "rdb1")
+    assert result.exit_code == 0
+    assert not result.ok
+    assert "rdb1 was running" in result.output
+
+
+def test_a_stop_that_leaves_the_process_running_is_not_success(tmp_path, monkeypatch):
+    from uqs.stack import runtime
+
+    root, _ = _stack_root(tmp_path, 6050)
+    settings = Settings(enable_writes=True, write_token=TOKEN, stack_root=root)
+    shutting = FakeCompleted(stdout="Shutting down rdb1...")
+    monkeypatch.setattr(runtime, "stop", lambda *a, **k: shutting)
+    monkeypatch.setattr(control, "VERIFY_SECONDS", 0)
+    _observed(monkeypatch, {"rdb1": [41]})
+    result = control.lifecycle(settings, "stop", "rdb1")
+    assert not result.ok
+    assert "rdb1 is still running" in result.output
+
+
+@pytest.mark.parametrize("action", ["start", "restart"])
+def test_a_start_is_success_only_once_the_process_is_up(tmp_path, monkeypatch, action):
+    from uqs.stack import runtime
+
+    root, _ = _stack_root(tmp_path, 6050)
+    settings = Settings(enable_writes=True, write_token=TOKEN, stack_root=root)
+    monkeypatch.setattr(runtime, action, lambda *a, **k: FakeCompleted(stdout="Starting rdb1..."))
+    _observed(monkeypatch, {"rdb1": []}, {"rdb1": []}, {"rdb1": [42]})
+    assert control.lifecycle(settings, action, "rdb1").ok
+
+    monkeypatch.setattr(control, "VERIFY_SECONDS", 0)
+    _observed(monkeypatch, {"rdb1": []})
+    result = control.lifecycle(settings, action, "rdb1")
+    assert not result.ok
+    assert "rdb1 is not running" in result.output
+
+
+def test_a_process_this_host_cannot_see_is_not_judged(tmp_path, monkeypatch):
+    """A process.csv row on another host has no local pid to look for:
+    torq.sh's exit code is all there is, as before."""
+    from uqs.stack import runtime
+
+    root, _ = _stack_root(tmp_path, 6050)
+    settings = Settings(enable_writes=True, write_token=TOKEN, stack_root=root)
+    monkeypatch.setattr(runtime, "start", lambda *a, **k: FakeCompleted())
+    _observed(monkeypatch, {})
+    assert control.lifecycle(settings, "start", "remote1").ok
+
+
+def test_a_lifecycle_action_while_another_holds_the_stack_is_a_409(tmp_path, monkeypatch, gw):
+    """Two tabs, or a tab and a terminal: the second is refused rather than
+    queued behind the first, and runs nothing (#2028)."""
+    import threading
+
+    from uqs.stack import generated, runtime
+
+    root, paths = _stack_root(tmp_path, 6050)
+    monkeypatch.setattr(control, "_holding", REAL_HOLDING)
+    monkeypatch.setattr(runtime, "stop", lambda *a, **k: pytest.fail("ran torq.sh"))
+    _observed(monkeypatch, {})
+    client = TestClient(
+        create_app(gateway=gw, settings=_writes_on(stack_root=root)),
+        headers={"Authorization": f"Bearer {TOKEN}"},
+    )
+    taken, release = threading.Event(), threading.Event()
+
+    def hold() -> None:
+        with generated.lifecycle_lock(paths):
+            taken.set()
+            release.wait(10)
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    try:
+        assert taken.wait(10)
+        resp = client.post("/control/lifecycle/stop", json={"procs": "rdb1", "confirmed": True})
+    finally:
+        release.set()
+        holder.join()
+    assert resp.status_code == 409
+    assert "another start, stop or restart" in resp.json()["detail"]
 
 
 # ------------------------------------------------------ process config
@@ -324,7 +497,7 @@ def test_setting_a_field_returns_the_effective_row(writeable, monkeypatch):
         get_process_config=lambda p, n, base_port=6050: {"procname": n, "startwithall": "1"},
     )
     body = writeable.put(
-        "/control/process/rdb1/config", json={"field": "startwithall", "value": "1"}
+        "/control/processes/rdb1/config", json={"field": "startwithall", "value": "1"}
     ).json()
     assert written == {"proc": "rdb1", "field": "startwithall", "value": "1"}
     assert body["config"]["startwithall"] == "1"
@@ -339,7 +512,7 @@ def test_an_unknown_field_is_refused_by_the_orchestrator_whitelist(writeable, mo
         raise UqsError("unknown process.csv field 'nope'")
 
     _patch_core(monkeypatch, set_process_config=refuse)
-    resp = writeable.put("/control/process/rdb1/config", json={"field": "nope", "value": "1"})
+    resp = writeable.put("/control/processes/rdb1/config", json={"field": "nope", "value": "1"})
     assert resp.status_code == 422
     assert "nope" in resp.json()["detail"]
 
@@ -358,7 +531,9 @@ def test_a_field_that_chooses_what_or_where_the_stack_runs_is_refused(
         list_process_names=lambda p: ["rdb1"],
         _write_overrides=lambda p, o: written.append(o),
     )
-    resp = writeable.put("/control/process/rdb1/config", json={"field": field, "value": "touch x"})
+    resp = writeable.put(
+        "/control/processes/rdb1/config", json={"field": field, "value": "touch x"}
+    )
     assert resp.status_code == 422, resp.text
     assert "uqs config set" in resp.json()["detail"]
     assert written == []
@@ -381,7 +556,8 @@ def test_a_value_torq_sh_would_split_is_refused_before_it_is_written(writeable, 
         _write_overrides=lambda p, o: written.append(o),
     )
     resp = writeable.put(
-        "/control/process/fxfeed1/config", json={"field": "extras", "value": "-pairs EURUSD,USDJPY"}
+        "/control/processes/fxfeed1/config",
+        json={"field": "extras", "value": "-pairs EURUSD,USDJPY"},
     )
     assert resp.status_code == 422
     assert "contains a comma, quote or newline" in resp.json()["detail"]
@@ -401,7 +577,7 @@ def test_a_value_torq_sh_s_eval_would_act_on_is_refused_before_it_is_written(
         _write_overrides=lambda p, o: written.append(o),
     )
     resp = writeable.put(
-        "/control/process/fxfeed1/config", json={"field": "extras", "value": f"-note a{ch}b"}
+        "/control/processes/fxfeed1/config", json={"field": "extras", "value": f"-note a{ch}b"}
     )
     assert resp.status_code == 422
     assert f"shell metacharacters {ch!r}" in resp.json()["detail"]
@@ -414,7 +590,7 @@ def test_a_value_torq_sh_s_eval_would_act_on_is_refused_before_it_is_written(
 def test_setting_a_worker_config_key_goes_through_the_gateway(writeable, gw):
     # `.qetl.cfg.explain`'s own shape: (`overrides;"true") arrives as a pair.
     gw._responses[control.SET_WORKER_CONFIG] = ["overrides", b"true"]
-    body = writeable.put("/control/worker-config", json={"key": "dry_run", "value": "true"}).json()
+    body = writeable.put("/control/worker/config", json={"key": "dry_run", "value": "true"}).json()
     program, args, _tier = gw.routed[-1]
     assert args == ("dry_run", "true")
     assert body["explain"] == ["overrides", "true"]
@@ -422,7 +598,7 @@ def test_setting_a_worker_config_key_goes_through_the_gateway(writeable, gw):
 
 def test_an_override_in_effect_is_not_shadowed(writeable, gw):
     gw._responses[control.SET_WORKER_CONFIG] = ["overrides", b"true"]
-    body = writeable.put("/control/worker-config", json={"key": "dry_run", "value": "true"}).json()
+    body = writeable.put("/control/worker/config", json={"key": "dry_run", "value": "true"}).json()
     assert (body["effective_layer"], body["shadowed"], body["saved"], body["env_var"]) == (
         "overrides",
         False,
@@ -435,7 +611,7 @@ def test_an_environment_variable_that_outranks_the_override_is_reported(writeabl
     """#634: UQF_DRY_RUN=false in the process's environment beats the override
     just set, and the response used to read as a success regardless."""
     gw._responses[control.SET_WORKER_CONFIG] = ["env", b"false"]
-    body = writeable.put("/control/worker-config", json={"key": "dry_run", "value": "true"}).json()
+    body = writeable.put("/control/worker/config", json={"key": "dry_run", "value": "true"}).json()
     assert body["shadowed"] is True
     assert body["saved"] is False
     assert (body["effective_layer"], body["effective_value"], body["env_var"]) == (
@@ -447,7 +623,7 @@ def test_an_environment_variable_that_outranks_the_override_is_reported(writeabl
 
 def test_an_answer_of_unknown_shape_claims_neither_saved_nor_shadowed(writeable, gw):
     gw._responses[control.SET_WORKER_CONFIG] = {}
-    body = writeable.put("/control/worker-config", json={"key": "dry_run", "value": "true"}).json()
+    body = writeable.put("/control/worker/config", json={"key": "dry_run", "value": "true"}).json()
     assert (body["effective_layer"], body["shadowed"]) == (None, False)
 
 
@@ -456,13 +632,13 @@ def test_the_response_says_the_override_is_not_durable(writeable, gw):
     override survives a restart. The two look identical from a UI and are
     not, so the response says so rather than leaving it to be discovered."""
     gw._responses[control.SET_WORKER_CONFIG] = {}
-    body = writeable.put("/control/worker-config", json={"key": "dry_run", "value": "true"}).json()
+    body = writeable.put("/control/worker/config", json={"key": "dry_run", "value": "true"}).json()
     assert "lost when it restarts" in body["note"]
 
 
 def test_an_empty_key_is_refused(writeable):
     assert (
-        writeable.put("/control/worker-config", json={"key": "", "value": "x"}).status_code == 422
+        writeable.put("/control/worker/config", json={"key": "", "value": "x"}).status_code == 422
     )
 
 
@@ -491,7 +667,7 @@ def test_a_backfill_is_started_through_torq_sh_as_uqs_backfill_starts_it(writeab
 
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["procname"] == "deals_backfill1", "the process to `uqs logs`"
+    assert body["process"] == "deals_backfill1", "the process to `uqs logs`"
     assert body["status_path"] == "/ops/backfill"
     args = seen["args"]
     assert args[:3] == ["start", "deals_backfill1", "-extras"], (
@@ -549,13 +725,13 @@ def test_a_naive_range_bound_is_refused(writeable):
         "/control/backfill", json=_backfill_body(range_from="2026-09-11T00:00:00")
     )
     assert resp.status_code == 422
-    assert "timezone" in resp.json()["detail"]
+    assert "needs an explicit timezone offset" in resp.text
 
 
 def test_a_malformed_range_bound_says_what_it_wanted(writeable):
     resp = writeable.post("/control/backfill", json=_backfill_body(range_to="not-a-date"))
     assert resp.status_code == 422
-    assert "ISO-8601" in resp.json()["detail"]
+    assert "is not an ISO-8601 instant" in resp.text
 
 
 def test_a_range_bound_finer_than_a_microsecond_is_refused_not_truncated(writeable, monkeypatch):
@@ -569,7 +745,7 @@ def test_a_range_bound_finer_than_a_microsecond_is_refused_not_truncated(writeab
     )
     assert resp.status_code == 422, resp.text
     detail = resp.json()["detail"]
-    assert "range_to '2026-09-12T00:00:00.123456789Z' is finer than a microsecond" in detail
+    assert "range_to: '2026-09-12T00:00:00.123456789Z' is finer than a microsecond" in detail
     assert "args" not in seen, "refused before any process starts"
 
 

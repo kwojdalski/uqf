@@ -8,15 +8,23 @@ Which HDB is named once, by what already knows it - never a path to remember:
   uqs data ... --attachment ATTACHMENT   an attached TorQ stack: its pinned HDB, else its live
                                wdb's .wdb.hdbdir, on the stack's host over ssh
   uqs data ... --hdb DIR       a directory on this machine, for anything else
+  uqs --target TARGET data compress --report --hdb DIR
+                               a directory on the target, read over its ssh by a
+                               fixed helper - no uqf needed there (#2219); the
+                               only command --target and --hdb reach together
 
 With none of them, this runtime's own HDB - which is what a release runs when
-`--target` reaches it. Every decision about the database is
+`--target` reaches it. Every `data` command that reads or writes one HDB takes
+the same `--hdb`/`--attachment` pair, with this one help (#2237); a command
+that cannot act on an attachment's HDB refuses it saying why (`local_hdb`),
+rather than not knowing the option. Every decision about the database is
 scripts/gates/hdb_alter.q's (stack/hdb_alter.py); this module resolves the HDB,
 shows the plan, asks, checks the writers, runs it and reloads the readers.
 """
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Annotated, Any
@@ -31,15 +39,21 @@ from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit
 from uqs.cli.safety import dry_run_note
 from uqs.cli.shared import _paths, console
-from uqs.paths import UqsError, UqsPaths, UqsUsageError
+from uqs.cli.target_confirm import AMBIGUOUS
+from uqs.deploy import control
+from uqs.paths import UqsError, UqsPaths, UqsUsageError, repo_root
 from uqs.stack import hdb_alter, hdb_remote
 from uqs.stack.hdb_alter import Request
+from uqs.stack.hdb_compression import SshHost
 
 AttachOpt = attach_opt("The attachment whose HDB to use: its pinned one, else its live wdb's")
 HdbOpt = Annotated[
     Path | None,
     typer.Option("--hdb", help="An HDB directory on this machine, when nothing else names it"),
 ]
+#: The target `uqs --target TARGET` named, while it runs a command here that
+#: reads a directory on that target (cli/target.py forward, #2219); None else.
+ON_TARGET: ContextVar[str | None] = ContextVar("uqs_hdb_on_target", default=None)
 #: The --apply model's options, safety's own (#1854).
 ApplyOpt = safety.ApplyOpt
 YesOpt = safety.ApplyYesOpt
@@ -55,6 +69,8 @@ class Handle:
     paths: UqsPaths
     where: AttachedHdb | None = None
     warnings: list[str] = field(default_factory=list)
+    #: kind "target": how to reach the target the directory is on
+    target: SshHost | None = None
 
     @property
     def ssh(self) -> str | None:
@@ -69,11 +85,32 @@ class Handle:
         return hdb_alter.run_local(self.paths, req, apply=apply)
 
 
+def ssh_host(name: str) -> SshHost:
+    """How to reach target `name`'s shell: its declared ssh, account and connect
+    timeout (deploy/control.py's Remote) and its q_cmd and q_home, if it sets them."""
+    label, settings = control.settings_for(name, repo_root())
+    r = control.remote_from(label, settings)
+    q_cmd, q_home = settings.get("q_cmd"), settings.get("q_home")
+    return SshHost(
+        r.name, r.host, r.remote_user, r.connect_timeout,
+        str(q_cmd) if q_cmd else None, str(q_home) if q_home else None,
+    )  # fmt: skip
+
+
 def resolve(attach: str | None, hdb: Path | str | None) -> Handle:
-    """The one HDB named: --attachment, --hdb, or (neither) this runtime's own."""
+    """The one HDB named: --attachment, --hdb, or (neither) this runtime's own;
+    --hdb on the target `uqs --target` named, when it named one (ON_TARGET)."""
     paths = _paths()
     if attach and hdb:
-        raise UqsUsageError("give one of --target, --attachment and --hdb: each names an HDB")
+        raise UqsUsageError(AMBIGUOUS)
+    if (name := ON_TARGET.get()) is not None:
+        if attach or not hdb:
+            raise UqsUsageError("with --target, name the directory on the target: --hdb DIR")
+        # a path on the target, never checked against this machine (#2219): its
+        # helper checks it there
+        ssh = ssh_host(name)
+        return Handle("target", str(hdb), f"--hdb on target {ssh.name} ({ssh.host}), over ssh",
+                      paths, target=ssh)  # fmt: skip
     if attach:
         ipc = service.ipc_for(attach_config.load(attach))
         where = hdb_where.resolve(attach, ipc)
@@ -89,6 +126,18 @@ def resolve(attach: str | None, hdb: Path | str | None) -> Handle:
         )
         return Handle("hdb", str(root.resolve()), "--hdb", paths, warnings=[unchecked])
     return Handle("runtime", str(paths.hdb_dir), f"this runtime's HDB ({paths.runtime})", paths)
+
+
+def local_hdb(attach: str | None, hdb: Path | None, *, command: str, why: str) -> Path | None:
+    """The HDB a command that writes only on this machine was named: `--hdb DIR`,
+    or None for its own default. `--attachment` is refused, saying `why` the
+    command cannot act on an attached stack's HDB (#2237) - check and alter
+    can, because they check the attached stack's writers first."""
+    if attach and hdb:
+        raise UqsUsageError(AMBIGUOUS)
+    if attach:
+        raise UqsUsageError(f"{command} cannot take --attachment {attach}: {why}")
+    return Path(hdb).expanduser() if hdb else None
 
 
 def tables_given(values: list[str] | None) -> list[str]:
@@ -151,13 +200,8 @@ def show_plan(handle: Handle, doc: dict[str, Any]) -> None:
 
 def confirm(handle: Handle, what: str, *, yes: bool, as_json: bool) -> None:
     """Ask once before the first write; without a terminal, --yes or nothing."""
-    if yes:
-        return
-    if as_json:
-        raise UqsUsageError(
-            "--json cannot ask for confirmation: add --yes to write. Nothing was written."
-        )
-    safety.confirm(f"{what} in {handle.hdb}?", yes=False)
+    safety.json_needs_yes(as_json, yes, "write")
+    safety.confirm(f"{what} in {handle.hdb}?", yes=yes)
 
 
 def apply_plan(
@@ -177,16 +221,15 @@ def apply_plan(
     return result
 
 
-def readers(handle: Handle) -> list[dict[str, str]]:
+def readers(handle: Handle) -> list[dict[str, Any]]:
     """Reload the HDB processes serving the directory; for --hdb, say how."""
     if handle.kind == "attach":
         assert handle.where is not None
         return hdb_where.reload_readers(handle.where, service.ipc_for(handle.where.att))
     if handle.kind == "runtime":
         return hdb_alter.reload_own_readers(handle.paths)
-    return [{"procname": "-", "ok": "not asked",
-             "detail": f'reload each HDB process serving {handle.hdb}: `system "l ."` '
-                       "(TorQ: `reload[]`)"}]  # fmt: skip
+    how = f'reload each HDB process serving {handle.hdb}: `system "l ."` (TorQ: `reload[]`)'
+    return [hdb_alter.reader_row("-", "not asked", how)]
 
 
 def finish(
@@ -212,8 +255,8 @@ def finish(
         console.print(f"[green]applied[/] in {len(result.get('partitions_touched') or [])} "
                       "partition(s); final check clean")  # fmt: skip
         for r in result.get("readers", []):
-            style = {"yes": "green", "no": "red"}.get(r["ok"], "dim")
-            console.print(f"  reload {r['procname']}: [{style}]{r['ok']}[/] {r['detail']}")
+            style = {"reloaded": "green", "failed": "red"}.get(r["outcome"], "dim")
+            console.print(f"  reload {r['process']}: [{style}]{r['outcome']}[/] {r['detail']}")
     if not ok:
         raise typer.Exit(code=1)
 

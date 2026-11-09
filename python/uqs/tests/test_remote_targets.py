@@ -125,7 +125,11 @@ def test_the_target_is_read_from_the_global_options_only(argv, expected):
         (["setup", "odbc", "rollback"], True),
         (["config", "set", "rdb1", "port", "1"], True),
         (["config", "sources", "stub"], True),
-        (["data", "seed"], True),
+        # #2235: a dry run unless --apply, which asks on the server
+        (["data", "seed"], False),
+        (["data", "seed", "--apply"], False),
+        (["data", "replay"], False),
+        (["data", "replay", "--apply"], False),
         (["some-command-added-later"], True),
         (["stop", "--dry-run"], False),
         (["config", "set", "rdb1", "port", "1", "-n"], False),
@@ -259,7 +263,10 @@ def test_check_names_the_running_release(server):
 
 
 def test_an_unknown_target_lists_the_declared_ones(server):
-    with pytest.raises(UqsError, match="'nope' - targets in .*: bare, down, uat"):
+    with pytest.raises(
+        UqsError,
+        match="no target or deployed server nope - .*declares: bare, down, uat; `uqs target list`",
+    ):
         control.remote_for("nope", Path("."))
 
 
@@ -387,7 +394,7 @@ def test_targets_are_listed_by_their_own_noun(server):
     assert isinstance(group, typer.core.TyperGroup)
     assert set(group.commands) == {
         "add", "set", "unset", "rename", "remove", "edit", "log", "revert", "adopt",
-        "list", "check", "shell",
+        "list", "check", "shell", "config", "tunnel",
     }  # fmt: skip
 
 
@@ -412,7 +419,7 @@ def test_add_appends_and_remove_deletes_only_that_table(server):
     )  # fmt: skip
     assert added.exit_code == 0, added.output
     assert targets.read(Path("."))["prod"] == {
-        "host": "svc@prod",
+        "ssh": "svc@prod",
         "dest": "/srv/uqf",
         "remote_user": "efx",
         "labels": {"env": "prod"},
@@ -479,7 +486,7 @@ def _cfg(host: str, dest: str, target: str | None = None, user: str | None = Non
     from types import SimpleNamespace
 
     return SimpleNamespace(
-        host=host, dest=dest, remote_user=user, target=target, runtime="uqf", profile="essential"
+        ssh=host, dest=dest, remote_user=user, target=target, runtime="uqf", profile="essential"
     )
 
 
@@ -504,7 +511,7 @@ def test_a_push_is_recorded_and_its_server_registered(server):
         "deployed",
     )
     assert targets.read(root)["new-example-new"] == {
-        "host": "svc@new.example",
+        "ssh": "svc@new.example",
         "dest": "/srv/new",
         "remote_user": "efx",
     }
@@ -524,7 +531,7 @@ def test_a_failed_push_is_recorded_and_registers_nothing(server):
 def test_a_push_to_a_declared_target_keeps_its_name(server):
     root = Path(".")
     uat = targets.read(root)["uat"]
-    history.record(root, _cfg(uat["host"], uat["dest"]), _report("r9"))
+    history.record(root, _cfg(uat["ssh"], uat["dest"]), _report("r9"))
     assert history.read(root)[0]["target"] == "uat"
 
 
@@ -604,3 +611,63 @@ def test_dry_runs_of_add_and_remove_check_and_write_nothing(server):
     removed = runner.invoke(app, ["target", "remove", some, "--dry-run"])
     assert removed.exit_code == 0, removed.output
     assert declared.read_text() == before
+
+
+def test_list_targets_refuses_labels_that_are_not_a_table(server, log_text):
+    """#2026: `labels = "prod"` was accepted, then the listing crashed with
+    AttributeError. It is refused now, naming the file and its line."""
+    declared = Path(os.environ[targets.DECLARATION_ENV])
+    declared.write_text(
+        declared.read_text() + '\n[targets.prod]\nssh = "p"\ndest = "/srv/p"\nlabels = "prod"\n'
+    )
+    result = CliRunner().invoke(app, ["target", "list", "--json"])
+    assert result.exit_code != 0
+    assert not isinstance(result.exception, AttributeError), result.exception
+    assert "target prod: labels must be a table" in log_text()
+
+
+# ------------------------------------------- one --yes, passed on (#2247)
+
+
+def _asking_leaves() -> list[tuple[str, ...]]:
+    """Every visible command that takes --yes, but `target ...`, which
+    --target refuses: it manages this machine's targets."""
+    found: list[tuple[str, ...]] = []
+
+    def walk(cmd, path: tuple[str, ...]) -> None:
+        subs = target_confirm.subcommands(cmd)
+        if not subs and path and target_confirm.takes_yes(cmd) and path[0] != "target":
+            found.append(path)
+        for name, sub in subs.items():
+            if not getattr(sub, "hidden", False):
+                walk(sub, (*path, name))
+
+    walk(target_confirm.root_command(), ())
+    return found
+
+
+def test_every_command_that_asks_is_found():
+    leaves = {" ".join(p) for p in _asking_leaves()}
+    assert {"data migrate", "data alter", "job remove", "job attachment add", "clean"} <= leaves
+
+
+@pytest.mark.parametrize("path", _asking_leaves(), ids=" ".join)
+def test_target_yes_reaches_every_command_that_takes_yes(server, monkeypatch, path):
+    """`uqs --target T --yes CMD` answered the local question only, unless CMD
+    confirmed on the server: `data migrate --apply`, `job remove` and the rest
+    asked again there, and without a terminal refused. One --yes answers it."""
+    sent: list[list[str]] = []
+    monkeypatch.setattr(control, "run", lambda r, args, **_: sent.append(list(args)) or 0)
+    assert target_cli.forward("uat", True, [*path], interactive=False) == 0
+    assert sent == [[*path, "--yes"]]
+    sent.clear()
+    assert target_cli.forward("uat", True, [*path, "-y"], interactive=False) == 0
+    assert sent == [[*path, "-y"]], "given once, it is not given twice"
+
+
+def test_target_yes_goes_before_a_double_dash(server, monkeypatch):
+    sent: list[list[str]] = []
+    monkeypatch.setattr(control, "run", lambda r, args, **_: sent.append(list(args)) or 0)
+    argv = ["data", "migrate", "--date", "2026.09.13", "--apply", "--", "quote"]
+    target_cli.forward("uat", True, argv, interactive=False)
+    assert sent == [["data", "migrate", "--date", "2026.09.13", "--apply", "--yes", "--", "quote"]]

@@ -26,12 +26,14 @@ from uqs.model.pipeline import (
 )
 from uqs.model.pipelines import PIPELINE_OFFSETS, PROCESS_CSV_FIELDS
 from uqs.model.registry import PIPELINES
-from uqs.paths import UqsError, UqsPaths, check_data_dir_was_migrated, repo_root
+from uqs.paths import UqsError, UqsPaths, repo_root
 from uqs.stack import clean as stack_clean
 from uqs.stack import deployment, hdb_types, listing, monitor_budget, runtime
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
+from uqs.stack.placeholders import resolve_process_config
+from uqs.stack.prerequisites import check_data_dir_was_migrated
 from uqs.stack.procs import VENDORED_STARTWITHALL_OVERLAY
 
 #: Every pipeline by procname, for the tests that look one up.
@@ -108,6 +110,25 @@ def test_bootstrap_writes_dqe_its_query_list(fake_paths: UqsPaths, monkeypatch):
     fake_which(monkeypatch, other="/usr/bin/true")
     runtime.bootstrap(fake_paths, base_port=7000)
     assert "meta_fx_orderbook_by_sym" in fake_paths.generated_dqe_config.read_text()
+
+
+def test_setenv_sh_records_the_status_dir_the_workers_are_started_with(
+    fake_paths: UqsPaths, monkeypatch, tmp_path
+):
+    """#2038: a worker writes its status where the starting shell's
+    UQF_STATUS_DIR says, and setenv.sh records it - the default pinned too -
+    for the frontend, which is started from another shell, to read."""
+    monkeypatch.delenv("UQF_STATUS_DIR", raising=False)
+    fake_paths.torqdata.mkdir(parents=True)
+    runtime.write_setenv(fake_paths, 7000)
+    default = fake_paths.torqdata / "status"
+    assert f'export UQF_STATUS_DIR="{default}"' in fake_paths.generated_setenv.read_text()
+    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path / "elsewhere"))
+    env = runtime.write_setenv(fake_paths, 7000)
+    assert env["UQF_STATUS_DIR"] == str(tmp_path / "elsewhere")
+    assert f'export UQF_STATUS_DIR="{tmp_path / "elsewhere"}"' in (
+        fake_paths.generated_setenv.read_text()
+    )
 
 
 def test_bootstrap_is_idempotent(fake_paths: UqsPaths, monkeypatch):
@@ -238,7 +259,7 @@ def test_get_process_config_resolve_false_leaves_placeholders_literal(
 
 def test_resolve_process_config_leaves_unknown_var_literal():
     row = {"port": "{NOT_A_REAL_VAR}", "load": "${ALSO_NOT_REAL}/x.q"}
-    resolved = stack_procs.resolve_process_config(row, {"KDBBASEPORT": "6010"})
+    resolved = resolve_process_config(row, {"KDBBASEPORT": "6010"})
     assert resolved["port"] == "{NOT_A_REAL_VAR}"
     assert resolved["load"] == "${ALSO_NOT_REAL}/x.q"
 
@@ -586,7 +607,7 @@ def test_bootstrap_generates_schema_with_the_fx_orderbook_table(fake_paths: UqsP
     # place "which database.q a runtime uses" is decided (#1370).
     assert generated == hdb_types.declared_schema(fake_paths)
     assert schemas.definition("position") in generated
-    assert schemas.definition("crypto_execution_quality") in generated
+    assert schemas.definition("crypto_markout") in generated
 
 
 def _torq(paths: UqsPaths) -> UqsPaths:
@@ -618,9 +639,9 @@ def test_an_unknown_runtime_is_refused_naming_the_real_ones(monkeypatch):
 def test_a_fresh_torq_data_directory_is_not_a_missed_migration(tmp_path):
     """The former data directories only ever held the default runtime's."""
     (tmp_path / "scripts" / "output" / "uqs").mkdir(parents=True)
-    stack_paths.check_data_dir_was_migrated(stack_paths.paths_for_root(tmp_path, "torq"))
+    check_data_dir_was_migrated(stack_paths.paths_for_root(tmp_path, "torq"))
     with pytest.raises(UqsError, match="the data directory has moved"):
-        stack_paths.check_data_dir_was_migrated(stack_paths.paths_for_root(tmp_path, "uqf"))
+        check_data_dir_was_migrated(stack_paths.paths_for_root(tmp_path, "uqf"))
 
 
 def test_the_torq_runtime_has_no_service_layer_and_says_which_it_is(fake_paths: UqsPaths):
@@ -861,10 +882,10 @@ def test_list_processes_gives_a_bounded_worker_its_dataset_as_output(fake_paths:
     workers = fake_paths.repo_root / "src" / "etl" / "workers"
     workers.mkdir(parents=True)
     (workers / "w.q").write_text(
-        "/ .qetl.job.bounded.define[`commented;`source`dataset!(`s;`nope)];\n"
-        ".qetl.job.bounded.define[`demo_deals_backfill;`source`dataset`width`procname!(\n"
-        "    `demo_deals;`demo_deals;1D;`deals_backfill1)];\n"
-        ".qetl.job.bounded.define[`x_backfill;`source`dataset`width!(`x;`x_rows;1D)];\n"
+        "/ .qetl.job.bounded.define[`commented;`source`outputs!(`s;enlist `nope)];\n"
+        ".qetl.job.bounded.define[`demo_deals_backfill;`source`outputs`width`procname!(\n"
+        "    `demo_deals;enlist `demo_deals;1D;`deals_backfill1)];\n"
+        ".qetl.job.bounded.define[`x_backfill;`source`outputs`width!(`x;enlist `x_rows;1D)];\n"
     )
     assert listing._worker_datasets(fake_paths) == {
         "deals_backfill1": "demo_deals",
@@ -1757,7 +1778,7 @@ def test_generated_schema_covers_every_published_table(fake_paths: UqsPaths):
 
 
 def test_declared_dataflow_edges_match_the_q_scripts():
-    """Every pipeline's `subscribe_to`/`publishes` declaration agrees with the
+    """Every pipeline's `subscribe_to`/`outputs` declaration agrees with the
     `.sub.subscribe` / `.qtorq.subscribe_etl` / `.u.upd` calls in its own
     script.
 
@@ -2268,6 +2289,9 @@ def test_hdb1_loads_the_metatables_after_its_database():
     assert composed["hdb1"]["load"].split() == [
         upstream["hdb1"],
         "${UQF_ROOT}/src/metadata/metatables.q",
+        # a markout's as-of join runs here, against the mapped partitions (#2288)
+        "${UQF_ROOT}/src/etl/core/mapped_books.q",
+        "${UQF_ROOT}/src/etl/core/mapped_depth.q",
     ]
 
 
@@ -2292,7 +2316,11 @@ def test_every_overlaid_file_exists():
     """A path in the `load` column that does not exist fails only when that
     process starts - and dqe1 does not start with the stack."""
     real = stack_paths.default_paths()
-    roots = {"${UQF_ROOT}": real.repo_root, "${UQF_SCRIPTS}": real.scripts_dir}
+    roots = {
+        "${UQF_ROOT}": real.repo_root,
+        "${UQF_SCRIPTS}": real.scripts_dir,
+        "${KDBCODE}": real.torqhome / "code",
+    }
     for before, after in stack_procs.VENDORED_LOAD_OVERLAY.values():
         for entry in (*before, *after):
             var, rest = entry.split("/", 1)
@@ -2425,12 +2453,12 @@ def _community_licence(monkeypatch):
 @pytest.mark.usefixtures("_community_licence")
 def test_a_profile_start_plans_monitor1_against_the_profiles_fleet():
     """#1318, over the real tree. The default start's fleet is over budget
-    and gives up `feed`; `--profile crypto` starts seventeen processes whose
-    handles fit with room to spare, and its only producer - cryptomock1, a
-    `feed` - got no heartbeat subscription because the plan it was handed
-    was the default fleet's. Essential lost reporter1 and housekeeping1 the
-    same way. (tpreplay1's `tickerlogreplay` is not on the vendored list, so
-    no plan hears it.)"""
+    and gives up `feed`; `--profile crypto` starts nineteen processes (the two
+    normalizers crypto_markout1 reads through since #1936 among them), and its
+    only producer - cryptomock1, a `feed` - got no heartbeat subscription
+    because the plan it was handed was the default fleet's. Essential lost
+    reporter1 and housekeeping1 the same way. (tpreplay1's `tickerlogreplay` is
+    not on the vendored list, so no plan hears it.)"""
     real = stack_paths.default_paths()
     default = _monitor_connections(stack_procs.effective_process_rows(real))
     assert "feed" not in default, "the default fleet does give feed up"
@@ -2442,7 +2470,11 @@ def test_a_profile_start_plans_monitor1_against_the_profiles_fleet():
         stack_procs.effective_process_rows(real, selected=profiles.resolve(["essential"]))
     )
     assert {"reporter", "housekeeping"} <= set(essential)
-    assert stack_procs.monitor_dropped_proctypes(real, profiles.resolve(["crypto"])) == []
+    # nineteen handles no longer all fit: the plan gives up the sortworkers first, the
+    # least useful to watch, and keeps every process type the crypto chain runs as
+    assert stack_procs.monitor_dropped_proctypes(real, profiles.resolve(["crypto"])) == [
+        "sortworker"
+    ]
 
 
 @pytest.mark.usefixtures("_community_licence")

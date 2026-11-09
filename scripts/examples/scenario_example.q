@@ -46,13 +46,13 @@ fill_times:t0+0D 0D00:00:00.500 0D00:00:00.700;
 snap_time:t0+0D00:00:01;
 
 / ==== reference_data: the pairs the rest of this scenario touches ====
-.qetl.log.dbg[`seed;"running: .qf.px.ccy_pair_legs each pairs";()!()];
+.qetl.log.ch.dbg[`lifecycle;"running: .qf.px.ccy_pair_legs each pairs";enlist[`example]!enlist `seed];
 legs:.qf.px.ccy_pair_legs each pairs;
 `reference_data insert ([]
     time:(count pairs)#t0; sym:pairs;
     base_ccy:legs`base; quote_ccy:legs`quote;
     pip_factor:10000 10000 10000; min_size:100000 100000 100000f; active:111b);
-.qetl.log.info[`seed;"reference_data - ",.Q.s1[count reference_data]," pairs";()!()];
+.qetl.log.ch.info[`lifecycle;"reference_data - ",.Q.s1[count reference_data]," pairs";enlist[`example]!enlist `seed];
 
 / ==== market_data: a three-pair order-book snapshot ====
 / EURPLN is here, not just EURUSD/AUDUSD, specifically so ccy_exposure
@@ -64,7 +64,7 @@ mk_book_row:{[spot]
         (spot+.qf.demo.pip_size)+.qf.demo.pip_size*levels;.qf.demo.level_size_unit*1+levels)};
 `market_data insert (([] time:3#t0; sym:pairs; source:3#`demo; source_time:3#t0),'
     (mk_book_row each 1.0850 0.6550 4.2500));
-.qetl.log.info[`seed;"market_data - ",.Q.s1[count market_data]," book snapshots";()!()];
+.qetl.log.ch.info[`lifecycle;"market_data - ",.Q.s1[count market_data]," book snapshots";enlist[`example]!enlist `seed];
 
 / ==== orders + trades: three buys, each opening one pair's position ====
 / `orders` carries book and product because a position keyed on more than
@@ -77,7 +77,7 @@ mk_book_row:{[spot]
 `trades insert ([] time:fill_times; sym:pairs; side:1 1 1;
     trade_price:1.0850 0.6550 4.2500; size:1000000 500000 300000f;
     pip_factor:10000 10000 10000);
-.qetl.log.info[`seed;"orders/trades - ",.Q.s1[count trades]," fills, one per pair in ",.Q.s1[pairs];()!()];
+.qetl.log.ch.info[`lifecycle;"orders/trades - ",.Q.s1[count trades]," fills, one per pair in ",.Q.s1[pairs];enlist[`example]!enlist `seed];
 
 / ==== markouts: a real call through markout_at_horizons ====
 / Scoped to EURUSD: mo_quotes is a EURUSD-only mid series, and the function
@@ -88,15 +88,15 @@ mo_quotes:([] sym:5#`EURUSD;
     time:t0+0D 0D00:00:00.100 0D00:00:00.300 0D00:00:00.500 0D00:00:01;
     mid:1.0850 1.08505 1.08508 1.08512 1.08515);
 trades_for_markout:`sym`time`side`trade_price`pip_factor#select from trades where sym=`EURUSD;
-.qetl.log.dbg[`seed;"running: .qf.exec.markout_at_horizons[trades;mo_quotes;100ms 500ms]";()!()];
+.qetl.log.ch.dbg[`lifecycle;"running: .qf.exec.markout_at_horizons[trades;mo_quotes;100ms 500ms]";enlist[`example]!enlist `seed];
 markouts:.qf.exec.markout_at_horizons[trades_for_markout;mo_quotes;0D00:00:00.100 0D00:00:00.500];
-.qetl.log.info[`seed;"markouts - ",.Q.s1[count markouts]," horizon(s) for the EURUSD fill";()!()];
+.qetl.log.ch.info[`lifecycle;"markouts - ",.Q.s1[count markouts]," horizon(s) for the EURUSD fill";enlist[`example]!enlist `seed];
 
 / ==== position: the open positions, marked to later rates ====
 / Built from `trades` via .qf.port.apply_fills, not typed - the same
 / real-call-not-fake-result approach the markout above takes.
 mark_rates:pairs!1.0855 0.6555 4.2550;
-.qetl.log.dbg[`seed;"running: .qf.port.apply_fills[.qf.port.empty_book[];trades]";()!()];
+.qetl.log.ch.dbg[`lifecycle;"running: .qf.port.apply_fills[.qf.port.empty_book[];trades]";enlist[`example]!enlist `seed];
 book:.qf.port.apply_fills[.qf.port.empty_book[];trades];
 pos_rows:0!book;
 pos_syms:exec sym from pos_rows;
@@ -107,8 +107,8 @@ pos_unrealized:{[book;mark_rates;sym] .qf.port.unrealized_pnl[book;sym;mark_rate
     realized_pnl:pos_rows`realized_pnl; mark_price:mark_rates pos_syms;
     unrealized_pnl:pos_unrealized;
     total_pnl:pos_unrealized+pos_rows`realized_pnl);
-.qetl.log.info[`seed;"position - ",.Q.s1[count pos_syms]," marked, EURUSD unrealised ",
-    .Q.s1[first exec unrealized_pnl from position where sym=`EURUSD];()!()];
+.qetl.log.ch.info[`lifecycle;"position - ",.Q.s1[count pos_syms]," marked, EURUSD unrealised ",
+    .Q.s1[first exec unrealized_pnl from position where sym=`EURUSD];enlist[`example]!enlist `seed];
 
 / ==== ccy_exposure: net exposure per currency, revalued into USD ====
 / PLN has no direct USD quote in market_data, so ccy_exposure_in bridges
@@ -121,10 +121,10 @@ pos_unrealized:{[book;mark_rates;sym] .qf.port.unrealized_pnl[book;sym;mark_rate
 / explicitly anyway, because market_data carries source and source_time
 / that the quotes shape does not.
 quotes_for_exposure:`sym`time xasc select time,sym,bid_prices,bid_sizes,ask_prices,ask_sizes from market_data;
-.qetl.log.dbg[`seed;"running: .qf.port.ccy_exposure_in[book;quotes;`USD;snap_time]";()!()];
+.qetl.log.ch.dbg[`lifecycle;"running: .qf.port.ccy_exposure_in[book;quotes;`USD;snap_time]";enlist[`example]!enlist `seed];
 exposure:.qf.port.ccy_exposure_in[book;quotes_for_exposure;`USD;snap_time];
 `ccy_exposure insert update time:snap_time, reporting_ccy:`USD from exposure;
-.qetl.log.info[`seed;"ccy_exposure - ",.Q.s1[count exposure]," currencies, reporting in USD";()!()];
+.qetl.log.ch.info[`lifecycle;"ccy_exposure - ",.Q.s1[count exposure]," currencies, reporting in USD";enlist[`example]!enlist `seed];
 
 / ==== predictions: the signal that motivated the EURUSD trade ====
 `predictions insert ([] time:enlist t0-0D00:00:00.500; sym:enlist `EURUSD;
@@ -143,9 +143,9 @@ exposure:.qf.port.ccy_exposure_in[book;quotes_for_exposure;`USD;snap_time];
     ccy:enlist `EUR; event_name:enlist `ECB_Rate_Decision;
     importance:enlist `high; forecast:enlist 4.25; previous:enlist 4.25;
     actual:enlist 0n);
-.qetl.log.info[`seed;"routing, connection, prediction and calendar rows seeded";()!()];
+.qetl.log.ch.info[`lifecycle;"routing, connection, prediction and calendar rows seeded";enlist[`example]!enlist `seed];
 
-.qetl.log.info[`seed;"scenario complete - showing every populated table";()!()];
+.qetl.log.ch.info[`lifecycle;"scenario complete - showing every populated table";enlist[`example]!enlist `seed];
 show reference_data;
 show market_data;
 show orders;

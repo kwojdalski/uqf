@@ -61,11 +61,11 @@ if[not `worker in key .Q.opt .z.x;
 / @return the io manager now installed as the default
 .qdev.runbackfill.use_io:{[opts;worker]
     if[not `hdb in key opts;
-        .qetl.log.info[`run_backfill;"writing into this process only - pass -hdb <root> to keep the rows";()!()];
+        .qetl.log.ch.info[`storage;"writing into this process only - pass -hdb <root> to keep the rows";()!()];
         :.qetl.io.default:.qetl.io.memory];
     root:hsym `$first opts`hdb;
     col:(.qetl.source.def (.qetl.job.bounded.def worker)`source)`time_column;
-    .qetl.log.info[`run_backfill;"writing into the HDB";`root`partition_col!(root;col)];
+    .qetl.log.ch.info[`storage;"writing into the HDB";`root`partition_col!(root;col)];
     .qetl.io.default:.qetl.io.hdb[root;col]}
 
 \d .
@@ -86,7 +86,7 @@ s:@[.qetl.job.bounded.spec_from_flags;.Q.opt .z.x;{[e] -1 e; exit 2}];
 worker:s`worker;
 ns:(.qetl.job.bounded.def worker)`ns;
 
-.qetl.log.info[worker;"run_backfill starting";s`spec];
+.qetl.log.ch.info[`lifecycle;"run_backfill starting";(enlist[`worker]!enlist worker),s`spec];
 if[`fixture in key .Q.opt .z.x; .qetl.cfg.set_override[`fixture_writes;"1"]];
 / -on_conflict then -mode, as torq_backfill.q does, and BEFORE any io is
 / opened: a bad value, or a variable that outranks the flag, is refused here
@@ -102,7 +102,7 @@ if[md in `validate`plan;
     / untrapped throw is a raw trace, or a debug prompt on a terminal.
     r:@[{[w;sp;m] $[m~`validate; .qetl.job.bounded.validate[w;sp]; .qetl.job.bounded.plan_only[w;sp]]}[worker;s`spec];
         md;{[e] -1 "run_backfill: ",e; exit 2}];
-    .qetl.log.info[worker;string[md]," - nothing opened, nothing written";`plan _ r];
+    .qetl.log.ch.info[`lifecycle;string[md]," - nothing opened, nothing written";(enlist[`worker]!enlist worker),`plan _ r];
     exit 0];
 .qdev.runbackfill.use_io[.Q.opt .z.x;worker];
 
@@ -111,10 +111,10 @@ if[md in `validate`plan;
 / supplied is a finished value, which .Q.trp refuses with a bare 'type.
 result:.Q.trp[{[ns;spec;ignored] (` sv ns,`init)[spec]; (` sv ns,`run)[]}[ns;s`spec];::;
     {[e;bt]
-        .qetl.log.err[`run_backfill;"run failed";enlist[`error]!enlist e];
-        .qetl.log.err[`run_backfill;"backtrace";enlist[`trace]!enlist .Q.sbt bt];
+        .qetl.log.ch.err[`lifecycle;"run failed";enlist[`error]!enlist e];
+        .qetl.log.ch.err[`lifecycle;"backtrace";enlist[`trace]!enlist .Q.sbt bt];
         `state`error!(`failed;e)}];
 
-.qetl.log.info[worker;"run_backfill finished";result];
+.qetl.log.ch.info[`lifecycle;"run_backfill finished";(enlist[`worker]!enlist worker),result];
 code:.qetl.job.bounded.exit_code result`state;
 exit code;

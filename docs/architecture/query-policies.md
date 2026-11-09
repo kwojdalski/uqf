@@ -87,11 +87,11 @@ tables (see [`demo_deals.q`](../../src/etl/sources/demo_deals.q) for why the
 desk's own names are not in this repository). Each limit is set from that
 table's own data density, not copied between rows:
 
-  | Table                      | Density                                                                                                     | Default policy                                                                                                                                                                            |
-  | ---                        | ---                                                                                                         | ---                                                                                                                                                                                       |
-  | `mkt_orderbook`            | 10 rows/s: `widefeed1` ticks twice a second for five pairs; two 11-level vectors make a row about 220 bytes | one hour, a `sym` filter required, raw only, 50,000 rows, 16MB. One pair for an hour is 7,200 rows                                                                                        |
-  | `crypto_execution_quality` | about 3.5 rows/s from `cryptomock1`: each fill scored at two horizons; about 80 bytes a row                 | one day, raw or aggregate, 250,000 rows, 32MB. A raw day (about 300,000 rows) is past the row limit, which is intended: a raw request is for a recent window, and a day is for aggregates |
-  | `duckdb_deals`             | 200 to 1,000 deals a day                                                                                    | 31 days, raw or aggregate, 100,000 rows, 16MB                                                                                                                                             |
+  | Table                      | Density                                                                                                                          | Default policy                                                                                                                                                                            |
+  | ---                        | ---                                                                                                                              | ---                                                                                                                                                                                       |
+  | `mkt_orderbook`            | 10 rows/s: `widefeed1` ticks twice a second for five pairs; two 11-level vectors make a row about 220 bytes                      | one hour, a `sym` filter required, raw only, 50,000 rows, 16MB. One pair for an hour is 7,200 rows                                                                                        |
+  | `crypto_markout`           | about 7 rows/s from `cryptomock1`: each fill scored at two horizons as a total and an execution component; about 250 bytes a row | one day, raw or aggregate, 250,000 rows, 64MB. A raw day (about 600,000 rows) is past the row limit, which is intended: a raw request is for a recent window, and a day is for aggregates |
+  | `duckdb_deals`             | 200 to 1,000 deals a day                                                                                                         | 31 days, raw or aggregate, 100,000 rows, 16MB                                                                                                                                             |
 
 `quant` has one exception: a whole day of `mkt_orderbook` (172,800 rows for one
 pair, about 38MB), still filtered by `sym`.
@@ -123,17 +123,17 @@ call goes through `.pm.req`, and a login can run only what its roles grant.
   never asks for more rows than the caller's policy allows, so a browser read is
   truncated to the policy's limit, never refused for size, whatever the
   frontend's `max_rows`. It returns the cap it read under with the rows, so
-  `/query` reports `truncated` for a cut the policy made too (#1255). A hidden
-  table has no policy and is refused. An open read covers the latest window its
-  policy allows; a `time` filter sets the window instead. Every plant table and
-  every dataset a bounded worker writes is listed for getdata
-  (`tableproperties.csv` is generated, one derived row each, from the columns q
-  declares each table is read by - `.qetl.plant.instrument_exceptions` in
-  `src/etl/plant_tables.q` names `order_quality`'s instrument column, `book`),
-  and listing a table grants nothing: the policies decide. A worker dataset that
-  is not a plant table is handed to a runtime only while its HDB's newest
-  partition holds it, because TorQ exits at start when the list names a table
-  the HDB lacks.
+  `/query` reports `truncated`, with `cut_by: "max_rows"`, for a cut the policy
+  made too (#1255, #2220). A hidden table has no policy and is refused. An open
+  read covers the latest window its policy allows; a `time` filter sets the
+  window instead. Every plant table and every dataset a bounded worker writes is
+  listed for getdata (`tableproperties.csv` is generated, one derived row each,
+  from the columns q declares each table is read by -
+  `.qetl.plant.instrument_exceptions` in `src/etl/plant_tables.q` names
+  `order_quality`'s instrument column, `book`), and listing a table grants
+  nothing: the policies decide. A worker dataset that is not a plant table is
+  handed to a runtime only while its HDB's newest partition holds it, because
+  TorQ exits at start when the list names a table the HDB lacks.
 - **Ordinary users.** Each user in
   [`permissions/gateway_users.csv`](../../scripts/torqconfig/permissions/gateway_users.csv)
   gets only the role named there. The roles are defined in

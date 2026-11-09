@@ -14,6 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import deploy_support as capture
 import pytest
 import typer
 from typer.main import get_group
@@ -27,6 +28,7 @@ from uqs.deploy import remote as remote_mod
 from uqs.deploy.config import Config, DeployError, make_config, redact
 from uqs.deploy.preflight import PREFLIGHT
 from uqs.deploy.remote import Remote, q
+from uqs.deploy.report import render
 from uqs.deploy.stages import Deployment
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -143,7 +145,7 @@ def test_the_required_arguments_are_host_dest_and_profile(log_text):
     assert r.exit_code == 2, "a usage error (#1885)"
     assert "--profile is required, or a TARGET after ARTIFACT" in log_text()
     cfg = parse_args(BASE)
-    assert (cfg.host, cfg.dest, cfg.profile) == ("uqf-server", "/opt/uqf", "essential")
+    assert (cfg.ssh, cfg.dest, cfg.profile) == ("uqf-server", "/opt/uqf", "essential")
     assert cfg.data_root == "/opt/uqf/shared/data"
 
 
@@ -266,7 +268,7 @@ def test_a_dry_run_changes_nothing_and_shows_the_plan(tmp_path):
     remote = FakeRemote({"uv python find": _done(SERVER + "data=present\ncurrent=OLD\n")})
     out = io.StringIO()
     cfg = parse_args(_args(_artifact(tmp_path), "--dry-run", "--restart"))
-    assert driver.deploy(cfg, remote, out=out) == 0
+    assert capture.deploy(cfg, remote, out=out) == 0
     assert [stage for stage, _ in remote.scripts] == ["preflight"]
     assert remote.puts == []
     shown = out.getvalue()
@@ -289,7 +291,7 @@ _HEALTHY = {
 def _run(tmp_path, rules, args=()):
     remote = FakeRemote({**_HEALTHY, **rules})
     out = io.StringIO()
-    code = driver.deploy(parse_args(_args(_artifact(tmp_path), *args)), remote, out=out)
+    code = capture.deploy(parse_args(_args(_artifact(tmp_path), *args)), remote, out=out)
     return code, remote, json.loads(out.getvalue())
 
 
@@ -496,7 +498,7 @@ def _run_as(tmp_path, rules=(), args=()):
     remote.rules["uv python find"] = dict(rules).get("uv python find", _AS_SVC["uv python find"])
     out = io.StringIO()
     cfg = parse_args(_args(_artifact(tmp_path), "--remote-user", "svc", *args))
-    code = driver.deploy(cfg, remote, out=out)
+    code = capture.deploy(cfg, remote, out=out)
     return code, remote, out.getvalue()
 
 
@@ -583,9 +585,9 @@ def test_a_dry_run_as_a_service_user_says_who_does_what(tmp_path):
 
 def test_q_flags_are_optional_and_may_hold_spaces():
     cfg = parse_args(BASE)
-    assert cfg.qcmd is None and cfg.qhome is None
+    assert cfg.q_cmd is None and cfg.q_home is None
     cfg = parse_args([*BASE, "--q-home", "/opt/kx home", "--q-cmd", "/opt/kx home/bin/q"])
-    assert (cfg.qhome, cfg.qcmd) == ("/opt/kx home", "/opt/kx home/bin/q")
+    assert (cfg.q_home, cfg.q_cmd) == ("/opt/kx home", "/opt/kx home/bin/q")
 
 
 @pytest.mark.parametrize("value", ["bin/q", "/opt/../q", "/opt/kx\nq"])
@@ -645,7 +647,7 @@ def test_a_rollback_uses_the_previous_releases_own_settings(tmp_path):
 def test_the_dry_run_names_where_each_q_setting_came_from(tmp_path):
     remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
     out = io.StringIO()
-    driver.deploy(parse_args(_args(_artifact(tmp_path), "--dry-run")), remote, out=out)
+    capture.deploy(parse_args(_args(_artifact(tmp_path), "--dry-run")), remote, out=out)
     assert "QHOME=/opt/kx home (svc's QHOME)" in out.getvalue()
     assert "resolved and run once in preflight" in out.getvalue()
 
@@ -723,7 +725,7 @@ def test_a_recovered_previous_release_is_verified_with_its_own_verifier(tmp_path
         [_verified(False, "no answer from rdb1"), _verified(True)],
     )
     out = io.StringIO()
-    code = driver.deploy(parse_args(_args(_artifact(tmp_path), "--restart")), remote, out=out)
+    code = capture.deploy(parse_args(_args(_artifact(tmp_path), "--restart")), remote, out=out)
     report = json.loads(out.getvalue())
     assert code == 1 and "restarted and verified release OLD's profile fx" in report["rollback"]
     check = [s for st, s in remote.scripts if st == "rollback" and "uqs deploy verify" in s]
@@ -907,7 +909,7 @@ def test_the_dry_run_names_the_launcher(tmp_path):
     remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
     out = io.StringIO()
     argv = _args(_artifact(tmp_path), *SITE, "--dry-run")
-    driver.deploy(parse_args(argv), remote, out=out)
+    capture.deploy(parse_args(argv), remote, out=out)
     shown = out.getvalue()
     assert "TORQHOME=/opt/site/torq/core/current, launcher /opt/site/torq/bin/torq.sh" in shown
     assert "UQS_TORQ_LAUNCHER" in shown and "TORQDATAHOME" in shown
@@ -972,7 +974,7 @@ def test_a_live_check_names_only_sources():
 def test_the_dry_run_plans_the_live_check(tmp_path):
     remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
     out = io.StringIO()
-    driver.deploy(parse_args(_args(_artifact(tmp_path), "--dry-run", *_CHECK)), remote, out=out)
+    capture.deploy(parse_args(_args(_artifact(tmp_path), "--dry-run", *_CHECK)), remote, out=out)
     assert (
         "live-chk  uqs config sources check deals_db quotes_db --timeout 120 "
         "(ODBC from /opt/odbc)" in out.getvalue()
@@ -1007,7 +1009,7 @@ def _run_with_facts(tmp_path, facts, q):
     )
     out = io.StringIO()
     target = {"q": q} if q else {}
-    code = driver.deploy(parse_args(_args(_artifact(tmp_path, **target))), remote, out=out)
+    code = capture.deploy(parse_args(_args(_artifact(tmp_path, **target))), remote, out=out)
     return code, remote, json.loads(out.getvalue())
 
 
@@ -1028,7 +1030,7 @@ def test_a_dirty_artifact_is_refused_unless_allowed(tmp_path):
     remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
     out = io.StringIO()
     assert (
-        driver.deploy(parse_args(_args(path, "--dry-run", "--allow-dirty")), remote, out=out) == 0
+        capture.deploy(parse_args(_args(path, "--dry-run", "--allow-dirty")), remote, out=out) == 0
     )
     assert "(with uncommitted changes)" in out.getvalue()
 
@@ -1045,7 +1047,7 @@ def test_allow_dirty_is_an_override_whose_reason_the_plan_records(tmp_path):
         out = io.StringIO()
         cfg = parse_args(_args(path, "--dry-run", *argv))
         assert cfg.allow_dirty == said
-        assert driver.deploy(cfg, remote, out=out) == 0
+        assert capture.deploy(cfg, remote, out=out) == 0
         plan = out.getvalue()
         assert "EXCEPTIONS" in plan and "--override allow-dirty: " in plan and said in plan
 
@@ -1088,6 +1090,77 @@ def test_a_failed_prune_does_not_undo_a_deployment_that_succeeded(tmp_path):
     code, _, report = _run(tmp_path, rules, args=["--keep", "1"])
     assert code == 0 and report["status"] == "deployed"
     assert report["pruned"]["prune"] == "failed"
+
+
+class InterruptedAfterActivation(FakeRemote):
+    """`exc` at the first script holding `marker` once `current` has moved."""
+
+    def __init__(self, rules, marker: str, exc: BaseException):
+        super().__init__(rules)
+        self.marker, self.exc = marker, exc
+
+    def run(self, script, timeout, stage, as_login=False):
+        if self.marker in script and self.ran(".current.new"):
+            self.scripts.append((stage, script))
+            raise self.exc
+        return super().run(script, timeout, stage, as_login)
+
+
+@pytest.mark.parametrize(
+    ("marker", "exc"),
+    [
+        ("/heartbeat; fi", KeyboardInterrupt()),  # the beat before the prune
+        ("import json, os, sys", KeyboardInterrupt()),  # listing the releases
+        ("rm -rf /opt/uqf/releases/2026100", KeyboardInterrupt()),  # removing them
+        ("rm -rf /opt/uqf/releases/2026100", RuntimeError("a bug")),
+    ],
+)
+def test_an_interrupted_prune_never_undoes_a_deployment_that_succeeded(tmp_path, marker, exc):
+    """Once `current` has moved, the push has succeeded: an interrupt in the
+    prune used to stop the new, current release and start the old one,
+    leaving `current` on the new release and a report saying otherwise (#2174)."""
+    previous = json.dumps({"profile": "fx", "processes": [{"process": "rdb1"}]})
+    old = ["20261001T000000Z-000000000001", "20261002T000000Z-000000000002"]
+    remote = InterruptedAfterActivation(
+        {
+            # first: the listing script also holds the markers below
+            "import json, os, sys": _listing(*old, "OLD", current="x"),
+            **_HEALTHY,
+            "uv python find": _done(SERVER + "data=present\ncurrent=OLD\n"),
+            "deploy-report.json\n": _done(previous),
+            "readlink": _done("current=OLD\n"),
+            "uqs deploy verify --profile": _verified(True),
+        },
+        marker,
+        exc,
+    )
+    seen: list[dict] = []
+    shown: list[dict] = []
+    cfg = parse_args(_args(_artifact(tmp_path), "--restart", "--keep", "1"))
+    with pytest.raises(type(exc)):
+        driver.deploy(
+            cfg,
+            remote,
+            out=io.StringIO(),
+            on_report=lambda r: seen.append(r.as_dict()),  # the history
+            on_result=lambda r: shown.append(r.as_dict()),  # the terminal
+        )
+    (report,) = seen
+    assert shown == seen, "the terminal is shown the same report before the interrupt goes on"
+    assert report["status"] == "deployed" and report["stage"] == "done"
+    assert report["rollback"] == "not needed" and report["error"] == ""
+    assert report["pruned"]["prune"] == "interrupted" and report["pruned"]["keep"] == 1
+    assert type(exc).__name__ in report["pruned"]["error"]
+    # the new release stays up and current: nothing stopped, nothing restarted
+    assert remote.stage("rollback") == []
+    assert sum(".current.new" in s for _, s in remote.scripts) == 1, "current moved once"
+    assert not any("uqs stop" in s for st, s in remote.scripts if st != "restart")
+    assert remote.scripts[-1][0] == "lock", "the lock is still released"
+    written = [s for _, s in remote.scripts if '"pruned"' in s and '"interrupted"' in s]
+    assert written and '"status": "deployed"' in written[-1], "the server's report agrees"
+    text = render(report)
+    assert text.startswith("deployed release") and "prune incomplete" in text
+    assert "`uqs deploy prune --keep 1` finishes it" in text
 
 
 def test_without_keep_nothing_is_pruned(tmp_path):
@@ -1255,7 +1328,7 @@ def _accepted(tmp_path, q="4.0", reason="smoke passed on the 3.6 server"):
     out = io.StringIO()
     path = _artifact(tmp_path, **({"q": q} if q else {}))
     args = _args(path, "--override", "accept-converted-release", "--reason", reason)
-    code = driver.deploy(parse_args(args), remote, out=out)
+    code = capture.deploy(parse_args(args), remote, out=out)
     return code, remote, json.loads(out.getvalue())
 
 

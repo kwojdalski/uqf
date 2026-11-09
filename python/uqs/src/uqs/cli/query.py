@@ -22,7 +22,7 @@ from uqs.cli import completion
 from uqs.cli import query_target as via_target
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.concepts import target_opt
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli.json_out import Verbatim, emit, json_opt
 from uqs.cli.q_login import (
     DEFAULT_PASSWORD,
     DEFAULT_USER,
@@ -290,7 +290,11 @@ def query(
             )
             return
         try:
-            with via_target.connect(target, proc, port, base_port, user, passwd) as via:
+            # any q expression, or a q session, may change the server (#2179)
+            change = f"`uqs query --tunnel {target}`"
+            with via_target.connect(
+                target, proc, port, base_port, user, passwd, change=change
+            ) as via:
                 _ask(expr, routed, via_target.LOOPBACK, via.port, user, passwd,
                      servers, render, export, via, as_json=as_json)  # fmt: skip
         except UqsError as exc:
@@ -369,7 +373,7 @@ def _ask(
         return
     if as_json:
         _export(result, export)  # first: a result it cannot write is refused alone
-        emit({"expression": shown, "result": result})
+        emit({"expression": shown, "result": Verbatim(result)})
         return
     if size is not None:
         _show_q(stack_render.text(result))

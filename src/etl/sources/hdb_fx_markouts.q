@@ -9,12 +9,16 @@
 / .
 /   `executions   the canonical executions end of day saved. The PRIMARY input: it
 /                 owns the window and its rows are what a run counts
-/   `market_data  the books of every pair an execution's route needs, from the
-/                 window's start back by the job's lookback to its end plus the
-/                 furthest horizon, AND each (pair, source)'s last snapshot before
-/                 that - the book an early execution is priced against when the
-/                 market was quiet across the window's start. A supporting input:
-/                 context, validated against its own contract, never cut to the window
+/   `market_data  the TOP OF BOOK of every pair an execution's route needs, at exactly the instants the
+/                 scoring asks about: each leg at the execution and at every horizon, as the latest book of
+/                 each source at or before the instant (looking back to the reference's age limit, across
+/                 midnight into the earlier partitions). A supporting input: context, validated against
+/                 its own contract, never cut to the window
+/ .
+/ MEMORY STAYS PROPORTIONAL TO THE EXECUTIONS (#2288). The books are not selected into this process: the as-of
+/ join runs where the partitions are memory-mapped (the HDB, .qetl.mapped.tob_at) and only the matched books
+/ come back, so a window of M executions costs M's worth of memory whether the market holds a million rows or
+/ ten terabytes. No query here selects market_data with a where beyond the date, and none reads a depth column.
 / .
 / Nothing here knows a vendor: both tables are the canonical ones. The scoring is the
 / worker's transform, the live job's own (src/etl/transforms/fx_markout_outputs.q), so
@@ -42,7 +46,7 @@
 .qpipe.source.hdb_fx_markouts.row_key:`venue`fill_id
 
 / The supporting input: the books, read by the transform as `market_data`.
-.qpipe.source.hdb_fx_markouts.supporting:enlist[`market_data]!enlist .qetl.plant.columns[`market_data;`source_time`sym`source`bid_prices`bid_sizes`ask_prices`ask_sizes`clock]
+.qpipe.source.hdb_fx_markouts.supporting:enlist[`market_data]!enlist .qetl.plant.columns[`market_data;`source_time`sym`source`bid`ask`clock]
 
 / .u.upd stamps `time` in UTC, and the sources' own stamps are UTC.
 .qpipe.source.hdb_fx_markouts.tz:`UTC
@@ -85,41 +89,96 @@
 /   symbols       reference_symbols
 .qpipe.source.hdb_fx_markouts.reference_read:`date_skew`lookback_cap`symbols!(1;7D;.qpipe.source.hdb_fx_markouts.reference_symbols)
 
-/ The window's executions, and the books they are scored against, both from the HDB.
-/ Both tables are date-partitioned, so the partition is constrained first, and each is
-/ named as a symbol so it resolves at the HDB's root. The books read are the declared
-/ reference_read's: the symbols scoring needs, from the window's start back by the
-/ look-back the spec's max_age sets (measured from the window's start, so it already
-/ includes the furthest look-back horizon) to its end plus the furthest horizon, and
-/ each (pair, source)'s last book before the earliest reference time. Both queries
-/ widen the partitions by the declared date_skew.
+/ The executions query sent to the HDB: the date partition is constrained first (widened by the
+/ declared date_skew) and the table is named as a symbol so it resolves at the HDB's root.
+/ @param skew the declared date_skew
+/ @return a lambda of (from_ts; to_ts) for the HDB to run
+/ @private
+.qpipe.source.hdb_fx_markouts.deals_remote:{[skew]
+    {[skew;from_ts;to_ts]
+        `source_time xasc select source_time, venue, sym, side, size, price, fill_id, clock from `executions
+            where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts
+    }[skew]}
+
+/ The window's executions, from the HDB.
+/ @param h an open handle to the HDB
+/ @param range_from inclusive lower bound
+/ @param range_to exclusive upper bound
+/ @return the executions, sorted by source_time
+.qpipe.source.hdb_fx_markouts.read_executions:{[h;range_from;range_to]
+    skew:(.qetl.source.reference_read .qpipe.source.hdb_fx_markouts.source_name)`date_skew;
+    .qetl.source.ipc[h;.qpipe.source.hdb_fx_markouts.deals_remote[skew];range_from;range_to]}
+
+/ The oldest source_time a book may have and still price the window: the window's start less the
+/ look-back the spec's max_age sets (which already includes the furthest look-back horizon). A book
+/ older than that is not a reference, so reading back further would only fetch rows scoring ignores.
+/ @param range_from the window's inclusive lower bound
+/ @return a timestamp
+/ @eg .qpipe.source.hdb_fx_markouts.read_from[2026.09.17D10:00:00]  ->  2026.09.17D09:59:54.000000000
+.qpipe.source.hdb_fx_markouts.read_from:{[range_from]
+    spec:.qpipe.transform.fx_markout_outputs.job_spec;
+    early:.qpipe.transform.fx_markout.lookback[spec];
+    range_from-.qetl.source.reference_lookback[.qpipe.source.hdb_fx_markouts.source_name;spec`max_age;early]}
+
+/ The top of book the window's executions are scored against: the instants the scoring asks about (every leg
+/ of every route, conversion pair included, at the execution and at each horizon), priced by the as-of join in
+/ the process that maps market_data.
+/ @param h an open handle to the HDB
+/ @param deals the window's executions
+/ @param range_from the window's inclusive lower bound
+/ @param only the syms to read books for, or ` for every one the executions need
+/ @return the top-of-book table: sym, source, source_time, bid, ask and clock, arranged
+.qpipe.source.hdb_fx_markouts.read_books:{[h;deals;range_from;only]
+    spec:.qpipe.transform.fx_markout_outputs.job_spec;
+    rr:.qetl.source.reference_read .qpipe.source.hdb_fx_markouts.source_name;
+    legs:.qpipe.transform.markout_core.legs_of[.qpipe.transform.fx_domain.domain;spec;deals];
+    probes:.qetl.mapped.probes[legs;deals`source_time;.qpipe.transform.markout_core.horizons_of spec];
+    / ` means every sym the executions need; a symbol list narrows to those
+    if[not $[-11h=type only; null only; 0b]; probes:select from probes where sym in only];
+    .qetl.mapped.read_books[h;probes;.qpipe.source.hdb_fx_markouts.read_from range_from;rr`date_skew;`all]}
+
+/ The window's executions, and the books they are scored against, both from the HDB: the
+/ executions of the window, then the top of book at the instants they are scored at.
 / @param h an open handle to the HDB
 / @param range_from inclusive lower bound
 / @param range_to exclusive upper bound
 / @return `executions`market_data!(the window's executions; the books they need)
 .qpipe.source.hdb_fx_markouts.query:{[h;range_from;range_to]
-    rr:.qetl.source.reference_read .qpipe.source.hdb_fx_markouts.source_name;
-    skew:rr`date_skew;
-    deals:.qetl.source.ipc[h;{[skew;from_ts;to_ts]
-        `source_time xasc select source_time, venue, sym, side, size, price, fill_id, clock from `executions
-            where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts
-      }[skew];range_from;range_to];
+    deals:.qetl.source.ipc[h;.qpipe.source.hdb_fx_markouts.deals_remote[(.qetl.source.reference_read .qpipe.source.hdb_fx_markouts.source_name)`date_skew];range_from;range_to];
     if[0=count deals; :`executions`market_data!(deals;0#.qpipe.source.hdb_fx_markouts.supporting`market_data)];
-    spec:.qpipe.transform.fx_markout_outputs.job_spec;
-    syms:rr[`symbols][spec;deals];
-    early:.qpipe.transform.fx_markout.lookback[spec];
-    lb:.qetl.source.reference_lookback[.qpipe.source.hdb_fx_markouts.source_name;spec`max_age;early];
-    books:.qetl.source.ipc[h;{[syms;skew;read_from;from_ts;to_ts]
-        cand:`source_time xasc select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock
-            from `market_data where date within (neg[skew],skew)+`date$(read_from;from_ts), source_time>=read_from, source_time<from_ts, sym in syms;
-        before:0!?[cand;();`sym`source!`sym`source;()];
-        inwin:select source_time, sym, source, bid_prices, bid_sizes, ask_prices, ask_sizes, clock from `market_data
-            where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts, sym in syms;
-        `source_time xasc (cols before)#before,inwin
-      }[syms;skew;range_from-lb];
-      range_from-early;
-      range_to+0D|max spec`horizons];
-    `executions`market_data!(deals;books)}
+    `executions`market_data!(deals;.qpipe.source.hdb_fx_markouts.read_books[h;deals;range_from;`])}
+
+/ The window's executions and a PRESENCE SUMMARY of their books (a batch_read `window`): the books the scoring
+/ is priced against are already only the matched ones - memory proportional to the executions - so the
+/ summary is the books themselves, which holds at least one row for every (pair, source) the window needs
+/ that the HDB has a book of. What `ready` judges, over the whole window, before any batch is read.
+/ @param h an open handle to the HDB
+/ @param range_from inclusive lower bound
+/ @param range_to exclusive upper bound
+/ @return `executions`market_data!(the window's executions; their books)
+.qpipe.source.hdb_fx_markouts.window:{[h;range_from;range_to] .qpipe.source.hdb_fx_markouts.query[h;range_from;range_to]}
+
+/ The books of exactly these symbols over the window: a batch's own. The window's executions are read
+/ again (they are small) and only the probes of these symbols are priced.
+/ @param h an open handle to the HDB
+/ @param range_from the window's inclusive lower bound
+/ @param range_to the window's exclusive upper bound
+/ @param syms the market_data syms
+/ @return enlist[`market_data]!enlist books
+.qpipe.source.hdb_fx_markouts.read_batch:{[h;range_from;range_to;syms]
+    deals:.qpipe.source.hdb_fx_markouts.read_executions[h;range_from;range_to];
+    if[0=count deals; :enlist[`market_data]!enlist 0#.qpipe.source.hdb_fx_markouts.supporting`market_data];
+    enlist[`market_data]!enlist .qpipe.source.hdb_fx_markouts.read_books[h;deals;range_from;syms]}
+
+/ The reference keys a batch of executions needs: reference_read's `symbols`, conversion pairs included.
+/ @param rows the batch's executions
+/ @return a symbol vector
+/ @eg .qpipe.source.hdb_fx_markouts.needs[([] sym:enlist `USDPLN)]  ->  `EURUSD`EURPLN
+.qpipe.source.hdb_fx_markouts.needs:{[rows]
+    (.qetl.source.reference_read .qpipe.source.hdb_fx_markouts.source_name)[`symbols][.qpipe.transform.fx_markout_outputs.job_spec;rows]}
+
+/ How the source reads a window a batch at a time (.qetl.source BATCH READ, source_batch_read.q).
+.qpipe.source.hdb_fx_markouts.batch_read:`window`needs`read`keys`sort!(.qpipe.source.hdb_fx_markouts.window;.qpipe.source.hdb_fx_markouts.needs;.qpipe.source.hdb_fx_markouts.read_batch;enlist[`market_data]!enlist `sym;enlist[`market_data]!enlist `source_time)
 
 / How far the HDB's books reach, less the furthest horizon: a window ending at or before
 / this has every book its executions are scored against (#1927). The latest book is read
@@ -129,9 +188,9 @@
 / @return the exclusive instant through which the books the scoring needs are present
 / @eg .qpipe.source.hdb_fx_markouts.complete_through[{2026.09.17D10:00:25}]  ->  2026.09.17D10:00:15.000000000
 .qpipe.source.hdb_fx_markouts.complete_through:{[h]
-    latest:.qetl.source.ipc_call[h;{[unused] exec max source_time from `market_data where date=max date};enlist 0b];
+    latest:.qetl.source.ipc_call[h;{[a] .qetl.mapped.newest a};enlist enlist[`market]!enlist `];
     / max of no rows is -0Wp, and arithmetic on it wraps to a far-future instant
-    $[latest<=-0Wp; -0Wp; latest-0D|max (.qpipe.transform.fx_markout_outputs.job_spec)`horizons]}
+    $[latest<=-0Wp; -0Wp; latest-.qpipe.transform.markout_core.reach .qpipe.transform.fx_markout_outputs.job_spec]}
 
 / Can this window be scored, or are its books absent? The core's gate (markout_core.unmet,
 / #1927): an execution with no book for one of its route's legs is a legitimate
@@ -168,17 +227,15 @@
     ([] source_time:2026.09.17D09:59:59 2026.09.17D10:00:00.5 2026.09.17D10:00:05 2026.09.17D10:00:00.5 2026.09.17D10:00:08 2026.09.17D09:59:59 2026.09.17D10:00:25,2026.09.17D10:00:18 2026.09.17D10:00:18 2026.09.17D10:00:18 2026.09.17D10:00:25 2026.09.17D10:00:25;
         sym:`EURUSD`EURUSD`EURUSD`EURUSD`EURUSD`EURPLN`EURPLN`EURUSD`EURUSD`EURPLN`EURUSD`EURUSD;
         source:`a`a`a`b`b`a`a`a`b`a`a`b;
-        bid_prices:(enlist 1.0999;enlist 1.1004;enlist 1.1009;enlist 1.1003;enlist 1.1008;enlist 4.9999;enlist 5.0999;enlist 1.1009;enlist 1.1008;enlist 4.9999;enlist 1.1009;enlist 1.1008);
-        bid_sizes:12#enlist enlist 1e6;
-        ask_prices:(enlist 1.1001;enlist 1.1006;enlist 1.1011;enlist 1.1007;enlist 1.1010;enlist 5.0001;enlist 5.1001;enlist 1.1011;enlist 1.1010;enlist 5.0001;enlist 1.1011;enlist 1.1010);
-        ask_sizes:12#enlist enlist 1e6; clock:12#`venue)}
+        bid:1.0999 1.1004 1.1009 1.1003 1.1008 4.9999 5.0999 1.1009 1.1008 4.9999 1.1009 1.1008f;
+        ask:1.1001 1.1006 1.1011 1.1007 1.1010 5.0001 5.1001 1.1011 1.1010 5.0001 1.1011 1.1010f; clock:12#`venue)}
 
 / What query returns for the fixture's day.
 / @return `executions`market_data!(raw_executions[];raw_market_data[])
 .qpipe.source.hdb_fx_markouts.fixture:{[] `executions`market_data!(.qpipe.source.hdb_fx_markouts.raw_executions[];.qpipe.source.hdb_fx_markouts.raw_market_data[])}
 
 .qetl.source.define[.qpipe.source.hdb_fx_markouts.source_name;
-    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`supporting`reference_read`complete_through`ready!
-    (.qpipe.source.hdb_fx_markouts.source_name;`executions;.qpipe.source.hdb_fx_markouts.time_column;.qpipe.source.hdb_fx_markouts.row_key;.qpipe.source.hdb_fx_markouts.columns;.qpipe.source.hdb_fx_markouts.types;.qpipe.source.hdb_fx_markouts.query;.qpipe.source.hdb_fx_markouts.fixture;.qpipe.source.hdb_fx_markouts.tz;.qpipe.source.hdb_fx_markouts.supporting;.qpipe.source.hdb_fx_markouts.reference_read;.qpipe.source.hdb_fx_markouts.complete_through;.qpipe.source.hdb_fx_markouts.ready)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`supporting`reference_read`batch_read`complete_through`ready!
+    (.qpipe.source.hdb_fx_markouts.source_name;`executions;.qpipe.source.hdb_fx_markouts.time_column;.qpipe.source.hdb_fx_markouts.row_key;.qpipe.source.hdb_fx_markouts.columns;.qpipe.source.hdb_fx_markouts.types;.qpipe.source.hdb_fx_markouts.query;.qpipe.source.hdb_fx_markouts.fixture;.qpipe.source.hdb_fx_markouts.tz;.qpipe.source.hdb_fx_markouts.supporting;.qpipe.source.hdb_fx_markouts.reference_read;.qpipe.source.hdb_fx_markouts.batch_read;.qpipe.source.hdb_fx_markouts.complete_through;.qpipe.source.hdb_fx_markouts.ready)];
 
 \d .

@@ -34,8 +34,8 @@
             ([] sym:enlist `a; event_time:enlist .qt.qetl.job.stream.horizons.t0; px:enlist 1f; ref:enlist 1.5)))];
     }
 
-.qt.qetl.job.stream.horizons.decl:{[] `procname`events`reference`transform`publishes`horizon`period`ephemeral!(
-    `hzt1;`hz_events;`hz_refs;`horizontest_px;`hz_priced;0D00:00:01;0D00:00:01;"a test fixture")}
+.qt.qetl.job.stream.horizons.decl:{[] `procname`events`reference`transform`outputs`horizon`period`ephemeral!(
+    `hzt1;`hz_events;`hz_refs;`horizontest_px;enlist `hz_priced;0D00:00:01;0D00:00:01;"a test fixture")}
 
 / one process per job, as .qetl.job.stream.define insists
 .qt.qetl.job.stream.horizons.decl_for:{[nm] @[.qt.qetl.job.stream.horizons.decl[];`procname;:;`$string[nm],"1"]}
@@ -82,6 +82,16 @@
         "*claims procname hz_l1 which hz_l already runs*";"the streaming registry refuses it"];
     .qunit.assertFalse[`hz_m in .qetl.job.stream.horizons.defined[];"and nothing half-registered is left"]};
 
+.qt.qetl.job.stream.horizons.test_the_retired_publishes_key_is_refused_and_outputs_holds_exactly_one_table:{[t]
+    .qt.qetl.job.stream.horizons.define_transform[];
+    old:(`outputs _ .qt.qetl.job.stream.horizons.decl[]),enlist[`publishes]!enlist `hz_out;
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_x;];old;
+        "*declares publishes, which is now outputs - rename the key*";"the old spelling is refused with its migration"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_x;];@[.qt.qetl.job.stream.horizons.decl[];`outputs;:;`hz_a`hz_b];
+        "*outputs must be a symbol list of exactly one table*";"a job of this kind writes one table"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_x;];@[.qt.qetl.job.stream.horizons.decl[];`outputs;:;`hz_a];
+        "*outputs must be a symbol list of exactly one table*";"an atom is not a list of one"]};
+
 .qt.qetl.job.stream.horizons.test_an_unknown_key_is_refused:{[t]
     .qt.qetl.job.stream.horizons.define_transform[];
     .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_d;];.qt.qetl.job.stream.horizons.decl[],enlist[`widht]!enlist 1;
@@ -91,7 +101,16 @@
     .qt.qetl.job.stream.horizons.job[`hz_e;()!()];
     d:.qetl.job.stream.def `hz_e;
     .qunit.assertEquals[d`subscribe_to;`hz_events`hz_refs;"events then reference"];
-    .qunit.assertEquals[d`publishes;enlist `hz_priced;"the declared output"]};
+    .qunit.assertEquals[d`outputs;enlist `hz_priced;"the declared output"]};
+
+.qt.qetl.job.stream.horizons.test_events_and_reference_must_be_distinct_tables:{[t]
+    .qt.qetl.job.stream.horizons.define_transform[];
+    d:.qt.qetl.job.stream.horizons.decl_for[`hz_same_input];
+    d[`reference]:d`events;
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_same_input;];d;
+        "*needs distinct events and reference tables*";"a batch cannot be routed to both buffers"];
+    .qunit.assertFalse[`hz_same_input in .qetl.job.stream.horizons.defined[];
+        "a refused declaration is not registered"]};
 
 / --- running --------------------------------------------------------------
 
@@ -190,13 +209,45 @@
 .qt.qetl.job.stream.horizons.sjob:{[nm;extra]
     .qt.qetl.job.stream.horizons.define_src_transform[];
     d:@[.qt.qetl.job.stream.horizons.decl_for[nm];`transform;:;`horizontest_src];
-    .qetl.job.stream.at_horizons[nm;d,extra];
+    / a source-stamp job must declare its lateness (#2116); an hour unless a test says otherwise
+    .qetl.job.stream.at_horizons[nm;d,(enlist[`lateness]!enlist 0D01),extra];
     `.qt.qetl.job.stream.horizons.sent set ();
     .qetl.job.stream.wire[nm;{[t;x] .qt.qetl.job.stream.horizons.sent,:enlist (t;x); count x}];
     nm}
 
 / an event that happened at `at`, received 30s later
 .qt.qetl.job.stream.horizons.sev:{[s;at;i] ([] time:enlist at+0D00:00:30; source_time:enlist at; sym:enlist s; id:enlist i; px:enlist 1f)}
+
+.qt.qetl.job.stream.horizons.test_compound_identities_keep_field_boundaries_on_redelivery:{[t]
+    nm:.qt.qetl.job.stream.horizons.sjob[`hz_id_pending;`event_time`identity!(`source_time;`sym`id)];
+    a:.qt.qetl.job.stream.horizons.sev[`$"a|b";.qt.qetl.job.stream.horizons.t0;`c];
+    b:.qt.qetl.job.stream.horizons.sev[`a;.qt.qetl.job.stream.horizons.t0;`$"b|c"];
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;a,b];
+    .qunit.assertEquals[count .qt.qetl.job.stream.horizons.ns[nm;`pending];2;"distinct tuples both wait"];
+    latest:update px:2f from a;
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;latest];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.ns[nm;`pending];b,latest;
+        "redelivery replaces only its exact identity"]};
+
+.qt.qetl.job.stream.horizons.test_completed_identity_does_not_suppress_a_different_tuple:{[t]
+    nm:.qt.qetl.job.stream.horizons.sjob[`hz_id_completed;`event_time`identity!(`source_time;`sym`id)];
+    a:.qt.qetl.job.stream.horizons.sev[`$"a|b";.qt.qetl.job.stream.horizons.t0;`c];
+    b:.qt.qetl.job.stream.horizons.sev[`a;.qt.qetl.job.stream.horizons.t0;`$"b|c"];
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;a];
+    (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:02;
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;a,b];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.ns[nm;`pending];b;
+        "only the already scored tuple is suppressed"];
+    (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:03;
+    .qunit.assertEquals[count .qt.qetl.job.stream.horizons.sent;2;"both events are scored"]};
+
+.qt.qetl.job.stream.horizons.test_numeric_identity_keeps_precision_and_empty_input_shape:{[t]
+    d:enlist[`identity]!enlist enlist `id;
+    rows:([] id:1.000000001 1.000000002);
+    .qunit.assertEquals[count distinct .qetl.job.stream.horizons.ids_of[d;rows];2;
+        "display precision must not merge distinct numeric identities"];
+    .qunit.assertEquals[.qetl.job.stream.horizons.ids_of[d;0#rows];`symbol$();
+        "no events still gives an empty symbol vector"]};
 
 .qt.qetl.job.stream.horizons.test_maturity_is_measured_on_event_time_not_receipt:{[t]
     nm:.qt.qetl.job.stream.horizons.sjob[`hz_s1;enlist[`event_time]!enlist `source_time];
@@ -284,7 +335,7 @@
 
 .qt.qetl.job.stream.horizons.test_the_new_keys_are_refused_when_malformed:{[t]
     .qt.qetl.job.stream.horizons.define_src_transform[];
-    d:@[.qt.qetl.job.stream.horizons.decl_for[`hz_s11];`transform;:;`horizontest_src];
+    d:@[.qt.qetl.job.stream.horizons.decl_for[`hz_s11];`transform`lateness;:;(`horizontest_src;0D)];
     .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_s11;];d,enlist[`event_time]!enlist `when;
         "*events input carries no when*";"an event_time the events lack"];
     .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_s11;];d,enlist[`ready_on]!enlist `soon;
@@ -302,20 +353,22 @@
 
 .qt.qetl.job.stream.horizons.test_a_late_event_finds_its_reference_after_an_idle_tick:{[t]
     / received 30s after it happened; an idle tick at t0+25s must not have evicted t0's rows
-    nm:.qt.qetl.job.stream.horizons.sjob[`hz_l1;`event_time`max_lateness!(`source_time;0D00:01)];
+    nm:.qt.qetl.job.stream.horizons.sjob[`hz_l1;`event_time`lateness!(`source_time;0D00:01)];
     (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_refs;.qt.qetl.job.stream.horizons.late_refs[]];
     (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:25;
     (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.sev[`a;.qt.qetl.job.stream.horizons.t0;`e1]];
     (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:30;
     .qunit.assertEquals[exec ref from last last .qt.qetl.job.stream.horizons.sent;enlist 1.5;"the answer the full history gives"]};
 
-.qt.qetl.job.stream.horizons.test_the_default_lateness_bound_covers_a_source_time_event:{[t]
-    nm:.qt.qetl.job.stream.horizons.sjob[`hz_l2;enlist[`event_time]!enlist `source_time];
-    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_refs;.qt.qetl.job.stream.horizons.late_refs[]];
-    (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:25;
-    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.sev[`a;.qt.qetl.job.stream.horizons.t0;`e1]];
-    (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:30;
-    .qunit.assertEquals[exec ref from last last .qt.qetl.job.stream.horizons.sent;enlist 1.5;"no declared bound: the documented default applies"]};
+.qt.qetl.job.stream.horizons.test_a_source_stamp_job_must_declare_its_lateness:{[t]
+    .qt.qetl.job.stream.horizons.define_src_transform[];
+    d:@[.qt.qetl.job.stream.horizons.decl_for[`hz_l2];`transform`event_time;:;(`horizontest_src;`source_time)];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_l2;];d;
+        "*horizon job hz_l2 is missing lateness*";"no implicit one-hour retention"]};
+
+.qt.qetl.job.stream.horizons.test_the_old_max_lateness_spelling_is_refused_naming_the_new_one:{[t]
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_l7;];.qt.qetl.job.stream.horizons.decl_for[`hz_l7],enlist[`max_lateness]!enlist 0D00:00:30;
+        "*max_lateness, which is now lateness*";"the old key"]};
 
 .qt.qetl.job.stream.horizons.test_a_late_event_is_not_falsely_expired_under_reference_readiness:{[t]
     nm:.qt.qetl.job.stream.horizons.sjob[`hz_l3;`event_time`ready_on`expire_after!(`source_time;`reference;0D00:01)];
@@ -326,21 +379,21 @@
     .qunit.assertEquals[(count .qt.qetl.job.stream.horizons.sent;count .qt.qetl.job.stream.horizons.ns[nm;`expired]);1 0;"scored, not given up on"]};
 
 .qt.qetl.job.stream.horizons.test_the_lateness_bound_still_trims_the_history:{[t]
-    nm:.qt.qetl.job.stream.horizons.sjob[`hz_l4;`event_time`max_lateness!(`source_time;0D00:00:02)];
+    nm:.qt.qetl.job.stream.horizons.sjob[`hz_l4;`event_time`lateness!(`source_time;0D00:00:02)];
     (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_refs;.qt.qetl.job.stream.horizons.late_refs[]];
     (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:25;
     .qunit.assertEquals[exec time from .qt.qetl.job.stream.horizons.ns[nm;`history];enlist .qt.qetl.job.stream.horizons.t0+0D00:00:20;"only the as-of row below now-horizon-lateness"]};
 
 .qt.qetl.job.stream.horizons.test_a_receipt_time_job_has_no_lateness:{[t]
     nm:.qt.qetl.job.stream.horizons.job[`hz_l5;()!()];
-    .qunit.assertEquals[(.qetl.job.stream.horizons.def nm)`max_lateness;0D;"event_time is `time"]};
+    .qunit.assertEquals[(.qetl.job.stream.horizons.def nm)`lateness;0D;"event_time is `time"]};
 
-.qt.qetl.job.stream.horizons.test_max_lateness_must_be_a_non_negative_timespan:{[t]
+.qt.qetl.job.stream.horizons.test_lateness_must_be_a_non_negative_timespan:{[t]
     .qt.qetl.job.stream.horizons.define_transform[];
-    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_l6;];.qt.qetl.job.stream.horizons.decl_for[`hz_l6],enlist[`max_lateness]!enlist -0D00:00:01;
-        "*max_lateness must be a timespan*";"negative"];
-    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_l6;];.qt.qetl.job.stream.horizons.decl_for[`hz_l6],enlist[`max_lateness]!enlist 5;
-        "*max_lateness must be a timespan*";"not a timespan"]};
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_l6;];.qt.qetl.job.stream.horizons.decl_for[`hz_l6],enlist[`lateness]!enlist -0D00:00:01;
+        "*lateness must be a timespan*";"negative"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_l6;];.qt.qetl.job.stream.horizons.decl_for[`hz_l6],enlist[`lateness]!enlist 5;
+        "*lateness must be a timespan*";"not a timespan"]};
 
 / the anchor is at t0-2s, past max_age 1s; the reference reaches t0+1s only after a tick
 .qt.qetl.job.stream.horizons.anchor_run:{[nm;tick]
@@ -464,7 +517,7 @@
 
 .qt.qetl.job.stream.horizons.test_both_is_refused_without_a_one_column_by:{[t]
     .qt.qetl.job.stream.horizons.define_src_transform[];
-    d:@[.qt.qetl.job.stream.horizons.decl_for[`hz_b5];`transform;:;`horizontest_src];
+    d:@[.qt.qetl.job.stream.horizons.decl_for[`hz_b5];`transform`lateness;:;(`horizontest_src;0D)];
     .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_b5;];d,`event_time`ready_on`by!(`source_time;`both;`sym`mid);
         "*ready_on `both needs a one-column by*";"the key its legs name"]};
 
@@ -544,8 +597,8 @@
 
 / --- readiness per series, and the grace that bounds it (#1523, #1524) -----------------------------
 
-/ The declaration fields readiness reads: horizon 10s, lookback 2s, max_age 5s, max_lateness 30s.
-.qt.qetl.job.stream.horizons.rd:{[] `by`retain_by`reference_time`horizon`lookback`max_age`max_lateness!(enlist `sym;`sym`source;`time;0D00:00:10;0D00:00:02;0D00:00:05;0D00:00:30)}
+/ The declaration fields readiness reads: horizon 10s, lookback 2s, max_age 5s, lateness 30s.
+.qt.qetl.job.stream.horizons.rd:{[] `by`retain_by`reference_time`horizon`lookback`max_age`lateness!(enlist `sym;`sym`source;`time;0D00:00:10;0D00:00:02;0D00:00:05;0D00:00:30)}
 
 .qt.qetl.job.stream.horizons.why:{[rows;now]
     d:.qt.qetl.job.stream.horizons.rd[];
@@ -559,12 +612,85 @@
     .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[rows,enlist (`b;10);12];"";"ready once b has reached the horizon too"];
     .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[((`a;-3);(`b;-3);(`a;11);(`b;4));12];"";"a source whose last book is older than max_age at the horizon sets nothing"]};
 
-.qt.qetl.job.stream.horizons.test_the_grace_after_max_lateness_waives_a_silent_source_and_the_lookback_reach:{[t]
+.qt.qetl.job.stream.horizons.test_the_grace_after_lateness_waives_a_silent_source_and_the_lookback_reach:{[t]
     behind:((`a;-3);(`b;-3);(`a;11);(`b;8));
-    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[behind;39];"a source has not reached 2026.10.09D10:00:10.000000000 for a";"a second short of horizon + max_lateness"];
-    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[behind;40];"";"at horizon + max_lateness a book stamped earlier cannot still arrive"];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[behind;39];"a source has not reached 2026.10.09D10:00:10.000000000 for a";"a second short of horizon + lateness"];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[behind;40];"";"at horizon + lateness a book stamped earlier cannot still arrive"];
     / no book at or before T-2s, one at T-0.5s: the lookback reach alone
     start:((`a;-0.5);(`a;11));
     .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[start;12];"no time at or before 2026.10.09D09:59:58.000000000 for a";"an older book could still arrive"];
     .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[start;40];"";"waived at the grace"];
     .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[enlist (`a;11);40];"no time at or before 2026.10.09D10:00:00.000000000 for a";"but an anchor at the event itself is still required"]};
+
+/ --- jobs of one process share one reference buffer (#2288) ------------------------------------------------
+
+/ The reference input with a column the shared job's transform does not read, to meet a shape mismatch.
+.qt.qetl.job.stream.horizons.define_wide_transform:{[]
+    if[`horizontest_wide in .qetl.transform.defined[]; :()];
+    wide:update extra:`float$() from .qt.qetl.job.stream.horizons.refs;
+    .qetl.transform.define[`horizontest_wide;`inputs`output`fn`examples!(
+        `events`refs!(.qt.qetl.job.stream.horizons.events;wide);
+        .qt.qetl.job.stream.horizons.priced;
+        {[e;r] .qt.qetl.job.stream.horizons.price[e;select time, sym, mid from r]};
+        enlist `inputs`expected!(
+            `events`refs!(([] time:enlist .qt.qetl.job.stream.horizons.t0; sym:enlist `a; px:enlist 1f);
+                ([] time:.qt.qetl.job.stream.horizons.t0+0D00:00:00.5 0D00:00:05; sym:`a`a; mid:1.5 9f; extra:2#0n));
+            ([] sym:enlist `a; event_time:enlist .qt.qetl.job.stream.horizons.t0; px:enlist 1f; ref:enlist 1.5)))]}
+
+/ Two jobs reading hz_refs, shared or not, and the heap holding n reference rows adds to each.
+.qt.qetl.job.stream.horizons.pair:{[shared;n]
+    ex:$[shared; enlist[`shared_reference]!enlist 1b; ()!()];
+    sfx:$[shared; "_s"; "_u"];
+    a:.qt.qetl.job.stream.horizons.job[`$"hz_pa",sfx;ex];
+    b:.qt.qetl.job.stream.horizons.job[`$"hz_pb",sfx;ex];
+    big:.qt.qetl.job.stream.horizons.rf[`a;.qt.qetl.job.stream.horizons.t0+til n;n#1f];
+    .Q.gc[];
+    u0:(.Q.w[])`used;
+    (.qt.qetl.job.stream.horizons.ns[a;`on_batch])[`hz_refs;big];
+    (.qt.qetl.job.stream.horizons.ns[b;`on_batch])[`hz_refs;big];
+    u1:(.Q.w[])`used;
+    (u1-u0;count .qt.qetl.job.stream.horizons.ns[a;`history];count .qt.qetl.job.stream.horizons.ns[b;`history])}
+
+.qt.qetl.job.stream.horizons.test_jobs_that_share_a_reference_hold_it_once:{[t]
+    n:200000;
+    apart:.qt.qetl.job.stream.horizons.pair[0b;n];
+    together:.qt.qetl.job.stream.horizons.pair[1b;n];
+    .qunit.assertEquals[apart 1 2;n,n;"unshared, each job holds the rows"];
+    .qunit.assertEquals[together 1 2;n,n;"shared, each job still reads them all - as its own history"];
+    / PeachQ's .Q.w[] counts the heap in whole blocks (12.5MB for either), so the bytes are measured on KDB-X
+    if[.qetl.io.on_peachq; :.qunit.assertTrue[1b;"PeachQ's .Q.w[] does not resolve a heap delta: measured on KDB-X"]];
+    .qunit.assertTrue[(together 0)<0.7*apart 0;"but the heap holds them once: ",string[together 0]," bytes against ",string apart 0]};
+
+.qt.qetl.job.stream.horizons.test_the_first_member_to_see_a_batch_appends_it_and_the_rest_add_nothing:{[t]
+    a:.qt.qetl.job.stream.horizons.job[`hz_qa;enlist[`shared_reference]!enlist 1b];
+    b:.qt.qetl.job.stream.horizons.job[`hz_qb;enlist[`shared_reference]!enlist 1b];
+    batch:.qt.qetl.job.stream.horizons.rf[`a;.qt.qetl.job.stream.horizons.t0+0D00:00:01*til 3;1 2 3f];
+    (.qt.qetl.job.stream.horizons.ns[b;`on_batch])[`hz_refs;batch];
+    (.qt.qetl.job.stream.horizons.ns[a;`on_batch])[`hz_refs;batch];
+    (.qt.qetl.job.stream.horizons.ns[b;`on_batch])[`hz_refs;batch];
+    h:{.qt.qetl.job.stream.horizons.ns[x;`history]} each a,b;
+    .qunit.assertEquals[(count h 0;(h 0)~h 1);(3;1b);"three rows however many members saw the batch, and the same rows in both"]};
+
+.qt.qetl.job.stream.horizons.test_a_tick_of_one_member_keeps_what_another_still_needs:{[t]
+    t0:.qt.qetl.job.stream.horizons.t0;
+    ex:`shared_reference`max_age!(1b;0D00:00:30);
+    a:.qt.qetl.job.stream.horizons.job[`hz_ra;ex];
+    b:.qt.qetl.job.stream.horizons.job[`hz_rb;ex];
+    / a's event waits for its second; b has nothing pending
+    (.qt.qetl.job.stream.horizons.ns[a;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.ev[`a;t0]];
+    (.qt.qetl.job.stream.horizons.ns[a;`on_batch])[`hz_refs;.qt.qetl.job.stream.horizons.rf[`a;t0+0D00:00:00.5 0D00:01:00;1.5 9f]];
+    / b ticks long after: alone it would drop everything older than its own floor
+    (.qt.qetl.job.stream.horizons.ns[b;`score_ready]) t0+0D00:00:00.9;
+    (.qt.qetl.job.stream.horizons.ns[b;`score_ready]) t0+0D00:00:00.9;
+    kept:exec time from .qt.qetl.job.stream.horizons.ns[a;`history];
+    .qunit.assertTrue[(t0+0D00:00:00.5) in kept;"the book a's pending event is priced by survives b's tick"];
+    (.qt.qetl.job.stream.horizons.ns[a;`score_ready]) t0+0D00:00:01;
+    .qunit.assertEquals[exec ref from last last .qt.qetl.job.stream.horizons.sent;enlist 1.5;"and a scores against it"];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.ns[a;`history]~.qt.qetl.job.stream.horizons.ns[b;`history];1b;"the members still hold one value"]};
+
+.qt.qetl.job.stream.horizons.test_a_member_that_reads_the_table_in_another_shape_is_refused:{[t]
+    .qt.qetl.job.stream.horizons.define_wide_transform[];
+    .qt.qetl.job.stream.horizons.job[`hz_wa;enlist[`shared_reference]!enlist 1b];
+    d:@[.qt.qetl.job.stream.horizons.decl_for[`hz_pw];`transform;:;`horizontest_wide],enlist[`shared_reference]!enlist 1b;
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_pw;];d;"*shared_reference: hz_pw reads hz_refs as time, sym, mid, extra, but hz_wa shares that buffer as time, sym, mid*";"one buffer has one shape"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_pq;];.qt.qetl.job.stream.horizons.decl_for[`hz_pq],enlist[`shared_reference]!enlist 1;"*shared_reference must be a boolean*";"and the key is a flag"]};

@@ -49,10 +49,10 @@
     steps:0 1 2 3 0;
     `columns`execution`horizon`shared`own`base`components`present`per_execution!(
         cols .qpipe.transform.fx_markout.result;`venue`fill_id;`horizon;
-        `time`source_time`clock`sym`side`size`price`quote_ccy`ref_t0`ref_t1`pip_factor`pip_value`report_ccy`rate`rate_source`rate_sym`rate_time`rate_timing`contract_version`version;
+        `time`source_time`clock`sym`side`size`price`quote_ccy`ref_t0`ref_t1`pip_factor`pip_value`rate`rate_source`rate_sym`rate_time`config_id`version;
         `leg`invert`price_t0`price_t1`move`pips`quote_amount`report_amount`status;`total;
         ([] kind:comps; step:steps);`status;
-        `time`source_time`clock`sym`side`size`price`quote_ccy`pip_factor`pip_value`report_ccy`contract_version`version)}
+        `time`source_time`clock`sym`side`size`price`quote_ccy`pip_factor`pip_value`config_id`version)}
 
 / The long layout of a calculation result.
 / @param res the calculation result
@@ -99,12 +99,28 @@
 / declares one.
 .qpipe.transform.fx_markout_outputs.job_spec:.qpipe.transform.fx_markout.default_spec,enlist[`horizons]!enlist(-0D00:00:01;0D00:00:00;0D00:00:01;0D00:00:10)
 
+/ The snapshot id the job spec's results belong to: the shipped jobs, the bounded twins and the
+/ hand-worked examples below all stamp it. config_markout.id takes a validated spec and the job
+/ spec is complete, so it is that spec as it stands; tests/q/test_config_markout.q holds the two
+/ ways of computing it equal.
+.qpipe.transform.fx_markout_outputs.config_id:.qpipe.transform.config_markout.id[.qpipe.transform.fx_domain.domain;.qpipe.transform.fx_markout_outputs.job_spec]
+
+/ Pin the job spec's configuration snapshot: the live jobs' `on_start` and the bounded twins' `pin`
+/ call it, so the snapshot is durable before the first calculation (#1999).
+/ @return the snapshot id, as a one-item list
+/ @eg count .qpipe.transform.fx_markout_outputs.pin[]  ->  1
+.qpipe.transform.fx_markout_outputs.pin:{[]
+    enlist .qpipe.transform.config_markout.pin[.qpipe.transform.fx_domain.domain;.qpipe.transform.fx_markout_outputs.job_spec;"fx_markout job spec: the live jobs fxmarkout1 and fxmarkoutwide1 and their bounded twins"]}
+
 / The least a job waits before scoring, however early its horizons are.
 .qpipe.transform.fx_markout_outputs.settle:0D00:00:01
 
 / How long a job waits for an execution's references before giving up on it: the
 / wait for its horizons, and five minutes more.
-.qpipe.transform.fx_markout_outputs.expire_after:.qpipe.transform.fx_markout.wait[.qpipe.transform.fx_markout_outputs.job_spec;.qpipe.transform.fx_markout_outputs.settle]+0D00:05
+/ @return a timespan
+/ @eg .qpipe.transform.fx_markout_outputs.expire_after[]  ->  0D00:05:10
+.qpipe.transform.fx_markout_outputs.expire_after:{[]
+    .qpipe.transform.fx_markout.wait[.qpipe.transform.fx_markout_outputs.job_spec;.qpipe.transform.fx_markout_outputs.settle]+0D00:05}
 
 / How long a job remembers an execution it has scored, to drop a redelivery.
 .qpipe.transform.fx_markout_outputs.remember:0D01
@@ -114,7 +130,7 @@
 / kind's day-long default for an event on source_time, which would hold a day of
 / every pair's books. An execution that arrives later than this after it happened
 / may find its books evicted and expires unscored, with the reason.
-.qpipe.transform.fx_markout_outputs.max_lateness:0D00:00:30
+.qpipe.transform.fx_markout_outputs.lateness:0D00:00:30
 
 / The calculation and one layout, with `time` as the core stamps it: the execution's
 / time plus the furthest horizon, the earliest a live row could have been stamped (all
@@ -161,8 +177,8 @@
         price_t0:3.99 3.99 1.25 5 0n; price_t1:5.5 4 1 5.5 0n;
         quote_ccy:5#`PLN; ref_t0:5#4.0; ref_t1:5#5.5;
         move:-1.51 -0.01 -1 -0.5 0f; pips:-15100 -100 -10000 -5000 0f; pip_factor:(5#.qf.px.pip_factor `USDPLN); pip_value:5#100f;
-        quote_amount:-1510000 -10000 -1000000 -500000 0f; report_ccy:5#`USD; rate:5#0n; rate_source:5#`; rate_sym:5#`;
-        rate_time:5#0Np; rate_timing:5#`execution; report_amount:5#0n; status:5#`no_rate; contract_version:5#1; version:5#`proposed_v1)}
+        quote_amount:-1510000 -10000 -1000000 -500000 0f; rate:5#0n; rate_source:5#`; rate_sym:5#`;
+        rate_time:5#0Np; report_amount:5#0n; status:5#`no_rate; config_id:5#.qpipe.transform.fx_markout_outputs.config_id; version:5#`proposed_v1)}
 
 / A EURUSD buy at 1.1001, as the executions normalizer publishes it.
 / @private
@@ -175,10 +191,8 @@
 .qpipe.transform.fx_markout_outputs.sample_books:{[]
     ([] source_time:2026.09.17D09:59:59 2026.09.17D10:00:00.5 2026.09.17D10:00:05 2026.09.17D10:00:00.5 2026.09.17D10:00:08;
         sym:5#`EURUSD; source:`a`a`a`b`b;
-        bid_prices:(enlist 1.0999;enlist 1.1004;enlist 1.1009;enlist 1.1003;enlist 1.1008);
-        bid_sizes:5#enlist enlist 1e6;
-        ask_prices:(enlist 1.1001;enlist 1.1006;enlist 1.1011;enlist 1.1007;enlist 1.1010);
-        ask_sizes:5#enlist enlist 1e6; clock:5#`venue)}
+        bid:1.0999 1.1004 1.1009 1.1003 1.1008f;
+        ask:1.1001 1.1006 1.1011 1.1007 1.1010f; clock:5#`venue)}
 
 / Its long rows under the job grid: the markout, the execution residual, the one
 / leg and the residual at -1s, 0s, +1s and +10s. 1e6 EURUSD is 100 USD a pip, and
@@ -194,9 +208,9 @@
         move:-1e-4 -1e-4 0 0f,-1e-4 -1e-4 0 0f,4e-4 -1e-4 5e-4 0f,8.5e-4 -1e-4 9.5e-4 0f;
         pips:-1 -1 0 0f,-1 -1 0 0f,4 -1 5 0f,8.5 -1 9.5 0f; pip_factor:(16#.qf.px.pip_factor `EURUSD); pip_value:16#100f;
         quote_amount:-100 -100 0 0f,-100 -100 0 0f,400 -100 500 0f,850 -100 950 0f;
-        report_ccy:16#`USD; rate:16#1f; rate_source:16#`fixed; rate_sym:16#`; rate_time:16#0Np; rate_timing:16#`execution;
+        rate:16#1f; rate_source:16#`fixed; rate_sym:16#`; rate_time:16#0Np;
         report_amount:-100 -100 0 0f,-100 -100 0 0f,400 -100 500 0f,850 -100 950 0f;
-        status:16#`ok`ok`ok`reconciled; contract_version:16#1; version:16#`proposed_v1)}
+        status:16#`ok`ok`ok`reconciled; config_id:16#.qpipe.transform.fx_markout_outputs.config_id; version:16#`proposed_v1)}
 
 / Its wide rows under the job grid.
 / @private
@@ -208,8 +222,8 @@
         leg1:4#`EURUSD; leg1_invert:4#0b; leg1_pips:0 0 5 9.5;
         leg2:4#`; leg2_invert:4#0b; leg2_pips:4#0n;
         leg3:4#`; leg3_invert:4#0b; leg3_pips:4#0n;
-        quote_amount:-100 -100 400 850f; report_ccy:4#`USD; rate:4#1f; rate_source:4#`fixed; rate_sym:4#`; rate_time:4#0Np; rate_timing:4#`execution;
-        report_amount:-100 -100 400 850f; status:4#`ok; contract_version:4#1; version:4#`proposed_v1)}
+        quote_amount:-100 -100 400 850f; rate:4#1f; rate_source:4#`fixed; rate_sym:4#`; rate_time:4#0Np;
+        report_amount:-100 -100 400 850f; status:4#`ok; config_id:4#.qpipe.transform.fx_markout_outputs.config_id; version:4#`proposed_v1)}
 
 \d .
 
@@ -242,9 +256,9 @@
             leg1:enlist `EURUSD; leg1_invert:enlist 1b; leg1_pips:enlist -10000f;
             leg2:enlist `EURPLN; leg2_invert:enlist 0b; leg2_pips:enlist -5000f;
             leg3:enlist `; leg3_invert:enlist 0b; leg3_pips:enlist 0n;
-            quote_amount:enlist -1510000f; report_ccy:enlist `USD; rate:enlist 0n; rate_source:enlist `; rate_sym:enlist `;
-            rate_time:enlist 0Np; rate_timing:enlist `execution; report_amount:enlist 0n; status:enlist `no_rate;
-            contract_version:enlist 1; version:enlist `proposed_v1)))];
+            quote_amount:enlist -1510000f; rate:enlist 0n; rate_source:enlist `; rate_sym:enlist `;
+            rate_time:enlist 0Np; report_amount:enlist 0n; status:enlist `no_rate;
+            config_id:enlist .qpipe.transform.fx_markout_outputs.config_id; version:enlist `proposed_v1)))];
 
 / A EURUSD buy at 1.1001 against two sources, the job grid. At the execution a's
 / 1.0999/1.1001 is the only book (mid 1.1000); at -1s it is the same book. +1s: the best

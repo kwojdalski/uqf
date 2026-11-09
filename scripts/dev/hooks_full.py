@@ -9,8 +9,7 @@ in full on a clean Linux checkout. Each check runs in one place:
 * q-tests and q-coverage, at push, run only the q suites the branch reaches
   (scripts/dev/test_impact.py);
 * doc-links (the Quarto render) and q-docs-peachq (the docs' q blocks on
-  PeachQ) do not run at all: CI runs both on every pull request that can
-  change them.
+  PeachQ) do not run at all: CI runs both on master and nightly (#2167).
 
 UQF_HOOKS_FULL=1 turns all of that back into the full set the hooks ran
 before: the whole Python suite, the whole q suite and its whole coverage
@@ -66,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     name, cmd = args[1], args[3:]
     if not full():
-        print(f"{name}: not run at commit - CI runs it on every pull request; {ENV}=1 runs it here")
+        print(f"{name}: not run at commit - CI runs it on master and nightly; {ENV}=1 runs it here")
         return 0
     return subprocess.run(cmd, check=False).returncode
 

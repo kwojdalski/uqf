@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+from uqs.attach import writer_calendar
 from uqs.attach.backfill_coordination import EOD_GUARD, fence
 from uqs.attach.remote import Endpoint, Ipc, IpcError
 from uqs.guardrails import Guardrail
@@ -35,14 +36,20 @@ GUARDRAILS = (
 )
 
 
-def last_completed_date(host: str, port: int, ipc: Ipc) -> date:
-    """The last date a forced run may write: the day before the writer's active date.
+def completed_bounds(host: str, port: int, ipc: Ipc) -> tuple[date, str]:
+    """The last date a forced run may write, and the calendar it files rows by.
+
+    The date is the day before the writer's active date, in the writer's own calendar
+    (#2193): the runner partitions by the same calendar, so a row's date is compared with it
+    as the stack names it. The calendar is `-calendar`'s text, '' when the stack files by UTC
+    midnight.
 
     @param host the --writer process's host
     @param port its port
     @param ipc the connection, with the attachment's credential
     @raise UqsError when the writer does not answer or does not say which date it is
-        filling - an unknown date is never read as safe, so the run does not start
+        filling - an unknown date is never read as safe, so the run does not start - or
+        stamps `time` in a data zone this run does not stamp
     """
     where = f"{host}:{port}"
     try:
@@ -54,9 +61,10 @@ def last_completed_date(host: str, port: int, ipc: Ipc) -> date:
         ) from exc
     refusals: list = []
     active, _, _ = fence(state, [], EOD_GUARD, refusals)
-    unknown = [b for b in refusals if b.code == "active-date-unknown"]
+    unknown = [b for b in refusals if b.code in ("active-date-unknown", "native-calendar")]
     if unknown or active is None:
         raise UqsError(
             unknown[0].message if unknown else f"{where} does not report which date it is writing"
         )
-    return active - timedelta(days=1)
+    calendar = writer_calendar.of(state) or writer_calendar.Calendar()
+    return active - timedelta(days=1), calendar.runner_text

@@ -7,7 +7,7 @@ import {
   createSortedRowModel,
   sortFns,
 } from "@tanstack/react-table";
-import type { RemoteEntry } from "./api";
+import type { RemoteEntry } from "./api/services";
 
 const features = tableFeatures({
   rowSortingFeature,
@@ -37,12 +37,15 @@ const KIND: Record<RemoteEntry["kind"], string> = {
 };
 
 function Checkbox({
+  name,
   label,
   checked,
   mixed = false,
   disabled,
   onChange,
 }: {
+  /** The control's activity name (activity.ts). */
+  name: string;
   label: string;
   checked: boolean;
   mixed?: boolean;
@@ -57,6 +60,7 @@ function Checkbox({
     <input
       ref={ref}
       type="checkbox"
+      data-activity={name}
       aria-label={label}
       checked={checked}
       aria-checked={mixed ? "mixed" : checked}
@@ -70,10 +74,12 @@ export function FileTable({
   entries,
   disabled,
   onOpen,
+  onSelectionChange,
 }: {
   entries: RemoteEntry[];
   disabled: boolean;
   onOpen: (name: string) => void;
+  onSelectionChange?: (names: string[]) => void;
 }) {
   const table = useTable({
     key: useId(),
@@ -92,6 +98,10 @@ export function FileTable({
   useEffect(() => {
     if (disabled) table.resetRowSelection();
   }, [disabled]);
+  const selectedRows = table.getSelectedRowModel().rows;
+  useEffect(() => {
+    onSelectionChange?.(selectedRows.map((row) => row.original.name));
+  }, [selectedRows, onSelectionChange]);
   const selectable = entries.filter((entry) => !entry.blocked).length;
   return (
     <>
@@ -104,6 +114,7 @@ export function FileTable({
             <tr>
               <th scope="col">
                 <Checkbox
+                  name="files.select-all"
                   label="Select all files"
                   checked={table.getIsAllRowsSelected()}
                   mixed={
@@ -137,6 +148,7 @@ export function FileTable({
                   >
                     <button
                       type="button"
+                      data-activity={`files.sort.${column.id}`}
                       onClick={column.getToggleSortingHandler()}
                     >
                       {label}
@@ -162,6 +174,7 @@ export function FileTable({
                 >
                   <td>
                     <Checkbox
+                      name="files.select"
                       label={`Select ${entry.name}`}
                       checked={row.getIsSelected()}
                       disabled={disabled || !row.getCanSelect()}
@@ -173,6 +186,7 @@ export function FileTable({
                       <button
                         type="button"
                         className="link"
+                        data-activity="files.open"
                         disabled={disabled}
                         onClick={() => onOpen(entry.name)}
                       >

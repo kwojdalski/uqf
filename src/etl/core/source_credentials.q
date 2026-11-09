@@ -138,7 +138,7 @@
     t:.qetl.source.read_settings[path];
     `.qetl.source.settings set t;
     `.qetl.source.settings_path_vars set (),path_vars;
-    .[{.qetl.log.dbg[x;y;z]};(`source_settings;"settings loaded";`file`sources!(first exec origin from 0!t;count t));::];
+    .[{.qetl.log.ch.dbg[x;y;z]};(`source;"settings loaded";`file`sources!(first exec origin from 0!t;count t));::];
     count t}
 
 / Forget every loaded setting, so sources fall back to the environment and
@@ -216,7 +216,7 @@
     v:getenv `$env_var;
     origin:.qetl.source.credential_origin[source];
     / Where it came from - never the value, which may be a credential.
-    .[{.qetl.log.dbg[x;y;z]};(source;"credential lookup";`var`present`origin!(env_var;0<count v;origin));::];
+    .[{.qetl.log.ch.dbg[`source;y;(enlist[`source]!enlist x),z]};(source;"credential lookup";`var`present`origin!(env_var;0<count v;origin));::];
     if[`env~origin; :v];
     if[`settings~origin; :.qetl.source.resolve_setting[source]];
     '"require_credentials: ",string[source]," has no credential - set ",env_var,

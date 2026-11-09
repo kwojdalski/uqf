@@ -6,15 +6,17 @@ from __future__ import annotations
 
 import dataclasses
 import io
+import re
 from pathlib import Path
 from typing import Any
 
 import pytest
 from typer.testing import CliRunner
 
-from uqs import cli
-from uqs.deploy import driver, plan, target_keys, targets
-from uqs.deploy.config import DeployError, make_config
+from uqs import cli, duration
+from uqs.deploy import driver, plan, targets
+from uqs.deploy.config import Config, DeployError, make_config
+from uqs.deploy.target_keys import DURATIONS
 
 FILE = """
 [targets.prod-a]
@@ -37,7 +39,7 @@ profile = "essential"
 """
 
 FLAGS: dict[str, Any] = dict(
-    host="deploy@prod-a", remote_user="svc", dest="/srv/uqf", profile="essential",
+    ssh="deploy@prod-a", remote_user="svc", dest="/srv/uqf", profile="essential",
     torq_home="/opt/torq", live=True, live_check="deals_db,quotes_db", jobs="piggy_spread",
     launcher_env=["KDBDB_ORG=desk"], process_fields="taskset_no",
 )  # fmt: skip
@@ -60,7 +62,7 @@ def test_a_targets_values_make_the_config_its_flags_would(root):
     (cfg,) = targets.configs("prod-a", "x.tar.gz", {}, False, root)
     assert _same(cfg, make_config(artifact="x.tar.gz", **FLAGS))
     assert (cfg.target, cfg.runtime) == ("prod-a", "crypto")
-    assert cfg.sources["host"] == "target prod-a"
+    assert cfg.sources["ssh"] == "target prod-a"
     assert cfg.process_fields == ("taskset_no",), "a site's columns, listed in the file (#1191)"
 
 
@@ -108,9 +110,7 @@ def test_the_file_can_live_elsewhere(tmp_path, monkeypatch):
     elsewhere.parent.mkdir()
     elsewhere.write_text(FILE)
     monkeypatch.setenv(targets.DECLARATION_ENV, str(elsewhere))
-    assert [c.host for c in targets.configs("prod-b", "x", {}, False, tmp_path)] == [
-        "deploy@prod-b"
-    ]
+    assert [c.ssh for c in targets.configs("prod-b", "x", {}, False, tmp_path)] == ["deploy@prod-b"]
 
 
 # --------------------------------------------------------- through the command
@@ -133,7 +133,7 @@ def _push(monkeypatch, root, argv, codes):
 
 def test_targets_are_deployed_in_order(root, monkeypatch):
     r, seen = _push(monkeypatch, root, ["prod-a", "prod-b"], [0, 0])
-    assert r.exit_code == 0 and [c.host for c in seen] == ["deploy@prod-a", "deploy@prod-b"]
+    assert r.exit_code == 0 and [c.ssh for c in seen] == ["deploy@prod-a", "deploy@prod-b"]
 
 
 def test_a_failed_target_stops_the_rest(root, monkeypatch):
@@ -204,7 +204,7 @@ def test_the_plan_says_where_each_setting_came_from(root):
     (cfg,) = targets.configs("prod-b", "x", {"profile": "fx"}, True, root)
     lines = plan._source_lines(cfg)
     assert "settings: profile from --profile" in lines
-    assert "settings: dest, host from target prod-b" in lines
+    assert "settings: dest, ssh from target prod-b" in lines
 
 
 def test_a_push_records_itself_and_registers_its_server(root, monkeypatch, tmp_path):
@@ -284,10 +284,21 @@ def test_every_file_key_is_a_push_option_spelt_as_its_flag():
     }
     #: this run's own: what it is, how it asks, whether it registers; and
     #: --fixture, the other side of the `live` key's --fixture/--live
-    run_only = {"dry_run", "override", "reason", "register", "no_register", "fixture"}
-    keys = {target_keys.key(o) for o in targets.SETTABLE}
-    assert keys == {n for n in names if not n.startswith("skip_")} - run_only
+    run_only = {"dry_run", "override", "reason", "register", "no_register", "fixture", "json"}
+    assert set(targets.SETTABLE) == {n for n in names if not n.startswith("skip_")} - run_only
     assert not targets.NOT_PUSH_OPTIONS & names
+    # one name, not two (#2123): each option's parameter - make_config's, the
+    # Config's field - is its flag's, so a key is the flag and the field alike
+    spelt = {"fixture": "fixture", "as_json": "json"}
+    differs = {
+        p.name: p.opts[0]
+        for p in push.params
+        if p.param_type_name == "option" and not getattr(p, "hidden", False)
+        and p.opts[0][2:].replace("-", "_") != spelt.get(p.name, p.name)
+    }  # fmt: skip
+    assert not differs, differs
+    fields = {f.name for f in dataclasses.fields(Config)}
+    assert set(targets.SETTABLE) - fields == set(), set(targets.SETTABLE) - fields
 
 
 def test_a_key_spelt_as_the_old_option_name_is_refused_naming_the_new(tmp_path):
@@ -295,3 +306,46 @@ def test_a_key_spelt_as_the_old_option_name_is_refused_naming_the_new(tmp_path):
     text = '[targets.a]\nhost = "h"\ndest = "/d"\nprofile = "p"\n'
     with pytest.raises(DeployError, match=r"line 2: target a: host is ssh - rename the key"):
         targets.validate(text, path)
+
+
+# --- a span of time in the file is a DURATION, as on the flag (#2121) ---------
+
+
+@pytest.mark.parametrize(
+    ("value", "seconds"),
+    [('"5m"', 300), ('"90"', 90), ('"1.5m"', 90), ('"500ms"', 1), ("600", 600), ("1.5", 2)],
+)
+def test_a_files_span_of_time_takes_what_its_flag_does(root, value, seconds):
+    """`verify_timeout = "5m"` was refused with "a setting has the wrong type
+    ('<=' not supported between instances of 'str' and 'int')", though
+    `--verify-timeout 5m` is fine: the file's value is read by the flag's own
+    parser, into the same whole seconds."""
+    (root / targets.DECLARATION).write_text(FILE + f"verify_timeout = {value}\n")
+    (cfg,) = targets.configs("prod-b", "x", {}, False, root)
+    assert cfg.verify_timeout == seconds
+
+
+@pytest.mark.parametrize("value", ['"soon"', '"5 m"', '"-5m"', "true", '"1w"'])
+def test_a_span_of_time_that_is_no_duration_is_refused_naming_its_key(root, value):
+    (root / targets.DECLARATION).write_text(FILE + f"soak = {value}\n")
+    with pytest.raises(DeployError) as exc:
+        targets.configs("prod-b", "x", {}, False, root)
+    said = str(exc.value)
+    assert re.search(r"line \d+: target prod-b: soak ", said), said
+    assert duration.FORMS in said
+
+
+def test_every_duration_push_takes_is_a_duration_in_the_file():
+    """Each `deploy push` option that is a DURATION on the command line is one
+    of config.DURATIONS, which the file reads the same way - so a span of
+    time added to push is not an int-only key in the file."""
+    import typer.main
+
+    import uqs.cli.entry  # noqa: F401 - registers the commands
+    from uqs.cli import vocabulary
+    from uqs.cli.shared import app
+
+    root: Any = typer.main.get_command(app)
+    push = root.commands["deploy"].commands["push"]
+    spans = {p.name for p in push.params if getattr(p.type, "func", None) in vocabulary.PARSERS}
+    assert spans == set(DURATIONS)

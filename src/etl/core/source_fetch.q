@@ -44,8 +44,8 @@
 .qetl.source.clip_to_complete:{[worker;source;h;live;range_to]
     bound:.qetl.source.complete_through_of[source;h;live];
     if[bound>=range_to; :range_to];
-    .qetl.log.warn[worker;"range clipped to the source's complete_through - the rest stays uncovered for the next run";
-        `source`complete_through`requested_to!(source;bound;range_to)];
+    .qetl.log.ch.warn[`source;"range clipped to the source's complete_through - the rest stays uncovered for the next run";
+        `worker`source`complete_through`requested_to!(worker;source;bound;range_to)];
     bound}
 
 / ------------------------------------------------------------- FETCHING
@@ -99,14 +99,31 @@
     if[not .qetl.log.enabled`TRACE; :h msg];
     t0:.z.p;
     req:`transport`request!(`ipc;.qetl.log.next_request[]);
-    .[{.qetl.log.trc[x;y;z]};(`ipc;"query sent";(enlist[`call]!enlist .qetl.source.call_text f),req,shown);::];
+    .[{.qetl.log.ch.trc[x;y;z]};(`source;"query sent";(enlist[`call]!enlist .qetl.source.call_text f),.qetl.source.qsql_fields[f;args],req,shown);::];
     r:@[h;msg;{[req;t0;e]
-        .[{.qetl.log.trc[x;y;z]};(`ipc;"query failed";
+        .[{.qetl.log.ch.trc[x;y;z]};(`source;"query failed";
             req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];
         'e}[req;t0]];
-    .[{.qetl.log.trc[x;y;z]};(`ipc;"query returned";
+    .[{.qetl.log.ch.trc[x;y;z]};(`source;"query returned";
         req,`rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
     r}
+
+/ Private: the query as the far side will run it, for the TRACE line - the
+/ lambda's body with its arguments resolved and rendered as qSQL (.qetl.qsql),
+/ so a currency pair and a timestamp read as values, not as the names of the
+/ lambda's parameters. This is the construction boundary: the source has
+/ built `f` (closing over its own values) and `args` are what it runs on.
+/ Only `f` and `args` are rendered; the handle - the connection - never is.
+/ A rendering that throws is reported as the TRACE line's own `qsql_error`
+/ rather than costing the query its trace, or the query itself.
+/ @param f the function sent
+/ @param args its arguments, a list
+/ @return a dictionary of `qsql_form (`qsql, `tree or `lambda) and `qsql (the text, in full)
+/ @eg first key .qetl.source.qsql_fields[{[a] a+1};enlist 41]  ->  `qsql_form
+/ @private
+.qetl.source.qsql_fields:{[f;args]
+    r:@[.qetl.qsql.of_call[f];args;{[e] (`error;"qsql: ",e)}];
+    `qsql_form`qsql!(r 0;r 1)}
 
 / Private: a query lambda's text for a trace - IN FULL. `string` for a
 / lambda: -3! stops at the console width (79 characters by default), and cut
@@ -180,21 +197,34 @@
 / bounds out, timestamps back - so neither the query nor the fixture author
 / has to know about zones. See source_bounds and narrow_to_utc.
 .qetl.source.fetch_window:{[source;h;range_from;range_to]
+    .qetl.source.fetch_window_via[source;h;range_from;range_to;(.qetl.source.def source)`query]}
+
+/ fetch_window with the live read named: a source that reads a window in two steps
+/ (batch_read, #1921) fetches its first step through the same bounds, validation and
+/ logging as the one-step query. The fixture path is the same as fetch_window's.
+/ @param source a registered source name
+/ @param h an open handle, or 0Ni when running on the fixture
+/ @param range_from window start
+/ @param range_to window end, exclusive
+/ @param read a lambda taking (handle;range_from;range_to), the live read to use
+/ @return (`live or `fixture; the table)
+/ @eg .qetl.source.fetch_window_via[`demo_deals;0Ni;2026.09.11D00:00;2026.09.12D00:00;{[h;a;b] ()}] 0  ->  `fixture
+.qetl.source.fetch_window_via:{[source;h;range_from;range_to;read]
     t0:.z.p;
     decl:.qetl.source.def[source];
     bounds:.qetl.source.source_bounds[decl;range_from;range_to];
-    .[{.qetl.log.dbg[x;y;z]};(source;"fetching";
-        `path`range_from`range_to`source_from`source_to`tz!
-            ($[null h;`fixture;`live];range_from;range_to;bounds 0;bounds 1;decl`tz));::];
+    .[{.qetl.log.ch.dbg[x;y;z]};(`source;"fetching";
+        `source`path`range_from`range_to`source_from`source_to`tz!
+            (source;$[null h;`fixture;`live];range_from;range_to;bounds 0;bounds 1;decl`tz));::];
     page:$[null h;
         (`fixture;.qetl.source.window_fixture[decl;bounds 0;bounds 1]);
-        (`live;(decl`query)[h;bounds 0;bounds 1])];
+        (`live;read[h;bounds 0;bounds 1])];
     out:.qetl.source.narrow_to_utc[decl;page 1;range_from;range_to];
     if[(page 0)=`live; .qetl.source.require_live_window[source;decl;out;range_from;range_to]];
     / fetched vs kept differ only for a zoned source, whose bounds are padded:
     / the difference is the neighbouring windows' rows, dropped on purpose.
-    .[{.qetl.log.dbg[x;y;z]};(source;"fetched";
-        `path`fetched`kept`ms!(page 0;count .qetl.source.primary[source;page 1];count .qetl.source.primary[source;out];
+    .[{.qetl.log.ch.dbg[x;y;z]};(`source;"fetched";
+        `source`path`fetched`kept`ms!(source;page 0;count .qetl.source.primary[source;page 1];count .qetl.source.primary[source;out];
             `long$(.z.p-t0)%1000000));::];
     (page 0;out)}
 

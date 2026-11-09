@@ -54,6 +54,7 @@ facts:(!) . flip (
     (`RUN_MODES;            .qetl.job.bounded.runtime.modes);
     (`READ_ONLY_RUN_MODES;  .qetl.job.bounded.runtime.read_only_modes);
     (`LOG_LEVELS;           .qetl.log.levels);
+    (`LOG_CHANNELS;         .qetl.log.channels);
     (`ETL_RUNS_COLUMNS;     cols .qetl.run.init_runs[]);
     (`ETL_RUN_META_COLUMNS; cols .qetl.run.init_meta[]);
     / The status file every worker writes and four readers poll (#1362).

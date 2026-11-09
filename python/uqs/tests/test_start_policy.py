@@ -1,7 +1,7 @@
 """Every front end refuses what `uqs start` refuses (#887).
 
 The refusals used to live in the CLI, so `uqs-mcp`'s `uqs_start` and the
-browser's `POST /control/process/start` started what the CLI refused: torq.sh
+browser's `POST /control/lifecycle/start` started what the CLI refused: torq.sh
 exits 0 on a name that is not a process, so a typo "succeeded" and the HTTP
 route answered `ok: true`. Here the real `runtime.start`/`stop`/`restart` are
 called through each front end against this checkout's own process table, with
@@ -15,6 +15,7 @@ import subprocess
 from datetime import UTC, datetime
 
 import pytest
+from mcp_support import call, refused
 
 from uqs import interpreter, mcp
 from uqs import paths as stack_paths
@@ -49,13 +50,11 @@ def test_all_is_still_torq_shs_own_selector(monkeypatch):
 
 
 def test_the_mcp_server_refuses_an_unknown_name(no_torq):
-    said = mcp.uqs_start("nosuchproc1")
-    assert said.startswith("ERROR:") and "nosuchproc1" in said
+    assert "nosuchproc1" in refused(call("uqs_start", procs=["nosuchproc1"]))
 
 
 def test_the_mcp_server_refuses_an_unknown_profile(no_torq):
-    said = mcp.uqs_start(profile="nosuchprofile")
-    assert said.startswith("ERROR:") and "nosuchprofile" in said
+    assert "nosuchprofile" in refused(call("uqs_start", profile="nosuchprofile"))
 
 
 def test_the_mcp_server_starts_a_profile_as_the_cli_resolves_it(monkeypatch):

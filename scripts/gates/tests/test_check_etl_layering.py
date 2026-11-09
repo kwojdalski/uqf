@@ -125,3 +125,73 @@ def test_every_directory_uqs_scaffolds_into_is_a_declaring_one():
     assert {"sources", "workers", "streaming", "reactions"} <= scaffolded
     declaring = {d.name for d in layering.declaring_dirs()}
     assert scaffolded <= declaring
+
+
+# #2156: the TorQ namespaces src/ may not read at all are derived from TorQ's
+# own definitions under lib/torq, so a namespace TorQ adds is refused the day
+# the vendored tree is updated, instead of the day someone remembers to list it.
+
+#: The ones the compression and housekeeping audit found unguarded.
+AUDITED = [".cmp", ".hk", ".dotz", ".wdb"]
+
+
+def test_the_derived_set_holds_what_the_audit_found():
+    assert set(AUDITED) <= layering.torq_namespaces()
+
+
+def test_the_derived_set_holds_every_owned_namespace():
+    assert set(layering.TORQ_OWNERS) <= layering.torq_namespaces()
+
+
+def test_a_namespace_q_reserves_is_not_counted_as_torq():
+    assert ".h" not in layering.torq_namespaces()
+    assert ".Q" not in layering.torq_namespaces()
+
+
+def test_both_ways_torq_defines_a_namespace_are_found(tmp_path):
+    torq = _tree(
+        tmp_path,
+        {
+            "code/common/a.q": "\\d .alpha\nx:1\n\\d .\n",
+            "code/processes/b.q": ".beta.f:{x}\n  .gamma.g:{x}\n/ .delta.h:1\n",
+            "torq.q": "\\d .epsilon\n",
+        },
+    )
+    assert layering.torq_namespaces(torq) == {".alpha", ".beta", ".epsilon"}
+
+
+@pytest.mark.parametrize("ns", AUDITED)
+@pytest.mark.parametrize("spelling", ["{ns}.thing[]", "@[value;`{ns}.thing;`]", "`{ns} in key `"])
+def test_src_reading_a_torq_namespace_it_has_no_owner_for_is_refused(tmp_path, ns, spelling):
+    code = spelling.format(ns=ns)
+    root = _tree(tmp_path, {"src/etl/core/compress.q": f"p:{code}\n"})
+    (hit,) = layering.torq_reach(root)
+    assert hit.startswith("src/etl/core/compress.q:1:")
+    assert ns in hit
+
+
+@pytest.mark.parametrize("ns", AUDITED)
+def test_a_comment_or_a_string_naming_one_is_still_exempt(tmp_path, ns):
+    root = _tree(
+        tmp_path,
+        {"src/etl/core/compress.q": f'/ TorQ calls {ns}.thing\nm:"unlike {ns}.thing"\n'},
+    )
+    assert layering.torq_reach(root) == []
+
+
+def test_an_allowed_remote_call_is_allowed_only_in_its_own_file(tmp_path):
+    (path, ns), _ = next(iter(layering.TORQ_REMOTE_CALLS.items()))
+    call = f"r:h(`{ns}.thing;1)\n"
+    assert layering.torq_reach(_tree(tmp_path / "a", {path: call})) == []
+    assert len(layering.torq_reach(_tree(tmp_path / "b", {"src/etl/core/other.q": call}))) == 1
+
+
+def test_every_allowed_remote_call_has_a_reason_and_is_still_made():
+    assert all(why.strip() for why in layering.TORQ_REMOTE_CALLS.values())
+    assert layering.unused_remote_calls(layering.REPO) == []
+
+
+def test_an_allowance_nothing_uses_any_more_is_reported(tmp_path):
+    (path, ns), _ = next(iter(layering.TORQ_REMOTE_CALLS.items()))
+    root = _tree(tmp_path, {path: "x:1\n"})
+    assert f"{path}: {ns}" in layering.unused_remote_calls(root)

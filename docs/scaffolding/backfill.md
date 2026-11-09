@@ -12,29 +12,30 @@ process that stays up.
 ## Command
 
 ```bash
-uqs job new fxprobe --kind backfill --dataset fx_probe \
+uqs job new fxprobe --kind backfill --outputs fx_probe \
     --schema "sym:symbol, mid:float" --width 1D
 ```
 
-`--dataset` is the table it fills, and it is **required** --- a backfill with no
-dataset has nothing to record coverage against. `--width` is the window size as
-a q timespan. `--transport odbc` scaffolds a source read from a database rather
-than a q process: it declares `transport` and a `credential_example`, and its
-query comment points at `.qetl.io.odbc` and `src/etl/sources/duckdb_deals.q`.
-`--proc` names the process (default `NAME_backfill1`). `--partition SYM` scopes
-the worker to one slice of its dataset, which is what lets a second worker fill
-the same one, and `--check` adds a quality check that fails a window on bad rows ---
-it throws until written. `--transform derive` replaces the default pass-through
-with a `.qetl.transform.define` from the source's contract to the dataset's
-shape: `derive` throws, and its example's expected output is left empty and
-marked `SCAFFOLDED`, so `.qetl.transform.verify` fails the suite until both are
+`--outputs` is the table it fills, and it is **required** --- a backfill with no
+dataset has nothing to record coverage against. `--width` is the window size: a
+DURATION (`1d`, `6h`) or a q timespan (`1D`, `0D01`). `--transport odbc`
+scaffolds a source read from a database rather than a q process: it declares
+`transport` and a `credential_example`, and its query comment points at
+`.qetl.io.odbc` and `src/etl/sources/duckdb_deals.q`. `--proc` names the process
+(default `NAME_backfill1`). `--slice SYM` scopes the worker to one slice of its
+dataset, which is what lets a second worker fill the same one, and `--check`
+adds a quality check that fails a window on bad rows --- it throws until
+written. `--transform derive` replaces the default pass-through with a
+`.qetl.transform.define` from the source's contract to the dataset's shape:
+`derive` throws, and its example's expected output is left empty and marked
+`SCAFFOLDED`, so `.qetl.transform.verify` fails the suite until both are
 written.
 
 When the adapter reads different columns from those it returns, `--raw-table`
 and `--raw-columns` declare its physical side apart from `--schema`:
 
 ```bash
-uqs job new events --kind backfill --dataset events --transport odbc \
+uqs job new events --kind backfill --outputs events --transport odbc \
     --schema "sym:symbol, px:float" \
     --raw-table EVENTS --raw-columns "CREATED_AT:timestamp, PAYLOAD:any"
 ```
@@ -49,8 +50,8 @@ the query you write: it is never guessed.
 refills the table the job publishes, which is what `uqs job gaps JOB` looks for.
 The dataset and columns are taken from the job's declaration and the plant's
 definition rather than given, so the twin writes the right table by
-construction. `--schema` is refused, and so is a `--dataset` the job does not
-publish. A job that publishes several tables needs `--dataset` to pick one.
+construction. `--schema` is refused, and so is a `--outputs` the job does not
+publish. A job that publishes several tables needs `--outputs` to pick one.
 
 When the job declares the transform it applies (`transform` in its
 `.qetl.job.stream.define`), the twin applies that same transform, so a refill
@@ -58,18 +59,26 @@ re-derives what the job publishes, and `--transform` is refused. The source's
 fetch must hand over that transform's inputs, by name. A job that declares no
 transform gets the usual `--transform` scaffold.
 
+The scaffold also writes the relationship into the worker, as `twin_of` (and
+`twin_calculation` `` `shared `` when the transform is shared), so it outlives
+the command: q refuses the pair at load if the job later publishes a different
+table or the twin's output stops satisfying the dataset's contract, even when
+the two tables have identical columns. A job that declares no transform leaves
+the calculation "not established", and `.qetl.twin.report[]` says so. See
+[Twins](../reference/pipeline-declarations.md#twins-----a-backfill-that-repairs-a-live-job).
+
 ```
-uqs job new crypto_markout_hist --kind backfill --twin-of crypto_markout
+uqs job new myjob_hist --kind backfill --twin-of myjob
 ```
 
 NAME is the base the files are named from, twin or not: the worker is
-`NAME_backfill` (here `crypto_markout_hist_backfill`), its source `NAME` unless
+`NAME_backfill` (here `myjob_hist_backfill`), its source `NAME` unless
 `--source` names another, and its example `scripts/examples/NAME_example.q` - as
 `hdb_transfer` is to `hdb_transfer_backfill`. So a NAME already ending in
 `_backfill` is refused, saying what to pass instead, rather than doubling the
 suffix.
 
-<!-- scaffold-transcript: fxprobe --kind backfill --dataset fx_probe --schema "sym:symbol, mid:float" --width 1D -->
+<!-- scaffold-transcript: fxprobe --kind backfill --outputs fx_probe --schema "sym:symbol, mid:float" --width 1D -->
 ```
 scaffold fxprobe_backfill:
   create src/etl/sources/fxprobe.q
@@ -170,8 +179,8 @@ facts:{[batch]
 .qetl.transform.passthrough[`fxprobe_passthrough;`batch;.qetl.plant.shape `fx_probe;.qpipe.source.fxprobe.fixture[]];
 
 .qetl.job.bounded.define[`fxprobe_backfill;
-    `source`dataset`width`transform`facts`procname`note!
-        (`fxprobe;`fx_probe;1D;`fxprobe_passthrough;.qpipe.job.fxprobe_backfill.facts;
+    `source`outputs`width`transform`facts`procname`note!
+        (`fxprobe;enlist `fx_probe;1D;`fxprobe_passthrough;.qpipe.job.fxprobe_backfill.facts;
          `fxprobe_backfill1;
          "SCAFFOLDED: bounded - say what this backfill is for")];
 ```

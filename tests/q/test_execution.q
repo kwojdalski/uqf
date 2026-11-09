@@ -213,6 +213,22 @@
     r:.qf.exec.hit_ratio_by[requests;t0;t0+0D00:30:00;0Nn;`symbol$();`count];
     .qt.support.assertApprox[first r`hit_ratio;1f;1e-9;"only the first two (both-hit) EURUSD rows fall inside the window"]};
 
+/ #2055: [from;to) - a request AT range_to belongs to the next window. Adjacent
+/ windows partition the requests: each is counted in exactly one, so their counts
+/ add up to the combined window's, at ms, us and ns alignment of the boundary.
+.qt.qf.exec.execution.test_hit_ratio_by_adjacent_windows_count_the_boundary_request_once:{[t]
+    b:2026.01.02D00:00:00.000000000;
+    {[b;u]
+        / a hit a tick before b, a miss AT b, a hit AT b, a miss at b+tick
+        reqs:([] time:(b-u),b,b,b+u; sym:4#`EURUSD; size:4#100; hit:1010b);
+        n:{[reqs;lo;hi] first exec hit_ratio from .qf.exec.hit_ratio_by[reqs;lo;hi;0Nn;`symbol$();`count]}[reqs;;];
+        left:n[b-u;b]; right:n[b;b+u]; whole:n[b-u;b+u];
+        .qt.support.assertApprox[left;1f;1e-9;"[a;b) holds only the request before b: ",string u];
+        .qt.support.assertApprox[right;0.5;1e-9;"[b;c) holds both requests at b (one hit) and not the one at c: ",string u];
+        .qt.support.assertApprox[whole*3;(left*1)+right*2;1e-9;"the windows' counts add to the combined window's: ",string u]
+        }[b;] each 0D00:00:00.001000000 0D00:00:00.000001000 0D00:00:00.000000001;
+    }
+
 .qt.qf.exec.execution.test_hit_ratio_by_hourly_bucket_grouped_by_sym:{[t]
     requests:.qt.qf.exec.execution.mk_hit_ratio_requests[::];
     t0:2026.01.01D08:00:00.000000000;
@@ -603,7 +619,11 @@
 
 .qt.qf.exec.execution.test_fill_probability_refuses_a_bucket_named_like_an_output:{[t]
     .qunit.assertThrows[.qt.qf.exec.execution.fill_call;@[.qt.qf.exec.execution.fill_args[];(0;2);:;(update target:`x from .qt.qf.exec.execution.mk_fill_orders[];enlist `target)];
-        "fill_probability_by: bucket column(s) target would collide*";"an output column cannot also be a bucket"]};
+        "fill_probability_by: group column(s) target would collide*";"an output column cannot also be a bucket"]};
+
+.qt.qf.exec.execution.test_fill_probability_refuses_a_timespan_for_group_cols:{[t]
+    .qunit.assertThrows[.qt.qf.exec.execution.fill_call;@[.qt.qf.exec.execution.fill_args[];2;:;0D00:01];
+        "fill_probability_by: group_cols must be a symbol*";"a timespan is named as a bad group_cols, not a bare 'type"]};
 
 / ---- venue_quality: the abstract scorecard (#338) ---------------------------
 / .
@@ -621,9 +641,8 @@
 .qt.qf.exec.execution.mk_vq_trades:{[]
     ([] time:`timestamp$(); sym:`symbol$(); venue:`symbol$(); side:`long$(); trade_price:`float$();
         pip_factor:`long$())}
-.qt.qf.exec.execution.vq_config:{[] `as_of`horizons!(2026.09.15D12:00:00.000000000;0D00:00:01 0D00:01:00)}
 .qt.qf.exec.execution.vq_call:{[args] .qf.exec.venue_quality . args}
-.qt.qf.exec.execution.vq_args:{[] (.qt.qf.exec.execution.mk_vq_quotes[];.qt.qf.exec.execution.mk_vq_requests[];.qt.qf.exec.execution.mk_vq_trades[];0D01:00:00;.qt.qf.exec.execution.vq_config[])}
+.qt.qf.exec.execution.vq_args:{[] (.qt.qf.exec.execution.mk_vq_quotes[];.qt.qf.exec.execution.mk_vq_requests[];.qt.qf.exec.execution.mk_vq_trades[];0D01:00:00;2026.09.15D12:00:00.000000000;0D00:00:01 0D00:01:00;::)}
 
 .qt.qf.exec.execution.test_venue_quality_is_abstract_for_now:{[t]
     .qunit.assertThrows[.qt.qf.exec.execution.vq_call;.qt.qf.exec.execution.vq_args[];
@@ -647,29 +666,29 @@
     .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];3;:;`hourly];
         "venue_quality: window must be a timespan*";"a window is a timespan"]};
 
-.qt.qf.exec.execution.test_venue_quality_refuses_a_config_missing_as_of:{[t]
-    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;{`as_of _ x}];
-        "venue_quality: config is missing as_of";"no cutoff means hindsight can leak in"]};
+.qt.qf.exec.execution.test_venue_quality_refuses_a_null_as_of:{[t]
+    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;:;0Np];
+        "venue_quality: as_of is null";"no cutoff means hindsight can leak in"]};
 
-.qt.qf.exec.execution.test_venue_quality_refuses_an_unknown_config_key:{[t]
-    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;{x,(enlist `foo)!enlist 1}];
-        "venue_quality: unknown config key(s) foo*";"a typo in a key is not silently ignored"]};
+.qt.qf.exec.execution.test_venue_quality_refuses_an_unknown_option:{[t]
+    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];6;:;(enlist `foo)!enlist 1];
+        "venue_quality: unknown option(s) foo - known: stale_after, min_count, weights, normalise";"a typo in a key is not silently ignored"]};
 
 .qt.qf.exec.execution.test_venue_quality_refuses_a_non_timestamp_as_of:{[t]
-    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;{x,(enlist `as_of)!enlist 2026.09.15}];
+    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;:;2026.09.15];
         "venue_quality: as_of must be a timestamp*";"a date is not an instant"]};
 
 .qt.qf.exec.execution.test_venue_quality_refuses_a_non_positive_horizon:{[t]
-    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;{x,(enlist `horizons)!enlist -0D00:00:01}];
+    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];5;:;-0D00:00:01];
         "venue_quality: every horizon must be positive";"a markout looks forward"]};
 
 .qt.qf.exec.execution.test_venue_quality_refuses_weights_without_normalise:{[t]
-    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;{x,(enlist `weights)!enlist `spread_bps`fill_rate!0.5 0.5}];
+    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];6;{[x] (enlist `weights)!enlist `spread_bps`fill_rate!0.5 0.5}];
         "venue_quality: weights need a normalise method*";"raw bps, rates and pips are not one scale"]};
 
 .qt.qf.exec.execution.test_venue_quality_accepts_weights_with_normalise:{[t]
-    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];4;{x,`weights`normalise!(`spread_bps`fill_rate!0.5 0.5;`zscore)}];
-        "venue_quality: not implemented yet (#338)*";"a complete config gets as far as the computation"]};
+    .qunit.assertThrows[.qt.qf.exec.execution.vq_call;@[.qt.qf.exec.execution.vq_args[];6;{[x] `weights`normalise!(`spread_bps`fill_rate!0.5 0.5;`zscore)}];
+        "venue_quality: not implemented yet (#338)*";"a complete opts gets as far as the computation"]};
 
 
 .qt.qf.exec.execution.test_markout_at_horizons_on_no_trades_is_empty_not_an_error:{[t]

@@ -7,9 +7,8 @@ poll-only, so a socket would add a moving part without adding liveness.
 
 from __future__ import annotations
 
-import datetime as dt
-import hashlib
-import math
+import http
+import re
 import subprocess
 import time
 import typing
@@ -17,80 +16,45 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-import polars as pl
 from fastapi import Depends, FastAPI, Request
-from fastapi.concurrency import run_in_threadpool
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from uqf_frontend import (
+    access,
     activity,
     authz,
     catalog,
-    control,
-    health,
-    ops,
-    procfile,
-    queries,
+    inspection,
     remote_files,
-    remote_helper,
-    services,
-    status,
+    settings_admin,
+    workspaces,
     write_guard,
 )
-from uqf_frontend.authz import Policy, Request_, allow_all, enforce
+from uqf_frontend.authz import Policy, allow_all
 from uqf_frontend.capture import CaptureScheduler, JsonlSink, UsageCapture
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import (
-    BackfillNotStarted,
-    CoverageIncomplete,
     FrontendError,
-    GatewayReloading,
-    GatewayUnavailable,
-    ValidationFailed,
+    InspectionMode,
     WritesDisabled,
 )
 from uqf_frontend.fleet import Fleet, KolaFleet
-from uqf_frontend.gateway import TIERS, Gateway, KolaGateway
-from uqf_frontend.models import (
-    ActivityBatchRequest,
-    ActivityBatchResponse,
-    ActivityEventOut,
-    ActivityOutcome,
-    ActivityPersistence,
-    ActivityResponse,
-    ActivitySource,
-    BackfillRequest,
-    BackfillStartedResponse,
-    BackfillStatusResponse,
-    CatalogResponse,
-    ColumnInfo,
-    CommandResponse,
-    ConnectionsResponse,
-    ControlStatusResponse,
-    CoverageRequirement,
-    CoverageResponse,
-    FleetHealthResponse,
-    HealthResponse,
-    IntervalOut,
-    LifecycleRequest,
-    OpsTableResponse,
-    ProcessConfigRequest,
-    ProcessConfigResponse,
-    ProcessHealthOut,
-    QueryRequest,
-    QueryResponse,
-    RemoteFilesResponse,
-    RemoteUploadResponse,
-    RunState,
-    ServicesResponse,
-    ServiceTargetOut,
-    TableInfo,
-    UsageResponse,
-    WorkerConfigRequest,
-    WorkerConfigResponse,
-    WorkerStatusOut,
-)
+from uqf_frontend.gateway import Gateway, KolaGateway
+from uqf_frontend.routes import access as access_routes
+from uqf_frontend.routes import activity as activity_routes
+from uqf_frontend.routes import catalog as catalog_routes
+from uqf_frontend.routes import charts as charts_routes
+from uqf_frontend.routes import compare as compare_routes
+from uqf_frontend.routes import config_push as config_push_routes
+from uqf_frontend.routes import control as control_routes
+from uqf_frontend.routes import health as health_routes
+from uqf_frontend.routes import ops as ops_routes
+from uqf_frontend.routes import query as query_routes
+from uqf_frontend.routes import services as services_routes
+from uqf_frontend.routes.common import _refuse, audit_user, identity_of, identity_source, run_policy
 
 
 def _refused(status_code: int, error: str, detail: str) -> JSONResponse:
@@ -102,31 +66,108 @@ def _refused(status_code: int, error: str, detail: str) -> JSONResponse:
     )
 
 
-def run_policy(request: Request, table: str | None = None) -> None:
-    """Run the app's policy for this request. The identity is CLAIMED, never
-    verified - see authz.IDENTITY_HEADER."""
-    enforce(
-        request.app.state.policy,
-        Request_(
-            identity=request.headers.get(authz.IDENTITY_HEADER, authz.ANONYMOUS),
-            path=request.url.path,
-            table=table,
-        ),
-    )
-
-
 def guard(request: Request) -> None:
     """The seam, as a dependency of every route the app has.
 
     Installed on the app rather than called by each handler, so a route added
     later cannot forget it, and runs before the handler reads anything. The
-    one way out is `authz.unguarded` on the endpoint itself. A route whose
-    table is only known from its input - /query's body, /coverage's dataset -
-    calls `run_policy` again with that table once it has it.
+    one way out is `authz.unguarded` on the endpoint itself.
+
+    Three layers, each of which must allow: inspection mode, which refuses
+    every route mapped to a `write` action while it is on for the frontend or
+    for the target the request acts on (inspection.py, #2032); the route's
+    feature and action under the access policy (access.ROUTE_PERMISSIONS - a
+    route with no mapping is refused, #2045); then the table/path policy
+    (authz.Policy). A
+    route whose table is only known from its input - /query's body,
+    /coverage's dataset - calls `run_policy` again with that table once it
+    has it. Every refusal is 403 and audited. The write token and Host check
+    (write_guard.py) ran before either, and still do.
     """
     route = request.scope.get("route")
-    if authz.unguarded_reason(getattr(route, "endpoint", None)) is None:
-        run_policy(request)
+    if authz.unguarded_reason(getattr(route, "endpoint", None)) is not None:
+        return
+    template = getattr(route, "path", None)
+    needed = access.permission_for(request.method, template)
+    if needed is None:
+        _refuse(
+            request,
+            f"{request.method.upper()} {template} has no feature in the access policy's "
+            "route map, so it is refused to everyone (access.ROUTE_PERMISSIONS)",
+            "unmapped",
+        )
+    feature, action = needed
+    if action == "write":
+        settings: Settings = request.app.state.settings
+        refused = inspection.refusal(
+            settings, request.method, template, inspection.request_target(request)
+        )
+        if refused is not None:
+            # audited with permission `inspection`, error InspectionMode
+            _refuse(request, refused, "inspection", InspectionMode)
+    who = identity_of(request)
+    if not request.app.state.access.allowed(who, feature, action):
+        _refuse(request, f"{feature}:{action} is not granted to {who.user}", f"{feature}:{action}")
+    run_policy(request)
+
+
+def workspace_route(request: Request) -> None:
+    """The workspace a request names, held to its route (workspaces.py).
+
+    A route that reads a stack is answered from the named workspace; one that
+    reads none ignores it; every other route refuses a target with 409, so a
+    route nobody scoped answers for the local stack only and says so, never
+    with the local stack's data in place of a target's. Runs after `guard`,
+    so a caller refused the route learns nothing of the target."""
+    name = workspaces.requested(request.headers)
+    route = request.scope.get("route")
+    template = getattr(route, "path", None)
+    if workspaces.is_scoped(request.method, template):
+        # What the answer - or the error - is labelled with.
+        request.state.workspace_target = name
+    elif name != workspaces.LOCAL and not workspaces.is_neutral(template):
+        raise workspaces.TargetNotScoped(
+            f"{request.method.upper()} {template} reads this server's own stack only, "
+            f"so it is not available in workspace {name} - switch to local for it"
+        )
+
+
+class RenamedRoute(typing.NamedTuple):
+    """A route renamed or moved, whose old path answers 410 naming the new
+    one. One-way - never a route that still works - so a client is told, not
+    served twice. A move can change the method as well as the path (#2248)."""
+
+    method: str
+    old_path: re.Pattern[str]
+    old: str
+    new_method: str
+    new: str
+    issue: int
+
+
+#: Routes renamed by #2230 and moved by #2248.
+RENAMED_ROUTES: tuple[RenamedRoute, ...] = (
+    RenamedRoute("POST", re.compile(r"/control/process/[^/]+"),
+                 "/control/process/{action}", "POST", "/control/lifecycle/{action}", 2230),
+    RenamedRoute("PUT", re.compile(r"/control/process/[^/]+/config"),
+                 "/control/process/{process}/config",
+                 "PUT", "/control/processes/{process}/config", 2230),
+    RenamedRoute("PUT", re.compile(r"/control/worker-config"),
+                 "/control/worker-config", "PUT", "/control/worker/config", 2230),
+    RenamedRoute("POST", re.compile(r"/services/[^/]+/files/delete"),
+                 "/services/{target}/files/delete", "DELETE", "/services/{target}/files", 2248),
+    RenamedRoute("PUT", re.compile(r"/services/[^/]+/files/content"),
+                 "/services/{target}/files/content", "PUT", "/services/{target}/files", 2248),
+)  # fmt: skip
+
+
+def renamed_route(method: str, path: str) -> str | None:
+    """Why `method path` is gone and where it went, or None when it never
+    was a route (RENAMED_ROUTES)."""
+    for r in RENAMED_ROUTES:
+        if method.upper() == r.method and r.old_path.fullmatch(path):
+            return f"`{r.method} {r.old}` is `{r.new_method} {r.new}` (#{r.issue})"
+    return None
 
 
 def create_app(
@@ -135,6 +176,7 @@ def create_app(
     fleet: Fleet | None = None,
     policy: Policy | None = None,
     remote_runner: remote_files.Runner | None = None,
+    workspace_opener: workspaces.Opener | None = None,
 ) -> FastAPI:
     """Build the app. Every dependency is injectable so tests need no q
     process and no environment.
@@ -145,17 +187,26 @@ def create_app(
     auth system.
     """
     settings = settings or Settings.from_env()
+    # Runtime settings changed in the Settings view (#2046), over the
+    # environment's - and refusing to start on a file that does not parse.
+    runtime = settings_admin.RuntimeStore(settings.settings_file)
+    settings = runtime.apply(settings)
     write_guard.require_configured(settings)
     gateway = gateway or KolaGateway(settings)
     fleet = fleet or KolaFleet(settings)
     policy = policy or allow_all
+    # The access policy (access.py): refuses to start on a policy file that
+    # is named but missing or does not parse.
+    policies = access.PolicyStore(settings.policy_file)
 
     # Activity history and the action audit (activity.py). Opened here, not
     # in the lifespan, so an unusable file stops the API before it serves.
     history = activity.ActivityStore(
         settings.activity_db,
-        retention_days=settings.activity_retention_days,
-        max_rows=settings.activity_max_rows,
+        bounds={
+            level: activity.Bound(days, rows)
+            for level, (days, rows) in settings.activity_bounds().items()
+        },
     )
 
     # Usage capture, started with the app and stopped with it. Off unless
@@ -175,6 +226,8 @@ def create_app(
         # on the loop it would stall every request for a whole fleet sweep.
         if scheduler is not None:
             scheduler.start()
+        # Idle target connections close on a timer, not only on a request.
+        app.state.workspaces.start()
         try:
             yield
         finally:
@@ -183,6 +236,7 @@ def create_app(
             # The gateway's pooled connections, held between requests now.
             if isinstance(gateway, KolaGateway):
                 gateway.close()
+            app.state.workspaces.close()
             history.close()
 
     app = FastAPI(
@@ -190,7 +244,7 @@ def create_app(
         summary="Validated, parameterised access to the uqf TorQ gateway",
         version="0.1.0",
         lifespan=lifespan,
-        dependencies=[Depends(guard)],
+        dependencies=[Depends(guard), Depends(workspace_route)],
     )
     app.state.settings = settings
     app.state.gateway = gateway
@@ -202,27 +256,76 @@ def create_app(
     app.state.catalog = tables
     app.state.fleet = fleet
     app.state.policy = policy
+    app.state.access = policies
+    app.state.runtime = runtime
+
+    def live() -> Settings:
+        """The settings in force now: the runtime ones change without a
+        restart (settings_admin.RUNTIME_FIELDS), so a handler reading one
+        reads it here rather than from `settings`, which was the start's."""
+        return app.state.settings
+
     # ssh, injectable so tests reach no server (remote_files.py)
     app.state.remote_runner = remote_runner or subprocess.run
     app.state.capture = scheduler
     app.state.activity = history
+    # The workspaces a request may name (#2029): this API's own stack, and a
+    # connection per target that uqs opens on first use.
+    app.state.workspaces = workspaces.Workspaces(
+        settings,
+        workspaces.Scope(
+            target=workspaces.LOCAL,
+            gateway=gateway,
+            fleet=fleet,
+            catalog=tables,
+            settings=settings,
+            connection="direct",
+            access="read-write" if settings.enable_writes else "read-only",
+        ),
+        opener=workspace_opener or workspaces.open_with_uqs,
+    )
+
+    @app.middleware("http")
+    async def label_workspace(request: Request, call_next):  # noqa: ANN001, ANN202
+        """Every scoped answer, and every error from one, names the workspace
+        it came from in X-UQF-Target (#2029)."""
+        response = await call_next(request)
+        target = request.scope.get("state", {}).get("workspace_target")
+        if target is not None:
+            response.headers[workspaces.TARGET_HEADER] = target
+        return response
+
+    # Browser events sent without the token, all callers together (#2019).
+    app.state.activity_rate = activity.RateLimit(
+        activity.BROWSER_EVENT_BURST, activity.BROWSER_EVENTS_PER_SECOND
+    )
+
+    @app.middleware("http")
+    async def bound_activity_batches(request: Request, call_next):  # noqa: ANN001, ANN202
+        """A browser batch's body is held to activity.MAX_BATCH_BYTES before
+        it is read: the route needs no token (#2019)."""
+        if request.method.upper() == "POST" and (
+            write_guard.route_path(request.scope) == "/activity/events"
+        ):
+            declared = request.headers.get("content-length")
+            if declared is None or not declared.isdigit():
+                return _refused(411, "LengthRequired", "send the batch with a Content-Length")
+            if int(declared) > activity.MAX_BATCH_BYTES:
+                return _refused(
+                    413,
+                    "BatchTooLarge",
+                    f"an activity batch may be at most {activity.MAX_BATCH_BYTES} bytes",
+                )
+        return await call_next(request)
 
     @app.middleware("http")
     async def guard_writes(request: Request, call_next):  # noqa: ANN001, ANN202
         """write_guard's two checks, ahead of every route - including ones
         added later, which cannot forget them. A middleware answers itself:
         FastAPI's exception handlers do not see what is raised here."""
-        refusal = write_guard.host_refusal(settings, request.headers.get("host"))
-        if (
-            refusal is None
-            and settings.enable_writes
-            and write_guard.needs_token(request.method, request.url.path)
-        ):
-            refusal = write_guard.token_refusal(settings, request.headers.get("authorization"))
-            if refusal is not None:
-                return _refused(401, "WriteTokenRequired", refusal)
+        refusal = _guard_refusal(settings, request)
         if refusal is not None:
-            return _refused(403, "HostNotAllowed", refusal)
+            return _refused(*refusal)
         return await call_next(request)
 
     @app.middleware("http")
@@ -230,31 +333,45 @@ def create_app(
         """One audit row per state-changing request, whoever sent it.
 
         Added after guard_writes, so it runs OUTSIDE it: a request the token
-        or Host check refuses is audited as refused. It reads no header but
+        or Host check refuses is audited as refused - as an `attempt`, under
+        its own cap, so it cannot evict the audit (#2019). It reads no header but
         the correlation ids and the claimed user, and no body at all - what a
         handler knows beyond the status code it reports through
         activity.audit_of(request).
         """
-        if not activity.is_audited(request.method, request.url.path):
+        if not activity.is_audited(request.method, write_guard.route_path(request.scope)):
             return await call_next(request)
         started = time.perf_counter()
         template, params = _route_of(request)
+        # Only a request that passes the guard and reaches a route can be an
+        # authorised action. Anything else is an attempt, capped on its own,
+        # so a stranger's requests cannot evict the audit (#2019).
+        authorised = (
+            settings.enable_writes
+            and template is not None
+            and _guard_refusal(settings, request) is None
+        )
         request_id = (
             activity.clean_id(request.headers.get(activity.REQUEST_ID_HEADER)) or activity.new_id()
         )
         event_id, recorded = history.add(
             source="server",
-            kind=activity.SERVER_KIND,
+            kind=activity.SERVER_KIND if authorised else activity.ATTEMPT_KIND,
             action=activity.server_action(request.method, template, params),
-            target=activity.server_target(params),
+            target=activity.server_target(template, params),
+            subject=activity.server_subject(params),
             outcome="pending",
             session_id=request.headers.get(activity.SESSION_ID_HEADER),
             request_id=request_id,
-            claimed_user=request.headers.get(authz.IDENTITY_HEADER),
+            claimed_user=audit_user(request),
             method=request.method.upper(),
         )
         audit = activity.audit_of(request)
         audit.store, audit.event_id = history, event_id
+        # Whose name claimed_user is: `verified` or `claimed`; absent, the
+        # caller was anonymous and named nobody.
+        if (source := identity_source(request)) != "anonymous":
+            audit.note(identity_source=source)
         try:
             response = await call_next(request)
         except Exception:
@@ -281,580 +398,137 @@ def create_app(
         )
         return response
 
+    def _error(
+        request: Request,
+        status_code: int,
+        error: str,
+        detail: str,
+        *,
+        transient: bool = False,
+        headers: typing.Mapping[str, str] | None = None,
+        **extra: Any,
+    ) -> JSONResponse:
+        """Every error this API answers, in its one shape (#2106):
+        `{"error": <type>, "detail": <text>, "transient": <bool>}`, plus any
+        `extra` keys a particular kind carries (a 422's `errors`)."""
+        # The error's TYPE, for an audited action: never its message, which
+        # can quote the input back.
+        activity.audit_of(request).note(error=error)
+        target = getattr(request.state, "workspace_target", None)
+        if target not in (None, workspaces.LOCAL) and f"target {target}" not in detail:
+            # A target's failure is never mistaken for the local stack's.
+            detail = f"target {target}: {detail}"
+        merged = dict(headers or {})
+        if status_code == 401:
+            merged["WWW-Authenticate"] = "Bearer"
+        return JSONResponse(
+            status_code=status_code,
+            content={"error": error, "detail": detail, "transient": transient, **extra},
+            headers=merged or None,
+        )
+
     @app.exception_handler(FrontendError)
     async def _handle(request: Request, exc: FrontendError) -> JSONResponse:
         """Render a typed failure, keeping the transient flag the UI needs to
         tell an EOD reload window apart from a real error.
         """
-        # The error's TYPE, for an audited action: never its message, which
-        # can quote the input back.
-        activity.audit_of(request).note(error=type(exc).__name__)
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "error": type(exc).__name__,
-                "detail": str(exc),
-                "transient": exc.transient,
-            },
+        return _error(
+            request, exc.status_code, type(exc).__name__, str(exc), transient=exc.transient
         )
 
-    @app.get("/health", response_model=HealthResponse)
-    @authz.unguarded("liveness probe - carries no data and no identity")
-    def gateway_health() -> HealthResponse:
-        # Not named `health`: that would shadow the health module imported
-        # above, and health.check() in ops_processes would resolve to this
-        # function instead. ruff's F811 caught it.
-        try:
-            # IDENTITY, not a bare clock read: a handle opening proves something is
-            # listening, not that it is the GATEWAY. The default port was
-            # rdb1's for a year, and every routed query failed while this
-            # endpoint said `up` (#235). IDENTITY already reports proctype
-            # and already guards it with @[...;`unknown], so it costs
-            # nothing over .z.p.
-            identity = gateway.call(ops.IDENTITY)
-        except GatewayReloading as exc:
-            return HealthResponse(
-                ok=True,
-                gateway="reloading",
-                detail=str(exc),
-                poll_seconds=ops.POLL_SECONDS["health"],
-                request_timeout_seconds=settings.request_timeout,
-            )
-        except GatewayUnavailable as exc:
-            return HealthResponse(
-                ok=False,
-                gateway="unreachable",
-                detail=str(exc),
-                poll_seconds=ops.POLL_SECONDS["health"],
-                request_timeout_seconds=settings.request_timeout,
-            )
-        proctype = _reported_proctype(identity)
-        # Only a POSITIVE reading of the wrong type is a refusal. A process
-        # that does not carry .proc.proctype reports `unknown`, and a test
-        # double reports nothing at all - neither is evidence of anything,
-        # and calling those wrong would break every deployment we cannot
-        # interrogate. Refuse on what we know, not on what we failed to
-        # learn.
-        if proctype is not None and proctype not in ("gateway", "unknown"):
-            return HealthResponse(
-                ok=False,
-                gateway="wrong_process",
-                detail=(
-                    f"{settings.host}:{settings.port} answers as a {proctype!r} process, "
-                    f"not a gateway - routed queries and the ops views all go through "
-                    f".gw.*, which only a gateway has. Point UQF_FRONTEND_STACK_ROOT at "
-                    f"the stack whose process.csv declares this gateway."
-                ),
-                poll_seconds=ops.POLL_SECONDS["health"],
-                request_timeout_seconds=settings.request_timeout,
-            )
-        return HealthResponse(
-            ok=True,
-            gateway="up",
-            poll_seconds=ops.POLL_SECONDS["health"],
-            request_timeout_seconds=settings.request_timeout,
+    @app.exception_handler(RequestValidationError)
+    async def _handle_invalid(request: Request, exc: RequestValidationError) -> JSONResponse:
+        """A request FastAPI refused before any handler ran - a malformed body,
+        a query parameter out of range - in the shape every other refusal
+        has. `detail` is one readable line; `errors` keeps each failure's
+        `loc`, `msg` and `type` for a form that marks the field. Never the
+        `input`, which would quote the request back."""
+        errors = [
+            {"loc": list(e.get("loc", ())), "msg": str(e.get("msg", "")), "type": e.get("type")}
+            for e in exc.errors()
+        ]
+        detail = "; ".join(
+            f"{'.'.join(str(part) for part in e['loc'])}: {e['msg']}" for e in errors
+        )
+        return _error(request, 422, "RequestInvalid", detail or "invalid request", errors=errors)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _handle_http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        """Starlette's own refusals - 404 for no such route, 405 for a method
+        the route does not take - named by their status (`NotFound`,
+        `MethodNotAllowed`), keeping the headers they carry (405's `Allow`).
+        A route that was renamed or moved is 410 `Gone`, naming where it went."""
+        if exc.status_code in (404, 405) and (
+            moved := renamed_route(request.method, write_guard.route_path(request.scope))
+        ):
+            return _error(request, 410, "Gone", moved)
+        phrase = http.HTTPStatus(exc.status_code).phrase
+        error = "".join(ch for ch in phrase.title() if ch.isalnum())
+        return _error(request, exc.status_code, error, str(exc.detail), headers=exc.headers)
+
+    @app.exception_handler(Exception)
+    async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
+        """A failure nothing named: 500 in the same shape, saying where to look
+        rather than quoting the exception, whose text can hold anything."""
+        return _error(
+            request,
+            500,
+            "InternalError",
+            f"the server failed unexpectedly ({type(exc).__name__}); see its log",
         )
 
-    @app.get("/catalog", response_model=CatalogResponse)
-    @authz.unguarded(
-        "describes the queryable surface and carries no data - a caller "
-        "refused it could not find out why"
-    )
-    def get_catalog() -> CatalogResponse:
-        return CatalogResponse(
-            tables=[
-                TableInfo(
-                    name=t.name,
-                    description=t.description,
-                    columns=[
-                        ColumnInfo(
-                            name=c,
-                            type=qt.value,  # held to ColumnType by test_browsable_types
-                            filterable=c in t.filterable,
-                            decimals=t.decimals_for(c),
-                        )
-                        for c, qt in t.columns.items()
-                    ],
-                )
-                for t in tables.tables().values()
-            ],
-            operators=sorted(catalog.OPERATORS),
-        )
-
-    @app.get("/ops/queue", response_model=OpsTableResponse)
-    def ops_queue() -> OpsTableResponse:
-        """Pending and running queries on the gateway."""
-        return OpsTableResponse(
-            rows=_rows(gateway.call(ops.QUEUE)), poll_seconds=ops.POLL_SECONDS["queue"]
-        )
-
-    @app.get("/ops/connections", response_model=ConnectionsResponse)
-    def ops_connections() -> ConnectionsResponse:
-        """Which backend handles the gateway has, and who is connected."""
-        return ConnectionsResponse(
-            servers=_rows(gateway.call(ops.SERVERS)),
-            clients=_rows(gateway.call(ops.CLIENTS)),
-            poll_seconds=ops.POLL_SECONDS["connections"],
-        )
-
-    @app.get("/ops/usage", response_model=UsageResponse)
-    def ops_usage(limit: int = 500) -> UsageResponse:
-        """Fleet-wide query log, assembled here because none exists in q.
-
-        `unreachable` is part of the response rather than an error: one process
-        being down must not blank the view for the other nine.
-        """
-        capped = min(limit, settings.max_rows)
-        rows, unreachable = ops.merge_usage(fleet.per_process(ops.USAGE, capped))
-        return UsageResponse(
-            rows=rows[:capped],
-            row_count=min(len(rows), capped),
-            unreachable=unreachable,
-            processes_configured=len(fleet.processes),
-            poll_seconds=ops.POLL_SECONDS["usage"],
-        )
-
-    @app.get("/ops/clients", response_model=UsageResponse)
-    def ops_clients(limit: int = 500) -> UsageResponse:
-        """Every client connected to any process in the fleet.
-
-        Distinct from `/ops/connections`, which reports the GATEWAY's clients.
-        A process that connects to the tickerplant rather than the gateway
-        does not appear there at all — which is the whole reason this exists.
-
-        The motivating case is the cryptorust recorder: it opens an outbound
-        connection to `stp1` and never listens, so it cannot be a TorQ
-        discovery member, and registering it as one would put a permanently
-        unreachable row in the fleet view. TorQ already tracks it here, in
-        `.clients.clients` of the process it connects to. See
-        docs/architecture/cryptorust-discovery.md.
-
-        Reuses UsageResponse: the shape is the same fleet-wide-merge-plus-
-        unreachable, and a second identical model would be two places for one
-        idea.
-        """
-        capped = min(limit, settings.max_rows)
-        rows, unreachable = ops.merge_process_clients(fleet.per_process(ops.PROCESS_CLIENTS))
-        return UsageResponse(
-            rows=rows[:capped],
-            row_count=min(len(rows), capped),
-            unreachable=unreachable,
-            processes_configured=len(fleet.processes),
-            poll_seconds=ops.POLL_SECONDS["connections"],
-        )
-
-    @app.get("/ops/processes", response_model=FleetHealthResponse)
-    def ops_processes() -> FleetHealthResponse:
-        """Fleet health for every process process.csv declares.
-
-        Liveness comes from an IPC probe rather than OS process inspection,
-        so the same mechanism works whether or not the process is on this
-        machine - see health.py for why that matters.
-        """
-        if settings.process_csv is None:
-            raise ValidationFailed(
-                "fleet health needs UQF_FRONTEND_STACK_ROOT set to the stack, whose "
-                "generated process.csv is the declared process set"
-            )
-        try:
-            declared = procfile.read(settings.process_csv, settings.base_port)
-        except FileNotFoundError as exc:
-            raise ValidationFailed(str(exc)) from None
-
-        checked = health.check(fleet, declared)
-        groups: dict[str, int] = {}
-        for proc in declared:
-            groups[proc.group] = groups.get(proc.group, 0) + 1
-
-        return FleetHealthResponse(
-            summary=health.summarise(checked),
-            processes=[ProcessHealthOut(**vars(h)) for h in checked],
-            groups=dict(sorted(groups.items())),
-            source=str(settings.process_csv),
-            poll_seconds=ops.POLL_SECONDS["processes"],
-        )
-
-    @app.get("/ops/backfill", response_model=BackfillStatusResponse)
-    def ops_backfill() -> BackfillStatusResponse:
-        """Backfill and Airflow task status, read from the files q writes.
-
-        Read from disk rather than from the gateway because q writes these
-        and nothing publishes them over IPC. Carries only q's own facts -
-        see status.py on the authority boundary this deliberately does not cross.
-        """
-        directory = status.status_directory(settings)
-        statuses, unreadable = status.read_dir(directory)
-        return BackfillStatusResponse(
-            summary=status.summarise(statuses),
-            workers=[_worker_status_out(s) for s in statuses],
-            unreadable=unreadable,
-            source=str(directory) if directory else None,
-            poll_seconds=ops.POLL_SECONDS["backfill"],
-        )
-
-    @app.get("/services", response_model=ServicesResponse)
-    def get_services() -> ServicesResponse:
-        """The deployment targets this machine declares, as `uqs target list
-        --json` reads them: from deploy_targets.toml and the local deploy
-        history, with no ssh - see services.py."""
-        found = services.read(settings)
-        return ServicesResponse(
-            targets=[ServiceTargetOut(**t) for t in found.targets],
-            source=found.source,
-            declared=found.declared,
-            invalid=found.invalid,
-            remote_operations_enabled=settings.enable_writes,
-            poll_seconds=ops.POLL_SECONDS["services"],
-        )
-
-    @app.get("/services/{target}/files", response_model=RemoteFilesResponse)
-    def get_remote_files(
-        request: Request, target: str, path: str = "", limit: int = remote_files.DEFAULT_LIMIT
-    ) -> RemoteFilesResponse:
-        """List one directory under a registered target's deployment root,
-        over ssh, with the release's own Python - see remote_files.py.
-
-        Reads only. Behind the authz guard like every route, and it reaches a
-        server with this machine's ssh key, so it needs remote operations on
-        (UQF_FRONTEND_ENABLE_WRITES) and, through the write guard, the token."""
+    def _tunnel_gate(what: str) -> None:
         if not settings.enable_writes:
             raise WritesDisabled(
-                "browsing a server's files reaches it over ssh, so it needs remote "
-                "operations: set UQF_FRONTEND_ENABLE_WRITES=1 and UQF_FRONTEND_WRITE_TOKEN "
-                "on the server"
+                f"{what} reaches the server over ssh, so it needs remote operations: set "
+                "UQF_FRONTEND_ENABLE_WRITES=1 and UQF_FRONTEND_WRITE_TOKEN on the server"
             )
-        if not 1 <= limit <= remote_helper.MAX_LIMIT:
-            raise ValidationFailed(f"limit must be between 1 and {remote_helper.MAX_LIMIT}")
-        answer = remote_files.browse(
-            settings, target, path, limit, runner=request.app.state.remote_runner
-        )
-        return RemoteFilesResponse(
-            target=target,
-            root=answer["root"],
-            path=answer["path"],
-            parent=answer["parent"],
-            entries=answer["entries"],
-            total=answer["total"],
-            truncated=answer["truncated"],
-            release=answer["release"],
-        )
 
-    @app.put("/services/{target}/files/content", response_model=RemoteUploadResponse)
-    async def put_remote_file(
-        request: Request, target: str, path: str, overwrite: bool = False
-    ) -> RemoteUploadResponse:
-        """Write the request body to `path` below a registered target's
-        shared/config, over ssh, with the release's own Python - see
-        remote_files.upload (#1951).
+    access_routes.install(app, settings=settings, policies=policies)
+    health_routes.install(app, settings=settings, live=live, gateway=gateway)
+    catalog_routes.install(app)
+    ops_routes.install(app, settings=settings)
+    services_routes.install(app, settings=settings, _tunnel_gate=_tunnel_gate)
+    query_routes.install(app, settings=settings)
+    charts_routes.install(app)
+    compare_routes.install(app, settings=settings, _tunnel_gate=_tunnel_gate)
+    config_push_routes.install(app, settings=settings, live=live, history=history)
+    control_routes.install(app, settings=settings, gateway=gateway)
+    activity_routes.install(app, settings=settings, live=live, history=history)
 
-        Refuses before reading the body when writes are off, the path is
-        unsafe or outside shared/config, the target is not registered, or
-        Content-Length is over the limit; refuses a body that grows past it
-        while read. An existing file is replaced only with `overwrite=true`.
-        A timeout or lost answer is 504 UploadOutcomeUncertain, never retried.
-        """
-        # Audited as `file.upload` (activity.SERVER_ACTIONS): the target, and
-        # the file's path, size and sha256 - never its bytes.
-        audit = activity.audit_of(request)
-        audit.set_target(target)
-        if not settings.enable_writes:
-            raise WritesDisabled(
-                "uploading to a server reaches it over ssh, so it needs remote "
-                "operations: set UQF_FRONTEND_ENABLE_WRITES=1 and UQF_FRONTEND_WRITE_TOKEN "
-                "on the server"
-            )
-        remote_files.check_upload_path(path)
-        remote_files.target(settings, target)
-        limit = remote_helper.MAX_UPLOAD
-        too_large = f"a file may be at most {limit} bytes"
-        declared = request.headers.get("content-length")
-        if declared is not None and declared.isdigit() and int(declared) > limit:
-            raise remote_files.UploadTooLarge(too_large)
-        body = bytearray()
-        async for chunk in request.stream():
-            body += chunk
-            if len(body) > limit:
-                raise remote_files.UploadTooLarge(too_large)
-        data = bytes(body)
-        audit.note(
-            file_name=path,
-            size_bytes=len(data),
-            sha256=hashlib.sha256(data).hexdigest(),
-            mode="overwrite" if overwrite else "create",
-        )
-        audit.begin()  # past here the file may be written
-        try:
-            answer = await run_in_threadpool(
-                remote_files.upload,
-                settings,
-                target,
-                path,
-                data,
-                overwrite,
-                runner=request.app.state.remote_runner,
-            )
-        except remote_files.UploadOutcomeUncertain:
-            audit.settle("unknown")
-            raise
-        except FrontendError as exc:
-            # Every other failure is certain: nothing was written. A refusal
-            # (4xx) is `refused`; damaged bytes or no ssh at all, `failed`.
-            audit.settle("refused" if exc.status_code < 500 else "failed")
-            raise
-        return RemoteUploadResponse(
-            target=target,
-            root=answer["root"],
-            path=answer["path"],
-            size=answer["size"],
-            sha256=answer["sha256"],
-            replaced=answer["replaced"],
-            mode=answer["mode"],
-            created=answer["created"],
-        )
-
-    @app.get("/coverage", response_model=CoverageResponse)
-    def get_coverage(
-        request: Request,
-        dataset: str,
-        partition: str,
-        source_version: str,
-        range_from: str | None = None,
-        range_to: str | None = None,
-    ) -> CoverageResponse:
-        """Composed coverage for one dataset, partition and source release,
-        plus the gaps in a requested range if one is given.
-
-        `partition` has no default on purpose. FastAPI makes a parameter with
-        no default REQUIRED, so omitting it is a 422 naming the field rather
-        than a plausible answer computed across every partition (#185). Pass
-        `""` for a dataset with no partition dimension.
-        """
-        # The dataset as the table: a policy refusing a table must refuse its
-        # coverage too, or /coverage reads round what /query refuses.
-        run_policy(request, table=dataset)
-        return _coverage(gateway, dataset, partition, source_version, range_from, range_to)
-
-    @app.post("/query", response_model=QueryResponse)
-    def run_query(req: QueryRequest, request: Request) -> QueryResponse:
-        tbl = tables.table(req.table)
-        # After catalog.table, so an unknown table is a 422 rather than a 403
-        # from a table policy. `guard` has already asked about the path.
-        run_policy(request, table=tbl.name)
-        columns, operators, values = queries.build_filters(
-            tbl, [(f.column, f.op, f.value) for f in req.filters]
-        )
-
-        if req.require_coverage is not None:
-            # The coverage dataset is read too, so it is authorised as a
-            # table in its own right: otherwise a 409's gaps disclose the
-            # coverage of a dataset /coverage would refuse with 403 (#1044).
-            run_policy(request, table=req.require_coverage.dataset)
-            _enforce_coverage(gateway, req.require_coverage)
-
-        capped = min(req.limit, settings.max_rows)
-        # As the data login, through the gateway's query policy (#889).
-        read = gateway.browse(tbl.name, columns, operators, values, capped, TIERS[req.tier])
-        rows = _rows(read.rows)
-        return QueryResponse(
-            poll_seconds=ops.POLL_SECONDS["query"],
-            table=tbl.name,
-            tier=req.tier,
-            rows=rows,
-            row_count=len(rows),
-            # read.cap is capped lowered to the policy's maxrows where that is
-            # less (#928), so a cut either one made is reported (#1255).
-            truncated=len(rows) >= read.cap < req.limit,
-        )
-
-    # ------------------------------------------------------ control (writes)
-    #
-    # Every route below CHANGES something. They are refused unless
-    # UQF_FRONTEND_ENABLE_WRITES is set, checked inside `control` so a route
-    # added later cannot forget it - a kill switch is only worth having if it
-    # cannot be bypassed by inattention.
-    #
-    # They also pass through `guard` like every read, so a deployment that
-    # installs a real policy gets one seam rather than two.
-
-    @app.get("/control", response_model=ControlStatusResponse)
-    def control_status() -> ControlStatusResponse:
-        """Whether writes are on, and what can be set.
-
-        A GET, and deliberately not itself gated: a UI needs to know whether
-        to render controls at all, and making it discover that by provoking a
-        403 on a real action is a poor way to find out.
-        """
-        enabled = settings.enable_writes
-        return ControlStatusResponse(
-            writes_enabled=enabled,
-            lifecycle_actions=list(control.LIFECYCLE_ACTIONS),
-            settable_fields=control.settable_fields(settings) if enabled else [],
-            processes=control.process_choices(settings) if enabled else [],
-            poll_seconds=ops.POLL_SECONDS["processes"],
-        )
-
-    @app.post("/control/process/{action}", response_model=CommandResponse)
-    def control_lifecycle(action: str, req: LifecycleRequest, request: Request) -> CommandResponse:
-        """Start, stop or restart processes (action is start|stop|restart)."""
-        audit = activity.audit_of(request)
-        audit.set_target(req.procs)
-        with control.reporting_acting(audit.begin):
-            result = control.lifecycle(settings, action, req.procs)
-        # torq.sh reports one exit code for the whole selector: success says
-        # every process did as asked; a failure does not say which one failed.
-        audit.settle("succeeded" if result.ok else "failed")
-        for proc in req.procs.split():
-            audit.item(proc, "succeeded" if result.ok else "unknown")
-        audit.note(exit_code=result.exit_code)
-        return CommandResponse(
-            action=result.action,
-            target=result.target,
-            exit_code=result.exit_code,
-            ok=result.ok,
-            output=result.output,
-        )
-
-    @app.put("/control/process/{procname}/config", response_model=ProcessConfigResponse)
-    def control_process_config(
-        procname: str, req: ProcessConfigRequest, request: Request
-    ) -> ProcessConfigResponse:
-        """Persist one process.csv field override, applied on the next start."""
-        audit = activity.audit_of(request)
-        # The field, never the value: a value is whatever was typed.
-        audit.note(procname=procname, field=req.field_name)
-        with control.reporting_acting(audit.begin):
-            row = control.set_process_field(settings, procname, req.field_name, req.value)
-        return ProcessConfigResponse(
-            procname=procname,
-            config=row,
-            settable_fields=control.settable_fields(settings),
-        )
-
-    @app.put("/control/worker-config", response_model=WorkerConfigResponse)
-    def control_worker_config(req: WorkerConfigRequest, request: Request) -> WorkerConfigResponse:
-        """Set a `.qetl.cfg` override in the live process the gateway addresses."""
-        audit = activity.audit_of(request)
-        audit.set_target(req.key)
-        audit.note(key=req.key)
-        with control.reporting_acting(audit.begin):
-            out = control.set_worker_config(gateway, settings, req.key, req.value)
-        # Set is not in effect: an environment variable outranks the override,
-        # and an answer of unknown shape says nothing either way.
-        audit.settle("succeeded" if out["saved"] else "failed" if out["shadowed"] else "unknown")
-        audit.note(
-            saved=out["saved"],
-            shadowed=out["shadowed"],
-            effective_layer=out["effective_layer"],
-        )
-        return WorkerConfigResponse(**out)
-
-    @app.post("/control/backfill", response_model=BackfillStartedResponse)
-    def control_backfill(req: BackfillRequest, request: Request) -> BackfillStartedResponse:
-        """Launch a bounded worker over a range. Detached; watch /ops/backfill."""
-        audit = activity.audit_of(request)
-        audit.set_target(req.worker)
-        audit.note(
-            worker=req.worker,
-            source_version=req.source_version,
-            range_from=req.range_from,
-            range_to=req.range_to,
-        )
-        try:
-            with control.reporting_acting(audit.begin):
-                out = control.start_backfill(
-                    settings,
-                    worker=req.worker,
-                    source_version=req.source_version,
-                    range_from=req.range_from,
-                    range_to=req.range_to,
-                )
-        except BackfillNotStarted:
-            audit.settle("failed")  # torq.sh said so: nothing is running
-            raise
-        # Handed off, not finished: whether it worked is /ops/backfill's to say.
-        audit.settle("accepted")
-        return BackfillStartedResponse(**out)
-
-    # ------------------------------------------------------ activity (#1954)
-
-    @app.post("/activity/events", response_model=ActivityBatchResponse)
-    def record_activity(batch: ActivityBatchRequest, request: Request) -> ActivityBatchResponse:
-        """What an operator did in the UI. Intent, as the browser reports it -
-        the server's own rows are the authority on what happened."""
-        stored = dropped = 0
-        claimed = request.headers.get(authz.IDENTITY_HEADER)
-        for event in batch.events:
-            _, more = activity.clean_detail(event.detail)
-            dropped += more
-            _, ok = history.add(
-                source="browser",
-                kind=event.kind,
-                action=event.action,
-                ts=event.ts,
-                event_id=event.event_id,
-                target=event.target,
-                outcome=event.outcome,
-                session_id=event.session_id,
-                request_id=event.request_id,
-                claimed_user=claimed,
-                trigger=event.trigger,
-                duration_ms=event.duration_ms,
-                items=[item.model_dump() for item in event.items],
-                detail=event.detail,
-            )
-            stored += ok
-        return ActivityBatchResponse(
-            stored=stored,
-            not_stored=len(batch.events) - stored,
-            dropped_detail=dropped,
-            persistent=history.persistence.persistent,
-        )
-
-    @app.get("/activity", response_model=ActivityResponse)
-    def list_activity(
-        since: str | None = None,
-        until: str | None = None,
-        session_id: str | None = None,
-        request_id: str | None = None,
-        action: str | None = None,
-        target: str | None = None,
-        outcome: ActivityOutcome | None = None,
-        source: ActivitySource | None = None,
-        limit: int = activity.DEFAULT_LIMIT,
-    ) -> ActivityResponse:
-        """The history, newest first, filtered; and whether it is being kept."""
-        rows = history.query(
-            activity.Query(
-                since=_instant("since", since),
-                until=_instant("until", until),
-                session_id=session_id or None,
-                request_id=request_id or None,
-                action=action or None,
-                target=target or None,
-                outcome=outcome,
-                source=source,
-                limit=limit,
-            )
-        )
-        state = history.persistence
-        return ActivityResponse(
-            events=[ActivityEventOut(**row) for row in rows],
-            persistence=ActivityPersistence(
-                persistent=state.persistent,
-                path=state.path,
-                failures=state.failures,
-                last_error=state.last_error,
-                last_failure_at=state.last_failure_at,
-            ),
-            retention_days=history.retention_days,
-            max_rows=history.max_rows,
-            poll_seconds=ops.POLL_SECONDS["activity"],
-        )
+    settings_admin.install(app)
 
     if settings.web_dist is not None:
         app.mount("/ui", StaticFiles(directory=settings.web_dist, html=True), name="web")
 
     return app
+
+
+def _guard_refusal(settings: Settings, request: Request) -> tuple[int, str, str] | None:
+    """write_guard's verdict on this request - (status, error, detail), or
+    None when it may pass. One function, so the guard and the audit's notion
+    of "authorised" cannot disagree."""
+    refusal = write_guard.host_refusal(settings, request.headers.get("host"))
+    if refusal is not None:
+        return 403, "HostNotAllowed", refusal
+    if settings.enable_writes and (
+        write_guard.needs_token(request.method, write_guard.route_path(request.scope))
+        or _reaches_target(request)
+    ):
+        refusal = write_guard.token_refusal(settings, request.headers.get("authorization"))
+        if refusal is not None:
+            return 401, "WriteTokenRequired", refusal
+    return None
+
+
+def _reaches_target(request: Request) -> bool:
+    """Will this request open, or read through, an ssh to a deploy target?
+    A scoped route naming a workspace other than local does: the operator's
+    key opens it, as it does for /services/{target} (#2067)."""
+    if not workspaces.names_target(request.headers):
+        return False
+    template, _ = _route_of(request)
+    return workspaces.is_scoped(request.method, template)
 
 
 def _route_of(request: Request) -> tuple[str | None, dict[str, str]]:
@@ -873,249 +547,3 @@ def _route_of(request: Request) -> tuple[str | None, dict[str, str]]:
 
 def _elapsed_ms(started: float) -> float:
     return round((time.perf_counter() - started) * 1000, 3)
-
-
-def _instant(name: str, raw: str | None) -> dt.datetime | None:
-    """A filter bound, which must carry its timezone."""
-    if raw is None or raw == "":
-        return None
-    try:
-        parsed = dt.datetime.fromisoformat(raw)
-    except ValueError:
-        raise ValidationFailed(
-            f"{name} must be ISO-8601, e.g. 2026-09-11T00:00:00Z; got {raw!r}"
-        ) from None
-    if parsed.tzinfo is None:
-        raise ValidationFailed(f"{name} needs an explicit timezone offset, got {raw!r}")
-    return parsed
-
-
-def _worker_status_out(s: status.WorkerStatus) -> WorkerStatusOut:
-    """One status record as its response model, field by field.
-
-    Explicit rather than `WorkerStatusOut(**{**vars(s), "terminal": s.terminal})`.
-    The splat is shorter but unverifiable - every field arrives as `Any`, so
-    nothing checks that the dataclass and the model still agree. Worse, the
-    failure mode is silent in the direction that matters: rename a field on
-    `WorkerStatus` and the splat keeps type-checking while raising at
-    runtime, on a request rather than in the suite.
-
-    `terminal` is a property, not a field, so `vars()` never carried it and
-    it had to be patched in by hand - which is the hint that the splat was
-    already not describing the model.
-    """
-    return WorkerStatusOut(
-        worker=s.worker,
-        instance_id=s.instance_id,
-        # status.read_status_file refuses a state outside STATES, which
-        # test_status.py holds equal to RunState - so this is one, as typed.
-        state=typing.cast(RunState, s.state),
-        source_version=s.source_version,
-        range_from=s.range_from,
-        range_to=s.range_to,
-        cursor=s.cursor,
-        rows_published=s.rows_published,
-        windows_completed=s.windows_completed,
-        reactions_owed=s.reactions_owed,
-        error=s.error,
-        updated_at=s.updated_at,
-        terminal=s.terminal,
-        pid=s.pid,
-        host=s.host,
-        run_id=s.run_id,
-        abandoned=s.abandoned,
-        warnings=s.warnings,
-    )
-
-
-def _iso(row: dict[str, Any]) -> IntervalOut:
-    """An interval's bounds as the Desk shows a timestamp (`_wire`): to the
-    nanosecond, where `datetime.isoformat` stopped at the microsecond and
-    read two `.z.p` bounds 765 ns apart as one instant (#1371). A row from
-    `_rows` already is; any other is put through `_wire` too."""
-    if not all(isinstance(row[k], str) for k in ("range_from", "range_to")):
-        row = _wire(pl.DataFrame([row]))[0]
-    return IntervalOut(range_from=row["range_from"], range_to=row["range_to"])
-
-
-def _coverage(
-    gateway: Gateway,
-    dataset: str,
-    partition: str,
-    source_version: str,
-    range_from: str | None,
-    range_to: str | None,
-    claims: str = queries.COVERAGE,
-) -> CoverageResponse:
-    # Coverage is now a claim that is true until superseded, so the
-    # read needs an as-of. `datetime.now(UTC)` here rather than letting q use
-    # its own `.z.p`: the value is sent as a parameter so the answer is
-    # reproducible and the test doubles can pin it, and a caller asking twice
-    # in one request gets one consistent belief rather than two.
-    as_of = dt.datetime.now(dt.UTC)
-    # From the ledger file the workers persist, read on the gateway (#1081):
-    # no RDB or HDB holds etl_coverage, so routing a select to the tiers found
-    # nothing a backfill had recorded. Composed and gapped by .qetl.coverage
-    # there too, not here: the rule a backfill trusts when it skips a covered
-    # window has one implementation, and this reports what it says.
-    raw = gateway.call(claims, dataset, partition, source_version, as_of)
-    covered = _rows(gateway.call(queries.COMPOSE, raw))
-
-    requested = None
-    missing: list[dict[str, Any]] = []
-    if range_from is not None and range_to is not None:
-        start = queries.coerce(range_from, catalog.QType.TIMESTAMP, "range_from", as_list=False)
-        end = queries.coerce(range_to, catalog.QType.TIMESTAMP, "range_to", as_list=False)
-        requested = _wire(pl.DataFrame({"range_from": start, "range_to": end}))[0]
-        if not (end > start).item():
-            from uqf_frontend.errors import ValidationFailed
-
-            raise ValidationFailed(
-                "an interval must be non-empty and forward-going, got "
-                f"[{requested['range_from']}, {requested['range_to']})"
-            )
-        missing = _rows(gateway.call(queries.GAPS, start, end, raw))
-
-    return CoverageResponse(
-        poll_seconds=ops.POLL_SECONDS["coverage"],
-        dataset=dataset,
-        source_version=source_version,
-        covered=[_iso(r) for r in covered],
-        requested=_iso(requested) if requested else None,
-        gaps=[_iso(r) for r in missing],
-        complete=requested is not None and not missing,
-    )
-
-
-def _enforce_coverage(gateway: Gateway, req: CoverageRequirement) -> None:
-    """Refuse the query when the required range is not fully published.
-
-    Returning the gaps rather than a bare refusal is the point: the caller can
-    say *which* days are missing, or narrow its range to what exists.
-    """
-    result = _coverage(
-        gateway, req.dataset, req.partition, req.source_version, req.range_from, req.range_to
-    )
-    if not result.complete:
-        gaps = ", ".join(f"[{g.range_from}, {g.range_to})" for g in result.gaps)
-        raise CoverageIncomplete(
-            f"{req.dataset!r} at source_version {req.source_version!r} is not fully "
-            f"published for the requested range; missing: {gaps or 'unknown'}"
-        )
-    # Written is not queryable (#1094): a backfill stages coverage as it
-    # appends, and a running HDB sees a date only once it is finished and
-    # reloaded. Checked second, so a range that is simply missing says so.
-    ready = _coverage(
-        gateway,
-        req.dataset,
-        req.partition,
-        req.source_version,
-        req.range_from,
-        req.range_to,
-        claims=queries.READY_CLAIMS,
-    )
-    if not ready.complete:
-        gaps = ", ".join(f"[{g.range_from}, {g.range_to})" for g in ready.gaps)
-        raise CoverageIncomplete(
-            f"{req.dataset!r} at source_version {req.source_version!r} is published for "
-            f"the requested range but not yet loaded by the HDB: {gaps or 'unknown'} - "
-            "retry once the backfill's reload has gone through"
-        )
-
-
-def _reported_proctype(identity: Any) -> str | None:
-    """The proctype in an ops.IDENTITY result, or None when there is none.
-
-    None means "could not tell" and is deliberately distinct from
-    ``"unknown"``, which is the process itself answering that it carries no
-    .proc.proctype. /health refuses on neither - see its comment - but the
-    two are different facts and collapsing them here would hide that.
-    """
-    rows = _rows(identity)
-    if not rows:
-        return None
-    value = rows[0].get("proctype")
-    return None if value is None else str(value)
-
-
-#: What an infinite number is sent as. JSON has no infinity, and pydantic
-#: writes one as null - the same as a missing value, which is the one thing
-#: an operator would read as harmless (#1330). A string, so the browser can
-#: tell it apart and show it as one.
-INFINITY = {1: "inf", -1: "-inf"}
-
-#: 0Wn as nanoseconds; -0Wn is its negation and 0Nn, one below, is null.
-_SPAN_INFINITY = 2**63 - 1
-
-#: 0Wp and -0Wp as kola hands them over, in nanoseconds since 1970: the first
-#: held at the widest a polars datetime goes, the second shifted from q's
-#: 2000 epoch.
-_STAMP_INFINITY = {2**63 - 1: 1, -(2**63 - 1) + 946_684_800 * 10**9: -1}
-
-#: A timestamp on the wire: UTC, to the nanosecond. A Python datetime stops
-#: at the microsecond (#1371).
-_STAMP_TEXT = "%Y-%m-%dT%H:%M:%S.%9fZ"
-
-
-def _rows(result: Any) -> list[dict[str, Any]]:
-    """Normalise a kola result into JSON-serialisable rows.
-
-    kola is a Polars interface to q, so a table-shaped result already arrives
-    as a DataFrame - just a dict projection, after `_wire`.
-    """
-    if result is None:
-        return []
-    if isinstance(result, pl.DataFrame):
-        return _wire(result)
-    if hasattr(result, "to_dicts"):
-        return result.to_dicts()
-    if isinstance(result, list):
-        return result
-    return [{"value": result}]  # pragma: no cover - scalar result from a table query
-
-
-def _wire(frame: pl.DataFrame) -> list[dict[str, Any]]:
-    """`frame`'s rows with the two values JSON would otherwise lose.
-
-    A timespan goes as a whole number of nanoseconds. As a Python timedelta
-    it stopped at the microsecond, so 1234 ns was shown as 1 us - in an
-    ISO-8601 duration the browser could not format - and could not be typed
-    back into a filter, which takes nanoseconds (#1329).
-
-    An infinity - a float's 0w or -0w, an integral column's 0W or -0W, which
-    .uqf.browse sends as floats because kola makes them null, or a timespan's
-    0Wn or -0Wn - goes as INFINITY, rather than as the null JSON would make
-    it (#1330); so does a timestamp's 0Wp or -0Wp, rather than as the dates
-    in 2262 and 1707 its bits spell.
-
-    A timestamp goes as UTC text to the nanosecond (_STAMP_TEXT). As a Python
-    datetime it stopped at the microsecond, so two `.z.p` stamps 765 ns
-    apart were sent as one instant, and the value shown could not be typed
-    back into a filter (#1371).
-    """
-    spans = [name for name, kind in frame.schema.items() if isinstance(kind, pl.Duration)]
-    floats = [name for name, kind in frame.schema.items() if kind.is_float()]
-    frame = frame.with_columns(pl.col(name).dt.total_nanoseconds() for name in spans)
-    stamps = {}
-    for name, kind in frame.schema.items():
-        if isinstance(kind, pl.Datetime):
-            column = pl.col(name)
-            if kind.time_zone is not None:
-                column = column.dt.convert_time_zone("UTC").dt.replace_time_zone(None)
-            nanoseconds = frame.select(column.dt.cast_time_unit("ns").cast(pl.Int64)).to_series()
-            stamps[name] = nanoseconds.replace_strict(_STAMP_INFINITY, default=None)
-            frame = frame.with_columns(column.dt.cast_time_unit("ns").dt.to_string(_STAMP_TEXT))
-    rows = frame.to_dicts()
-    for name, sign in stamps.items():
-        for row, infinite in zip(rows, sign, strict=True):
-            if infinite is not None:
-                row[name] = INFINITY[infinite]
-    infinite = [name for name in floats if frame.get_column(name).is_infinite().any()] + [
-        name for name in spans if (frame.get_column(name).abs() == _SPAN_INFINITY).any()
-    ]
-    for name in infinite:
-        for row in rows:
-            value = row[name]
-            if value is not None and abs(value) in (math.inf, _SPAN_INFINITY):
-                row[name] = INFINITY[1 if value > 0 else -1]
-    return rows

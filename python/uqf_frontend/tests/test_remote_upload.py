@@ -1,4 +1,4 @@
-"""PUT /services/{target}/files/content: uploads to a registered target (#1951).
+"""PUT /services/{target}/files: uploads to a registered target (#1951).
 
 ssh is stubbed as in test_remote_files.py: a Recorder answers with a canned
 result, for the gates that refuse before ssh and for each failure ssh or the
@@ -30,7 +30,7 @@ from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
 
 TOKEN = secrets.token_hex(32)
-RELEASE = "20261101T090000Z-abc1234"
+RELEASE = "20261101T090000000Z-abc1234"
 UNUSUAL = [
     "with space",
     "it's quoted",
@@ -44,7 +44,7 @@ UNUSUAL = [
     "a&b|c>d",
 ]
 
-API_TS = Path(__file__).resolve().parents[3] / "web" / "src" / "api.ts"
+API_TS = Path(__file__).resolve().parents[3] / "web" / "src" / "api" / "services.ts"
 
 
 class Recorder:
@@ -113,29 +113,48 @@ def served(tmp_path, monkeypatch):
     registry.write_text(f'[targets.box]\nssh = "ops@box"\ndest = "{dest}"\n')
     monkeypatch.setenv("UQS_DEPLOY_TARGETS", str(registry))
     monkeypatch.setenv("UQS_DEPLOY_HISTORY", str(tmp_path / "deploy_history.json"))
+    monkeypatch.setattr(sys.modules[__name__], "SERVED", dest)
     return dest
 
 
-def _put(runner, path, data=b"a,b\n", target="box", overwrite=None, **kw):
-    params = {"path": path}
+#: The deployment `served` made: _put opens each upload's push in it, in
+#: process, so a test's runner sees only the upload (#2002).
+SERVED: Path | None = None
+#: The push an upload names when no deployment is served - a canned runner
+#: never reads it.
+CANNED_PUSH = "20261104T000000000Z-00000000"
+
+
+def _open_push() -> str:
+    if SERVED is None:
+        return CANNED_PUSH
+    push_id = remote_files.new_push_id()
+    remote_helper.handle({"protocol": 1, "op": "push_open", "root": str(SERVED),
+                          "push_id": push_id, "config_dir": "shared/config"})  # fmt: skip
+    return push_id
+
+
+def _put(runner, path, data=b"a,b\n", target="box", overwrite=None, push=None, **kw):
+    params = {"path": path, "push_id": push or _open_push()}
     if overwrite is not None:
         params["overwrite"] = overwrite
     client = kw.pop("client", None) or _client(runner)
-    return client.put(f"/services/{target}/files/content", params=params, content=data, **kw)
+    return client.put(f"/services/{target}/files", params=params, content=data, **kw)
 
 
 def _ok_answer(path, data, **over):
     return json.dumps({
         "protocol": 1, "ok": True, "path": path, "size": len(data),
         "sha256": hashlib.sha256(data).hexdigest(), "replaced": False, "mode": 0o644,
-        "created": [], "swept": 0, **over,
+        "created_dirs": [], "swept": 0, "push_id": CANNED_PUSH, "previous_size": None,
+        "previous_sha256": None, **over,
     }) + "\n"  # fmt: skip
 
 
 # ------------------------------------------------------------ gates before ssh
 
 
-def test_uploading_needs_remote_operations_enabled(served):
+def test_uploading_needs_writes_enabled(served):
     runner = Recorder()
     client = _client(runner, writes=False, token=None)
     resp = _put(runner, "shared/config/x", client=client)
@@ -184,14 +203,14 @@ def test_only_a_registered_target_takes_an_upload(served):
 def test_unsafe_paths_and_unsupported_destinations_are_refused_before_ssh(served, path, error):
     runner = Recorder()
     resp = _put(runner, path)
-    assert resp.status_code == 400, resp.text
+    assert resp.status_code == 422, resp.text
     assert resp.json()["error"] == error
     assert runner.calls == []
 
 
 def test_a_path_is_required(served):
     runner = Recorder()
-    resp = _client(runner).put("/services/box/files/content", content=b"x")
+    resp = _client(runner).put("/services/box/files", content=b"x")
     assert resp.status_code == 422
     assert runner.calls == []
 
@@ -223,7 +242,9 @@ def test_the_upload_function_refuses_too_large_data_itself(served, monkeypatch):
     from uqf_frontend.config import Settings
 
     with pytest.raises(remote_files.UploadTooLarge):
-        remote_files.upload(Settings(), "box", "shared/config/x", b"xxxx", False, Recorder())
+        remote_files.upload(
+            Settings(), "box", "shared/config/x", b"xxxx", False, CANNED_PUSH, Recorder()
+        )
 
 
 # ------------------------------------------------------------ the ssh call
@@ -232,7 +253,8 @@ def test_the_upload_function_refuses_too_large_data_itself(served, monkeypatch):
 def test_one_batch_mode_call_framed_as_the_helper_then_the_bytes(served):
     data = b"\x00\x01binary\r\n"
     runner = Loopback()
-    resp = _put(runner, "shared/config/x.bin", data=data)
+    push_id = _open_push()
+    resp = _put(runner, "shared/config/x.bin", data=data, push=push_id)
     assert resp.status_code == 200, resp.text
     assert len(runner.calls) == 1
     argv, kwargs = runner.calls[0]
@@ -252,6 +274,7 @@ def test_one_batch_mode_call_framed_as_the_helper_then_the_bytes(served):
     assert request == {
         "protocol": 1, "op": "upload", "root": str(served), "path": "shared/config/x.bin",
         "size": len(data), "sha256": hashlib.sha256(data).hexdigest(), "overwrite": False,
+        "push_id": push_id,
     }  # fmt: skip
     assert (served / "shared/config/x.bin").read_bytes() == data
 
@@ -261,13 +284,16 @@ def test_the_answer_says_what_was_written(served):
     body = resp.json()
     assert body == {
         "target": "box",
-        "root": str(served),
+        "dest": str(served),
         "path": "shared/config/scripts/torqconfig/sources.csv",
         "size": 4,
         "sha256": hashlib.sha256(b"a,b\n").hexdigest(),
         "replaced": False,
         "mode": body["mode"],
-        "created": ["shared/config/scripts", "shared/config/scripts/torqconfig"],
+        "created_dirs": ["shared/config/scripts", "shared/config/scripts/torqconfig"],
+        "push_id": body["push_id"],
+        "previous_size": None,
+        "previous_sha256": None,
     }
 
 
@@ -322,7 +348,7 @@ def test_a_link_out_of_the_root_is_refused_by_the_server(served, tmp_path):
     (tmp_path / "outside").mkdir()
     (served / "shared/config/out").symlink_to(tmp_path / "outside")
     resp = _put(Loopback(), "shared/config/out/x.csv")
-    assert resp.status_code == 400
+    assert resp.status_code == 422
     assert "symbolic link" in resp.json()["detail"]
     assert list((tmp_path / "outside").iterdir()) == []
 
@@ -429,6 +455,7 @@ def test_the_browser_holds_the_same_upload_limit_and_destination():
     assert json.loads(_ts_const("UPLOAD_ROOT")) == "/".join(remote_helper.UPLOAD_ROOT)
     assert json.loads(_ts_const("UPLOAD_TEMP_PREFIX")) == remote_helper.TEMP_PREFIX
     assert int(_ts_const("UPLOAD_MAX_DEPTH")) == remote_helper.MAX_UPLOAD_DEPTH
+    assert int(_ts_const("UPLOAD_MAX_PATH")) == remote_helper.MAX_PATH
 
 
 def test_the_browser_waits_longer_than_the_server_does():
@@ -456,14 +483,16 @@ def test_an_upload_is_audited_with_metadata_and_never_its_bytes(served, tmp_path
     resp, rows, dump = _audited(tmp_path, Loopback())
     assert resp.status_code == 200, resp.text
     (row,) = rows
-    assert row["action"] == "file.upload"
+    assert row["action"] == "files.upload"
     assert row["target"] == "box"
     assert row["outcome"] == "succeeded"
     assert row["detail"] == {
-        "file_name": "shared/config/x.csv",
-        "size_bytes": len(SECRET),
+        "path": "shared/config/x.csv",
+        "size": len(SECRET),
         "sha256": hashlib.sha256(SECRET).hexdigest(),
         "mode": "create",
+        "push_id": resp.json()["push_id"],
+        "previous_sha256": None,
     }
     assert SECRET.decode() not in dump
     assert base64.b64encode(SECRET).decode() not in dump

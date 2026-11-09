@@ -147,14 +147,14 @@
         if[`ok~first outcome;
             :`state`kind`attempts`result`error!(`ok;`none;attempt;last outcome;"")];
         kind:.qetl.job.bounded.runtime.classify[last outcome];
-        .[{.qetl.log.dbg[x;y;z]};(`qetl.job.bounded.runtime;"attempt failed";
+        .[{.qetl.log.ch.dbg[x;y;z]};(`ipc;"attempt failed";
             `attempt`of`kind`error!(attempt;cap;kind;last outcome));::];
         if[kind=`data;
             :`state`kind`attempts`result`error!(`failed;`data;attempt;::;last outcome)];
         if[attempt=cap;
             :`state`kind`attempts`result`error!(`failed;`transport;attempt;::;last outcome)];
         wait:.qetl.job.bounded.runtime.backoff_ms[pol;attempt];
-        .[{.qetl.log.warn[x;y;z]};(`qetl.job.bounded.runtime;"retrying after a transport error";
+        .[{.qetl.log.ch.warn[x;y;z]};(`ipc;"retrying after a transport error";
             `attempt`of`backoff_ms`error!(attempt;cap;wait;last outcome));::];
         .qetl.job.bounded.runtime.sleep_ms[wait];
         attempt+:1];
@@ -231,7 +231,7 @@
 / Suppressing a SUBSET is the dangerous case: rows withheld while coverage is
 / still published leaves the ledger asserting a window is complete when
 / nothing was written.
-.qetl.job.bounded.runtime.suppressed_in_dry_run:`publish_rows`publish_coverage`write_checkpoint`record_run`record_facts`finish_store`notify_reactions
+.qetl.job.bounded.runtime.suppressed_in_dry_run:`publish_rows`publish_coverage`write_checkpoint`record_run`record_facts`finish_store`notify_reactions`pin_config
 
 / This run's mode: `mode` (UQF_MODE, or `uqs job backfill --mode`) when set, else
 / `dry_run when the older dry_run flag is set, else `run.
@@ -351,7 +351,7 @@
     / `f . ()` is a TYPE error rather than a niladic call; the unary-null
     / argument list is what actually applies a niladic function.
     applied:$[0=count args; enlist(::); args];
-    if[dry; .[{.qetl.log.dbg[x;y;z]};(`qetl.job.bounded.runtime;"dry run - skipped";enlist[`effect]!enlist effect);::]];
+    if[dry; .[{.qetl.log.ch.dbg[x;y;z]};(`lifecycle;"dry run - skipped";enlist[`effect]!enlist effect);::]];
     $[dry; (`skipped;effect); (`done;effect;action . applied)]}
 
 / ----------------------------------------------------------- WINDOWS
@@ -438,7 +438,7 @@
     m:.qetl.coverage.missing[ds;part;version;as_of;from_ts;to_ts];
     / The answer to "why did the run do nothing": every window already covered
     / at this version, so there is nothing left to fetch.
-    .[{.qetl.log.dbg[x;y;z]};(ds;"coverage gaps";
+    .[{.qetl.log.ch.dbg[`coverage;y;(enlist[`dataset]!enlist x),z]};(ds;"coverage gaps";
         `partition`source_version`range_from`range_to`gaps!(part;version;from_ts;to_ts;count m));::];
     m}
 
@@ -471,7 +471,7 @@
     if[`done~first covered; .qetl.coverage.note_written[ds;part;spec`source_version]];
     checkpointed:.qetl.job.bounded.runtime.commit[dry;`write_checkpoint;.qetl.job.bounded.state.save_checkpoint;
         (worker;spec;to_ts)];
-    .[{.qetl.log.dbg[x;y;z]};(worker;"window finished";
+    .[{.qetl.log.ch.dbg[`lifecycle;y;(enlist[`worker]!enlist x),z]};(worker;"window finished";
         `range_from`range_to`rows`dry_run!(from_ts;to_ts;rows;dry));::];
     `dry_run`rows_published`published`covered`checkpointed!
         (dry;rows;published;covered;checkpointed)}
@@ -682,12 +682,12 @@
         / Switched to by the framework, not asked for, so it must not do what a
         / declared replace is refused for: delete a sibling's rows (#1476).
         if[.qetl.job.bounded.runtime.replace_unscoped[worker];
-            .qetl.log.warn[worker;"a fixture run wrote this window, but its rows cannot be cleared without clearing another partition's - declare partition_column to clear them";
-                `range_from`range_to`on_conflict!(w`range_from;w`range_to;oc)];
+            .qetl.log.ch.warn[`storage;"a fixture run wrote this window, but its rows cannot be cleared without clearing another partition's - declare partition_column to clear them";
+                (enlist[`worker]!enlist worker),`range_from`range_to`on_conflict!(w`range_from;w`range_to;oc)];
             :oc];
         :`replace];
-    .qetl.log.warn[worker;"a fixture run wrote this window, and with no window_column its rows cannot be cleared - fixture rows the live data does not overwrite stay";
-        `range_from`range_to`on_conflict!(w`range_from;w`range_to;oc)];
+    .qetl.log.ch.warn[`storage;"a fixture run wrote this window, and with no window_column its rows cannot be cleared - fixture rows the live data does not overwrite stay";
+        (enlist[`worker]!enlist worker),`range_from`range_to`on_conflict!(w`range_from;w`range_to;oc)];
     oc}
 
 / Private: refuse a batch `replace would write on a window column that does
@@ -767,7 +767,7 @@
     tos:(k#w`range_from),hit`range_to;
     {[cfg;v;a;b] if[a<b; .qetl.coverage.stage_completion[cfg`dataset;cfg`partition;v;a;b;0]]}[cfg;v]'[froms;tos];
     n:.qetl.coverage.supersede[cfg`dataset;cfg`partition;v;w`range_from;w`range_to];
-    .qetl.log.info[worker;"live rows replace a fixture run's window";`range_from`range_to`claims!(w`range_from;w`range_to;n)];
+    .qetl.log.ch.info[`storage;"live rows replace a fixture run's window";(enlist[`worker]!enlist worker),`range_from`range_to`claims!(w`range_from;w`range_to;n)];
     rows}
 
 \d .

@@ -48,7 +48,7 @@ Run everything from the repository root; the load scripts use relative paths.
   | **`rlwrap`**                                          | `torq.sh` debug starts and `qcon`; `uqs start` refuses without it                                    | yes, for the fleet                                 |
   | **`multitail`**                                       | `uqs logs --multitail`                                                                               | no - `uqs logs -f` follows the same files          |
   | **Node**                                              | the [browser application](web/README.md), `^22.13 \|\| ^24 \|\| >=26`                                | no - only for `web/`                               |
-  | **[`qlinter`](https://github.com/kwojdalski/q-lint)** | linting q source; `cargo install --git https://github.com/kwojdalski/q-lint --tag v0.14.18 --locked` | no - never needed to build, test or run            |
+  | **[`qlinter`](https://github.com/kwojdalski/q-lint)** | linting q source; `cargo install --git https://github.com/kwojdalski/q-lint --tag v0.14.20 --locked` | no - never needed to build, test or run            |
 
 **Setup is `./install.sh`.** It checks these, says how to install anything
 missing (it never runs sudo), then puts `uqs` on your PATH. Flags: `--dev`
@@ -98,14 +98,14 @@ create or append to without writing any of them:
 ```
 # a streaming job: reads quote, publishes a table of its own
 uv run uqs job new spread_stats --subscribe-to quote \
-    --publishes spread_stats --schema "sym:symbol, spread_pips:float" --dry-run
+    --outputs spread_stats --schema "sym:symbol, spread_pips:float" --dry-run
 
 # a feed: subscribes to nothing, publishes on a timer
-uv run uqs job new rates_feed --publishes rates \
+uv run uqs job new rates_feed --outputs rates \
     --schema "sym:symbol, mid:float" --dry-run
 
 # a bounded worker, with its source and transform, one day per window
-uv run uqs job new eod_rates --kind backfill --dataset eod_rates \
+uv run uqs job new eod_rates --kind backfill --outputs eod_rates \
     --schema "sym:symbol, mid:float" --width 1D --dry-run
 ```
 
@@ -181,17 +181,20 @@ uv run pytest tests/qrun/test_external_smoke.py -m external --smoke-targets HOST
 ### Where each check runs
 
 Each check runs in one place, chosen by what it needs (#1879). A commit's hooks
-are **fast**, a push's are **targeted test suites**, and CI is the **full,
-clean** run - a Linux checkout with nothing left over, PeachQ as its q.
+are **fast**, a push's are **targeted test suites**, a pull request's CI runs
+the **gates and attestation**, and master's CI - every push, and nightly - is
+the **full, clean** run: a Linux checkout with nothing left over, PeachQ as its
+q.
 
-  | Check                                                             | Before #1965 | Now                |
-  | ---                                                               | ---          | ---                |
-  | format, lint, `ty`, static gates, generated-file checks, `q-docs` | commit       | commit             |
-  | `python-tests` (the Python tests the change reaches)              | commit       | push               |
-  | `q-tests`, `q-coverage` (the q suites the branch reaches, KDB-X)  | commit       | push               |
-  | `peachq-push` (changed q test files on PeachQ)                    | -            | push               |
-  | whole Python suite, whole q suite on PeachQ, docs render          | CI           | CI                 |
-  | `regenerate-merged` (generated files a merge kept one side of)    | -            | after merge/rebase |
+  | Check                                                             | Before #1965 | Now                      |
+  | ---                                                               | ---          | ---                      |
+  | format, lint, `ty`, static gates, generated-file checks, `q-docs` | commit       | commit, and every CI run |
+  | `python-tests` (the Python tests the change reaches)              | commit       | push                     |
+  | `q-tests`, `q-coverage` (the q suites the branch reaches, KDB-X)  | commit       | push                     |
+  | `peachq-push` (changed q test files on PeachQ)                    | -            | push                     |
+  | KDB-X attestation check, browser application (for `web/`)         | CI           | pull request CI          |
+  | whole Python suite, whole q suite on PeachQ, docs render          | CI           | master CI and nightly    |
+  | `regenerate-merged` (generated files a merge kept one side of)    | -            | after merge/rebase       |
 
 - **Commit hooks.** The static hooks run on what is staged, in seconds.
 
@@ -224,17 +227,25 @@ clean** run - a Linux checkout with nothing left over, PeachQ as its q.
   CI and Kodiak never merge locally and need neither. A clone without the driver
   merges these files as text, as before.
 
-- **CI.** Every hook again over every file, on every run. Then each complete
-  group the change can affect (#1955): the whole Python suite in four PeachQ
-  shards, the whole q suite on PeachQ, the docs render, and the browser
-  application's check and build. `scripts/dev/ci_scope.py` decides, and says why -
-  for each group run and each skipped - in the "Scope" job's summary. The Python
-  suite runs for every change but a `web/` file no Python file names (a `.q`
-  file starts q in Python tests, a document's q blocks run as one); the browser
-  application only for `web/`; and every group for the shared test configuration
-  (`conftest.py`, `pyproject.toml`, `uv.lock`, the workflow and its planner) or
-  a path in no known area. "Repository checks" counts a skipped job as passed
-  only when Scope said to skip it.
+- **CI.** Every hook again over every file, on every run. On a pull request that
+  is all, beside the author check, the KDB-X attestation check and, for a `web/`
+  change, the browser application's check and build (#2167): its push hooks
+  already ran the tests it reaches. On every push to master and nightly (and on
+  a pull request labelled `ci:full`, or `gh workflow run ci.yml -f full=true`)
+  every group runs too: the whole Python suite in four PeachQ shards, the whole
+  q suite on PeachQ, the docs render, and the browser application.
+  `scripts/dev/ci_scope.py` decides, and says why - for each group run and each
+  skipped, and on a pull request what master will run - in the "Scope" job's
+  summary. "Repository checks" counts a skipped job as passed only when Scope
+  said to skip it.
+
+  The pull-request mode is a switch, the repository variable `CI_PR_TESTS`:
+  unset or `lean` is the above; `full` has every pull request run each test
+  group its change reaches, complete, as before #2167. Flip it in Settings ->
+  Secrets and variables -> Actions -> Variables (`CI_PR_TESTS=full`), or
+  `gh variable set CI_PR_TESTS --body full`. Nothing else changes with it: every
+  job and condition stays in `ci.yml`. The tag `ci/full-pr-tests-baseline`
+  points at master's `ci.yml` from before the change.
 
 - **KDB-X attestation.** The KDB-X gates run locally
   (`uv run python scripts/dev/attest_kdbx.py`), and CI checks the trailer.

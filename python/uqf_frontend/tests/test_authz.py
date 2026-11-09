@@ -110,6 +110,21 @@ def test_a_refusing_policy_blocks_each_ops_route(path):
     assert resp.json()["transient"] is False
 
 
+def test_a_root_path_prefix_does_not_take_a_route_out_of_the_policy():
+    """The policy sees the path the router matched, without the ASGI
+    root_path a proxy adds - else `deny_paths` is bypassed under a prefix
+    (#2018)."""
+    app = create_app(
+        gateway=FakeGateway({queries.BROWSE: []}),
+        settings=Settings(max_rows=5000),
+        fleet=FakeFleet(),
+        policy=deny_paths({"/ops/usage"}),
+    )
+    resp = TestClient(app, root_path="/api").get("/api/ops/usage")
+    assert resp.status_code == 403, resp.text
+    assert resp.json()["error"] == "Forbidden"
+
+
 def test_a_refusing_policy_blocks_query():
     c, _ = client(policy=deny_tables({"trades"}))
     resp = c.post("/query", json={"table": "trades", "filters": []})
@@ -144,7 +159,10 @@ def test_an_unknown_table_is_422_not_403():
     assert c.post("/query", json={"table": "nope", "filters": []}).status_code == 422
 
 
-def test_the_identity_comes_from_the_header_and_reaches_the_policy():
+def test_the_claimed_header_never_reaches_the_policy():
+    """x-uqf-user is a claim anyone can make (#2045): the policy sees the
+    identity identity.py vouches for, which without a trusted proxy is
+    anonymous whatever the header says. test_access.py covers the proxy."""
     seen: list[str] = []
 
     def spy(req: Request_) -> str | None:
@@ -153,7 +171,7 @@ def test_the_identity_comes_from_the_header_and_reaches_the_policy():
 
     c, _ = client(policy=spy)
     c.get("/ops/queue", headers={authz.IDENTITY_HEADER: "desk-user-7"})
-    assert seen == ["desk-user-7"]
+    assert seen == [authz.ANONYMOUS]
 
 
 def test_a_missing_identity_header_is_anonymous_not_an_error():
@@ -207,6 +225,7 @@ def test_health_and_catalog_are_not_behind_the_seam():
 #: in both directions, so neither a new opt-out nor a stale entry passes.
 UNGUARDED = {
     "/health": "liveness probe - no data, no identity",
+    "/me/capabilities": "what the caller may do - a refused caller must be able to see why",
     "/catalog": "describes the queryable surface - a refused caller must be able to see why",
 }
 
@@ -250,6 +269,7 @@ def _deny_all(req: Request_) -> str | None:
 #: A well-formed request per guarded route, so the refusal is the policy's
 #: and not a 422 - valid before and after the seam moved into a dependency.
 SAMPLES: dict[tuple[str, str], dict] = {
+    ("DELETE", "/services/{target}/files"): {"json": {"paths": ["shared/file"], "confirmed": True}},
     ("GET", "/ops/queue"): {},
     ("GET", "/ops/connections"): {},
     ("GET", "/ops/usage"): {},
@@ -257,35 +277,77 @@ SAMPLES: dict[tuple[str, str], dict] = {
     ("GET", "/ops/processes"): {},
     ("GET", "/ops/backfill"): {},
     ("GET", "/services"): {},
+    ("GET", "/workspaces"): {},
+    ("GET", "/workspace"): {},
     ("GET", "/services/{target}/files"): {"params": {"path": "releases"}},
-    ("PUT", "/services/{target}/files/content"): {
-        "params": {"path": "shared/config/x.csv"},
+    ("GET", "/services/{target}/tunnel"): {"params": {"process": "rdb1"}},
+    ("GET", "/services/{target}/tunnel/check"): {"params": {"process": "rdb1"}},
+    ("PUT", "/services/{target}/files"): {
+        "params": {"path": "shared/config/x.csv", "push_id": "20261104T000000000Z-00000000"},
         "content": b"a,b\n",
     },
-    ("GET", "/coverage"): {
-        "params": {"dataset": "fx_quotes", "partition": "", "source_version": "v1"}
+    # the config push history (#2002)
+    ("POST", "/services/{target}/config/pushes"): {
+        "json": {
+            "config_dir": "shared/config",
+            "file_count": 1,
+            "total_bytes": 4,
+            "confirmed": True,
+        }
     },
+    ("POST", "/services/{target}/config/pushes/{push_id}/close"): {"json": {"reported": []}},
+    ("GET", "/services/{target}/config/pushes"): {},
+    ("GET", "/services/{target}/config/pushes/{push_id}"): {},
+    ("GET", "/services/{target}/config/pushes/{push_id}/diff"): {},
+    ("GET", "/services/{target}/config/pushes/{push_id}/restore"): {},
+    ("POST", "/services/{target}/config/pushes/{push_id}/restore"): {"json": {"confirmed": True}},
+    ("GET", "/coverage"): {"params": {"dataset": "fx_quotes", "slice": "", "source_version": "v1"}},
     ("POST", "/query"): {"json": {"table": "trades", "filters": []}},
+    ("GET", "/charts"): {},
+    ("POST", "/charts/{name}"): {"json": {}},
+    ("POST", "/compare"): {"json": {}},
     ("GET", "/control"): {},
     ("GET", "/activity"): {},
+    ("GET", "/activity/export"): {"params": {"format": "jsonl"}},
     ("POST", "/activity/events"): {
         "json": {
             "events": [
                 {
                     "event_id": "evt00000001",
                     "session_id": "session0001",
-                    "ts": "2026-01-01T00:00:00Z",
+                    "time": "2026-01-01T00:00:00Z",
                     "kind": "navigate",
                     "action": "view.open",
-                    "target": "Control",
+                    "subject": "Control",
                     "trigger": "pointer",
                 }
             ]
         }
     },
-    ("POST", "/control/process/{action}"): {"json": {"procs": "rdb1"}},
-    ("PUT", "/control/process/{procname}/config"): {"json": {"field": "port", "value": "1"}},
-    ("PUT", "/control/worker-config"): {"json": {"key": "k", "value": "v"}},
+    # the admin Settings view (#2046)
+    ("GET", "/settings"): {},
+    ("PUT", "/settings/access"): {
+        "json": {"version": "0" * 64, "policy": {"grants": [], "memberships": []}}
+    },
+    ("PUT", "/settings/runtime"): {
+        "json": {
+            "version": "0" * 64,
+            "settings": {
+                "activity_level": "actions",
+                "activity_retention_days": 30,
+                "activity_max_kept": 100000,
+                "activity_interactions_retention_days": 7,
+                "activity_interactions_max_kept": 50000,
+                "activity_debug_retention_days": 1,
+                "activity_debug_max_kept": 10000,
+                "config_history_max_kept": 50,
+                "config_history_retention_days": 90,
+            },
+        }
+    },
+    ("POST", "/control/lifecycle/{action}"): {"json": {"procs": "rdb1", "confirmed": True}},
+    ("PUT", "/control/processes/{process}/config"): {"json": {"field": "port", "value": "1"}},
+    ("PUT", "/control/worker/config"): {"json": {"key": "k", "value": "v"}},
     ("POST", "/control/backfill"): {
         "json": {
             "worker": "w",
@@ -318,8 +380,10 @@ def test_a_deny_all_policy_refuses_every_guarded_route(method, path):
     c, gw = client(policy=_deny_all)
     url = (
         path.replace("{action}", "start")
-        .replace("{procname}", "rdb1")
+        .replace("{process}", "rdb1")
         .replace("{target}", "prod-a")
+        .replace("{push_id}", "20261104T000000000Z-00000000")
+        .replace("{name}", "markout_curve")
     )
     resp = c.request(method, url, **SAMPLES[(method, path)])
     assert resp.status_code == 403, resp.text
@@ -346,7 +410,7 @@ def test_a_denied_table_is_refused_on_coverage_too():
     c, _ = client(policy=deny_tables({"fx_quotes"}))
     r = c.get(
         "/coverage",
-        params={"dataset": "fx_quotes", "partition": "", "source_version": "v1"},
+        params={"dataset": "fx_quotes", "slice": "", "source_version": "v1"},
     )
     assert r.status_code == 403, r.text
     assert "fx_quotes" in r.text
@@ -363,7 +427,7 @@ def test_a_denied_coverage_dataset_is_refused_on_query_too():
             "filters": [],
             "require_coverage": {
                 "dataset": "etl_coverage",
-                "partition": "",
+                "slice": "",
                 "source_version": "v1",
                 "range_from": "2026-09-13T00:00:00Z",
                 "range_to": "2026-09-16T00:00:00Z",
@@ -375,3 +439,23 @@ def test_a_denied_coverage_dataset_is_refused_on_query_too():
     metadata = {queries.CATALOG, queries.SCHEMA}
     assert [p for p, _, _ in gw.routed if p not in metadata] == [], "no coverage read"
     assert [p for p, _ in gw.calls if p not in metadata] == []
+
+
+@pytest.mark.parametrize(("method", "path"), sorted(SAMPLES))
+def test_an_access_policy_granting_nothing_refuses_every_guarded_route(tmp_path, method, path):
+    """The same sweep under the access policy (#2045): with no grant for
+    anonymous, every guarded route is 403 and reads no data."""
+    policy = tmp_path / "policy.csv"
+    policy.write_text("p, somebody, desk, read\n")
+    c, gw = client(policy_file=policy)
+    url = (
+        path.replace("{action}", "start")
+        .replace("{process}", "rdb1")
+        .replace("{target}", "prod-a")
+        .replace("{push_id}", "20261104T000000000Z-00000000")
+    )
+    resp = c.request(method, url, **SAMPLES[(method, path)])
+    assert resp.status_code == 403, resp.text
+    assert "not granted to anonymous" in resp.json()["detail"]
+    metadata = {queries.CATALOG, queries.SCHEMA}
+    assert [p for p, _, _ in gw.routed if p not in metadata] == []

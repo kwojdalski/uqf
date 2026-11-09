@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from uqs.cells import Shown
-from uqs.deploy import target_changelog, target_changes, targets
+from uqs.deploy import inspection, target_changelog, target_changes, targets
 from uqs.deploy.config import Config, DeployError
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
@@ -65,9 +65,21 @@ def read(root: Path) -> list[dict]:
     if not path.is_file():
         return []
     try:
-        entries = json.loads(path.read_text()).get("deployments", [])
+        entries = json.loads(path.read_text(encoding="utf-8")).get("deployments", [])
+    except UnicodeDecodeError as exc:
+        raise DeployError(
+            "arguments", f"{path} is not a deployment history: not UTF-8 ({exc})"
+        ) from None
     except (json.JSONDecodeError, AttributeError) as exc:
         raise DeployError("arguments", f"{path} is not a deployment history: {exc}") from None
+    # Refused, not iterated: `{"deployments": 5}` was a TypeError, and a 500
+    # on the Services view (#2026).
+    if not isinstance(entries, list):
+        raise DeployError(
+            "arguments",
+            f"{path} is not a deployment history: deployments is not a list "
+            f"({type(entries).__name__})",
+        )
     return [_ssh(e) for e in entries if isinstance(e, dict)]
 
 
@@ -99,22 +111,22 @@ def _target_for(root: Path, cfg: Config, register: bool, say: Callable[[str], No
         return cfg.target
     declared = targets.read(root) if targets.declaration_path(root).is_file() else {}
     for name, t in sorted(declared.items()):
-        if t.get("host") == cfg.host and t.get("dest") == cfg.dest:
+        if t.get("ssh") == cfg.ssh and t.get("dest") == cfg.dest:
             return name
     if not register:
         return None
     # <server>-<dest's last folder>: never the bare server name, which means
     # that server's latest deployment, whichever dest it went to.
-    raw = f"{server_of(cfg.host)}-{cfg.dest.rstrip('/').rsplit('/', 1)[-1]}"
+    raw = f"{server_of(cfg.ssh)}-{cfg.dest.rstrip('/').rsplit('/', 1)[-1]}"
     base = re.sub(r"[^a-z0-9_-]+", "-", raw.lower()).strip("-") or "server"
     if not base[0].isalpha():
         base = f"host-{base}"
     name, n = base[:60], 2
     while name in declared:
         name, n = f"{base[:56]}-{n}", n + 1
-    entry = {"host": cfg.host, "dest": cfg.dest, "remote_user": cfg.remote_user}
+    entry = {"ssh": cfg.ssh, "dest": cfg.dest, "remote_user": cfg.remote_user}
     done = target_changes.add(
-        root, name, entry, f"uqs deploy push to {cfg.host}:{cfg.dest}",
+        root, name, entry, f"uqs deploy push to {cfg.ssh}:{cfg.dest}",
         kind=target_changelog.REGISTERED,
     )  # fmt: skip
     number = len(target_changelog.read_log(root))
@@ -179,7 +191,7 @@ def record(
         entry = {
             "at": (now or datetime.now(UTC)).isoformat(timespec="seconds"),
             "target": name,
-            "ssh": cfg.host,
+            "ssh": cfg.ssh,
             "dest": cfg.dest,
             "remote_user": cfg.remote_user,
             "release": r.get("release"),
@@ -230,7 +242,8 @@ def defaults(root: Path) -> set[int]:
 def target_rows(root: Path) -> list[dict[str, Any]]:
     """`uqs target list`: every declared target - where it is, as whom, its
     labels - and the release last deployed there from this machine. The
-    environment column appears only when a target names one (#1557)."""
+    environment column appears only when a target names one (#1557), and the
+    inspection column only when a target is in inspection mode (#2032)."""
     if not targets.declaration_path(root).is_file():
         return []
     declared = targets.read(root)
@@ -238,15 +251,18 @@ def target_rows(root: Path) -> list[dict[str, Any]]:
         (e.get("ssh"), e.get("dest")): e for e in read(root) if e.get("status") in INSTALLED
     }
     envs = any(targets.ENVIRONMENT in t for t in declared.values())
+    inspected = any(inspection.is_on(t) for t in declared.values())
     rows = []
     for name, t in sorted(declared.items()):
-        last = deployed.get((t.get("host"), t.get("dest")))
+        last = deployed.get((t.get("ssh"), t.get("dest")))
         env = {"environment": str(t.get(targets.ENVIRONMENT) or "")} if envs else {}
+        if inspected:
+            env["inspection"] = inspection.is_on(t)
         rows.append(
             {
                 "target": name,
                 **env,
-                "ssh": str(t.get("host", "")),
+                "ssh": str(t.get("ssh", "")),
                 "dest": str(t.get("dest", "")),
                 "remote_user": str(t.get("remote_user") or ""),
                 "labels": {str(k): str(v) for k, v in (t.get("labels") or {}).items()},

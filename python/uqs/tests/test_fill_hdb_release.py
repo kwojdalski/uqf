@@ -167,7 +167,7 @@ def test_a_column_of_another_type_is_reported_and_the_deployment_refuses_it(tmp_
     for fix_hdb in (False, True):
         cfg = make_config(
             artifact="",
-            host="h",
+            ssh="h",
             dest="/opt/uqf",
             profile="essential",
             fix_hdb="the test fills it" if fix_hdb else None,

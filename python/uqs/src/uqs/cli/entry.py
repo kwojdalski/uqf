@@ -48,13 +48,17 @@ from uqs.cli import verify  # noqa: F401
 from uqs.cli import replay  # noqa: F401
 from uqs.cli import seed  # noqa: F401
 from uqs.cli import migrate  # noqa: F401
+from uqs.cli import compress  # noqa: F401
 from uqs.cli import hdb_check  # noqa: F401
 from uqs.cli import hdb_alter  # noqa: F401
+from uqs.cli import snapshot  # noqa: F401
+from uqs.cli import data_diff  # noqa: F401
 from uqs.cli import summary  # noqa: F401
 from uqs.cli import graph  # noqa: F401
 from uqs.cli import query  # noqa: F401
 from uqs.cli import inspect  # noqa: F401
 from uqs.cli import config  # noqa: F401
+from uqs.cli import logs  # noqa: F401
 from uqs.cli import runtime_diff  # noqa: F401
 from uqs.cli import runtime_prepare  # noqa: F401
 from uqs.cli import sources  # noqa: F401
@@ -75,6 +79,9 @@ from uqs.cli import target_log  # noqa: F401
 from uqs.cli import deploy_history  # noqa: F401
 from uqs.cli import target_edit  # noqa: F401
 from uqs.cli import target_adopt  # noqa: F401
+from uqs.cli import target_tunnel  # noqa: F401
+from uqs.cli import target_config  # noqa: F401
+from uqs.cli import activity  # noqa: F401
 from uqs.cli import lists  # noqa: F401
 
 # isort: on

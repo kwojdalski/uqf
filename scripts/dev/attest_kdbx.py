@@ -104,11 +104,25 @@ REPO = Path(__file__).resolve().parents[2]
 #: still loads the real check.
 _SOURCE = REPO
 
-#: The hooks that need a q, which hosted CI skips - exactly the ones ci.yml's
-#: no-q branch adds to SKIP, which test_check_kdbx_attestation.py holds equal
-#: in both directions: one skipped there and missing here ran nowhere that was
-#: checked (plant-schema, #1794).
-HOOKS = ("q-tests", "q-coverage", "q-docs", "contract-surface", "q-facts", "plant-schema")
+
+def _hook_scopes():
+    """scripts/gates/check_hook_scopes.py, which reads the hook config."""
+    spec = importlib.util.spec_from_file_location(
+        "check_hook_scopes", _SOURCE / "scripts/gates/check_hook_scopes.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+#: The hooks that need a q, which hosted CI skips: the ones .pre-commit-config.yaml
+#: tags `# kdbx-only` under their `- id:` - the one place the set is written
+#: (#2170). ci.yml's no-q branch adds the same list to SKIP by asking
+#: scripts/gates/check_hook_scopes.py --kdbx-only, so a hook is added in one
+#: place; test_check_kdbx_attestation.py holds that and the config together.
+HOOKS = tuple(_hook_scopes().kdbx_only_hooks((REPO / ".pre-commit-config.yaml").read_text()))
 
 #: The pre-commit CI runs the hooks with: ci.yml's, held equal to it by
 #: `scripts/gates/check.py tool-pins`.

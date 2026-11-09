@@ -6,10 +6,12 @@ command bootstraps through and which calls this on each one."""
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 
 from uqs.interpreter import q_command, q_interpreter
 from uqs.logger import get_logger
 from uqs.paths import UqsPaths
+from uqs.stack import runs
 from uqs.stack.env import with_interpreter
 
 log = get_logger()
@@ -29,7 +31,13 @@ FILL_HDB_SCRIPT = "gates/fill_hdb_partitions.q"
 FILL_HDB_TIMEOUT_S = 600
 
 
-def fill_hdb_partitions(paths: UqsPaths) -> bool:
+#: The one switch the script takes after the HDB and the schema: fold the markout
+#: configuration columns into snapshots (#1999). Only `uqs data check --apply`, which asks
+#: first, passes it; the bootstrap fill never deletes a column.
+MIGRATE_ARG = "migrate"
+
+
+def fill_hdb_partitions(paths: UqsPaths, *, migrate: bool = False, hdb: Path | None = None) -> bool:
     """Write an empty copy of every declared table into every partition
     that lacks one, and every declared column into every table that lacks
     one. Returns whether the filler ran at all.
@@ -41,20 +49,35 @@ def fill_hdb_partitions(paths: UqsPaths) -> bool:
     declared TYPE changed is reported by `uqs data check`, not
     repaired here.
 
+    Two exceptions, and only with ``migrate``. (#1999) The three configuration
+    columns a markout row used to repeat (contract_version, rate_timing,
+    report_ccy) are folded into legacy configuration snapshots, recorded in the
+    status directory, a ``config_id`` column names each row's, and the three
+    columns are dropped. (#2288) market_data's older partitions get the flat
+    level-0 top (``bid``, ``ask``) derived from their ladders, are rewritten sorted
+    by sym, source, source_time with p# on sym, and get their row numbers
+    (``rid``) - what a markout's as-of join against the mapped partition needs.
+    ``uqs data check --apply`` passes it after asking; the bootstrap does not, and
+    leaves an existing partition as it was.
+
+    `hdb` is another HDB root to fill from this runtime's schema (`data seed
+    --hdb DIR`, #2237); None, this runtime's own.
+
     NEVER FAILS A BOOTSTRAP. Every `uqs` command bootstraps, so a
     problem here - no q on the path, an HDB mid-write, a permissions
     fault - must not stop an operator stopping the stack or reading a log.
     It is reported and stepped over; `uqs data check` says the same
     thing on demand, and the smoke lane says it about a running stack.
     """
-    hdb_root = paths.hdb_dir
+    hdb_root = hdb if hdb is not None else paths.hdb_dir
     if not hdb_root.is_dir():
         return False
     script = paths.scripts_dir / FILL_HDB_SCRIPT
     if not script.is_file():  # pragma: no cover - a broken checkout
         log.warning("HDB partition filler not found at {}", script)
         return False
-    env = with_interpreter(paths)
+    # the snapshot store lives in the status directory, which the filler reads from here
+    env = {**with_interpreter(paths), "UQF_STATUS_DIR": str(runs.status_dir(paths))}
     q = q_interpreter(env)
     if q is None:
         log.warning(
@@ -71,6 +94,7 @@ def fill_hdb_partitions(paths: UqsPaths) -> bool:
                 str(script),
                 str(hdb_root),
                 str(paths.generated_schema),
+                *([MIGRATE_ARG] if migrate else []),
             ],
             stdin=subprocess.DEVNULL,
             capture_output=True,
@@ -96,7 +120,13 @@ def fill_hdb_partitions(paths: UqsPaths) -> bool:
         return False
     for line in result.stdout.splitlines():
         # "added" too, or the column half of the repair happens silently and
-        # an operator reading the log believes the database was untouched.
-        if "wrote" in line or "filled" in line or "added" in line:
+        # an operator reading the log believes the database was untouched; and
+        # "dropped" and the legacy snapshots, which the markout migration reports
+        # (#1999), and "rewritten", a partition put in its declared order (#2288) - a
+        # deleted column or a rewritten partition must never be silent.
+        if any(
+            word in line
+            for word in ("wrote", "filled", "added", "dropped", "legacy snapshot", "rewritten")
+        ):
             log.info("hdb: {}", line.strip())
     return True

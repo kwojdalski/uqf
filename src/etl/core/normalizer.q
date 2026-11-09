@@ -34,7 +34,7 @@
 / REGISTERED AS A STREAMING JOB, because it is one: the runner subscribes,
 / wires publish and installs upd exactly as for any other job. define
 / performs the .qetl.job.stream.define itself - subscribe_to is the source list,
-/ publishes is the output, on_batch is the dispatcher - so an instance
+/ outputs is the one table it is named for, on_batch is the dispatcher - so an instance
 / cannot declare its edges differently from its mappings.
 
 \d .
@@ -47,7 +47,7 @@
 .qetl.job.stream.registries:distinct .qetl.job.stream.registries,`.qetl.job.stream.normalizer.registry;
 
 / What every normalizer must declare.
-.qetl.job.stream.normalizer.required_keys:`procname`output`input
+.qetl.job.stream.normalizer.required_keys:`output`input
 
 / Declare a normalizer: its canonical output and one transform per source.
 / .
@@ -64,6 +64,7 @@
 .qetl.job.stream.normalizer.define:{[name;decl]
     who:"define: normalizer ",string[name];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
+    .qetl.declared.refuse_unknown[who;"a normalizer";decl;.qetl.job.stream.normalizer.required_keys,`procname,.qetl.job.stream.passthrough_keys];
     missing:.qetl.job.stream.normalizer.required_keys where not .qetl.job.stream.normalizer.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     out:decl`output;
@@ -83,8 +84,8 @@
     (` sv (.qetl.job.stream.namespace name),`on_batch) set handler;
     / The passthrough options (start_with_all, note, on_start, check, on_fail)
     / go straight to define, which validates them once (#1232).
-    .qetl.job.stream.define[name;(`procname`subscribe_to`publishes`on_batch!(
-        decl`procname; key srcs; enlist name; handler)),.qetl.job.stream.passthrough decl];
+    .qetl.job.stream.define[name;(`procname`subscribe_to`outputs`on_batch!(
+        .qetl.job.procname_of[name;decl]; key srcs; enlist name; handler)),.qetl.job.stream.passthrough decl];
     / registered only once the streaming job is, as horizon does
     .qetl.job.stream.normalizer.registry[name]:enlist decl;
     name}

@@ -46,14 +46,21 @@ def test_a_runtime_naming_a_profile_that_does_not_exist_is_refused():
 def test_a_subset_runtime_has_exactly_its_profile_s_pipelines(runtime):
     rows = effective_process_rows(_paths(runtime.name))
     pipelines = {r["procname"] for r in rows} & PIPELINE_NAMES
-    assert pipelines == profiles.closure(profiles.PROFILES[runtime.profile])
+    assert pipelines == profiles.closure(
+        profiles.PROFILES[runtime.profile], profiles.unfed_inputs([runtime.profile])
+    )
 
 
 def test_crypto_has_only_the_crypto_chain():
+    """The mock, the two jobs, and the two normalizers crypto_markout1 reads the
+    canonical tables through (#1936) - and none of the FX feeds those normalizers
+    also map, which PROFILE_UNFED_INPUTS leaves unfed."""
     assert pipeline_procnames(runtimes.RUNTIMES["crypto"]) == {
         "cryptomock1",
         "crypto_markout1",
         "crypto_book_1s1",
+        "executions1",
+        "marketdata1",
     }
 
 
@@ -79,17 +86,27 @@ def test_a_subset_schema_defines_only_the_tables_its_pipelines_use(runtime):
     assert len(schema) < len(full)
 
 
-def test_crypto_s_schema_has_no_fx_tables():
+def test_crypto_s_schema_has_no_fx_outputs():
+    """The normalizers crypto_markout1 reads through subscribe to their FX sources, so
+    those few tables exist on the plant (never fed, see PROFILE_UNFED_INPUTS); what the
+    FX chain PRODUCES does not."""
     schema = _generated_schema_content(_paths("crypto"))
-    assert "crypto_execution_quality:" in schema
-    assert "fx_orderbook:" not in schema
+    assert "crypto_markout:" in schema
+    assert "crypto_execution_quality:" not in schema
+    assert "fx_position:" not in schema
+    assert "wide_orderbook:" not in schema
+    assert "crypto_book:" in schema
 
 
-def test_a_dqe_metatable_on_a_table_the_runtime_lacks_is_left_out():
+def test_a_dqe_metatable_on_a_table_the_runtime_lacks_is_left_out(monkeypatch):
     def metatables(name: str) -> list[str]:
         return [r["params"] for r in dqe_config_rows(_paths(name)) if r["query"] == "uqf_metatable"]
 
     assert metatables("uqf") and metatables("fx")
+    # crypto holds fx_orderbook since #1936 (marketdata1 subscribes to it, never fed), so the
+    # metatable stays; a runtime that really lacks the table is simulated
+    assert metatables("crypto")
+    monkeypatch.setattr("uqs.stack.dqe.plant_tables", lambda declaration: {"crypto_book"})
     assert metatables("crypto") == []
 
 

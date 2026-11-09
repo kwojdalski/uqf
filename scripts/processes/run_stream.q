@@ -29,7 +29,7 @@
 / UPSTREAM IS DERIVED, NOT NAMED (#927). With the plant in this process,
 / -job also starts every in-tree job upstream of it - each job publishing a
 / table it subscribes to, and theirs in turn - read from the jobs' own
-/ subscribe_to/publishes, as `uqs start --profile` reads the same graph. So
+/ subscribe_to/outputs, as `uqs start --profile` reads the same graph. So
 / moving a job onto a normalized table never changes its run command: the
 / executions normalizer above is started because fx_positions subscribes to
 / executions, not because the command line says so. Feeds are never added:
@@ -100,7 +100,7 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
     .qproc.standalone.declare_schemas[];
     existing:.qetl.tick.open_log[.qproc.standalone.opt[`logdir;"tplog"];`$"uqf",$[null port;"local";string port];.z.D];
     if[not null port; system "p ",string port];
-    .qetl.log.info[`run_stream;"plant started";
+    .qetl.log.ch.info[`lifecycle;"plant started";
         `port`log`existing_messages!(port;.qetl.tick.log_path;existing)];
     / A subscriber that drops must stop receiving, or every publish throws
     / on a dead handle and takes the plant down with it.
@@ -130,7 +130,7 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
         row:.qproc.standalone.timers i;
         if[not (null row 3) or now>=(row 3)+row 2; :()];
         .qproc.standalone.timers[i;3]:now;
-        @[row 1;::;{[job;e] .qetl.log.err[job;"timer function failed";enlist[`error]!enlist e];}[row 0]];
+        @[row 1;::;{[job;e] .qetl.log.ch.err[`lifecycle;"timer function failed";(enlist[`job]!enlist job),enlist[`error]!enlist e];}[row 0]];
         }[now];
     fire each til count .qproc.standalone.timers;
     }
@@ -142,12 +142,18 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
 / @return the date that ended
 .qproc.standalone.end_day:{[today]
     ended:.qetl.tick.roll today;
-    .qetl.log.info[`run_stream;"end of day";`ended`today!(ended;today)];
+    .qetl.log.ch.info[`eod;"end of day";`ended`today!(ended;today)];
     .qetl.job.stream.end_of_day ended;
     ended}
 
 / Private: the timer half both transports share.
 .qproc.standalone.add_timer:{[name;period;f] `.qproc.standalone.timers set .qproc.standalone.timers,enlist (name;f;period;0Np);}
+
+/ The UTC instant a plant's log for `day` began (#2191): this plant names and
+/ rolls its log by the host's LOCAL date (.z.D), so the log begins at that
+/ date's local midnight. Null for no day.
+/ @private
+.qproc.standalone.roll_of:{[day] $[null day; 0Np; .qetl.job.stream.rolling.day_start (`timestamp$day)+0D12]}
 
 / The transport for a plant IN this process: .qetl.tick directly.
 / .
@@ -161,7 +167,7 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
 / the handler to one argument and make a projection rather than an error.
 / @return the transport dictionary
 .qproc.standalone.local_transport:{[]
-    `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log!(
+    `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log`plant_roll!(
         {[] };
         {[] {[t;r] .qetl.tick.publish[t;r]}};
         {[tbls;handler;replay]
@@ -172,7 +178,8 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
         .qproc.standalone.add_timer;
         {[tbls;first_day;last_day] .qetl.tick.earlier_days[tbls;first_day;last_day]};
         {[] .qetl.tick.plant_day[]};
-        {[dt] .qetl.tick.has_log dt})}
+        {[dt] .qetl.tick.has_log dt};
+        {[] .qproc.standalone.roll_of .qetl.tick.plant_day[]})}
 
 / The transport for a plant in ANOTHER process, on port `tp`.
 / .
@@ -203,9 +210,9 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
 / @param tp the plant's port
 / @return the transport dictionary
 .qproc.standalone.remote_transport:{[tp]
-    `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log!(
+    `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log`plant_roll!(
         {[tp]
-            .qetl.log.info[`run_stream;"connecting to the plant";enlist[`port]!enlist tp];
+            .qetl.log.ch.info[`ipc;"connecting to the plant";enlist[`port]!enlist tp];
             `.qproc.standalone.h set @[hopen;tp;{[tp;e]
                 '"run_stream: cannot connect to the plant on port ",string[tp]," (",e,") - is it running? start one with -plant ",string tp}[tp]];}[tp];
         {[] {[h;t;x] h(`.qetl.tick.publish;t;x)}[.qproc.standalone.h]};
@@ -218,7 +225,8 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
         .qproc.standalone.add_timer;
         {[tbls;first_day;last_day] .qproc.standalone.h({[w;a;b] .qetl.tick.earlier_days[w;a;b]};tbls;first_day;last_day)};
         {[] .qproc.standalone.h({[] .qetl.tick.plant_day[]};())};
-        {[dt] .qproc.standalone.h({[d] .qetl.tick.has_log d};dt)})}
+        {[dt] .qproc.standalone.h({[d] .qetl.tick.has_log d};dt)};
+        {[] .qproc.standalone.roll_of .qproc.standalone.h({[] .qetl.tick.plant_day[]};())})}
 
 / The jobs to run for `jobs` with the plant in this process: every in-tree
 / producer upstream of them, producers first, then `jobs` themselves.
@@ -238,7 +246,7 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
     reg:.qetl.job.stream.jobs;
     known:key reg;
     subs:{[reg;j] (first reg j)`subscribe_to}[reg] each known;
-    pubs:{[reg;j] (first reg j)`publishes}[reg] each known;
+    pubs:{[reg;j] (first reg j)`outputs}[reg] each known;
     makers:known where 0<count each subs;
     made:pubs where 0<count each subs;
     seen:jobs; frontier:jobs; chain:`symbol$();
@@ -268,7 +276,7 @@ if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
         asked:jobs;
         jobs:.qproc.standalone.with_upstream jobs;
         if[count added:jobs except asked;
-            .qetl.log.info[`run_stream;"starting what the jobs subscribe to";
+            .qetl.log.ch.info[`lifecycle;"starting what the jobs subscribe to";
                 `asked`upstream!(asked;added)]];
         .qproc.standalone.start_plant plant_port];
     if[not null listen; system "p ",string listen];

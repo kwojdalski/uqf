@@ -2,12 +2,15 @@ name: CI
 
 # The full, clean run (#1879): a Linux checkout with nothing left over, PeachQ
 # as its q. A commit's hooks are targeted (scripts/dev/hooks_full.py); this is
-# where every check runs in full - every job on master, and on a pull request
-# the hooks and static gates plus each complete verification group its change
-# can affect ("Docs links", "PeachQ q tests", "Browser application", "PeachQ
-# Python tests"; scripts/dev/ci_scope.py decides, in the "Scope" job, and says
-# why in its summary). Full mode runs every group: every push, a `ci:full`
-# label on the pull request, or workflow_dispatch with `full: true`.
+# where every check runs in full - every job on master and nightly. A pull
+# request runs the author check, the hooks and static gates and, for a web/
+# change, "Browser application"; the test suites ("Docs links", "PeachQ q
+# tests", "PeachQ Python tests") are left to master and the nightly run (#2167)
+# - while the repository variable CI_PR_TESTS is unset or `lean`; `full` runs
+# each group the change reaches, as before.
+# scripts/dev/ci_scope.py decides, in the "Scope" job, and says why in its
+# summary. Full mode runs every group: every push, the nightly schedule, a
+# `ci:full` label on the pull request, or workflow_dispatch with `full: true`.
 
 on:
   push:
@@ -17,6 +20,10 @@ on:
     # re-runs it as an ordinary run of the same head: never a run that
     # reports without checking (a skipped required check counts as passed).
     types: [opened, synchronize, reopened, labeled]
+  # The full set on master every night (#2167): what pull requests no longer
+  # run is caught within a day even when nothing merges.
+  schedule:
+    - cron: "0 3 * * *"
   workflow_dispatch:
     inputs:
       full:
@@ -25,11 +32,23 @@ on:
         default: false
   # release.yml runs these same checks before it builds an artifact (#872),
   # every one of them.
+  # Every checkout below names `inputs.ref` (#2200): empty on every other
+  # event, so actions/checkout takes the event's own revision; release.yml
+  # passes the tag's commit, so these check the revision it builds and not
+  # the dispatching branch's head. `checked_sha` says which one they checked.
   workflow_call:
     inputs:
       full:
         type: boolean
         default: true
+      ref:
+        description: "The commit to check out and check (empty: the event's own)"
+        type: string
+        default: ""
+    outputs:
+      checked_sha:
+        description: "The commit every job here checked out"
+        value: ${{ jobs.scope.outputs.sha }}
 
 permissions:
   contents: read
@@ -43,6 +62,26 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  author:
+    name: Pull request author
+    # Only pull requests authored by kwojdalski may merge (CONTRIBUTING.md).
+    # No checkout: another author's code never runs here. The login reaches
+    # the script through env, never interpolated into it. On a push to master
+    # there is no pull request, and the job succeeds.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: The author is the owner
+        shell: bash
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          if [ "$EVENT" = pull_request ] && [ "$PR_AUTHOR" != kwojdalski ]; then
+            echo "::error::Pull requests are accepted only from kwojdalski; this one is by $PR_AUTHOR. See CONTRIBUTING.md."
+            exit 1
+          fi
+          echo "author check passed ($EVENT${PR_AUTHOR:+ by $PR_AUTHOR})"
   scope:
     name: Scope
     # Which verification groups this run needs, and why (the step summary).
@@ -54,30 +93,69 @@ jobs:
       q: ${{ steps.scope.outputs.q }}
       frontend: ${{ steps.scope.outputs.frontend }}
       python: ${{ steps.scope.outputs.python }}
+      sha: ${{ steps.checked.outputs.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref }}
           # the merge base, for the pull request's three-dot diff
           fetch-depth: 0
           persist-credentials: false
+      - name: The revision checked out is the one asked for
+        id: checked
+        shell: bash
+        env:
+          WANTED: ${{ inputs.ref }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          if [ -n "$WANTED" ] && [ "$sha" != "$(git rev-parse "$WANTED^{commit}")" ]; then
+            echo "::error::checked out $sha, but the caller asked for $WANTED"
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         # The repository's Python: ci_scope.py reads q_readers from
         # scripts/dev/test_impact.py, written for 3.14.
         with:
           version: "0.12.14"
           python-version: "3.14"
+      - name: Has this pull request moved the qlinter pin?
+        # A pin bump pushed before the q-lint release finished uploading its
+        # assets ran every job without them (#2171). When .qlinter-version
+        # changes, the install runs here first: a missing asset fails Scope
+        # with one clear error, every job that needs Scope is skipped, and on
+        # success the cache is warm for them.
+        id: qlinter-pin
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git diff --quiet "$BASE" HEAD -- .qlinter-version; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: The pinned qlinter release is published
+        if: ${{ steps.qlinter-pin.outputs.changed == 'true' }}
+        uses: ./.github/actions/install-qlinter
       - name: Decide which verification groups run
         id: scope
         env:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.event.pull_request.base.sha || 'origin/master' }}
-          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha || inputs.ref || github.sha }}
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           FULL: ${{ inputs.full }}
+          # The pull-request mode switch (#2167): the repository variable
+          # CI_PR_TESTS - unset or `lean`, a pull request leaves the test
+          # suites to master and nightly; `full`, it runs each group its
+          # change reaches, as before. ci_scope.py's docstring says more.
+          PR_TESTS: ${{ vars.CI_PR_TESTS }}
         run: >-
           uv run --no-project --python 3.14 python scripts/dev/ci_scope.py
           --event "$EVENT" --base "$BASE" --head "$HEAD" --labels "$LABELS" --full-input "$FULL"
-          --output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+          --pr-tests "$PR_TESTS" --output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
 
   checks:
     name: Hooks and static gates
@@ -109,6 +187,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
@@ -117,7 +196,7 @@ jobs:
           enable-cache: true
       - name: Install workspace dependencies
         run: uv sync --locked
-      - name: Install d2
+      - name: Pin d2
         # The rendered-diagrams check compares each committed .svg with a
         # fresh render, and used to skip with "no d2 on PATH" on every CI run
         # because nothing installed it (#1369). The version is read from
@@ -126,33 +205,72 @@ jobs:
         # for that release's linux-amd64 tarball (the release publishes no
         # checksum file), so a bump of D2_VERSION fails here until the hash
         # is updated on purpose.
+        #
+        # Cached under a key of the version and that sha256 (#2171): a warm
+        # run makes no network fetch, so a GitHub download outage (a 504 on
+        # 2026-11-05) cannot fail an unrelated change. The tarball is what is
+        # cached, and it is checked against the sha256 on a hit as on a miss.
+        id: d2
         shell: bash
         env:
           D2_SHA256: 5669ddc46b99e942cc96078f4a4e36d5e62103348f4c05179ede27802fdd87a9
         run: |
           set -euo pipefail
-          D2_VERSION="$(python3 scripts/generate/derive.py diagrams --print-version)"
-          curl -sSfL "https://github.com/terrastruct/d2/releases/download/${D2_VERSION}/d2-${D2_VERSION}-linux-amd64.tar.gz" -o /tmp/d2.tar.gz
-          echo "${D2_SHA256}  /tmp/d2.tar.gz" | sha256sum -c -
-          tar xzf /tmp/d2.tar.gz -C /tmp
-          install -m755 "/tmp/d2-${D2_VERSION}/bin/d2" /usr/local/bin/d2
+          version="$(python3 scripts/generate/derive.py diagrams --print-version)"
+          {
+            echo "version=$version"
+            echo "sha256=$D2_SHA256"
+            echo "dir=$HOME/.cache/uqf/tools/d2-$version"
+          } >> "$GITHUB_OUTPUT"
+      - name: Restore d2 from the cache
+        id: d2-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.d2.outputs.dir }}
+          key: d2-${{ steps.d2.outputs.version }}-${{ steps.d2.outputs.sha256 }}-${{ runner.os }}-${{ runner.arch }}
+      - name: Download d2 (cache miss)
+        # Retried with curl's exponential backoff on a transient failure.
+        if: ${{ steps.d2-cache.outputs.cache-hit != 'true' }}
+        shell: bash
+        env:
+          VERSION: ${{ steps.d2.outputs.version }}
+          SHA256: ${{ steps.d2.outputs.sha256 }}
+          DIR: ${{ steps.d2.outputs.dir }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$DIR"
+          curl -sSfL --retry 5 --retry-connrefused --retry-max-time 180 \
+            "https://github.com/terrastruct/d2/releases/download/${VERSION}/d2-${VERSION}-linux-amd64.tar.gz" -o "$DIR/d2.tar.gz"
+          echo "${SHA256}  $DIR/d2.tar.gz" | sha256sum -c -
+      - name: Save d2 to the cache
+        # Straight after the download, not at the end of the job: the
+        # combined actions/cache saves only when the whole job passes.
+        if: ${{ steps.d2-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.d2.outputs.dir }}
+          key: ${{ steps.d2-cache.outputs.cache-primary-key }}
+      - name: Install d2
+        shell: bash
+        env:
+          VERSION: ${{ steps.d2.outputs.version }}
+          SHA256: ${{ steps.d2.outputs.sha256 }}
+          DIR: ${{ steps.d2.outputs.dir }}
+        run: |
+          set -euo pipefail
+          echo "${SHA256}  $DIR/d2.tar.gz" | sha256sum -c -
+          tar xzf "$DIR/d2.tar.gz" -C "$RUNNER_TEMP"
+          install -m755 "$RUNNER_TEMP/d2-${VERSION}/bin/d2" /usr/local/bin/d2
           d2 --version
       - name: Install qlinter
-        shell: bash
         # The q-traps hook delegates most of its rules to the
         # standalone linter, and refuses rather than passing vacuously when
         # it is missing. Pinned: the linter releases on its own cadence, and
         # a new rule landing upstream must not turn this repository red
         # without anyone choosing it. The pin lives in .qlinter-version, the
-        # one place it is written; the hook refuses any other version.
-        run: |
-          set -euo pipefail
-          read -r QLINT_VERSION < .qlinter-version
-          url="https://github.com/kwojdalski/q-lint/releases/download/${QLINT_VERSION}/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
-          curl -sSfL "$url" -o /tmp/qlinter.tar.gz
-          tar xzf /tmp/qlinter.tar.gz -C /tmp
-          install -m755 "/tmp/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu/qlinter" /usr/local/bin/qlinter
-          qlinter --rules > /dev/null && echo "qlinter ${QLINT_VERSION} installed"
+        # one place it is written; the hook refuses any other version. Cached
+        # and verified by the action (#2171).
+        uses: ./.github/actions/install-qlinter
       - name: Report q runtime coverage
         shell: bash
         run: |
@@ -161,7 +279,8 @@ jobs:
           if command -v "${QCMD:-q}" >/dev/null; then
             echo "A q interpreter is available; the q-tests and q-coverage hooks will run." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "SKIP=$SKIP,q-tests,q-coverage,q-docs,contract-surface,q-facts,plant-schema" >> "$GITHUB_ENV"
+            # the hooks .pre-commit-config.yaml tags `# kdbx-only`: one list, not a copy
+            echo "SKIP=$SKIP,$(python3 scripts/gates/check_hook_scopes.py --kdbx-only)" >> "$GITHUB_ENV"
             echo "::warning::No q interpreter on this runner. The full qUnit suite, the coverage gate and q-dependent Python IPC tests are not exercised here; static q checks still run, and the portable qUnit suites run on PeachQ further down."
             echo "### Runtime coverage limitation" >> "$GITHUB_STEP_SUMMARY"
             echo "No q interpreter is installed on this hosted runner. The qUnit, coverage and contract-surface hooks are skipped, and Python tests requiring q skip through their existing fixtures. Static q checks and the remaining Python tests run. Run uv run pytest tests/qrun/test_q_suite.py and uv run pytest -m coverage tests/qrun/test_q_coverage.py locally with KDB-X before merging q changes." >> "$GITHUB_STEP_SUMMARY"
@@ -206,6 +325,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
@@ -292,6 +412,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
@@ -301,21 +422,11 @@ jobs:
       - name: Install workspace dependencies
         run: uv sync --locked
       - name: Install qlinter (the gates' own tests use it)
-        shell: bash
-        # The q-traps hook delegates most of its rules to the
-        # standalone linter, and refuses rather than passing vacuously when
-        # it is missing. Pinned: the linter releases on its own cadence, and
-        # a new rule landing upstream must not turn this repository red
-        # without anyone choosing it. The pin lives in .qlinter-version, the
-        # one place it is written; the hook refuses any other version.
-        run: |
-          set -euo pipefail
-          read -r QLINT_VERSION < .qlinter-version
-          url="https://github.com/kwojdalski/q-lint/releases/download/${QLINT_VERSION}/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
-          curl -sSfL "$url" -o /tmp/qlinter.tar.gz
-          tar xzf /tmp/qlinter.tar.gz -C /tmp
-          install -m755 "/tmp/qlinter-${QLINT_VERSION}-x86_64-unknown-linux-gnu/qlinter" /usr/local/bin/qlinter
-          qlinter --rules > /dev/null && echo "qlinter ${QLINT_VERSION} installed"
+        # The pinned release (.qlinter-version), cached and verified by the
+        # action (#2171). Its id gates the steps below: they run with
+        # !cancelled(), and must not run the tests without qlinter.
+        id: qlinter
+        uses: ./.github/actions/install-qlinter
       - name: Restore PeachQ built from its pinned commit
         # PeachQ is an MIT-licensed q, so unlike KDB-X a hosted runner can
         # have one - which makes it the only interpreter CI can run q with.
@@ -331,7 +442,7 @@ jobs:
         # there, and it changes this key. The cache is the resolver's own
         # (~/.cache/uqf/peachq), so a hit is a warm cache and needs no network.
         id: peachq-cache
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.qlinter.outcome == 'success' }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/uqf/peachq
@@ -345,7 +456,7 @@ jobs:
         # KDB-X run. It is reached only by the steps below, which name it
         # through QCMD and nothing else (#1753): uqs and the
         # pytest conftest ask the binary which q it is.
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.qlinter.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -410,6 +521,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - name: Identify all documentation inputs
         id: docs-tree
@@ -492,12 +604,13 @@ jobs:
   repository-checks:
     name: Repository checks
     if: ${{ always() }}
-    needs: [scope, checks, doc-links, peachq-q, peachq-python, web]
+    needs: [author, scope, checks, doc-links, peachq-q, peachq-python, web]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
       - name: Every job passed, or was not needed
         env:
+          AUTHOR: ${{ needs.author.result }}
           SCOPE: ${{ needs.scope.result }}
           CHECKS: ${{ needs.checks.result }}
           PYTHON: ${{ needs.peachq-python.result }}
@@ -516,6 +629,7 @@ jobs:
             if [ "$2" = skipped ] && [ "$3" = false ]; then echo "$1: skipped - nothing it checks changed"
             else need "$1" "$2"; fi
           }
+          need "Pull request author" "$AUTHOR"
           need "Scope" "$SCOPE"
           need "Hooks and static gates" "$CHECKS"
           filtered "Docs links" "$DOCS" "$DOCS_NEEDED"
@@ -541,6 +655,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:

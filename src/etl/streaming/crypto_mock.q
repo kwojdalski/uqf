@@ -13,7 +13,8 @@
 / row - see build_real_upd_message in cryptorust's
 / src/bin/kdb_fills_recorder.rs: one message per fill, every column a
 / ONE-ELEMENT typed vector, side as a signed long, fee in the quote
-/ currency, a unique exchange_fill_id, and no `time` (the plant stamps it).
+/ currency, a unique exchange_fill_id, the venue's fill time as source_time
+/ right after the `time` the plant stamps (and the mock never sends).
 / The fill model is that repository's QuoteFillSimulator
 / (src/components/fill/fill_simulator.rs): the maker's bid and ask each fill
 / with a probability, positive toxicity lifts the ask side and negative hits
@@ -182,18 +183,20 @@
 / Every column is a ONE-ELEMENT VECTOR, never a bare atom - the same shape
 / build_real_upd_message sends, and the shape a tickerplant needs to take a
 / row count from. Fee is size*price*bps, in the quote currency, because
-/ that is what a spot venue charges a maker.
+/ that is what a spot venue charges a maker. source_time is .z.p, the venue's
+/ stamp as the mock has it (see book_rows): the real recorder sends the venue's
+/ own fill time (cryptorust#1062), so the fill is on the venue clock like the book.
 / @param venue the venue
 / @param s the symbol
 / @param side 1 for a buy (the bid filled), -1 for a sell (the ask filled)
 / @param price the fill price
 / @param size the filled size, base units
 / @param id the exchange fill id
-/ @return the rows: sym, venue, side, trade_price, size, fee, fee_currency, exchange_fill_id
-/ @eg count .qpipe.job.crypto_mock.fill_rows[`binance_spot;`$"BTC-USDT";1;62000f;0.25;`x] -> 8
+/ @return the rows: source_time, sym, venue, side, trade_price, size, fee, fee_currency, exchange_fill_id
+/ @eg count .qpipe.job.crypto_mock.fill_rows[`binance_spot;`$"BTC-USDT";1;62000f;0.25;`x] -> 9
 .qpipe.job.crypto_mock.fill_rows:{[venue;s;side;price;size;id]
     bps:.qpipe.job.crypto_mock.maker_fee_bps .qpipe.job.crypto_mock.venues?venue;
-    (enlist s; enlist venue; enlist side; enlist price; enlist size;
+    (enlist .z.p; enlist s; enlist venue; enlist side; enlist price; enlist size;
         enlist size*price*bps%10000; enlist .qpipe.job.crypto_mock.quote_ccy s; enlist id)}
 
 / Decide the fills for one market row this tick, given the draws.
@@ -266,7 +269,7 @@
 
 \d .
 
-.qetl.job.stream.define[`crypto_mock;`procname`subscribe_to`publishes`period`on_timer`note`state`ephemeral!(
+.qetl.job.stream.define[`crypto_mock;`procname`subscribe_to`outputs`period`on_timer`note`state`ephemeral!(
     `cryptomock1;
     `symbol$();
     `crypto_book`crypto_trades;

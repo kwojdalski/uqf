@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from uqs.generated.q_facts import Q_TYPE_CHARS, Q_TYPE_NAMES
 from uqs.model import plant_metadata
 from uqs.model.declarations import split_top_level
-from uqs.model.qnames import Q_WORDS
+from uqs.model.qnames import reserved_reason
 from uqs.paths import UqsError
 
 #: q's type names and the char `meta` reports for them, as q exports them
@@ -41,20 +41,6 @@ NESTED_CHARS = frozenset(c.upper() for c in TYPE_CHARS.values())
 
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
-#: Globals every TorQ process of the supported version defines at its root (read with
-#: `system"f"` / `system"v"` on an isolated 5.2.12 stack) - the entry points the plant calls
-#: by name, the views it keeps, and `sym`, the enumeration domain the wdb and hdb share.
-#: An attached table of one of these names would overwrite it (#1450). The names are
-#: static so a bundle is refused before any stack is involved; the stack's own root
-#: names are read by the probe and refused too (preflight NAME_RESERVED).
-_TORQ_GLOBALS = frozenset(
-    "upd tablelist init setup subdetails loadschemas generateschemas createlogs tptype "
-    "loghandles endofday endofperiod reload countbysym hloc sym".split()
-)
-#: The hdb's partition domain: `date` for the default `.Q.pf`, and the other partition
-#: types. A table with one of these names in a partition breaks every date-filtered
-#: query of every table (`'splay`).
-_PARTITION_NAMES = frozenset("date month year int".split())
 #: One optional `;` may close the statement - `tables.q` lines are q statements,
 #: and `t:([] ...);` is the same definition as `t:([] ...)`. Nothing else may
 #: follow the closing paren: a further expression would run when the line loads.
@@ -264,19 +250,6 @@ def _nested_char(table: str, column: str, declared: str | None) -> str:
             f"({''.join(sorted(NESTED_CHARS))})"
         )
     return declared
-
-
-def reserved_reason(name: str) -> str | None:
-    """Why `name` cannot be a table name on a TorQ stack, or None when nothing
-    static forbids it (the running processes may still hold the name, which
-    preflight reads from the probe)."""
-    if name in Q_WORDS:
-        return "a q keyword"
-    if name in _TORQ_GLOBALS:
-        return "a global every TorQ process defines (an attached table would overwrite it)"
-    if name in _PARTITION_NAMES:
-        return "a partition name of the hdb (it would break date-filtered queries of every table)"
-    return None
 
 
 def check_publishable(spec: TableSpec) -> None:

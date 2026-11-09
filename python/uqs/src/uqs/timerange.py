@@ -10,8 +10,11 @@ Every command that takes time bounds takes them the same three ways:
 `resolve` turns whichever was given into one `TimeRange`, and refuses a mix,
 a missing bound or an empty range with one message (`USAGE`). A command whose
 unit is coarser than an instant asks the range for it: `data replay` replays
-one day's log (`TimeRange.day`), `data seed` copies whole date partitions
-(`TimeRange.partition_dates`).
+one day's log (`TimeRange.day`), `data seed` and `data compress` act on whole
+date partitions (`TimeRange.partition_dates`). Neither rounds (#2245): a bound
+that is not a UTC midnight is refused, naming the days either side, and
+`--last` must be whole days - the N days before today, never today's live
+partition.
 
 python/uqs/tests/test_timerange.py holds the parser; each command's own tests
 hold only that it passes its options here.
@@ -23,6 +26,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 
+from uqs import duration
 from uqs.paths import UqsUsageError
 from uqs.timefmt import finer_than_a_microsecond
 
@@ -48,16 +52,6 @@ _Q_TIMESTAMP = re.compile(
 
 #: A day alone, either way: 2026-09-13 or 2026.09.13.
 _DAY = re.compile(r"(\d{4})[.-](\d{2})[.-](\d{2})")
-
-#: A duration: a positive whole number and a unit.
-_DURATION = re.compile(r"([0-9]+)(ms|s|m|h|d)")
-_UNIT = {
-    "ms": timedelta(milliseconds=1),
-    "s": timedelta(seconds=1),
-    "m": timedelta(minutes=1),
-    "h": timedelta(hours=1),
-    "d": timedelta(days=1),
-}
 
 
 def _from_q_literal(name: str, text: str) -> datetime | None:
@@ -128,19 +122,19 @@ def parse_day(name: str, text: str) -> date:
         raise UqsUsageError(f"{name} {text!r} is not a real date: {exc}") from None
 
 
-def parse_duration(name: str, text: str) -> timedelta:
-    """`30s`, `5m`, `2h`, `7d` or `500ms` - what `--last` takes.
+def parse_duration(name: str, value: str | float) -> timedelta:
+    """A DURATION (uqs/duration.py) - `30`, `1.5m`, `30s`, `7d`; bare is
+    seconds - or the seconds a DURATION option's parser already gave: what
+    `--last` takes.
 
     @raise UqsUsageError for anything else, and for zero - a range must cover time.
     """
-    m = _DURATION.fullmatch(text.strip())
-    if not m:
-        raise UqsUsageError(
-            f"{name} {text!r}: expected a whole number and a unit - ms, s, m, h or d - e.g. 30s"
-        )
-    span = int(m.group(1)) * _UNIT[m.group(2)]
+    try:
+        span = timedelta(seconds=duration.seconds(value))
+    except duration.DurationError as exc:
+        raise UqsUsageError(f"{name} {exc}") from None
     if span <= timedelta(0):
-        raise UqsUsageError(f"{name} {text!r}: the range must be longer than zero")
+        raise UqsUsageError(f"{name} {value!r}: the range must be longer than zero")
     return span
 
 
@@ -170,32 +164,74 @@ class TimeRange:
             raise UqsUsageError(f"{self} is open-ended - {USAGE}")
         return self.start, self.end
 
-    def day(self, what: str) -> date:
-        """The one UTC day this range is, or a refusal saying `what` needs one."""
-        if self.start is not None and self.end is not None:
-            first = self.start.date()
-            if self.start == _midnight(first) and self.end == _midnight(first + timedelta(days=1)):
-                return first
-        raise UqsUsageError(f"{what} one whole day: --date D, or --from D --to D+1 - not {self}")
+    def whole_days(self, what: str) -> TimeRange:
+        """This range as whole UTC days, or a refusal saying `what` takes only
+        whole days (#2245). Nothing is rounded: a bound off a midnight is
+        refused with the days either side of it, so the operator sees the
+        choice before anything is written. `--last N` is the N whole days
+        before today - today, the live day, is never in it - and must be a
+        whole number of days. An open side stays open."""
+        if self.last is not None:
+            if self.last % timedelta(days=1):
+                days = self.last // timedelta(days=1)
+                either = f"{days}d or {days + 1}d" if days else "1d"
+                raise UqsUsageError(
+                    f"{what} whole partitions: --last {_spoken(self.last)} is not a whole "
+                    f"number of days; give --last {either}"
+                )
+            assert self.end is not None
+            end = _midnight(self.end.date())
+            return TimeRange(end - self.last, end, self.last)
+        for flag, bound in (("--from", self.start), ("--to", self.end)):
+            if bound is not None and bound != _midnight(bound.date()):
+                before = bound.date()
+                raise UqsUsageError(
+                    f"{what} whole partitions: {flag} {_naive(bound)} is not a day boundary; "
+                    f"give {flag} {before} or {before + timedelta(days=1)}"
+                )
+        return self
 
-    def partition_dates(self) -> tuple[date | None, date | None]:
-        """(first, last), inclusive: the dates whose midnight lies in the range -
-        the date partitions a whole-partition copy takes. None for an open side."""
-        first = last = None
-        if self.start is not None:
-            first = self.start.date()
-            if self.start != _midnight(first):
-                first += timedelta(days=1)
-        if self.end is not None:
-            last = (self.end - timedelta(microseconds=1)).date()
+    def day(self, what: str) -> date:
+        """The one UTC day this range is, or a refusal saying `what` needs one.
+        `--last 1d` is yesterday, as on every whole-partition command."""
+        days = self.whole_days(what) if self.last is not None else self
+        if days.start is not None and days.end is not None:
+            first = days.start.date()
+            if days.start == _midnight(first) and days.end == _midnight(first + timedelta(days=1)):
+                return first
+        raise UqsUsageError(f"{what} one whole day: --date D, or --from D --to D+1 - not {days}")
+
+    def partition_dates(self, what: str) -> tuple[date | None, date | None]:
+        """(first, last), inclusive: the date partitions a whole-partition
+        command acts on - every day from --from up to the day before --to.
+        A bound off a midnight is refused, not rounded (`whole_days`). None for
+        an open side."""
+        days = self.whole_days(what)
+        first = days.start.date() if days.start is not None else None
+        # `end` is exclusive and a midnight: the range owns nothing of that day.
+        last = days.end.date() - timedelta(days=1) if days.end is not None else None
         return first, last
+
+
+def _naive(bound: datetime) -> str:
+    """A UTC bound as it would be typed: 2026-09-13T06:00:00, no offset."""
+    return bound.replace(tzinfo=None).isoformat()
+
+
+def _spoken(span: timedelta) -> str:
+    """A duration in the largest unit that divides it: 36h, 90m, 45s."""
+    secs = span.total_seconds()
+    for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
+        if secs % size == 0:
+            return f"{int(secs // size)}{unit}"
+    return f"{secs:g}s"
 
 
 def resolve(
     range_from: str | None,
     range_to: str | None,
     day: str | None = None,
-    last: str | None = None,
+    last: str | float | None = None,
     *,
     open_ended: bool = False,
     now: datetime | None = None,
@@ -225,7 +261,7 @@ def resolve(
         if day is not None:
             first = parse_day("--date", day)
             return TimeRange(_midnight(first), _midnight(first + timedelta(days=1)))
-        span = parse_duration("--last", last or "")
+        span = parse_duration("--last", "" if last is None else last)
         end = (now or datetime.now(UTC)).astimezone(UTC)
         return TimeRange(end - span, end, span)
     if not open_ended and (range_from is None or range_to is None):

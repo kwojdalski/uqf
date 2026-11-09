@@ -19,7 +19,7 @@
 
 / The core columns, in order: a table of name and q type char (as meta reports it).
 / @return table: c (symbol), t (char)
-/ @eg count .qt.qetl.plant.markout.core[]  ->  24
+/ @eg count .qt.qetl.plant.markout.core[]  ->  22
 .qt.qetl.plant.markout.core:{[]
     m:exec c!t from meta .qpipe.transform.markout_core.result;
     c:.qpipe.transform.markout_core.core_cols;
@@ -28,14 +28,13 @@
 / Every markout dataset on the plant, with its layout (`long or `wide).
 / @return dictionary: table name -> layout
 .qt.qetl.plant.markout.datasets:{[]
-    `fx_markout`fx_markout_wide`crypto_execution_quality!`long`wide`long}
+    `fx_markout`fx_markout_wide`crypto_markout`eq_markout!`long`wide`long`long}
 
 / Datasets that do not yet carry the core, each with the issue that removes the
 / exemption and why. An exemption is deleted by the issue named, not edited.
 / @return table: dataset, issue, reason
 .qt.qetl.plant.markout.exemptions:{[]
-    ([] dataset:enlist `crypto_execution_quality; issue:enlist `$"#1936";
-        reason:enlist "replaced by a new crypto dataset, which is written with the core")}
+    ([] dataset:`symbol$(); issue:`symbol$(); reason:())}
 
 / What stops a table conforming. Empty means it conforms.
 / @param schema table: the dataset's schema
@@ -66,9 +65,9 @@
     extra:([] c:`domain_a`kind`step;t:"fsj");
     .qt.qetl.plant.markout.build[(2#c),(1#extra),(2_c),1_extra]}
 
-.qt.qetl.plant.markout.test_the_core_is_24_distinct_columns_time_first:{[t]
+.qt.qetl.plant.markout.test_the_core_is_22_distinct_columns_time_first:{[t]
     c:.qt.qetl.plant.markout.core[];
-    .qunit.assertEquals[(count c;count distinct c`c;first c`c);(24;24;`time);"the contract's table"]};
+    .qunit.assertEquals[(count c;count distinct c`c;first c`c);(22;22;`time);"the contract's table"]};
 
 .qt.qetl.plant.markout.test_a_conforming_dataset_has_no_problems:{[t]
     s:.qt.qetl.plant.markout.conforming[];
@@ -134,7 +133,16 @@
     .qunit.assertEquals[.qt.qetl.plant.markout.stale[`ok`bad;`ok`bad!(s;r);`ok`bad!`long`long];enlist `ok;
         "only the dataset that conforms is stale"]};
 
-/ The real datasets are not vacuously accepted: each unmigrated one has problems.
+/ No dataset is exempt now; the check must still be able to fail on a real schema.
 .qt.qetl.plant.markout.test_the_unmigrated_datasets_are_caught_by_the_check:{[t]
-    p:count each .qt.qetl.plant.markout.problems[;`long] each .qetl.plant.schema each enlist `crypto_execution_quality;
-    .qunit.assertTrue[all p>0;"the check finds the missing core columns in real schemas"]};
+    p:count .qt.qetl.plant.markout.problems[delete clock from .qetl.plant.schema `fx_markout;`long];
+    .qunit.assertTrue[p>0;"the check finds the missing core columns in real schemas"]};
+
+/ The three fields a row used to repeat are the snapshot's now (#1999): no dataset carries them, and
+/ every one names its snapshot in config_id, the core's last column.
+.qt.qetl.plant.markout.test_no_dataset_repeats_a_configuration_field:{[t]
+    ds:key .qt.qetl.plant.markout.datasets[];
+    moved:`report_ccy`rate_timing`contract_version;
+    .qunit.assertEquals[ds where {[moved;d] any moved in cols .qetl.plant.schema d}[moved] each ds;`symbol$();"report_ccy, rate_timing and contract_version live in the snapshot"];
+    .qunit.assertEquals[last .qpipe.transform.markout_core.core_cols;`config_id;"config_id is the core's last column"];
+    .qunit.assertEquals[ds where not {[d] `config_id in cols .qetl.plant.schema d} each ds;`symbol$();"and every dataset carries it"]};

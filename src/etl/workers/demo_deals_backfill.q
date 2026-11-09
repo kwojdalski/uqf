@@ -68,7 +68,7 @@
 / `check` is optional on the declaration; this worker declares one, which
 / makes it unskippable for every window this worker ever fetches.
 .qetl.job.bounded.define[`demo_deals_backfill;
-    `source`dataset`width`transform`check`procname`note!
-    (`demo_deals;`demo_deals;1D;`demo_deals_passthrough;.qpipe.job.demo_deals_backfill.quality_check;
+    `source`outputs`width`transform`check`procname`note`twin_of`twin_calculation!
+    (`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough;.qpipe.job.demo_deals_backfill.quality_check;
      `deals_backfill1;
-     "bounded: runs a window range and exits, so it must not start with the stack")];
+     "bounded: runs a window range and exits, so it must not start with the stack";`demo_deals_feed;`shared)];

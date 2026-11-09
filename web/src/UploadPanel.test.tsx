@@ -1,5 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { ApiError, writeToken } from "./api/client";
+import type { ConfigPushReport, PushOps } from "./api/config_push";
 import {
   type RemoteFiles,
   type RemoteUpload,
@@ -9,8 +11,7 @@ import {
   remoteUploadPath,
   uploadPathProblem,
   uploadRemoteFile,
-  writeToken,
-} from "./api";
+} from "./api/services";
 import { FileBrowser } from "./FileBrowser";
 import { UploadPanel, type Uploader, walkEntries } from "./UploadPanel";
 
@@ -29,15 +30,50 @@ function file(name: string, body = "a,b\n", relative?: string): File {
 function answer(path: string, over: Partial<RemoteUpload> = {}): RemoteUpload {
   return {
     target: "prod-a",
-    root: "/srv/uqf",
+    dest: "/srv/uqf",
     path,
     size: 4,
     sha256: "0".repeat(64),
     replaced: false,
     mode: 0o644,
-    created: [],
+    created_dirs: [],
+    push_id: PUSH,
+    previous_size: null,
+    previous_sha256: null,
     ...over,
   };
+}
+
+const PUSH = "20261104T103442123Z-9aa36609";
+
+/** Push calls that record what they were asked, opening PUSH. */
+function fakePushes(open?: () => Promise<never>, closeFails = false) {
+  const opened: { target: string; config_dir: string; files: number }[] = [];
+  const closed: { push: string; reported: ConfigPushReport[] }[] = [];
+  const pushes: PushOps = {
+    open: (target, body) => {
+      opened.push({
+        target,
+        config_dir: body.config_dir,
+        files: body.file_count,
+      });
+      if (open) return open();
+      return Promise.resolve({
+        target,
+        dest: "/srv/uqf",
+        push_id: PUSH,
+        pruned: [],
+        max_kept: 50,
+        retention_days: 90,
+      });
+    },
+    close: (_target, push, reported) => {
+      closed.push({ push, reported });
+      if (closeFails) return Promise.reject(new ApiError("API restarted"));
+      return Promise.resolve({} as never);
+    },
+  };
+  return { pushes, opened, closed };
 }
 
 type Call = {
@@ -45,6 +81,7 @@ type Call = {
   overwrite: boolean;
   signal: AbortSignal;
   progress: (f: number) => void;
+  push: string;
 };
 
 /** An uploader that records each call and answers with `reply(call)`. */
@@ -60,23 +97,29 @@ function fake(
     overwrite,
     progress,
     signal,
+    push,
   ) => {
-    const call = { path, overwrite, signal, progress };
+    const call = { path, overwrite, signal, progress, push };
     calls.push(call);
     return reply(call);
   };
   return { uploader, calls };
 }
 
-function panel(uploader: Uploader, directory = "shared/config") {
+function panel(
+  uploader: Uploader,
+  directory = "shared/config",
+  pushes = fakePushes().pushes,
+) {
   const onUploaded = vi.fn();
   render(
     <UploadPanel
       target="prod-a"
-      root="/srv/uqf"
+      dest="/srv/uqf"
       directory={directory}
       onUploaded={onUploaded}
       uploader={uploader}
+      pushes={pushes}
     />,
   );
   return {
@@ -295,7 +338,7 @@ it("gives each upload its own outcome: done, failed, uncertain", async () => {
   choose([file("a.csv"), file("b.csv"), file("c.csv")]);
   await confirm();
   await vi.waitFor(() =>
-    expect(row("c.csv")).toHaveTextContent("Outcome uncertain"),
+    expect(row("c.csv")).toHaveTextContent("Outcome unknown"),
   );
   expect(row("a.csv")).toHaveTextContent("Uploaded");
   expect(row("b.csv")).toHaveTextContent("Failed - nothing written");
@@ -327,7 +370,7 @@ it("shows progress, and a cancel leaves the in-flight file uncertain and sends n
   await vi.waitFor(() =>
     expect(row("b.csv")).toHaveTextContent("Cancelled - not sent"),
   );
-  expect(row("a.csv")).toHaveTextContent("Outcome uncertain");
+  expect(row("a.csv")).toHaveTextContent("Outcome unknown");
   expect(calls).toHaveLength(1);
   // the listing is refreshed: the uncertain one may be there
   expect(onUploaded).toHaveBeenCalledTimes(1);
@@ -339,7 +382,7 @@ it("shows progress, and a cancel leaves the in-flight file uncertain and sends n
 it("warns about uncertain outcomes before anything is sent", () => {
   panel(fake().uploader);
   expect(screen.getByRole("note")).toHaveTextContent(
-    "a cancellation or a timeout while a file is in flight can leave its outcome uncertain",
+    "a cancellation or a timeout while a file is in flight can leave its outcome unknown",
   );
 });
 
@@ -367,9 +410,9 @@ it("checks paths as the server does", () => {
   );
 });
 
-it("encodes the target, path and overwrite in the URL", () => {
-  expect(remoteUploadPath("a/b", "shared/config/x?y", true)).toBe(
-    "/services/a%2Fb/files/content?path=shared%2Fconfig%2Fx%3Fy&overwrite=true",
+it("encodes the target, path, overwrite and push in the URL", () => {
+  expect(remoteUploadPath("a/b", "shared/config/x?y", true, PUSH)).toBe(
+    `/services/a%2Fb/files?path=shared%2Fconfig%2Fx%3Fy&overwrite=true&push_id=${PUSH}`,
   );
 });
 
@@ -444,11 +487,12 @@ it("uploads with the token, as octet-stream, reporting progress", async () => {
     false,
     (f) => progress.push(f),
     new AbortController().signal,
+    PUSH,
   );
   expect(done.path).toBe("shared/config/x");
   expect(sent[0].method).toBe("PUT");
   expect(sent[0].url).toBe(
-    remoteUploadPath("prod-a", "shared/config/x", false),
+    remoteUploadPath("prod-a", "shared/config/x", false, PUSH),
   );
   expect(sent[0].headers.Authorization).toBe("Bearer s3cret");
   expect(sent[0].headers["Content-Type"]).toBe("application/octet-stream");
@@ -488,10 +532,39 @@ it("treats a refusal as certain and a 504, a lost answer or a timeout as uncerta
       false,
       () => {},
       new AbortController().signal,
+      PUSH,
     ).catch((error: unknown) => error);
     expect(failure).toBeInstanceOf(UploadFailed);
     expect((failure as UploadFailed).uncertain).toBe(uncertain);
   }
+});
+
+it("shows a validation refusal's reason, not just its status (#2106)", async () => {
+  stubXhr(
+    422,
+    JSON.stringify({
+      error: "RequestInvalid",
+      detail: "query.overwrite: Input should be a valid boolean",
+      transient: false,
+      errors: [
+        { loc: ["query", "overwrite"], msg: "Input should be a valid boolean" },
+      ],
+    }),
+  );
+  const failure = await uploadRemoteFile(
+    "prod-a",
+    "shared/config/x",
+    file("x"),
+    false,
+    () => {},
+    new AbortController().signal,
+    PUSH,
+  ).catch((error: unknown) => error);
+  expect(failure).toBeInstanceOf(UploadFailed);
+  expect((failure as UploadFailed).message).toBe(
+    "query.overwrite: Input should be a valid boolean",
+  );
+  expect((failure as UploadFailed).uncertain).toBe(false);
 });
 
 it("appears in the browser below shared/config and refreshes the listing after", async () => {
@@ -502,14 +575,14 @@ it("appears in the browser below shared/config and refreshes the listing after",
   };
   const listing = (path: string): RemoteFiles => ({
     target: "prod-a",
-    root: "/srv/uqf",
+    dest: "/srv/uqf",
     path,
     parent: path ? path.split("/").slice(0, -1).join("/") : null,
     entries: (children[path] ?? []).map((name) => ({
       name,
       kind: "dir",
       size: null,
-      mtime: 0,
+      mtime: "1970-01-01T00:00:00.000000000Z",
       blocked: false,
       reason: null,
     })),
@@ -526,7 +599,12 @@ it("appears in the browser below shared/config and refreshes the listing after",
   vi.stubGlobal("fetch", fetcher);
   const { uploader, calls } = fake();
   render(
-    <FileBrowser target="prod-a" onClose={() => {}} uploader={uploader} />,
+    <FileBrowser
+      target="prod-a"
+      onClose={() => {}}
+      uploader={uploader}
+      pushes={fakePushes().pushes}
+    />,
   );
   const region = await screen.findByRole("region", { name: "Upload files" });
   // the root is not an upload destination
@@ -544,4 +622,96 @@ it("appears in the browser below shared/config and refreshes the listing after",
   await vi.waitFor(() =>
     expect(listed).toEqual(["", "shared", "shared/config", "shared/config"]),
   );
+});
+
+it("opens one push on confirming, names it on every file, and closes it with what it saw", async () => {
+  const { uploader, calls } = fake((call) =>
+    call.path.endsWith("b.csv")
+      ? Promise.reject(new UploadFailed("timed out", 0, true))
+      : call.path.endsWith("c.csv")
+        ? Promise.reject(new UploadFailed("exists", 409, false))
+        : Promise.resolve(answer(call.path)),
+  );
+  const { pushes, opened, closed } = fakePushes(undefined, true);
+  panel(uploader, "shared/config", pushes);
+  choose([file("a.csv"), file("b.csv"), file("c.csv")]);
+  expect(opened).toEqual([]); // nothing until the operator confirms
+  await confirm();
+  await vi.waitFor(() => expect(closed).toHaveLength(1));
+  expect(opened).toEqual([
+    { target: "prod-a", config_dir: "shared/config", files: 3 },
+  ]);
+  expect(calls.map((c) => c.push)).toEqual([PUSH, PUSH, PUSH]);
+  expect(calls).toHaveLength(3); // the uncertain one is not retried
+  expect(closed[0]).toEqual({
+    push: PUSH,
+    reported: [
+      { path: "shared/config/b.csv", outcome: "unknown" },
+      { path: "shared/config/c.csv", outcome: "failed" },
+    ],
+  });
+  expect(screen.getByLabelText("Push")).toHaveTextContent(PUSH);
+  // the close failed: said so, the uploads stand
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    `Push ${PUSH} was not closed`,
+  );
+});
+
+it("sends nothing when the push cannot be opened", async () => {
+  const { uploader, calls } = fake();
+  const { pushes, closed } = fakePushes(() =>
+    Promise.reject(new ApiError("history is a link", false, 400)),
+  );
+  panel(uploader, "shared/config", pushes);
+  choose([file("a.csv")]);
+  await confirm();
+  expect(
+    await screen.findByText(/could not be opened, so nothing was sent/),
+  ).toHaveTextContent("history is a link");
+  expect(calls).toEqual([]);
+  expect(closed).toEqual([]);
+  expect(row("a.csv")).toHaveTextContent("Queued");
+});
+
+it("honours a cancel pressed while the push is being opened: nothing is sent, and the push is closed with every file cancelled (#2010)", async () => {
+  const { uploader, calls } = fake();
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const closed: { push: string; reported: ConfigPushReport[] }[] = [];
+  const pushes: PushOps = {
+    open: async (target) => {
+      await gate;
+      return {
+        target,
+        dest: "/srv/uqf",
+        push_id: PUSH,
+        pruned: [],
+        max_kept: 50,
+        retention_days: 90,
+      };
+    },
+    close: (_target, push, reported) => {
+      closed.push({ push, reported });
+      return Promise.resolve({} as never);
+    },
+  };
+  const { onUploaded } = panel(uploader, "shared/config", pushes);
+  choose([file("a.csv"), file("b.csv")]);
+  await confirm();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  release();
+  await vi.waitFor(() => expect(closed).toHaveLength(1));
+  expect(calls).toEqual([]);
+  expect(closed[0]).toEqual({
+    push: PUSH,
+    reported: [
+      { path: "shared/config/a.csv", outcome: "cancelled" },
+      { path: "shared/config/b.csv", outcome: "cancelled" },
+    ],
+  });
+  expect(row("a.csv")).toHaveTextContent("Cancelled - not sent");
+  expect(row("b.csv")).toHaveTextContent("Cancelled - not sent");
+  expect(onUploaded).not.toHaveBeenCalled();
 });

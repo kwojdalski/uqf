@@ -61,11 +61,6 @@
 / that more is finished - a TorQ runner asks the HDB to reload. Kept off the
 / store so the store stays TorQ-free (scripts/gates/check_etl_layering.py).
 
-/ Private: can this value be called? A lambda, or a projection over one -
-/ the HDB writer's functions are projections over its root and column.
-/ @private
-.qetl.io.callable:{[v] (type v) within 100 112h}
-
 / Refuse a manager that is not one, naming what is wrong.
 / .
 / Checked at DECLARATION rather than at first write, because a worker with a
@@ -81,17 +76,17 @@
     missing:.qetl.io.required where not .qetl.io.required in key mgr;
     if[count missing;
         '"require_manager: io manager is missing ",", " sv string missing];
-    if[not .qetl.io.callable mgr`write;
+    if[not .qetl.declared.callable mgr`write;
         '"require_manager: an io manager's write must be a function taking (target;batch)"];
-    if[(`finish in key mgr) and not .qetl.io.callable mgr`finish;
+    if[(`finish in key mgr) and not .qetl.declared.callable mgr`finish;
         '"require_manager: an io manager's finish must be a niladic function"];
-    if[(`write_keyed in key mgr) and not .qetl.io.callable mgr`write_keyed;
+    if[(`write_keyed in key mgr) and not .qetl.declared.callable mgr`write_keyed;
         '"require_manager: an io manager's write_keyed must be a function taking (target;batch;opts)"];
-    if[(`flush in key mgr) and not .qetl.io.callable mgr`flush;
+    if[(`flush in key mgr) and not .qetl.declared.callable mgr`flush;
         '"require_manager: an io manager's flush must be a function taking a timestamp"];
-    if[(`recover in key mgr) and not .qetl.io.callable mgr`recover;
+    if[(`recover in key mgr) and not .qetl.declared.callable mgr`recover;
         '"require_manager: an io manager's recover must be a function taking (target;range_from;range_to)"];
-    if[(`on_ready in key mgr) and not .qetl.io.callable mgr`on_ready;
+    if[(`on_ready in key mgr) and not .qetl.declared.callable mgr`on_ready;
         '"require_manager: an io manager's on_ready must be a function taking a dictionary"];
     1b}
 
@@ -184,6 +179,14 @@
          " already there by ",", " sv string kc];
     kept:existing where not (kc#existing) in kc#fresh;
     if[`replace=strategy;
+        / A replace clears a WINDOW, judged by the rows' own time column. With
+        / none to judge by, the only thing left is the key, which reaches rows
+        / outside the window (#2197) - so refuse rather than guess.
+        tcol:$[`time_column in key opts; opts`time_column; `];
+        if[(null tcol) or not tcol in cols existing;
+            '"on_conflict replace: ",string[opts`target]," has no time column to bound the window by (time_column ",
+             $[null tcol; "unset"; string tcol]," is not one of ",(" " sv string cols existing),
+             ") - replace clears a window, never a key across the table"];
         t:kept opts`time_column;
         inside:(t>=opts`range_from) and t<opts`range_to;
         / A partitioned worker clears its own rows only: the window holds its
@@ -292,7 +295,7 @@
     k:(),row_key;
     n:count[batch]-count distinct k#batch;
     if[n>0;
-        .[{.qetl.log.warn[x;y;z]};(`qetl.io;"a batch repeats a key - folded to one row per key";
+        .[{.qetl.log.ch.warn[x;y;z]};(`storage;"a batch repeats a key - folded to one row per key";
             `target`row_key`rows`folded!(target;k;count batch;n));::]];
     n}
 
@@ -395,6 +398,6 @@
 / @private
 .qetl.io.ready:{[mgr;status]
     if[not `on_ready in key mgr; :(::)];
-    @[mgr`on_ready;status;{[e] .[{.qetl.log.err[x;y;z]};(`qetl.io;"on_ready failed";enlist[`error]!enlist e);::]}]}
+    @[mgr`on_ready;status;{[e] .[{.qetl.log.ch.err[x;y;z]};(`storage;"on_ready failed";enlist[`error]!enlist e);::]}]}
 
 \d .

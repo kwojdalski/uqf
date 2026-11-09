@@ -1,22 +1,32 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, request } from "./api";
+import { ApiError, request } from "./api/client";
+import { noteResource } from "./activity";
+import { useWorkspace } from "./workspace";
 
 export function useResource<T>(
   path: string | null,
   body?: string,
   poll = true,
+  // `Bearer <token>` for a read that reaches a server over ssh - /compare
+  // naming a target (#2066). Not part of the key: the same read either way.
+  authorization?: string,
 ) {
   const [revision, setRevision] = useState(0);
   const [paused, updatePaused] = useState(false);
   const pausedRef = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const lastCadence = useRef({ key: "", seconds: 5 });
-  const key = `${path}\n${body ?? ""}`;
+  // The workspace is part of what is asked (#2029): a switch is a new key,
+  // so what was shown for the old one is dropped, not kept as "last result".
+  const workspace = useWorkspace();
+  const key = `${workspace}\n${path}\n${body ?? ""}`;
   const [state, setState] = useState<{
     key?: string;
     data?: T;
     error?: ApiError;
     loading: boolean;
+    /** The workspace `data` and `error` came from. */
+    target?: string;
     updated?: Date;
     cadence?: number;
   }>({ loading: false });
@@ -30,6 +40,7 @@ export function useResource<T>(
     if (lastCadence.current.key !== key)
       lastCadence.current = { key, seconds: 5 };
     let cadence = lastCadence.current.seconds;
+    let retries = 0;
     setState((previous) =>
       previous.key === key
         ? { ...previous, loading: true }
@@ -38,7 +49,13 @@ export function useResource<T>(
     async function load() {
       setState((previous) => ({ ...previous, loading: true }));
       try {
-        const data = await request<T>(path!, controller.signal, body);
+        const data = await request<T>(
+          path!,
+          controller.signal,
+          body,
+          undefined,
+          authorization,
+        );
         if (!active) return;
         const seconds = (data as { poll_seconds?: number }).poll_seconds;
         const canPoll =
@@ -52,12 +69,17 @@ export function useResource<T>(
         setState({
           key,
           data,
+          target: workspace,
           loading: false,
           updated: new Date(),
           cadence: canPoll ? cadence : undefined,
         });
+        retries = 0;
         if (poll && canPoll && !pausedRef.current)
-          timer.current = setTimeout(load, cadence * 1000);
+          timer.current = setTimeout(() => {
+            noteResource("poll", path!);
+            void load();
+          }, cadence * 1000);
       } catch (error) {
         if (!active) return;
         const failure =
@@ -65,10 +87,14 @@ export function useResource<T>(
         setState((previous) => ({
           ...previous,
           error: failure,
+          target: workspace,
           loading: false,
         }));
         if (poll && failure.transient && !pausedRef.current)
-          timer.current = setTimeout(load, cadence * 1000);
+          timer.current = setTimeout(() => {
+            noteResource("retry", path!, ++retries);
+            void load();
+          }, cadence * 1000);
       }
     }
     void load();
@@ -77,7 +103,7 @@ export function useResource<T>(
       clearTimeout(timer.current);
       controller.abort();
     };
-  }, [path, body, key, poll, revision]);
+  }, [path, body, key, poll, revision, workspace, authorization]);
   function setPaused(value: boolean) {
     pausedRef.current = value;
     updatePaused(value);

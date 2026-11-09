@@ -111,7 +111,7 @@ second authority for ordering and retries (`pipeline-philosophy.md` §8).
   | a plant table's schema | `src/etl/plant_tables.q` (`.qetl.plant`)                                                             | the generated `database.q` the tickerplant loads                  |
   | which processes exist  | the q declarations (`procname`), plus `NON_JOB_PIPELINES` in Python for processes with no job        | `process.csv`, `docs/reference/processes.md`                      |
   | a process's port       | `scripts/processes/process_ports.csv`, an append-only offset from the base port                      | `process.csv`                                                     |
-  | the job graph          | each declaration's `subscribe_to`/`publishes`/`dataset`                                              | `.qetl.dag`, `src/etl/generated/pipeline_dag.q`, profile closures |
+  | the job graph          | each declaration's `subscribe_to`/`outputs`                                                          | `.qetl.dag`, `src/etl/generated/pipeline_dag.q`, profile closures |
   | what a process loads   | each declaration's references, read as text by `python/uqs/src/uqs/model/load_plan.py`               | `src/etl/generated/load_plan.q`                                   |
   | query policies         | `scripts/torqconfig/dataaccess/querypolicy.csv`, capped by `.checkinputs.policyceiling`              | enforced on `gateway1` (`docs/architecture/query-policies.md`)    |
   | the frontend catalog   | `scripts/processes/uqs_catalog.q` (`.qcat`)                                                          | the browser's table list                                          |

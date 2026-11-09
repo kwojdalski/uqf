@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+import pytest
 from fastapi.testclient import TestClient
 
 from uqf_frontend import ops
@@ -111,11 +112,44 @@ def test_no_configured_processes_is_reported_not_disguised_as_idle():
     assert body["processes_configured"] == 0
 
 
-def test_usage_limit_is_capped_by_max_rows():
+def test_usage_limit_above_max_rows_is_refused_not_clamped_silently():
+    """A limit over max_rows used to be cut to max_rows with nothing in the
+    answer saying so (#2106). It is refused, naming the bound."""
     fleet = FakeFleet({"a": [{"time": dt.datetime(2026, 9, 15, i % 24)} for i in range(50)]})
     c = TestClient(create_app(gateway=FakeGateway(), settings=Settings(max_rows=10), fleet=fleet))
-    body = c.get("/ops/usage", params={"limit": 999}).json()
-    assert body["row_count"] == 10
+    resp = c.get("/ops/usage", params={"limit": 999})
+    assert resp.status_code == 422, resp.text
+    assert "10" in resp.json()["detail"]
+    assert fleet.calls == []
+    assert c.get("/ops/usage").json()["row_count"] == 10, "the default never exceeds the cap"
+
+
+@pytest.mark.parametrize("path", ["/ops/usage", "/ops/clients"])
+@pytest.mark.parametrize("limit", [0, -1, -3])
+def test_a_limit_below_one_is_refused_before_any_process_is_asked(path, limit):
+    """`lim <= 0` makes ops.USAGE return a process's WHOLE usage log, and a
+    negative slice keeps all but the last rows, so max_rows stopped capping
+    and row_count went negative (#2020). Refused, as QueryRequest.limit is."""
+    rows = [{"time": dt.datetime(2026, 9, 15, i), "u": f"c{i}"} for i in range(8)]
+    fleet = FakeFleet({"a": rows})
+    c = TestClient(create_app(gateway=FakeGateway(), settings=Settings(max_rows=5), fleet=fleet))
+    resp = c.get(path, params={"limit": limit})
+    assert resp.status_code == 422, resp.text
+    assert fleet.calls == [], "nothing may be sent to q for a refused limit"
+
+
+@pytest.mark.parametrize("path", ["/ops/usage", "/ops/clients"])
+def test_a_limit_of_one_is_one_row_and_one_over_max_rows_is_refused(path):
+    rows = [{"time": dt.datetime(2026, 9, 15, i), "u": f"c{i}"} for i in range(8)]
+    c = TestClient(
+        create_app(
+            gateway=FakeGateway(), settings=Settings(max_rows=5), fleet=FakeFleet({"a": rows})
+        )
+    )
+    assert c.get(path, params={"limit": 1}).json()["row_count"] == 1
+    body = c.get(path, params={"limit": 5}).json()
+    assert body["row_count"] == len(body["rows"]) == 5
+    assert c.get(path, params={"limit": 6}).status_code == 422
 
 
 def test_merge_usage_tolerates_a_row_without_a_timestamp():
@@ -209,3 +243,30 @@ def test_the_clients_endpoint_reports_what_the_gateway_view_cannot():
     assert body["row_count"] == 1
     assert body["rows"][0]["u"] == "cryptorust"
     assert body["rows"][0]["source_process"] == "stp1"
+
+
+@pytest.mark.parametrize("path", ["/ops/usage", "/ops/clients"])
+def test_a_log_cut_at_the_limit_says_so(path):
+    """`rows[:limit]` cut the log with nothing saying so: a fleet with 2000
+    logged queries showed 500 as if they were all (#2220)."""
+    rows = [{"time": dt.datetime(2026, 9, 15, i), "u": f"c{i}"} for i in range(8)]
+    c = TestClient(
+        create_app(
+            gateway=FakeGateway(), settings=Settings(max_rows=10), fleet=FakeFleet({"a": rows})
+        )
+    )
+    cut = c.get(path, params={"limit": 5}).json()
+    assert (cut["row_count"], cut["truncated"]) == (5, True)
+    whole = c.get(path, params={"limit": 8}).json()
+    assert (whole["row_count"], whole["truncated"]) == (8, False)
+
+
+def test_usage_asks_each_process_for_one_row_past_the_limit():
+    """So the merged log holds more than `limit` rows exactly when the fleet
+    does: a process with limit+1 rows is a cut, one with `limit` is not."""
+    rows = [{"time": dt.datetime(2026, 9, 15, i)} for i in range(6)]
+    fleet = FakeFleet({"a": lambda lim: rows[:lim]})
+    c = TestClient(create_app(gateway=FakeGateway(), settings=Settings(max_rows=10), fleet=fleet))
+    assert c.get("/ops/usage", params={"limit": 5}).json()["truncated"] is True
+    assert fleet.calls[-1][2] == (6,)
+    assert c.get("/ops/usage", params={"limit": 6}).json()["truncated"] is False

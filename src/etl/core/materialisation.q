@@ -14,7 +14,7 @@
 / Coverage view - and renaming a persisted table to match
 / a namespace is the tail wagging the dog. A namespace and the table it
 / writes need not share a name; .qf.port manages `position` and .qf.exec writes
-/ `crypto_execution_quality` on the same principle.
+/ the execution-quality tables on the same principle.
 / .
 / It was `.qcov` until the maintainer pointed out that `scripts/dev/
 / coverage.q` is a completely different module - CODE coverage, `.cov`,
@@ -318,7 +318,7 @@
     .qetl.coverage.require_schema[];
     `etl_coverage}
 
-/ The claims one dataset, partition and release holds at `at`, read from
+/ The claims one dataset, partition and release holds at `as_of`, read from
 / the ledger the workers persist - for a reader that is not a worker (#1081).
 / .
 / The ledger lives in one file, beside the checkpoints (ledger_path). It is
@@ -333,18 +333,18 @@
 / dimension" sentinel and matches only rows recorded under it.
 / @param ds the dataset
 / @param part the partition, or ` for a dataset with none
-/ @param release the source version
-/ @param at the as-of: claims recorded by then and not yet superseded
+/ @param version the source version
+/ @param as_of the as-of: claims recorded by then and not yet superseded
 / @return table range_from, range_to - for compose and gaps
 / @eg count .qetl.coverage.claims[`no_such_dataset;`;`v1;.z.p]  ->  0
-.qetl.coverage.claims:{[ds;part;release;at]
+.qetl.coverage.claims:{[ds;part;version;as_of]
     p:hsym `$.qetl.coverage.ledger_path[];
     t:$[()~key p; 0#([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
           range_from:`timestamp$(); range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$(); superseded_at:`timestamp$());
         .qetl.job.bounded.state.durable_get .qetl.coverage.ledger_path[]];
     select range_from, range_to from t
-        where dataset=ds, partition=part, source_version=release,
-              recorded_at<=at, at<superseded_at, range_to>range_from}
+        where dataset=ds, partition=part, source_version=version,
+              recorded_at<=as_of, as_of<superseded_at, range_to>range_from}
 
 / The named partitions a dataset has ever been claimed under, in this
 / process's ledger or the persisted one: what a worker that loads only itself
@@ -412,9 +412,9 @@
         .qetl.coverage.persist[]};
         enlist (dataset;partition;source_version;range_from;range_to;
                 "j"$rows_published;.z.p;.qetl.coverage.still_current;.qetl.coverage.current_run[])];
-    .[{.qetl.log.dbg[x;y;z]};(dataset;"coverage recorded";
-        `partition`source_version`range_from`range_to`rows!
-            (partition;source_version;range_from;range_to;"j"$rows_published));::];
+    .[{.qetl.log.ch.dbg[x;y;z]};(`coverage;"coverage recorded";
+        `dataset`partition`source_version`range_from`range_to`rows!
+            (dataset;partition;source_version;range_from;range_to;"j"$rows_published));::];
     count .qetl.coverage.ledger[]}
 
 / ------------------------------------------------------------------ READ
@@ -490,8 +490,8 @@
 / @throws error naming the missing ranges when not fully covered
 .qetl.coverage.require_covered:{[ds;part;version;as_of;from_ts;to_ts]
     m:.qetl.coverage.missing[ds;part;version;as_of;from_ts;to_ts];
-    .[{.qetl.log.dbg[x;y;z]};(ds;"upstream coverage check";
-        `partition`source_version`range_from`range_to`gaps!(part;version;from_ts;to_ts;count m));::];
+    .[{.qetl.log.ch.dbg[x;y;z]};(`coverage;"upstream coverage check";
+        `dataset`partition`source_version`range_from`range_to`gaps!(ds;part;version;from_ts;to_ts;count m));::];
     if[count m;
         '"require_covered: ",string[ds],"[",string[part],"] at source_version ",
          string[version]," is not fully published for [",
@@ -749,29 +749,45 @@
         ([] dataset:count[ds]#k`dataset; partition:count[ds]#k`partition; source_version:count[ds]#k`source_version; date:asc ds)}[at];
     raze per each 0!distinct ks}
 
+/ The days a dataset is still being written to: every date a current claim with rows
+/ covers that its readers have not been released to see - release_dates over every key
+/ the ledger holds. A run writes, and its deployment releases once the HDB has reloaded
+/ what it wrote (release_ready), so a date here is one a writer is still busy with, and
+/ that HDB maintenance (`uqs data compress`, #2147) leaves alone. A key with no watermark
+/ at all counts as unreleased, as `outstanding` and `ready_claims` read it.
+/ @param at the as-of: claims recorded after it are not counted
+/ @return table dataset, date - distinct, sorted; empty when there is no ledger
+/ @eg .qetl.coverage.unreleased[.z.p]
+.qetl.coverage.unreleased:{[at]
+    out:([] dataset:`symbol$(); date:`date$());
+    if[()~key hsym `$.qetl.coverage.ledger_path[]; :out];
+    t:.qetl.job.bounded.state.durable_get .qetl.coverage.ledger_path[];
+    ks:distinct select dataset, partition, source_version from t;
+    `dataset`date xasc distinct select dataset, date from .qetl.coverage.release_dates[ks;at]}
+
 / The coverage claims a reader can query now: claims as `claims` returns
 / them, recorded at or before the key's readiness watermark. What /query's
 / require_coverage composes (#1094), read on the gateway like `claims`.
 / @param ds the dataset
 / @param part the partition, or `
-/ @param release the source version
-/ @param at the as-of
+/ @param version the source version
+/ @param as_of the as-of
 / @return table range_from, range_to - for compose and gaps
 / @eg count .qetl.coverage.ready_claims[`no_such_dataset;`;`v1;.z.p]  ->  0
-.qetl.coverage.ready_claims:{[ds;part;release;at]
-    w:(.qetl.coverage.ready_table[])[`dataset`partition`source_version!(ds;part;release)]`ready_at;
-    w:at&0Np^w;
-    select range_from, range_to from .qetl.coverage.claims_at[ds;part;release;at] where recorded_at<=w}
+.qetl.coverage.ready_claims:{[ds;part;version;as_of]
+    w:(.qetl.coverage.ready_table[])[`dataset`partition`source_version!(ds;part;version)]`ready_at;
+    w:as_of&0Np^w;
+    select range_from, range_to from .qetl.coverage.claims_at[ds;part;version;as_of] where recorded_at<=w}
 
 / Private: the current claims with their recorded_at - claims' read.
 / @private
-.qetl.coverage.claims_at:{[ds;part;release;at]
+.qetl.coverage.claims_at:{[ds;part;version;as_of]
     p:hsym `$.qetl.coverage.ledger_path[];
     t:$[()~key p; 0#([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
           range_from:`timestamp$(); range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$(); superseded_at:`timestamp$());
         .qetl.job.bounded.state.durable_get .qetl.coverage.ledger_path[]];
     select range_from, range_to, rows_published, recorded_at from t
-        where dataset=ds, partition=part, source_version=release,
-              recorded_at<=at, at<superseded_at, range_to>range_from}
+        where dataset=ds, partition=part, source_version=version,
+              recorded_at<=as_of, as_of<superseded_at, range_to>range_from}
 
 \d .

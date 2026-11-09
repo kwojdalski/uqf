@@ -35,15 +35,17 @@ from uqs.cli.shared import (
     _export,
     _paths,
     _show,
-    _sorted_items,
     app,
     console,
     job_app,
 )
+from uqs.cli.sorting import _sorted_items
 from uqs.cli.target import target_app
 from uqs.deploy import targets
 from uqs.paths import UqsError
-from uqs.stack import listing
+from uqs.stack import housekeeping, listing
+from uqs.stack.env import build_env
+from uqs.stack.procs import get_process_config
 
 #: Kinds of `uqs list` that moved to their noun's own list -> the command now.
 MOVED = {
@@ -75,9 +77,9 @@ JsonOpt = Annotated[
     ),
 ]
 
-#: The key a kind's rows are under in its --json document, where it is not
-#: the kind's own name.
-_JSON_KEY = {"named overrides": "overrides", "env": "variables"}
+#: The key a kind's rows are under in its --json document, and in uqs-mcp's
+#: list tool's, where it is not the kind's own name.
+JSON_KEY = {"named overrides": "overrides", "env": "variables"}
 _SORT_HELP = "Sort by this column (case-insensitive, numeric-aware)."
 
 
@@ -98,7 +100,7 @@ def _print(kind, base_port, export, sort, reverse, interactive, as_json, rows=No
     items = _sorted_items(items, sort, reverse)
     shown = [cells(item) for item in items]  # what a table cell and an export hold
     if as_json:
-        emit({_JSON_KEY.get(kind, kind): records(items)})
+        emit({JSON_KEY.get(kind, kind): records(items)})
         _export(shown, export)
         return
     table = Table(title=f"{kind} ({len(items)})")
@@ -218,6 +220,33 @@ attachment_app.command("status", cls=safety.ReadOnly)(
         "backfills",
         "Show each destination a `uqs job backfill --attachment` has run into.\n\nIts "
         "attachment, worker, state, outcome, whether its rows are queryable, and its latest log.",
+    )
+)
+
+
+def _housekeeping() -> list[dict]:
+    paths = _paths()
+    try:
+        localtime = get_process_config(paths, "housekeeping1")["localtime"] != "0"
+    except UqsError:  # a runtime without housekeeping1: the rules it would run
+        localtime = True
+    return housekeeping.effective_schedule(paths, build_env(paths), localtime)
+
+
+housekeeping_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="housekeeping1's schedule: show.",
+)
+config_app.add_typer(housekeeping_app, name="housekeeping")
+housekeeping_app.command("show", cls=safety.ReadOnly)(
+    _noun_list(
+        "housekeeping",
+        "Show housekeeping1's effective schedule: when it runs, and each rule it runs.\n\n"
+        "Log and tickerplant-log retention, and HDB compression by the declared policy, "
+        "as generated into TORQDATA (stack/housekeeping.py).",
+        _housekeeping,
+        ("runs", "function", "on", "matching", "except", "older_than"),
     )
 )
 

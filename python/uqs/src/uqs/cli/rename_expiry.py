@@ -108,7 +108,6 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             "uqs job contract export",
             "uqs job contract approve",
             "uqs job contract list",
-            "mcp uqs_summary",
         }
     ),
     "stable/2026-10-29": frozenset(
@@ -120,7 +119,6 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             "uqs job new --procname",
             "uqs deploy check --procs",
             "uqs deploy check --deadline",
-            "uqs config sources check --window",
             "uqs data seed --overwrite",
             "uqs job attachment contract approve --conflict",
             "uqs job attachment contract approve --max-rows",
@@ -194,6 +192,12 @@ RENAMED_AFTER: dict[str, frozenset[str]] = {
             "uqs data migrate -n",
             "uqs target adopt --dry-run",
             "uqs target adopt -n",
+            # #2235: replay and seed wrote by default; a dry run is the default
+            # now, so their --dry-run is refused, naming --apply
+            "uqs data replay --dry-run",
+            "uqs data replay -n",
+            "uqs data seed --dry-run",
+            "uqs data seed -n",
             # #1852: a bypass is --override NAME --reason, never a bare flag
             "uqs deploy build --allow-dirty",
             "uqs deploy build --allow-computed-names",

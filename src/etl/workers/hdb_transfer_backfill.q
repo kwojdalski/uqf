@@ -8,7 +8,7 @@
 / example script points .qetl.io.default at a second HDB directory.
 / .
 / Scaffolded with:
-/   uqs job new hdb_transfer --kind backfill --transport local --dataset trades_copy \
+/   uqs job new hdb_transfer --kind backfill --transport local --outputs trades_copy \
 /       --columns 'trade_id:long,sym:symbol,price:float,size:long,side:symbol,notional:float'
 
 \d .
@@ -45,7 +45,7 @@
 / `procname` is the process that runs this worker - the process registry is
 / read from this declaration, so there is no entry to add anywhere else.
 .qetl.job.bounded.define[`hdb_transfer_backfill;
-    `source`dataset`width`transform`facts`procname`note!
-        (`hdb_transfer;`trades_copy;1D;`hdb_transfer_with_notional;.qpipe.job.hdb_transfer_backfill.facts;
+    `source`outputs`width`transform`facts`procname`note!
+        (`hdb_transfer;enlist `trades_copy;1D;`hdb_transfer_with_notional;.qpipe.job.hdb_transfer_backfill.facts;
          `hdb_transfer_backfill1;
          "bounded - copies trades from a kdb+ HDB on this machine into trades_copy, adding notional; the HDB-to-HDB example")];

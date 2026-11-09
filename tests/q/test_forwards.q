@@ -471,10 +471,10 @@
 .qt.qf.px.forwards.test_cross_size_at_price_rejects_bad_side:{[t]
     quotes:.qt.qf.px.forwards.mk_quotes_table[::];
     wrapper:{[q] .qf.mkt.cross_size_at_price[q;`AUDPLN;2026.01.02D00:00:00.000000000;`mid;2.5650]};
-    .qunit.assertError[wrapper;quotes;"side must be `bid or `ask"];
+    .qunit.assertError[wrapper;quotes;"book_side must be `bid or `ask"];
     / As above: an integer side reached `string` and threw a bare 'type.
     .qunit.assertThrows[{[q] .qf.mkt.cross_size_at_price[q;`EURUSD;2026.01.01D0;1;1.0]};quotes;
-        "cross_size_at_price: side must be `bid or `ask, got 1";
+        "cross_size_at_price: book_side must be `bid or `ask, got 1";
         "an integer side is named, not a bare 'type"]};
 
 .qt.qf.px.forwards.test_cross_size_at_price_near_zero_when_even_negligible_size_breaches:{[t]
@@ -816,11 +816,11 @@
     s:.qf.px.mock_swap;
     m:.qf.px.mock_swap_market;
     at_market:@[@[s;`near_rate;:;m`near_fwd];`far_rate;:;m`far_fwd];
-    r:.qf.px.swap_value[at_market;m;2026.09.18;(enlist `pip_factor)!enlist 10000];
+    r:.qf.px.swap_value[at_market;m;2026.09.18;10000;::];
     .qt.support.assertApprox[r`pv;0f;1e-9;"contracted at the marks"]};
 
 .qt.qf.px.forwards.test_swap_pv_is_the_sum_of_its_legs:{[t]
-    r:.qf.px.swap_value[.qf.px.mock_swap;.qf.px.mock_swap_market;2026.09.18;(enlist `pip_factor)!enlist 10000];
+    r:.qf.px.swap_value[.qf.px.mock_swap;.qf.px.mock_swap_market;2026.09.18;10000;::];
     .qt.support.assertApprox[r`pv;(r`near_pv)+r`far_pv;1e-9;"net = near + far"];
     .qt.support.assertApprox[r`pv;-1976.08;1e-6;"(1.1004-1.10)*1m*0.9998 - (1.1124-1.11)*1m*0.99"];
     .qt.support.assertApprox[r`market_points`contract_points;120 100f;1e-6;"swap points in pips"]};
@@ -828,22 +828,30 @@
 .qt.qf.px.forwards.test_swap_reversed_negates_and_doubled_doubles:{[t]
     s:.qf.px.mock_swap;
     m:.qf.px.mock_swap_market;
-    o:(enlist `pip_factor)!enlist 10000;
-    base:.qf.px.swap_value[s;m;2026.09.18;o];
-    rev:.qf.px.swap_value[@[s;`near_side;neg];m;2026.09.18;o];
-    dbl:.qf.px.swap_value[@[s;`notional;2*];m;2026.09.18;o];
+    base:.qf.px.swap_value[s;m;2026.09.18;10000;::];
+    rev:.qf.px.swap_value[@[s;`near_side;neg];m;2026.09.18;10000;::];
+    dbl:.qf.px.swap_value[@[s;`notional;2*];m;2026.09.18;10000;::];
     .qt.support.assertApprox[rev`near_pv`far_pv`pv`near_pv01`far_pv01;neg base`near_pv`far_pv`pv`near_pv01`far_pv01;1e-9;"reversed"];
     .qt.support.assertApprox[dbl`near_pv`far_pv`pv;2*base`near_pv`far_pv`pv;1e-9;"doubled"];
     .qunit.assertEquals[(.qf.px.swap_cashflows @[s;`near_side;neg])`amount;neg (.qf.px.swap_cashflows s)`amount;"flows negate too"]};
 
 .qt.qf.px.forwards.test_swap_settled_near_leg_is_worth_nothing:{[t]
-    r:.qf.px.swap_value[.qf.px.mock_swap;.qf.px.mock_swap_market;2026.10.01;(enlist `pip_factor)!enlist 10000];
+    r:.qf.px.swap_value[.qf.px.mock_swap;.qf.px.mock_swap_market;2026.10.01;10000;::];
     .qunit.assertEquals[r`settled;enlist `near;"the near leg settled on 22 Sep"];
     .qt.support.assertApprox[r`pv;r`far_pv;1e-12;"only the far leg remains"]};
 
-.qt.qf.px.forwards.test_swap_without_a_pip_factor_is_refused:{[t]
-    .qunit.assertThrows[.qf.px.swap_value[.qf.px.mock_swap;.qf.px.mock_swap_market;2026.09.18;];::;
-        "swap_value: opts must be a dictionary carrying pip_factor";"refused"]};
+.qt.qf.px.forwards.test_swap_value_refuses_an_unknown_option:{[t]
+    / the typo that gave a PV01 of 99.98 instead of 499.9 with no error (#2113)
+    .qunit.assertThrows[.qf.px.swap_value[.qf.px.mock_swap;.qf.px.mock_swap_market;2026.09.18;10000;];(enlist `bump_pip)!enlist 5;
+        "swap_value: unknown option(s) bump_pip - known: bump_pips";"a misspelt option is refused, not defaulted"]};
+
+.qt.qf.px.forwards.test_swap_value_bump_pips_scales_the_pv01:{[t]
+    r:.qf.px.swap_value[.qf.px.mock_swap;.qf.px.mock_swap_market;2026.09.18;10000;(enlist `bump_pips)!enlist 5];
+    .qt.support.assertApprox[r`near_pv01`far_pv01;499.9 -495f;1e-6;"five pips is five times the one-pip default"]};
+
+.qt.qf.px.forwards.test_forward_at_date_refuses_an_unknown_option:{[t]
+    .qunit.assertThrows[.qf.px.forward_at_date[1.10;.qf.px.mock_fwd_curve;2026.11.02;10000;];(enlist `extrapolate)!enlist `flat;
+        "forward_at_date: unknown option(s) extrapolate - known: extrapolation";"a misspelt policy is refused"]};
 
 / ----------------------------------------- quote convention conversion (#315)
 
@@ -868,7 +876,7 @@
 
 .qt.qf.px.forwards.test_convert_quotes_points_go_through_the_outright:{[t]
     q:([] sym:enlist `EURUSD; spot:enlist 2f; fwd_points:enlist 2000f);
-    pf:(enlist `pip_factors)!enlist `EURUSD`USDEUR!10000 10000f;
+    pf:`EURUSD`USDEUR!10000 10000f;
     r:.qf.px.convert_quotes[q;(enlist `EURUSD)!enlist `USDEUR;pf];
     .qt.support.assertApprox[first r`fwd_points;10000*(1%2.2)-1%2;1e-9;"target_pf*(1/F - 1/S), not -2000"]};
 

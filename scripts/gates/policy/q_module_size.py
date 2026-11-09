@@ -29,12 +29,12 @@ LIMIT = 800
 #: cap, so the allowlist can only shrink.
 ALLOWED: dict[str, tuple[int, str]] = {
     "src/etl/core/bounded_worker.q": (
-        1554,
+        1528,
         "the bounded-worker lifecycle (define, plan, run, retry, cleanup) in one namespace; "
         "the next split after source_contract.q (#970), not yet done",
     ),
     "src/market_data/microstructure.q": (
-        1227,
+        1224,
         "one .qf.mkt namespace of independent analytics (spread, depth, impact, flow); "
         "a split is possible along those lines but nothing is forcing it",
     ),

@@ -113,7 +113,7 @@ def test_apply_links_the_release_saves_the_target_and_it_then_runs(server, tmp_p
     assert (release / ".hidden").is_file() and (release / "python" / "uqs").is_dir()
     saved = targets.read(Path("."))["lvc"]
     assert saved == {
-        "host": "svc@lvc",
+        "ssh": "svc@lvc",
         "dest": str(server),
         "launch_mode": "source",
         "launch_python": sys.executable,
@@ -165,7 +165,7 @@ def test_a_pushed_release_already_linked_is_saved_as_is(server, tmp_path):
     r = _adopt(server, "--apply")
     assert r.exit_code == 0, r.output
     assert _has(r.output, "launches as pushed")
-    assert targets.read(Path("."))["lvc"] == {"host": "svc@lvc", "dest": str(server)}
+    assert targets.read(Path("."))["lvc"] == {"ssh": "svc@lvc", "dest": str(server)}
     assert history.read(Path("."))[0]["release"] == release.name
 
 
@@ -187,3 +187,29 @@ def test_a_declared_name_is_refused(server, logged):
 def test_a_relative_path_is_refused(server, logged):
     r = _adopt(server, "--launch-python", "bin/python3")
     assert r.exit_code == 1 and "must be an absolute path on the server" in "".join(logged)
+
+
+def test_apply_onto_an_inspection_servers_ssh_and_dest_is_refused(
+    server, tmp_path, logged, monkeypatch
+):
+    """#2231: adopting under a NEW name is still the inspection-only server -
+    it is matched by its ssh and dest - and --yes does not get past it."""
+    from uqs.deploy import adopt
+
+    Path(os.environ[targets.DECLARATION_ENV]).write_text(
+        f'[targets.prd]\nssh = "deploy@lvc"\ndest = "{server}"\ninspection = true\n'
+    )
+
+    def never(*_a, **_k):
+        raise AssertionError("an inspection-only server was changed")
+
+    monkeypatch.setattr(adopt, "apply", never)
+    before = _tree(tmp_path)
+    r = _adopt(server, "--launch-python", sys.executable, "--apply", "--yes")
+    assert r.exit_code == 1, r.output
+    said = "".join(logged)
+    assert "target prd is in inspection mode" in said
+    assert "`uqs target adopt --apply` is refused" in said
+    assert _tree(tmp_path) == before
+    # the dry run still reports what the server holds
+    assert _adopt(server, "--launch-python", sys.executable).exit_code == 0

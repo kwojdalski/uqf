@@ -10,7 +10,9 @@
 .qpipe.job.superbook.publish:.qetl.job.stream.unwired `superbook;
 / From the plant, not from .qpipe.job.market_data: the plant loads before
 / every declaration, a peer job does not (#731).
-.qpipe.job.superbook.books:`sym`source xkey .qetl.plant.published `market_data
+/ Only the columns it merges: the ladders and who quoted them. The flat top (bid, ask) and the row number (rid)
+/ market_data also carries (#2288) are not its business, and a batch need not bring them.
+.qpipe.job.superbook.books:`sym`source xkey .qetl.plant.columns[`market_data;`sym`source`market`source_time`bid_prices`bid_sizes`ask_prices`ask_sizes`clock]
 .qpipe.job.superbook.superbook:.qetl.plant.published `superbook
 / The demo feeds tick every 500ms. Override for the actual feed SLA.
 .qpipe.job.superbook.max_age:0D00:00:05
@@ -46,10 +48,10 @@
 / @throws when columns, identities, timestamps or level vectors are malformed
 / @eg count .qpipe.job.superbook.replace_books[.qpipe.job.superbook.books;.qpipe.job.market_data.market_data;2026.09.19D10:00:00.000000000] -> 0
 .qpipe.job.superbook.replace_books:{[state;batch;as_of]
-    wanted:cols .qpipe.job.market_data.market_data;
+    wanted:cols 0!state;
     .qf.util.require_cols[`superbook;`batch;batch;wanted];
     rows:wanted#batch;
-    problems:.qetl.transform.problems[.qpipe.job.market_data.market_data;rows;1b];
+    problems:.qetl.transform.problems[wanted#.qpipe.job.market_data.market_data;rows;1b];
     if[count problems; '"superbook: ","; " sv problems];
     if[any null rows`source_time; '"superbook: source_time must not be null"];
     if[(any null rows`source) or not all `fx=rows`market;
@@ -153,8 +155,8 @@
     latest:now+lead;
     ahead:select from x where source_time>latest;
     if[count ahead;
-        .qetl.log.warn[`superbook;"rows dated past the allowed clock lead refused";
-            `sources`rows`max_clock_lead!(distinct ahead`source;count ahead;lead)]];
+        .qetl.log.ch.warn[`transform;"rows dated past the allowed clock lead refused";
+            (enlist[`job]!enlist `superbook),`sources`rows`max_clock_lead!(distinct ahead`source;count ahead;lead)]];
     `.qpipe.job.superbook.books set .qpipe.job.superbook.replace_books[.qpipe.job.superbook.books;x;latest];
     .qpipe.job.superbook.refresh[now];
     }
@@ -172,7 +174,7 @@
 / (#295, #1033).
 .qetl.cfg.audit.watch[`superbook;`.qpipe.job.superbook.max_age`.qf.mkt.max_clock_lead];
 
-.qetl.job.stream.define[`superbook;`procname`subscribe_to`publishes`on_batch`period`on_timer`note`state`ephemeral!(
+.qetl.job.stream.define[`superbook;`procname`subscribe_to`outputs`on_batch`period`on_timer`note`state`ephemeral!(
     `superbook1;
     enlist `market_data;
     `superbook`config_change;

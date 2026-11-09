@@ -3,7 +3,7 @@
 An outside process can follow a table live, the way kdb+tick's real-time
 subscriber (RTS) does: it subscribes to a tickerplant and receives every update
 as it is published. The first such client is cryptorust's engine, which shows
-`crypto_execution_quality` in its terminal.
+`crypto_markout` in its terminal.
 
 ```text
 feed -> stp1 -> rdb1 / wdb1 ...
@@ -40,15 +40,15 @@ Call `.u.sub` synchronously, once per table, with `` ` `` for every symbol:
 
 ```q
 h:hopen `:localhost:6265:rts:rts
-h(".u.sub";`crypto_execution_quality;`)
-/ (`crypto_execution_quality; empty table with the schema)
+h(".u.sub";`crypto_markout;`)
+/ (`crypto_markout; empty table with the schema)
 ```
 
 The reply is the table's name and an empty copy of it: its columns and types.
 After that, `sctp1` pushes asynchronous messages:
 
 ```q
-(`upd; `crypto_execution_quality; table)
+(`upd; `crypto_markout; table)
 ```
 
 `table` is a q table, already stamped with `time` by `stp1`. `sctp1` batches on
@@ -59,12 +59,12 @@ its 200 ms timer, so one message usually carries several rows.
 A subscriber that starts mid-session has no rows until the next update. So
 subscribe first, then ask the gateway for recent rows, then apply the live
 updates. A row can then appear in both. Rows carry no sequence number, so
-de-duplicate on the table's identity columns (for `crypto_execution_quality`,
-`fill_id` and `horizon`).
+de-duplicate on the table's identity columns (for `crypto_markout`, `venue`,
+`fill_id`, `horizon`, `kind` and `step`).
 
 ```q
 g:hopen `:localhost:6257:rts:rts
-g(`.dataaccess.getdata;`tablename`starttime`endtime!(`crypto_execution_quality;.z.p-0D00:05;.z.p))
+g(`.dataaccess.getdata;`tablename`starttime`endtime!(`crypto_markout;.z.p-0D00:05;.z.p))
 ```
 
 The request is held to the table's row in
@@ -72,7 +72,12 @@ The request is held to the table's row in
 ordinary user's is. A table can be subscribed to from outside only if it is in
 the catalog (`.qcat.describe`, see
 [`uqs_catalog.q`](../../scripts/processes/uqs_catalog.q)) and has a policy row.
-Today that is `crypto_execution_quality`.
+Today that is `crypto_markout`.
+
+cryptorust's `kdb_subscriber.tables` defaults to `crypto_execution_quality`, the
+table `crypto_markout` replaced (#1936): a terminal pointed at this plant lists
+`tables: [crypto_markout]` explicitly. `crypto_markout` is a long dataset -
+filter `kind = total` for one row per fill and horizon.
 
 ## Never publish back
 

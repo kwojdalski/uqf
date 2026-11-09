@@ -173,21 +173,21 @@
 / opened (refused with `access`). Nothing reloads, and it is now an ERROR, not
 / an INFO indistinguishable from "no HDB running".
 .qt.qtorq.pipeline.test_registered_hdbs_that_refused_reload_nothing_and_say_so:{[t]
-    saved:.qetl.log.err;
-    .qetl.log.err:{[c;m;d] .qt.qtorq.pipeline.errs_seen,:enlist m};
+    saved:.qetl.log.ch.err;
+    `.qetl.log.ch.err set {[c;m;d] .qt.qtorq.pipeline.errs_seen,:enlist m};
     .qt.qtorq.pipeline.errs_seen:();
     n:.qtorq.reload_handles[2;()];
-    .qetl.log.err:saved;
+    `.qetl.log.ch.err set saved;
     .qunit.assertEquals[n;`registered`opened`reloaded!2 0 0;"two registered, none reloaded - owed (#1084)"];
     .qunit.assertTrue[any .qt.qtorq.pipeline.errs_seen like "hdb reload: could not open a handle to every registered hdb*";
         "the refusal is an error naming its likely cause"]};
 
 .qt.qtorq.pipeline.test_no_hdb_running_is_not_an_error:{[t]
-    saved:.qetl.log.err;
-    .qetl.log.err:{[c;m;d] .qt.qtorq.pipeline.errs_seen,:enlist m};
+    saved:.qetl.log.ch.err;
+    `.qetl.log.ch.err set {[c;m;d] .qt.qtorq.pipeline.errs_seen,:enlist m};
     .qt.qtorq.pipeline.errs_seen:();
     n:.qtorq.reload_handles[0;()];
-    .qetl.log.err:saved;
+    `.qetl.log.ch.err set saved;
     .qunit.assertEquals[(n;count .qt.qtorq.pipeline.errs_seen);(`registered`opened`reloaded!0 0 0;0);"none registered: nothing to do, nothing wrong"]};
 
 .qt.qtorq.pipeline.test_every_opened_hdb_is_asked_to_reload_today:{[t]
@@ -196,11 +196,11 @@
     .qunit.assertEquals[(n`reloaded;.qt.qtorq.pipeline.reload_seen);(2;2#enlist (`reload;.z.d));"both reloaded, with today's date"]};
 
 .qt.qtorq.pipeline.test_a_reload_that_throws_counts_as_not_reloaded:{[t]
-    saved:.qetl.log.err;
-    .qetl.log.err:{[c;m;d] .qt.qtorq.pipeline.errs_seen,:enlist m};
+    saved:.qetl.log.ch.err;
+    `.qetl.log.ch.err set {[c;m;d] .qt.qtorq.pipeline.errs_seen,:enlist m};
     .qt.qtorq.pipeline.errs_seen:();
     n:.qtorq.reload_handles[2;(.qt.qtorq.pipeline.hdb_ok;.qt.qtorq.pipeline.hdb_broken)];
-    .qetl.log.err:saved;
+    `.qetl.log.ch.err set saved;
     .qunit.assertEquals[(n;.qt.qtorq.pipeline.errs_seen);(`registered`opened`reloaded!2 2 1;enlist "hdb reload failed");"one reloaded, one logged as failed"]};
 
 / reload_hdb itself, not only reload_handles: the tests above never reached
@@ -404,6 +404,10 @@
 .qt.qtorq.pipeline.test_the_day_a_plant_directory_is_for_is_the_date_it_ends_in:{[t]
     .qunit.assertEquals[.qtorq.dir_day `$":/data/tplogs/stp1_2026.10.09";2026.10.09;"the plant's own naming"]};
 
+.qt.qtorq.pipeline.test_plant_roll_is_a_day_before_the_plants_next_roll:{[t]
+    / the plant's own boundary, whatever zone the host or this process is in (#2191)
+    .qunit.assertEquals[.qtorq.plant_roll {[q] 2026.10.11D00:00:00};2026.10.10D00:00:00;"asked of the plant: its next roll less a day"]};
+
 .qt.qtorq.pipeline.test_plant_day_is_the_day_of_the_plants_current_log_directory:{[t]
     root:.qt.qtorq.pipeline.plant_root[];
     hooks:.qtorq.plant_hooks[.qt.qtorq.pipeline.ask[root;` sv root,`stp1_2026.10.08];`pos`fill];
@@ -482,11 +486,11 @@
     .qunit.assertEquals[count tr[`earlier_days][`pos`fill;2026.10.08;2026.10.08];3;"and the earlier days read from them"]}
 
 .qt.qtorq.pipeline.test_a_plant_that_cannot_answer_costs_the_call_not_the_job:{[t]
-    saved:.qetl.log.warn;
-    .qetl.log.warn:{[c;m;d] .qt.qtorq.pipeline.warned,:enlist m};
+    saved:.qetl.log.ch.warn;
+    `.qetl.log.ch.warn set {[c;m;d] .qt.qtorq.pipeline.warned,:enlist m};
     .qt.qtorq.pipeline.warned:();
     hooks:.qtorq.plant_hooks[{[unused] '"no .stplg.dldir"};enlist `pos];
     r:(hooks[`earlier_days][`pos;2026.10.08;2026.10.08]; hooks[`plant_day][]; hooks[`has_log] 2026.10.08);
-    .qetl.log.warn:saved;
+    `.qetl.log.ch.warn set saved;
     .qunit.assertEquals[r;(();.z.D;0b);"no earlier days, the job's own clock, no log"];
     .qunit.assertEquals[count .qt.qtorq.pipeline.warned;3;"each costing a warning"]}

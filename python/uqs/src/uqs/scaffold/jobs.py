@@ -46,7 +46,7 @@ from uqs.scaffold.docs import ANALYTICS, FEEDS, doc_stub_actions
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.scaffold.profile import membership, profile_names
 from uqs.scaffold.templates import test_stub
-from uqs.scaffold.timespan import check_positive_timespan
+from uqs.scaffold.timespan import q_timespan
 from uqs.scaffold.transform import (
     check_passthrough_shapes,
     check_streaming,
@@ -114,9 +114,10 @@ def check_period(period: str) -> str:
     the generated file, and a zero one a refusal - both found only when the
     tree next loads, far from the typo. The check is on the value q reads
     (#1598): a minute of 60 does not parse, and a day count past q's 64-bit
-    range wraps - 213504D becomes about 25 minutes, and loads.
+    range wraps - 213504D becomes about 25 minutes, and loads. A DURATION -
+    `5s` - is rendered as the q timespan it is (#2121).
     """
-    return check_positive_timespan(period, "--period", "0D00:00:05 or 0D00:00:00.500")
+    return q_timespan(period, "--period")
 
 
 def start_with_all_field(start_with_all: bool) -> tuple[str, str]:
@@ -203,7 +204,7 @@ def streaming_job(
     """
     _check_name(name, "job name")
     if period is not None:
-        check_period(period)
+        period = check_period(period)
     proc = procname or f"{name}1"
     _check_name(proc, "procname")
     for table in subscribe_to:
@@ -230,11 +231,11 @@ def streaming_job(
             "delivers its input, so there is no page to fetch - drop --poll or --subscribe-to"
         )
     if poll and not pubs:
-        raise UqsError("--poll needs --publishes: a polling feed publishes what it fetches")
+        raise UqsError("--poll needs --outputs: a polling feed publishes what it fetches")
     actions: list[FileAction] = []
     notes: list[str] = []
 
-    # `enlist` for one table, as for `publishes` below and as the tree's own
+    # `enlist` for one table, as for `outputs` below and as the tree's own
     # jobs write it: a bare `trades is an atom, which define accepts but which
     # reads as a different shape from every other declaration.
     sub_literal = "`symbol$()" if is_feed else poll_steps.symbol_list(subscribe_to)
@@ -307,7 +308,7 @@ publish:.qetl.job.stream.unwired `{name};
 / The process registry is read from this declaration: `procname` is the
 / process that runs it, and `start_with_all` whether `uqs start all` starts it
 / (absent: on demand, until the connection budget has room).
-.qetl.job.stream.define[`{name};`procname`subscribe_to`publishes{keys}{swa_key}`note!(
+.qetl.job.stream.define[`{name};`procname`subscribe_to`outputs{keys}{swa_key}`note!(
     `{proc};
     {sub_literal};
     {pub_literal};{values}{swa_value}
@@ -320,14 +321,14 @@ publish:.qetl.job.stream.unwired `{name};
     # cannot carry, so that is refused rather than guessed at.
     if len(new_tables) > 1:
         raise UqsError(
-            f"--publishes names {len(new_tables)} tables the plant does not define yet "
+            f"--outputs names {len(new_tables)} tables the plant does not define yet "
             f"({', '.join(new_tables)}), and --schema can shape only one - scaffold with one "
             "new table and add the others to src/etl/plant_tables.q by hand"
         )
     if new_tables:
         if not columns:
             raise UqsError(
-                f"--publishes {new_tables[0]} needs --schema: the plant must define a table "
+                f"--outputs {new_tables[0]} needs --schema: the plant must define a table "
                 "before anything writes to it, or .u.upd discards the rows in silence"
             )
         cols = as_columns(columns)
@@ -348,7 +349,7 @@ publish:.qetl.job.stream.unwired `{name};
             + (
                 f"{', '.join(pubs)} already defined by the plant - drop --schema"
                 if pubs
-                else "no --publishes, so there is no table to define"
+                else "no --outputs, so there is no table to define"
             )
         )
 

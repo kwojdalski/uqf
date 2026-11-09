@@ -25,8 +25,7 @@
     base,changes}
 
 .qt.qpipe.transform.eq_domain.bk:{[tm;sym;bid;ask]
-    ([] source_time:enlist tm; sym:enlist sym; source:enlist `XNAS; bid_prices:enlist enlist bid; bid_sizes:enlist enlist 100f;
-        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 100f; clock:enlist `venue)}
+    ([] source_time:enlist tm; sym:enlist sym; source:enlist `XNAS; bid:enlist bid; ask:enlist ask; clock:enlist `venue)}
 
 .qt.qpipe.transform.eq_domain.fill:{[tm;sym;id]
     ([] source_time:enlist tm; venue:enlist `n; sym:enlist sym; side:enlist -1; size:enlist 100f; price:enlist 50.5; fill_id:enlist id; clock:enlist `venue)}
@@ -38,7 +37,7 @@
           .qt.qpipe.transform.eq_domain.bk[t+0D00:00:04;`ACME;50.5;51f];
           .qt.qpipe.transform.eq_domain.bk[t+0D00:00:29;`ACME;50.25;50.75])}
 
-.qt.qpipe.transform.eq_domain.score:{[spec;e;m] .qpipe.transform.markout_core.calc[.qpipe.transform.eq_domain.domain;spec;e;m]}
+.qt.qpipe.transform.eq_domain.score:{[spec;e;m] .qpipe.transform.markout_core.score[.qpipe.transform.eq_domain.domain;spec;e;m]}
 
 .qt.qpipe.transform.eq_domain.at:{[r;knd;hz;col] first (r col) where ((r`kind)=knd) and (r`horizon)=hz}
 
@@ -54,7 +53,7 @@
 .qt.qpipe.transform.eq_domain.test_without_the_calendar_the_after_hours_book_would_have_scored_it:{[t]
     / the same call through a domain with no availability rule: the after-hours mid 50.50 is within max_age
     bare:`resolve`convert`keys`validate!(.qpipe.transform.eq_domain.domain`resolve;.qpipe.transform.eq_domain.domain`convert;.qpipe.transform.eq_domain.domain`keys;.qpipe.transform.eq_domain.domain`validate);
-    r:.qpipe.transform.markout_core.calc[bare;.qt.qpipe.transform.eq_domain.spec[()!()];.qt.qpipe.transform.eq_domain.fill[.qt.qpipe.transform.eq_domain.t;`ACME;`e1];.qt.qpipe.transform.eq_domain.books[]];
+    r:.qpipe.transform.markout_core.score[bare;.qt.qpipe.transform.eq_domain.spec[()!()];.qt.qpipe.transform.eq_domain.fill[.qt.qpipe.transform.eq_domain.t;`ACME;`e1];.qt.qpipe.transform.eq_domain.books[]];
     .qunit.assertEquals[.qt.qpipe.transform.eq_domain.at[r;`total;0D00:00:30;`move];0f;"-(50.50-50.50): scored, and wrongly - the calendar is what refuses it"]};
 
 .qt.qpipe.transform.eq_domain.test_a_horizon_landing_exactly_on_the_close_is_unavailable:{[t]
@@ -119,3 +118,48 @@
 .qt.qpipe.transform.eq_domain.test_the_validated_spec_carries_the_declared_defaults:{[t]
     sp:.qpipe.transform.markout_core.validate[.qpipe.transform.eq_domain.domain;.qt.qpipe.transform.eq_domain.spec[()!()]];
     .qunit.assertEquals[(sp`quote_ccy;sp`benchmark;count sp`halts);(`USD;`mid;0);"USD, mid, no halts"]};
+
+/ ---------------------------------------------------------------- NEGATIVE HORIZONS (#2178)
+/ A negative horizon has t1 < t0. The calendar rules read the ordered span [t0&t1; t0|t1].
+
+.qt.qpipe.transform.eq_domain.test_a_negative_horizon_is_judged_on_its_ordered_span:{[t]
+    / the issue's four rows: t1 before the open; t0 after the close; a halt between t1 and t0; a clean span
+    sess:([] sym:enlist `; open_time:enlist 2026.09.17D13:30:00.000000000; close_time:enlist 2026.09.17D20:00:00.000000000);
+    h:([] sym:enlist `A; halt_from:enlist 2026.09.17D14:30:00.000000000; halt_to:enlist 2026.09.17D14:40:00.000000000);
+    fr:([] sym:4#`A;
+        t0:2026.09.17D13:30:00.500000000 2026.09.17D20:00:30.000000000 2026.09.17D15:00:00.000000000 2026.09.17D13:31:00.000000000;
+        t1:2026.09.17D13:29:59.500000000 2026.09.17D19:59:30.000000000 2026.09.17D14:00:00.000000000 2026.09.17D13:30:30.000000000);
+    sp:`sessions`halts!(sess;h);
+    .qunit.assertEquals[.qpipe.transform.eq_domain.available[sp;fr];0001b;"negative horizons"];
+    .qunit.assertEquals[.qpipe.transform.eq_domain.available[sp;update t0:fr`t1, t1:fr`t0 from fr];0001b;"the same spans as positive horizons"]};
+
+.qt.qpipe.transform.eq_domain.test_a_negative_horizon_markout_is_unavailable_across_the_open_the_close_and_a_halt:{[t]
+    mk:{[hz;tm;m;halts]
+        sp:.qt.qpipe.transform.eq_domain.spec[`horizons`halts!(enlist hz;halts)];
+        .qt.qpipe.transform.eq_domain.score[sp;.qt.qpipe.transform.eq_domain.fill[tm;`ACME;`n1];m]};
+    none:0#([] sym:`$(); halt_from:"p"$(); halt_to:"p"$());
+    / across the open: fill 13:30:02, -5s lands on the 13:29:57 pre-open book
+    o:2026.09.17D13:30:02.000000000;
+    r:mk[neg 0D00:00:05;o;raze (.qt.qpipe.transform.eq_domain.bk[o-0D00:00:06;`ACME;49.75;50.25];.qt.qpipe.transform.eq_domain.bk[o;`ACME;50.5;51f]);none];
+    .qunit.assertEquals[distinct r`status;enlist `unavailable;"-5s from 13:30:02 reaches 13:29:57, before the open"];
+    .qunit.assertTrue[all null r`move;"no move"];
+    / across the close: fill 20:00:03 is after the close
+    c:2026.09.17D20:00:03.000000000;
+    r:mk[neg 0D00:00:05;c;raze (.qt.qpipe.transform.eq_domain.bk[c-0D00:00:06;`ACME;49.75;50.25];.qt.qpipe.transform.eq_domain.bk[c;`ACME;50.5;51f]);none];
+    .qunit.assertEquals[distinct r`status;enlist `unavailable;"a fill after the close"];
+    / across a halt: halted 15:00:00 to 15:00:10, fill 15:00:12, -5s reaches 15:00:07
+    hf:2026.09.17D15:00:12.000000000;
+    hl:([] sym:enlist `ACME; halt_from:enlist 2026.09.17D15:00:00.000000000; halt_to:enlist 2026.09.17D15:00:10.000000000);
+    r:mk[neg 0D00:00:05;hf;raze (.qt.qpipe.transform.eq_domain.bk[hf-0D00:00:06;`ACME;49.75;50.25];.qt.qpipe.transform.eq_domain.bk[hf;`ACME;50.5;51f]);hl];
+    .qunit.assertEquals[distinct r`status;enlist `unavailable;"the span 15:00:07 to 15:00:12 overlaps the halt ending 15:00:10"];
+    / in session, clear of any halt: scored
+    k:2026.09.17D16:00:00.000000000;
+    r:mk[neg 0D00:00:05;k;raze (.qt.qpipe.transform.eq_domain.bk[k-0D00:00:06;`ACME;49.75;50.25];.qt.qpipe.transform.eq_domain.bk[k;`ACME;50.5;51f]);hl];
+    .qunit.assertEquals[distinct r`status;enlist `ok;"a clean negative span is still priced"]};
+
+.qt.qpipe.transform.eq_domain.test_positive_horizons_are_unchanged_by_the_ordered_span:{[t]
+    sp:`sessions`halts!(.qt.qpipe.transform.eq_domain.session[];([] sym:enlist `A; halt_from:enlist 2026.09.17D15:00:10.000000000; halt_to:enlist 2026.09.17D15:00:20.000000000));
+    fr:([] sym:5#`A;
+        t0:2026.09.17D13:29:59 2026.09.17D19:59:55 2026.09.17D19:59:50 2026.09.17D15:00:00 2026.09.17D15:00:00;
+        t1:2026.09.17D13:30:04 2026.09.17D20:00:00 2026.09.17D19:59:55 2026.09.17D15:00:05 2026.09.17D15:00:30);
+    .qunit.assertEquals[.qpipe.transform.eq_domain.available[sp;fr];00110b;"before the open, on the close, inside, before a halt, across a halt"]};

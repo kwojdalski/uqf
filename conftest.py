@@ -80,6 +80,8 @@ MARKERS = (
     "pre-commit hook runs it at commit, so the python-tests hook leaves it out",
     "q_suite: runs the whole qUnit suite (minutes): the q-tests hook and CI's PeachQ q job "
     "run it, and CI's sharded Python job leaves it to that job",
+    "judges_reach_record: judges the reach record (.testreach.json) the other tests write; "
+    "the python-tests hook runs it after them, against the record they rewrote (#2273)",
 )
 
 #: Markers a test runs under only when asked for: such a test skips, saying
@@ -271,6 +273,18 @@ def _skip_unasked_opt_ins(config, items) -> None:
         for marker in OPT_IN.keys() - asked:
             if item.get_closest_marker(marker):
                 item.add_marker(pytest.mark.skip(reason=f"opt-in: select it with -m {marker}"))
+
+
+# --- no test writes into the checkout's output/ (#2082) -------------------------
+
+#: The packages' tests (python/*/tests), whose stack commands default to the
+#: checkout: scripts/dev/checkout_guard.py fails one that leaves anything new
+#: or changed under output/, which the next run - or the next `uqs` - reads.
+_PYTHON_TESTS = Path(__file__).with_name("python")
+
+checkout_output_untouched = _dev_module("checkout_guard").make_guard(
+    Path(__file__).with_name("output"), lambda path: path.is_relative_to(_PYTHON_TESTS)
+)
 
 
 # --- the tests PeachQ is known to fail (python/peachq_known_gaps.txt) ---------

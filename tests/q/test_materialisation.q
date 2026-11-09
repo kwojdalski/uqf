@@ -703,3 +703,36 @@
     .qunit.assertEquals[(.qetl.coverage.release_dates[.qt.qetl.coverage.rdy[`rel_e];.z.p])`date;enlist 2026.09.10;
         "another source_version's claim and a withdrawn one are not released"];
     .qunit.assertEquals[count .qetl.coverage.release_dates[0#.qt.qetl.coverage.rdy[`rel_e];.z.p];0;"no keys, no dates"]};
+
+/ --- the days still being written (#2147) -----------------------------------
+/ What HDB maintenance leaves alone: every key's unreleased dates, read from the file.
+
+.qt.qetl.coverage.test_unreleased_is_every_keys_dates_not_yet_released:{[t]
+    .qt.support.reset_coverage_ledger[];
+    .qetl.coverage.stage_completion[`unr_a;`;`v1;2026.09.10D00:00;2026.09.11D00:00;4];
+    .qetl.coverage.mark_ready[.qt.qetl.coverage.rdy[`unr_a];.z.p];
+    .qetl.coverage.stage_completion[`unr_a;`;`v1;2026.09.14D00:00;2026.09.15D00:00;4];
+    .qetl.coverage.stage_completion[`unr_b;`EURUSD;`v1;2026.09.12D22:00;2026.09.13D02:00;4];
+    .qetl.coverage.stage_completion[`unr_c;`;`v1;2026.09.16D00:00;2026.09.17D00:00;0];
+    .qunit.assertEquals[.qetl.coverage.unreleased .z.p;
+        ([] dataset:`unr_a`unr_b`unr_b; date:2026.09.14 2026.09.12 2026.09.13);
+        "released days and empty windows are out; every other key's days are in, per dataset"]};
+
+.qt.qetl.coverage.test_unreleased_with_no_ledger_is_empty:{[t]
+    saved:getenv`UQF_STATUS_DIR;
+    setenv[`UQF_STATUS_DIR;"build/test-status-no-ledger"];
+    r:@[.qetl.coverage.unreleased;.z.p;{x}];
+    setenv[`UQF_STATUS_DIR;saved];
+    .qunit.assertEquals[r;([] dataset:`symbol$(); date:`date$());"no ledger, nothing being written"]};
+
+/ --- #2274: coverage lines are on the coverage channel ------------------------
+
+.qt.qetl.coverage.test_coverage_lines_are_on_the_coverage_channel:{[t]
+    lines:.qt.support.captured_log[0b;{
+        .qetl.log.debug[1b];
+        .qetl.coverage.stage_completion[`markouts;`;`v1;.qt.qetl.coverage.d[1];.qt.qetl.coverage.d[3];5];
+        .qetl.coverage.require_covered[`markouts;`;`v1;.z.p;.qt.qetl.coverage.d[1];.qt.qetl.coverage.d[3]];
+        .qetl.log.debug[0b]}];
+    .qunit.assertEquals[(lines[;1];lines[;2]);(`coverage`coverage;("coverage recorded";"upstream coverage check"));
+        "recording and checking coverage are the coverage channel's"];
+    .qunit.assertEquals[(first lines)[3]`dataset;`markouts;"the dataset is a field, not the id"]};

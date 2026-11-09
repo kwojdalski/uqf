@@ -26,15 +26,22 @@ from collections.abc import Callable
 from typing import Annotated
 
 import typer
+from typer._click.exceptions import ClickException
 
-from uqs.cli import safety
+from uqs.cli import hdb_scope, safety
 from uqs.cli.concepts import LatestTargetArg, TargetArg, target_arg
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.safety import ChangesState, Effect, ReadOnly, dry_run_note, marked
 from uqs.cli.shared import _die, app, console, log
 from uqs.cli.skip_options import forwarded
-from uqs.cli.target_confirm import changes_the_server, confirmed_on_server
-from uqs.deploy import control, target_changelog, target_changes, target_file
+from uqs.cli.target_confirm import (
+    changes_the_server,
+    for_the_server,
+    may_change_the_server,
+    parse,
+    root_command,
+)
+from uqs.deploy import control, inspection, target_changelog, target_changes, target_file
 from uqs.deploy.config import DeployError
 from uqs.paths import UqsError, UqsUsageError, repo_root
 
@@ -42,7 +49,7 @@ target_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
     help="Deploy targets: add, set, unset, rename, remove, edit, list, check, log, revert, "
-    "adopt, shell.\n\nThe servers `uqs --target TARGET <command>` runs on.",
+    "adopt, shell, config, tunnel.\n\nThe servers `uqs --target TARGET <command>` runs on.",
 )
 app.add_typer(target_app, name="target")
 
@@ -153,7 +160,7 @@ def add(
     labels = _labels(label)
     if remote_user is not None and not _ACCOUNT.fullmatch(remote_user):
         _die(UqsError(f"--remote-user {remote_user!r} is not an account name"))
-    entry = {"host": ssh, "dest": dest, "remote_user": remote_user, "labels": labels or None}
+    entry = {"ssh": ssh, "dest": dest, "remote_user": remote_user, "labels": labels or None}
     words = [name, "--ssh", ssh, "--dest", dest]
     words += ["--remote-user", remote_user] if remote_user else []
     words += [w for pair in label or [] for w in ("--label", pair)]
@@ -180,7 +187,7 @@ def set_(
         list[str],
         typer.Argument(
             metavar="KEY=VALUE...",
-            help="Settings, spelt as in the file: host=deploy@prod connect_timeout=20 "
+            help="Settings, spelt as in the file: ssh=deploy@prod connect_timeout=20 "
             'launch_mode=source labels.tier=uat live_check=\'["a", "b"]\'. A VALUE is '
             'read as TOML when it is one (20, true, [..], "quoted"), else as text',
             show_default=False,
@@ -289,12 +296,53 @@ def shell(
     `exit` comes back."""
     try:
         r = control.remote_for(name, repo_root())
+        # a shell can change anything there (#2032)
+        inspection.refuse(repo_root(), "`uqs target shell`", name=r.name, ssh=r.host, dest=r.dest)
         console.print(f"connecting to {r.name} ({r.describe()})")
         code = control.run(r, [], tty=True, command=control.shell_command(r))
     except UqsError as exc:
         _die(exc)
         return
     raise typer.Exit(code=code)
+
+
+#: The one command --target and --hdb reach together (#2219).
+REPORT_ON_TARGET = ("data", "compress")
+
+
+def _report_here(name: str, args: list[str]) -> int | None:
+    """`uqs --target TARGET data compress --report --hdb DIR`, run HERE: DIR is
+    read on the target by a fixed helper over its ssh (stack/hdb_compression.py),
+    so the target needs q and the HDB, not uqf. None for any other command line,
+    which forward sends to the release as before.
+
+    Not refused on an inspection-only target: the helper is a program this tree
+    wrote, and it reads - file headers and sort columns - and writes nothing
+    but its own temporary directory, which it removes. `--apply` is refused
+    before anything reaches the target: compressing an arbitrary directory
+    would bypass the writer lock, the coverage hold, the policy and the reload a
+    managed deployment's housekeeping1 runs it under."""
+    p = parse(args)
+    if p is None or p.help or p.path != REPORT_ON_TARGET or p.given("--hdb") is None:
+        return None
+    if p.given("--apply"):
+        raise UqsUsageError(
+            f"`--apply` is not run on a directory --hdb names on target {name}: only "
+            "`--report` reads one. Compressing goes through a managed deployment's "
+            f"writer lock, policy and reload - `uqs --target {name} data compress --apply`, "
+            "without --hdb, on its configured HDB"
+        )
+    token = hdb_scope.ON_TARGET.set(name)
+    try:
+        code = root_command().main(args=list(args), prog_name="uqs", standalone_mode=False)
+        return int(code or 0)
+    except ClickException as exc:
+        exc.show()
+        return exc.exit_code
+    except typer.Exit as exc:
+        return exc.exit_code
+    finally:
+        hdb_scope.ON_TARGET.reset(token)
 
 
 def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
@@ -316,10 +364,15 @@ def forward(name: str, yes: bool, args: list[str], *, interactive: bool) -> int:
             f"give the target once: `uqs --target NAME {words[0]}` runs it on the server, "
             f"`uqs {words[0]} --tunnel NAME` runs it here through an ssh tunnel"
         )
+    if (code := _report_here(name, args)) is not None:
+        return code
     # a --skip-<id> goes as its --override, which an older server's uqs takes (#1826)
-    args = confirmed_on_server(forwarded(args), yes)
+    args = for_the_server(forwarded(args), yes)
     r = control.remote_for(name, repo_root())
     shown = " ".join(["uqs", *args])
+    if may_change_the_server(args):
+        # before --yes is read: inspection mode is not a question (#2032)
+        inspection.refuse(repo_root(), f"`{shown}`", name=r.name, ssh=r.host, dest=r.dest)
     if changes_the_server(args) and not yes:
         if not interactive:
             raise UqsError(

@@ -164,7 +164,7 @@
     if[count gave_up;
         `.qpipe.job.alert_sink.dead upsert update failed_at:now from gave_up;
         `.qpipe.job.alert_sink.alerts set (key[.qpipe.job.alert_sink.alerts] except gave_up`id)#.qpipe.job.alert_sink.alerts;
-        {[r] .qetl.log.err[`alert_sink;"breach not delivered - recorded in dead";`id`attempts`error!(r`id;r`attempts;r`error)]} each gave_up];
+        {[r] .qetl.log.ch.err[`ipc;"breach not delivered - recorded in dead";(enlist[`job]!enlist `alert_sink),`id`attempts`error!(r`id;r`attempts;r`error)]} each gave_up];
     `delivered`retrying`failed!(count where ok;count .qpipe.job.alert_sink.pending;count gave_up)}
 
 / A batch of breaches: dedupe, queue, and try to deliver.
@@ -190,7 +190,7 @@
 / The process registry is read from this declaration: `procname` is the
 / process that runs it, and `start_with_all` whether `uqs start all` starts it
 / (absent: on demand, until the connection budget has room).
-.qetl.job.stream.define[`alert_sink;`procname`subscribe_to`publishes`on_batch`period`on_timer`note`state`ephemeral!(
+.qetl.job.stream.define[`alert_sink;`procname`subscribe_to`outputs`on_batch`period`on_timer`note`state`ephemeral!(
     `alert_sink1;
     enlist `fx_limit_breach;
     `symbol$();

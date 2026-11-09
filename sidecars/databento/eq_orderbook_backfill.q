@@ -44,8 +44,8 @@
 \d .
 
 .qetl.job.bounded.define[`eq_orderbook_backfill;
-    `source`dataset`width`transform`check`procname`note`target_key`source_version!
-    (`databento_mbp10;`eq_orderbook;0D00:10:00;`eq_orderbook;.qpipe.job.eq_orderbook_backfill.quality_check;
+    `source`outputs`width`transform`check`procname`note`target_key`source_version`twin_of`twin_calculation!
+    (`databento_mbp10;enlist `eq_orderbook;0D00:10:00;`eq_orderbook;.qpipe.job.eq_orderbook_backfill.quality_check;
      `databento_backfill1;
      "bounded: reads Databento MBP-10 over ODBC and folds it with the same transform databento1 applies live";
      / The source's row_key, with symbol under the transform's name. ts_event, not
@@ -53,4 +53,7 @@
      / writers carry ts_event, so only it matches a refill to live rows (#1282).
      `sym`ts_event`sequence`action`side`price`size;
      / Historical market data is not restated, so a run needs no --version.
-     `v1)];
+     `v1;
+     / Repairs eq_orderbook, one of the two tables databento1 publishes, with the one
+     / transform it applies (#2103): q refuses either side drifting from the other.
+     `eq_orderbook;`shared)];

@@ -14,6 +14,7 @@ from pathlib import Path
 from uqs.model import plant_metadata
 from uqs.model.declarations import (
     declaration_calls,
+    declared_outputs,
     read_declarations,
     strip_q_comments,
     symbols,
@@ -46,7 +47,7 @@ def workers_filling(repo_root: Path, dataset: str, partition: str | None = None)
             if fn != "qetl.job.bounded.define":
                 continue
             claimed = symbols(fields["partition"])[:1] if "partition" in fields else ()
-            if symbols(fields.get("dataset", "")) == (dataset,) and claimed == (
+            if declared_outputs(fields, name) == (dataset,) and claimed == (
                 (partition,) if partition else ()
             ):
                 found.append(name)
@@ -93,12 +94,12 @@ def twin_target(
         if len(published) > 1:
             raise UqsError(
                 f"--twin-of {twin_of} publishes {', '.join(published)} - name the one this "
-                "twin refills with --dataset"
+                "twin refills with --outputs"
             )
         dataset = published[0]
     elif dataset not in published:
         raise UqsError(
-            f"--dataset {dataset} is not a table {twin_of} publishes ({', '.join(published)}) - "
+            f"--outputs {dataset} is not a table {twin_of} publishes ({', '.join(published)}) - "
             "a twin refills what the job publishes, or it is not a twin"
         )
     if dataset not in definitions:
@@ -240,15 +241,15 @@ def backfill_plan(
         # standing processes, and .qetl.job.bounded.define has no such key.
         raise UqsError("--start-with-all is for standing jobs, not a backfill - drop it")
     if not dataset:
-        raise UqsUsageError("--kind backfill needs --dataset: the table it fills")
+        raise UqsUsageError("--kind backfill needs --outputs: the table it fills")
     claimed = workers_filling(repo_root, dataset, partition)
     if claimed:
-        where = f"partition {partition!r}" if partition else "no partition"
+        where = f"slice {partition!r}" if partition else "no slice"
         raise UqsError(
             f"dataset {dataset!r} is already filled by {', '.join(claimed)} "
             f"in {where}, "
             "and .qetl.job.bounded.define refuses two workers on one dataset and "
-            "partition - pick another --dataset, or another --partition"
+            "slice - pick another --outputs, or another --slice"
         )
     # An existing source is reused, not rewritten, and an existing
     # table is not defined twice: a second worker over rows someone
@@ -283,6 +284,7 @@ def backfill_plan(
         check=check,
         transform=transform or "passthrough",
         shared=shared,
+        twin_of=twin_of,
         raw=raw,
         reuse_source=reuse_source,
         define_table=define_table,

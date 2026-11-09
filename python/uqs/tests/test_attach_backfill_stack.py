@@ -137,7 +137,7 @@ def test_plan_dry_run_run_query_and_a_safe_retry_without_restarting_anything(wor
     assert planned.returncode == 0, planned.stdout + planned.stderr
     report = json.loads(planned.stdout)
     assert report["mutates"] is False and report["destination"]["hdb_dir"] == str(hdb.resolve())
-    assert [t["procname"] for t in report["reload_targets"]] == ["hdb1"]
+    assert [t["process"] for t in report["reload_targets"]] == ["hdb1"]
     assert "wdb1" in report["writers"] and report["coverage"]["fetch"] == 2
     # the stack's HDB already holds this date - with the starter pack's own tables, not ours
     assert report["native_partitions"] == [

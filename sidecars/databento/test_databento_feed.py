@@ -5,15 +5,15 @@ tickerplant will accept, and every way that can go wrong is silent:
 
   - a column in the wrong ORDER transposes two same-typed fields, so prices
     arrive as sizes and nothing raises;
-  - a bare atom instead of a list makes `.u.upd` derive the wrong row count;
-  - a `time` column makes every message one column too wide;
-  - a record with fewer than ten levels, which is an ordinary thin book,
-    produces short rows unless the gaps are padded.
+  - a price read raw is a fixed-point int, 1e9 times too large (#2190);
+  - an epoch-ns int sent as a long, or rebased by hand, is thirty years off;
+  - a record with no symbol mapping would publish a null sym;
+  - a dict instead of a list of columns is refused by the segmented STP;
+  - a `time` column makes every message one column too wide.
 
-None of those needs an API key, a network or a tickerplant to test, which
-is exactly why `rows_from_records` was separated from the socket. The
-subscription loop itself is not tested here: it is four lines of plumbing
-around a third-party client.
+The records are the real `databento_dbn` classes the live client yields, not
+look-alikes: the streamer once passed every test here on a `FakeRecord` with
+float prices and a `symbol` field, neither of which Databento sends (#2190).
 
 The databento bundle's own Python tests (#1776): scripts/dev/bundle_suite.py
 installs the bundle into a throwaway tree and runs them there, against the
@@ -26,9 +26,11 @@ from __future__ import annotations
 import importlib
 import os
 import sys
-from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
+import databento_dbn as dbn
+import polars as pl
 import pytest
 import rename_support  # python/uqs/tests' helper: bundle_suite.py runs this from there
 from typer.testing import CliRunner
@@ -42,9 +44,14 @@ from uqs.paths import TABLES_FILE, UqsError, UqsPaths, repo_root
 databento_feed = sys.modules[cli_external.FEEDS["databento"].start.__module__]
 #: Its streamer, beside it: bundle_suite.py puts the installed folder on sys.path.
 streamer = importlib.import_module("databento_streamer")
-contract_fields, rows_from_records = streamer.contract_fields, streamer.rows_from_records
+contract_fields = streamer.contract_fields
 
 runner = CliRunner()
+
+#: AAPL's Databento instrument_id in the extract the source fixture is cut from.
+AAPL = 15144
+#: 2026-02-25 14:30:00.016039462 UTC, as Databento sends it: ns since 1970.
+TS_EVENT = 1772029800016039462
 
 
 def _fields() -> list[str]:
@@ -52,43 +59,90 @@ def _fields() -> list[str]:
     return contract_fields(str(repo_root()))
 
 
-@dataclass
-class FakeLevel:
-    bid_px: float
-    bid_sz: int
-    ask_px: float
-    ask_sz: int
+def _plant_table() -> str:
+    """`databento_mbp10`'s definition in the plant tables the bundle installed."""
+    from uqs.model import schemas
+
+    found = schemas.definitions_in((repo_root() / TABLES_FILE).read_text())
+    return schemas.definition_from(found, "databento_mbp10", str(TABLES_FILE))
 
 
-@dataclass
-class FakeRecord:
-    ts_event: int
-    symbol: str
-    action: str
-    side: str
-    price: float
-    size: int
-    sequence: int
-    levels: list[FakeLevel]
-
-
-def _record(levels: int = 10, *, symbol: str = "AAPL", price: float = 271.2) -> FakeRecord:
-    """One Databento-shaped record with `levels` levels populated.
-
-    Explicit keywords rather than **kwargs: a dict splatted into a
-    dataclass widens every field to the union of the dict's value types,
-    which the type checker cannot narrow and rightly refuses.
-    """
-    return FakeRecord(
-        ts_event=1,
-        symbol=symbol,
-        action="A",
-        side="B",
-        price=price,
-        size=200,
-        sequence=7,
-        levels=[FakeLevel(100.0 + i, 10 + i, 200.0 + i, 20 + i) for i in range(levels)],
+def _level(i: int, *, empty: bool = False) -> dbn.BidAskPair:
+    """Level `i`: one cent away from a 271.45 x 271.66 touch, sizes up by 100.
+    Prices in Databento's fixed-point units; an empty level is UNDEF_PRICE and
+    size 0, as Databento pads a thin book."""
+    if empty:
+        return dbn.BidAskPair(
+            bid_px=dbn.UNDEF_PRICE, ask_px=dbn.UNDEF_PRICE, bid_sz=0, ask_sz=0, bid_ct=0, ask_ct=0
+        )
+    cent = 10_000_000
+    return dbn.BidAskPair(
+        bid_px=271_450_000_000 - i * cent,
+        ask_px=271_660_000_000 + i * cent,
+        bid_sz=500 + 100 * i,
+        ask_sz=480 + 100 * i,
+        bid_ct=1,
+        ask_ct=1,
     )
+
+
+def _mbp10(*, instrument_id: int = AAPL, depth: int = 10, **kw) -> dbn.MBP10Msg:
+    """An add on the bid at 271.20, `depth` populated levels then empty ones."""
+    return dbn.MBP10Msg(
+        publisher_id=2,
+        instrument_id=instrument_id,
+        ts_event=kw.get("ts_event", TS_EVENT),
+        price=kw.get("price", 271_200_000_000),
+        size=200,
+        action=kw.get("action", dbn.Action.ADD),
+        side=kw.get("side", dbn.Side.BID),
+        depth=0,
+        ts_recv=TS_EVENT + 60_538,
+        flags=0,
+        sequence=28151775,
+        levels=[_level(i, empty=i >= depth) for i in range(10)],
+    )
+
+
+def _mapping(instrument_id: int = AAPL, symbol: str = "AAPL") -> dbn.SymbolMappingMsg:
+    return dbn.SymbolMappingMsg(
+        publisher_id=2,
+        instrument_id=instrument_id,
+        ts_event=TS_EVENT - 1,
+        stype_in=dbn.SType.from_str("raw_symbol"),
+        stype_in_symbol=symbol,
+        stype_out=dbn.SType.from_str("instrument_id"),
+        stype_out_symbol=symbol,
+        start_ts=0,
+        end_ts=0,
+    )
+
+
+class RecordingQ:
+    """A stand-in for kola.Q that remembers what it was asked to run."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
+    def sync(self, *args):
+        self.calls.append(args)
+
+
+def _stream(records, *, client_map=None) -> tuple[RecordingQ, list[str]]:
+    """Every record through `publish`, as main's loop sends them."""
+    q, log = RecordingQ(), []
+    decoder = streamer.RecordDecoder(_fields(), client_map)
+    for rec in records:
+        streamer.publish(q, "databento_mbp10", decoder, rec, log.append)
+    return q, log
+
+
+def _published_row(q: RecordingQ) -> dict:
+    """The one row `q` was sent, by field name."""
+    assert len(q.calls) == 1
+    fn, table, cols = q.calls[0]
+    assert (fn, table) == (".u.upd", "databento_mbp10")
+    return {name: col.to_list()[0] for name, col in zip(_fields(), cols, strict=True)}
 
 
 # ------------------------------------------------- the column contract
@@ -128,70 +182,178 @@ def test_the_fields_line_up_with_the_plant_table_column_for_column():
     """
     from uqs.model import schemas
 
-    found = schemas.definitions_in((repo_root() / TABLES_FILE).read_text())
-    table = schemas.column_names(
-        schemas.definition_from(found, "databento_mbp10", str(TABLES_FILE))
-    )
+    table = schemas.column_names(_plant_table())
     expected = ["symbol" if c == "sym" else c for c in table if c != "time"]
     assert _fields() == expected
 
 
-def test_no_time_column_is_produced():
-    """The tickerplant stamps its own on receipt and rejects a row that
-    carries one - one column too wide is a length error, not a warning."""
-    fields = _fields()
-    assert "time" not in fields
-    assert "time" not in rows_from_records([_record()], fields)
+def test_each_field_is_published_in_the_plant_tables_own_type():
+    """`insert` refuses a column of the wrong type outright, so the dtype the
+    streamer picks by name is held against the table's literal, column for
+    column: a float where a long belongs is a `type` error per record."""
+    from uqs.model import schemas
+
+    q_type = {
+        streamer.TIMESTAMP: "timestamp",
+        streamer.SYMBOL: "symbol",
+        streamer.FLOAT: "float",
+        streamer.LONG: "long",
+    }
+    for (column, literal), field in zip(
+        [p for p in schemas.column_pairs(_plant_table()) if p[0] != "time"], _fields(), strict=True
+    ):
+        assert literal.endswith(f"`{q_type[streamer.field_dtype(field)]}$()"), (column, literal)
 
 
-def test_every_column_is_a_list_even_for_one_record():
-    """`.u.upd` derives the row count from column length, so a bare atom
-    for a single record is the bug that reads as a silent no-op."""
-    fields = _fields()
-    cols = rows_from_records([_record()], fields)
-    assert set(cols) == set(fields)
-    assert all(isinstance(v, list) for v in cols.values())
-    assert all(len(v) == 1 for v in cols.values())
+# --------------------------------------------- a real record, decoded
 
 
-def test_every_record_contributes_one_entry_per_column():
-    fields = _fields()
-    cols = rows_from_records([_record(), _record(), _record()], fields)
-    assert all(len(v) == 3 for v in cols.values())
+def test_a_real_record_becomes_one_row_in_real_units():
+    """The worked example, by hand: 271_200_000_000 fixed-point is 271.20
+    dollars, not 2.712e11; ts_event's ns since 1970 is 14:30:00.016039462 on
+    2026-02-25, to the nanosecond; the Side/Action enums are their letters;
+    the symbol is the one the mapping message named."""
+    q, log = _stream([_mapping(), _mbp10()])
+    assert log == []
+    row = _published_row(q)
+    assert row["price"] == 271.2
+    assert isinstance(row["price"], float)
+    assert row["ts_event"] == datetime(2026, 2, 25, 14, 30, 0, 16039)
+    assert row["symbol"] == "AAPL"
+    assert (row["action"], row["side"]) == ("A", "B")
+    assert (row["size"], row["sequence"]) == (200, 28151775)
+    assert (row["bid_px_00"], row["ask_px_00"]) == (271.45, 271.66)
+    assert (row["bid_sz_00"], row["ask_sz_00"]) == (500, 480)
+    assert row["bid_px_09"] == pytest.approx(271.36)
+    assert row["ask_sz_09"] == 1380
 
 
-# ------------------------------------------------------- the level fold
+def test_the_timestamp_keeps_its_nanoseconds():
+    """A Python datetime stops at microseconds; the column is ns-precise, and
+    ts_event is part of the source's row key."""
+    q, _ = _stream([_mapping(), _mbp10()])
+    ts = q.calls[0][2][0]
+    assert ts.dtype == pl.Datetime("ns")
+    assert ts.cast(pl.Int64).to_list() == [TS_EVENT]
 
 
-def test_levels_land_in_their_own_numbered_columns():
-    fields = _fields()
-    cols = rows_from_records([_record()], fields)
-    assert cols["bid_px_00"] == [100.0]
-    assert cols["bid_px_09"] == [109.0]
-    assert cols["ask_sz_00"] == [20]
-    assert cols["ask_sz_09"] == [29]
+def test_the_row_is_a_list_of_typed_columns_not_a_dict():
+    """The segmented STP's `(enlist ...),x` refuses a dictionary (#1492), and a
+    Python list of ints and Nones has no single q type: one polars Series per
+    field, in contract order, each one long, no `time`."""
+    q, _ = _stream([_mapping(), _mbp10()])
+    cols = q.calls[0][2]
+    assert isinstance(cols, list)
+    assert [c.name for c in cols] == _fields()
+    assert [c.dtype for c in cols] == [streamer.field_dtype(f) for f in _fields()]
+    assert all(len(c) == 1 for c in cols)
+    assert "time" not in [c.name for c in cols]
 
 
-def test_a_thin_book_is_padded_with_nulls_not_zeros():
-    """A record with three levels is ordinary - an opening auction, an
-    illiquid name. It still has to produce forty columns, and the empty
-    ones must be null: zero is a price, and a zero bid would read as a
-    real quote to everything downstream.
-    """
-    fields = _fields()
-    cols = rows_from_records([_record(levels=3)], fields)
-    assert cols["bid_px_02"] == [102.0]
-    assert cols["bid_px_03"] == [None]
-    assert cols["ask_sz_09"] == [None]
-    assert all(len(v) == 1 for v in cols.values()), "still one entry per column"
+def test_every_side_and_action_is_its_plant_letter():
+    """The letters the ODBC source stores for the same events (the source
+    fixture's `A`T`A`C and `B`N`A`A), so live and backfilled rows agree."""
+    actions = {"ADD": "A", "CANCEL": "C", "MODIFY": "M", "TRADE": "T", "FILL": "F", "CLEAR": "R"}
+    sides = {"BID": "B", "ASK": "A", "NONE": "N"}
+    for action, a in actions.items():
+        for side, s in sides.items():
+            rec = _mbp10(action=getattr(dbn.Action, action), side=getattr(dbn.Side, side))
+            q, _ = _stream([_mapping(), rec])
+            row = _published_row(q)
+            assert (row["action"], row["side"]) == (a, s), (action, side)
 
 
-def test_a_record_with_no_levels_still_produces_every_column():
-    fields = _fields()
-    cols = rows_from_records([_record(levels=0)], fields)
-    assert len(cols) == len(fields)
-    assert cols["bid_px_00"] == [None]
-    assert cols["price"] == [271.2], "the scalar fields are unaffected"
+def test_a_thin_books_empty_levels_are_nulls_not_zeros():
+    """Databento pads a thin book with UNDEF_PRICE and size 0. Zero is a price,
+    and a zero-size level reads as a real one: both are null."""
+    q, _ = _stream([_mapping(), _mbp10(depth=3)])
+    row = _published_row(q)
+    assert row["bid_px_02"] == pytest.approx(271.43)
+    assert (row["bid_px_03"], row["bid_sz_03"], row["ask_px_09"], row["ask_sz_09"]) == (None,) * 4
+
+
+def test_an_undefined_trade_price_is_null():
+    """A book clear carries UNDEF_PRICE (i64 max): 9.2e9 dollars if read raw."""
+    q, _ = _stream([_mapping(), _mbp10(price=dbn.UNDEF_PRICE, action=dbn.Action.CLEAR)])
+    assert _published_row(q)["price"] is None
+
+
+# --------------------------------------------- symbols, and what is refused
+
+
+def test_a_record_with_no_symbol_mapping_is_refused_with_a_reason():
+    """Never published with a null sym: the row would land in the book
+    keyed by nothing. The log names the instrument_id."""
+    q, log = _stream([_mapping(), _mbp10(instrument_id=99)])
+    assert q.calls == []
+    assert len(log) == 1 and "instrument_id 99 has no symbol" in log[0]
+
+
+def test_the_live_clients_own_symbology_map_names_a_record():
+    """main passes `Live.symbology_map`, which the client fills from the same
+    mapping messages; a mapping the client saw first is enough."""
+    q, log = _stream([_mbp10()], client_map={AAPL: "AAPL"})
+    assert log == []
+    assert _published_row(q)["symbol"] == "AAPL"
+
+
+def test_records_that_are_not_book_events_publish_nothing():
+    """The live client yields mappings and system messages too, each with a
+    ts_event; before #2190 every one went out as a row of nulls."""
+    q, log = _stream([_mapping(), dbn.SystemMsg(ts_event=TS_EVENT, msg="Heartbeat")])
+    assert q.calls == [] and log == []
+
+
+def test_a_gateway_error_is_logged_not_published():
+    q, log = _stream([dbn.ErrorMsg(ts_event=TS_EVENT, err="auth failed")])
+    assert q.calls == []
+    assert log == ["databento record refused: gateway error: auth failed"]
+
+
+# --------------------------------------- through a q insert, as the STP does
+
+
+def test_a_published_row_lands_in_the_plant_table_through_the_stps_insert(
+    start_q, q_binary, tmp_path
+):
+    """End to end on a real q: the plant's `databento_mbp10` and the segmented
+    STP's own `updtab` (lib/torq/code/segmentedtickerplant/stplog.q), which
+    prepends `time` and inserts. `insert` refuses any column of the wrong
+    type, so the row arriving at all proves the types; the values prove the
+    units."""
+    import kola
+
+    boot = tmp_path / "tp.q"
+    boot.write_text(
+        _plant_table()
+        + "\nupdtab:{(enlist(count first x)#y),x}"
+        + "\n.u.upd:{[t;x] t insert updtab[x;.z.p]}\n"
+    )
+    with start_q(str(boot)) as port:
+        conn = kola.Q("127.0.0.1", port, user="", passwd="")
+        try:
+            for rec in (_mapping(), _mbp10(depth=3)):
+                streamer.publish(
+                    conn,
+                    "databento_mbp10",
+                    streamer.RecordDecoder(_fields(), {AAPL: "AAPL"}),
+                    rec,
+                    pytest.fail,
+                )
+            # As one symbol: kola hands a q string back as bytes, not text;
+            # and \c widened so the rendering is not cut at the console's.
+            got = conn.sync(
+                '{system"c 25 500"; `$-3!(count databento_mbp10;'
+                " exec first ts_event, first sym, first action, first side, first price,"
+                " first bid_px_00, first bid_px_03, first bid_sz_03 from databento_mbp10)}",
+                None,
+            )
+        finally:
+            conn.disconnect()
+    assert got == (
+        "(1;`ts_event`sym`action`side`price`bid_px_00`bid_px_03`bid_sz_03!"
+        "(2026.02.25D14:30:00.016039462;`AAPL;`A;`B;271.2;271.45;0n;0N))"
+    )
 
 
 # ------------------------------------------------------- the lifecycle

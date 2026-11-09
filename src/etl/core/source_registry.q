@@ -68,7 +68,7 @@
 / the declaration it always did.
 .qetl.source.sources:([name:`symbol$()] source:`symbol$(); table_name:`symbol$();
     time_column:`symbol$(); row_key:(); columns:(); types:(); query:(); fixture:();
-    tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:(); raw:(); complete_through:(); ready:(); reference_read:())
+    tz:`symbol$(); transport:`symbol$(); credential_example:(); supporting:(); raw:(); complete_through:(); ready:(); reference_read:(); batch_read:())
 
 / ------------------------------------------------------- COMPLETE THROUGH
 / .
@@ -170,15 +170,14 @@
 .qetl.source.check_reference_read:{[source;rr]
     who:"define: ",string[source],"'s reference_read ";
     if[not 99h=type rr; 'who,"must be a dict of date_skew, lookback_cap and symbols"];
+    .qetl.declared.refuse_unknown[who;"a reference_read";rr;`date_skew`lookback_cap`symbols];
     miss:`date_skew`lookback_cap`symbols except key rr;
     if[count miss; 'who,"is missing ",", " sv string miss];
-    extra:(key rr) except `date_skew`lookback_cap`symbols;
-    if[count extra; 'who,"declares ",(", " sv string extra),", which it does not take"];
     bad:();
     if[not (-7h=type rr`date_skew) and rr[`date_skew]>=0; bad,:enlist "date_skew (a whole number of days, 0 or more)"];
     if[not (-16h=type rr`lookback_cap) and (rr[`lookback_cap]>0D) and rr[`lookback_cap]<0Wn; bad,:enlist "lookback_cap (a positive, finite timespan)"];
     sy:rr`symbols;
-    if[not (100h=type sy) and 2=count (value sy) 1; bad,:enlist "symbols (a lambda taking spec and rows)"];
+    if[not (.qetl.declared.callable sy) and $[.qetl.declared.lambda sy; 2=count (value sy) 1; 1b]; bad,:enlist "symbols (a lambda taking spec and rows)"];
     if[count bad; 'who,"has malformed ",", " sv bad];
     }
 
@@ -221,6 +220,9 @@
 /   ready - a lambda {[batch;range_from;range_to]} returning the window's unmet
 /     requirements as a list of strings, () when it can be scored (see READINESS).
 /     The default is ready for everything.
+/   batch_read - window, needs, read, keys and sort: how the source reads its
+/     supporting inputs a batch at a time, for a worker that batches (see
+/     source_batch_read.q, #1921)
 /   reference_read - date_skew, lookback_cap and symbols, how much of its
 /     supporting inputs the source reads as reference (see REFERENCE READ). Needs
 /     supporting inputs to describe.
@@ -232,6 +234,7 @@
     / (#1092).
     if[`target in key decl;
         '"define: ",string[source]," declares target, which is gone (#1092) - rows go to the worker's dataset; drop it"];
+    .qetl.declared.refuse_unknown["define: ",string source;"a source";decl;.qetl.source.required_declarations,key .qetl.source.optional_declarations];
     missing:.qetl.source.required_declarations where not .qetl.source.required_declarations in key decl;
     if[count missing;
         '"define: ",string[source]," is missing declaration(s): ",", " sv string missing];
@@ -242,10 +245,10 @@
     if[(count decl`columns)<>count decl`types;
         '"define: ",string[source]," declares ",string[count decl`columns],
          " field(s) but ",string[count decl`types]," type(s) - the source contract requires a type per required field"];
-    if[not 100h=type decl`query;
-        '"define: ",string[source],"'s query must be a lambda (parameterised, never concatenated)"];
-    if[not 100h=type decl`fixture;
-        '"define: ",string[source],"'s fixture must be a niladic lambda (the path must be exercisable with no driver)"];
+    if[not .qetl.declared.callable decl`query;
+        '"define: ",string[source],"'s query must be a function (parameterised, never concatenated)"];
+    if[not .qetl.declared.callable decl`fixture;
+        '"define: ",string[source],"'s fixture must be a niladic function (the path must be exercisable with no driver)"];
     if[not -11h=type decl`tz;
         '"define: ",string[source],"'s tz must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\""];
     / The window is taken on time_column, so time_column must be a field this
@@ -323,35 +326,34 @@
             '"define: ",string[source],"'s raw inputs must each be a table - an empty one, the columns the adapter reads"]];
     if[`complete_through in key decl;
         ct:decl`complete_through;
-        if[not 100h=type ct;
-            '"define: ",string[source],"'s complete_through must be a lambda taking the source's handle and returning a timestamp"];
+        if[not .qetl.declared.callable ct;
+            '"define: ",string[source],"'s complete_through must be a function taking the source's handle and returning a timestamp"];
         / `{[] ...}` reports one parameter, a null symbol, so a niladic lambda
-        / is counted as one unless that is looked for.
-        params:(value ct) 1;
+        / is counted as one unless that is looked for. Only a lambda has a
+        / parameter list to read (.qetl.declared).
+        params:$[.qetl.declared.lambda ct; (value ct) 1; enlist `h];
         if[(not 1=count params) or null first params;
             '"define: ",string[source],"'s complete_through must take exactly one argument, the source's handle"]];
     if[`ready in key decl;
         rd:decl`ready;
-        if[not 100h=type rd;
-            '"define: ",string[source],"'s ready must be a lambda taking the fetched batch and the window's bounds and returning its unmet requirements"];
-        if[3<>count (value rd) 1;
+        if[not .qetl.declared.callable rd;
+            '"define: ",string[source],"'s ready must be a function taking the fetched batch and the window's bounds and returning its unmet requirements"];
+        if[(.qetl.declared.lambda rd) and 3<>count (value rd) 1;
             '"define: ",string[source],"'s ready must take exactly three arguments, the batch and the window's range_from and range_to"]];
     / A declaration read back from the registry carries the default, (): not declared.
     if[(`reference_read in key decl) and not ()~decl`reference_read;
         if[0=count sup;
             '"define: ",string[source]," declares reference_read but no supporting inputs - there is no reference to read"];
         .qetl.source.check_reference_read[source;decl`reference_read]];
+    / A declaration read back from the registry carries the default, (): not declared (see source_batch_read.q).
+    if[(`batch_read in key decl) and not ()~decl`batch_read;
+        .qetl.source.check_batch_read[source;decl`batch_read;decl]];
     tr:$[`transport in key decl; decl`transport; .qetl.source.default_transport];
     if[not tr in .qetl.source.transports[];
         '"define: ",string[source],"'s transport must be one of ",(", " sv string .qetl.source.transports[])];
     / Every declaration is stored with every column: a key no column holds
     / would have nowhere to go, so it is refused by name rather than dropped.
     decl[`transport]:tr;
-    unknown:(key decl) except .qetl.source.required_declarations,key .qetl.source.optional_declarations;
-    if[count unknown;
-        '"define: ",string[source]," declares ",(", " sv string unknown),
-         ", which a source does not take - the declarations are ",
-         ", " sv string (.qetl.source.required_declarations,key .qetl.source.optional_declarations)];
     / Store row_key NORMALISED to a vector, always.
     / .
     / Two reasons, and the second is not obvious. Semantically it means no
@@ -364,8 +366,8 @@
     / a general column on the first registration and refuse the next one.
     decl:.qetl.source.optional_declarations,@[decl;`row_key`columns`types;:;(key_cols;(),decl`columns;(),decl`types)];
     `.qetl.source.sources upsert (source,decl cols value .qetl.source.sources);
-    .[{.qetl.log.dbg[x;y;z]};(source;"source registered";
-        `columns`time_column`tz`transport`row_key!(decl`columns;decl`time_column;decl`tz;tr;key_cols));::];
+    .[{.qetl.log.ch.dbg[x;y;z]};(`config;"source registered";
+        `source`columns`time_column`tz`transport`row_key!(source;decl`columns;decl`time_column;decl`tz;tr;key_cols));::];
     source}
 
 / Every registered source's name.

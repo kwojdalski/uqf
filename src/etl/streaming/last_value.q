@@ -98,7 +98,7 @@
 / The state is this process's memory, so a restart used to start it empty
 / until every sym ticked again. Replaying the day's market_data rebuilds it;
 / publish is muted while it does, so rows already published are not repeated.
-.qetl.job.stream.define[`last_value;`procname`subscribe_to`publishes`on_batch`replay`note`state!(
+.qetl.job.stream.define[`last_value;`procname`subscribe_to`outputs`on_batch`replay`note`state!(
     `last_value1;
     enlist `market_data;
     enlist `last_value;

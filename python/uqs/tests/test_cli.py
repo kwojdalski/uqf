@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
@@ -43,6 +44,7 @@ import pytest
 # command's own helpers live in the family module that registers it.
 import rename_support
 import typer
+from plain_cli import PlainRunner
 from typer.testing import CliRunner
 from which_support import fake_which
 
@@ -51,11 +53,14 @@ from uqs import paths as stack_paths
 from uqs.checks import schema_view
 from uqs.cli import (
     create_backfill,
+    json_out,
     lifecycle,
     lists,
     pipelines,
     renames,
+    safety,
     shared,
+    sorting,
     start_warnings,
     summary,
     summary_columns,
@@ -73,7 +78,16 @@ from uqs.external.crypto import (
 from uqs.model import profiles
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import alive, deployment, listing, probe, runtime, stream_health
+from uqs.stack import (
+    alive,
+    deployment,
+    listing,
+    log_follow,
+    probe,
+    runtime,
+    stream_health,
+    table_export,
+)
 from uqs.stack import channel as stack_channel
 from uqs.stack import clean as stack_clean
 from uqs.stack import logs as stack_logs
@@ -304,7 +318,7 @@ def _up(
         follow.update(procnames=procnames, min_level=min_level)
         start_fn()
 
-    monkeypatch.setattr(stack_logs, "follow_during", fake_follow)
+    monkeypatch.setattr(log_follow, "follow_during", fake_follow)
     result = runner.invoke(cli.app, [*command, *args])
     return result, start, stop, follow
 
@@ -352,7 +366,7 @@ def test_a_failed_start_still_stops_what_it_started_and_keeps_its_exit_code(monk
     monkeypatch.setattr(stack_logs, "resolve_procnames", lambda paths, names: names.split())
     monkeypatch.setattr(lifecycle, "_running", lambda port: set())
     monkeypatch.setattr(
-        stack_logs, "follow_during", lambda paths, procnames, start_fn, min_level=None: start_fn()
+        log_follow, "follow_during", lambda paths, procnames, start_fn, min_level=None: start_fn()
     )
     result = runner.invoke(cli.app, ["start", "rdb1", "-f", "--stop-on-exit"])
     assert start.calls, "it started"
@@ -965,7 +979,7 @@ def test_every_heartbeat_state_renders(monkeypatch, state):
 
 def test_export_writes_when_a_path_is_given(monkeypatch, tmp_path):
     _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
-    rec = _patch(monkeypatch, runtime, "export_table")
+    rec = _patch(monkeypatch, table_export, "export_table")
     target = tmp_path / "out.csv"
     result = runner.invoke(cli.app, ["process", "list", "--export", str(target)])
     assert result.exit_code == 0
@@ -975,7 +989,7 @@ def test_export_writes_when_a_path_is_given(monkeypatch, tmp_path):
 
 def test_nothing_is_exported_without_the_option(monkeypatch):
     _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
-    rec = _patch(monkeypatch, runtime, "export_table")
+    rec = _patch(monkeypatch, table_export, "export_table")
     runner.invoke(cli.app, ["process", "list"])
     assert rec.calls == []
 
@@ -985,7 +999,7 @@ def test_a_failed_export_reports_rather_than_losing_the_output(monkeypatch, tmp_
     unwritable path must say so, not take the whole command down with a
     traceback."""
     _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
-    _patch(monkeypatch, runtime, "export_table", raises=UqsError("unsupported suffix"))
+    _patch(monkeypatch, table_export, "export_table", raises=UqsError("unsupported suffix"))
     result = runner.invoke(cli.app, ["process", "list", "--export", str(tmp_path / "x.txt")])
     assert result.exit_code == 1
 
@@ -1227,43 +1241,43 @@ def test_a_numeric_column_sorts_numerically_not_lexicographically():
     """`port` is a string like "6051". Sorted as text, "6100" comes before
     "659" - which looks like the sort silently did nothing on the one column
     most worth sorting."""
-    order = [i["port"] for i in shared._sorted_items(_procs(), "port", reverse=False)]
+    order = [i["port"] for i in sorting._sorted_items(_procs(), "port", reverse=False)]
     assert order == ["659", "6067", "6100"]
 
 
 def test_a_text_column_sorts_case_insensitively():
     """ "Arbitrage1" must not sort before every lowercase name just for its
     capital - the reader is looking up a name, not an ordinal."""
-    order = [i["procname"] for i in shared._sorted_items(_procs(), "procname", reverse=False)]
+    order = [i["procname"] for i in sorting._sorted_items(_procs(), "procname", reverse=False)]
     assert order == ["Arbitrage1", "sortworker2", "stp1"]
 
 
 def test_reverse_flips_the_order():
-    order = [i["port"] for i in shared._sorted_items(_procs(), "port", reverse=True)]
+    order = [i["port"] for i in sorting._sorted_items(_procs(), "port", reverse=True)]
     assert order == ["6100", "6067", "659"]
 
 
 def test_the_column_name_is_matched_case_insensitively():
-    assert shared._sorted_items(_procs(), "PORT", reverse=False)[0]["port"] == "659"
+    assert sorting._sorted_items(_procs(), "PORT", reverse=False)[0]["port"] == "659"
 
 
 def test_empty_cells_group_at_one_end_rather_than_sorting_as_empty_string():
     """A process with no override set is not "before aaa", it is absent -
     and a blank interleaved among real values reads as data."""
     items = [{"v": "b"}, {"v": ""}, {"v": "a"}]
-    assert [i["v"] for i in shared._sorted_items(items, "v", reverse=False)] == ["a", "b", ""]
+    assert [i["v"] for i in sorting._sorted_items(items, "v", reverse=False)] == ["a", "b", ""]
 
 
 def test_sorting_is_a_no_op_without_the_option():
     items = _procs()
-    assert shared._sorted_items(items, None, reverse=False) == items
+    assert sorting._sorted_items(items, None, reverse=False) == items
 
 
 def test_sorting_an_empty_listing_does_not_look_up_columns():
     """There is no first row to read column names from, and a kind with no
     items is a legitimate result - `overrides` is empty until something is
     set."""
-    assert shared._sorted_items([], "anything", reverse=False) == []
+    assert sorting._sorted_items([], "anything", reverse=False) == []
 
 
 def test_an_unsortable_column_names_the_real_ones(monkeypatch):
@@ -1279,7 +1293,7 @@ def test_the_sorted_order_reaches_the_export(monkeypatch):
     """An exported CSV that disagreed with what was on screen would be the
     worst of both."""
     _patch(monkeypatch, listing, "list_items", result=_procs())
-    rec = _patch(monkeypatch, runtime, "export_table", result=None)
+    rec = _patch(monkeypatch, table_export, "export_table", result=None)
     result = runner.invoke(cli.app, ["process", "list", "--sort", "port", "--export", "/tmp/x.csv"])
     assert result.exit_code == 0
     assert [i["port"] for i in rec.args[0]] == ["659", "6067", "6100"]
@@ -1292,7 +1306,7 @@ def test_logs_defaults_to_a_bounded_tail_not_a_follow(monkeypatch):
     """`follow` blocks until Ctrl-C. Defaulting to it would hang any script
     that ran `uqs logs`."""
     recent = _patch(monkeypatch, stack_logs, "print_recent_logs")
-    follow = _patch(monkeypatch, stack_logs, "follow_logs")
+    follow = _patch(monkeypatch, log_follow, "follow_logs")
     result = runner.invoke(cli.app, ["logs"])
     assert result.exit_code == 0
     assert follow.calls == []
@@ -1301,7 +1315,7 @@ def test_logs_defaults_to_a_bounded_tail_not_a_follow(monkeypatch):
 
 def test_follow_selects_the_streaming_path(monkeypatch):
     recent = _patch(monkeypatch, stack_logs, "print_recent_logs")
-    follow = _patch(monkeypatch, stack_logs, "follow_logs")
+    follow = _patch(monkeypatch, log_follow, "follow_logs")
     runner.invoke(cli.app, ["logs", "--follow"])
     assert recent.calls == []
     assert len(follow.calls) == 1
@@ -1309,7 +1323,7 @@ def test_follow_selects_the_streaming_path(monkeypatch):
 
 def test_follow_opens_on_the_same_history_logs_shows(monkeypatch):
     """`logs -f` used to open empty, starting at the end of every file."""
-    follow = _patch(monkeypatch, stack_logs, "follow_logs")
+    follow = _patch(monkeypatch, log_follow, "follow_logs")
     runner.invoke(cli.app, ["logs", "-f", "--lines", "7"])
     assert follow.kwargs["lines"] == 7
 
@@ -1395,17 +1409,17 @@ def test_raw_names_exec_and_is_hidden(monkeypatch):
 
 def test_remove_output_delegates(monkeypatch):
     rec = _patch(monkeypatch, stack_clean, "clean", result=[])
-    assert runner.invoke(cli.app, ["clean"]).exit_code == 0
+    assert runner.invoke(cli.app, ["clean", "--yes"]).exit_code == 0
     assert len(rec.calls) == 1
 
 
 @pytest.mark.parametrize(
     ("argv", "expected"),
     [
-        ([], {"match": None, "dry_run": False}),
+        (["--yes"], {"match": None, "dry_run": False}),
         (["--dry-run"], {"match": None, "dry_run": True}),
         (["-n"], {"match": None, "dry_run": True}),
-        (["--match", "^logs$"], {"match": "^logs$", "dry_run": False}),
+        (["--match", "^logs$", "-y"], {"match": "^logs$", "dry_run": False}),
         (["--match", "^logs$", "-n"], {"match": "^logs$", "dry_run": True}),
     ],
 )
@@ -1414,6 +1428,44 @@ def test_remove_output_passes_its_flags_through(monkeypatch, argv, expected):
     rec = _patch(monkeypatch, stack_clean, "clean", result=[])
     assert runner.invoke(cli.app, ["clean", *argv]).exit_code == 0
     assert rec.calls[-1][1] == expected
+
+
+@pytest.fixture
+def data_dir(tmp_path, monkeypatch):
+    """A data directory holding an HDB, which `uqs clean` would remove."""
+    from types import SimpleNamespace
+
+    from uqs.cli import cleanup
+
+    root = tmp_path / "torqdata"
+    (root / "hdb" / "2026.09.01").mkdir(parents=True)
+    (root / "hdb" / "2026.09.01" / "trade").write_bytes(b"x" * 900)
+    (root / "logs").mkdir()
+    monkeypatch.setattr(cleanup, "_paths", lambda: SimpleNamespace(torqdata=root))
+    return root
+
+
+def test_clean_without_a_terminal_refuses_naming_yes(data_dir, log_text):
+    """#2233: the HDB is in the data directory - nothing goes without asking."""
+    result = runner.invoke(cli.app, ["clean"])
+    assert result.exit_code == 1
+    assert "This cannot be undone? - there is no terminal to ask on: add --yes" in log_text()
+    assert (data_dir / "hdb" / "2026.09.01" / "trade").exists()
+
+
+def test_clean_lists_what_goes_and_a_no_removes_nothing(data_dir, terminal, log_text):
+    result = runner.invoke(cli.app, ["clean", "--match", "hdb"], input="n\n")
+    assert result.exit_code == safety.EXIT_DECLINED
+    assert "would remove 1 entry" in result.output
+    assert "Remove 1 entry (900B)? This cannot be undone" in result.output
+    assert (data_dir / "hdb").exists()
+
+
+def test_clean_a_yes_removes(data_dir, terminal):
+    result = runner.invoke(cli.app, ["clean", "--match", "^hdb$"], input="y\n")
+    assert result.exit_code == 0, result.output
+    assert "removed 1 entry" in result.output
+    assert not (data_dir / "hdb").exists() and (data_dir / "logs").exists()
 
 
 def test_remove_output_reports_what_it_removed(monkeypatch):
@@ -1550,8 +1602,44 @@ def test_connector_logs_shows_the_tail_of_the_log_its_status_names(monkeypatch, 
     assert json.loads(as_json.stdout) == {
         "name": "crypto",
         "log": str(log),
-        "lines": ["line 28", "line 29"],
+        "lines": [{"time": None, "level": None, "message": f"line {i}"} for i in (28, 29)],
     }
+
+
+@pytest.mark.parametrize(
+    ("line", "record"),
+    [
+        (
+            "2026-10-20T09:00:00.5Z  WARN cryptorust::feed: reconnecting",
+            {"time": "2026-10-20T09:00:00.5+00:00", "level": "WARNING",
+             "message": "cryptorust::feed: reconnecting"},
+        ),
+        (
+            "2026-10-20 09:00:00+00:00 | ERROR    | kafka_feed:run:12 - broker down",
+            {"time": "2026-10-20T09:00:00+00:00", "level": "ERROR",
+             "message": "kafka_feed:run:12 - broker down"},
+        ),
+        (
+            "2026.10.20D09:00:00.000000000|h|feed|kafka1|INF|id|a|b",
+            {"time": json_out.timestamp("2026.10.20D09:00:00.000000000"), "level": "INFO",
+             "message": "a|b"},
+        ),
+        ("started, pid 42", {"time": None, "level": None, "message": "started, pid 42"}),
+    ],
+)  # fmt: skip
+def test_connector_logs_json_lines_are_records_as_logs_prints_them(
+    monkeypatch, tmp_path, line, record
+):
+    """#2241: `connector logs --json` printed bare strings under the `lines` key `logs`
+    fills with records; a line is one record, `{time, level, message}`, whatever wrote it."""
+    log = tmp_path / "crypto.log"
+    log.write_text(line + "\n")
+    _crypto_running(monkeypatch, True, log)
+    result = runner.invoke(cli.app, ["connector", "logs", "crypto", "--json"])
+    assert result.exit_code == 0, result.output
+    (got,) = json.loads(result.stdout)["lines"]
+    assert got == record
+    assert tuple(got) == json_out.LINE_KEYS
 
 
 def test_connector_logs_follow_reads_the_same_file(monkeypatch, tmp_path):
@@ -1674,8 +1762,8 @@ def test_logs_refuses_options_for_the_other_viewer(monkeypatch, argv, message):
     assert any(message in m for m in errors.messages), errors.messages
 
 
-def test_channel_subscribes_with_its_ids_and_level(monkeypatch):
-    """#1067: --channel reads what the processes publish, not their files."""
+def test_subscribe_reads_the_published_lines_with_its_channels_and_level(monkeypatch):
+    """#1067, renamed #2274: --subscribe reads what the processes publish, not their files."""
     recent = _patch(monkeypatch, stack_logs, "print_recent_logs")
     chan = _patch(monkeypatch, stack_channel, "follow_channel")
     result = runner.invoke(
@@ -1683,11 +1771,11 @@ def test_channel_subscribes_with_its_ids_and_level(monkeypatch):
         [
             "logs",
             "rdb1",
+            "--subscribe",
             "--channel",
-            "--id",
-            "fx_positions",
-            "--id",
-            "posbook",
+            "source",
+            "--channel",
+            "ipc",
             "--level",
             "ERROR",
         ],
@@ -1695,25 +1783,78 @@ def test_channel_subscribes_with_its_ids_and_level(monkeypatch):
     assert result.exit_code == 0, result.output
     assert recent.calls == []
     assert chan.args[1] == "rdb1"
-    assert list(chan.kwargs["ids"]) == ["fx_positions", "posbook"]
+    assert list(chan.kwargs["channels"]) == ["source", "ipc"]
     assert chan.kwargs["min_level"] == "ERROR"
 
 
 @pytest.mark.parametrize(
     ("argv", "message"),
     [
-        (["--id", "fx_positions"], "--id needs --channel"),
-        (["--channel", "-f"], "--follow does not apply with --channel"),
-        (["--channel", "--multitail"], "--multitail does not apply with --channel"),
+        (["--subscribe", "-f"], "--follow does not apply with --subscribe"),
+        (["--subscribe", "--multitail"], "--multitail does not apply with --subscribe"),
     ],
 )
-def test_logs_refuses_channel_options_out_of_place(monkeypatch, argv, message):
+def test_logs_refuses_subscribe_options_out_of_place(monkeypatch, argv, message):
     errors = _error_log(monkeypatch)
     chan = _patch(monkeypatch, stack_channel, "follow_channel")
     _patch(monkeypatch, stack_logs, "print_recent_logs")
     assert runner.invoke(cli.app, ["logs", *argv]).exit_code == 2, "a usage error (#1885)"
     assert chan.calls == []
     assert any(message in m for m in errors.messages), errors.messages
+
+
+def test_multitail_reads_files_itself_so_a_channel_does_not_apply(monkeypatch):
+    errors = _error_log(monkeypatch)
+    result = runner.invoke(cli.app, ["logs", "--multitail", "--channel", "source"])
+    assert result.exit_code == 1
+    assert any("--channel does not apply with --multitail" in m for m in errors.messages)
+
+
+def test_channels_filter_the_recent_lines_with_the_level_and_the_process(monkeypatch):
+    """#2274: --channel is the subsystem filter; it repeats, and combines with the rest."""
+    recent = _patch(monkeypatch, stack_logs, "print_recent_logs")
+    result = runner.invoke(
+        cli.app,
+        ["logs", "rdb1", "--channel", "source", "--channel", "storage", "--level", "WARNING"],
+    )
+    assert result.exit_code == 0, result.output
+    assert recent.args[1] == "rdb1"
+    assert recent.kwargs["min_level"] == "WARNING"
+    assert list(recent.kwargs["channels"]) == ["source", "storage"]
+
+
+def test_channels_filter_a_followed_log_too(monkeypatch):
+    follow = _patch(monkeypatch, log_follow, "follow_logs")
+    result = runner.invoke(cli.app, ["logs", "rdb1", "-f", "--channel", "ipc", "--level", "DEBUG"])
+    assert result.exit_code == 0, result.output
+    assert list(follow.kwargs["channels"]) == ["ipc"] and follow.kwargs["min_level"] == "DEBUG"
+
+
+@pytest.mark.parametrize(
+    ("argv", "said"),
+    [
+        (["--id", "fx_positions"], "`--id` was renamed `--channel`"),
+        (["--id=fx_positions", "--subscribe"], "`--id` was renamed `--channel`"),
+        # the old flag took no value: it swallows the next option, or finds none
+        (
+            ["--channel", "--level", "ERROR"],
+            "subscribing to the published lines was renamed `--subscribe`",
+        ),
+        (["--channel"], "subscribing to the published lines was renamed `--subscribe`"),
+        (["--channel", "fx_positions"], "--channel 'fx_positions' is not a channel"),
+    ],
+)
+def test_logs_refuses_the_old_id_and_the_old_channel(monkeypatch, argv, said):
+    errors = _error_log(monkeypatch)
+    chan = _patch(monkeypatch, stack_channel, "follow_channel")
+    recent = _patch(monkeypatch, stack_logs, "print_recent_logs")
+    result = PlainRunner().invoke(
+        cli.app, ["logs", "rdb1", *argv]
+    )  # CI renders usage errors in colour
+    assert result.exit_code == 2
+    box = re.sub("[│╭╰╮╯─]", " ", result.output)
+    assert " ".join(said.split()) in " ".join(" ".join([box, *errors.messages]).split())
+    assert chan.calls == [] and recent.calls == []
 
 
 def test_a_logs_refusal_exits_one(monkeypatch):
@@ -1934,9 +2075,9 @@ def test_a_dataset_an_unpartitioned_worker_fills_is_found(tmp_path):
     rather than write a tree that no longer loads."""
     root = _worker_tree(
         tmp_path,
-        "/ .qetl.job.bounded.define[`commented;`source`dataset!(`s;`fx)];\n"
-        ".qetl.job.bounded.define[`w;\n    `source`dataset`width`transform!\n"
-        "    (`s;`fx;1D;`s_passthrough)];\n",
+        "/ .qetl.job.bounded.define[`commented;`source`outputs!(`s;enlist `fx)];\n"
+        ".qetl.job.bounded.define[`w;\n    `source`outputs`width`transform!\n"
+        "    (`s;enlist `fx;1D;`s_passthrough)];\n",
     )
     assert create_backfill.workers_filling(root, "fx") == ["w"]
     assert create_backfill.workers_filling(root, "other") == []
@@ -1945,8 +2086,8 @@ def test_a_dataset_an_unpartitioned_worker_fills_is_found(tmp_path):
 def test_a_partitioned_worker_leaves_room_for_another(tmp_path):
     root = _worker_tree(
         tmp_path,
-        ".qetl.job.bounded.define[`w;`source`dataset`width`transform`partition!"
-        "(`s;`fx;1D;`s_passthrough;`EURUSD)];\n",
+        ".qetl.job.bounded.define[`w;`source`outputs`width`transform`partition!"
+        "(`s;enlist `fx;1D;`s_passthrough;`EURUSD)];\n",
     )
     assert create_backfill.workers_filling(root, "fx") == []
 

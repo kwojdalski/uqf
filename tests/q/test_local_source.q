@@ -53,7 +53,7 @@
             enlist[`batch]!enlist ([] time:enlist 2026.09.17D10:00; sym:enlist `EURUSD; px:enlist 1.1);
             ([] time:enlist 2026.09.17D10:00; sym:enlist `EURUSD; px:enlist 1.1)))];
     .qetl.job.bounded.define[`loctest_backfill;
-        `source`dataset`width`transform!(`loctest_src;`loctest_out;1D;`loctest_passthrough)];
+        `source`outputs`width`transform!(`loctest_src;enlist `loctest_out;1D;`loctest_passthrough)];
     }
 
 .qt.qetl.source.local.setUp_fresh:{[]
@@ -267,7 +267,7 @@
 
 .qt.qetl.source.local.test_a_local_query_is_traced_like_a_remote_one:{[t]
     lines:.qt.qetl.source.local.logged {.qetl.source.local[.qt.qetl.source.local.root;{[read;a;b] read[`trades;a;b]};2026.09.17D00:00;2026.09.18D00:00]};
-    .qunit.assertEquals[lines[;1 2];((`local;"query sent");(`local;"query returned"));"sent, then returned"];
+    .qunit.assertEquals[lines[;1 2];((`source;"query sent");(`source;"query returned"));"sent, then returned"];
     .qunit.assertEquals[(lines[0;3]`transport;(lines[0;3]`request)~lines[1;3]`request;lines[1;3]`rows);(`local;1b;2);
         "transport local, one request number, the rows read"]};
 

@@ -26,6 +26,23 @@
 / path to .qetl.coverage.stage_completion, and `advance` refuses a cursor that would
 / go backwards - the one way a tailer can silently re-publish.
 / .
+/ WHAT A CURSOR MEANS (#2055). Two kinds of cursor live in this tree and they
+/ are not interchangeable:
+/ .
+/   - a CONTINUOUS cursor (this file) is the LAST EVENT OBSERVED: the time of
+/     the newest row the feed has published. A fetch "after the cursor" asks for
+/     rows STRICTLY later, so a row at exactly the cursor is not re-read - which
+/     also means a row that arrives LATE with that same time is not read at all.
+/     A feed that can see such rows keeps a compound cursor (time plus a
+/     tie-breaker, lexically_after) instead of a bare time.
+/   - a BOUNDED checkpoint (.qetl.job.bounded.state.save_checkpoint) is the
+/     EXCLUSIVE END of the last completed window: the range_to of [from;to). A
+/     resume starts AT it, so the row timed exactly at the cursor belongs to the
+/     next window and is read once.
+/ .
+/ Neither is ever "last event plus one tick": that spelling makes the bound depend
+/ on the column's precision.
+/ .
 / Freshness is reported instead, which is the honest statement a consumer of
 / continuous output can actually use. That it is not a cross-worker contract
 / is #62's open question, and `freshness` says so at the point of use.

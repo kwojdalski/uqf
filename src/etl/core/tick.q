@@ -134,7 +134,7 @@
 / to a message is q's own async send, so a real subscriber and a test
 / recorder are called by identical code.
 / @private
-.qetl.tick.can_send:{[sink] ((type sink) within 100 112h) or (type sink) in -6 -7h}
+.qetl.tick.can_send:{[sink] (.qetl.declared.callable sink) or (type sink) in -6 -7h}
 
 / ------------------------------------------------------------- PUBLISHING
 
@@ -279,7 +279,7 @@
     if[-7h=type r; :r];
     size:hcount path;
     path 1: read1 (path;0;last r);
-    .qetl.log.warn[`qetl.tick;"cut a torn tail off the log - a crash left a partly written message";
+    .qetl.log.ch.warn[`storage;"cut a torn tail off the log - a crash left a partly written message";
         `path`messages`kept_bytes`dropped_bytes!(path;first r;last r;size-last r)];
     first r}
 
@@ -343,7 +343,7 @@
     n:first cnt;
     if[0=n; :0];
     if[not -7h=type cnt;
-        .qetl.log.warn[`qetl.tick;"replaying only the whole messages of a torn log";
+        .qetl.log.ch.warn[`storage;"replaying only the whole messages of a torn log";
             `path`messages`valid_bytes`log_bytes!(path;n;last cnt;hcount path)]];
     saved:$[`upd in key `.; enlist get `upd; ()];
     `upd set handler;

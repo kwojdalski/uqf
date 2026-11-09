@@ -26,7 +26,7 @@
 /                               last book of a leg, as the best-of-sources reference needs
 /   identity (venue; fill_id)   a redelivery before scoring replaces the pending
 /                               execution; one scored within `remember` is dropped
-/   max_lateness                how late an execution may arrive and still find its books:
+/   lateness                how late an execution may arrive and still find its books:
 /                               bounds the history instead of the kind's day-long default
 /   expire_after                an execution whose references never cover it is given
 /                               up on, with the reason in `expired`
@@ -34,6 +34,10 @@
 /                               books of pairs the convention routes - the same
 /                               predicates scoring applies, so the queue never holds a row
 /                               that would fail every tick
+/   on_start, check, on_fail    the spec's configuration snapshot is recorded (pinned) before the
+/                               job opens anything, and a batch whose rows name a snapshot that
+/                               is not durably recorded is held whole: a result never becomes
+/                               visible before the configuration that explains it (#1999)
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
 
@@ -58,12 +62,12 @@
 
 \d .
 
-.qetl.job.stream.at_horizons[`fx_markout;`procname`events`reference`transform`publishes`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`max_lateness`expire_after`keep`note`ephemeral!(
+.qetl.job.stream.at_horizons[`fx_markout;`procname`events`reference`transform`outputs`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail`shared_reference!(
     `fxmarkout1;
     `executions;
     `market_data;
     `fx_markout_score_long;
-    `fx_markout;
+    enlist `fx_markout;
     .qpipe.transform.fx_markout.wait[.qpipe.transform.fx_markout_outputs.job_spec;.qpipe.transform.fx_markout_outputs.settle];
     0D00:00:01;
     `source_time;
@@ -76,8 +80,12 @@
     `sym`source;
     `venue`fill_id;
     .qpipe.transform.fx_markout_outputs.remember;
-    .qpipe.transform.fx_markout_outputs.max_lateness;
-    .qpipe.transform.fx_markout_outputs.expire_after;
+    .qpipe.transform.fx_markout_outputs.lateness;
+    .qpipe.transform.fx_markout_outputs.expire_after[];
     .qpipe.job.fx_markout.keep;
     "normalized FX markouts, long layout: the markout, the execution residual, each cross leg's allocation and the residual, from the canonical executions and market_data. On demand - it needs executions and market_data sources a site wires in";
-    "executions waiting for their horizons at a restart are not scored, and the book history is rebuilt from the next snapshots; the job publishes derived rows, not a book of record - hdb_fx_markouts_backfill re-derives any window from the HDB")];
+    "executions waiting for their horizons at a restart are not scored, and the book history is rebuilt from the next snapshots; the job publishes derived rows, not a book of record - hdb_fx_markouts_backfill re-derives any window from the HDB";
+    {[] .qpipe.transform.fx_markout_outputs.pin[]; (::)};
+    .qpipe.transform.config_markout.check_pinned;
+    `hold;
+    1b)];

@@ -10,7 +10,7 @@ Two sources, one answer:
     shipped here, its tables as q evaluated `src/etl/plant_tables.q`
     (uqs.model.plant_metadata, #1781) - never its text.
 
-The tables an attachment registers are the job's `publishes` that the job's
+The tables an attachment registers are the job's `outputs` that the job's
 source DEFINES. A table the job publishes that nothing here defines (the
 vendored `quote`, say) is not ours to create; the plan checks it already
 exists on the stack instead.

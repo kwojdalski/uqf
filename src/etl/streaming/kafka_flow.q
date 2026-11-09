@@ -126,7 +126,7 @@
 / The client trade topic, owned by this job; its mapping is the shared transform.
 .qetl.kafka.topic.define[`uqf.client.flow;`mapping`output`job!(`kafka_client_flow;`client_flow;`kafka_flow)];
 
-.qetl.job.stream.define[`kafka_flow;`procname`subscribe_to`publishes`on_batch`replay`restore_from`on_replayed`note`state!(
+.qetl.job.stream.define[`kafka_flow;`procname`subscribe_to`outputs`on_batch`replay`restore_from`on_replayed`note`state!(
     `kafka_flow1;
     enlist `kafka_message;
     `client_flow`kafka_dead_letter;

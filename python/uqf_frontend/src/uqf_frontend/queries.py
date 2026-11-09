@@ -48,6 +48,7 @@ from typing import Any
 
 import polars as pl
 
+from uqf_frontend import instants
 from uqf_frontend.catalog import LIST_OPERATORS, OPERATORS, QType, Table
 from uqf_frontend.errors import ValidationFailed
 
@@ -113,13 +114,15 @@ BROWSE = ".uqf.browse"
 #: CALLED - not when it is defined, and whether or not the body references it.
 #: `test_q_programs.py` caught this before it shipped, which is the fourth
 #: name this repository has lost to that trap.
-#: `partition` is required for the same reason again, one dimension further
-#: out (#185). A coverage read that names a dataset but not a partition
-#: aggregates across every partition, so a range published for EURUSD alone
+#: The coverage slice is required for the same reason again, one dimension
+#: further out (#185). A coverage read that names a dataset but not a slice
+#: aggregates across every slice, so a range published for EURUSD alone
 #: reports as covered for every symbol - the exact failure the column was
-#: added to prevent, rebuilt on the HTTP side. The empty string maps to the
-#: q null symbol `, which is .qetl.coverage's "this dataset has no partition
-#: dimension" sentinel and matches only rows recorded under it.
+#: added to prevent, rebuilt on the HTTP side. The API calls it `slice`; the
+#: ledger's q column and this function's argument are still `partition`
+#: (#2261). The empty string maps to the q null symbol `, which is
+#: .qetl.coverage's "this dataset has no slice dimension" sentinel and
+#: matches only rows recorded under it.
 #: Since #1081 a NAME on the gateway, not a lambda routed to the tiers: the
 #: ledger is a file the workers persist (.qetl.coverage.ledger_path), not a
 #: table any RDB or HDB holds, and gateway1 loads the reader. The same
@@ -320,10 +323,6 @@ def _nanoseconds(value: Any, column: str) -> pl.Series:
 _Q_EPOCH = 946_684_800 * 10**9
 _STAMP_LIMITS = (-(2**63 - 1) + _Q_EPOCH, 2**63 - 1)
 
-#: The fraction of a second, matched on the text: `fromisoformat` takes any
-#: number of digits there and keeps the first six without a word (#1317).
-_FRACTION = re.compile(r"^(.*?\d{2}:\d{2}:\d{2})[.,](\d+)(.*)$")
-
 
 def _utc(value: Any, column: str) -> pl.Series:
     """An ISO-8601 string (or an aware datetime) as the one-item timestamp
@@ -331,42 +330,24 @@ def _utc(value: Any, column: str) -> pl.Series:
 
     Not a `datetime`: that stops at the microsecond, so a `.z.p`-stamped row
     could not be asked for by the time the Desk shows for it - since #1317
-    the value was refused rather than truncated (#1371). The fraction is read
-    from the text, up to nine digits; a tenth that is not zero is refused, as
-    is an instant q has no timestamp for. .uqf.browse unwraps the vector
-    (browse_value), as it does a timespan's.
+    the value was refused rather than truncated (#1371). The text is read by
+    the API's one instant parser (instants.nanoseconds, #2105): up to nine
+    digits, an explicit offset required. An instant q has no timestamp for is
+    refused too. .uqf.browse unwraps the vector (browse_value), as it does a
+    timespan's.
     """
     if isinstance(value, dt.datetime):
-        parsed, nanoseconds = value, value.microsecond * 1000
-        parsed = parsed.replace(microsecond=0)
-    elif isinstance(value, str):
-        match = _FRACTION.match(value)
-        head, digits, tail = match.groups() if match else (value, "", "")
-        if digits[9:].strip("0"):
+        if value.tzinfo is None:
             raise ValidationFailed(
-                f"column {column!r} is a timestamp; {value!r} is finer than a nanosecond, "
-                "which q cannot hold"
+                f"column {column!r} is a timestamp; {value!r} needs an explicit timezone offset"
             )
-        nanoseconds = int(digits[:9].ljust(9, "0"))
-        try:
-            parsed = dt.datetime.fromisoformat(head + tail)
-        except ValueError:
-            raise ValidationFailed(
-                f"column {column!r} is a timestamp; expected an ISO-8601 datetime, got {value!r}"
-            ) from None
-    else:
+        value = value.isoformat()
+    if not isinstance(value, str):
         raise ValidationFailed(f"column {column!r} is a timestamp; expected an ISO-8601 string")
-
-    if parsed.tzinfo is None:
-        raise ValidationFailed(
-            f"column {column!r} needs an explicit timezone offset (e.g. "
-            f"'2026-09-15T10:30:00Z'); everything is stored in UTC and a naive "
-            f"local time would be silently wrong"
-        )
-    # Whole seconds as an exact integer, then the fraction added: a float
-    # timestamp() would round the nanoseconds away.
-    since = parsed - dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
-    total = (since // dt.timedelta(seconds=1)) * 10**9 + nanoseconds
+    try:
+        total = instants.nanoseconds(value)
+    except instants.InstantRefused as exc:
+        raise ValidationFailed(f"column {column!r} is a timestamp; {exc}") from None
     low, high = _STAMP_LIMITS
     if not low < total < high:
         raise ValidationFailed(

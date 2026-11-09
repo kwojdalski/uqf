@@ -120,7 +120,7 @@ def test_job_gaps_prints_the_gaps_and_their_refills(monkeypatch):
     utc = [{k: f"{v}+00:00" for k, v in h.items()} for h in holes]
     assert doc["gaps"] == utc and doc["sessions"] == 2 and doc["refillable"]
     (refill,) = doc["refills"]
-    assert refill["worker"] == "w_backfill"
+    assert refill["job"] == "w_backfill"
     assert refill["command"].startswith("uqs job backfill w_backfill --from ")
 
 
@@ -157,6 +157,9 @@ def test_logs_prints_the_lines(monkeypatch):
     monkeypatch.setattr(stack_logs, "get_recent_logs", lambda *_a: [line])
     (got,) = _doc(["logs", "rdb1"])["lines"]
     assert got["message"] == "m" and got["host"] is None
+    # #2241: the level is `level`, as the --level that filters it, never TorQ's `loglevel`
+    assert got["level"] == "INFO" and "loglevel" not in got
+    assert set(json_out.LINE_KEYS) <= got.keys()
 
 
 def test_logs_attach_prints_the_runs_lines(monkeypatch):
@@ -203,13 +206,15 @@ def test_target_check_prints_the_release(monkeypatch):
                    "remote_user": None, "release": "rel-1"}  # fmt: skip
 
 
-def test_deploy_verify_json_leaves_out_the_marker(monkeypatch, capsys):
+def test_deploy_verify_json_leaves_out_the_marker(monkeypatch):
     monkeypatch.setattr(verify, "_expected", lambda *_a: ({"rdb1": 6002}, set()))
     monkeypatch.setattr(verify, "busy_ports", lambda expected, _c: {})
-    assert verify.run("p", ports_free=True, marker=False) == 0
-    assert json.loads(capsys.readouterr().out) == {"ok": True, "profile": "p", "busy": {}}
-    verify.run("p", ports_free=True)
-    assert capsys.readouterr().out.splitlines()[-1] == verify.OK_MARKER
+    argv = ["deploy", "check", "--profile", "p", "--ports-free"]
+    assert _doc(argv) == {"ok": True, "profile": "p", "busy": {}}
+    # without --json: the result on one line, then the marker a push reads
+    lines = runner.invoke(cli.app, argv).stdout.splitlines()
+    assert json.loads(lines[-2]) == {"ok": True, "profile": "p", "busy": {}}
+    assert lines[-1] == verify.OK_MARKER
 
 
 def test_summary_json_carries_the_lines_under_the_table(monkeypatch):

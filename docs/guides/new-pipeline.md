@@ -46,12 +46,12 @@ tests it holds, so naming it is the whole of adding it.
 
 ```
 uqs job new markout2 --subscribe-to trades,quote \
-    --publishes my_metric --schema "sym:symbol, px:float"
+    --outputs my_metric --schema "sym:symbol, px:float"
 
-uqs job new fx_rates --kind backfill --dataset fx_rates \
+uqs job new fx_rates --kind backfill --outputs fx_rates \
     --schema "sym:symbol, mid:float" --width 1D
 
-uqs job new fx_rates_1h --kind backfill --dataset fx_rates_1h \
+uqs job new fx_rates_1h --kind backfill --outputs fx_rates_1h \
     --source fx_rates --schema "sym:symbol, mid:float" --width 0D01
 ```
 
@@ -61,19 +61,19 @@ this machine, with no process serving it (see "A source read from local HDB
 files" below), `--proc` names the process, and `--start-with-all` puts a
 streaming job in `uqs start all`. `--period` sets a feed's tick or gives an etl
 a timer, `--profile`/`--unprofiled` place a standing job in a start profile, and
-`--partition`/`--check` shape a backfill. `--transform passthrough|derive`
-scaffolds the transform - and for a one-in, one-out streaming job its whole
-handler (see [the ETL page](../scaffolding/etl.md)). `uqs job remove NAME`
-undoes a scaffold. Where q is installed, `uqs job new` also re-exports the
-contract surface; without it, it prints the command to run.
+`--slice`/`--check` shape a backfill. `--transform passthrough|derive` scaffolds
+the transform - and for a one-in, one-out streaming job its whole handler (see
+[the ETL page](../scaffolding/etl.md)). `uqs job remove NAME` undoes a scaffold.
+Where q is installed, `uqs job new` also re-exports the contract surface;
+without it, it prints the command to run.
 
 The third is a second worker over the second's source: an existing source or
 table is reused, not rewritten. `--schema` is required whenever a new source or
 table is written, and refused otherwise. Two workers cannot fill one dataset
 without a partition - see [below](#filling-one-dataset-with-several-workers).
 
-A streaming job follows the same rule for what it publishes: `--publishes` takes
-a comma list, a table the plant already defines is published onto without
+A streaming job follows the same rule for what it publishes: `--outputs` takes a
+comma list, a table the plant already defines is published onto without
 `--schema`, and `--schema` shapes the one new table. Its `--subscribe-to` must
 name tables the plant defines, so a producer is scaffolded before its consumer.
 
@@ -96,7 +96,7 @@ until written - the batch
 drives the job with to hold every table it publishes to its plant table:
 
 ```
-uqs job new dxprobe --subscribe-to trades --publishes dx_t --schema "sym:symbol, v:float"
+uqs job new dxprobe --subscribe-to trades --outputs dx_t --schema "sym:symbol, v:float"
 q tests/run_tests.q
 ```
 
@@ -218,8 +218,8 @@ minute's volume); choose rolling when the question is about "right now". Both
 are a transform plus a declaration:
 
 ```q
-.qetl.job.stream.at_rolling[`order_quality;`procname`events`by`event_time`transform`publishes`windows`lateness`period!(
-    `order_quality1;`order_outcomes;`book;`source_time;`order_quality;`order_quality;
+.qetl.job.stream.at_rolling[`order_quality;`procname`events`by`event_time`transform`outputs`windows`lateness`period!(
+    `order_quality1;`order_outcomes;`book;`source_time;`order_quality;enlist `order_quality;
     0D00:01 0D00:05 0D01;0D00:00:05;0D00:00:05)];
 ```
 
@@ -396,8 +396,8 @@ Mostly a declaration. Create `src/etl/workers/fx_rates_backfill.q`:
         ([] rate_time:2026.09.11D09:00 2026.09.12D09:00; sym:`EURUSD`USDJPY; mid:1.0842 149.82; pip_factor:10000 100)))];
 
 .qetl.job.bounded.define[`fx_rates_backfill;
-    `source`dataset`width`transform`check!
-    (`fx_rates;`fx_rates;1D;`fx_rates_pips;.qpipe.job.fx_rates_backfill.quality_check)];
+    `source`outputs`width`transform`check!
+    (`fx_rates;enlist `fx_rates;1D;`fx_rates_pips;.qpipe.job.fx_rates_backfill.quality_check)];
 ```
 
 **The namespace is `.qpipe.job.<worker name>`, and you do not choose it.** Every
@@ -492,8 +492,8 @@ A worker's declaration names its process, and may say why it exists:
 
 ```q
 .qetl.job.bounded.define[`fx_rates_backfill;
-    `source`dataset`width`transform`procname`note!
-    (`fx_rates;`fx_rates;1D;`fx_rates_passthrough;
+    `source`outputs`width`transform`procname`note!
+    (`fx_rates;enlist `fx_rates;1D;`fx_rates_passthrough;
      `fx_rates_backfill1;
      "bounded: reads the vendor's daily fixings over ODBC")];
 ```
@@ -502,8 +502,14 @@ A worker's declaration names its process, and may say why it exists:
 A backfill never starts with the stack - it registers with discovery, runs its
 range and exits - so a worker has no `start_with_all`.
 
-A streaming job already names its `procname`, `subscribe_to` and `publishes`,
-and those are its process's edges. Two more keys are optional:
+Both job types name what they produce under `outputs`, a symbol list --- and the
+job type decides what that means. A worker's holds exactly one dataset
+(`enlist `fx_rates`), the one its coverage is recorded under and its `replace` is keyed on; zero or several is refused at declaration. A streaming job's holds the tables it publishes onto the tickerplant, none or many, and nothing records them as complete. The old spellings, a worker's `dataset` and a streaming job's `publishes\`,
+are refused with the rename. See
+[Outputs](../reference/pipeline-declarations.md#outputs-----one-key-two-meanings).
+
+A streaming job already names its `procname`, `subscribe_to` and `outputs`, and
+those are its process's edges. Two more keys are optional:
 
   | key              | means                                                | absent    |
   | ---              | ---                                                  | ---       |
@@ -793,7 +799,7 @@ workers can fill one dataset at once:
 
 ```q
 .qetl.job.bounded.define[`fx_rates_eurusd;
-    `source`dataset`width`transform`partition!(`fx_rates;`fx_rates;1D;`fx_rates_pips;`EURUSD)];
+    `source`outputs`width`transform`partition!(`fx_rates;enlist `fx_rates;1D;`fx_rates_pips;`EURUSD)];
 ```
 
 Coverage is then recorded and read under that partition, and **no read unions

@@ -166,7 +166,7 @@ def test_a_job_the_bundle_does_not_declare_is_refused_naming_what_it_has(bundle)
 def test_a_published_table_the_bundle_does_not_define_is_external(tmp_path):
     folder = make_bundle(tmp_path / "pb2")
     (folder / "pb_general_ledger.q").write_text(
-        ".qetl.job.stream.define[`pb_general_ledger;`procname`subscribe_to`publishes!"
+        ".qetl.job.stream.define[`pb_general_ledger;`procname`subscribe_to`outputs!"
         "(`pb_ledger1;`symbol$();`piggybank_general_ledger`quote)];\n"
     )
     spec = jobs.from_bundle("pb_general_ledger", folder)
@@ -628,7 +628,7 @@ def test_a_dry_run_prints_the_plan_as_json_and_saves_nothing(cli_stack, bundle, 
     )  # fmt: skip
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)["plan"]
-    assert data["stack"]["id"] == 6000 and data["stack"]["discovery"] == "localhost:6001"
+    assert data["stack"]["base_port"] == 6000 and data["stack"]["discovery"] == "localhost:6001"
     assert data["ok"] is True and data["changes"][0]["action"] == "register table"
     assert not (tmp_path / "attachments").exists()
 

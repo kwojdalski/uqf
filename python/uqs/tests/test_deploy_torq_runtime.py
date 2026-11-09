@@ -15,15 +15,16 @@ import tarfile
 from pathlib import Path
 from typing import Any
 
+import deploy_support as capture
 import pytest
 from test_deploy import _HEALTHY, SERVER, FakeRemote, _args, _artifact, _done, _verified, parse_args
 
-from uqs.deploy import driver, targets, torq_runtime
+from uqs.deploy import targets, torq_runtime
 from uqs.deploy.artifact import ReleaseError
 from uqs.deploy.config import DeployError, make_config
 
 ROOT = Path(__file__).resolve().parents[3]
-BASE: dict[str, Any] = {"artifact": "x", "host": "h", "dest": "/srv/uqf", "profile": "essential"}
+BASE: dict[str, Any] = {"artifact": "x", "ssh": "h", "dest": "/srv/uqf", "profile": "essential"}
 
 #: A small vendored TorQ: the two trees, with the files preflight and the
 #: version reader look at, and an executable torq.sh.
@@ -221,19 +222,19 @@ def test_a_runtime_that_does_not_match_its_sha256_is_refused(tmp_path):
 
 
 def test_bundled_needs_a_runtime():
-    with pytest.raises(DeployError, match="torq_mode is bundled, and needs torq_runtime"):
+    with pytest.raises(DeployError, match="torq_mode is bundled, and needs torq_component"):
         make_config(**BASE, torq_mode="bundled")
 
 
 @pytest.mark.parametrize("field", ["torq_home", "torq_app_home", "torq_launcher"])
 def test_an_existing_field_beside_bundled_is_refused(field):
     with pytest.raises(DeployError, match=f"torq_mode is bundled, but {field} - existing mode's"):
-        make_config(**BASE, torq_mode="bundled", torq_runtime="rt.tar.gz", **{field: "/opt/t"})
+        make_config(**BASE, torq_mode="bundled", torq_component="rt.tar.gz", **{field: "/opt/t"})
 
 
 def test_a_runtime_without_bundled_is_refused():
-    with pytest.raises(DeployError, match="torq_mode is existing, but torq_runtime - bundled"):
-        make_config(**BASE, torq_runtime="rt.tar.gz")
+    with pytest.raises(DeployError, match="torq_mode is existing, but torq_component - bundled"):
+        make_config(**BASE, torq_component="rt.tar.gz")
 
 
 def test_a_target_switching_to_bundled_drops_the_torq_home_below_it(tmp_path, monkeypatch):
@@ -244,10 +245,10 @@ def test_a_target_switching_to_bundled_drops_the_torq_home_below_it(tmp_path, mo
         'torq_component = "dist/rt.tar.gz"\n'
     )
     (cfg,) = targets.configs("b", "x", {}, False, tmp_path)
-    assert (cfg.torq_mode, cfg.torq_home, cfg.torq_runtime) == ("bundled", None, "dist/rt.tar.gz")
+    assert (cfg.torq_mode, cfg.torq_home, cfg.torq_component) == ("bundled", None, "dist/rt.tar.gz")
     # and a flag switching back drops the target's runtime
     (cfg,) = targets.configs("b", "x", {"torq_mode": "existing"}, False, tmp_path)
-    assert (cfg.torq_mode, cfg.torq_runtime) == ("existing", None)
+    assert (cfg.torq_mode, cfg.torq_component) == ("existing", None)
 
 
 # --- a bundled push ----------------------------------------------------------------------
@@ -265,7 +266,7 @@ def _push(tmp_path: Path, rt: torq_runtime.Runtime, *extra: str, state: dict | N
     built = list((tmp_path / "release" / "dist").glob("uqf-*.tar.gz"))
     release = built[0] if built else _artifact(tmp_path / "release")
     argv = _args(release, "--torq-mode", "bundled", "--torq-component", str(rt.path))
-    code = driver.deploy(parse_args([*argv, *extra]), remote, out=out)
+    code = capture.deploy(parse_args([*argv, *extra]), remote, out=out)
     return code, remote, out.getvalue()
 
 
@@ -335,7 +336,7 @@ def test_an_unpinned_runtime_is_refused_without_allow_unpinned(tmp_path):
     rt = runtime(tmp_path)
     Path(f"{rt.path}.sha256").unlink()
     with pytest.raises(
-        DeployError, match="no torq_runtime_sha256 pins it - pass --override allow-unpinned"
+        DeployError, match="no torq_component_sha256 pins it - pass --override allow-unpinned"
     ):
         _push(tmp_path, rt)
     code, _, out = _push(
@@ -360,12 +361,12 @@ def test_a_runtime_that_is_not_the_pinned_one_is_refused_without_accept_digest(t
 
 
 def test_allow_unpinned_may_relax_the_runtime_when_the_release_is_pinned():
-    cfg = make_config(**BASE, torq_mode="bundled", torq_runtime="rt.tar.gz",
+    cfg = make_config(**BASE, torq_mode="bundled", torq_component="rt.tar.gz",
                       expected_sha256="ab" * 32, allow_unpinned="dev TorQ")  # fmt: skip
     assert cfg.allow_unpinned == "dev TorQ"
     with pytest.raises(DeployError, match="nothing for it to relax"):
-        make_config(**BASE, torq_mode="bundled", torq_runtime="rt.tar.gz",
-                    expected_sha256="ab" * 32, torq_runtime_sha256="cd" * 32,
+        make_config(**BASE, torq_mode="bundled", torq_component="rt.tar.gz",
+                    expected_sha256="ab" * 32, torq_component_sha256="cd" * 32,
                     allow_unpinned="dev TorQ")  # fmt: skip
 
 

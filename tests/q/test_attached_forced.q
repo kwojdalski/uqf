@@ -5,6 +5,7 @@
 // into a directory of its own, so what was and was not sent is read back from disk.
 
 system "l scripts/dev/attached_forced.q";
+system "l scripts/dev/attached_calendar.q";
 
 .qt.qetl.attached_forced.root:`:build/test_attached_forced
 
@@ -76,3 +77,60 @@ system "l scripts/dev/attached_forced.q";
     / a null bound would refuse nothing: every row would pass the fence
     .qunit.assertThrows[.qdev.attached.forced_max_date;.Q.opt ("-max_date";"yesterday");
         "attached_backfill: -max_date yesterday is not a date";"named, not taken as null"]};
+
+/ --- a batch that does not match the native table writes nothing (#2194) -----
+
+/ Does text contain the fragment? (like is 'nyi on KDB-X for several wildcards)
+.qt.qetl.attached_forced.has:{[text;frag] 0<count ss[text;frag]}
+
+/ Every file under the root with its size and bytes, and the sym file: "unchanged" means the same bytes.
+.qt.qetl.attached_forced.fingerprint:{[root]
+    p:1_string root;
+    files:system"find ",p," -type f | sort";
+    files!{read1 hsym `$x} each files}
+
+.qt.qetl.attached_forced.native:{[]
+    system "rm -rf build/test_attached_forced; mkdir -p build/test_attached_forced";
+    db:.qt.qetl.attached_forced.root;
+    native:([] sym:`EURUSD`GBPUSD; time:2026.09.01D10:00:00.000000000 2026.09.01D11:00:00.000000000; px:1.1 1.3; qty:100 200);
+    (` sv .Q.par[db;2026.09.01;`fx],`) set .Q.en[db;native];
+    db}
+
+.qt.qetl.attached_forced.test_a_long_against_float_batch_is_refused_and_the_partition_is_untouched:{[t]
+    db:.qt.qetl.attached_forced.native[];
+    before:.qt.qetl.attached_forced.fingerprint db;
+    rows:([] sym:enlist `USDJPY; time:enlist 2026.09.01D12:00:00.000000000; px:enlist 150.1; qty:enlist 5f);
+    err:.[.qdev.attached.forced_append;(db;2026.09.01;`fx;rows);{[e] e}];
+    .qunit.assertTrue[10h=type err;"it throws"];
+    .qunit.assertTrue[.qt.qetl.attached_forced.has[err;"attached_forced: the batch does not match the native table"] and .qt.qetl.attached_forced.has[err;"nothing was written"];"with the named error"];
+    .qunit.assertTrue[.qt.qetl.attached_forced.has[err;"qty: native j, batch f"];"which lists the column with its native and its batch type"];
+    .qunit.assertEquals[.qt.qetl.attached_forced.fingerprint db;before;"every byte of the native HDB is as it was, the sym file included"]};
+
+.qt.qetl.attached_forced.test_a_batch_that_matches_is_still_appended:{[t]
+    / PeachQ cannot upsert onto a splayed table on disk ('type), which is why io_hdb.q reads and rewrites there
+    if[.qetl.io.on_peachq; :(::)];
+    db:.qt.qetl.attached_forced.native[];
+    rows:([] sym:enlist `USDJPY; time:enlist 2026.09.01D12:00:00.000000000; px:enlist 150.1; qty:enlist 5);
+    .qunit.assertEquals[.qdev.attached.forced_append[db;2026.09.01;`fx;rows];1;"one row appended"];
+    .qunit.assertEquals[count get ` sv .Q.par[db;2026.09.01;`fx],`qty;3;"qty holds all three rows"];
+    .qunit.assertEquals[type get ` sv .Q.par[db;2026.09.01;`fx],`qty;7h;"and is still a long vector"]};
+
+.qt.qetl.attached_forced.test_the_refusal_lists_every_mismatched_column:{[t]
+    db:.qt.qetl.attached_forced.native[];
+    rows:([] sym:enlist `USDJPY; time:enlist 2026.09.01D12:00:00.000000000; px:enlist 150; qty:enlist 5f);
+    err:.[.qdev.attached.forced_append;(db;2026.09.01;`fx;rows);{[e] e}];
+    .qunit.assertTrue[.qt.qetl.attached_forced.has[err;"px: native f, batch j"];"px is listed"];
+    .qunit.assertTrue[.qt.qetl.attached_forced.has[err;"qty: native j, batch f"];"and so is qty"]};
+
+/ --- the stack's calendar (#2193) --------------------------------------------
+
+.qt.qetl.attached_forced.test_rows_go_to_the_partition_the_stack_files_them_in:{[t]
+    system "rm -rf build/test_attached_forced; mkdir -p build/test_attached_forced";
+    `.qt.qetl.attached_forced.calls set ();
+    `.qdev.attached.forced_dates set `date$();
+    b:`max_date`destination`calendar!(2026.11.06;`dest_forced;"off=-25200000000000,adj=0");
+    m:.qdev.attached.forced_manager[.qt.qetl.attached_forced.call;.qt.qetl.attached_forced.root;`deal_time;b];
+    r:.[m`write;(`deals;.qt.qetl.attached_forced.rows 2026.11.05D16:00:00.000000000 2026.11.05D17:30:00.000000000);{[e] (`err;e)}];
+    .qetl.io.use_calendar "";
+    .qunit.assertEquals[r;2;"both rows written"];
+    .qunit.assertEquals[0<count each key each .Q.par[.qt.qetl.attached_forced.root;;`deals] each 2026.11.05 2026.11.06;11b;"one partition each: the 17:30 row is the next native day's"]};

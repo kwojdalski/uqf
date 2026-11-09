@@ -1,0 +1,321 @@
+/**
+ * The Compare view (#2033) holds no rule: it sends both sides, the window,
+ * the filters and the row limit as typed, and shows q's verdict as it came
+ * back - an equal_in_sample result always with its label, which says whether
+ * the sample was cut.
+ */
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { expect, it, vi } from "vitest";
+import { CompareView, compareBody, compareFilter } from "./CompareView";
+import { writeToken } from "./api/client";
+import type { CompareResult, CompareTable } from "./api/compare";
+
+const ok = (body: unknown) => ({ ok: true, json: async () => body });
+
+function verdict(over: Partial<CompareTable> = {}): CompareTable {
+  return {
+    table: "demo_deals",
+    outcome: "equal_in_sample",
+    label:
+      "equal in a sample cut at 50 rows per side - NOT proof the tables are equal: rows past the cut were not compared",
+    truncated: true,
+    key: ["deal_id"],
+    basis: "events",
+    read: [50, 50],
+    schema: [],
+    rows: [],
+    unpaired: 0,
+    coverage: {
+      left: { checked: false, covered: [], gaps: [] },
+      right: { checked: false, covered: [], gaps: [] },
+    },
+    reasons: { left: "", right: "" },
+    ...over,
+  };
+}
+
+function result(tables: CompareTable[]): CompareResult {
+  return {
+    ok: tables.every((t) => t.outcome === "equal_in_sample"),
+    outcome: tables[0].outcome,
+    left: "local",
+    right: "prod",
+    range_from: "2026-09-11T00:00:00.000000000+00:00",
+    range_to: "2026-09-16T00:00:00.000000000+00:00",
+    limit: 50,
+    filters: [{ column: "sym", op: "eq", value: "EURUSD" }],
+    source_version: null,
+    slice: null,
+    tables,
+  };
+}
+
+/** /catalog answers the operators the filter rows offer; every other path
+ *  answers `answer`. */
+function serve(answer: unknown) {
+  const fetcher = vi.fn(async (path: string) =>
+    path === "/catalog"
+      ? ok({
+          tables: [],
+          operators: ["eq", "ne", "lt", "le", "gt", "ge", "in"],
+        })
+      : answer,
+  );
+  vi.stubGlobal("fetch", fetcher);
+  return fetcher;
+}
+
+function fill(values: Record<string, string>) {
+  for (const [label, value] of Object.entries(values))
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+}
+
+const FORM = {
+  Right: "prod",
+  Tables: "demo_deals",
+  "From (included)": "2026-09-11T00:00:00Z",
+  "To (excluded)": "2026-09-16T00:00:00Z",
+  "Rows per side, at most": "50",
+};
+
+/** One filter row, typed into the form as the Desk's are. */
+async function addFilter(column: string, op: string, value: string) {
+  const add = screen.getByRole("button", { name: "Add filter" });
+  await waitFor(() => expect(add).toBeEnabled());
+  fireEvent.click(add);
+  const rows = screen.getAllByLabelText("Column");
+  const index = rows.length - 1;
+  fireEvent.change(rows[index], { target: { value: column } });
+  fireEvent.change(screen.getAllByLabelText("Operator")[index], {
+    target: { value: op },
+  });
+  fireEvent.change(screen.getAllByLabelText(/^Value/)[index], {
+    target: { value },
+  });
+}
+
+it("sends both sides, the window, filters and limit as typed", async () => {
+  const fetcher = serve(ok(result([verdict()])));
+  render(<CompareView />);
+  fill(FORM);
+  await addFilter("sym", "eq", "EURUSD");
+  await addFilter("sym", "in", '["EURUSD", "GBPUSD"]');
+  fireEvent.click(screen.getByRole("button", { name: "Compare" }));
+  await screen.findByLabelText("Comparison of demo_deals");
+  const [path, options] = fetcher.mock.calls.at(-1) as unknown as [
+    string,
+    RequestInit,
+  ];
+  expect(path).toBe("/compare");
+  expect(JSON.parse(options.body as string)).toEqual({
+    left: "local",
+    right: "prod",
+    tables: ["demo_deals"],
+    range_from: "2026-09-11T00:00:00Z",
+    range_to: "2026-09-16T00:00:00Z",
+    filters: [
+      { column: "sym", op: "eq", value: "EURUSD" },
+      { column: "sym", op: "in", value: ["EURUSD", "GBPUSD"] },
+    ],
+    limit: 50,
+    source_version: null,
+    slice: null,
+  });
+});
+
+it("carries the write token, since a target side is reached over ssh", async () => {
+  writeToken.set("s3cret");
+  try {
+    const fetcher = serve(ok(result([verdict()])));
+    render(<CompareView />);
+    fill(FORM);
+    fireEvent.click(screen.getByRole("button", { name: "Compare" }));
+    await screen.findByLabelText("Comparison of demo_deals");
+    const [, options] = fetcher.mock.calls.at(-1) as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect((options.headers as Record<string, string>).Authorization).toBe(
+      "Bearer s3cret",
+    );
+  } finally {
+    writeToken.set("");
+  }
+});
+
+it("names both sides, and never shows a truncated sample without its label", async () => {
+  serve(ok(result([verdict()])));
+  render(<CompareView />);
+  fill(FORM);
+  fireEvent.click(screen.getByRole("button", { name: "Compare" }));
+  const summary = await screen.findByLabelText("Comparison summary");
+  expect(summary).toHaveTextContent("local (left) against prod (right)");
+  const table = screen.getByLabelText("Comparison of demo_deals");
+  expect(within(table).getByRole("status")).toHaveTextContent(
+    "NOT proof the tables are equal",
+  );
+  expect(within(table).getByText("equal_in_sample")).toHaveClass("badge");
+});
+
+it("shows each kind of difference q named", async () => {
+  serve(
+    ok(
+      result([
+        verdict({
+          outcome: "differs",
+          label:
+            "differs - schema (1 column), published coverage, rows (1 difference)",
+          truncated: false,
+          schema: [{ column: "venue", left: "absent", right: "symbol (s)" }],
+          rows: [
+            {
+              rowkey: "deal_id=3",
+              kind: "changed",
+              detail: "rate: 1.0847 -> 1.2",
+            },
+          ],
+          coverage: {
+            left: { checked: true, covered: [], gaps: [] },
+            right: {
+              checked: true,
+              covered: [],
+              gaps: [
+                {
+                  range_from: "2026-09-13T00:00:00.000000000+00:00",
+                  range_to: "2026-09-16T00:00:00.000000000+00:00",
+                },
+              ],
+            },
+          },
+        }),
+      ]),
+    ),
+  );
+  render(<CompareView />);
+  fill(FORM);
+  fireEvent.click(screen.getByRole("button", { name: "Compare" }));
+  expect(await screen.findByLabelText("Schema differences")).toHaveTextContent(
+    "venue",
+  );
+  expect(screen.getByLabelText("Row differences")).toHaveTextContent(
+    "rate: 1.0847 -> 1.2",
+  );
+  expect(screen.getByLabelText("Coverage not published")).toHaveTextContent(
+    "prod",
+  );
+});
+
+it("shows an unavailable side's reason", async () => {
+  serve(
+    ok(
+      result([
+        verdict({
+          outcome: "endpoint_unavailable",
+          label: "endpoint unavailable - prod: ssh refused",
+          truncated: false,
+          reasons: { left: "", right: "ssh refused" },
+        }),
+      ]),
+    ),
+  );
+  render(<CompareView />);
+  fill(FORM);
+  fireEvent.click(screen.getByRole("button", { name: "Compare" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "prod: ssh refused",
+  );
+});
+
+it("refuses a form that does not state both sides and a zoned window", () => {
+  const base = {
+    left: "local",
+    right: "prod",
+    tables: "t",
+    from: "2026-09-11T00:00:00Z",
+    to: "2026-09-12T00:00:00Z",
+    filters: [],
+    limit: "10",
+    sourceVersion: "",
+    slice: "",
+  };
+  expect(() => compareBody({ ...base, right: " " })).toThrow("Name both sides");
+  expect(() => compareBody({ ...base, tables: "" })).toThrow(
+    "at least one table",
+  );
+  expect(() => compareBody({ ...base, from: "2026-09-11T00:00:00" })).toThrow(
+    "timezone",
+  );
+  expect(() => compareBody({ ...base, limit: "0" })).toThrow("row limit");
+  expect(compareBody({ ...base, tables: "a, b c" }).tables).toEqual([
+    "a",
+    "b",
+    "c",
+  ]);
+});
+
+it("says the coverage slice: a blank slice with a source version is the no-slice-dimension slice", () => {
+  const base = {
+    left: "local",
+    right: "prod",
+    tables: "t",
+    from: "2026-09-11T00:00:00Z",
+    to: "2026-09-12T00:00:00Z",
+    filters: [],
+    limit: "10",
+    sourceVersion: "",
+    slice: "",
+  };
+  const slice = (over: Partial<typeof base>) => {
+    const body = compareBody({ ...base, ...over });
+    return [body.source_version, body.slice];
+  };
+  expect(slice({})).toEqual([null, null]);
+  expect(slice({ sourceVersion: "v1" })).toEqual(["v1", ""]);
+  expect(slice({ sourceVersion: "v1", slice: " EURUSD " })).toEqual([
+    "v1",
+    "EURUSD",
+  ]);
+  // sent, so the server refuses it, rather than dropped here
+  expect(slice({ slice: "EURUSD" })).toEqual([null, "EURUSD"]);
+});
+
+it("shows the server's refusal", async () => {
+  serve({
+    ok: false,
+    status: 422,
+    json: async () => ({
+      error: "CompareRefused",
+      detail: "data diff: filter sym: expected COLUMN OP VALUE",
+      transient: false,
+    }),
+  });
+  render(<CompareView />);
+  fill(FORM);
+  fireEvent.click(screen.getByRole("button", { name: "Compare" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "expected COLUMN OP VALUE",
+  );
+});
+
+it("refuses a filter row it cannot send, before anything is sent", () => {
+  expect(() => compareFilter({ column: " ", op: "eq", raw: "x" })).toThrow(
+    "column",
+  );
+  expect(() => compareFilter({ column: "sym", op: "eq", raw: " " })).toThrow(
+    "a value",
+  );
+  expect(() =>
+    compareFilter({ column: "sym", op: "in", raw: "EURUSD" }),
+  ).toThrow("JSON list");
+  expect(compareFilter({ column: " px ", op: "ge", raw: "1.5" })).toEqual({
+    column: "px",
+    op: "ge",
+    value: "1.5",
+  });
+});

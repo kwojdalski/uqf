@@ -31,7 +31,12 @@ from uqs.cli.shared import (
     console,
     job_app,
 )
-from uqs.model.declarations import Declaration, declaration_calls, read_file, symbols
+from uqs.model.declarations import (
+    Declaration,
+    declaration_calls,
+    declared_outputs,
+    read_file,
+)
 from uqs.model.pipeline import PipelineKind
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import bundles
@@ -134,7 +139,7 @@ def _report_undefined_tables(items: list[Item], declarations: list[Declaration])
         if item.kind is Kind.WORKER and item.destination is not None:
             for fn, name, fields in declaration_calls(item.destination.read_text()):
                 if fn == "qetl.job.bounded.define":
-                    uses.append((name, "fills", symbols(fields.get("dataset", ""))))
+                    uses.append((name, "fills", declared_outputs(fields, name)))
     for name, verb, used in uses:
         missing = [t for t in used if t not in known]
         if missing:

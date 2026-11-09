@@ -45,6 +45,17 @@ Open `http://127.0.0.1:8000/ui/`. API routes and static assets share the same
 origin. The stack root's `web/dist` is mounted when it exists at startup; without
 it the API runs alone.
 
+## Workspace
+
+The header's workspace selector picks the stack this tab reads: `local`, or a
+target from the server's uqs registry (`GET /workspaces`). The choice is this
+tab's own (sessionStorage) and travels on every request as `X-UQF-Target`, so
+another session is never moved by it. Switching aborts what is in flight and
+clears every view's results; each result is labelled with the workspace it
+came from, and an answer labelled for another is refused. A target that cannot
+be reached is shown as an error naming it - the views stay empty rather than
+showing the local stack. The browser holds no target list and no credential.
+
 ## Views
 
 - **Coverage:** explicit dataset, source version and timezone-aware half-open
@@ -66,6 +77,16 @@ it the API runs alone.
   is explained. An optional coverage requirement refuses incomplete queries
   and shows the API's 409 missing-range message. Results are bounded by the
   requested row limit and server cap, with no pagination claim.
+  _Plot_ draws the loaded rows instead of tabling them: an x column (numeric
+  or temporal), up to three numeric y columns, as a line or scatter. Nulls and
+  infinities stay gaps, and a truncated result says so on the chart. No new
+  request is made. Plotly loads only when a plot is first shown, from its own
+  chunk.
+- **Charts:** prepared charts, defined on the server (`GET /charts`). The view
+  draws each chart's form from its parameter schema and renders the plotly.py
+  figure it is sent, with the point limit and whether the figure was
+  downsampled or truncated. It holds no chart-specific code. Plotly comes from
+  the same lazy chunk the Desk's Plot view uses.
 - **Control:** the write surface, rendered only when the API reports writes
   enabled. Processes are picked from the list the API serves, grouped by
   proctype, with `all` meaning torq.sh's own `all` (startwithall=1) rather
@@ -76,24 +97,42 @@ it the API runs alone.
   Stop and restart ask to be confirmed first; Escape or Cancel backs out.
 - **Activity:** the history `GET /activity` serves - what operators did here
   and the server's audit of every write, whoever sent it - filtered by time,
-  this session, action, target, outcome and source. Choosing a request id shows
-  one operation: the click, the request and its result. It says when history
-  is in memory only or writes to it have failed, and shows a claimed user as
-  unverified.
+  this session, action, target, outcome, source and level. Choosing a request
+  id shows one operation: the click, the request and its result. It says when
+  history is in memory only or writes to it have failed, how much of each level
+  is kept and what was not, and shows a claimed user as unverified. It sets the
+  level this tab records at, and exports what the filters show as a timeline,
+  CSV or JSON Lines.
 - **Fleet, Queue, Connections, Usage:** the existing operational endpoints,
   including partial failures, identity mismatches, unresolved ports, optional
   processes and unconfigured usage collection.
 
 ## Activity recording
 
-`src/activity.ts` records navigation, selections, submissions, confirmations,
-cancellations and the result of each write, with how each was triggered
-(`pointer` or `keyboard`: Enter on a button counts). It batches events and
-sends them to `POST /activity/events` about a second later, or when the tab is
-hidden, and keeps them while the API is unreachable. Polling records nothing.
-It never records a typed value or the write token: a target names a view, a
-table, a process selector or a worker, and `detail` carries only the keys the
-server allows. Every write carries `X-UQF-Request-Id` and `X-UQF-Session-Id`,
+`src/activity.ts` records at the tab's level (#2000) - the server's default from
+`/health`, or the one picked in the Activity view:
+
+- `off`: nothing. The server still audits every write.
+- `actions`: navigation, selections, submissions, confirmations, cancellations
+  and the result of each write, from the handler that performs each.
+- `interactions`: also every control used, recorded by one listener at the
+  document - a click (or Enter or Space on a control), a download, a change to
+  a select, box or field, a section toggled, a copy - under the control's
+  `data-activity` name. Give every new button, link, input, select, textarea
+  and summary one: `src/ActivityCoverage.test.tsx` fails on a control without
+  it, in the source and on every rendered view.
+- `debug`: also each request's start and finish (method, route, status,
+  duration) and each poll and retry of a polled view, rate-limited (a burst of
+  30, then 5 a second).
+
+Each event says how it was triggered (`pointer` or `keyboard`: Enter on a button
+counts). It batches events and sends them to `POST /activity/events` about a
+second later, or when the tab is hidden, and keeps up to 1000 while the API is
+unreachable; what the rate limit samples away or the queue overflows is counted
+and sent with the next batch. It never records a typed value, a file's name or
+contents, copied text or the write token at any level: a target names a view, a
+table, a process selector, a worker or a control, a request is recorded by its
+route alone, and `detail` carries only the keys the server allows. Every write carries `X-UQF-Request-Id` and `X-UQF-Session-Id`,
 so its browser events and the server's audit row share an id.
 
 ## Refresh behaviour
@@ -102,7 +141,7 @@ Only mounted views poll. Each successful response supplies `poll_seconds`;
 requests are scheduled after completion, so slow HDB calls never overlap.
 The browser cancels requests on navigation, replacement or refresh, and ignores
 late responses. A browser request times out after
-`UQF_FRONTEND_TIMEOUT` plus 15 seconds, which `/health` serves as
+`UQF_FRONTEND_TIMEOUT_SECONDS` plus 15 seconds, which `/health` serves as
 `request_timeout_seconds` (45 seconds with the default 30 until the first
 answer); start/stop/restart are killed 5 seconds sooner, so the server's
 refusal arrives before the browser gives up.
@@ -128,6 +167,8 @@ They cover typed filters, UTC range validation, cancellation, no-overlap polling
 server cadence, transient recovery, coverage gaps/409s and idle versus failed
 worker states. The CI `Browser application` job runs these and the production
 build. API tests cover the added cadence fields and optional static mount.
+The build ends with `scripts/check-bundle.mjs`, which reads the vite manifest
+and fails if Plotly is in anything the entry loads up front.
 
 Live gateway integration and visual browser QA are separate checks; the unit
 suite uses explicit API fixtures and does not silently replace unavailable

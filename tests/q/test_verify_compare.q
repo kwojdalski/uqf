@@ -23,7 +23,7 @@
 
 / A third producer of demo_deals whose rows are the fixture's, changed by `shape`.
 .qt.qetl.verify.compare.declare_rogue:{[shape]
-    .qetl.job.stream.define[.qt.qetl.verify.compare.rogue;`procname`subscribe_to`publishes`period`poll!(
+    .qetl.job.stream.define[.qt.qetl.verify.compare.rogue;`procname`subscribe_to`outputs`period`poll!(
         `vcmp_rogue1;`symbol$();enlist `demo_deals;0D00:00:01;
         `fetch`normalize`next_cursor`source!(
             {[shape;c] shape select from .qpipe.source.demo_deals.fixture[] where deal_time>c}[shape];

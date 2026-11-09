@@ -2,13 +2,16 @@ import { expect, it, vi } from "vitest";
 import {
   DEFAULT_REQUEST_TIMEOUT_MS,
   adoptRequestTimeout,
+  errorBody,
   request,
   requestTimeout,
+} from "./api/client";
+import {
   filterValue,
   validateRange,
   type Column,
   type ColumnType,
-} from "./api";
+} from "./api/query";
 const column = (type: ColumnType): Column => ({
   name: "value",
   type,
@@ -40,10 +43,10 @@ it("coerces the int, short, date and time columns the scaffold can create (#1364
 it("rejects naive and reversed time ranges before requesting coverage", () => {
   const range = {
     dataset: "trades",
-    // The sentinel, not an omission: "" means the dataset has no partition
-    // dimension. validateRange must accept it, or every unpartitioned
-    // dataset becomes unqueryable (#185).
-    partition: "",
+    // The sentinel, not an omission: "" means the dataset has no slice
+    // dimension. validateRange must accept it, or every unsliced dataset
+    // becomes unqueryable (#185).
+    slice: "",
     source_version: "v1",
     range_from: "2026-09-16T00:00:00Z",
     range_to: "2026-09-17T00:00:00Z",
@@ -88,7 +91,7 @@ it("takes a timestamp to the nanosecond, and orders a range by it", () => {
   );
   const range = {
     dataset: "trades",
-    partition: "",
+    slice: "",
     source_version: "v1",
     range_from: "2026-10-14T10:00:00.000001234Z",
     range_to: "2026-10-14T12:00:00.000001999+02:00",
@@ -119,4 +122,32 @@ it("takes its request timeout from what /health serves, not a copy of its own (#
   adoptRequestTimeout(0);
   expect(requestTimeout()).toBe(90000);
   adoptRequestTimeout(DEFAULT_REQUEST_TIMEOUT_MS / 1000);
+});
+it("reads every error in the one shape the API answers (#2106)", () => {
+  expect(
+    errorBody(
+      {
+        error: "RequestInvalid",
+        detail: "query.limit: too small",
+        transient: false,
+      },
+      422,
+    ),
+  ).toEqual({
+    error: "RequestInvalid",
+    detail: "query.limit: too small",
+    transient: false,
+    errors: undefined,
+  });
+  expect(
+    errorBody(
+      { error: "GatewayReloading", detail: "eod", transient: true },
+      503,
+    ).transient,
+  ).toBe(true);
+  // An answer not in the shape - a proxy's page, or none - names the status.
+  expect(errorBody(null, 502).detail).toBe("Request failed (502).");
+  expect(errorBody({ detail: ["x"] }, 422).detail).toBe(
+    "Request failed (422).",
+  );
 });

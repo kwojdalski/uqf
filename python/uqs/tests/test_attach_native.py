@@ -74,7 +74,7 @@ def test_dry_run_writes_nothing_and_previews_every_file_writer_and_policy(world)
     assert files[str(world.schema)]["host"] == "localhost"
     (launcher,) = [f for f in files if f.endswith("native_start.sh")]
     assert files[launcher]["change"] == "native start launcher (runs the start gate)"
-    assert native_preview["publisher"]["procname"] == PROC
+    assert native_preview["publisher"]["process"] == PROC
     assert native_preview["publisher"]["proctype"] == "metrics"
     assert native_preview["start_with_all"] is False
     assert native_preview["startup"].startswith("on demand (startwithall=0)")

@@ -7,17 +7,18 @@ logs the new spelling when used. The release after removes the row in
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pytest
 import typer
-from typer.testing import CliRunner
+from plain_cli import PlainRunner
 
 from uqs import cli
 from uqs.cli import lists, renames
 from uqs.stack import multitail as stack_multitail
 
-runner = CliRunner()
+runner = PlainRunner()  # CI renders usage errors in colour
 
 #: (command path, old spelling, new spelling): every rename #1729 made.
 RENAMED = [
@@ -373,20 +374,16 @@ def test_a_duration_is_seconds_bare_or_with_a_unit():
         vocabulary.seconds("soon")
 
 
-def test_sources_check_window_minutes_become_last(monkeypatch):
-    """`--window N` was minutes; it is `--last Nm` now, read and converted."""
+def test_sources_check_window_is_refused_naming_the_range(monkeypatch):
+    """`--window N` was minutes; it was read as `--last Nm` for a release, and
+    is refused now, naming the shared range that replaced it (#2249)."""
     from uqs.cli import source_check
 
-    seen = {}
-    monkeypatch.setattr(source_check.live_check, "check", lambda *a, **k: seen.update(k) or [])
-    said = []
-    monkeypatch.setattr(source_check, "warn_renamed", lambda o, n: said.append((o, n)))
+    monkeypatch.setattr(source_check.live_check, "check", lambda *a, **k: pytest.fail("ran"))
     result = runner.invoke(cli.app, ["config", "sources", "check", "src1", "--window", "90"])
-    assert result.exit_code == 0, result.output
-    assert seen["window_minutes"] == 90
-    assert said == [("--window 90", "--last 90m")]
-    runner.invoke(cli.app, ["config", "sources", "check", "src1", "--last", "2h"])
-    assert seen["window_minutes"] == 120
+    assert result.exit_code == 2
+    said = " ".join(re.sub("[│╭╮╰╯─]", " ", result.output).split())
+    assert "`--window MINUTES` is now the shared time range: --last DURATION" in said
 
 
 def test_seed_overwrite_is_on_conflict_replace(monkeypatch):

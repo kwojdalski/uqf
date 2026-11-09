@@ -26,8 +26,8 @@ def plan(subs=("ev", "ref"), horizon="0D00:00:10", **kw):
     )
 
 
-def body() -> str:
-    return next(a.body for a in plan().actions if str(a.path).endswith("hz.q"))
+def body(**kw) -> str:
+    return next(a.body for a in plan(**kw).actions if str(a.path).endswith("hz.q"))
 
 
 def test_it_declares_a_horizon_job_over_the_two_tables():
@@ -42,10 +42,11 @@ def test_it_declares_a_horizon_job_over_the_two_tables():
     ("kw", "message"),
     [
         ({"subs": ("ev",)}, "--subscribe-to EVENTS,REFERENCE"),
+        ({"subs": ("ev", "ev")}, "distinct events and reference tables"),
         ({"horizon": None}, "needs --horizon"),
-        ({"horizon": "10s"}, "a q timespan"),
+        ({"horizon": "10x"}, "a DURATION .* or a q timespan"),
         ({"columns": None}, "needs --schema"),
-        ({"publishes": "x"}, "drop --publishes"),
+        ({"publishes": "x"}, "drop --outputs"),
         ({"subs": ("ev", "nosym")}, "carries no sym"),
         ({"subs": ("ev", "gone")}, "no plant definition to read for gone"),
     ],
@@ -53,6 +54,11 @@ def test_it_declares_a_horizon_job_over_the_two_tables():
 def test_a_bad_request_is_refused_by_name(kw, message):
     with pytest.raises(UqsError, match=message):
         plan(**kw)
+
+
+def test_a_horizon_may_be_a_duration():
+    """#2121: `--horizon 10s` is the 0D00:00:10 it means."""
+    assert "0D00:00:10;" in body(horizon="10s")
 
 
 # #1584: horizon.q refuses a horizon that is not a positive timespan at load,

@@ -19,9 +19,10 @@
     unrec:sum batch[`status]=`unreconciled;
     bad:`infinite_pips`unreconciled_residual!(inf;unrec);
     names:where 0<bad;
+    pinned:.qpipe.transform.config_markout.check_pinned[batch];
     $[0=count names;
-      .qetl.job.bounded.no_failures[];
-      ([] check:names; status:(count names)#`fail;
+      pinned;
+      pinned,([] check:names; status:(count names)#`fail;
           detail:{[n;c] string[c]," row(s) ",$[n=`infinite_pips;"with infinite pips";"whose legs do not add up to the markout"]}'[names;bad names])]}
 
 / What a run records about its window.
@@ -30,8 +31,8 @@
 / @eg .qpipe.job.hdb_fx_markout_wide_backfill.facts[0#.qetl.plant.shape `fx_markout_wide]  ->  (enlist `span)!enlist "empty window"
 .qpipe.job.hdb_fx_markout_wide_backfill.facts:{[batch]
     if[0=count batch; :(enlist `span)!enlist "empty window"];
-    `executions`horizons`unpriced!(count distinct `venue`fill_id#batch;count distinct batch`horizon;
-        "j"$sum batch[`status]=`unavailable)}
+    `executions`horizons`unpriced`config_id!(count distinct `venue`fill_id#batch;count distinct batch`horizon;
+        "j"$sum batch[`status]=`unavailable;distinct batch`config_id)}
 
 \d .
 
@@ -45,9 +46,9 @@
         (cols .qetl.plant.shape `fx_markout_wide)#(([] time:4#2026.09.17D10:00:10),'.qpipe.transform.fx_markout_outputs.sample_wide[])))];
 
 .qetl.job.bounded.define[`hdb_fx_markout_wide_backfill;
-    `source`dataset`width`transform`check`facts`procname`note`target_key`window_column`on_conflict`revision!
-    (`hdb_fx_markouts;`fx_markout_wide;0D01;`hdb_fx_markouts_wide;
+    `source`outputs`width`transform`check`facts`procname`note`target_key`window_column`on_conflict`revision`pin`twin_of!
+    (`hdb_fx_markouts;enlist `fx_markout_wide;0D01;`hdb_fx_markouts_wide;
      .qpipe.job.hdb_fx_markout_wide_backfill.quality_check;.qpipe.job.hdb_fx_markout_wide_backfill.facts;
      `hdb_fx_markout_wide_backfill1;
      "bounded: marks out the HDB's executions against its market_data, into fx_markout_wide, with the calculation fxmarkoutwide1 applies live";
-     `venue`fill_id`horizon;`source_time;`replace;1)];
+     `venue`fill_id`horizon;`source_time;`replace;1;.qpipe.transform.fx_markout_outputs.pin;`fx_markout_wide)];

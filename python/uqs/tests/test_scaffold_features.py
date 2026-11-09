@@ -8,10 +8,11 @@ rather than on the next import.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner
+from plain_cli import PlainRunner
 
 from uqs import cli
 from uqs.cli import create, create_backfill
@@ -26,7 +27,7 @@ UQF_ROOT = Path(__file__).resolve().parents[3]
 PROFILES_TEXT = (UQF_ROOT / profile.PROFILES_FILE).read_text()
 KNOWN = ("default", "fx", "crypto", "essential")
 
-runner = CliRunner()
+runner = PlainRunner()  # CI renders usage errors in colour
 
 
 def _body(plan: jobs.ScaffoldPlan, suffix: str) -> str:
@@ -66,17 +67,18 @@ def test_an_etl_without_a_period_has_no_timer():
 @pytest.mark.parametrize(
     ("period", "message"),
     [
-        ("5s", "must be a q timespan"),
+        ("5x", "must be a DURATION .* or a q timespan"),
         ("0D00:00:00", "must be positive"),
+        ("0s", "must be positive"),
         # #1598: a component q refuses to parse, or a day count past q's
         # 64-bit timespans - 106752D wraps negative, 213504D to ~25 minutes.
-        ("0D00:60:00", "must be a q timespan"),
-        ("0D00:00:60", "must be a q timespan"),
-        ("0D99:99:99", "must be a q timespan"),
-        ("106752D00:00:00", "must be a q timespan"),
-        ("213504D00:00:00", "must be a q timespan"),
-        ("999999999D00:00:00", "must be a q timespan"),
-        ("\u0661D00:00:01", "must be a q timespan"),
+        ("0D00:60:00", "or a q timespan"),
+        ("0D00:00:60", "or a q timespan"),
+        ("0D99:99:99", "or a q timespan"),
+        ("106752D00:00:00", "or a q timespan"),
+        ("213504D00:00:00", "or a q timespan"),
+        ("999999999D00:00:00", "or a q timespan"),
+        ("\u0661D00:00:01", "or a q timespan"),
         ("0D00:00:00.0000000001", "must be positive"),
     ],
 )
@@ -85,7 +87,15 @@ def test_a_period_define_would_refuse_is_refused_here(period, message):
         jobs.streaming_job("f", [], "fo", "px:float", period=period)
 
 
-# -------------------------------------------------------- --partition, --check
+@pytest.mark.parametrize(("period", "tick"), [("5s", "0D00:00:05"), ("1D", "1D")])
+def test_a_period_is_a_duration_or_a_q_timespan(period, tick):
+    """#2121: `--period 5s` was refused on the one command whose value is a
+    timer tick, and `1D` too, which `--width` took."""
+    plan = jobs.streaming_job("f", [], "fo", "px:float", period=period)
+    assert f"\n    {tick};" in next(a.body for a in plan.actions if str(a.path).endswith("f.q"))
+
+
+# ------------------------------------------------------------ --slice, --check
 
 
 def test_a_partitioned_worker_declares_its_partition():
@@ -106,7 +116,7 @@ def test_a_partitioned_worker_declares_the_column_holding_its_partition():
 def test_a_partition_column_outside_the_columns_or_without_a_partition_is_refused():
     with pytest.raises(UqsError, match="not among --schema"):
         backfill.bounded_worker("fx", "fx_rates", "px:float", partition="EURUSD")
-    with pytest.raises(UqsError, match="needs --partition"):
+    with pytest.raises(UqsError, match="--slice-column needs --slice"):
         backfill.bounded_worker("fx", "fx_rates", "px:float", partition_column="sym")
 
 
@@ -153,8 +163,8 @@ def test_a_second_worker_needs_another_partition(tmp_path):
     workers = tmp_path / "src" / "etl" / "workers"
     workers.mkdir(parents=True)
     (workers / "w.q").write_text(
-        ".qetl.job.bounded.define[`w;`source`dataset`width`transform`partition!"
-        "(`s;`fx;1D;`s_passthrough;`EURUSD)];\n"
+        ".qetl.job.bounded.define[`w;`source`outputs`width`transform`partition!"
+        "(`s;enlist `fx;1D;`s_passthrough;`EURUSD)];\n"
     )
     assert create_backfill.workers_filling(tmp_path, "fx", "EURUSD") == ["w"]
     assert create_backfill.workers_filling(tmp_path, "fx", "GBPUSD") == []
@@ -269,7 +279,7 @@ def test_a_normalizer_takes_a_profile_too():
                 "x",
                 "--kind",
                 "backfill",
-                "--dataset",
+                "--outputs",
                 "x",
                 "--schema",
                 "a:float",
@@ -278,18 +288,18 @@ def test_a_normalizer_takes_a_profile_too():
             ],
             "--period",
         ),
-        (["x", "--publishes", "x", "--schema", "a:float", "--partition", "EURUSD"], "--partition"),
-        (["x", "--publishes", "x", "--schema", "a:float", "--check"], "--check"),
-        (["x", "--publishes", "x", "--schema", "a:float", "--width", "2D"], "--width"),
-        (["x", "--publishes", "x", "--schema", "a:float", "--source", "s"], "--source"),
-        (["x", "--publishes", "x", "--schema", "a:float", "--dataset", "d"], "--dataset"),
+        (["x", "--outputs", "x", "--schema", "a:float", "--slice", "EURUSD"], "--slice"),
+        (["x", "--outputs", "x", "--schema", "a:float", "--check"], "--check"),
+        (["x", "--outputs", "x", "--schema", "a:float", "--width", "2D"], "--width"),
+        (["x", "--outputs", "x", "--schema", "a:float", "--source", "s"], "--source"),
+        (["x", "--kind", "normalizer", "--outputs", "x", "--schema", "a:float"], "--outputs"),
         (["x", "--kind", "normalizer", "--schema", "a:float", "--width", "2D"], "--width"),
         (
             [
                 "x",
                 "--kind",
                 "backfill",
-                "--dataset",
+                "--outputs",
                 "x",
                 "--schema",
                 "a:float",
@@ -313,6 +323,18 @@ def test_an_option_for_another_kind_is_refused_by_name(argv, option, monkeypatch
     assert refused and refused[0].startswith(f"{option} does not apply to --kind")
 
 
+@pytest.mark.parametrize(
+    ("old", "new"), [("--partition", "`--slice`"), ("--partition-column", "`--slice-column`")]
+)
+def test_the_old_partition_spellings_are_refused_naming_slice(old, new):
+    """#2239: the coverage slice is `--slice`; "partition" is an HDB date."""
+    argv = ["job", "new", "x", "--kind", "backfill", "--outputs", "x", old, "EURUSD", "--dry-run"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 2
+    said = " ".join(re.sub("[│╭╮╰╯─]", " ", result.output).split())
+    assert f"`{old}` is now {new}" in said
+
+
 # ------------------------------------------------------------------ --twin-of
 
 
@@ -326,8 +348,8 @@ def _plant() -> dict[str, str]:
 
 def test_a_twin_takes_its_jobs_table_and_columns():
     dataset, cols = create_backfill.twin_target(UQF_ROOT, "crypto_markout", None, None, _plant())
-    assert dataset == "crypto_execution_quality", "the one table crypto_markout publishes"
-    assert [c for c, _ in cols][:2] == ["time", "sym"], "and that table's own columns"
+    assert dataset == "crypto_markout", "the one table crypto_markout publishes"
+    assert [c for c, _ in cols][:2] == ["time", "source_time"], "and that table's own columns"
 
 
 def test_a_job_publishing_several_tables_needs_dataset_to_choose():
@@ -358,14 +380,39 @@ def test_a_twin_applies_the_transform_its_job_declares():
     refill re-derives what the job publishes rather than a copy of it."""
     assert create_backfill.shared_transform(UQF_ROOT, "crypto_markout", None) == (
         "crypto_markout",
-        "crypto_execution_quality",
+        "crypto_markout_score",
     )
     body = templates.worker_body(
-        "mk_backfill", "mk", "crypto_execution_quality", "1D", "mk_backfill1",
-        shared=("crypto_markout", "crypto_execution_quality"),
+        "mk_backfill", "mk", "crypto_markout", "1D", "mk_backfill1",
+        shared=("crypto_markout", "crypto_markout_score"),
     )  # fmt: skip
-    assert "`mk;`crypto_execution_quality;1D;`crypto_execution_quality;" in body
+    assert "`mk;enlist `crypto_markout;1D;`crypto_markout_score;" in body
     assert "passthrough" not in body, "no transform of its own is written"
+
+
+def test_a_scaffolded_twin_declares_the_job_it_repairs():
+    """#2103: --twin-of used to read the job once and leave nothing behind, so a
+    later change to the job's output could not be told from the backfill's."""
+    plain = templates.worker_body(
+        "mk_backfill", "mk", "arb_out", "1D", "mk_backfill1", twin_of="arbitrage"
+    )
+    assert "`twin_of`procname`note!" in plain
+    assert ";`arbitrage;\n" in plain
+    assert "twin_calculation" not in plain, "no shared transform, so no promise is written"
+    assert "calculation equivalence is not established" in plain
+    shared = templates.worker_body(
+        "mk_backfill", "mk", "crypto_markout", "1D", "mk_backfill1",
+        shared=("crypto_markout", "crypto_markout_score"), twin_of="crypto_markout",
+    )  # fmt: skip
+    assert "`twin_of`twin_calculation`procname`note!" in shared
+    assert ";`crypto_markout;`shared;\n" in shared, "the promise to apply the one transform"
+    assert "twin_of" not in templates.worker_body("w_backfill", "w", "d", "1D", "w1")
+
+
+def test_a_planned_twin_writes_its_declaration():
+    fields = _fields(_twin("arb_refill", "arbitrage"), "arb_refill_backfill.q")
+    assert symbols(fields["twin_of"]) == ("arbitrage",)
+    assert "twin_calculation" not in fields, "arbitrage declares no transform"
 
 
 def test_transform_beside_a_declared_one_is_refused():
@@ -462,16 +509,11 @@ def test_a_twin_of_a_job_without_a_transform_still_gets_a_new_source():
 
 
 def test_a_twin_whose_transform_registers_after_workers_is_refused():
-    """#1579: crypto_execution_quality is registered inside the streaming job's
-    file, which src/etl/init.q loads after workers/. A twin naming it stopped
-    the whole tree loading with `transform ... is not registered`."""
-    with pytest.raises(UqsError, match="Move crypto_execution_quality's .qetl.transform.define"):
-        create_backfill.backfill_plan(
-            UQF_ROOT, "crypto_refill", None, None,
-            width=None, source=None, procname=None, transport=None, partition=None,
-            check=False, transform=None, start_with_all=False, twin_of="crypto_markout",
-            definitions=_plant(),
-        )  # fmt: skip
+    """#1579: posbook's `position` transform is registered inside the streaming
+    job's file, which src/etl/init.q loads after workers/. A twin naming it
+    stopped the whole tree loading with `transform ... is not registered`."""
+    with pytest.raises(UqsError, match="Move position's .qetl.transform.define"):
+        create_backfill.require_loaded_before_workers(UQF_ROOT, "posbook", "position")
 
 
 def test_a_transform_registered_under_transforms_is_loaded_before_workers():
@@ -495,7 +537,7 @@ def test_a_twin_reuses_an_existing_source_without_columns_it_never_passed():
     assert not any(p.endswith("plant_tables.q") for p in written), "table not redefined"
     fields = _fields(plan, "exec_refill_backfill.q")
     assert symbols(fields["source"]) == ("hdb_executions",)
-    assert symbols(fields["dataset"]) == ("executions",)
+    assert symbols(fields["outputs"]) == ("executions",)
 
 
 # ---------------------------------- a passthrough between two different shapes

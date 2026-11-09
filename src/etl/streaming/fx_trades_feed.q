@@ -80,7 +80,7 @@
 
 / Once a second, slower than the quote feeds: a fill is a rarer event than a
 / quote, and the markout job's horizons are measured in seconds.
-.qetl.job.stream.define[`fx_trades_feed;`procname`subscribe_to`publishes`period`on_timer`start_with_all!(
+.qetl.job.stream.define[`fx_trades_feed;`procname`subscribe_to`outputs`period`on_timer`start_with_all!(
     `fxtradesfeed1;
     `symbol$();
     enlist `trades;

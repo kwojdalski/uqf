@@ -6,7 +6,6 @@ records every script, as in test_deploy.py.
 
 from __future__ import annotations
 
-import io
 import json
 import subprocess
 from pathlib import Path
@@ -84,13 +83,11 @@ def _server(target_verifies: bool = True, current: str = NEW, previous: str | No
 
 
 def _cfg():
-    return make_config(artifact="", host="uqf-server", dest="/opt/uqf", profile="rollback")
+    return make_config(artifact="", ssh="uqf-server", dest="/opt/uqf", profile="rollback")
 
 
 def _roll(remote, **kw):
-    out = io.StringIO()
-    code = rollback.rollback(_cfg(), remote, out=out, **kw)
-    return code, json.loads(out.getvalue())
+    return rollback.rollback(_cfg(), remote, **kw)
 
 
 def test_it_returns_to_the_release_current_replaced_in_the_order_a_push_restarts():
@@ -154,7 +151,7 @@ def test_a_current_that_will_not_stop_is_restarted_and_nothing_else_runs():
     remote = _server()
     remote.rules[".venv/bin/uqs stop rdb1 hdb1"] = _done(rc=1)
     with pytest.raises(DeployError):
-        rollback.rollback(_cfg(), remote, out=io.StringIO())
+        rollback.rollback(_cfg(), remote)
     stop = remote.index(".venv/bin/uqs stop rdb1 hdb1")
     restart = remote.index(
         f"cd /opt/uqf/releases/{NEW}\n", ".venv/bin/uqs start --profile essential"
@@ -163,6 +160,94 @@ def test_a_current_that_will_not_stop_is_restarted_and_nothing_else_runs():
     assert not remote.ran(".venv/bin/uqs start --profile fx"), "the target is never started"
     assert not remote.ran(".current.new"), "current never moves"
     assert remote.ran("rm -rf /opt/uqf/deploy.lock"), "the lock is released"
+
+
+def _interrupt_at(remote: FakeRemote, *markers: str) -> None:
+    """Ctrl-C the first time a script holding each of `markers` runs."""
+    base = remote.run
+    pending = list(markers)
+
+    def run(script, timeout, stage, as_login=False):
+        hit = next((m for m in pending if m in script), None)
+        if hit is not None:
+            pending.remove(hit)
+            remote.scripts.append((stage, script))
+            raise KeyboardInterrupt
+        return base(script, timeout, stage, as_login)
+
+    setattr(remote, "run", run)  # noqa: B010 - an instance's own run, as a fake
+
+
+@pytest.mark.parametrize(
+    ("marker", "target_started"),
+    [
+        (".venv/bin/uqs stop rdb1 hdb1", False),  # current's stop
+        (".venv/bin/uqs start --profile fx", True),  # the target's start
+        ("uqs deploy verify --profile fx", True),  # the target's verify wait
+    ],
+)
+def test_an_interrupted_rollback_restores_current_and_goes_on(log_text, marker, target_started):
+    """A Ctrl-C after current's stop used to go straight to releasing the
+    lock: both releases down, and nothing said (#2175). As a push does
+    (#1664), what the target started is stopped, current is started and
+    verified again, and the interruption goes on to the caller."""
+    remote = _server()
+    _interrupt_at(remote, marker)
+    with pytest.raises(KeyboardInterrupt):
+        rollback.rollback(_cfg(), remote)
+    at = remote.index(marker)
+    stop_target = f"cd /opt/uqf/releases/{OLD}\n", ".venv/bin/uqs stop rdb1 piggy1"
+    assert remote.ran(*stop_target) is target_started
+    restart = remote.index(
+        f"cd /opt/uqf/releases/{NEW}\n", ".venv/bin/uqs start --profile essential"
+    )
+    assert at < restart < remote.index("uqs deploy verify --profile essential")
+    if target_started:
+        assert remote.index(*stop_target) < restart, "the target is stopped first"
+    assert not remote.ran(".current.new"), "current never moves"
+    assert remote.ran("rm -rf /opt/uqf/deploy.lock"), "the lock is released"
+    said = log_text()
+    assert "INTERRUPTED" in said and f"release {NEW} restored" in said
+    assert f"current still names {NEW}" in said
+
+
+def test_an_interrupted_rollback_whose_restore_fails_says_nothing_runs(log_text):
+    remote = _server()
+    remote.rules["uqs deploy verify --profile essential"] = _verified(False)
+    _interrupt_at(remote, "uqs deploy verify --profile fx")
+    with pytest.raises(KeyboardInterrupt):
+        rollback.rollback(_cfg(), remote)
+    assert remote.ran(f"cd /opt/uqf/releases/{OLD}\n", ".venv/bin/uqs stop rdb1 piggy1")
+    assert not remote.ran(".current.new")
+    said = log_text()
+    assert f"release {NEW} NOT restored" in said and "neither release may be running" in said
+    assert f"current still names {NEW}" in said
+
+
+def test_a_second_interrupt_while_current_is_restored_says_nothing_may_run(log_text):
+    remote = _server()
+    _interrupt_at(remote, "uqs deploy verify --profile fx", "uqs deploy verify --profile essential")
+    with pytest.raises(KeyboardInterrupt):
+        rollback.rollback(_cfg(), remote)
+    assert not remote.ran(".current.new") and remote.ran("rm -rf /opt/uqf/deploy.lock")
+    said = log_text()
+    assert "interrupted again while restoring" in said
+    assert f"current still names {NEW}, but neither release may be running" in said
+
+
+def test_an_interrupt_while_current_moves_leaves_the_verified_target_running(log_text):
+    """The target is up and verified: undoing it there would trade a running
+    release for a guess. What `current` names is read back and said."""
+    remote = _server()
+    _interrupt_at(remote, f"ln -sfn releases/{OLD}")
+    with pytest.raises(KeyboardInterrupt):
+        rollback.rollback(_cfg(), remote)
+    assert not remote.ran(".venv/bin/uqs stop rdb1 piggy1"), "the target keeps running"
+    assert not remote.ran(".venv/bin/uqs start --profile essential")
+    assert remote.ran("rm -rf /opt/uqf/deploy.lock")
+    said = log_text()
+    assert f"release {OLD}'s processes are running and verified" in said
+    assert f"current names {NEW}" in said, "the fake's readlink still answers NEW"
 
 
 def test_a_target_that_does_not_verify_is_stopped_by_name_never_by_all():
@@ -219,11 +304,16 @@ def test_the_command_ends_a_dry_run_with_the_note_on_stderr_after_the_json(monke
     from uqs.cli.safety import dry_run_note
 
     monkeypatch.setattr(deploy_server, "Remote", lambda *a, **k: _server())
-    r = CliRunner().invoke(
-        cli.app, ["deploy", "rollback", "--ssh", "h", "--dest", "/opt/uqf", "--dry-run"]
-    )
+    argv = ["deploy", "rollback", "--ssh", "h", "--dest", "/opt/uqf", "--dry-run"]
+    note = Text.from_markup(dry_run_note()).plain
+    r = CliRunner().invoke(cli.app, [*argv, "--json"])
     assert r.exit_code == 0, r.output
-    assert r.stderr.strip().splitlines()[-1] == Text.from_markup(dry_run_note()).plain
+    doc = json.loads(r.stdout)  # #2125: the one document, the note beside it on stderr
+    assert (doc["ok"], doc["rollback"], doc["from"], doc["to"]) == (True, "planned", NEW, OLD)
+    assert r.stderr.strip().splitlines()[-1] == note
+    text = CliRunner().invoke(cli.app, argv)
+    assert text.stdout.startswith(f"would roll back from {NEW} to {OLD}: stop ")
+    assert text.stdout.strip().splitlines()[-1] == note
 
 
 def test_without_a_recorded_predecessor_it_asks_for_to():

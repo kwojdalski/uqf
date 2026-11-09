@@ -1,41 +1,68 @@
-import { useEffect, useState, type FormEvent } from "react";
 import {
-  type Backfill,
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
+import { mutate, type Row, writeToken } from "./api/client";
+import type {
+  BackfillStarted,
+  BackfillBody,
+  CommandResult,
+  ControlProcess,
+  ControlStatus,
+  LifecycleBody,
+  ProcessConfigBody,
+  ProcessConfigResult,
+  WorkerConfigBody,
+  WorkerConfigResult,
+} from "./api/control";
+import type { Health } from "./api/health";
+import type { Backfill, OpsData } from "./api/ops";
+import {
   type Catalog,
   type Coverage,
-  type BackfillStarted,
-  type BackfillBody,
-  type CommandResult,
-  type ControlProcess,
-  type ControlStatus,
   type CoverageRequest,
   type FilterOp,
-  type LifecycleBody,
-  type ProcessConfigBody,
-  type ProcessConfigResult,
-  type WorkerConfigBody,
-  type WorkerConfigResult,
-  mutate,
-  type Health,
-  type OpsData,
   type QueryInput,
   type QueryResult,
-  type Row,
-  type Services,
   type Tier,
   filterValue,
   validateRange,
-  writeToken,
-} from "./api";
+} from "./api/query";
+import type { Services } from "./api/services";
 import { FileBrowser } from "./FileBrowser";
+import { PlotPanel } from "./PlotPanel";
+import { ChartsView } from "./ChartsView";
+import { CompareView } from "./CompareView";
+import { FleetConnections, TunnelPanel } from "./TunnelPanel";
+import { TargetLabel, WorkspaceSelector } from "./WorkspaceSelector";
+import { useWorkspaceTarget } from "./workspace";
 import { useResource } from "./useResource";
 import { ActivityView } from "./ActivityView";
-import { installActivity, record, tracked, triggerOf } from "./activity";
+import {
+  CapabilitiesProvider,
+  InspectionBanner,
+  useCapabilities,
+} from "./capabilities";
+// The form library is loaded only when the view is opened (#2046).
+const SettingsView = lazy(() => import("./SettingsView"));
+import {
+  adoptDefaultLevel,
+  installActivity,
+  record,
+  tracked,
+  triggerOf,
+} from "./activity";
 
 const views = [
   "Coverage",
   "Backfills",
   "Desk",
+  "Charts",
+  "Compare",
   "Fleet",
   "Queue",
   "Connections",
@@ -43,6 +70,7 @@ const views = [
   "Services",
   "Control",
   "Activity",
+  "Settings",
 ] as const;
 type View = (typeof views)[number];
 /** An ISO instant, as the server sends one: a date, a T, a time, and
@@ -52,7 +80,8 @@ const ISO_INSTANT =
   /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})?$/;
 /** The column types that hold an infinity, and so the only ones whose
  *  "inf" / "-inf" is the server's infinity rather than a symbol that happens
- *  to be spelled that way (#1330) - a timestamp's 0Wp too (#1371). */
+ *  to be spelled that way (#1330) - a timestamp's 0Wp too (#1371), and a
+ *  time's 0Wt and a date's 0Wd (#2037). */
 const NUMERIC = new Set([
   "float",
   "long",
@@ -60,6 +89,8 @@ const NUMERIC = new Set([
   "short",
   "timespan",
   "timestamp",
+  "time",
+  "date",
 ]);
 const INFINITY: Record<string, string> = { inf: "∞", "-inf": "-∞" };
 function text(value: unknown, decimals?: number | null, type?: string) {
@@ -227,11 +258,17 @@ function ResourceStatus<T>({
             ? ` · Every ${resource.cadence}s`
             : ""}
         </span>
-        <button type="button" onClick={resource.refresh}>
+        <TargetLabel target={resource.target} />
+        <button
+          type="button"
+          data-activity="resource.refresh"
+          onClick={resource.refresh}
+        >
           Refresh
         </button>
         <button
           type="button"
+          data-activity="resource.pause"
           aria-pressed={resource.paused}
           onClick={() => resource.setPaused(!resource.paused)}
         >
@@ -269,7 +306,7 @@ function initialRange(): CoverageRequest {
   start.setUTCDate(start.getUTCDate() - 1);
   return {
     dataset: "trades",
-    partition: "",
+    slice: "",
     source_version: "",
     range_from: start.toISOString(),
     range_to: end.toISOString(),
@@ -287,7 +324,7 @@ function RangeFields({
       {(
         [
           ["dataset", "Dataset"],
-          ["partition", "Partition (blank = whole dataset)"],
+          ["slice", "Slice (blank = whole dataset)"],
           ["source_version", "Source version"],
           ["range_from", "From (inclusive, timezone required)"],
           ["range_to", "To (exclusive, timezone required)"],
@@ -296,16 +333,17 @@ function RangeFields({
         <label key={key}>
           {label}
           <input
-            // Every field but `partition` must be non-empty. Blank IS the
-            // partition's meaningful value - the sentinel for a dataset with
-            // no partition dimension - so marking it required would make the
+            data-activity={`range.${key}`}
+            // Every field but `slice` must be non-empty. Blank IS the
+            // slice's meaningful value - the sentinel for a dataset with no
+            // slice dimension - so marking it required would make the
             // commonest case unsubmittable.
-            required={key !== "partition"}
+            required={key !== "slice"}
             value={value[key]}
             placeholder={
               key === "source_version"
                 ? "e.g. v1"
-                : key === "partition"
+                : key === "slice"
                   ? "e.g. EURUSD"
                   : undefined
             }
@@ -333,7 +371,7 @@ function CoverageView() {
       setError("");
       resource.refresh();
       record("submit", "coverage.check", {
-        target: range.dataset,
+        subject: range.dataset,
         detail: {
           dataset: range.dataset,
           source_version: range.source_version,
@@ -355,7 +393,9 @@ function CoverageView() {
         <RangeFields value={range} onChange={setRange} />
         <div className="form-footer">
           <span>Half-open intervals · [from, to)</span>
-          <button className="primary">Check coverage</button>
+          <button className="primary" data-activity="coverage.check">
+            Check coverage
+          </button>
         </div>
         {error && (
           <p role="alert" className="error-text">
@@ -462,11 +502,32 @@ function BackfillView() {
     </>
   );
 }
+/** The Desk's row limit bounds, as its field declares them. */
+const MAX_ROW_LIMIT = 10000;
+/** How long the Row limit field must stay unchanged before it re-queries. */
+const LIMIT_SETTLE_MS = 400;
+/** The row limit `text` asks for, or null when it is not one to send. */
+function rowLimit(text: string): number | null {
+  if (!/^\s*\d+\s*$/.test(text)) return null;
+  const value = Number(text);
+  return value >= 1 && value <= MAX_ROW_LIMIT ? value : null;
+}
 function DeskView() {
   const catalog = useResource<Catalog>("/catalog", undefined, false);
   const [table, setTable] = useState("");
   const [tier, setTier] = useState<Tier>("rdb");
   const [limit, setLimit] = useState(100);
+  // What the Row limit field holds. It becomes `limit`, which re-runs the
+  // query, only once it is a whole number in range and has stopped changing:
+  // not 0 while the field is cleared, not 5, 50 and 500 on the way to 5000
+  // (#2017).
+  const [limitText, setLimitText] = useState("100");
+  const typedLimit = rowLimit(limitText);
+  useEffect(() => {
+    if (typedLimit === null) return;
+    const timer = setTimeout(() => setLimit(typedLimit), LIMIT_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [typedLimit]);
   const [filters, setFilters] = useState<
     { column: string; op: FilterOp; raw: string }[]
   >([]);
@@ -474,6 +535,7 @@ function DeskView() {
   const [requireCoverage, setRequireCoverage] = useState(false);
   const [applied, setApplied] = useState<QueryInput | null>(null);
   const [error, setError] = useState("");
+  const [display, setDisplay] = useState<"Table" | "Plot">("Table");
   const selected =
     catalog.data?.tables.find((item) => item.name === table) ??
     catalog.data?.tables[0];
@@ -491,6 +553,7 @@ function DeskView() {
     setFilters([]);
     setTier("rdb");
     setLimit(100);
+    setLimitText("100");
     setApplied({ table: selectedName, tier: "rdb", limit: 100, filters: [] });
     setError("");
   }, [selectedName]); // a new table is a fresh glimpse: tier and limit reset too
@@ -503,6 +566,12 @@ function DeskView() {
     event.preventDefault();
     if (!selected) return;
     try {
+      if (typedLimit === null)
+        throw new Error(
+          `The row limit must be a whole number from 1 to ${MAX_ROW_LIMIT}.`,
+        );
+      const limit = typedLimit;
+      setLimit(limit);
       if (requireCoverage) validateRange(coverage);
       const parsed = filters.map((filter) => {
         const column = columns.find((column) => column.name === filter.column);
@@ -523,8 +592,8 @@ function DeskView() {
       setError("");
       resource.refresh();
       // How many filters, never their values: those are whatever was typed.
-      record("submit", "query.apply", {
-        target: selected.name,
+      record("submit", "desk.apply", {
+        subject: selected.name,
         detail: {
           tier,
           limit,
@@ -534,8 +603,8 @@ function DeskView() {
       });
     } catch (error) {
       setError((error as Error).message);
-      record("submit", "query.apply", {
-        target: selected.name,
+      record("submit", "desk.apply", {
+        subject: selected.name,
         outcome: "refused",
         detail: { reason: "invalid input" },
       });
@@ -546,7 +615,9 @@ function DeskView() {
       {catalog.error && (
         <div role="alert" className="notice error">
           {catalog.error.message}{" "}
-          <button onClick={catalog.refresh}>Retry catalog</button>
+          <button data-activity="desk.catalog-retry" onClick={catalog.refresh}>
+            Retry catalog
+          </button>
         </div>
       )}
       <div className="desk">
@@ -558,12 +629,13 @@ function DeskView() {
               key={item.name}
               type="button"
               className="table-choice"
+              data-activity="desk.table"
               aria-pressed={item.name === selected?.name}
               title={item.description}
               onClick={(event) => {
                 if (item.name !== selected?.name)
-                  record("select", "table.select", {
-                    target: item.name,
+                  record("select", "desk.table", {
+                    subject: item.name,
                     trigger: triggerOf(event),
                   });
                 setTable(item.name);
@@ -582,41 +654,63 @@ function DeskView() {
                   <div className="section-heading">
                     <h2>{resource.data.table}</h2>
                     <Badge value={resource.data.tier.toUpperCase()} />
+                    <div className="toggle" role="group" aria-label="Show as">
+                      {(["Table", "Plot"] as const).map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          data-activity={`desk.show.${item.toLowerCase()}`}
+                          aria-pressed={display === item}
+                          onClick={() => setDisplay(item)}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <p className="note">
                     {selected?.description}
                     {selected?.description ? " · " : ""}
                     {resource.data.row_count.toLocaleString()} rows returned
-                    {resource.data.truncated
-                      ? " · Server row cap reached"
-                      : resource.data.row_count >= applied.limit
-                        ? " · Showing the first " +
-                          applied.limit +
-                          "; more rows may exist"
-                        : ""}
+                    {resource.data.truncated &&
+                      (resource.data.cut_by === "max_rows"
+                        ? " · Server row cap reached; more rows exist"
+                        : " · Showing the first " +
+                          resource.data.row_count.toLocaleString() +
+                          "; more rows exist")}
                   </p>
-                  <Table
-                    rows={resource.data.rows}
-                    empty="No rows match this query."
-                    decimals={decimalsFor(catalog.data, resource.data.table)}
-                    types={typesFor(catalog.data, resource.data.table)}
-                  />
+                  {display === "Plot" ? (
+                    <PlotPanel
+                      result={resource.data}
+                      types={typesFor(catalog.data, resource.data.table)}
+                    />
+                  ) : (
+                    <Table
+                      rows={resource.data.rows}
+                      empty="No rows match this query."
+                      decimals={decimalsFor(catalog.data, resource.data.table)}
+                      types={typesFor(catalog.data, resource.data.table)}
+                    />
+                  )}
                 </section>
               )}
             </>
           )}
           <details className="panel">
-            <summary>Refine · tier, row limit, filters, coverage</summary>
+            <summary data-activity="desk.refine">
+              Refine · tier, row limit, filters, coverage
+            </summary>
             <form onSubmit={submit}>
               <div className="fields">
                 <label>
                   Storage tier
                   <select
+                    data-activity="desk.tier"
                     value={tier}
                     onChange={(event) => {
                       setTier(event.target.value as Tier);
-                      record("select", "query.tier", {
-                        target: selected?.name,
+                      record("select", "desk.tier", {
+                        subject: selected?.name,
                         detail: { tier: event.target.value },
                       });
                     }}
@@ -629,12 +723,14 @@ function DeskView() {
                 <label>
                   Row limit
                   <input
+                    data-activity="desk.limit"
                     type="number"
                     min="1"
-                    max="10000"
+                    max={MAX_ROW_LIMIT}
                     required
-                    value={limit}
-                    onChange={(event) => setLimit(Number(event.target.value))}
+                    value={limitText}
+                    aria-invalid={typedLimit === null}
+                    onChange={(event) => setLimitText(event.target.value)}
                   />
                 </label>
               </div>
@@ -648,6 +744,7 @@ function DeskView() {
                 <h3>Filters</h3>
                 <button
                   type="button"
+                  data-activity="desk.filter.add"
                   disabled={!columns.length || filters.length >= 16}
                   onClick={() =>
                     setFilters([
@@ -664,6 +761,7 @@ function DeskView() {
                   <label>
                     Column
                     <select
+                      data-activity="desk.filter.column"
                       value={filter.column}
                       onChange={(event) =>
                         setFilters(
@@ -685,6 +783,7 @@ function DeskView() {
                   <label>
                     Operator
                     <select
+                      data-activity="desk.filter.op"
                       value={filter.op}
                       onChange={(event) =>
                         setFilters(
@@ -709,6 +808,7 @@ function DeskView() {
                   <label>
                     Value{filter.op === "in" ? " (JSON list)" : ""}
                     <input
+                      data-activity="desk.filter.value"
                       required
                       value={filter.raw}
                       onChange={(event) =>
@@ -724,6 +824,7 @@ function DeskView() {
                   </label>
                   <button
                     type="button"
+                    data-activity="desk.filter.remove"
                     aria-label={`Remove filter ${index + 1}`}
                     onClick={() =>
                       setFilters(filters.filter((_, i) => i !== index))
@@ -736,6 +837,7 @@ function DeskView() {
               <label className="checkbox">
                 <input
                   type="checkbox"
+                  data-activity="desk.require-coverage"
                   checked={requireCoverage}
                   onChange={(event) => setRequireCoverage(event.target.checked)}
                 />
@@ -746,7 +848,11 @@ function DeskView() {
               )}
               <div className="form-footer">
                 <span>Read-only · filters validated by the API</span>
-                <button disabled={!selected} className="primary">
+                <button
+                  disabled={!selected}
+                  className="primary"
+                  data-activity="desk.apply"
+                >
                   Apply filters
                 </button>
               </div>
@@ -767,7 +873,17 @@ function DeskView() {
 function ServicesView() {
   const resource = useResource<Services>("/services");
   const data = resource.data;
-  const [browsing, setBrowsing] = useState<string | null>(null);
+  // Services reads follow the workspace (#2029): a selected target is the
+  // one browsed and planned, until the operator picks another here.
+  const scoped = useWorkspaceTarget();
+  const [browsing, setBrowsing] = useState<string | null>(scoped);
+  const [tunnelling, setTunnelling] = useState<string | null>(scoped);
+  const [followed, setFollowed] = useState(scoped);
+  if (followed !== scoped) {
+    setFollowed(scoped);
+    setBrowsing(scoped);
+    setTunnelling(scoped);
+  }
   return (
     <>
       <ResourceStatus resource={resource} />
@@ -780,7 +896,7 @@ function ServicesView() {
             <h2>Deployment targets</h2>
             <Badge
               value={
-                data.remote_operations_enabled
+                data.writes_enabled
                   ? "Remote operations enabled"
                   : "Remote operations disabled"
               }
@@ -805,11 +921,14 @@ function ServicesView() {
           ) : (
             <Table
               rows={data.targets.map((target) => ({
-                target: target.name,
+                target: target.target,
                 ssh: target.ssh,
                 dest: target.dest,
                 environment: target.environment,
                 remote_user: target.remote_user,
+                ...(data.targets.some((t) => t.inspection)
+                  ? { inspection: target.inspection ? "inspection mode" : null }
+                  : {}),
                 labels:
                   Object.entries(target.labels)
                     .map(([key, value]) => `${key}=${value}`)
@@ -826,16 +945,28 @@ function ServicesView() {
             server is contacted.
           </p>
           {data.targets.length > 0 &&
-            (data.remote_operations_enabled ? (
+            (data.writes_enabled ? (
               <div className="actions" aria-label="Browse files">
                 {data.targets.map((target) => (
                   <button
                     type="button"
-                    key={target.name}
-                    aria-pressed={browsing === target.name}
-                    onClick={() => setBrowsing(target.name)}
+                    data-activity="services.browse"
+                    key={target.target}
+                    aria-pressed={browsing === target.target}
+                    onClick={() => setBrowsing(target.target)}
                   >
-                    Browse {target.name}
+                    Browse {target.target}
+                  </button>
+                ))}
+                {data.targets.map((target) => (
+                  <button
+                    type="button"
+                    data-activity="services.tunnel"
+                    key={`tunnel:${target.target}`}
+                    aria-pressed={tunnelling === target.target}
+                    onClick={() => setTunnelling(target.target)}
+                  >
+                    Tunnel {target.target}
                   </button>
                 ))}
               </div>
@@ -848,12 +979,21 @@ function ServicesView() {
         </section>
       )}
       {browsing &&
-        data?.remote_operations_enabled &&
-        data.targets.some((target) => target.name === browsing) && (
+        data?.writes_enabled &&
+        data.targets.some((target) => target.target === browsing) && (
           <FileBrowser
             key={browsing}
             target={browsing}
             onClose={() => setBrowsing(null)}
+          />
+        )}
+      {tunnelling &&
+        data?.writes_enabled &&
+        data.targets.some((target) => target.target === tunnelling) && (
+          <TunnelPanel
+            key={tunnelling}
+            target={tunnelling}
+            onClose={() => setTunnelling(null)}
           />
         )}
     </>
@@ -880,6 +1020,12 @@ function OpsView({
           {data.summary && <Summary values={data.summary} />}
           <section className="panel">
             <h2>{view}</h2>
+            {data.truncated && data.rows && (
+              <p className="notice pending" role="status">
+                Showing the newest {data.rows.length.toLocaleString()}; more
+                rows exist.
+              </p>
+            )}
             {data.processes_configured === 0 && (
               <p className="notice pending">
                 No processes configured for usage collection. This is not an
@@ -936,6 +1082,7 @@ function OpsView({
           </section>
         </>
       )}
+      {view === "Fleet" && <FleetConnections />}
     </>
   );
 }
@@ -968,12 +1115,15 @@ function ProcessPicker({
   picked,
   onChange,
   liveness,
+  disabled = false,
 }: {
   processes: ControlProcess[];
   mode: "all" | "pick";
   picked: ReadonlySet<string>;
   onChange: (mode: "all" | "pick", picked: ReadonlySet<string>) => void;
   liveness: Map<string, boolean> | null;
+  /** Frozen while a stop or restart awaits confirmation (#2009). */
+  disabled?: boolean;
 }) {
   const groups = new Map<string, ControlProcess[]>();
   for (const p of processes) {
@@ -990,11 +1140,11 @@ function ProcessPicker({
   };
   const startedByAll = processes
     .filter((p) => p.start_with_all)
-    .map((p) => p.procname);
+    .map((p) => p.process);
   const count = mode === "all" ? startedByAll.length : picked.size;
 
   return (
-    <fieldset className="picker">
+    <fieldset className="picker" disabled={disabled}>
       <legend>
         Processes
         <span className="muted">
@@ -1007,6 +1157,7 @@ function ProcessPicker({
         <button
           type="button"
           className={mode === "all" ? "chip active" : "chip"}
+          data-activity="control.pick.all"
           onClick={() => onChange("all", picked)}
         >
           all
@@ -1014,6 +1165,7 @@ function ProcessPicker({
         <button
           type="button"
           className="chip"
+          data-activity="control.pick.startwithall"
           onClick={() => onChange("pick", new Set(startedByAll))}
         >
           startwithall only
@@ -1023,13 +1175,14 @@ function ProcessPicker({
             <button
               type="button"
               className="chip"
+              data-activity="control.pick.down"
               onClick={() =>
                 onChange(
                   "pick",
                   new Set(
                     processes
-                      .filter((p) => liveness.get(p.procname) === false)
-                      .map((p) => p.procname),
+                      .filter((p) => liveness.get(p.process) === false)
+                      .map((p) => p.process),
                   ),
                 )
               }
@@ -1039,13 +1192,14 @@ function ProcessPicker({
             <button
               type="button"
               className="chip"
+              data-activity="control.pick.up"
               onClick={() =>
                 onChange(
                   "pick",
                   new Set(
                     processes
-                      .filter((p) => liveness.get(p.procname) === true)
-                      .map((p) => p.procname),
+                      .filter((p) => liveness.get(p.process) === true)
+                      .map((p) => p.process),
                   ),
                 )
               }
@@ -1057,6 +1211,7 @@ function ProcessPicker({
         <button
           type="button"
           className="chip"
+          data-activity="control.pick.none"
           onClick={() => onChange("pick", new Set())}
         >
           none
@@ -1064,13 +1219,14 @@ function ProcessPicker({
       </div>
       <div className="picker-groups">
         {[...groups.entries()].map(([proctype, list]) => {
-          const names = list.map((p) => p.procname);
+          const names = list.map((p) => p.process);
           const chosen = names.filter((n) => picked.has(n)).length;
           return (
             <div key={proctype} className="picker-group">
               <label className="picker-row picker-head">
                 <input
                   type="checkbox"
+                  data-activity="control.pick.type"
                   aria-label={`every ${proctype}`}
                   checked={mode === "pick" && chosen === names.length}
                   ref={(el) => {
@@ -1084,20 +1240,21 @@ function ProcessPicker({
                 <span className="muted">{names.length}</span>
               </label>
               {list.map((p) => {
-                const up = liveness?.get(p.procname);
+                const up = liveness?.get(p.process);
                 return (
-                  <label key={p.procname} className="picker-row">
+                  <label key={p.process} className="picker-row">
                     <input
                       type="checkbox"
+                      data-activity="control.pick.process"
                       checked={
                         mode === "all"
                           ? p.start_with_all
-                          : picked.has(p.procname)
+                          : picked.has(p.process)
                       }
                       disabled={mode === "all"}
-                      onChange={(e) => pick([p.procname], e.target.checked)}
+                      onChange={(e) => pick([p.process], e.target.checked)}
                     />
-                    <code>{p.procname}</code>
+                    <code>{p.process}</code>
                     {up !== undefined && (
                       <span className={up ? "badge up" : "badge down"}>
                         {up ? "up" : "down"}
@@ -1150,7 +1307,9 @@ export function workerConfigOutcome(r: WorkerConfigResult): string {
   );
 }
 
-/** Lifecycle actions that take something down: each asks to be confirmed. */
+/** Lifecycle actions that take something down: each asks to be confirmed,
+ *  and the server refuses one sent without `confirmed: true`
+ *  (models.CONFIRMED_LIFECYCLE, #2244). */
 const DESTRUCTIVE = new Set(["stop", "restart"]);
 
 /** The outcome a worker-config response supports (#634): set is not in effect. */
@@ -1159,10 +1318,33 @@ function workerConfigSettled(r: WorkerConfigResult) {
 }
 
 function ControlView() {
+  const access = useCapabilities();
   const status = useResource<ControlStatus>("/control");
   const [busy, setBusy] = useState("");
-  // The destructive action awaiting confirmation, if any.
+  // The destructive action awaiting confirmation, if any, and the selection
+  // it was opened for: Confirm acts on exactly that (#2009).
   const [confirming, setConfirming] = useState("");
+  const [held, setHeld] = useState<{ procs: string; mode: "all" | "pick" }>({
+    procs: "",
+    mode: "all",
+  });
+  // The button that opened the confirmation. Focus goes back to it when the
+  // confirmation closes, once it is enabled again (#2016).
+  const opener = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (confirming || busy || !opener.current) return;
+    const button = opener.current;
+    opener.current = null;
+    const focused = document.activeElement;
+    if (!focused || focused === document.body) button.focus();
+  }, [confirming, busy]);
+  // A failed status poll keeps the view (#2008). useResource retries only a
+  // transient failure, so a lasting one is retried here at the same cadence.
+  useEffect(() => {
+    if (!status.error || status.error.transient || status.paused) return;
+    const timer = setTimeout(status.refresh, (status.cadence ?? 5) * 1000);
+    return () => clearTimeout(timer);
+  }, [status.error]);
   const [result, setResult] = useState<string>("");
   const [error, setError] = useState("");
 
@@ -1174,10 +1356,10 @@ function ControlView() {
   // picker is complete without it.
   const fleet = useResource<OpsData>("/ops/processes");
   const liveness = fleet.data?.processes
-    ? new Map(fleet.data.processes.map((row) => [row.procname, row.up]))
+    ? new Map(fleet.data.processes.map((row) => [row.process, row.up]))
     : null;
   const procs = selectorFor(mode, picked);
-  const [cfg, setCfg] = useState({ procname: "", field: "", value: "" });
+  const [cfg, setCfg] = useState({ process: "", field: "", value: "" });
   const [wcfg, setWcfg] = useState<WorkerConfigBody>({ key: "", value: "" });
   const [bf, setBf] = useState<BackfillBody>({
     worker: "",
@@ -1191,27 +1373,30 @@ function ControlView() {
     action: string,
     kind: "submit" | "confirm",
     trigger: ReturnType<typeof triggerOf>,
+    selector = procs,
+    chosen = mode,
   ) {
-    const target = procs;
     run(action, async () => {
       const r = await tracked(
         kind,
         `process.${action}`,
-        { target, trigger, detail: { mode } },
+        { subject: selector, trigger, detail: { mode: chosen } },
         (correlation) =>
           mutate<CommandResult>(
-            `/control/process/${action}`,
-            { procs: target } satisfies LifecycleBody,
+            `/control/lifecycle/${encodeURIComponent(action)}`,
+            (DESTRUCTIVE.has(action)
+              ? { procs: selector, confirmed: kind === "confirm" }
+              : { procs: selector }) satisfies LifecycleBody,
             "POST",
             correlation,
           ),
         (r) => (r.ok ? "succeeded" : "failed"),
       );
-      return `${r.action} ${r.target}: exit ${r.exit_code}\n${r.output}`;
+      return `${r.action} ${r.procs}: exit ${r.exit_code}\n${r.output}`;
     });
   }
   function cancel(trigger: ReturnType<typeof triggerOf>) {
-    record("cancel", `process.${confirming}`, { target: procs, trigger });
+    record("cancel", `process.${confirming}`, { subject: held.procs, trigger });
     setConfirming("");
   }
 
@@ -1228,17 +1413,32 @@ function ControlView() {
     }
   }
 
-  if (status.error)
-    return (
-      <p role="alert" className="error-text">
-        {status.error.message}
+  const statusNotice = status.error && (
+    <div
+      className={`notice ${status.error.transient ? "pending" : "error"}`}
+      role={status.error.transient ? "status" : "alert"}
+    >
+      <strong>Could not refresh the control status</strong>
+      <p>{status.error.message}</p>
+      <p>
+        {status.data ? "Showing the last status loaded. " : ""}Retrying
+        automatically.
       </p>
-    );
-  if (!status.data) return <p>Loading…</p>;
+      <button
+        type="button"
+        data-activity="control.status-refresh"
+        onClick={status.refresh}
+      >
+        Refresh control status
+      </button>
+    </div>
+  );
+  if (!status.data) return statusNotice || <p>Loading…</p>;
 
   if (!status.data.writes_enabled)
     return (
       <div className="panel">
+        {statusNotice}
         <h2>Writes are disabled</h2>
         <p>
           Every control route returns 403. Set{" "}
@@ -1253,8 +1453,39 @@ function ControlView() {
       </div>
     );
 
+  // Shown, not enforced: the server refuses these routes to everyone while
+  // the whole frontend is in inspection mode (#2032).
+  if (access.inspection?.active)
+    return (
+      <div className="panel">
+        {statusNotice}
+        <h2>Inspection mode</h2>
+        <p>
+          The server refuses starting, stopping and configuring processes and
+          starting backfills while inspection mode is on. The status above is
+          still read live.
+        </p>
+      </div>
+    );
+
+  // Shown, not enforced: the server refuses these routes to this caller
+  // whether or not the controls are on screen (#2045).
+  if (!access.can("control", "write"))
+    return (
+      <div className="panel">
+        {statusNotice}
+        <h2>Changes are not part of your access</h2>
+        <p>
+          The server&rsquo;s access policy does not grant you{" "}
+          <code>control:write</code>, so it refuses starting, stopping and
+          configuring processes for you. Ask an administrator for it.
+        </p>
+      </div>
+    );
+
   return (
     <>
+      {statusNotice}
       {error && (
         <p role="alert" className="error-text">
           {error}
@@ -1266,6 +1497,7 @@ function ControlView() {
         <label>
           Write token
           <input
+            data-activity="control.token"
             type="password"
             autoComplete="off"
             value={token}
@@ -1277,8 +1509,7 @@ function ControlView() {
         </label>
         <p className="sidebar-note">
           The server&rsquo;s <code>UQF_FRONTEND_WRITE_TOKEN</code>, sent with
-          every action below. Kept in this tab only. Not needed under{" "}
-          <code>npm run dev</code>, whose proxy adds it.
+          every action below. Kept in this tab only.
         </p>
       </div>
 
@@ -1304,6 +1535,7 @@ function ControlView() {
             });
           }}
           liveness={liveness}
+          disabled={confirming !== ""}
         />
         <div className="form-footer">
           <span>
@@ -1315,16 +1547,19 @@ function ControlView() {
               <button
                 key={action}
                 type="button"
+                data-activity={`control.${action}`}
                 className={action === "stop" ? "danger" : "primary"}
                 disabled={busy !== "" || procs === "" || confirming !== ""}
                 onClick={(event) => {
                   if (!DESTRUCTIVE.has(action))
                     return lifecycle(action, "submit", triggerOf(event));
                   record("submit", `process.${action}`, {
-                    target: procs,
+                    subject: procs,
                     trigger: triggerOf(event),
                     detail: { mode },
                   });
+                  opener.current = event.currentTarget;
+                  setHeld({ procs, mode });
                   setConfirming(action);
                 }}
               >
@@ -1343,20 +1578,29 @@ function ControlView() {
             }}
           >
             <p>
-              {confirming} <code>{procs}</code>? Running processes will go down.
+              {confirming} <code>{held.procs}</code>? Running processes will go
+              down.
             </p>
             <button
               type="button"
               className="danger"
+              data-activity="control.confirm"
               onClick={(event) => {
                 setConfirming("");
-                lifecycle(confirming, "confirm", triggerOf(event));
+                lifecycle(
+                  confirming,
+                  "confirm",
+                  triggerOf(event),
+                  held.procs,
+                  held.mode,
+                );
               }}
             >
               Confirm {confirming}
             </button>{" "}
             <button
               type="button"
+              data-activity="control.cancel"
               autoFocus
               onClick={(event) => cancel(triggerOf(event))}
             >
@@ -1376,13 +1620,13 @@ function ControlView() {
               "submit",
               "process.config",
               {
-                target: cfg.procname,
+                subject: cfg.process,
                 trigger: triggerOf(),
-                detail: { procname: cfg.procname, field: cfg.field },
+                detail: { process: cfg.process, field: cfg.field },
               },
               (correlation) =>
                 mutate<ProcessConfigResult>(
-                  `/control/process/${cfg.procname}/config`,
+                  `/control/processes/${encodeURIComponent(cfg.process)}/config`,
                   {
                     field: cfg.field,
                     value: cfg.value,
@@ -1391,7 +1635,7 @@ function ControlView() {
                   correlation,
                 ),
             );
-            return `${r.procname} now: ${JSON.stringify(r.config, null, 2)}`;
+            return `${r.process} now: ${JSON.stringify(r.config, null, 2)}`;
           });
         }}
       >
@@ -1400,14 +1644,16 @@ function ControlView() {
           <label>
             Process
             <input
+              data-activity="control.config.process"
               required
-              value={cfg.procname}
-              onChange={(e) => setCfg({ ...cfg, procname: e.target.value })}
+              value={cfg.process}
+              onChange={(e) => setCfg({ ...cfg, process: e.target.value })}
             />
           </label>
           <label>
             Field
             <select
+              data-activity="control.config.field"
               required
               value={cfg.field}
               onChange={(e) => setCfg({ ...cfg, field: e.target.value })}
@@ -1423,6 +1669,7 @@ function ControlView() {
           <label>
             Value
             <input
+              data-activity="control.config.value"
               value={cfg.value}
               onChange={(e) => setCfg({ ...cfg, value: e.target.value })}
             />
@@ -1432,7 +1679,11 @@ function ControlView() {
           <span>
             Persisted to process_overrides.csv; applied on the next start.
           </span>
-          <button className="primary" disabled={busy !== ""}>
+          <button
+            className="primary"
+            data-activity="control.config.set"
+            disabled={busy !== ""}
+          >
             Set field
           </button>
         </div>
@@ -1447,13 +1698,13 @@ function ControlView() {
               "submit",
               "worker.config",
               {
-                target: wcfg.key,
+                subject: wcfg.key,
                 trigger: triggerOf(),
                 detail: { key: wcfg.key },
               },
               (correlation) =>
                 mutate<WorkerConfigResult>(
-                  "/control/worker-config",
+                  "/control/worker/config",
                   wcfg,
                   "PUT",
                   correlation,
@@ -1469,6 +1720,7 @@ function ControlView() {
           <label>
             Key
             <input
+              data-activity="control.worker.key"
               required
               value={wcfg.key}
               onChange={(e) => setWcfg({ ...wcfg, key: e.target.value })}
@@ -1477,6 +1729,7 @@ function ControlView() {
           <label>
             Value
             <input
+              data-activity="control.worker.value"
               value={wcfg.value}
               onChange={(e) => setWcfg({ ...wcfg, value: e.target.value })}
             />
@@ -1484,7 +1737,11 @@ function ControlView() {
         </div>
         <div className="form-footer">
           <span>In memory only — lost when the process restarts.</span>
-          <button className="primary" disabled={busy !== ""}>
+          <button
+            className="primary"
+            data-activity="control.worker.set"
+            disabled={busy !== ""}
+          >
             Set override
           </button>
         </div>
@@ -1499,7 +1756,7 @@ function ControlView() {
               "submit",
               "backfill.start",
               {
-                target: bf.worker,
+                subject: bf.worker,
                 trigger: triggerOf(),
                 detail: {
                   worker: bf.worker,
@@ -1518,7 +1775,7 @@ function ControlView() {
               // Handed off, not finished: the Backfills view says how it went.
               () => "accepted",
             );
-            return `started ${r.worker} as ${r.procname}\nwatch ${r.status_path}, or \`uqs logs ${r.procname}\``;
+            return `started ${r.worker} as ${r.process}\nwatch ${r.status_path}, or \`uqs logs ${r.process}\``;
           });
         }}
       >
@@ -1535,6 +1792,7 @@ function ControlView() {
             <label key={key}>
               {label}
               <input
+                data-activity={`control.backfill.${key}`}
                 required
                 value={bf[key]}
                 onChange={(e) => setBf({ ...bf, [key]: e.target.value })}
@@ -1544,7 +1802,11 @@ function ControlView() {
         </div>
         <div className="form-footer">
           <span>Detached — watch Backfill for the outcome.</span>
-          <button className="primary" disabled={busy !== ""}>
+          <button
+            className="primary"
+            data-activity="control.backfill.start"
+            disabled={busy !== ""}
+          >
             Start backfill
           </button>
         </div>
@@ -1553,9 +1815,24 @@ function ControlView() {
   );
 }
 export default function App() {
-  const [view, setView] = useState<View>("Coverage");
+  return (
+    <CapabilitiesProvider>
+      <Workspace />
+    </CapabilitiesProvider>
+  );
+}
+function Workspace() {
+  const access = useCapabilities();
+  // Only the views the server's policy lets this caller read are offered
+  // (#2045); a chosen view that is not falls back to the first that is.
+  const shown = views.filter((item) => access.canView(item));
+  const [chosen, setView] = useState<View>("Coverage");
+  const view = shown.includes(chosen) ? chosen : (shown[0] ?? chosen);
   useEffect(() => installActivity(), []);
   const health = useResource<Health>("/health");
+  // The server's default recording level, served beside its timeout (#2000).
+  const serverLevel = health.data?.activity_level;
+  useEffect(() => adoptDefaultLevel(serverLevel), [serverLevel]);
   // Asked once here so the sidebar can say what this deployment actually is,
   // rather than asserting "read-only" on a server where it is not true.
   const control = useResource<ControlStatus>("/control");
@@ -1573,9 +1850,10 @@ export default function App() {
   return (
     <div className="app">
       <header>
-        <a className="brand" href="/ui/">
+        <a className="brand" href="/ui/" data-activity="nav.home">
           uqf<span> / FX DATA</span>
         </a>
+        <WorkspaceSelector />
         <div className="gateway" role="status">
           Gateway <Badge value={gateway} />
           {/* The server's own words on what is wrong and what to set - for
@@ -1589,39 +1867,46 @@ export default function App() {
         <aside>
           <p className="eyebrow">WORKSPACE</p>
           <nav aria-label="Workspace views">
-            {views.map((item, index) => (
+            {shown.map((item, index) => (
               <button
                 key={item}
+                data-activity={`nav.${item}`}
                 className={view === item ? "selected" : ""}
                 aria-current={view === item ? "page" : undefined}
                 onClick={(event) => {
                   if (item !== view)
                     record("navigate", "view.open", {
-                      target: item,
+                      subject: item,
                       trigger: triggerOf(event),
                       detail: { from_view: view },
                     });
                   setView(item);
                 }}
               >
-                <span className="nav-number">0{index + 1}</span>
+                <span className="nav-number">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
                 {item}
               </button>
             ))}
           </nav>
           <p className="sidebar-note">
-            Local session
+            {access.authenticated
+              ? `Signed in as ${access.user}`
+              : "Local session"}
             <br />
-            {control.data?.writes_enabled
-              ? "Writes enabled"
-              : "Read-only access"}
+            {access.inspection?.active
+              ? "Inspection mode"
+              : control.data?.writes_enabled
+                ? "Writes enabled"
+                : "Read-only access"}
           </p>
         </aside>
         <main>
           <div className="page-heading">
             <div>
               <p className="eyebrow">
-                {view === "Desk"
+                {view === "Desk" || view === "Charts"
                   ? "PUBLISHED DATA"
                   : view === "Activity"
                     ? "HISTORY"
@@ -1636,18 +1921,34 @@ export default function App() {
               Gateway reload in progress. Views will retry automatically.
             </div>
           )}
-          {view === "Coverage" ? (
+          {access.inspection && (
+            <InspectionBanner inspection={access.inspection} />
+          )}
+          {access.known && shown.length === 0 ? (
+            <div className="notice error" role="alert">
+              Your access includes none of these views. Ask an administrator to
+              grant you one.
+            </div>
+          ) : view === "Coverage" ? (
             <CoverageView />
           ) : view === "Backfills" ? (
             <BackfillView />
           ) : view === "Desk" ? (
             <DeskView />
+          ) : view === "Charts" ? (
+            <ChartsView />
+          ) : view === "Compare" ? (
+            <CompareView />
           ) : view === "Control" ? (
             <ControlView />
           ) : view === "Activity" ? (
             <ActivityView />
           ) : view === "Services" ? (
             <ServicesView />
+          ) : view === "Settings" ? (
+            <Suspense fallback={<p>Loading…</p>}>
+              <SettingsView />
+            </Suspense>
           ) : (
             <OpsView key={view} view={view} />
           )}

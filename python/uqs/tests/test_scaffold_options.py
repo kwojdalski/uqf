@@ -113,7 +113,7 @@ def test_a_backfill_procname_is_checked_like_every_other_kinds():
 
 
 def test_one_subscription_is_written_as_a_list_like_the_tree_writes_it():
-    """`enlist `trades`, as `publishes` and the tree's own jobs spell it - not
+    """`enlist `trades`, as `outputs` and the tree's own jobs spell it - not
     the atom `trades`, which define accepts but no other declaration uses."""
     plan = jobs.streaming_job("m", ["trades"], "m_out", "px:float")
     body = _body(plan, "m.q")
@@ -221,7 +221,7 @@ def _refusals(monkeypatch, *argv: str) -> list[str]:
 def test_raw_table_and_raw_columns_come_together(monkeypatch):
     refused = _refusals(
         monkeypatch,
-        *("fx", "--kind", "backfill", "--dataset", "fx_rates", "--schema", "px:float"),
+        *("fx", "--kind", "backfill", "--outputs", "fx_rates", "--schema", "px:float"),
         *("--raw-table", "EVENTS"),
     )
     assert any("--raw-table and --raw-columns go together" in r for r in refused), refused
@@ -277,7 +277,7 @@ def test_a_scaffolded_source_takes_its_words_from_the_surface(name):
                 "x",
                 "--kind",
                 "backfill",
-                "--dataset",
+                "--outputs",
                 "x",
                 "--schema",
                 "a:float",
@@ -286,7 +286,7 @@ def test_a_scaffolded_source_takes_its_words_from_the_surface(name):
             "standing jobs, not a backfill",
         ),
         (
-            ["x", "--publishes", "x", "--schema", "a:float", "--transport", "odbc"],
+            ["x", "--outputs", "x", "--schema", "a:float", "--transport", "odbc"],
             "--transport does not apply to --kind streaming",
         ),
     ],
@@ -323,7 +323,7 @@ def test_a_backfill_into_a_vendored_table_does_not_redefine_it():
     A derivation, since a passthrough between the two shapes is refused (#1593)."""
     result = CliRunner().invoke(
         cli.app,
-        ["job", "new", "qt", "--kind", "backfill", "--dataset", "quote",
+        ["job", "new", "qt", "--kind", "backfill", "--outputs", "quote",
          "--schema", "sym:symbol, bid:float", "--transform", "derive", "--dry-run"],
     )  # fmt: skip
     assert result.exit_code == 0, result.output
@@ -353,6 +353,6 @@ def test_columns_is_the_old_spelling_of_schema(monkeypatch, argv, given, renames
         raise UqsError("stop here")
 
     monkeypatch.setattr(create.columns_mod, "resolve_shape", resolve_shape)
-    _refusals(monkeypatch, "x", "--publishes", "x", *argv)
+    _refusals(monkeypatch, "x", "--outputs", "x", *argv)
     assert seen == [given]
     assert said == [rename_support.renamed(*r) for r in renames]

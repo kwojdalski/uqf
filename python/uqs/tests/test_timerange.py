@@ -9,8 +9,8 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
-from uqs import timerange
-from uqs.paths import UqsError
+from uqs import duration, timerange
+from uqs.paths import UqsError, UqsUsageError
 
 FROM = datetime(2026, 9, 13, tzinfo=UTC)
 NOW = datetime(2026, 9, 20, 12, 30, tzinfo=UTC)
@@ -105,6 +105,10 @@ def test_date_takes_a_day_alone(text):
         ("5m", timedelta(minutes=5)),
         ("2h", timedelta(hours=2)),
         ("7d", timedelta(days=7)),
+        # #2121: a DURATION as every other option takes one - bare is seconds
+        ("300", timedelta(seconds=300)),
+        ("1.5m", timedelta(seconds=90)),
+        (300.0, timedelta(seconds=300)),
     ],
 )
 def test_last_is_the_duration_up_to_now(text, span):
@@ -112,9 +116,17 @@ def test_last_is_the_duration_up_to_now(text, span):
     assert (r.start, r.end, r.last) == (NOW - span, NOW, span)
 
 
-@pytest.mark.parametrize("text", ["0s", "5", "m", "1.5h", "-1h", "1w"])
-def test_last_takes_a_positive_whole_number_and_a_unit(text):
-    with pytest.raises(UqsError, match=re.escape(f"--last {text!r}")):
+@pytest.mark.parametrize("text", ["m", "-1h", "1w", "1D", "5 m"])
+def test_last_is_a_duration(text):
+    with pytest.raises(
+        UqsError, match=re.escape(f"--last {text!r}: a duration is {duration.FORMS}")
+    ):
+        timerange.resolve(None, None, last=text)
+
+
+@pytest.mark.parametrize("text", ["0s", "0", 0.0])
+def test_last_must_cover_time(text):
+    with pytest.raises(UqsError, match=re.escape(f"--last {text!r}: the range must be longer")):
         timerange.resolve(None, None, last=text)
 
 
@@ -181,10 +193,104 @@ def test_anything_but_one_whole_day_is_refused_by_what_needs_one(lo, hi):
     ("lo", "hi", "dates"),
     [
         ("2026-09-13", "2026-09-15", (date(2026, 9, 13), date(2026, 9, 14))),
-        ("2026-09-13T06:00", "2026-09-15T06:00", (date(2026, 9, 14), date(2026, 9, 15))),
+        ("2026.09.13D00:00", "2026-09-15T00:00", (date(2026, 9, 13), date(2026, 9, 14))),
         (None, "2026-09-15", (None, date(2026, 9, 14))),
         ("2026-09-13", None, (date(2026, 9, 13), None)),
     ],
 )
-def test_the_partition_dates_are_those_whose_midnight_is_in_the_range(lo, hi, dates):
-    assert timerange.resolve(lo, hi, open_ended=True).partition_dates() == dates
+def test_the_partition_dates_are_the_whole_days_of_the_range(lo, hi, dates):
+    assert timerange.resolve(lo, hi, open_ended=True).partition_dates("x copies") == dates
+
+
+# --- whole partitions are refused, never rounded (#2245) -----------------------
+
+
+@pytest.mark.parametrize(
+    ("lo", "hi", "said"),
+    [
+        (
+            "2026-09-13T06:00",
+            "2026-09-15",
+            "--from 2026-09-13T06:00:00 is not a day boundary; give --from 2026-09-13 or "
+            "2026-09-14",
+        ),
+        # the partial LAST day was taken whole, past --to
+        (
+            "2026-09-13",
+            "2026-09-15T06:00",
+            "--to 2026-09-15T06:00:00 is not a day boundary; give --to 2026-09-15 or 2026-09-16",
+        ),
+        (None, "2026.09.15D00:00:00.000001", "--to 2026-09-15T00:00:00.000001 is not a day"),
+        ("2026-09-13T00:00+02:00", None, "--from 2026-09-12T22:00:00 is not a day boundary"),
+    ],
+)
+def test_a_bound_off_a_midnight_is_refused_naming_the_days_either_side(lo, hi, said):
+    rng = timerange.resolve(lo, hi, open_ended=True)
+    whole = f"`data seed` copies whole partitions: {said}"
+    with pytest.raises(UqsUsageError, match=re.escape(whole)):
+        rng.partition_dates("`data seed` copies")
+
+
+NOW = datetime(2026, 11, 6, 10, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("last", "dates"),
+    [
+        ("1d", (date(2026, 11, 5), date(2026, 11, 5))),  # yesterday - not today, the live day
+        ("3d", (date(2026, 11, 3), date(2026, 11, 5))),
+    ],
+)
+def test_last_on_a_partition_command_is_the_whole_days_before_today(last, dates):
+    rng = timerange.resolve(None, None, None, last, open_ended=True, now=NOW)
+    assert rng.partition_dates("x copies") == dates
+
+
+@pytest.mark.parametrize(
+    ("last", "said"), [("36h", "give --last 1d or 2d"), ("6h", "give --last 1d$")]
+)
+def test_last_that_is_not_whole_days_is_refused(last, said):
+    rng = timerange.resolve(None, None, None, last, open_ended=True, now=NOW)
+    with pytest.raises(UqsUsageError, match=f"--last {last} is not a whole number of days; {said}"):
+        rng.partition_dates("x copies")
+
+
+def test_last_one_day_is_yesterday_for_what_needs_one_day():
+    rng = timerange.resolve(None, None, None, "1d", now=NOW)
+    assert rng.day("replay takes") == date(2026, 11, 5)
+
+
+# --- the half-open contract (#2055) ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "hi", ["2026.09.15D00:00:00.000000", "2026-09-15T00:00:00.000000", "2026-09-15"]
+)
+def test_the_last_partition_is_the_one_before_an_end_at_midnight_at_any_precision(hi):
+    """An end exactly at midnight owns none of that day, however it is written;
+    one tick after it is refused, not rounded up to the whole day (#2245)."""
+    assert timerange.resolve("2026-09-13", hi).partition_dates("x")[1] == date(2026, 9, 14)
+
+
+def test_adjacent_ranges_share_their_boundary_exactly_once():
+    """[a, b) and [b, c) tile [a, c): no instant lies in both, none between."""
+    a, b, c = (
+        timerange.resolve(x, None, open_ended=True).start
+        for x in ("2026-09-13", "2026-09-14", "2026-09-15")
+    )
+    left, right, whole = (
+        timerange.resolve("2026-09-13", "2026-09-14"),
+        timerange.resolve("2026-09-14", "2026-09-15"),
+        timerange.resolve("2026-09-13", "2026-09-15"),
+    )
+    assert (left.start, left.end, right.start, right.end) == (a, b, b, c)
+    assert (whole.start, whole.end) == (a, c)
+    assert left.end == right.start
+    days = left.partition_dates("x") + right.partition_dates("x")
+    assert days == (date(2026, 9, 13), date(2026, 9, 13), date(2026, 9, 14), date(2026, 9, 14))
+    assert whole.partition_dates("x") == (date(2026, 9, 13), date(2026, 9, 14))
+
+
+def test_a_reversed_range_is_refused_like_an_empty_one():
+    with pytest.raises(UqsError, match="the range is empty"):
+        timerange.resolve("2026-09-14", "2026-09-13")

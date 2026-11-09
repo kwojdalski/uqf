@@ -20,6 +20,7 @@
 .qt.qpipe.job.hdb_fx_markouts_backfill.beforeNamespace_isolate:{[]
     setenv[`UQF_STATUS_DIR;"build/test-status"];
     system"mkdir -p build/test-status";
+    .qt.support.reset_snapshots[];
     }
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.setUp_fresh:{[]
@@ -31,6 +32,7 @@
     .qetl.job.bounded.state.release_lock `hdb_fx_markouts_backfill;
     .qetl.job.bounded.state.clear_checkpoint `hdb_fx_markouts_backfill;
     `fx_markout set 0#.qetl.plant.shape `fx_markout;
+    .qt.support.reset_snapshots[];
     }
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.tearDown_release:{[] .qpipe.job.hdb_fx_markouts_backfill.cleanup[];}
@@ -67,6 +69,9 @@
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_the_gate_passes_the_fixture_and_names_what_it_refuses:{[t]
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.scored[.qpipe.source.hdb_fx_markouts.fixture[]];
+    f0:.qpipe.job.hdb_fx_markouts_backfill.quality_check r;
+    .qunit.assertEquals[(f0`check;f0`status);(enlist `config_unpinned;enlist `fail);"rows naming a configuration nobody recorded are refused"];
+    .qpipe.transform.fx_markout_outputs.pin[];
     .qunit.assertEquals[count .qpipe.job.hdb_fx_markouts_backfill.quality_check r;0;"clean"];
     bad:update pips:0w from r where i=0;
     f:.qpipe.job.hdb_fx_markouts_backfill.quality_check bad;
@@ -76,7 +81,7 @@
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_the_facts_count_executions_horizons_and_the_unpriced:{[t]
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.scored[.qpipe.source.hdb_fx_markouts.fixture[]];
-    .qunit.assertEquals[.qpipe.job.hdb_fx_markouts_backfill.facts r;`executions`horizons`unpriced!(2;4;0);"two executions at four horizons, all priced"];
+    .qunit.assertEquals[.qpipe.job.hdb_fx_markouts_backfill.facts r;`executions`horizons`unpriced`config_id!(2;4;0;enlist .qpipe.transform.fx_markout_outputs.config_id);"two executions at four horizons, all priced, under one configuration"];
     .qunit.assertEquals[.qpipe.job.hdb_fx_markouts_backfill.facts 0#r;(enlist `span)!enlist "empty window";"and an empty window says so"]};
 
 / --- a run ----------------------------------------------------------------------------------
@@ -95,6 +100,57 @@
     .qpipe.job.hdb_fx_markouts_backfill.run[];
     .qunit.assertEquals[count get `fx_markout;36;"still one row per component"]};
 
+/ --- configuration snapshots (#1999) ----------------------------------------------------------
+
+/ Put a worker declaration back into the registry as it stands (what define stores).
+.qt.qpipe.job.hdb_fx_markouts_backfill.put_cfg:{[d]
+    `.qetl.job.bounded.worker_cfg upsert (`hdb_fx_markouts_backfill,d cols value .qetl.job.bounded.worker_cfg)}
+
+/ The fixture, noting how many snapshots were recorded each time it is read: once by init's
+/ contract check, then once per window fetched.
+.qt.qpipe.job.hdb_fx_markouts_backfill.noting_fixture:{[]
+    `.qt.qpipe.job.hdb_fx_markouts_backfill.recorded_at_fetch set .qt.qpipe.job.hdb_fx_markouts_backfill.recorded_at_fetch,count .qetl.snapshot.list[`];
+    .qpipe.source.hdb_fx_markouts.fixture[]}
+
+.qt.qpipe.job.hdb_fx_markouts_backfill.test_a_run_pins_its_configuration_before_the_first_fetch_and_every_row_names_it:{[t]
+    `.qt.qpipe.job.hdb_fx_markouts_backfill.recorded_at_fetch set `long$();
+    began:.z.p;
+    r:.qt.qpipe.job.hdb_fx_markouts_backfill.run_with[.qt.qpipe.job.hdb_fx_markouts_backfill.noting_fixture];
+    id:.qpipe.transform.fx_markout_outputs.config_id;
+    n:.qt.qpipe.job.hdb_fx_markouts_backfill.recorded_at_fetch;
+    .qunit.assertEquals[(first n;min 1_n;1<count n);(0;1;1b);"none at init's check, then the snapshot already recorded at every window fetched - before anything was calculated"];
+    .qunit.assertEquals[(r`state;distinct (get `fx_markout)`config_id);(`completed;enlist id);"and every row the run wrote names it"];
+    .qunit.assertEquals[(.qetl.snapshot.list[`])`snapshot_id;enlist id;"it is the one snapshot of the job spec"];
+    f:select from .qetl.run.meta_table[] where label=`config_id, recorded_at>=began;
+    .qunit.assertTrue[(0<count f) and all {0<count ss[x;string y]}[;id] each f`text;"and the window's materialisation metadata says which configuration produced it"]};
+
+.qt.qpipe.job.hdb_fx_markouts_backfill.test_a_pin_that_fails_stops_the_run_before_any_window:{[t]
+    `.qt.qpipe.job.hdb_fx_markouts_backfill.recorded_at_fetch set `long$();
+    keep:.qetl.job.bounded.def `hdb_fx_markouts_backfill;
+    .qt.qpipe.job.hdb_fx_markouts_backfill.put_cfg @[keep;`pin;:;{[] '"cannot record the snapshot"}];
+    r:@[{.qt.qpipe.job.hdb_fx_markouts_backfill.run_with[.qt.qpipe.job.hdb_fx_markouts_backfill.noting_fixture]};::;{[e] e}];
+    .qt.qpipe.job.hdb_fx_markouts_backfill.put_cfg keep;
+    .qunit.assertEquals[r;"cannot record the snapshot";"the run fails with the pin's reason"];
+    .qunit.assertEquals[(.qt.qpipe.job.hdb_fx_markouts_backfill.recorded_at_fetch;count get `fx_markout);(enlist 0;0);"no window was fetched (only init's contract check read the source) and nothing was written"];
+    .qunit.assertFalse[.qt.qpipe.job.hdb_fx_markouts_backfill.covered[];"and no coverage was claimed"]};
+
+.qt.qpipe.job.hdb_fx_markouts_backfill.test_an_interrupted_publication_leaves_the_snapshot_and_no_results_and_a_retry_reuses_it:{[t]
+    / a target the batch cannot be written into: publication fails after the pin and the calculation
+    `fx_markout set ([] a:1 2);
+    r:.qt.qpipe.job.hdb_fx_markouts_backfill.run_with[.qpipe.source.hdb_fx_markouts.fixture];
+    .qunit.assertEquals[(r`state;0<r`windows_failed);(`partial;1b);"the windows failed to publish"];
+    .qunit.assertEquals[cols get `fx_markout;enlist `a;"no result row was written"];
+    .qunit.assertFalse[.qt.qpipe.job.hdb_fx_markouts_backfill.covered[];"and none was claimed"];
+    id:.qpipe.transform.fx_markout_outputs.config_id;
+    / the process restarts: the snapshot is on disk
+    ![`.;();0b;enlist `etl_config_snapshots];
+    `.qetl.snapshot.verified set `symbol$();
+    .qetl.snapshot.attach[];
+    .qunit.assertEquals[(.qetl.snapshot.list[`])`snapshot_id;enlist id;"the pin survived the interruption"];
+    `fx_markout set 0#.qetl.plant.shape `fx_markout;
+    r2:.qt.qpipe.job.hdb_fx_markouts_backfill.run_with[.qpipe.source.hdb_fx_markouts.fixture];
+    .qunit.assertEquals[(r2`state;count get `fx_markout;count .qetl.snapshot.list[`]);(`completed;36;1);"the retry completes under the same snapshot, recording no second one"]};
+
 / --- the live path, against a stand-in HDB ----------------------------------------------------
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.sent:()
@@ -105,7 +161,7 @@
 .qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb:{[f]
     had:{[nm] $[nm in key `.; (1b;get nm); (0b;::)]} each `executions`market_data;
     `executions set update date:`date$source_time from .qpipe.source.hdb_fx_markouts.raw_executions[];
-    `market_data set update date:`date$source_time from .qpipe.source.hdb_fx_markouts.raw_market_data[];
+    `market_data set .qt.support.stand_in_market_data .qpipe.source.hdb_fx_markouts.raw_market_data[];
     `.qt.qpipe.job.hdb_fx_markouts_backfill.sent set ();
     r:@[f;::;{[e] `threw,e}];
     {[nm;k] $[first k; nm set last k; ![`.;();0b;enlist nm]]}'[`executions`market_data;had];
@@ -117,7 +173,12 @@
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qpipe.source.hdb_fx_markouts.query[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb;.qt.qpipe.job.hdb_fx_markouts_backfill.w 0;.qt.qpipe.job.hdb_fx_markouts_backfill.w 1]};
     .qunit.assertEquals[count .qt.qpipe.job.hdb_fx_markouts_backfill.sent;2;"one query for the executions, one for the books"];
     .qunit.assertEquals[.qt.qpipe.job.hdb_fx_markouts_backfill.sent 0;w;"executions over the window itself"];
-    .qunit.assertEquals[.qt.qpipe.job.hdb_fx_markouts_backfill.sent 1;((w 0)-0D00:00:01;(w 1)+0D00:00:10);"books from the window's start less the job's lookback, to its end plus the furthest horizon"];
+    a:first .qt.qpipe.job.hdb_fx_markouts_backfill.sent 1;
+    spec:.qpipe.transform.fx_markout_outputs.job_spec;
+    .qunit.assertEquals[a`read_from;(w 0)-spec[`max_age]+.qpipe.transform.fx_markout.lookback spec;"books no older than the window's start less the job's lookback"];
+    .qunit.assertEquals[(a`skew;a`venues);(1;`all);"a day either side, every venue"];
+    .qunit.assertEquals[asc distinct (a`probes)`sym;`EURPLN`EURUSD;"only the pairs the executions' routes need"];
+    .qunit.assertEquals[min (a`probes)`time;(w 0)-.qpipe.transform.fx_markout.lookback spec;"and the instants the scoring asks about: the first execution's own, then each horizon from it"];
     .qunit.assertEquals[key r;`executions`market_data;"both inputs, raw - the scoring is the transform's"];
     .qunit.assertEquals[count .qt.qpipe.job.hdb_fx_markouts_backfill.scored r;36;"the window's two routable executions, scored"]};
 
@@ -129,8 +190,8 @@
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_only_the_books_the_routes_need_are_read:{[t]
     / USDPLN needs EURUSD and EURPLN; a GBPJPY book exists and is not read
     extra:{
-        `market_data set (update date:`date$source_time from .qpipe.source.hdb_fx_markouts.raw_market_data[]),
-            update date:`date$source_time, sym:`GBPJPY from 2#.qpipe.source.hdb_fx_markouts.raw_market_data[];
+        `market_data set .qt.support.stand_in_market_data (.qpipe.source.hdb_fx_markouts.raw_market_data[]),
+            update sym:`GBPJPY from 2#.qpipe.source.hdb_fx_markouts.raw_market_data[];
         `executions set update date:`date$source_time from .qpipe.source.hdb_fx_markouts.raw_executions[];
         .qpipe.source.hdb_fx_markouts.query[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb;2026.09.17D10:00:00;2026.09.17D11:00:00]};
     `.qt.qpipe.job.hdb_fx_markouts_backfill.extra set extra;
@@ -142,9 +203,8 @@
     f:{
         `executions set ([] date:enlist 2026.09.17; source_time:enlist 2026.09.17D10:00:03; venue:enlist `a; sym:enlist `EURUSD;
             side:enlist 1; size:enlist 1e6; price:enlist 1.1; fill_id:enlist `e1; clock:enlist `venue);
-        `market_data set ([] date:2026.09.17 2026.09.17; source_time:2026.09.17D09:50:00 2026.09.17D11:30:00;
-            sym:2#`EURUSD; source:2#`a; bid_prices:(enlist 1.1;enlist 1.2); bid_sizes:2#enlist enlist 1e6;
-            ask_prices:(enlist 1.1002;enlist 1.2002); ask_sizes:2#enlist enlist 1e6; clock:2#`venue);
+        `market_data set .qt.support.stand_in_market_data ([] source_time:2026.09.17D09:50:00 2026.09.17D11:30:00;
+            sym:2#`EURUSD; source:2#`a; bid:1.1 1.2; ask:1.1002 1.2002; clock:2#`venue);
         .qpipe.source.hdb_fx_markouts.query[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb;2026.09.17D10:00:00;2026.09.17D11:00:00]};
     `.qt.qpipe.job.hdb_fx_markouts_backfill.early set f;
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qt.qpipe.job.hdb_fx_markouts_backfill.early[]};
@@ -155,8 +215,8 @@
     f:{
         `executions set ([] date:enlist 2026.09.17; source_time:enlist 2026.09.17D10:00:03; venue:enlist `a; sym:enlist `EURUSD;
             side:enlist 1; size:enlist 1e6; price:enlist 1.1; fill_id:enlist `e1; clock:enlist `venue);
-        `market_data set ([] date:enlist 2026.09.01; source_time:enlist 2026.09.01D10:00; sym:enlist `EURUSD; source:enlist `a;
-            bid_prices:enlist enlist 1.1; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.1002; ask_sizes:enlist enlist 1e6; clock:enlist `venue);
+        `market_data set .qt.support.stand_in_market_data ([] source_time:enlist 2026.09.01D10:00; sym:enlist `EURUSD; source:enlist `a;
+            bid:enlist 1.1; ask:enlist 1.1002; clock:enlist `venue);
         .qpipe.source.hdb_fx_markouts.query[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb;2026.09.17D10:00:00;2026.09.17D11:00:00]};
     `.qt.qpipe.job.hdb_fx_markouts_backfill.stale set f;
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qt.qpipe.job.hdb_fx_markouts_backfill.stale[]};
@@ -194,7 +254,7 @@
     .[`.qetl.source.sources;(`hdb_fx_markouts;`fixture);:;f];
     d:.qt.qpipe.job.hdb_fx_markouts_backfill.day[];
     .qpipe.job.hdb_fx_markouts_backfill.init[.qt.qpipe.job.hdb_fx_markouts_backfill.spec_for[`v1;d 0;d 1]];
-    r:@[{.qpipe.job.hdb_fx_markouts_backfill.run[]};::;{[e] `threw,e}];
+    r:@[{.qpipe.job.hdb_fx_markouts_backfill.run[]};::;{[e] (`threw;e)}];
     .qpipe.job.hdb_fx_markouts_backfill.cleanup[];
     .[`.qetl.source.sources;(`hdb_fx_markouts;`fixture);:;keep];
     if[`threw~first r; 'last r];
@@ -255,7 +315,7 @@
     .qunit.assertEquals[r;2026.09.17D10:00:25-0D00:00:10;"the last book is at 10:00:25 and the furthest horizon is 10s"]};
 
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_an_hdb_without_books_vouches_for_nothing:{[t]
-    f:{`market_data set 0#update date:`date$source_time from .qpipe.source.hdb_fx_markouts.raw_market_data[];
+    f:{`market_data set 0#.qt.support.stand_in_market_data .qpipe.source.hdb_fx_markouts.raw_market_data[];
         .qpipe.source.hdb_fx_markouts.complete_through[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb]};
     `.qt.qpipe.job.hdb_fx_markouts_backfill.empty set f;
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qt.qpipe.job.hdb_fx_markouts_backfill.empty[]};

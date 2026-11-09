@@ -89,7 +89,7 @@
         "the column, and what its rows hold instead"]};
 
 .qt.qetl.verify.schema.test_producers_declaring_different_keys_are_a_finding:{[t]
-    .qetl.job.stream.define[.qt.qetl.verify.schema.rival;`procname`subscribe_to`publishes`period`poll!(
+    .qetl.job.stream.define[.qt.qetl.verify.schema.rival;`procname`subscribe_to`outputs`period`poll!(
         `vs_rival1;`symbol$();enlist `demo_deals;0D00:00:01;
         `fetch`normalize`next_cursor`row_key!({[c] ::};{[p] p};{[p] ::};`sym))];
     p:.qetl.verify.producers .qt.qetl.verify.schema.deals;

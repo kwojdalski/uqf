@@ -52,20 +52,36 @@ FX-only. The core does not call it: `.qf.exec.markout`
 (`src/execution/execution.q:24`) is `side*pip_factor*(ref-price)`, which is pips
 and therefore FX. The core may use the cross-asset book primitives in `.qf.mkt`
 that `fx_markout` and `crypto_markout` already share: `.qf.mkt.top_sides`
-(`src/market_data/book.q:268`), `.qf.mkt.best_across_venues`
-(`src/market_data/microstructure_venues.q:93`) and `.qf.mkt.reference_max_age`
+(`src/market_data/book.q:268`, taken at write time into `market_data`'s flat
+`bid` and `ask`, #2288), `.qf.mkt.best_across_venues`
+(`src/market_data/microstructure_venues.q:93`, restated over the flat top as
+reference variant #1, `.qetl.reference`) and `.qf.mkt.reference_max_age`
 (`microstructure_venues.q:61`).
+
+**The market input is the flat top of book** (#2288): `sym`, `source`,
+`source_time`, `bid`, `ask`, `clock`, sorted by `sym`, `source`, `source_time`
+with `p#` on `sym`. The core checks that order and reads the table as it is - it
+never sorts or copies it - so a twin can hand it a book read from a
+memory-mapped partition. A (`sym`, `source`) is on one clock.
+
+**The reference is a declared variant** (#2288): SELECT (venue set, staleness,
+offset) over the flat keys by `aj`, TRANSFORM of one book, COMBINE across
+venues. The spec's `reference` key names it (default `best_top`, variant #1:
+every venue, the latest book within `max_age`, level 0, the best bid and ask).
+Variant #1 is what `contract_version` 1 means, so it adds nothing to
+`config_id`; any other variant is recorded in full in the configuration
+snapshot.
 
 ## Datasets
 
 There is one dataset per asset class. Each one is the core columns plus that
 asset class's domain columns.
 
-  | Asset class | Dataset                                                           | Domain module | Issue        |
-  | ---         | ---                                                               | ---           | ---          |
-  | FX          | `fx_markout` (long), with `fx_markout_wide` derived from it       | #1933         | #1935        |
-  | crypto      | a new dataset, replacing `crypto_execution_quality`               | #1934         | #1936        |
-  | equity      | a new dataset, once an equity source reaches `market_data`        | #1939         | #1939        |
+  | Asset class | Dataset                                                                                                | Domain module | Issue        |
+  | ---         | ---                                                                                                    | ---           | ---          |
+  | FX          | `fx_markout` (long), with `fx_markout_wide` derived from it                                            | #1933         | #1935        |
+  | crypto      | `crypto_markout` (long), replacing `crypto_execution_quality`                                          | #1934         | #1936        |
+  | equity      | `eq_markout` (long)                                                                                    | #1939         | #1981        |
 
 The long rows are the stored form. A wide or nested-wide layout is derived from
 the long rows by key and is never recalculated (#1932). This is already true of
@@ -81,21 +97,25 @@ environment variable lets a job mix clocks.
 Today `source_time` means different clocks depending on the mapping, and nothing
 records which:
 
-  | Mapping                                                    | `source_time` is | Where                                                  |
-  | ---                                                        | ---              | ---                                                    |
-  | `executions.from_trades`, `from_orders`                    | receipt          | `src/etl/streaming/executions.q:73-75`, `:90-93`       |
-  | `executions.from_crypto_trades`                            | receipt          | `executions.q:81-83`; the fill feed is polled          |
-  | `market_data.from_quote`, `from_fx_orderbook`              | receipt          | `src/etl/streaming/market_data.q:6-8`, `:30-45`        |
-  | `market_data.from_crypto_book`                             | venue            | `market_data.q:47-60`                                  |
-  | `market_data` from `eq_orderbook` (databento bundle)       | venue            | `sidecars/databento/eq_orderbook.q`, `to_market_data`  |
-  | `fx_source_adapters` (deal tape and depth)                 | venue            | `src/etl/transforms/fx_source_adapters.q:37`, `:120`   |
+  | Mapping                                                    | `source_time` is                                                | Where                                                  |
+  | ---                                                        | ---                                                             | ---                                                    |
+  | `executions.from_trades`, `from_orders`                    | receipt                                                         | `src/etl/streaming/executions.q:73-75`, `:90-93`       |
+  | `executions.from_crypto_trades`                            | venue, or receipt where the recorder sent no venue time (#1936) | `executions.q`; the fill feed is polled                |
+  | `market_data.from_quote`, `from_fx_orderbook`              | receipt                                                         | `src/etl/streaming/market_data.q:6-8`, `:30-45`        |
+  | `market_data.from_crypto_book`                             | venue                                                           | `market_data.q:47-60`                                  |
+  | `market_data` from `eq_orderbook` (databento bundle)       | venue                                                           | `sidecars/databento/eq_orderbook.q`, `to_market_data`  |
+  | `fx_source_adapters` (deal tape and depth)                 | venue                                                           | `src/etl/transforms/fx_source_adapters.q:37`, `:120`   |
 
 So the rule has consequences today:
 
-- Crypto fills carry receipt time and crypto books carry venue time. They cannot
-  be scored against each other until the cryptorust recorder stamps the venue's
-  trade time. That is why #1936 is blocked. `crypto_markout` avoids the problem
-  only by reading plant `time` on both sides (`crypto_markout.q:26-31`).
+- Crypto fills used to carry receipt time while crypto books carry venue time,
+  so the two could not be scored against each other until the cryptorust
+  recorder stamped the venue's trade time. It now does
+  (`crypto_trades.source_time`, cryptorust#1062), the executions mapping puts a
+  fill that has one on the `venue` clock and one that has none (a row from
+  before the column, an older recorder) on `receipt`, and #1936 is built: the
+  retired `crypto_markout` job avoided the problem only by reading plant `time`
+  on both sides.
 - A row whose clock is `unknown`, the value #1925 gives an ambiguous historical
   row, is never scored.
 
@@ -113,6 +133,21 @@ move and stored as domain columns:
 - FX pips are `pip_factor * move`. Today's `pips` is
   `side*pip_factor*(ref-price)` (`fx_markout.q:308-312`).
 - Crypto bps are `10000 * move % price` (`crypto_markout.q:86-87`).
+
+## The horizon grid
+
+A job declares its horizons once, in its spec, and every consumer reads that one
+validated list: the reference fetch (`markout_core.reach`, `lookback`), the
+calculation, the configuration snapshot, the live holdback (`markout_core.wait`)
+and any output naming. A grid is refused, by name, unless it is a non-empty list
+of distinct, finite timespans in whole milliseconds.
+
+`markout_core.horizon_labels[horizons]` names each horizon by its exact
+milliseconds in input order: `-0D00:00:01` is `neg_1000`, `0D` is `0`, `+500ms`
+is `500`. `horizon_columns[stem;horizons]` builds `stem_label` column names from
+the same labels. The shipped layouts carry a `horizon` column, not a column per
+horizon, so nothing existing is renamed, and no stored table changes: a job that
+wants per-horizon columns regenerates its schema explicitly.
 
 ## Conversion to a reporting currency
 
@@ -161,10 +196,15 @@ domain's pips or bps.
 
 ## Versioning
 
-Every row carries a contract version. Consumers pin it: a consumer that reads
-version N refuses any other. A change to anything this page fixes bumps the
-version: a core column, its type, its order, a formula or the status vocabulary.
-A version bump lands in one change, together with:
+The contract has a version, and **a row does not carry it**: the configuration
+snapshot the row's `config_id` names does (see [Configuration
+snapshots](#configuration-snapshots), #1999). Consumers pin it: a consumer that
+reads version N resolves every `config_id` it reads to its snapshot and refuses
+any other (`.qpipe.transform.config_markout.require_version`), and a row naming
+a snapshot nobody recorded is refused with the id, never read as version N. A
+change to anything this page fixes bumps the version: a core column, its type,
+its order, a formula or the status vocabulary. A version bump lands in one
+change, together with:
 
 - the schema in `plant_tables.q`;
 - the history rewritten or refilled;
@@ -189,39 +229,37 @@ key](#long-layout-key)). Domain columns may sit between core columns, so
 `fx_markout` gains the core columns without reordering what it already has.
 #1930 tests exactly this.
 
-  | #   | Column             | Type        | Meaning                                                                                       | Replaces or comes from                                                                                                                                                                                    |
-  | -:  | ---                | ---         | ---                                                                                           | ---                                                                                                                                                                                                       |
-  |   1 | `time`             | `timestamp` | the plant's stamp; a backfill writes `source_time + max horizons`                             | `fx_markout.time` (`src/etl/plant_tables.q:673`); backfill stamp at `fx_markout_outputs.q:141-142`                                                                                                        |
-  |   2 | `source_time`      | `timestamp` | the execution's time, on its clock                                                            | `executions.source_time` (`plant_tables.q:542`); replaces `trade_time` in `crypto_execution_quality` (`:662`)                                                                                             |
-  |   3 | `clock`            | `symbol`    | `venue` or `receipt`; the execution's, and so every reference's                               | new, `executions.clock` (#1925)                                                                                                                                                                           |
-  |   4 | `venue`            | `symbol`    | identity, with `fill_id`                                                                      | `fx_markout.venue`; `crypto_execution_quality.venue`                                                                                                                                                      |
-  |   5 | `fill_id`          | `symbol`    | identity                                                                                      | `fx_markout.fill_id`; `crypto_execution_quality.fill_id`                                                                                                                                                  |
-  |   6 | `sym`              | `symbol`    | the instrument, as `executions` spells it (`` `g# `` on the plant)                            | `fx_markout.sym`                                                                                                                                                                                          |
-  |   7 | `side`             | `long`      | `1` buy, `-1` sell                                                                            | `fx_markout.side`; `crypto_execution_quality.side`                                                                                                                                                        |
-  |   8 | `size`             | `float`     | base units                                                                                    | `fx_markout.size`; absent from both execution-quality tables today                                                                                                                                        |
-  |   9 | `horizon`          | `timespan`  | signed; zero and negative allowed                                                             | `fx_markout.horizon`                                                                                                                                                                                      |
-  |  10 | `price`            | `float`     | the fill price, in quote units                                                                | `fx_markout_wide.price` (`plant_tables.q:679`); `fx_markout.price_t0` on `total` rows; `trade_price` in both execution-quality tables                                                                     |
-  |  11 | `quote_ccy`        | `symbol`    | the currency `price` is in, from the resolver                                                 | new                                                                                                                                                                                                       |
-  |  12 | `ref_t0`           | `float`     | the reference at the execution                                                                | `fx_markout_wide.ref_t0`; `fx_markout.price_t1` on `execution` rows                                                                                                                                       |
-  |  13 | `ref_t1`           | `float`     | the reference at the horizon                                                                  | `fx_markout_wide.ref_t1`; `fx_markout.price_t1` on `total` rows; `ref_price` in both execution-quality tables                                                                                             |
-  |  14 | `move`             | `float`     | this row's signed move in price units; positive means the market moved in the fill's favour   | new; FX `pips` is `pip_factor * move` (`fx_markout.q:308-312`), crypto `markout_bps` is `10000 * move % price` (`crypto_markout.q:86-87`)                                                                 |
-  |  15 | `quote_amount`     | `float`     | `size * move`, in `quote_ccy`                                                                 | new                                                                                                                                                                                                       |
-  |  16 | `report_ccy`       | `symbol`    | the spec's reporting currency                                                                 | new                                                                                                                                                                                                       |
-  |  17 | `rate`             | `float`     | units of `report_ccy` per unit of `quote_ccy`                                                 | new                                                                                                                                                                                                       |
-  |  18 | `rate_source`      | `symbol`    | the `market_data` source the rate was read from, or `fixed`                                   | new                                                                                                                                                                                                       |
-  |  19 | `rate_sym`         | `symbol`    | the `market_data` pair read; null for a fixed rate                                            | new                                                                                                                                                                                                       |
-  |  20 | `rate_time`        | `timestamp` | the `source_time` of the book the rate came from; null for a fixed rate                       | new                                                                                                                                                                                                       |
-  |  21 | `rate_timing`      | `symbol`    | `execution` or `horizon`                                                                      | new                                                                                                                                                                                                       |
-  |  22 | `report_amount`    | `float`     | `quote_amount * rate`; null when `status` is `no_rate` or the row is unpriced                 | new                                                                                                                                                                                                       |
-  |  23 | `status`           | `symbol`    | see [Status vocabulary](#status-vocabulary)                                                   | `fx_markout.status`; `fx_markout_wide.status`                                                                                                                                                             |
-  |  24 | `contract_version` | `long`      | the contract version this row was written under; `1` for the first                            | new                                                                                                                                                                                                       |
+  | #   | Column             | Type        | Meaning                                                                                                         | Replaces or comes from                                                                                                                                                                                    |
+  | -:  | ---                | ---         | ---                                                                                                             | ---                                                                                                                                                                                                       |
+  |   1 | `time`             | `timestamp` | the plant's stamp; a backfill writes `source_time + max horizons`                                               | `fx_markout.time` (`src/etl/plant_tables.q:673`); backfill stamp at `fx_markout_outputs.q:141-142`                                                                                                        |
+  |   2 | `source_time`      | `timestamp` | the execution's time, on its clock                                                                              | `executions.source_time` (`plant_tables.q:542`); replaces `trade_time` in `crypto_execution_quality` (`:662`)                                                                                             |
+  |   3 | `clock`            | `symbol`    | `venue` or `receipt`; the execution's, and so every reference's                                                 | new, `executions.clock` (#1925)                                                                                                                                                                           |
+  |   4 | `venue`            | `symbol`    | identity, with `fill_id`                                                                                        | `fx_markout.venue`; `crypto_execution_quality.venue`                                                                                                                                                      |
+  |   5 | `fill_id`          | `symbol`    | identity                                                                                                        | `fx_markout.fill_id`; `crypto_execution_quality.fill_id`                                                                                                                                                  |
+  |   6 | `sym`              | `symbol`    | the instrument, as `executions` spells it (`` `g# `` on the plant)                                              | `fx_markout.sym`                                                                                                                                                                                          |
+  |   7 | `side`             | `long`      | `1` buy, `-1` sell                                                                                              | `fx_markout.side`; `crypto_execution_quality.side`                                                                                                                                                        |
+  |   8 | `size`             | `float`     | base units                                                                                                      | `fx_markout.size`; absent from both execution-quality tables today                                                                                                                                        |
+  |   9 | `horizon`          | `timespan`  | signed; zero and negative allowed                                                                               | `fx_markout.horizon`                                                                                                                                                                                      |
+  |  10 | `price`            | `float`     | the fill price, in quote units                                                                                  | `fx_markout_wide.price` (`plant_tables.q:679`); `fx_markout.price_t0` on `total` rows; `trade_price` in both execution-quality tables                                                                     |
+  |  11 | `quote_ccy`        | `symbol`    | the currency `price` is in, from the resolver                                                                   | new                                                                                                                                                                                                       |
+  |  12 | `ref_t0`           | `float`     | the reference at the execution                                                                                  | `fx_markout_wide.ref_t0`; `fx_markout.price_t1` on `execution` rows                                                                                                                                       |
+  |  13 | `ref_t1`           | `float`     | the reference at the horizon                                                                                    | `fx_markout_wide.ref_t1`; `fx_markout.price_t1` on `total` rows; `ref_price` in both execution-quality tables                                                                                             |
+  |  14 | `move`             | `float`     | this row's signed move in price units; positive means the market moved in the fill's favour                     | new; FX `pips` is `pip_factor * move` (`fx_markout.q:308-312`), crypto `markout_bps` is `10000 * move % price` (`crypto_markout.q:86-87`)                                                                 |
+  |  15 | `quote_amount`     | `float`     | `size * move`, in `quote_ccy`                                                                                   | new                                                                                                                                                                                                       |
+  |  16 | `rate`             | `float`     | units of the snapshot's `report_ccy` per unit of `quote_ccy`                                                    | new                                                                                                                                                                                                       |
+  |  17 | `rate_source`      | `symbol`    | the `market_data` source the rate was read from, or `fixed`                                                     | new                                                                                                                                                                                                       |
+  |  18 | `rate_sym`         | `symbol`    | the `market_data` pair read; null for a fixed rate                                                              | new                                                                                                                                                                                                       |
+  |  19 | `rate_time`        | `timestamp` | the `source_time` of the book the rate came from; null for a fixed rate                                         | new                                                                                                                                                                                                       |
+  |  20 | `report_amount`    | `float`     | `quote_amount * rate`; null when `status` is `no_rate` or the row is unpriced                                   | new                                                                                                                                                                                                       |
+  |  21 | `status`           | `symbol`    | see [Status vocabulary](#status-vocabulary)                                                                     | `fx_markout.status`; `fx_markout_wide.status`                                                                                                                                                             |
+  |  22 | `config_id`        | `symbol`    | the configuration snapshot the row was produced under (see [Configuration snapshots](#configuration-snapshots)) | new (#1999); replaces `report_ccy`, `rate_timing` and `contract_version`, which moved into the snapshot                                                                                                   |
 
-In a long dataset, columns 2 to 13 and 16 to 21 are per `(execution, horizon)`
-and repeat on every component row. Columns 14, 15, 22 and 23 belong to the row's
-own component. In a wide dataset there is one row per `(execution, horizon)`, so
-`move`, the amounts and `status` are the `total` component's. Every other
-component is a prefixed domain column, as `execution_pips` and `leg1_pips` are
-today (`plant_tables.q:679`).
+In a long dataset, columns 2 to 13, 16 to 19 and 22 are per
+`(execution, horizon)` and repeat on every component row. Columns 14, 15, 20 and
+21 belong to the row's own component. In a wide dataset there is one row per
+`(execution, horizon)`, so `move`, the amounts and `status` are the `total`
+component's. Every other component is a prefixed domain column, as
+`execution_pips` and `leg1_pips` are today (`plant_tables.q:679`).
 
 ### Long layout key
 
@@ -247,6 +285,65 @@ each of today's columns goes.
   `fee_ccy` (#1934). Both columns are on `executions` already
   (`plant_tables.q:542`).
 - **Equity:** the declared benchmark and session fields (#1939).
+
+## Configuration snapshots
+
+A result row used to repeat three of its configuration's fields
+(`contract_version`, `rate_timing`, `report_ccy`), which did not identify the
+rest: the horizons, the reference-age limit, the declared rates, the rules that
+price an instrument. A row now carries **one** reference, `config_id`, and the
+snapshot it names holds the whole configuration, once (#1999).
+
+A snapshot records:
+
+  | Field                                                       | Meaning                                                                                       |
+  | ---                                                         | ---                                                                                           |
+  | `contract_version`, `code_revision`                         | this page's version, and the revision of the core's calculation                               |
+  | `domain`, `domain_revision`, `datasets`                     | the domain that priced the instrument, the revision of its rules, the datasets it produces    |
+  | `horizons`, `max_age`, `report_ccy`, `rate_timing`, `rates` | the core's validated parameters, the rates as declared                                        |
+  | `domain_spec`                                               | the domain's own spec keys (FX's convention and tolerance)                                    |
+  | id, digest, creation time, actor, reason                    | the id is the kind and 16 digits of the digest; the digest is the md5 of the rendered content |
+
+Source versions and input-snapshot identifiers are not in it: they belong to the
+materialisation (the run ledger and the coverage ledger). A snapshot establishes
+the conditions of a calculation, not reproducibility; that also needs the code
+at `code_revision` and the source data.
+
+- **The id is the content's.** `config_id` is a pure function of the domain and
+  the validated spec, so `calc` stamps it without reading a store, and two
+  producers that ran the same configuration agree on it. The creation time,
+  actor and reason are not in the digest.
+- **Write-once, at the application level.** A new configuration is a new
+  snapshot; recording the same one again returns it unchanged; an id reused with
+  different content is refused; nothing updates or deletes a snapshot; the
+  digest is recomputed on every load, and a store that fails it is refused by id.
+  The store is a table in the status directory, beside the run ledger and under
+  the same lock (`src/etl/core/config_snapshot.q`). It is not tamper-proof: an
+  administrator can rewrite the file, and the next load says so.
+- **Pinned before calculating.** A live job's `on_start` and a bounded worker's
+  `pin` record the snapshot before the first calculation. The publish path
+  refuses a batch whose rows name a snapshot that is not durable (the job's
+  `check`, which holds the batch), so a result never becomes visible before the
+  configuration that explains it. An interruption between the two leaves a
+  snapshot with no results, never results with no snapshot.
+- **Lineage survives a partial backfill.** The reference is on the row, so a
+  window re-scored under another configuration replaces its own rows and leaves
+  the others naming the snapshot that produced them; a superseded snapshot stays
+  recorded.
+- **Lookups never substitute.** A row whose snapshot is not recorded is an error
+  that names the id. The enriched read,
+  `.qpipe.transform.config_markout.enrich`, joins the producing snapshot's
+  fields next to the results; `uqs data snapshot list` and `show` read the
+  store.
+- **History.** A partition written before snapshots holds the three columns.
+  `uqs data check --apply` records one *legacy* snapshot per distinct triple in
+  each partition (`markout_legacy_...`, `legacy` set, everything else unknown),
+  writes `config_id`, and drops the three columns, in that order. A partition
+  older than the columns reads as contract version 1 with the rate timing and
+  reporting currency unknown.
+
+The pure calculation, `markout_core.calc`, does not depend on any of this
+storage: it stamps an id and reads nothing.
 
 ## Resolver contract
 
@@ -390,7 +487,7 @@ markout. They are #1926's scope. Today the rules are hard-coded in
 on `source_time`. The source declares how many days apart the two can be. Today
 this is a fixed `(-1 1)` at `hdb_fx_markouts.q:68` and `:78`. The declared skew
 must be a non-negative whole number of days, and at least what the live job's
-`max_lateness` allows for (`fx_markout_outputs.q:119`).
+`lateness` allows for (`fx_markout_outputs.q:119`).
 
 **Symbol filter.** Only the readiness legs are read: for the window's
 executions, the union of the resolver `legs` and the conversion legs. Today the
@@ -443,6 +540,23 @@ cover the horizon, and an execution whose legs never do is expired, not
 published
 ([`pipeline-declarations.md`](../reference/pipeline-declarations.md#horizon-job-----qetljobstreamat_horizons)).
 
+## Decisions beyond the record
+
+Things the decision record in #1923 does not settle and a later maintainer
+decision has. Unlike the open questions below, these are decided.
+
+1. **The configuration moves out of the rows (#1999).** `contract_version`,
+   `rate_timing` and `report_ccy` are no longer result columns. They are fields
+   of the configuration snapshot a row's `config_id` names, with the horizons,
+   `max_age`, the declared rates and the revisions that the three never
+   identified. This changes the approved contract: the core is 22 columns, not
+   24, and `config_id` is its last. The contract version is still a `long`
+   starting at 1 (open question 5), now recorded in the snapshot.
+2. **The link is a compact column, not the run ledger.** The run and coverage
+   ledgers identify a window's producer, but a live row has no run, and a
+   partial backfill replaces rows inside a window the ledger describes as one. A
+   row-level reference is the only one that stays true of each row.
+
 ## Open questions
 
 The decision record in #1923 does not settle these. Each has a proposal above;
@@ -464,7 +578,8 @@ none is decided until the maintainer approves it.
    must reproduce today's rows exactly, so the proposal keeps both. Should
    `price_t0` and `price_t1` be dropped in a later contract version?
 5. **The contract version's name and type.** The proposal is `contract_version`,
-   a `long` starting at 1, kept apart from FX's `version` (the convention's).
+   a `long` starting at 1, kept apart from FX's `version` (the convention's). It
+   is recorded in the configuration snapshot, not on the rows (#1999).
 6. **"Null money" under `no_rate`.** The record says a missing rate gives null
    money. The proposal nulls only `report_amount` and keeps `quote_amount`,
    which needs no rate. Confirm.
@@ -472,7 +587,7 @@ none is decided until the maintainer approves it.
    source. The proposal keys `rates` by quote currency, because one crypto
    dataset can hold USDT, USDC and BTC-quoted pairs.
 8. **`report_ccy` required or optional?** The proposal is required, with no
-   default currency.
+   default currency. It is recorded in the configuration snapshot (#1999).
 9. **Rate staleness.** Which `max_age` limits a rate book: the spec's `max_age`,
    or a separate rate age?
 10. **Clock rule for the rate.** Must the conversion book be on the execution's
@@ -494,7 +609,8 @@ none is decided until the maintainer approves it.
 15. **How the core receives a domain module.** As an argument, as a spec entry,
     or as a registered name? The record fixes the layering but not the call
     shape, so #1929 proposes it.
-16. **Date skew and `max_lateness`.** Should the source's date skew be derived
-    from the live job's `max_lateness`, instead of declared beside it?
-17. **The crypto dataset's name.** #1936 names it when it is built. This page
-    does not.
+16. **Date skew and `lateness`.** Should the source's date skew be derived from
+    the live job's `lateness`, instead of declared beside it?
+17. **The crypto dataset's name.** `crypto_markout` (#1936): the table takes the
+    job's name, as `fx_markout` does. It is a long dataset; the live job is
+    `crypto_markout1` and its bounded twin `hdb_crypto_markout_backfill1`.

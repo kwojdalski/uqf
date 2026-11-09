@@ -53,7 +53,7 @@
 
 \d .
 
-.qetl.job.stream.define[`fx_orderbook_feed;`procname`subscribe_to`publishes`period`on_timer`start_with_all!(
+.qetl.job.stream.define[`fx_orderbook_feed;`procname`subscribe_to`outputs`period`on_timer`start_with_all!(
     `fxorderbookfeed1;
     `symbol$();
     enlist `fx_orderbook;

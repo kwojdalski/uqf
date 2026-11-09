@@ -15,35 +15,36 @@ import typer
 
 from uqs.cli import completion, safety
 from uqs.cli import deploy_connection as conn
-from uqs.cli import deploy_dry_run as dry
+from uqs.cli import deploy_output as deploy_out
 from uqs.cli import deploy_policy as policy
 from uqs.cli.concepts import profile_opt
-from uqs.cli.deploy import _failed, deploy_app
+from uqs.cli.deploy import deploy_app
 from uqs.cli.hdb_scope import tables_given
-from uqs.cli.json_out import emit, json_opt
+from uqs.cli.json_out import emit, emit_line, json_opt
 from uqs.cli.renames import alias_command, renamed
 from uqs.cli.safety import ChangesState, OverrideOpt, ReadOnly, ReasonOpt, YesOpt
 from uqs.cli.shared import _die, json_refusal
 from uqs.cli.vocabulary import duration
-from uqs.deploy import config, overrides, prune, rollback, status, verify
+from uqs.deploy import config, inspection, overrides, prune, rollback, status, verify
 from uqs.deploy.prune import RELEASE_ID
 from uqs.deploy.remote import Remote
-from uqs.paths import UqsError
+from uqs.paths import UqsError, repo_root
 
 
-def _server(ctx, target, flags: dict, **fixed):
+def _server(ctx, target, flags: dict, unnamed: str | None = None, **fixed):
     """The Config and Remote for a command that reaches one server: TARGET's
     settings - its timeouts too (#1892) - under the `flags` given on the
-    command line, under `fixed`, which this command alone decides."""
-    settings = conn.server(ctx, target, **flags) | fixed
+    command line, under `fixed`, which this command alone decides. `unnamed`
+    refuses a call that names no server (conn.server)."""
+    settings = conn.server(ctx, target, unnamed=unnamed, **flags) | fixed
     # profile is unused: each release's own report names the profile it runs
     settings["profile"] = "unused"
     cfg = config.make_config(artifact="", **settings)
-    return cfg, Remote(cfg.host, cfg.connect_timeout, remote_user=cfg.remote_user)
+    return cfg, Remote(cfg.ssh, cfg.connect_timeout, remote_user=cfg.remote_user)
 
 
 StatusJson = json_opt(
-    '{"ok", "format", "host", "dest", "current", "previous", "releases", "last_deployment", '
+    '{"ok", "format", "ssh", "dest", "current", "previous", "releases", "last_deployment", '
     '"health": {checked, passed, reason, processes}, "lock"} - ok false when the health check '
     "ran and failed"
 )
@@ -64,7 +65,7 @@ def status_cmd(
             "--health-timeout", integer=True, help="How long (a DURATION) processes have to answer"
         ),
     ] = 10,
-    host: conn.Host = None,
+    ssh: conn.Ssh = None,
     dest: conn.Dest = None,
     remote_user: conn.RemoteUser = None,
     connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
@@ -78,12 +79,12 @@ def status_cmd(
         cfg, remote = _server(
             ctx,
             target,
-            dict(host=host, dest=dest, remote_user=remote_user, connect_timeout=connect_timeout),
+            dict(ssh=ssh, dest=dest, remote_user=remote_user, connect_timeout=connect_timeout),
             verify_timeout=health_timeout,
         )
         result = status.status(cfg, remote, health=health)
     except config.DeployError as exc:
-        _failed("uqs deploy status", exc.stage, exc)
+        deploy_out.failed("uqs deploy status", exc.stage, exc)
     h = result["health"]
     failing = h["checked"] and not h["passed"]
     if as_json:
@@ -103,7 +104,7 @@ def status_cmd(
 )
 def rollback_cmd(
     ctx: typer.Context,
-    target: conn.Target = None,
+    target: conn.NamedTarget = None,
     to: Annotated[
         str | None,
         typer.Option(
@@ -116,7 +117,7 @@ def rollback_cmd(
         bool,
         typer.Option("--dry-run", "-n", help="Print what would stop and start; change nothing"),
     ] = False,
-    host: conn.Host = None,
+    ssh: conn.Ssh = None,
     dest: conn.Dest = None,
     remote_user: conn.RemoteUser = None,
     connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
@@ -124,6 +125,7 @@ def rollback_cmd(
     verify_timeout: conn.VerifyTimeout = None,
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
+    as_json: deploy_out.RollbackJson = False,
 ) -> None:
     """Put a server back on an earlier release.
 
@@ -131,11 +133,12 @@ def rollback_cmd(
     `current`. A target that fails to verify is stopped and current's
     processes are started again.
 
-    `--dry-run` prints the plan as JSON and the dry-run note on stderr. It
-    reads the deploy lock and does not take it: it changes nothing, so it
-    warns when another deployment holds the lock rather than writing one."""
+    `--dry-run` prints the plan, then the dry-run note (on stderr under
+    --json). It reads the deploy lock and does not take it: it changes
+    nothing, so it warns when another deployment holds the lock rather than
+    writing one."""
     if to is not None and not RELEASE_ID.fullmatch(to):
-        _failed(
+        deploy_out.failed(
             "uqs deploy rollback", "arguments", ValueError(f"--release {to!r} is not a release id")
         )
     try:
@@ -144,38 +147,52 @@ def rollback_cmd(
             ctx,
             target,
             dict(
-                host=host,
+                ssh=ssh,
                 dest=dest,
                 remote_user=remote_user,
                 connect_timeout=connect_timeout,
                 command_timeout=command_timeout,
                 verify_timeout=verify_timeout,
             ),
+            unnamed="name the server to roll back: `uqs deploy rollback TARGET`",
             break_lock=waived.get(overrides.BREAK_LOCK),
         )
-        code = rollback.rollback(cfg, remote, to=to, dry_run=dry_run)
+        inspection.refuse_deploy(
+            repo_root(), "`uqs deploy rollback`",
+            name=target, ssh=cfg.ssh, dest=cfg.dest, dry_run=dry_run,
+        )  # fmt: skip
+        code, result = rollback.rollback(cfg, remote, to=to, dry_run=dry_run)
     except config.DeployError as exc:
-        _failed("uqs deploy rollback", exc.stage, exc)
-    dry.end_json(dry_run, code)
+        deploy_out.failed("uqs deploy rollback", exc.stage, exc)
+        return
+    deploy_out.show(result, rollback.render, as_json=as_json, dry_run=dry_run)
     raise typer.Exit(code=code)
 
 
 @deploy_app.command("prune", cls=renamed(conn.OLD_SPELLINGS, ChangesState))
 def prune_cmd(
     ctx: typer.Context,
+    target: conn.NamedTarget = None,
     keep: Annotated[
-        int, typer.Option("--keep", min=0, help="How many of the newest releases to keep")
-    ],
-    target: conn.Target = None,
+        int | None,
+        typer.Option(
+            "--keep",
+            min=0,
+            help="How many of the newest releases to keep; default: TARGET's `keep`, "
+            "as `deploy push` prunes to",
+            show_default=False,
+        ),
+    ] = None,
     dry_run: Annotated[
         bool, typer.Option("--dry-run", "-n", help="List what would be removed; remove nothing")
     ] = False,
-    host: conn.Host = None,
+    ssh: conn.Ssh = None,
     dest: conn.Dest = None,
     remote_user: conn.RemoteUser = None,
     connect_timeout: conn.ConnectTimeout = conn.DEFAULT_CONNECT_TIMEOUT,
     command_timeout: conn.CommandTimeout = None,
     yes: YesOpt = False,
+    as_json: deploy_out.PruneJson = False,
 ) -> None:
     """Remove the oldest releases beyond the newest --keep, under the deploy lock.
 
@@ -187,35 +204,54 @@ def prune_cmd(
     stayed and why, what went, and the bytes freed.
 
     `--dry-run` takes no lock - it reads it, and warns when another deployment
-    holds it - and ends with the dry-run note on stderr, after the JSON."""
+    holds it - and ends with the dry-run note (on stderr under --json)."""
     try:
         cfg, remote = _server(
             ctx,
             target,
             dict(
-                host=host,
+                ssh=ssh,
                 dest=dest,
                 remote_user=remote_user,
                 connect_timeout=connect_timeout,
                 command_timeout=command_timeout,
+                keep=keep,
             ),
+            unnamed="name the server to prune: `uqs deploy prune TARGET`",
         )
-        code = prune.prune(
-            cfg, remote, keep=keep, dry_run=dry_run, confirm=None if yes else _confirm_prune
+        if cfg.keep is None:
+            raise config.DeployError(
+                "arguments",
+                "--keep is required: "
+                + ("the target sets no keep" if target else "no TARGET gives one"),
+            )
+        inspection.refuse_deploy(
+            repo_root(), "`uqs deploy prune`",
+            name=target, ssh=cfg.ssh, dest=cfg.dest, dry_run=dry_run,
+        )  # fmt: skip
+        if not dry_run:
+            try:
+                safety.json_needs_yes(as_json, yes, "remove releases")
+            except UqsError as exc:  # before the server is reached: nothing was removed
+                raise config.DeployError("confirm", str(exc)) from None
+        code, result = prune.prune(
+            cfg, remote, keep=cfg.keep, dry_run=dry_run, confirm=None if yes else _confirm_prune
         )
     except config.DeployError as exc:
-        _failed("uqs deploy prune", exc.stage, exc)
-    dry.end_json(dry_run, code)
+        deploy_out.failed("uqs deploy prune", exc.stage, exc)
+        return
+    deploy_out.show(result, prune.render, as_json=as_json, dry_run=dry_run)
     raise typer.Exit(code=code)
 
 
 def _confirm_prune(planned: dict) -> bool:
     """Ask before `deploy prune` removes anything, naming each release and runtime."""
     runtimes = planned.get("runtimes", {}).get("removed", [])
+    # on stderr, with the question: stdout is the result's alone (#2125)
     for name in planned["removed"]:
-        typer.echo(f"  release {name}")
+        typer.echo(f"  release {name}", err=True)
     for name in runtimes:
-        typer.echo(f"  runtime {name}")
+        typer.echo(f"  runtime {name}", err=True)
     try:
         return safety.ask(
             f"Remove these {len(planned['removed'])} release(s) and {len(runtimes)} runtime(s) "
@@ -289,7 +325,7 @@ def verify_cmd(
     line of its own, which `uqs deploy push` reads; `--json` leaves the marker
     out, so stdout is the one document."""
     try:
-        code = verify.run(
+        code, result = verify.run(
             profile,
             deadline=deadline,
             query_timeout=query_timeout,
@@ -298,7 +334,6 @@ def verify_cmd(
             tables=tables_given(tables),
             live=not fixture,
             ports_free=ports_free,
-            marker=not as_json,
         )
     except UqsError as exc:  # an unknown profile or process
         _die(exc)
@@ -307,7 +342,12 @@ def verify_cmd(
         if not as_json:
             raise
         json_refusal(str(exc.code))
-        code = 1
+        raise typer.Exit(code=1) from None
+    if as_json:
+        emit(result)
+    else:
+        emit_line(result)
+        print(verify.OK_MARKER if code == 0 else verify.FAILED_MARKER)
     raise typer.Exit(code=code)
 
 

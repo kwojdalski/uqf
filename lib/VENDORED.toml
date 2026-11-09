@@ -1,0 +1,105 @@
+# Every tree vendored under lib/: where it came from, at which commit, under
+# which licence, and what was copied (#2157). One [tree.<dir>] table per
+# directory under lib/.
+#
+#   upstream       the repository it was copied from
+#   commit         the upstream commit, in full
+#   license        its SPDX id ("NONE" when upstream grants no licence)
+#   license_file   the licence text, as named here
+#   include        upstream paths copied (absent: the whole repository)
+#   omit           upstream paths deliberately not copied (each says why in
+#                  `omit_why`)
+#   renames        upstream path -> path here
+#   local          files here that are this repository's own, not upstream's
+#   upstream_tree  upstream's git tree id at `commit`
+#   files, digest  how many files lib/.vendored/<dir>.tsv lists, and the
+#                  sha256 of that listing
+#
+# `commit`, `upstream_tree`, `files` and `digest`, and the listing itself, are
+# written by scripts/dev/revendor.py and by nothing else; the gate
+# (`python3 scripts/gates/check.py vendored`, a pre-commit hook) recomputes
+# every file's git blob id and fails on any byte that is not upstream's.
+# Files known to differ from upstream are frozen in
+# lib/.vendored/<dir>.drift.tsv - see that file's header.
+
+[tree.torq]
+upstream = "https://github.com/DataIntellectTech/TorQ"
+commit = "a6cee6cef5f7e495c984d26193f3c3fb59ed60c0"
+license = "MIT"
+license_file = "LICENSE-torq"
+renames = { "LICENSE" = "LICENSE-torq" }
+upstream_tree = "626685d3d74d201bdb3fca8967e906b1bce19f50"
+files = 810
+digest = "sha256:52098ecc111ec59427b57cf4b7c0b46668dba4cc1155c67b6a9e04f1fbb17ada"
+
+[tree.torq-finance-starter-pack]
+upstream = "https://github.com/DataIntellectTech/TorQ-Finance-Starter-Pack"
+commit = "50fcd5ad6d8e50fcd71965010ce38a1fccdad87b"
+license = "MIT"
+license_file = "LICENSE-torq-finance-starter-pack"
+renames = { "LICENSE" = "LICENSE-torq-finance-starter-pack" }
+upstream_tree = "3499202f5859b90540f427962e4d44d4b7b792f4"
+files = 149
+digest = "sha256:7bac6e911c57e12664135522d30d2767fb0469200281553f570e3dd3f58c0ec9"
+
+[tree.qAutomatedTrading]
+upstream = "https://github.com/shahrzl/qAutomatedTrading"
+commit = "e508156fb6b03d22523b62d445b1fdf3b82d159e"
+license = "MIT"
+license_file = "LICENSE-qAutomatedTrading"
+renames = { "LICENSE" = "LICENSE-qAutomatedTrading" }
+upstream_tree = "77db1218002137959e352c2efe4b0d91d769aef4"
+files = 22
+digest = "sha256:7d4d8d9f7226c079e25580759b2822606bb569ffa977a1211ce14d8374c5197d"
+
+[tree.ml]
+upstream = "https://github.com/KxSystems/ml"
+commit = "5509fa6cfc454c68bf3441672fe1a26cb5a19088"
+license = "Apache-2.0"
+license_file = "LICENSE-ml"
+renames = { "LICENSE" = "LICENSE-ml" }
+omit = [
+    "ml/examples/models/pythonModel.pkl",
+    "ml/examples/models/sklearnModel.pkl",
+    "ml/examples/models/theanoModel.pkl",
+    "ml/examples/models/torchModel.pt",
+]
+omit_why = "pickled example models execute code when loaded; see lib/ml/NOTICE.md"
+local = ["NOTICE.md"]
+upstream_tree = "7518e338b09fb47cd9d75226a71432ef24510f6c"
+files = 505
+digest = "sha256:781e266a28e1f6545bf4b79b95c4e496eb79812e1ac620e320053c341ed1a4fe"
+
+[tree.kdb-parquet]
+upstream = "https://github.com/DataIntellectTech/kdb-parquet"
+commit = "e5cd641c321e52c0631fb3ef5ea1ec1e56062ef0"
+license = "NONE"
+license_file = "NOTICE.md"
+omit = [".gitignore", ".gitmodules", "rawlibs/arrow"]
+omit_why = "rawlibs/arrow is the Apache Arrow submodule, not part of kdb-parquet, and .gitmodules only points at it; .gitignore was not copied when the tree was vendored (f6df10aa). Upstream has no LICENSE: NOTICE.md says so"
+local = ["NOTICE.md"]
+upstream_tree = "28e68ca3c0a8171eaead33937a6d4aa8af406b9d"
+files = 192
+digest = "sha256:5b4e313023796f1f305418d95f7a6e3bd2977f7b580728f4901a862705eb6b34"
+
+[tree.kx-dbmaint]
+upstream = "https://github.com/KxSystems/kdb"
+commit = "1daebf73349199b1318649fc2c5656cab2b4a7f2"
+license = "Apache-2.0"
+license_file = "LICENSE-kx-kdb"
+include = ["utils/dbmaint.q", "utils/dbmaint.md", "LICENSE"]
+renames = { "utils/dbmaint.q" = "dbmaint.q", "utils/dbmaint.md" = "dbmaint.md", "LICENSE" = "LICENSE-kx-kdb" }
+local = ["NOTICE.md"]
+upstream_tree = "b9662249fc9dc5e68b965bea9024aafe28c43ae3"
+files = 3
+digest = "sha256:a10565b6637e3972e65489c8d8978c3abc0dd23deef51b9c1d684a47f782b546"
+
+[tree.unparse]
+upstream = "https://github.com/patmok/unparse"
+commit = "079b8a2ad1a18770677bd68ef31b5fa1d38c3864"
+license = "NONE"
+license_file = "NOTICE.md"
+local = ["NOTICE.md"]
+upstream_tree = "e02559e9a7f460e5a07986c68a2f682b277133c6"
+files = 3
+digest = "sha256:fddc5b4ef175757e0b5ea1580488feef102335d0976adf78417eea8b8287541e"

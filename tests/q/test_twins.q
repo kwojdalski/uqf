@@ -17,7 +17,7 @@
 
 / stream job -> (stream transform; twin transform; twin input name for each stream input)
 / Stream transform input -> twin transform input, where they differ.
-.qt.qpipe.twins.renames:(`exec_bars`crypto_book_1s`order_quality`book_liquidity_1m`fx_markout`fx_markout_wide`demo_deals_feed)!(enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;()!();enlist[`books]!enlist `books;()!();()!();()!())
+.qt.qpipe.twins.renames:(`exec_bars`crypto_book_1s`order_quality`book_liquidity_1m`fx_markout`fx_markout_wide`crypto_markout`eq_markout`demo_deals_feed)!(enlist[`tape]!enlist `executions;enlist[`book]!enlist `book;()!();enlist[`books]!enlist `books;()!();()!();()!();()!();()!())
 
 / A bundle's twin pair lists its own renaming, as .qt.qpipe.job.<job>.twin_renames in its test file
 / (the databento bundle's eq_orderbook is one): a name the job's suite owns has no load order, and the
@@ -38,7 +38,23 @@
     twin:first .qetl.uptime.twins job;
     ((.qetl.job.stream.def job)`transform;(.qetl.job.bounded.def twin)`transform;.qt.qpipe.twins.renames_of job)}
 
-.qt.qpipe.twins.with_twins:{[] js:key .qetl.job.stream.jobs; js where 0<count each .qetl.uptime.twins each js}
+/ A normalizer's table that a bounded worker ALSO writes, from a source of its own. That worker
+/ is another producer of the table (.qetl.uptime.twins counts any worker whose dataset the job
+/ publishes), not a recomputation of the normalizer's rows, and a normalizer has no single
+/ transform to compare. Stream job -> the worker, and why it is not a twin.
+.qt.qpipe.twins.other_producers:enlist[`executions]!enlist (`eq_fills_backfill;"fills from a csv drop, mapped by its source; the normalizer maps the plant's own fill tables")
+
+/ The stream jobs with a twin to compare: those with a worker that recomputes their rows.
+.qt.qpipe.twins.with_twins:{[]
+    js:key .qetl.job.stream.jobs;
+    js:js where 0<count each .qetl.uptime.twins each js;
+    js where not js in key .qt.qpipe.twins.other_producers}
+
+.qt.qpipe.twins.test_an_other_producer_is_a_worker_of_a_normalizer:{[t]
+    o:.qt.qpipe.twins.other_producers;
+    j:first key o;
+    .qunit.assertTrue[((o j) 0) in .qetl.uptime.twins j;"the worker really writes the job's table, so the exemption is still needed"];
+    .qunit.assertTrue[null (.qetl.job.stream.def j)`transform;"and the job is a normalizer, which has no single transform to compare"]};
 
 .qt.qpipe.twins.test_every_twin_pair_is_listed:{[t]
     listed:{[j] (j in key .qt.qpipe.twins.renames) or 99h=type .qt.qpipe.twins.own_renames j};
@@ -46,6 +62,12 @@
         "a stream job with a twin is listed here (or names its renames in its own test file), so its equivalence is checked"];
     .qunit.assertEquals[(key .qt.qpipe.twins.renames) except .qt.qpipe.twins.with_twins[];`symbol$();
         "and nothing listed here has lost its twin"]};
+
+/ The relationship is the worker's own declaration (twin_of, #2103), not only a shared dataset:
+/ q then refuses the pair when the live job's output moves (tests/q/test_twin_contracts.q).
+.qt.qpipe.twins.test_every_twin_pair_is_declared_by_its_backfill:{[t]
+    .qunit.assertEquals[.qt.qpipe.twins.with_twins[] except exec distinct live from .qetl.twin.report[];`symbol$();
+        "a stream job whose table a backfill re-derives is named in that backfill's twin_of"]};
 
 / The twin's transform reproduces each of the stream transform's examples.
 .qt.qpipe.twins.test_a_stream_job_with_a_twin_declares_its_transform:{[t]
@@ -71,6 +93,9 @@
         / the comparison the stream transform's own examples are held to:
         / float columns within .qetl.transform.float_tolerance
         0=count .qetl.transform.differences[c#want;c#got]}[p] each s`examples}
+
+.qt.qpipe.twins.test_the_crypto_markout_twin_scores_as_the_live_job_does:{[t]
+    .qunit.assertTrue[.qt.qpipe.twins.agrees[`crypto_markout];"hdb_crypto_markout_long gives the live transform's rows on its examples (plus the core's time)"]};
 
 .qt.qpipe.twins.test_the_fx_markout_twins_score_as_the_live_jobs_do:{[t]
     .qunit.assertTrue[.qt.qpipe.twins.agrees[`fx_markout];"hdb_fx_markouts_long gives the live long layout's rows on its examples"];

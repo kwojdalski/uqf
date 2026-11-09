@@ -130,9 +130,9 @@
 .qetl.reaction.require_handler:{[dataset;nm;handler]
     if[not -11h=type dataset; '"on: dataset must be a symbol"];
     if[not -11h=type nm; '"on: name must be a symbol"];
-    if[not (type handler) within 100 112h;
+    if[not .qetl.declared.callable handler;
         '"on: ",string[nm]," must be a function taking (dataset;range_from;range_to)"];
-    if[(100h=type handler) and not 3=count (value handler) 1;
+    if[(.qetl.declared.lambda handler) and not 3=count (value handler) 1;
         '"on: ",string[nm]," must take exactly 3 arguments (dataset;range_from;range_to)"];
     1b}
 
@@ -144,7 +144,7 @@
 / @param outputs the dataset(s) this handler writes, as a symbol or vector
 / @throws error when outputs is not a symbol or symbol vector, or when no
 /   bounded worker fills `dataset`
-/ @eg .qetl.reaction.on_writing[`demo_deals;`rebuild_positions;`positions;{[ds;f;t] count select from demo_deals where deal_time within (f;t-1)}]
+/ @eg .qetl.reaction.on_writing[`demo_deals;`rebuild_positions;`positions;{[ds;f;t] count select from demo_deals where deal_time>=f, deal_time<t}]
 .qetl.reaction.on_writing:{[dataset;nm;outputs;handler]
     .qetl.reaction.require_handler[dataset;nm;handler];
     if[not 11h=abs type outputs;
@@ -188,9 +188,9 @@
     if[not null .qetl.run.proc_name[];
         '"on_worker: ",string[worker]," cannot run as a reaction inside TorQ process ",
          string[.qetl.run.proc_name[]],": one bounded worker per process, and the reaction would run in the publisher's"];
-    if[not (type spec_fn) within 100 112h;
+    if[not .qetl.declared.callable spec_fn;
         '"on_worker: ",string[worker],"'s spec_fn must be a function taking (range_from;range_to)"];
-    if[(100h=type spec_fn) and not 2=count (value spec_fn) 1;
+    if[(.qetl.declared.lambda spec_fn) and not 2=count (value spec_fn) 1;
         '"on_worker: ",string[worker],"'s spec_fn must take exactly 2 arguments (range_from;range_to)"];
     ns:.qetl.job.bounded.namespace worker;
     h:{[worker;ns;spec_fn;ds;range_from;range_to] / noqa: QF016 reaction handler signature
@@ -418,7 +418,7 @@
     / Never fails the reaction it records: a ledger that cannot be written is
     / logged, and the next run's `pending` simply sees the window as not done.
     @[.qetl.reaction.persist_outcome;(item`dataset;item`partition;item`source_version;name;item`range_from;item`range_to;outcome;.z.p;.qetl.reaction.revision_of[item`dataset;name]);
-      {[e] @[{.qetl.log.err[`qetl.reaction;"could not record a reaction outcome";enlist[`error]!enlist x]};e;{[e2] (::)}]}];
+      {[e] @[{.qetl.log.ch.err[`coverage;"could not record a reaction outcome";enlist[`error]!enlist x]};e;{[e2] (::)}]}];
     }
 
 / ------------------------------------------------------ DURABLE OUTCOMES
@@ -619,7 +619,7 @@
 / failure rather than an error inside an error handler.
 / @private
 .qetl.reaction.log_failure:{[item;nm;e]
-    @[{.qetl.log.err[`qetl.reaction;"reaction failed";
+    @[{.qetl.log.ch.err[`lifecycle;"reaction failed";
         `dataset`reaction`range_from`range_to`error!
         (x`dataset;y;x`range_from;x`range_to;z)]}[item;nm];e;{[e] (::)}]}
 
@@ -717,7 +717,9 @@
     if[not `time in cols rows;
         '"write: ",string[target],"'s rows need a time column - the window is cleared by it"];
     w:.qetl.reaction.window_now;
-    if[count outside:select from rows where not time within (w 0;w[1]-1);
+    / the window is [w 0; w 1): a row AT w 1 belongs to the next window, and
+    / "w 1 minus one tick" would make the bound depend on the column's precision
+    if[count outside:select from rows where not (time>=w 0) and time<w 1;
         '"write: ",string[count outside]," row(s) of ",string[target],
          " lie outside the window being reacted to, ",string[w 0]," to ",string w 1];
     mgr:$[99h=type .qetl.reaction.io_now; .qetl.reaction.io_now; .qetl.io.default];

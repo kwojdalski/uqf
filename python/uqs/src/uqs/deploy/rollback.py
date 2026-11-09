@@ -19,7 +19,10 @@ from the same stages a push uses:
 
 If the target fails to start or verify, its processes are stopped, `current`'s
 are started again and verified, and `current` never moves: the server ends
-where it began. Nothing is deleted - the release rolled back from stays in
+where it began. So does an interruption - Ctrl-C in the verify wait, say -
+before `current` moves, and the interruption then goes on, as a push's does
+(#1664, #2175); one while `current` moves leaves the verified target running
+and says what `current` names. Nothing is deleted - the release rolled back from stays in
 releases/, so a push of the same artifact is refused and a rollback with
 --release can return to it.
 """
@@ -27,8 +30,8 @@ releases/, so a push of the same artifact is refused and a rollback with
 from __future__ import annotations
 
 import json
-import sys
 
+from uqs.deploy import report as deploy_report
 from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, redact
 from uqs.deploy.remote import Transport, q
 from uqs.deploy.selection import Selection, started_by
@@ -45,7 +48,7 @@ def _report(dep: Deployment, release: str) -> dict:
         f"cat {q(dep.releases)}/{q(release)}/{REPORT}",
     )
     try:
-        report = json.loads(out)
+        report = deploy_report.read(json.loads(out))
         return {
             **report,
             "profile": report["profile"],
@@ -117,32 +120,32 @@ def _plan(dep: Deployment, cfg: Config, to: str | None) -> tuple[dict, dict, dic
 
 
 def rollback(
-    cfg: Config, remote: Transport, *, to: str | None = None, dry_run: bool = False, out=sys.stdout
-) -> int:
-    """Move the server at cfg.host:cfg.dest back to an earlier release.
-    Returns 0 when the target is running, verified and `current`."""
+    cfg: Config, remote: Transport, *, to: str | None = None, dry_run: bool = False
+) -> tuple[int, dict]:
+    """Move the server at cfg.ssh:cfg.dest back to an earlier release.
+    Returns (0 when the target is running, verified and `current`, else 1;
+    what happened, as the command's document - its verdict under `rollback`:
+    planned, done or failed). Printed by the command, never here (#2125)."""
     dep = Deployment(cfg, remote)
     dep.check_sudo()
     if dry_run:  # reads the lock, takes nothing: Deployment.read_lock says why
         dep.read_lock("rollback")
-        print(json.dumps({"rollback": "planned", **_plan(dep, cfg, to)[0]}, indent=2), file=out)
-        return 0
+        return 0, {"ok": True, "rollback": "planned", **_plan(dep, cfg, to)[0]}
     dep.take_lock("rollback")
+    # How far it got, for an interruption: "stop" once current's processes may
+    # be going down, "start" once the target's may be coming up, "restore"
+    # once current is being restored, "activate" once `current` may move.
+    reached = ""
     try:
         plan, now, then = _plan(dep, cfg, to)
         current, target = plan["from"], plan["to"]
         log.info("stopping release {}'s processes", current)
-        try:
-            dep.uqs(f"{dep.releases}/{current}", "rollback", "stopping the current processes",
-                    "stop", *_started(now))  # fmt: skip
-        except DeployError:
-            # Some of current's processes may be down: bring them back first.
-            restored = _start_and_verify(dep, current, now, f"release {current} again")
-            outcome = "verified" if restored.get("passed") else "NOT verified - check by hand"
-            log.error("stopping release {} failed; restarted it: {}", current, outcome)
-            raise
+        reached = "stop"  # before it: a stop that fails part-way took some down
+        dep.uqs(f"{dep.releases}/{current}", "rollback", "stopping the current processes",
+                "stop", *_started(now))  # fmt: skip
         dep.beat()
         log.info("starting release {}'s profile {}", target, then["profile"])
+        reached = "start"
         result = _start_and_verify(dep, target, then, f"release {target}")
         dep.beat()
         if not result.get("passed"):
@@ -150,19 +153,86 @@ def rollback(
             log.error(
                 "release {} did not start or verify: {}; restoring {}", target, reason, current
             )
-            try:
-                dep.uqs(f"{dep.releases}/{target}", "rollback", "stopping the target's processes",
-                        "stop", *_started(then))  # fmt: skip
-            except DeployError as exc:
-                log.error("stopping release {}'s processes failed: {}; restoring anyway", target,
-                          redact(str(exc)))  # fmt: skip
-            restored = _start_and_verify(dep, current, now, f"release {current} again")
-            outcome = "restored" if restored.get("passed") else "NOT restored - check by hand"
+            reached = "restore"
+            outcome = _restore(dep, plan, now, then, stop_target=True)
             failed = {"rollback": "failed", **plan, "reason": reason, "current": current}
-            print(json.dumps({**failed, "restore": outcome}, indent=2), file=out)
-            return 1
+            return 1, {"ok": False, **failed, "restore": outcome}
+        reached = "activate"
         dep.activate(target)
-        print(json.dumps({"rollback": "done", **plan, "current": target}, indent=2), file=out)
-        return 0
+        return 0, {"ok": True, "rollback": "done", **plan, "current": target}
+    except BaseException as exc:
+        # A stop that failed, or Ctrl-C in the target's verify wait: the same
+        # restore a target that fails to verify gets, then the exception goes
+        # on to the caller - as a push does (#1664, #2175).
+        if reached:
+            _recover(dep, plan, now, then, reached, exc)
+        raise
     finally:
         dep.release_lock()
+
+
+def _restore(dep: Deployment, plan: dict, now: dict, then: dict, *, stop_target: bool) -> str:
+    """Stop what the target started (when it was started), then start and
+    verify `current`'s release again: "restored" or "NOT restored - ..."."""
+    current, target = plan["from"], plan["to"]
+    if stop_target:
+        try:
+            dep.uqs(f"{dep.releases}/{target}", "rollback", "stopping the target's processes",
+                    "stop", *_started(then))  # fmt: skip
+        except DeployError as exc:
+            log.error("stopping release {}'s processes failed: {}; restoring anyway", target,
+                      redact(str(exc)))  # fmt: skip
+    restored = _start_and_verify(dep, current, now, f"release {current} again")
+    return "restored" if restored.get("passed") else "NOT restored - check by hand"
+
+
+def _recover(dep, plan, now, then, reached: str, exc: BaseException) -> None:
+    """After `exc` at `reached`: leave a running release, or say exactly why
+    there is none. Logged, since the exception - not a document - goes on."""
+    current, target = plan["from"], plan["to"]
+    what = "FAILED" if isinstance(exc, DeployError) else "INTERRUPTED"
+    why = redact(": ".join(filter(None, (type(exc).__name__, str(exc)))))
+    lost = (f"current still names {current}, but neither release may be running - "
+            "check by hand")  # fmt: skip
+    if reached == "restore":  # a second Ctrl-C, while current was being restored
+        log.error("rollback {} ({}) while restoring release {}: {}", what, why, current, lost)
+        return
+    if reached == "activate":
+        # The target is up and verified: undoing it now would trade a running
+        # release for a guess. Say what `current` names, read back.
+        try:
+            names = _current(dep) or "nothing"
+        except Exception:  # noqa: BLE001 - the original exception is what goes on
+            names = f"{current} or {target} (it could not be read back)"
+        log.error("rollback {} ({}) while moving current: release {}'s processes are running "
+                  "and verified; current names {}", what, why, target, names)  # fmt: skip
+        return
+    doing = f"stopping release {current}" if reached == "stop" else f"starting release {target}"
+    log.error("rollback {} ({}) while {}: restoring release {}", what, why, doing, current)
+    try:
+        outcome = _restore(dep, plan, now, then, stop_target=reached == "start")
+    except BaseException:
+        log.error("rollback interrupted again while restoring release {}: {}", current, lost)
+        raise
+    if outcome == "restored":
+        log.error("release {} restored - the server is where it began; current still names {}",
+                  current, current)  # fmt: skip
+    else:
+        log.error("release {} NOT restored: {}", current, lost)
+
+
+def render(doc: dict) -> str:
+    """A rollback's document for a terminal."""
+    start = doc["start"]
+    extra = start["extra_processes"]
+    starts = f"profile {start['profile']}" + (f" and {', '.join(extra)}" if extra else "")
+    stops = ", ".join(doc["stop"]) or "nothing"
+    verdict = doc["rollback"]
+    if verdict == "planned":
+        return f"would roll back from {doc['from']} to {doc['to']}: stop {stops}; start {starts}"
+    if verdict == "done":
+        return f"rolled back from {doc['from']} to {doc['to']} ({starts}); current is {doc['to']}"
+    return (
+        f"rollback from {doc['from']} to {doc['to']} FAILED: {redact(str(doc['reason']))}; "
+        f"release {doc['current']} {doc['restore']}"
+    )

@@ -29,8 +29,8 @@
 .qt.qtorq.querypolicy.refusal:{[p;d] @[{.checkinputs.checkrequest[x;`sym;y];`passed}[p];d;{x}]}
 
 .qt.qtorq.querypolicy.test_every_exposed_table_has_a_policy_for_ordinary_callers:{[t]
-    .qunit.assertEquals[asc exec tablename from .qt.qtorq.querypolicy.shipped where null role;`crypto_execution_quality`duckdb_deals`last_value`mkt_orderbook;
-        "the four tables the gateway exposes, each with a default row - crypto_execution_quality for the rts subscriber's snapshot (#984)"]};
+    .qunit.assertEquals[asc exec tablename from .qt.qtorq.querypolicy.shipped where null role;`crypto_markout`duckdb_deals`last_value`mkt_orderbook;
+        "the four tables the gateway exposes, each with a default row - crypto_markout for the rts subscriber's snapshot (#984)"]};
 
 .qt.qtorq.querypolicy.test_a_table_without_a_policy_is_refused_with_how_to_get_one:{[t]
     .qunit.assertThrows[.checkinputs.resolvepolicy[.qt.qtorq.querypolicy.shipped;.qt.qtorq.querypolicy.caps;;.qt.qtorq.querypolicy.none];`trades;
@@ -129,8 +129,8 @@
 
 .qt.qtorq.querypolicy.test_a_comparison_on_a_column_no_policy_requires_is_unaffected:{[t]
     d:.qt.qtorq.querypolicy.book,enlist[`filters]!enlist `sym`bid!(enlist .uqf.browse_pair[`eq;`EURUSD];enlist .uqf.browse_pair[`gt;1.08]);
-    p:.qt.qtorq.querypolicy.policy`crypto_execution_quality;
-    e:`tablename`starttime`endtime`filters!(`crypto_execution_quality;2026.01.01D00:00;2026.01.01D01:00;
+    p:.qt.qtorq.querypolicy.policy`crypto_markout;
+    e:`tablename`starttime`endtime`filters!(`crypto_markout;2026.01.01D00:00;2026.01.01D01:00;
         enlist[`sym]!enlist enlist .uqf.browse_pair[`ne;`ZZZ]);
     .qunit.assertEquals[(.qt.qtorq.querypolicy.refusal[.qt.qtorq.querypolicy.policy`mkt_orderbook] d;.qt.qtorq.querypolicy.refusal[p] e);`passed`passed;"only required columns must narrow"]};
 
@@ -144,16 +144,16 @@
         "querypolicy: mkt_orderbook allows raw and this request is aggregate - drop aggregations*";"raw only"]};
 
 .qt.qtorq.querypolicy.test_a_raw_read_on_an_aggregate_only_table_is_refused:{[t]
-    p:@[.qt.qtorq.querypolicy.policy`crypto_execution_quality;`operations;:;enlist`aggregate];
-    d:`tablename`starttime`endtime!(`crypto_execution_quality;2026.01.01D00:00;2026.01.01D01:00);
+    p:@[.qt.qtorq.querypolicy.policy`crypto_markout;`operations;:;enlist`aggregate];
+    d:`tablename`starttime`endtime!(`crypto_markout;2026.01.01D00:00;2026.01.01D01:00);
     .qunit.assertThrows[.checkinputs.checkrequest[p;`sym;];d;
-        "querypolicy: crypto_execution_quality allows aggregate and this request is raw - send aggregations*";"aggregates only"]};
+        "querypolicy: crypto_markout allows aggregate and this request is raw - send aggregations*";"aggregates only"]};
 
 .qt.qtorq.querypolicy.test_only_approved_aggregation_functions_pass_where_a_policy_lists_them:{[t]
-    p:@[.qt.qtorq.querypolicy.policy`crypto_execution_quality;`functions;:;`avg`count];
-    d:`tablename`starttime`endtime`aggregations!(`crypto_execution_quality;2026.01.01D00:00;2026.01.01D01:00;`avg`max!`markout_bps`markout_bps);
+    p:@[.qt.qtorq.querypolicy.policy`crypto_markout;`functions;:;`avg`count];
+    d:`tablename`starttime`endtime`aggregations!(`crypto_markout;2026.01.01D00:00;2026.01.01D01:00;`avg`max!`markout_bps`markout_bps);
     .qunit.assertThrows[.checkinputs.checkrequest[p;`sym;];d;
-        "querypolicy: crypto_execution_quality allows the aggregations avg, count - not max";"max is not on the list"];
+        "querypolicy: crypto_markout allows the aggregations avg, count - not max";"max is not on the list"];
     .qunit.assertEquals[.qt.qtorq.querypolicy.refusal[p;@[d;`aggregations;:;enlist[`avg]!enlist`markout_bps]];`passed;"avg is"]};
 
 .qt.qtorq.querypolicy.test_a_parameter_the_policy_cannot_see_into_is_refused:{[t]
@@ -283,6 +283,57 @@
 .qt.qtorq.querypolicy.test_browse_takes_its_window_from_the_browsers_time_bounds:{[t]
     w:.uqf.browse_window[`time`time;`ge`lt;(2026.01.01D10:00;2026.01.01D11:00);1D;2026.01.02D00:00];
     .qunit.assertEquals[w;2026.01.01D10:00 2026.01.01D11:00;"the bounds given, not the policy's span"]};
+
+/ #2055: getdata reads its window CLOSED at both ends, so the browser's contract
+/ rests on the `time` filters that travel with it. Rows at a, at b (three of
+/ them, sharing the instant) and at c, read as getdata reads - `within` - then
+/ filtered as browse_pair sends: [a;b) and [b;c) return b's rows exactly once,
+/ neither returns c's, and together they are [a;c). Run at ms, us and ns
+/ alignment, so no bound is a tick away from the event.
+.qt.qtorq.querypolicy.read_as_getdata:{[ts;lo;hi]
+    w:.uqf.browse_window[`time`time;`ge`lt;(lo;hi);1D;2026.01.02D00:00];
+    in_closed:ts within w;
+    pg:.uqf.browse_pair[`ge;lo];
+    pl:.uqf.browse_pair[`lt;hi];
+    in_closed and (pg[0][ts;pg 1]) and pl[0][ts;pl 1]}
+
+.qt.qtorq.querypolicy.check_adjacent:{[u]
+    b:2026.01.02D00:00:00.000000000;
+    a:b-u; c:b+u;
+    ts:a,b,b,b,c;
+    left:ts where .qt.qtorq.querypolicy.read_as_getdata[ts;a;b];
+    right:ts where .qt.qtorq.querypolicy.read_as_getdata[ts;b;c];
+    whole:ts where .qt.qtorq.querypolicy.read_as_getdata[ts;a;c];
+    .qunit.assertEquals[left;enlist a;"[a;b) has a and none of b's rows, at ",string u];
+    .qunit.assertEquals[right;3#b;"[b;c) has all three rows at b and not c's, at ",string u];
+    .qunit.assertEquals[left,right;whole;"the two requests concatenate to the combined one, at ",string u]}
+
+.qt.qtorq.querypolicy.test_adjacent_browser_windows_compose_and_the_shared_instant_comes_back_once:{[t]
+    .qt.qtorq.querypolicy.check_adjacent each 0D00:00:00.001000000 0D00:00:00.000001000 0D00:00:00.000000001;
+    }
+
+/ #2034: `time in [...]` bounds the window, from the earliest instant to the
+/ latest. It used to find no bound and read "the latest maxrange ending now",
+/ so instants older than that came back as a complete-looking empty result.
+/ The frontend sends each instant as a one-item timestamp vector (#1371).
+.qt.qtorq.querypolicy.test_browse_takes_its_window_from_a_time_in_list:{[t]
+    asked:2026.10.02D10:00 2026.10.01D10:00;
+    w:.uqf.browse_window[enlist `time;enlist `in;enlist enlist each asked;1D;2026.11.04D00:00];
+    .qunit.assertEquals[w;asc asked;"the earliest instant to the latest, not the policy's latest span"]};
+
+.qt.qtorq.querypolicy.test_browse_hands_getdata_a_window_covering_every_time_in_instant:{[t]
+    .qt.qtorq.querypolicy.browse_with[`maxrange`maxrows!(1D;10);
+        {[] .uqf.browse[`crypto_markout;enlist `time;enlist `in;enlist enlist each 2026.10.01D10:00 2026.10.01D12:00;1000;`rdb`hdb]}];
+    d:.qt.qtorq.querypolicy.asked;
+    .qunit.assertEquals[d`starttime`endtime;2026.10.01D10:00 2026.10.01D12:00;"getdata's window holds both instants"]};
+
+/ A list spanning more than maxrange is held to the policy like any other
+/ window: refused with the policy's own words, not answered with nothing.
+.qt.qtorq.querypolicy.test_a_time_in_list_wider_than_maxrange_is_refused_by_the_policy:{[t]
+    w:.uqf.browse_window[enlist `time;enlist `in;enlist enlist each 2026.10.01D10:00 2026.10.03D10:00;1D;2026.11.04D00:00];
+    req:`tablename`starttime`endtime`instruments!(`mkt_orderbook;w 0;w 1;`EURUSD);
+    .qunit.assertThrows[.checkinputs.checkrequest[.qt.qtorq.querypolicy.policy`mkt_orderbook;`sym];req;
+        "*per request and this one covers 2D00:00:00.000000000*";"the policy's refusal, naming the span"]};
 
 .qt.qtorq.querypolicy.test_browse_refuses_an_unknown_operator:{[t]
     .qunit.assertThrows[{.uqf.browse[`t;enlist `sym;enlist `like;enlist "E*";10;enlist `rdb]};::;

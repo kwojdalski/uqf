@@ -7,14 +7,14 @@ feeds. If your rows come from a plant table, you want [etl.md](etl.md) instead.
 ## Command
 
 ```bash
-uqs job new pulsefeed --publishes pulse --schema "sym:symbol, px:float"
+uqs job new pulsefeed --outputs pulse --schema "sym:symbol, px:float"
 ```
 
 **There is no `--kind feed`.** A streaming job that subscribes to nothing is a
 feed, and the scaffold derives that. Omitting `--subscribe-to` is the whole
 signal.
 
-<!-- scaffold-transcript: pulsefeed --publishes pulse --schema "sym:symbol, px:float" -->
+<!-- scaffold-transcript: pulsefeed --outputs pulse --schema "sym:symbol, px:float" -->
 ```
 scaffold pulsefeed:
   create src/etl/streaming/pulsefeed.q
@@ -45,7 +45,7 @@ scaffold pulsefeed:
 
 \d .
 
-.qetl.job.stream.define[`pulsefeed;`procname`subscribe_to`publishes`period`on_timer`note!(
+.qetl.job.stream.define[`pulsefeed;`procname`subscribe_to`outputs`period`on_timer`note!(
     `pulsefeed1;
     `symbol$();                    / subscribes to nothing - this is what makes it a feed
     enlist `pulse;
@@ -90,9 +90,12 @@ checked for shape.
 ## Timer
 
 `period` is `0D00:00:01` by default --- one second --- and `--period` sets it:
-`--period 0D00:00:00.500` for twice a second. It is a field in the declaration,
-so changing it later is a one-line edit, and a feed that should tick faster than
-the plant can absorb is a decision to make deliberately rather than discover.
+`--period 500ms` for twice a second, written into the declaration as
+`0D00:00:00.500`. Like every span of time `uqs` takes it is a DURATION (`30`
+seconds, `500ms`, `5m`, `1d`), or a q timespan kept as written. It is a field in
+the declaration, so changing it later is a one-line edit, and a feed that should
+tick faster than the plant can absorb is a decision to make deliberately rather
+than discover.
 
 ## Polling a source
 
@@ -100,8 +103,8 @@ A feed that ticks makes rows up; a feed that polls fetches them from somewhere
 else. Scaffold the second with `--poll`:
 
 ```
-uqs job new rates_feed --publishes rates --schema "sym:symbol, mid:float" --poll
-uqs job new book_feed --publishes books --schema "sym:symbol, px:float" \
+uqs job new rates_feed --outputs rates --schema "sym:symbol, mid:float" --poll
+uqs job new book_feed --outputs books --schema "sym:symbol, px:float" \
     --poll --cursor-fields time,securityId,priceBookType
 ```
 
@@ -117,7 +120,7 @@ built from them that fetches the page after its cursor, normalizes it, publishes
 it and then advances the cursor:
 
 ```q
-.qetl.job.stream.define[`vectorize2;`procname`subscribe_to`publishes`period`poll!(
+.qetl.job.stream.define[`vectorize2;`procname`subscribe_to`outputs`period`poll!(
     `vectorize2_1;`symbol$();enlist `wide_orderbook;0D00:00:05;
     `fetch`normalize`next_cursor`source!(
         fetch;                         / [cursor] -> the page after it

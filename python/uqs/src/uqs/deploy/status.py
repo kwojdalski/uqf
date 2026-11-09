@@ -130,6 +130,9 @@ def _health(dep: Deployment, current: str, report: dict | None) -> dict:
     )
     return {
         "checked": True,
+        # `ok` is every --json document's success flag (#2122); `passed` stays for a
+        # deploying uqs of another version, as in `deploy check` (#1882)
+        "ok": bool(result.get("passed")),
         "passed": bool(result.get("passed")),
         "reason": result.get("reason") or "",
         "processes": result.get("processes", []),
@@ -139,7 +142,7 @@ def _health(dep: Deployment, current: str, report: dict | None) -> dict:
 
 
 def status(cfg: Config, remote: Transport, *, health: bool = True) -> dict:
-    """What cfg.host:cfg.dest runs. Takes no lock and changes nothing."""
+    """What cfg.ssh:cfg.dest runs. Takes no lock and changes nothing."""
     dep = Deployment(cfg, remote)
     dep.check_sudo()
     out = dep.run(
@@ -159,7 +162,7 @@ def status(cfg: Config, remote: Transport, *, health: bool = True) -> dict:
     named = {current, previous} - {None}
     result = {
         "format": FORMAT,
-        "ssh": cfg.host,
+        "ssh": cfg.ssh,
         "dest": cfg.dest,
         "current": _release(dep, current, kept),
         "previous": _release(dep, previous, kept),

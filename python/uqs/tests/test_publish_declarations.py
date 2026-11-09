@@ -1,6 +1,6 @@
-"""Every table a streaming job publishes is one it declares in `publishes`.
+"""Every table a streaming job publishes is one it declares in `outputs`.
 
-`publishes` is what the runner, the registry and the generated diagrams all
+`outputs` is what the runner, the registry and the generated diagrams all
 read as the job's output. Nothing on the publish path checks it:
 `.qetl.job.stream.wire` accepts any publisher, so a job that publishes into a table
 it never declared runs fine, and the registry, the DAG and `uqs status` all
@@ -32,7 +32,7 @@ from uqs.paths import STREAM_DIR, repo_root
 _Q_STRING = re.compile(r'"(?:\\.|[^"\\])*"')
 
 # Every standalone `publish` identifier, with whatever qualifies it. The
-# lookbehind stops `publishes` and `.qtorq.publish_x` style names matching.
+# lookbehind stops `outputs` and `.qtorq.publish_x` style names matching.
 _ANY_PUBLISH = re.compile(r"(?<![\w.])(?P<name>[\w.]*\bpublish)\b(?!\w)(?P<after>\s*[\[:]?)")
 
 # The one checkable shape: a call in a job's own namespace, table as a literal.
@@ -70,7 +70,7 @@ def publish_problems(source: str, declarations: list[Declaration]) -> list[str]:
         if call is None:
             problems.append(
                 f"line {line}: `{name}` is not a `.qpipe.job.<job>.publish[`table;...]` call, "
-                "so its table cannot be checked against `publishes`"
+                "so its table cannot be checked against `outputs`"
             )
             continue
         job, table = call.group("job"), call.group("table")
@@ -125,7 +125,7 @@ def _file(source: str) -> list[Declaration]:
 
 
 _DECL = (
-    ".qetl.job.stream.define[`j;`procname`subscribe_to`publishes`on_batch!("
+    ".qetl.job.stream.define[`j;`procname`subscribe_to`outputs`on_batch!("
     "`j1;enlist `a;enlist `out;.qpipe.job.j.on_batch)];\n"
 )
 

@@ -77,7 +77,7 @@
     $[(not null source) and source in key .qetl.source.sources; (),(.qetl.source.def source)`row_key; `symbol$()]}
 
 / Every producer that fills `dataset`, as the job graph says: .qetl.dag.producers, built
-/ from the streaming jobs' `publishes`, the bounded workers' `dataset` and the reactions'
+/ from the streaming jobs' `outputs`, the bounded workers' `outputs` and the reactions'
 / outputs. Nothing here groups producers a second time. The graph is rebuilt from the
 / registries for the call and put back as it was, so asking changes nothing.
 / @param dataset the dataset, a symbol

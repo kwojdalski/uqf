@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import App from "./App";
-import type { Services } from "./api";
+import type { Services } from "./api/services";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
 const SOURCE = "/repo/deploy_targets.toml";
@@ -11,7 +11,7 @@ function services(over: Partial<Services> = {}): Services {
     source: SOURCE,
     declared: true,
     invalid: null,
-    remote_operations_enabled: false,
+    writes_enabled: false,
     poll_seconds: 30,
     ...over,
   };
@@ -41,22 +41,24 @@ it("lists each target's ssh destination, root and environment, profile or not", 
       services({
         targets: [
           {
-            name: "prod-a",
+            target: "prod-a",
             ssh: "deploy@prod-a",
             dest: "/srv/uqf",
             remote_user: null,
             environment: null,
             labels: { region: "ldn" },
+            inspection: false,
             last_deployed: { release: "r42", at: "2026-11-01T09:00:00Z" },
           },
           {
             // ssh and root only, no deployment profile
-            name: "uat-b",
+            target: "uat-b",
             ssh: "deploy@uat-b",
             dest: "/srv/uqf-uat",
             remote_user: "svc",
             environment: "uat",
             labels: {},
+            inspection: false,
             last_deployed: null,
           },
         ],
@@ -76,7 +78,7 @@ it("lists each target's ssh destination, root and environment, profile or not", 
 });
 
 it("says whether remote operations are enabled", async () => {
-  mockApi(() => ok(services({ remote_operations_enabled: true })));
+  mockApi(() => ok(services({ writes_enabled: true })));
   openServices();
   expect(
     await screen.findByText("Remote operations enabled"),
@@ -138,12 +140,13 @@ it("refreshes on demand, reading the registry again", async () => {
     services({
       targets: [
         {
-          name: "added",
+          target: "added",
           ssh: "ops@box",
           dest: "/opt/uqf",
           remote_user: null,
           environment: null,
           labels: {},
+          inspection: false,
           last_deployed: null,
         },
       ],
@@ -159,4 +162,27 @@ it("refreshes on demand, reading the registry again", async () => {
   expect(
     fetcher.mock.calls.filter(([path]) => path === "/services"),
   ).toHaveLength(2);
+});
+
+it("marks a target in inspection mode, and only then shows the column", async () => {
+  mockApi(() =>
+    ok(
+      services({
+        targets: [
+          {
+            target: "prod-a",
+            ssh: "deploy@prod-a",
+            dest: "/srv/uqf",
+            remote_user: null,
+            environment: null,
+            labels: {},
+            inspection: true,
+            last_deployed: null,
+          },
+        ],
+      }),
+    ),
+  );
+  openServices();
+  expect(await screen.findByText("inspection mode")).toBeInTheDocument();
 });

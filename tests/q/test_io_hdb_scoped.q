@@ -5,6 +5,8 @@
 / back: "preserved" means the same bytes on disk, not the same count.
 
 
+system "l scripts/dev/attached_calendar.q";
+
 .qt.qetl.hdb_scoped.bounds:{[] `max_date`deadline`destination!(2026.01.31;2099.01.01D00:00:00.000000000;`dest_test)}
 
 / The window the keyed tests replace, and the strategy.
@@ -289,3 +291,74 @@
     .qunit.assertEquals[0<count each .qt.qetl.hdb_scoped.rows_on[root;] each 2026.09.11 2026.09.12 2026.09.13;110b;
         "the dates up to the bound were written; the one past it was not touched"];
     .qunit.assertTrue[()~key hsym `$(string root),"/2026.09.13";"no partition exists for it"]};
+
+/ --- the stack's own calendar (#2193) --------------------------------------
+/ TorQ's real eodtime.q, configured to roll at 17:00 UTC with the partition named for the next day
+/ (rolltimeoffset -07:00): a row at 17:30 belongs to the NEXT native partition.
+
+.qt.qetl.hdb_scoped.roll17:"off=-25200000000000,adj=0"
+
+/ Run f[x] under the 17:00 calendar and put UTC back whatever happens, so no other test sees it.
+.qt.qetl.hdb_scoped.under_roll17:{[f;x]
+    .qetl.io.use_calendar .qt.qetl.hdb_scoped.roll17;
+    r:@[{(1b;.[x 0;x 1])};(f;x);{(0b;x)}];
+    .qetl.io.use_calendar "";
+    if[not first r; 'last r];
+    last r}
+
+.qt.qetl.hdb_scoped.test_rows_are_partitioned_by_the_stacks_getday_not_the_utc_date:{[t]
+    ts:2026.11.05D16:59:59.000000000 2026.11.05D17:00:00.000000000 2026.11.05D17:30:00.000000000 2026.11.05D18:30:00.000000000;
+    b:([] time:ts; sym:4#`EURUSD; qty:1 2 3 4f);
+    got:.qt.qetl.hdb_scoped.under_roll17[{[b] (.qetl.io.scoped_days[`time;b]; .eodtime.getday each b`time)};enlist b];
+    .qunit.assertEquals[first got;2026.11.05 2026.11.06 2026.11.06 2026.11.06;"the scoped writer files the rows where the roll puts them"];
+    .qunit.assertEquals[first got;last got;"and that is TorQ's own getday, row by row"];
+    .qunit.assertEquals[.qetl.io.scoped_days[`time;b];4#2026.11.05;"with no calendar the UTC date is kept"]};
+
+.qt.qetl.hdb_scoped.test_the_completed_history_bound_is_in_native_days:{[t]
+    b:([] time:enlist 2026.11.05D17:30:00.000000000; sym:enlist `EURUSD; qty:enlist 1f);
+    bounds:`max_date`destination!(2026.11.05;`dest_test);
+    .qunit.assertEquals[.qetl.io.scoped_check_date[bounds;`time;`t;b;0Np];2026.11.05;"UTC midnight: the row is completed history"];
+    r:.qt.qetl.hdb_scoped.under_roll17[{[bounds;b] .[.qetl.io.scoped_check_date;(bounds;`time;`t;b;0Np);{[e] e}]};(bounds;b)];
+    .qunit.assertEquals[r;"hdb_scoped: t would write 2026.11.06 into dest_test, whose completed history ends 2026.11.05 - later dates belong to the native writers and end of day";
+        "under the 17:00 roll it belongs to the partition the wdb is filling, and is refused"]};
+
+.qt.qetl.hdb_scoped.test_a_write_lands_in_the_native_partition:{[t]
+    / Dates well in the past: hdb_rows refuses today and later, and this test must not age into that.
+    root:`$":",first system"mktemp -d";
+    bounds:`max_date`deadline`destination`calendar!(2026.03.11;2099.01.01D00:00:00.000000000;`dest_test;.qt.qetl.hdb_scoped.roll17);
+    m:.qetl.io.hdb_scoped[root;`time;bounds];
+    n:.[{[m;b] m[`write][`iodeals;b]};(m;([] time:2026.03.10D16:00:00.000000000 2026.03.10D17:30:00.000000000; sym:`EURUSD`EURUSD; notional:1 2f));{[e] .qetl.io.use_calendar ""; 'e}];
+    .qetl.io.use_calendar "";
+    .qunit.assertEquals[n;2;"both rows written"];
+    .qunit.assertEquals[0<count each key each hsym each `$(string root),/:("/2026.03.10/iodeals";"/2026.03.11/iodeals");11b;"one row in each native partition"];
+    .qunit.assertEquals[count get hsym `$(string root),"/2026.03.11/iodeals/time";1;"and the 17:30 row is in the later one"]};
+
+/ #2197: the issue's repro - one balance per account per day, keyed by account (time not in the key).
+/ Re-backfilling the 1st through the scoped manager must leave the 2nd's rows byte-identical.
+.qt.qetl.hdb_scoped.test_replace_by_a_key_without_time_leaves_the_next_day_byte_identical:{[t]
+    root:`$":",first system"mktemp -d";
+    rows:{[d;v] ([] time:2#`timestamp$d+0D17; sym:`ACC1`ACC2; account:`A1`A2; bal:v)};
+    .qt.qetl.hdb_scoped.put[root;`balances;rows[2026.01.01;100 200f]];
+    .qt.qetl.hdb_scoped.put[root;`balances;rows[2026.01.02;110 210f]];
+    m:.qetl.io.hdb_scoped[root;`time;`max_date`deadline`destination!(2026.01.31;2099.01.01D00:00:00.000000000;`dest_test)];
+    o:`on_conflict`row_key`time_column`range_from`range_to!(`replace;`account;`time;2026.01.01D00:00:00.000000000;2026.01.02D00:00:00.000000000);
+    before:.qt.qetl.hdb_scoped.part[root;2026.01.02;`balances];
+    .qetl.io.write_keyed[m;`balances;1#rows[2026.01.01;101 0f];o];
+    .qetl.io.finish[m];
+    .qunit.assertEquals[.qt.qetl.hdb_scoped.part[root;2026.01.02;`balances];before;"the 2nd is byte-identical"];
+    .qunit.assertEquals[(.qt.qetl.hdb_scoped.part[root;2026.01.02;`balances])`account;before`account;"and still holds A1"];
+    .qunit.assertEquals[.qt.qetl.hdb_scoped.part[root;2026.01.01;`balances]`bal;-3!enlist 101f;"the window holds the replacement"]};
+
+/ The same case through uqf's own HDB writer.
+.qt.qetl.hdb_scoped.test_replace_by_a_key_without_time_leaves_uqfs_own_next_day_byte_identical:{[t]
+    root:`$":",first system"mktemp -d";
+    rows:{[d;v] ([] time:2#`timestamp$d+0D17; sym:`ACC1`ACC2; account:`A1`A2; bal:v)};
+    m:.qetl.io.hdb[root;`time];
+    .qetl.io.write[m;`balances;rows[2026.01.01;100 200f]];
+    .qetl.io.write[m;`balances;rows[2026.01.02;110 210f]];
+    o:`on_conflict`row_key`time_column`range_from`range_to!(`replace;`account;`time;2026.01.01D00:00:00.000000000;2026.01.02D00:00:00.000000000);
+    before:.qt.qetl.hdb_scoped.part[root;2026.01.02;`balances];
+    .qetl.io.write_keyed[m;`balances;1#rows[2026.01.01;101 0f];o];
+    .qetl.io.finish[m];
+    .qunit.assertEquals[`time`account`bal#.qt.qetl.hdb_scoped.part[root;2026.01.02;`balances];`time`account`bal#before;"the 2nd keeps both accounts: the rewrite of a partition may add the sym attribute, so the data columns are compared"];
+    .qunit.assertEquals[.qt.qetl.hdb_scoped.part[root;2026.01.01;`balances]`bal;-3!enlist 101f;"the window holds the replacement"]};

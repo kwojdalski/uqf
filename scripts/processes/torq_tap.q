@@ -42,7 +42,7 @@ if[`verbose in key .Q.opt .z.x; .qetl.log.debug 1b];
   / Said rather than returned silently: a tap with nothing to subscribe to
   / otherwise sits idle with no line in its log to say why.
   if[0=count s:.sub.getsubscriptionhandles[.qproc.tap.tickerplanttypes;();()!()];
-    .qetl.log.warn[`subscribe;"no tickerplant to tap - nothing will arrive";
+    .qetl.log.ch.warn[`ipc;"no tickerplant to tap - nothing will arrive";
         enlist[`proctype]!enlist .qproc.tap.tickerplanttypes];
     :()];
   subproc:first s;
@@ -51,7 +51,7 @@ if[`verbose in key .Q.opt .z.x; .qetl.log.debug 1b];
   / flat, string of a vector needs an explicit join, or "," ends up
   / splicing individual characters in among the table names instead of
   / joining them (threw a 'type error the first time this shipped).
-  .qetl.log.info[`subscribe;"tapping";`tables`publisher!(.qproc.tap.tap_tables;subproc`procname)];
+  .qetl.log.ch.info[`ipc;"tapping";`tables`publisher!(.qproc.tap.tap_tables;subproc`procname)];
   / setschema=1b (unlike cross1/vectorize1, which pre-define their own
   / namespaced mirror table): tap1 has no local table of its own for any
   / of this - .sub.subscribe's createtables auto-creates a matching empty
@@ -61,17 +61,17 @@ if[`verbose in key .Q.opt .z.x; .qetl.log.debug 1b];
   / manually, but never fires for real ticks - no error, just silently
   / dropped).
   r:.sub.subscribe[.qproc.tap.tap_tables;`;1b;0b;subproc];
-  .qetl.log.dbg[`subscribe;"subscribed";enlist[`result]!enlist r];
+  .qetl.log.ch.dbg[`ipc;"subscribed";enlist[`result]!enlist r];
   r
  };
 
 .qproc.tap.init:{
   / startupdepcycles with 0W cycles blocks forever and says nothing, so say
   / what it is waiting for first - see .qtorq.wait_for_tickerplant.
-  .qetl.log.info[`tap;"waiting for the tickerplant - if this is the last line, it is not running";
+  .qetl.log.ch.info[`ipc;"waiting for the tickerplant - if this is the last line, it is not running";
       `proctype`retry_s!(.qproc.tap.requiredprocs;.qproc.tap.tpconsleep)];
   .servers.startupdepcycles[.qproc.tap.requiredprocs;.qproc.tap.tpconsleep;.qproc.tap.tpcheckcycles];
-  .qetl.log.info[`tap;"tickerplant is up";()!()];
+  .qetl.log.ch.info[`ipc;"tickerplant is up";()!()];
   .qproc.tap.subscribe[];
  };
 
@@ -89,7 +89,7 @@ if[`verbose in key .Q.opt .z.x; .qetl.log.debug 1b];
 / At ROOT, where the tickerplant calls it (scripts/processes/torq_pipeline.q,
 / invariant 5). Everything else this process owns is in .qproc.tap.
 upd:{[t;x]
-  .qetl.log.info[t;.Q.s1 x;()!()];
+  .qetl.log.ch.info[`ipc;.Q.s1 x;enlist[`table]!enlist t];
  }
 
 / same reasoning as torq_cross_etl.q/torq_vectorize_etl.q: a real
@@ -109,7 +109,7 @@ upd:{[t;x]
 / scripts/processes/torq_pipeline.q, invariant 9, for the reasoning behind
 / the empty bodies.
 endofperiod:{[current_period;next_period;data] / noqa: QF016 TorQ endofperiod signature
-    .qetl.log.info[`qproc;"end of period";`from`to!(current_period;next_period)];
+    .qetl.log.ch.info[`eod;"end of period";`from`to!(current_period;next_period)];
     }
 
-endofday:{[dt;data] .qetl.log.info[`qproc;"end of day";enlist[`date]!enlist dt]; } / noqa: QF016 TorQ endofday signature
+endofday:{[dt;data] .qetl.log.ch.info[`eod;"end of day";enlist[`date]!enlist dt]; } / noqa: QF016 TorQ endofday signature

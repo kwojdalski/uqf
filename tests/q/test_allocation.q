@@ -305,19 +305,19 @@
 
 .qt.qf.exec.allocation.test_asof_stops_the_clock:{[t]
     trades:.qt.qf.exec.allocation.mk_two_lots[];
-    .qunit.assertEmpty[.qf.exec.allocate[trades;`method`asof!(`fifo;2026.01.01D10:30:00)];
+    .qunit.assertEmpty[.qf.exec.allocate[trades;`method`as_of!(`fifo;2026.01.01D10:30:00)];
         "nothing had been realised by 10:30 - the sell had not happened yet"];
-    .qunit.assertEquals[count .qf.exec.residual[trades;`method`asof!(`fifo;2026.01.01D10:30:00)]; 2;
+    .qunit.assertEquals[count .qf.exec.residual[trades;`method`as_of!(`fifo;2026.01.01D10:30:00)]; 2;
         "but both buys were open"];
-    .qunit.assertEquals[count .qf.exec.allocate[trades;`method`asof!(`fifo;2026.01.01D11:00:00)]; 1;
-        "asof is inclusive, so the 11:00 sell counts at 11:00"]};
+    .qunit.assertEquals[count .qf.exec.allocate[trades;`method`as_of!(`fifo;2026.01.01D11:00:00)]; 1;
+        "as_of is inclusive, so the 11:00 sell counts at 11:00"]};
 
 .qt.qf.exec.allocation.test_asof_composes_with_universe:{[t]
-    / universe picks the trades that count, asof stops the clock - in that
+    / universe picks the trades that count, as_of stops the clock - in that
     / order, so a trade excluded by the universe is not resurrected by a
-    / later asof.
+    / later as_of.
     trades:.qt.qf.exec.allocation.mk_two_lots[];
-    r:.qf.exec.residual[trades;`method`universe`asof!(`fifo;
+    r:.qf.exec.residual[trades;`method`universe`as_of!(`fifo;
         .qf.exec.by_cols[enlist[`trade_price]!enlist 2.0 4.0]; 2026.01.01D10:30:00)];
     .qunit.assertEquals[exec price from r; enlist 2.0;
         "the 1.0 buy was filtered out, and only the 2.0 buy was open at 10:30"]};

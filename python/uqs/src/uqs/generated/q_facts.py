@@ -40,6 +40,18 @@ LOG_LEVELS: tuple[str, ...] = (
     "ERROR",
 )
 
+#: the log channels a record may carry in its id - .qetl.log.channels (#2274)
+LOG_CHANNELS: tuple[str, ...] = (
+    "lifecycle",
+    "ipc",
+    "source",
+    "transform",
+    "storage",
+    "coverage",
+    "eod",
+    "config",
+)
+
 #: the run ledger's columns - cols .qetl.run.init_runs[]
 ETL_RUNS_COLUMNS: tuple[str, ...] = (
     "run_id",
@@ -123,10 +135,13 @@ STATUS_FILE_SUFFIX: str = ".txt"
 BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
     "book_liquidity_1m": "time",
     "crypto_book_1s": "time",
+    "crypto_markout": "time",
     "demo_deals": "time",
     "duckdb_deals": "time",
+    "eq_markout": "time",
     "event_tape": "time",
     "exec_bar": "time",
+    "executions": "time",
     "fx_markout": "time",
     "fx_markout_wide": "time",
     "imported_trades": "time",
@@ -138,10 +153,13 @@ BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
 BOUNDED_DATASET_INSTRUMENT_COLUMNS: dict[str, str] = {
     "book_liquidity_1m": "sym",
     "crypto_book_1s": "sym",
+    "crypto_markout": "sym",
     "demo_deals": "sym",
     "duckdb_deals": "sym",
+    "eq_markout": "sym",
     "event_tape": "sym",
     "exec_bar": "sym",
+    "executions": "sym",
     "fx_markout": "sym",
     "fx_markout_wide": "sym",
     "imported_trades": "sym",
@@ -168,7 +186,10 @@ DAG_PRODUCERS: dict[str, tuple[str, ...]] = {
         "crypto_book_1s",
         "hdb_crypto_book_backfill",
     ),
-    "crypto_execution_quality": ("crypto_markout",),
+    "crypto_markout": (
+        "crypto_markout",
+        "hdb_crypto_markout_backfill",
+    ),
     "crypto_trades": ("crypto_mock",),
     "deal_positions": ("demo_deals~rebuild_positions",),
     "demo_deals": (
@@ -176,12 +197,19 @@ DAG_PRODUCERS: dict[str, tuple[str, ...]] = {
         "demo_deals_feed",
     ),
     "duckdb_deals": ("duckdb_deals_backfill",),
+    "eq_markout": (
+        "eq_markout",
+        "hdb_eq_markout_backfill",
+    ),
     "event_tape": ("demo_events_backfill",),
     "exec_bar": (
         "exec_bars",
         "hdb_exec_bars_backfill",
     ),
-    "executions": ("executions",),
+    "executions": (
+        "eq_fills_backfill",
+        "executions",
+    ),
     "fx_limit_breach": ("fx_positions",),
     "fx_markout": (
         "fx_markout",
@@ -220,7 +248,10 @@ SOURCE_TRANSPORTS: dict[str, str] = {
     "demo_deals": "ipc",
     "demo_events": "ipc",
     "duckdb_deals": "odbc",
+    "eq_fills": "csv",
     "hdb_crypto_book": "ipc",
+    "hdb_crypto_markouts": "ipc",
+    "hdb_eq_markouts": "ipc",
     "hdb_executions": "ipc",
     "hdb_fx_markouts": "ipc",
     "hdb_market_data": "ipc",

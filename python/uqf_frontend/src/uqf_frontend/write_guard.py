@@ -28,6 +28,8 @@ not itself gated - the UI needs it to decide whether to show controls.
 from __future__ import annotations
 
 import hmac
+from collections.abc import Mapping
+from typing import Any
 
 from uqf_frontend.config import Settings
 
@@ -48,9 +50,10 @@ def require_configured(settings: Settings) -> None:
 
 
 def is_write(method: str, path: str) -> bool:
-    """Does this request change the stack?"""
-    return method.upper() not in _SAFE_METHODS and (
-        path == "/control" or path.startswith("/control/")
+    """Does this request change the stack - or the frontend's own settings
+    and access policy (/settings, #2046)?"""
+    return method.upper() not in _SAFE_METHODS and any(
+        path == root or path.startswith(root + "/") for root in ("/control", "/settings")
     )
 
 
@@ -59,6 +62,26 @@ def is_remote(path: str) -> bool:
     in /services does; the list itself does not (#1950). It carries the
     token like a write: the operator's ssh key, not the caller's, opens it."""
     return path.startswith("/services/")
+
+
+def route_path(scope: Mapping[str, Any]) -> str:
+    """The path the router matches: the request's path less the ASGI
+    `root_path` a reverse proxy serves the API under (`--root-path /api`).
+
+    Every check that keys on a path - the token, the policy, the audit - must
+    judge THIS path, not `request.url.path`, which keeps the prefix. Judged on
+    the URL, `/api/control/...` reaches the control handler while matching no
+    guarded prefix, and runs without the token (#2018). The same rule as
+    Starlette's router (starlette._utils.get_route_path), kept here because
+    that one is private.
+    """
+    path = str(scope.get("path", ""))
+    root_path = str(scope.get("root_path", "") or "")
+    if not root_path or not path.startswith(root_path):
+        return path
+    if path == root_path:
+        return ""
+    return path[len(root_path) :] if path[len(root_path)] == "/" else path
 
 
 def needs_token(method: str, path: str) -> bool:

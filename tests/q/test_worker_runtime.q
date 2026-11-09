@@ -151,8 +151,8 @@
 / test_every_worker_runs.q's test_a_dry_run_leaves_everything_durable_as_it_was.
 .qt.qetl.job.bounded.runtime.test_dry_run_suppresses_every_durable_effect:{[t]
     .qunit.assertEquals[asc .qetl.job.bounded.runtime.suppressed_in_dry_run;
-        asc `publish_rows`publish_coverage`write_checkpoint`record_run`record_facts`finish_store`notify_reactions;
-        "rows, coverage, checkpoint, run ledger, facts, store finish and reactions are all withheld"]};
+        asc `publish_rows`publish_coverage`write_checkpoint`record_run`record_facts`finish_store`notify_reactions`pin_config;
+        "rows, coverage, checkpoint, run ledger, facts, store finish, reactions and the configuration pin are all withheld"]};
 
 / --- run modes ---------------------------------------------------
 
@@ -375,3 +375,9 @@
     want:count[workers]#enlist asc `source_version`range_from`range_to;
     .qunit.assertEquals[shapes;want;
         "every worker's spec returns its own three state keys"]};
+
+.qt.qetl.job.bounded.runtime.test_the_dependency_check_is_on_the_ipc_channel:{[t]
+    .qetl.job.bounded.runtime.declare_dependencies[`w;`tickerplant`hdb];
+    .qetl.job.bounded.runtime.connected_override:`tickerplant`hdb`rdb;
+    lines:.qt.support.captured_log[0b;{.qetl.log.debug[1b]; .qetl.job.bounded.runtime.require_dependencies[`w]; .qetl.log.debug[0b]}];
+    .qunit.assertEquals[(lines[;1];lines[;2]);(enlist `ipc;enlist "dependencies");"which connections it needs is an ipc line"]};

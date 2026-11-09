@@ -7,7 +7,8 @@ import {
 } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import App from "./App";
-import { ApiError, type BrowserEvent } from "./api";
+import type { BrowserEvent } from "./api/activity";
+import { ApiError } from "./api/client";
 import {
   configureActivity,
   flushActivity,
@@ -15,6 +16,7 @@ import {
   queuedActivity,
   record,
 } from "./activity";
+import { HISTORY } from "./testing/activityFixtures";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
 
@@ -34,47 +36,9 @@ async function recorded(): Promise<BrowserEvent[]> {
 }
 
 const PROCESSES = [
-  { procname: "rdb1", proctype: "rdb", start_with_all: true },
-  { procname: "rdb2", proctype: "rdb", start_with_all: true },
+  { process: "rdb1", proctype: "rdb", start_with_all: true },
+  { process: "rdb2", proctype: "rdb", start_with_all: true },
 ];
-const HISTORY = {
-  events: [
-    {
-      event_id: "e1",
-      ts: "2026-11-03T10:00:00.000000Z",
-      recorded_at: "2026-11-03T10:00:00.000000Z",
-      source: "server",
-      kind: "request",
-      action: "process.stop",
-      target: "rdb1 rdb2",
-      outcome: "unknown",
-      session_id: null,
-      request_id: "req0123456789",
-      claimed_user: "alice",
-      trigger: null,
-      method: "POST",
-      status_code: 422,
-      duration_ms: 35000,
-      items: [
-        { target: "rdb1", outcome: "unknown" },
-        { target: "rdb2", outcome: "unknown" },
-      ],
-      detail: {},
-      dropped: 0,
-    },
-  ],
-  persistence: {
-    persistent: false,
-    path: null,
-    failures: 2,
-    last_error: "OperationalError: disk I/O error",
-    last_failure_at: null,
-  },
-  retention_days: 30,
-  max_rows: 100000,
-  poll_seconds: 15,
-};
-
 function mockApi(
   handler: (path: string, options: RequestInit) => unknown = () => ok({}),
 ) {
@@ -114,12 +78,12 @@ it("records navigation once per change, and how it was triggered", async () => {
   fireEvent.click(screen.getByRole("button", { name: /Desk/ }), { detail: 1 });
   pressEnter(screen.getByRole("button", { name: /Fleet/ }));
   const events = (await recorded()).filter((e) => e.kind === "navigate");
-  expect(events.map((e) => [e.target, e.trigger, e.detail?.from_view])).toEqual(
-    [
-      ["Desk", "pointer", "Coverage"],
-      ["Fleet", "keyboard", "Desk"],
-    ],
-  );
+  expect(
+    events.map((e) => [e.subject, e.trigger, e.detail?.from_view]),
+  ).toEqual([
+    ["Desk", "pointer", "Coverage"],
+    ["Fleet", "keyboard", "Desk"],
+  ]);
 });
 
 it("records nothing while views poll", async () => {
@@ -147,10 +111,12 @@ it("asks before a stop, and a keyboard cancel sends nothing", async () => {
   fireEvent.keyDown(dialog, { key: "Escape" });
   expect(screen.queryByRole("alertdialog")).toBeNull();
   expect(
-    fetcher.mock.calls.filter(([path]) => path.startsWith("/control/process")),
+    fetcher.mock.calls.filter(([path]) =>
+      path.startsWith("/control/lifecycle"),
+    ),
   ).toEqual([]);
   const events = (await recorded()).filter((e) => e.action === "process.stop");
-  expect(events.map((e) => [e.kind, e.trigger, e.target])).toEqual([
+  expect(events.map((e) => [e.kind, e.trigger, e.subject])).toEqual([
     ["submit", "keyboard", "all"],
     ["cancel", "keyboard", "all"],
   ]);
@@ -160,7 +126,7 @@ it("a confirmed stop carries one request id from the click to the server and bac
   const fetcher = mockApi(() =>
     ok({
       action: "stop",
-      target: "all",
+      procs: "all",
       exit_code: 0,
       ok: true,
       output: "done",
@@ -173,7 +139,7 @@ it("a confirmed stop carries one request id from the click to the server and bac
   });
   await screen.findByText(/exit 0/);
   const call = fetcher.mock.calls.find(([path]) =>
-    path.startsWith("/control/process/stop"),
+    path.startsWith("/control/lifecycle/stop"),
   )!;
   const headers = call[1].headers as Record<string, string>;
   const events = (await recorded()).filter((e) => e.action === "process.stop");
@@ -195,7 +161,7 @@ it("a non-zero exit is recorded as failed, a refusal as refused", async () => {
     path.endsWith("/start")
       ? ok({
           action: "start",
-          target: "all",
+          procs: "all",
           exit_code: 3,
           ok: false,
           output: "boom",
@@ -216,7 +182,7 @@ it("a non-zero exit is recorded as failed, a refusal as refused", async () => {
 });
 
 it("never records a typed value or the write token", async () => {
-  mockApi(() => ok({ procname: "rdb1", config: {}, settable_fields: [] }));
+  mockApi(() => ok({ process: "rdb1", config: {}, settable_fields: [] }));
   await openControl();
   fireEvent.change(screen.getByLabelText("Write token"), {
     target: { value: "TOKEN-SHOULD-NOT-APPEAR" },
@@ -238,7 +204,7 @@ it("never records a typed value or the write token", async () => {
   expect(text).not.toContain("TOKEN-SHOULD-NOT-APPEAR");
   expect(text).not.toContain("VALUE-SHOULD-NOT-APPEAR");
   expect(events.find((e) => e.kind === "submit")?.detail).toEqual({
-    procname: "rdb1",
+    process: "rdb1",
     field: "extras",
   });
 });
@@ -291,12 +257,12 @@ it("keeps events the API did not take, and sends them next time", async () => {
       sent.push(...events);
     },
   });
-  record("navigate", "view.open", { target: "Desk" });
+  record("navigate", "view.open", { subject: "Desk" });
   await flushActivity();
   expect(queuedActivity()).toHaveLength(1);
   fail = false;
   await flushActivity();
-  expect(sent.map((e) => e.target)).toEqual(["Desk"]);
+  expect(sent.map((e) => e.subject)).toEqual(["Desk"]);
   expect(queuedActivity()).toHaveLength(0);
 });
 
@@ -304,4 +270,23 @@ it("reads a 4xx as refused and anything else as unknown", () => {
   expect(outcomeOfError(new ApiError("x", false, 422))).toBe("refused");
   expect(outcomeOfError(new ApiError("x", true, 503))).toBe("unknown");
   expect(outcomeOfError(new ApiError("timed out", true))).toBe("unknown");
+});
+
+it("says when the history shown is cut at the limit (#2220)", async () => {
+  const cut = { ...HISTORY, truncated: true };
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: string) =>
+      path === "/health"
+        ? ok({ ok: true, gateway: "up", poll_seconds: 5 })
+        : path.startsWith("/activity")
+          ? ok(cut)
+          : ok({ poll_seconds: 5 }),
+    ),
+  );
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: /Activity/ }));
+  expect(
+    await screen.findByText(/more events match these filters/),
+  ).toBeInTheDocument();
 });

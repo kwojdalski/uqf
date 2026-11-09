@@ -1,0 +1,6 @@
+tabname,att,column,sort
+default,p,sym,1
+default,,time,1
+market_data,p,sym,1
+market_data,,source,1
+market_data,,source_time,1

@@ -70,7 +70,7 @@
     .qunit.assertEquals[(d`width;d`event_time;d`by;d`input);(0D00:01:00;`source_time;`sym`source;`books);
         "one-minute windows on the book's own clock, per provider"];
     .qunit.assertEquals[.qetl.job.stream.def[`book_liquidity_1m]`subscribe_to;enlist `market_data;"reads market_data"];
-    .qunit.assertEquals[.qetl.job.stream.def[`book_liquidity_1m]`publishes;enlist `book_liquidity_1m;"publishes book_liquidity_1m"];
+    .qunit.assertEquals[.qetl.job.stream.def[`book_liquidity_1m]`outputs;enlist `book_liquidity_1m;"publishes book_liquidity_1m"];
     .qunit.assertEquals[.qetl.job.stream.def[`book_liquidity_1m]`start_with_all;0b;"on demand, not in start-all"]};
 
 .qt.qpipe.job.book_liquidity_1m.test_the_job_is_the_twins_stream_job_and_shares_its_key_and_calculation:{[t]

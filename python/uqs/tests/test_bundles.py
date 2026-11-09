@@ -24,11 +24,12 @@ from uqs.stack.bundles import LEDGER, OVERRIDES_FILE, BundleError
 
 SOURCE = "source_name:`piggy\n.qetl.source.define[source_name;`columns!enlist `time];\n"
 WORKER = (
-    ".qetl.job.bounded.define[`piggy_backfill;`source`dataset`width!(`piggy;`piggy_tape;1D)];\n"
+    ".qetl.job.bounded.define[`piggy_backfill;"
+    "`source`outputs`width!(`piggy;enlist `piggy_tape;1D)];\n"
 )
 STREAM = (
     ".qetl.job.stream.define[`piggy_spread;"
-    "`procname`subscribe_to`publishes!(`piggy_spread1;enlist `quote;enlist `piggy_tape)];\n"
+    "`procname`subscribe_to`outputs!(`piggy_spread1;enlist `quote;enlist `piggy_tape)];\n"
 )
 TABLES = "/ piggybank's tape\npiggy_tape:([]time:`timestamp$();sym:`symbol$();px:())\n"
 NESTED = 'nested[`piggy_tape;(enlist `px)!enlist "F"];\n'

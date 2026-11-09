@@ -24,6 +24,8 @@
 \l src/integrations/data.q
 \l docs/man.q
 \l scripts/processes/torq_pipeline.q
+\l scripts/processes/torq_compress.q
+\l scripts/processes/torq_compress_survey.q
 \l scripts/processes/torq_metatables.q
 / The ETL tree, in dependency order, from the one list that defines it -
 / see src/etl/init.q for why the order matters and is not obvious.

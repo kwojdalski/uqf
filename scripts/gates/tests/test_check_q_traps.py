@@ -407,6 +407,7 @@ def test_a_pattern_in_a_comment_is_ignored():
     assert not _like('/ s like "*a*b*" would throw')
 
 
+@needs_linter
 def test_the_real_repository_has_none():
     """Asserted against the tree rather than a sample: the rule was written
     after the trap was hit, so it has to be true of the code that exists.
@@ -459,6 +460,7 @@ def test_a_commented_example_is_ignored():
     assert not _sv('/ \'"a ",", " sv string xs," b" is the trap')
 
 
+@needs_linter
 def test_the_real_repository_is_clean():
     """Against the tree, not a sample. The rule was written after four live
     instances were found and fixed, so it has to hold for the code that
@@ -553,7 +555,7 @@ def test_every_written_mention_of_the_pin_agrees():
         tags = re.findall(r"q-lint --tag (v[\d.]+)", (cqt.REPO / name).read_text())
         assert tags, f"{name} no longer quotes the install command"
         assert set(tags) == {pinned}, f"{name} quotes {tags}, the pin is {pinned}"
-    for name in (".github/workflows/ci.yml", "install.sh"):
+    for name in (".github/actions/install-qlinter/action.yml", "install.sh"):
         text = (cqt.REPO / name).read_text()
         assert ".qlinter-version" in text, f"{name} no longer reads the pin"
         assert not re.search(r"QLINT_VERSION[:=]\s*\"?v\d", text), f"{name} writes its own pin"
@@ -607,6 +609,7 @@ def test_the_type_gate_is_registered_in_the_scope_checker():
     assert '("type", TYPE_HOOKS)' in text
 
 
+@needs_linter
 def test_the_real_repo_is_clean():
     """The rules hold on every tracked .q file, so the hook is committable."""
     assert cqt.main() == 0

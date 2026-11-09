@@ -29,16 +29,11 @@ from uqs.scaffold.templates import (
     test_stub,
     worker_body,
 )
+from uqs.scaffold.timespan import q_timespan
 from uqs.scaffold.transform import check_mode
 
 #: A partition is a q symbol: `EURUSD, `binance_spot.
 _PARTITION = re.compile(r"^[A-Za-z0-9_]+$")
-
-#: A q timespan literal as a width is written: 1D, 0D01, 0D01:30, 0D01:00:00.5.
-_WIDTH = re.compile(r"(\d+)D(?:(\d{1,2})(?::(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?)?)?", re.ASCII)
-_DAY_NS = 86_400 * 10**9
-#: The largest day count a q timespan holds; past it the literal wraps (#1576).
-_MAX_DAYS = 106_751
 
 
 def check_width(width: str) -> str:
@@ -46,32 +41,16 @@ def check_width(width: str) -> str:
 
     It wants a positive timespan. Written verbatim, a malformed width is a
     parse error in the generated worker and a zero or negative one a refusal,
-    both found only when the tree next loads. Components are range-checked
-    and the total computed here, so a value below q's nanosecond precision or
-    past its range is refused rather than becoming zero or wrapping.
+    both found only when the tree next loads. The check is `--period`'s and
+    `--horizon`'s (scaffold/timespan.py, #2121): a q timespan as written, or
+    a DURATION rendered as one.
     """
-    m = _WIDTH.fullmatch(width)
-    hint = "a positive q timespan, e.g. 1D, 0D01 or 0D01:00:00"
-    if m is None:
-        raise UqsError(f"--width {width!r} must be {hint}")
-    days, hh, mm, ss, frac = m.groups()
-    if int(hh or 0) > 23 or int(mm or 0) > 59 or int(ss or 0) > 59:
-        raise UqsError(f"--width {width!r} has an out-of-range field - it must be {hint}")
-    ns = (
-        int(days) * _DAY_NS
-        + (int(hh or 0) * 3600 + int(mm or 0) * 60 + int(ss or 0)) * 10**9
-        + int((frac or "").ljust(9, "0"))
-    )
-    if ns <= 0:
-        raise UqsError(f"--width {width!r} must be positive - a zero width plans no windows")
-    if ns > _MAX_DAYS * _DAY_NS:
-        raise UqsError(f"--width {width!r} is past what a q timespan holds ({_MAX_DAYS}D)")
-    return width
+    return q_timespan(width, "--width")
 
 
 #: A bounded worker's window width when `job new --width` is not given.
 DEFAULT_WIDTH = "1D"
-#: The column holding a worker's --partition when `--partition-column` is not given.
+#: The column holding a worker's --slice when `--slice-column` is not given.
 DEFAULT_PARTITION_COLUMN = "sym"
 
 
@@ -91,6 +70,7 @@ def bounded_worker(
     check: bool = False,
     transform: str = "passthrough",
     shared: tuple[str, str] | None = None,
+    twin_of: str | None = None,
     raw: tuple[str, list[tuple[str, str]]] | None = None,
     target_columns: list[tuple[str, str]] | None = None,
 ) -> ScaffoldPlan:
@@ -125,7 +105,9 @@ def bounded_worker(
     `transform` is `passthrough` (the batch published as fetched) or `derive`
     (a `.qetl.transform.define` whose example fails until it is written) - see
     scaffold/transform.py. `shared` is (stream job, transform) for a twin of
-    a job that declares its transform: the twin applies that one (#884).
+    a job that declares its transform: the twin applies that one (#884). `twin_of`
+    is the streaming job the worker repairs: written into the declaration, so q
+    keeps holding the pair to it after this scaffold is gone (#2103).
 
     `raw` is (physical table, columns) when the new source's adapter reads
     columns other than those it returns: written as the source's `raw`
@@ -133,7 +115,7 @@ def bounded_worker(
     mapping between the two is never guessed - the query is the author's.
     """
     check_mode(transform)
-    check_width(width)
+    width = check_width(width)
     _check_name(name, "worker name")
     if name.endswith("_backfill"):
         # NAME is the base the worker, its source and its example are named
@@ -149,15 +131,15 @@ def bounded_worker(
     _check_name(dataset, "dataset")
     if partition is not None and not _PARTITION.fullmatch(partition):
         raise UqsError(
-            f"--partition {partition!r} must be a q symbol - letters, digits and underscores, "
+            f"--slice {partition!r} must be a q symbol - letters, digits and underscores, "
             "e.g. EURUSD"
         )
     if partition_column is not None and partition is None:
-        raise UqsError("--partition-column needs --partition: it names the column holding it")
+        raise UqsError("--slice-column needs --slice: it names the column holding it")
     if partition is not None:
         partition_column = partition_column or DEFAULT_PARTITION_COLUMN
         if not _PARTITION.fullmatch(partition_column):
-            raise UqsError(f"--partition-column {partition_column!r} must be a q symbol")
+            raise UqsError(f"--slice-column {partition_column!r} must be a q symbol")
     worker = f"{name}_backfill"
     proc = _check_name(procname or f"{name}_backfill1", "procname")
     # Columns shape what is WRITTEN - a new source's fields, a new table - so
@@ -203,13 +185,13 @@ def bounded_worker(
     if partition_column and define_table and cols:
         if partition_column not in [c for c, _ in cols]:
             raise UqsError(
-                f"--partition-column {partition_column!r} is not among --schema "
+                f"--slice-column {partition_column!r} is not among --schema "
                 f"({', '.join(c for c, _ in cols)}) - name the column that holds the partition"
             )
     elif partition_column and target_columns is not None:
         if partition_column not in [c for c, _ in target_columns]:
             raise UqsError(
-                f"--partition-column {partition_column!r} is not a column of {dataset} "
+                f"--slice-column {partition_column!r} is not a column of {dataset} "
                 f"({', '.join(c for c, _ in target_columns)}) - name the one that holds "
                 "the partition"
             )
@@ -233,6 +215,7 @@ def bounded_worker(
                 check=check,
                 transform=transform,
                 shared=shared,
+                twin_of=twin_of,
             ),
         )
     )

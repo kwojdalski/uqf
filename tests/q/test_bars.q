@@ -23,8 +23,8 @@
 / A job named nm over the real transform, state emptied and publish recorded.
 .qt.qetl.job.stream.bars.job:{[nm]
     if[not nm in .qetl.job.stream.bars.defined[];
-        .qetl.job.stream.at_bars[nm;`procname`events`event_time`transform`publishes`width`lateness`period!(
-            `$string[nm],"1";`bt_fills;`source_time;`exec_bars;`bt_bar;0D00:01:00;0D00:00:05;0D00:00:01)]];
+        .qetl.job.stream.at_bars[nm;`procname`events`event_time`transform`outputs`width`lateness`period!(
+            `$string[nm],"1";`bt_fills;`source_time;`exec_bars;enlist `bt_bar;0D00:01:00;0D00:00:05;0D00:00:01)]];
     ns:.qetl.job.stream.namespace nm;
     .qetl.job.stream.reset nm;
     (` sv ns,`now) set {[] .qt.qetl.job.stream.bars.clock};
@@ -57,8 +57,8 @@
 
 / --- declaring -----------------------------------------------------------
 
-.qt.qetl.job.stream.bars.decl:{[] `procname`events`event_time`transform`publishes`width`lateness`period!(
-    `btd1;`bt_fills;`source_time;`exec_bars;`bt_bar;0D00:01:00;0D00:00:05;0D00:00:01)}
+.qt.qetl.job.stream.bars.decl:{[] `procname`events`event_time`transform`outputs`width`lateness`period!(
+    `btd1;`bt_fills;`source_time;`exec_bars;enlist `bt_bar;0D00:01:00;0D00:00:05;0D00:00:01)}
 
 .qt.qetl.job.stream.bars.test_a_declaration_missing_a_key_is_refused_by_name:{[t]
     .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];`lateness _ .qt.qetl.job.stream.bars.decl[];
@@ -71,6 +71,15 @@
 .qt.qetl.job.stream.bars.test_a_transform_that_does_not_name_the_window_is_refused:{[t]
     .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[.qt.qetl.job.stream.bars.decl[];`transform;:;`hdb_exec_bars];
         "*bt_x's transform input carries no bar_start*";"the twin's transform reads raw fills"]};
+
+.qt.qetl.job.stream.bars.test_the_retired_publishes_key_is_refused_and_outputs_holds_exactly_one_table:{[t]
+    old:(`outputs _ .qt.qetl.job.stream.bars.decl[]),enlist[`publishes]!enlist `bt_out;
+    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];old;
+        "*declares publishes, which is now outputs - rename the key*";"the old spelling is refused with its migration"];
+    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[.qt.qetl.job.stream.bars.decl[];`outputs;:;`bt_a`bt_b];
+        "*outputs must be a symbol list of exactly one table*";"a job of this kind writes one table"];
+    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[.qt.qetl.job.stream.bars.decl[];`outputs;:;`bt_a];
+        "*outputs must be a symbol list of exactly one table*";"an atom is not a list of one"]};
 
 .qt.qetl.job.stream.bars.test_an_unknown_key_is_refused:{[t]
     .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];.qt.qetl.job.stream.bars.decl[],enlist[`horizon]!enlist 0D00:00:01;

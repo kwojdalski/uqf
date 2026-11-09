@@ -49,8 +49,8 @@
 .qetl.transform.passthrough[`duckdb_deals_passthrough;`batch;.qetl.plant.published `duckdb_deals;.qpipe.source.duckdb_deals.fixture[]];
 
 .qetl.job.bounded.define[`duckdb_deals_backfill;
-    `source`dataset`width`transform`check`facts`procname`note!
-        (`duckdb_deals;`duckdb_deals;1D;`duckdb_deals_passthrough;
+    `source`outputs`width`transform`check`facts`procname`note!
+        (`duckdb_deals;enlist `duckdb_deals;1D;`duckdb_deals_passthrough;
          .qpipe.job.duckdb_deals_backfill.quality_check;.qpipe.job.duckdb_deals_backfill.facts;
          `duckdb_deals_backfill1;
          "bounded: copies mock FX deals from a DuckDB file over ODBC, a day at a time")];

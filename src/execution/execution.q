@@ -337,8 +337,8 @@
 / many small misses, and one huge miss can swamp the ratio the way it
 / wouldn't in `count mode).
 / @param requests table with at least `time`hit`size, plus whatever columns group_cols names
-/ @param range_from only consider requests at or after this time
-/ @param range_to only consider requests at or before this time
+/ @param range_from inclusive start: requests at or after this time are considered
+/ @param range_to exclusive end: a request AT this time belongs to the next window, so adjacent windows [a;b) and [b;c) count it once
 / @param bucket_size a timespan to floor time into buckets by (xbar) and
 /   group by alongside group_cols, e.g. 0D01:00:00 for hourly, 1D for
 /   daily - a null timespan (0Nn) disables time-bucketing entirely (no
@@ -357,7 +357,7 @@
     group_cols:group_cols,();
     .qf.util.require_cols[`hit_ratio_by;`requests;requests;distinct `time`hit`size,group_cols];
     if[not mode in `count`amount; '"hit_ratio_by: mode must be `count or `amount, got ",string mode];
-    windowed:select from requests where time within (range_from;range_to);
+    windowed:select from requests where time>=range_from, time<range_to;
     windowed:$[null bucket_size; windowed; update time:bucket_size xbar time from windowed];
     time_group:$[null bucket_size; `symbol$(); enlist `time];
     effective_group_cols:time_group,group_cols;
@@ -381,8 +381,8 @@
 / (number rejected / number of requests) and `amount (size-weighted, so one
 / large reject counts for more than several small ones).
 / @param requests table with at least `time`reject`size, plus whatever columns group_cols names
-/ @param range_from only consider requests at or after this time
-/ @param range_to only consider requests at or before this time
+/ @param range_from inclusive start: requests at or after this time are considered
+/ @param range_to exclusive end: a request AT this time belongs to the next window, so adjacent windows [a;b) and [b;c) count it once
 / @param bucket_size a timespan to floor time into buckets by (xbar) and group
 /   by alongside group_cols, e.g. 0D01:00:00 for hourly - a null timespan
 /   (0Nn) disables time-bucketing entirely
@@ -400,7 +400,7 @@
     group_cols:group_cols,();
     .qf.util.require_cols[`reject_ratio_by;`requests;requests;distinct `time`reject`size,group_cols];
     if[not mode in `count`amount; '"reject_ratio_by: mode must be `count or `amount, got ",string mode];
-    windowed:select from requests where time within (range_from;range_to);
+    windowed:select from requests where time>=range_from, time<range_to;
     windowed:$[null bucket_size; windowed; update time:bucket_size xbar time from windowed];
     time_group:$[null bucket_size; `symbol$(); enlist `time];
     effective_group_cols:time_group,group_cols;
@@ -418,7 +418,7 @@
 / answered by counting what happened to comparable orders before. Each
 / order is one row of our OWN order lifecycle, supplied by the caller: the
 / market's add/cancel/trade tape says nothing about whether OUR order
-/ filled. Comparable means same values in the caller's bucket columns -
+/ filled. Comparable means same values in the caller's group columns -
 / distance from touch, visible depth, a volatility regime - which the caller
 / computes at decision time, so no feature can see the outcome it predicts.
 / .
@@ -457,7 +457,7 @@
 / `sparse - 30 by default, a conventional floor rather than a derived one.
 .qf.exec.fill_probability_defaults:`cancel_policy`min_count!(`exclude;30)
 
-/ Output column names, which a bucket column may not reuse.
+/ Output column names, which a group column may not reuse.
 .qf.exec.fill_probability_cols:`horizon`target`order_count`fill_count`failure_count`cancelled_count`censored_count`observed_count`fill_probability`status
 
 / Empirical probability that a resting order fills within a horizon,
@@ -469,31 +469,32 @@
 / exactly at submit_time+h does not count as cancelled (the order was
 / exposed for the whole horizon); events after observed_until are ignored.
 / @param orders table, one row per order, with the timestamp columns in
-/   fill_order_time_cols plus every column named in bucket_cols
+/   fill_order_time_cols plus every column named in group_cols
 / @param horizons a positive timespan, or a vector of them, e.g. 0D00:00:10
-/ @param bucket_cols columns to group comparable orders by, e.g. `sym`dist_bucket
+/ @param group_cols columns to group comparable orders by, e.g. `sym`dist_bucket
 /   - empty for one bucket over every order
 / @param as_of timestamp the estimate is made at; nothing later is used
 / @param opts (::) for the defaults, or a dict of any of cancel_policy
 /   (`exclude or `failure) and min_count (an integer) - see fill_probability_defaults
-/ @return a table sorted by bucket_cols, horizon, target, one row per
-/   combination present: bucket_cols, horizon, target (`any or `full),
+/ @return a table sorted by group_cols, horizon, target, one row per
+/   combination present: group_cols, horizon, target (`any or `full),
 /   order_count, fill_count, failure_count, cancelled_count, censored_count,
 /   observed_count, fill_probability (fill_count % observed_count, a float
 /   in [0,1], null when observed_count is 0), status (`ok, `sparse when
 /   observed_count < min_count, `empty when it is 0)
-/ @throws error naming what is wrong: a missing column, a non-timestamp time
-/   column, a bucket column named like an output column, a non-positive
+/ @throws error naming what is wrong: a group_cols that is not symbols (a
+/   timespan there is the bucket_size slot of the other *_by functions), a missing column, a non-timestamp time
+/   column, a group column named like an output column, a non-positive
 /   horizon, a non-timestamp as_of, an unknown option or policy, an event
 /   before its order's submit_time, or a full_fill_time with no first_fill_time
 /   at or before it
 / @eg .qf.exec.fill_probability_by[fill_orders;0D00:01:00 0D00:02:00;enlist `sym;2026.01.01D12:00:00.000000000;::]
 / @eg exec fill_probability from .qf.exec.fill_probability_by[fill_orders;0D00:01:00;`symbol$();2026.01.01D12:00:00.000000000;::] where target=`full  -> ,0.4
 / @eg .qf.exec.fill_probability_by[fill_orders;0D00:01:00;`symbol$();2026.01.01D12:00:00.000000000;(enlist `cancel_policy)!enlist `ignore]  -> throws
-.qf.exec.fill_probability_by:{[orders;horizons;bucket_cols;as_of;opts]
-    bucket_cols:(),bucket_cols;
+.qf.exec.fill_probability_by:{[orders;horizons;group_cols;as_of;opts]
+    group_cols:(),group_cols;
     hs:(),horizons;
-    .qf.exec.fill_probability_require_args[orders;hs;bucket_cols;as_of];
+    .qf.exec.fill_probability_require_args[orders;hs;group_cols;as_of];
     o:.qf.exec.fill_probability_opts[opts];
     orders:0!orders;
     / Orders that existed at as_of. A later order is not censored, it is
@@ -513,11 +514,11 @@
     horizon_end:(expanded`submit_time)+h;
     any_outcome:.qf.exec.fill_outcome[expanded`first_fill_time;expanded`cancel_time;horizon_end;known_by];
     full_outcome:.qf.exec.fill_outcome[expanded`full_fill_time;expanded`cancel_time;horizon_end;known_by];
-    / Column by column, rather than `expanded bucket_cols`: with no bucket
+    / Column by column, rather than `expanded group_cols`: with no bucket
     / columns that would index the table by an empty list.
-    grouping:(bucket_cols!{[tbl;c] tbl c}[expanded] each bucket_cols),(enlist `horizon)!enlist h;
+    grouping:(group_cols!{[tbl;c] tbl c}[expanded] each group_cols),(enlist `horizon)!enlist h;
     scored:.qf.exec.fill_outcome_rows[grouping;`any;any_outcome],.qf.exec.fill_outcome_rows[grouping;`full;full_outcome];
-    by_names:bucket_cols,`horizon`target;
+    by_names:group_cols,`horizon`target;
     agg:`order_count`fill_count`failure_count`cancelled_count`censored_count!(
         (count;`i);(sum;`fill_count);(sum;`failure_count);(sum;`cancelled_count);(sum;`censored_count));
     r:0!?[scored;();by_names!by_names;agg];
@@ -530,12 +531,14 @@
 
 / Private: refuse fill_probability_by's arguments, naming what is wrong.
 / @private
-.qf.exec.fill_probability_require_args:{[orders;hs;bucket_cols;as_of]
+.qf.exec.fill_probability_require_args:{[orders;hs;group_cols;as_of]
     if[not .Q.qt orders; '"fill_probability_by: orders must be a table"];
-    .qf.util.require_cols[`fill_probability_by;`orders;0!orders;distinct .qf.exec.fill_order_time_cols,bucket_cols];
-    clash:bucket_cols where bucket_cols in .qf.exec.fill_probability_cols;
+    if[(0<count group_cols) and not 11h=type group_cols;
+        '"fill_probability_by: group_cols must be a symbol or symbol list of column names, got type ",string type group_cols];
+    .qf.util.require_cols[`fill_probability_by;`orders;0!orders;distinct .qf.exec.fill_order_time_cols,group_cols];
+    clash:group_cols where group_cols in .qf.exec.fill_probability_cols;
     if[count clash;
-        '"fill_probability_by: bucket column(s) ",(", " sv string clash)," would collide with an output column of the same name"];
+        '"fill_probability_by: group column(s) ",(", " sv string clash)," would collide with an output column of the same name"];
     if[not 16h=type hs;
         '"fill_probability_by: horizons must be a timespan or timespan vector, e.g. 0D00:00:10"];
     if[0=count hs; '"fill_probability_by: horizons is empty"];
@@ -585,14 +588,7 @@
 / @throws error naming an unknown key, an unknown cancel_policy or a bad min_count
 / @private
 .qf.exec.fill_probability_opts:{[opts]
-    if[(::)~opts; :.qf.exec.fill_probability_defaults];
-    if[not 99h=type opts;
-        '"fill_probability_by: opts must be (::) or a dictionary of cancel_policy and/or min_count"];
-    unknown:(key opts) except key .qf.exec.fill_probability_defaults;
-    if[count unknown;
-        '"fill_probability_by: unknown option(s) ",(", " sv string unknown),
-         " - known: ",", " sv string key .qf.exec.fill_probability_defaults];
-    o:.qf.exec.fill_probability_defaults,opts;
+    o:.qf.util.resolve_opts[`fill_probability_by;opts;.qf.exec.fill_probability_defaults];
     if[not (o`cancel_policy) in `exclude`failure;
         '"fill_probability_by: cancel_policy must be `exclude or `failure, got ",-3!o`cancel_policy];
     if[not (type o`min_count) in -5 -6 -7h;
@@ -622,7 +618,7 @@
 
 / ---- venue_quality: a per-venue execution-quality scorecard (#338) -------
 / .
-/ ABSTRACT FOR NOW. The signature, inputs, config and output below are the
+/ ABSTRACT FOR NOW. The signature, inputs, opts and output below are the
 / contract; the computation is not written yet. venue_quality validates
 / everything it is given - that part is real and tested - and then throws
 / "not implemented". Implementing #338 means replacing its last line, not
@@ -639,7 +635,7 @@
 / possible result. Such a row is `incomplete and names the component in
 / `missing`, and a composite score over it is null.
 
-/ What venue_quality uses when config does not say.
+/ What venue_quality uses when opts does not say.
 / .
 / stale_after: a quote older than this at the end of its bucket counts as
 / stale - 5s by default, a convention rather than a derived number.
@@ -671,30 +667,32 @@
 /   reject_rate        rejects % requests; reject_rate_size weights by size
 /   n_fills            fills in the bucket
 /   markout_pips       mean post-fill markout per horizon, a float vector
-/                      aligned with config`horizons - positive when the market
+/                      aligned with the horizons argument - positive when the market
 /                      moved in the fill's favour, as markout
 /   status             `complete, `sparse (a component under min_count) or
 /                      `incomplete (a component with no observations)
 /   missing            the components with no observations
-/   score              the weighted composite, null without config`weights
+/   score              the weighted composite, null without opts`weights
 /                      and null for an `incomplete row
 / .
-/ Nothing after config`as_of is used, from any input.
+/ Nothing after as_of is used, from any input.
 / @param quotes table, one row per quote update: `time`sym`venue`bid`ask`bsize`asize
 / @param requests table, one row per request: `time`sym`venue`size`hit`reject
 /   - hit and reject are booleans, as hit_ratio_by and reject_ratio_by take
 / @param trades table, one row per fill: `time`sym`venue`side`trade_price`pip_factor
 /   - the shape markout_at_horizons takes, plus venue
 / @param window a positive timespan to bucket time by, e.g. 0D01:00:00
-/ @param config a dict: as_of (timestamp, required), horizons (timespan or
-/   timespans for the post-fill markouts, required), and optionally
-/   stale_after, min_count, weights and normalise - see venue_quality_defaults
+/ @param as_of the timestamp the scorecard is made at; nothing later is used
+/ @param horizons a timespan, or timespans, for the post-fill markouts
+/ @param opts (::) for the defaults, or a dict of any of stale_after,
+/   min_count, weights and normalise - see venue_quality_defaults; an
+/   unknown key is refused
 / @return the scorecard table described above
 / @throws error naming what is wrong with an argument; otherwise
 /   "not implemented" until #338 is built
-.qf.exec.venue_quality:{[quotes;requests;trades;window;config]
+.qf.exec.venue_quality:{[quotes;requests;trades;window;as_of;horizons;opts]
     .qf.exec.venue_quality_require_args[quotes;requests;trades;window];
-    .qf.exec.venue_quality_config[config];
+    .qf.exec.venue_quality_opts[as_of;horizons;opts];
     '"venue_quality: not implemented yet (#338) - the contract is fixed, the computation is not"};
 
 / Private: refuse venue_quality's tables and window, naming what is wrong.
@@ -710,23 +708,16 @@
     if[not window>0D00:00:00; '"venue_quality: window must be positive"];
     };
 
-/ Private: venue_quality's config, checked and resolved against the defaults.
-/ @throws error naming a missing or unknown key, or a value of the wrong kind
+/ Private: venue_quality's as_of, horizons and opts, checked and resolved
+/ against the defaults.
+/ @throws error naming an unknown option, or a value of the wrong kind
 / @private
-.qf.exec.venue_quality_config:{[config]
-    if[not 99h=type config;
-        '"venue_quality: config must be a dictionary with at least as_of and horizons"];
-    missing:`as_of`horizons except key config;
-    if[count missing; '"venue_quality: config is missing ",", " sv string missing];
-    unknown:(key config) except `as_of`horizons,key .qf.exec.venue_quality_defaults;
-    if[count unknown;
-        '"venue_quality: unknown config key(s) ",(", " sv string unknown),
-         " - known: as_of, horizons, ",", " sv string key .qf.exec.venue_quality_defaults];
-    c:.qf.exec.venue_quality_defaults,config;
-    if[not -12h=type c`as_of;
+.qf.exec.venue_quality_opts:{[as_of;horizons;opts]
+    c:.qf.util.resolve_opts[`venue_quality;opts;.qf.exec.venue_quality_defaults];
+    if[not -12h=type as_of;
         '"venue_quality: as_of must be a timestamp - nothing after it is used"];
-    if[null c`as_of; '"venue_quality: as_of is null"];
-    hs:(),c`horizons;
+    if[null as_of; '"venue_quality: as_of is null"];
+    hs:(),horizons;
     if[not 16h=type hs;
         '"venue_quality: horizons must be a timespan or timespan vector, e.g. 0D00:00:01 0D00:01:00"];
     if[0=count hs; '"venue_quality: horizons is empty"];

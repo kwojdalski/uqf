@@ -19,6 +19,7 @@ from uqs.deploy import (
     adopt,
     control,
     history,
+    inspection,
     target_changelog,
     target_changes,
     target_file,
@@ -120,7 +121,7 @@ def adopt_(
             raise UqsError(f"target name {name!r}: lower-case letters, digits, - and _")
         if remote_user is not None and not _ACCOUNT.fullmatch(remote_user):
             raise UqsError(f"--remote-user {remote_user!r} is not an account name")
-        targets.remote_shape(name, {"host": ssh, "dest": dest})
+        targets.remote_shape(name, {"ssh": ssh, "dest": dest})
         r = control.Remote(name, ssh, dest.rstrip("/") or "/", remote_user)
         survey = adopt.survey(r, release, launch_python, launch_env_file)
     except UqsError as exc:
@@ -133,10 +134,7 @@ def adopt_(
     entry = adopt.block(survey, r)
     console.print("  target       would save:")
     console.print(
-        "\n".join(
-            f"    {ln}"
-            for ln in target_file.render(("targets", name), targets.to_keys(entry)).splitlines()
-        ),
+        "\n".join(f"    {ln}" for ln in target_file.render(("targets", name), entry).splitlines()),
         markup=False,
         highlight=False,
     )
@@ -153,6 +151,13 @@ def adopt_(
         _die(UqsError(str(exc)))
     if not do_it:
         console.print(dry_run_note("with --apply to adopt it"))
+        return
+    try:
+        # #2231: the server is matched by its ssh and dest as well as by name, so
+        # adopting an inspection-only server under a new name is refused too
+        inspection.refuse(root, "`uqs target adopt --apply`", name=name, ssh=ssh, dest=dest)
+    except UqsError as exc:
+        _die(exc)
         return
     changes = adopt.server_changes(survey)
     if changes and not yes:

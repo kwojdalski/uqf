@@ -50,7 +50,7 @@
 /             every trade. Without it a sell that closes yesterday's buy
 /             finds an empty queue and opens a short, which is not a
 /             smaller answer but a wrong one.
-/   asof    - the trades are truncated at an instant, so residual is the
+/   as_of   - the trades are truncated at an instant, so residual is the
 /             position AS OF that moment and the ledger is what had been
 /             realised by then. position and position_at roll that up into
 /             a book, which is the same object .qf.port carries - and
@@ -220,10 +220,10 @@
 / weighted's convention on fifo and lifo. residual emits exactly the shape
 / opening accepts, which is what makes a chain of days compose.
 / .
-/ `asof defaults to (::), "no truncation", rather than to a far-future
+/ `as_of defaults to (::), "no truncation", rather than to a far-future
 / timestamp - the trades table's time column need not be a timestamp, and a
 / default that assumed one would be a type error on the untruncated path.
-.qf.exec.default_opts:`method`by`universe`where`opening`asof!(`fifo; enlist `sym; .qf.exec.all_rows; .qf.exec.all_rows; (::); (::))
+.qf.exec.default_opts:`method`by`universe`where`opening`as_of!(`fifo; enlist `sym; .qf.exec.all_rows; .qf.exec.all_rows; (::); (::))
 
 / Private: fill in the defaults, reject typos, and normalise `by to a vector.
 / .
@@ -236,14 +236,10 @@
 / @private
 .qf.exec.normalised_opts:{[opts]
     o:$[-11h=type opts; (enlist `method)!enlist opts;
+        (::)~opts; opts;
         99h=type opts; opts;
-        '"allocate: opts must be a dictionary of options, or a method name"];
-    supplied:key o;
-    unknown:supplied where not supplied in key .qf.exec.default_opts;
-    if[count unknown;
-        '"allocate: unknown option ",(", " sv string unknown),
-         " - have ",", " sv string key .qf.exec.default_opts];
-    o:.qf.exec.default_opts,o;
+        '"allocate: opts must be (::) for the defaults, a dictionary of options, or a method name"];
+    o:.qf.util.resolve_opts[`allocate;o;.qf.exec.default_opts];
     / 100 104h rather than 100h alone: by_cols returns a PROJECTION, so the
     / filter a caller is most likely to pass is not a plain lambda.
     if[not all (type each o`universe`where) within 100 104h;
@@ -425,9 +421,9 @@
     trades:.qf.exec.prepared[trades;bys];
     opening:.qf.exec.prepared_opening[o`opening;bys];
     trades:(o`universe) trades;
-    / asof AFTER universe, so the two compose the way they read: pick the
+    / as_of AFTER universe, so the two compose the way they read: pick the
     / trades that count, then stop the clock.
-    if[not (::)~o`asof; trades:?[trades;enlist (<=;`time;o`asof);0b;()]];
+    if[not (::)~o`as_of; trades:?[trades;enlist (<=;`time;o`as_of);0b;()]];
     trades:`time xasc trades;
     tk:.qf.exec.key_table[trades;bys];
     ok:$[count opening; .qf.exec.key_table[opening;bys]; 0#tk];
@@ -490,17 +486,17 @@
 
 / The position held at an instant.
 / .
-/ run's `asof option with the rollup applied, because "what were we holding
+/ run's `as_of option with the rollup applied, because "what were we holding
 / at 10am" is the question, and spelling it as a truncate-then-group is the
 / answer rather than the question.
 / @param trades see run
-/ @param opts see run - its `asof is overwritten by ts
-/ @param ts the instant to stop at, inclusive
+/ @param opts see run - its `as_of is overwritten by as_of
+/ @param as_of the instant to stop at, inclusive
 / @return a book, as position returns one
 / @eg exec first qty from .qf.exec.position_at[([] time:2026.01.01D09:00:00 2026.01.01D11:00:00; sym:2#`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo;2026.01.01D10:00:00] -> 1000000f
-.qf.exec.position_at:{[trades;opts;ts]
+.qf.exec.position_at:{[trades;opts;as_of]
     o:.qf.exec.normalised_opts[opts];
-    .qf.exec.position[.qf.exec.residual[trades;@[o;`asof;:;ts]]; o`by]}
+    .qf.exec.position[.qf.exec.residual[trades;@[o;`as_of;:;as_of]]; o`by]}
 
 / -------------------------------------------------------------- ROLLUPS
 

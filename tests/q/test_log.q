@@ -39,33 +39,29 @@
 / --- structure: fields render k=v, in order ------------------------------
 
 .qt.qetl.log.test_fields_render_as_key_value_pairs:{[t]
-    .qetl.log.info[`w;"window published";`rows`worker!(1234;`demo)];
+    .qetl.log.ch.info[`lifecycle;"window published";`rows`worker!(1234;`demo)];
     .qunit.assertEquals[.qt.qetl.log.last_msg[];"window published rows=1234 worker=`demo";"values are rendered unambiguously and in declared order"]};
 
 .qt.qetl.log.test_a_timestamp_field_renders_readably:{[t]
-    .qetl.log.info[`w;"at";(enlist `ts)!enlist 2026.09.11D00:00:00.000000000];
+    .qetl.log.ch.info[`lifecycle;"at";(enlist `ts)!enlist 2026.09.11D00:00:00.000000000];
     .qunit.assertEquals[.qt.qetl.log.last_msg[] like "*ts=2026.09.11D00:00:00.000000000*";1b;"a timestamp is not abbreviated or reformatted"]};
 
 .qt.qetl.log.test_no_fields_gives_the_bare_text:{[t]
-    .qetl.log.info[`w;"started";()!()];
+    .qetl.log.ch.info[`lifecycle;"started";()!()];
     .qunit.assertEquals[.qt.qetl.log.last_msg[];"started";"an empty dict adds nothing, not a trailing space"]};
 
 / Field order is preserved so a worker that always logs (worker;window;rows)
 / produces columns a human can scan down. A sorted or hashed order would
 / interleave them differently per line.
 .qt.qetl.log.test_field_order_is_preserved:{[t]
-    .qetl.log.info[`w;"x";`zebra`apple`mid!(1;2;3)];
+    .qetl.log.ch.info[`lifecycle;"x";`zebra`apple`mid!(1;2;3)];
     .qunit.assertEquals[.qt.qetl.log.last_msg[];"x zebra=1 apple=2 mid=3";"declared order, not alphabetical"]};
 
 / --- levels: the id becomes TorQ's id column ----------------------------
 
 .qt.qetl.log.test_the_level_is_carried:{[t]
-    .qetl.log.warn[`w;"careful";()!()];
+    .qetl.log.ch.warn[`lifecycle;"careful";()!()];
     .qunit.assertEquals[first last .qt.qetl.log.captured;`WARNING;"warn emits at WARNING"]};
-
-.qt.qetl.log.test_the_id_is_carried:{[t]
-    .qetl.log.info[`demo_deals_backfill;"x";()!()];
-    .qunit.assertEquals[.qt.qetl.log.captured[0;1];`demo_deals_backfill;"the worker name is the id, so a published log is filterable by worker"]};
 
 / err records and RETURNS. TorQ's .lg.e throws or exits depending on .proc
 / state, which is right for init and wrong for a worker noting one failed
@@ -78,7 +74,7 @@
     / Assert the ABSENCE of a throw, which is the property, rather than a
     / particular return value - the transport's return (-1 from a stdout
     / write, () from .lg.l) is incidental and differs between them.
-    threw:@[{.qetl.log.err[`w;"window failed";(enlist `err)!enlist "boom"]; 0b};::;{[e] 1b}];
+    threw:@[{.qetl.log.ch.err[`lifecycle;"window failed";(enlist `err)!enlist "boom"]; 0b};::;{[e] 1b}];
     .qunit.assertEquals[threw;0b;"err records the failure and returns, leaving the caller to decide whether to abort"]};
 
 / --- debug: off by default, on per process ------------------------------
@@ -86,25 +82,25 @@
 / The property that matters. A DEBUG line must NOT appear unless asked for,
 / or a million-row backfill floods its log with per-window detail.
 .qt.qetl.log.test_debug_is_suppressed_by_default:{[t]
-    .qetl.log.dbg[`w;"per-window detail";()!()];
+    .qetl.log.ch.dbg[`lifecycle;"per-window detail";()!()];
     .qunit.assertEquals[count .qt.qetl.log.captured;0;"nothing emitted: debug is opt-in"]};
 
 .qt.qetl.log.test_debug_appears_once_enabled:{[t]
     .qetl.log.debug[1b];
-    .qetl.log.dbg[`w;"per-window detail";()!()];
+    .qetl.log.ch.dbg[`lifecycle;"per-window detail";()!()];
     .qunit.assertEquals[(count .qt.qetl.log.captured;first last .qt.qetl.log.captured);(1;`DEBUG);"after debug[1b] the same call emits"]};
 
 .qt.qetl.log.test_debug_can_be_switched_off_again:{[t]
     .qetl.log.debug[1b];
     .qetl.log.debug[0b];
-    .qetl.log.dbg[`w;"x";()!()];
+    .qetl.log.ch.dbg[`lifecycle;"x";()!()];
     .qunit.assertEquals[count .qt.qetl.log.captured;0;"debug[0b] restores suppression"]};
 
 / Suppression is DEBUG-specific: enabling or disabling debug must not affect
 / the other three levels, or turning debug off would silence errors.
 .qt.qetl.log.test_other_levels_are_unaffected_by_debug:{[t]
     .qetl.log.debug[0b];
-    .qetl.log.info[`w;"a";()!()]; .qetl.log.warn[`w;"b";()!()]; .qetl.log.err[`w;"c";()!()];
+    .qetl.log.ch.info[`lifecycle;"a";()!()]; .qetl.log.ch.warn[`lifecycle;"b";()!()]; .qetl.log.ch.err[`lifecycle;"c";()!()];
     .qunit.assertEquals[.qt.qetl.log.captured[;0];`INFO`WARNING`ERROR;"INFO, WARNING and ERROR emit regardless of the debug switch"]};
 
 / --- trace: below debug, with its own switch ----------------------------
@@ -114,25 +110,25 @@
 / must not switch it on too.
 
 .qt.qetl.log.test_trace_is_suppressed_by_default:{[t]
-    .qetl.log.trc[`odbc;"sql sent";enlist[`statement]!enlist "SELECT 1"];
+    .qetl.log.ch.trc[`source;"sql sent";enlist[`statement]!enlist "SELECT 1"];
     .qunit.assertEquals[count .qt.qetl.log.captured;0;"nothing emitted: trace is opt-in"]};
 
 .qt.qetl.log.test_trace_appears_once_enabled:{[t]
     .qetl.log.trace[1b];
-    .qetl.log.trc[`odbc;"sql sent";enlist[`statement]!enlist "SELECT 1"];
+    .qetl.log.ch.trc[`source;"sql sent";enlist[`statement]!enlist "SELECT 1"];
     .qunit.assertEquals[(.qt.qetl.log.captured[;0];.qt.qetl.log.last_msg[]);(enlist `TRACE;"sql sent statement=\"SELECT 1\"");
         "after trace[1b] the statement is emitted, at TRACE"]};
 
 .qt.qetl.log.test_debug_does_not_switch_trace_on:{[t]
     .qetl.log.debug[1b];
-    .qetl.log.trc[`odbc;"sql sent";()!()];
-    .qetl.log.dbg[`w;"window start";()!()];
+    .qetl.log.ch.trc[`source;"sql sent";()!()];
+    .qetl.log.ch.dbg[`lifecycle;"window start";()!()];
     .qunit.assertEquals[.qt.qetl.log.captured[;0];enlist `DEBUG;"debug alone shows DEBUG, not every query"]};
 
 .qt.qetl.log.test_trace_does_not_switch_debug_on:{[t]
     .qetl.log.trace[1b];
-    .qetl.log.trc[`odbc;"sql sent";()!()];
-    .qetl.log.dbg[`w;"window start";()!()];
+    .qetl.log.ch.trc[`source;"sql sent";()!()];
+    .qetl.log.ch.dbg[`lifecycle;"window start";()!()];
     .qunit.assertEquals[.qt.qetl.log.captured[;0];enlist `TRACE;"trace alone shows queries, not DEBUG detail"]};
 
 .qt.qetl.log.test_enabled_reports_the_trace_gate:{[t]
@@ -146,17 +142,17 @@
 / line inside the scope, and gone when the scope ends - however it ends.
 
 .qt.qetl.log.test_a_line_inside_a_context_carries_it:{[t]
-    .qetl.log.with_context[`worker`source!(`w;`s);{.qetl.log.info[`x;"fetched";enlist[`rows]!enlist 3]};enlist(::)];
+    .qetl.log.with_context[`worker`source!(`w;`s);{.qetl.log.ch.info[`lifecycle;"fetched";enlist[`rows]!enlist 3]};enlist(::)];
     .qunit.assertEquals[.qt.qetl.log.last_msg[];"fetched rows=3 worker=`w source=`s";"own fields first, then the context"]};
 
 .qt.qetl.log.test_a_lines_own_field_wins_over_the_context:{[t]
-    .qetl.log.with_context[enlist[`range_from]!enlist 1;{.qetl.log.info[`x;"m";enlist[`range_from]!enlist 2]};enlist(::)];
+    .qetl.log.with_context[enlist[`range_from]!enlist 1;{.qetl.log.ch.info[`lifecycle;"m";enlist[`range_from]!enlist 2]};enlist(::)];
     .qunit.assertEquals[.qt.qetl.log.last_msg[];"m range_from=2";"a line's own value, not the context's"]};
 
 .qt.qetl.log.test_contexts_nest_and_unwind:{[t]
     .qetl.log.with_context[enlist[`worker]!enlist `w;
-        {.qetl.log.with_context[enlist[`attempt]!enlist 2;{.qetl.log.info[`x;"in";()!()]};enlist(::)];
-         .qetl.log.info[`x;"out";()!()]};enlist(::)];
+        {.qetl.log.with_context[enlist[`attempt]!enlist 2;{.qetl.log.ch.info[`lifecycle;"in";()!()]};enlist(::)];
+         .qetl.log.ch.info[`lifecycle;"out";()!()]};enlist(::)];
     .qunit.assertEquals[.qt.qetl.log.captured[;2];("in worker=`w attempt=2";"out worker=`w");
         "the inner scope adds its field, and leaving it takes only that field away"]};
 
@@ -211,7 +207,7 @@
 .qt.qetl.log.test_a_suppressed_message_is_not_rendered:{[t]
     `.qt.qetl.log.rendered set 0b;
     `.qetl.log.render set {[fields] `.qt.qetl.log.rendered set 1b; "x"};
-    .qetl.log.dbg[`w;"expensive";(enlist `k)!enlist 1];
+    .qetl.log.ch.dbg[`lifecycle;"expensive";(enlist `k)!enlist 1];
     r:.qt.qetl.log.rendered;
     `.qetl.log.render set .qt.qetl.log.real_render;
     .qunit.assertEquals[r;0b;"debug off means the fields are never rendered, not rendered and discarded"]};
@@ -219,7 +215,7 @@
 .qt.qetl.log.test_an_emitted_message_is_rendered:{[t]
     `.qt.qetl.log.rendered set 0b;
     `.qetl.log.render set {[fields] `.qt.qetl.log.rendered set 1b; "x"};
-    .qetl.log.info[`w;"wanted";(enlist `k)!enlist 1];
+    .qetl.log.ch.info[`lifecycle;"wanted";(enlist `k)!enlist 1];
     r:.qt.qetl.log.rendered;
     `.qetl.log.render set .qt.qetl.log.real_render;
     .qunit.assertEquals[r;1b;"an INFO message is rendered, or the gate is refusing everything"]};
@@ -261,10 +257,10 @@
     `.lg.outmap set `ERR`INFO`WARN!2 1 1;
     `.lg.pubmap set `ERR`INFO`WARN!1 0 1;
     `.qt.qetl.log.torq_got set ();
-    .qetl.log.info[`w;"routed";(enlist `k)!enlist 1];
+    .qetl.log.ch.info[`lifecycle;"routed";(enlist `k)!enlist 1];
     got:.qt.qetl.log.torq_got;
     ![`.lg;();0b;`l`outmap`pubmap];
-    .qunit.assertEquals[got;(`INFO;`w;"routed k=1");"level, id and rendered message arrive at .lg.l"]};
+    .qunit.assertEquals[got;(`INFO;`lifecycle;"routed k=1");"level, id and rendered message arrive at .lg.l"]};
 
 .qt.qetl.log.test_register_adds_this_files_levels_to_torqs_routing_tables_when_present:{[t]
     `.lg.l set {[a;b;c;d;e;f] ::};
@@ -287,10 +283,10 @@
     `.lg.outmap set `ERR`INFO`WARN!2 1 1;
     `.lg.pubmap set `ERR`INFO`WARN!1 0 1;
     `.qt.qetl.log.torq_got set ();
-    .qetl.log.warn[`w;"first";()!()];
+    .qetl.log.ch.warn[`lifecycle;"first";()!()];
     got:.qt.qetl.log.torq_got;
     ![`.lg;();0b;`l`outmap`pubmap];
-    .qunit.assertEquals[got;(`WARNING;`w;"first");"a WARNING reaches TorQ's logger before anything registered it"]};
+    .qunit.assertEquals[got;(`WARNING;`lifecycle;"first");"a WARNING reaches TorQ's logger before anything registered it"]};
 
 / --- without TorQ, register is a harmless no-op -------------------------
 
@@ -307,3 +303,124 @@
     / `samples`, not `vs`: vs is a q builtin.
     samples:(300#"a";til 500;`a`b!1 2;"tab\there";([] x:til 50));
     .qunit.assertEquals[.qetl.log.value1 each samples;.qf.util.full each samples;"value1 and .qf.util.full agree"]};
+
+
+/ --- channels and process identity (#2274) -----------------------------
+/ A record's `proc` is the process that wrote it and its `id` the channel.
+/ Before, the worker or component name was in both, so a record from a source
+/ named the source as its process and nothing a reader could select on.
+
+.qt.qetl.log.test_a_channel_call_carries_the_channel_as_the_id:{[t]
+    .qetl.log.ch.info[`storage;"swapped";enlist[`rows]!enlist 3];
+    .qunit.assertEquals[.qt.qetl.log.captured;enlist (`INFO;`storage;"swapped rows=3");
+        "level, channel and rendered message - the worker is a field, not an argument"]};
+
+.qt.qetl.log.test_every_level_has_a_channel_call:{[t]
+    .qetl.log.debug[1b]; .qetl.log.trace[1b];
+    .qetl.log.ch.trc[`ipc;"a";()!()]; .qetl.log.ch.dbg[`ipc;"b";()!()]; .qetl.log.ch.info[`ipc;"c";()!()];
+    .qetl.log.ch.warn[`ipc;"d";()!()]; .qetl.log.ch.err[`ipc;"e";()!()];
+    .qunit.assertEquals[.qt.qetl.log.captured[;0];.qetl.log.levels;"TRACE to ERROR, each through the channel call"];
+    .qunit.assertEquals[distinct .qt.qetl.log.captured[;1];enlist `ipc;"all on the one channel"]};
+
+.qt.qetl.log.test_the_declared_channels_are_the_eight_in_the_issue:{[t]
+    .qunit.assertEquals[.qetl.log.channels;`lifecycle`ipc`source`transform`storage`coverage`eod`config;
+        "the one declared list - uqs's --channel and the docs table are held to it"]};
+
+.qt.qetl.log.test_an_undeclared_channel_is_refused_at_the_call:{[t]
+    .qunit.assertThrows[{.qetl.log.ch.info[`sourse;"typo";()!()]};::;"unknown log channel `sourse: one of lifecycle, ipc*";
+        "a misspelt channel is refused where the line is written, naming the declared list"];
+    .qunit.assertEquals[.qt.qetl.log.captured;();"and nothing was emitted"]};
+
+.qt.qetl.log.test_every_declared_channel_is_accepted:{[t]
+    {.qetl.log.ch.info[x;"ok";()!()]} each .qetl.log.channels;
+    .qunit.assertEquals[.qt.qetl.log.captured[;1];.qetl.log.channels;"each declared channel is carried as written"]};
+
+.qt.qetl.log.torq_stub:{[] `.qt.qetl.log.torq_got set ();
+    `.qetl.log.emit set .qt.qetl.log.real_emit;
+    `.lg.l set {[level;proctype;proc;id;message;dict] `.qt.qetl.log.torq_got set (proctype;proc;id)};
+    `.lg.outmap set `ERR`INFO`WARN!2 1 1;
+    `.lg.pubmap set `ERR`INFO`WARN!1 0 1;}
+
+.qt.qetl.log.test_under_torq_proc_is_the_process_and_id_the_channel:{[t]
+    .qt.qetl.log.torq_stub[];
+    `.proc.procname set `rdb1;
+    .qetl.log.ch.info[`source;"fetched";enlist[`source]!enlist `demo_deals];
+    got:.qt.qetl.log.torq_got;
+    ![`.lg;();0b;`l`outmap`pubmap]; ![`.proc;();0b;enlist `procname];
+    .qunit.assertEquals[got;(`etl;`rdb1;`source);
+        "proc is TorQ's procname, never the source; the source rides in the message"]};
+
+.qt.qetl.log.test_standalone_the_runner_names_the_process:{[t]
+    .qt.qetl.log.torq_stub[];
+    keep:.qetl.log.standalone_name;
+    .qetl.log.set_process`attached_backfill;
+    .qetl.log.ch.info[`lifecycle;"started";()!()];
+    got:.qt.qetl.log.torq_got;
+    .qetl.log.set_process keep;
+    ![`.lg;();0b;`l`outmap`pubmap];
+    .qunit.assertEquals[got;(`etl;`attached_backfill;`lifecycle);"outside TorQ the runner's own name, set once"]};
+
+.qt.qetl.log.test_a_worker_name_is_never_the_process:{[t]
+    .qt.qetl.log.torq_stub[];
+    keep:.qetl.log.standalone_name; .qetl.log.set_process`;
+    .qetl.log.ch.info[`lifecycle;"x";enlist[`worker]!enlist `demo_deals_backfill];
+    got:.qt.qetl.log.torq_got;
+    .qetl.log.set_process keep;
+    ![`.lg;();0b;`l`outmap`pubmap];
+    .qunit.assertTrue[not got[1]=`demo_deals_backfill;"a worker name is a field, never the process"]};
+
+.qt.qetl.log.test_the_id_first_helpers_are_gone:{[t]
+    .qunit.assertEquals[(`trc`dbg`info`warn`err) inter key `.qetl.log;`symbol$();
+        "only .qetl.log.ch carries the five levels - no id-first form to pass a worker as the category"]};
+
+/ --- the channel survives TorQ's own formatting and publication --------
+/ TorQ's .lg.format and .lg.publish, taken from lib/torq/torq.q itself rather
+/ than copied here, so a TorQ update that changes how `id` is written fails
+/ this test instead of the reader. Loaded as a script (the only way to define
+/ into .lg without a context switch), once with -jsonlogs and once without.
+
+.qt.qetl.log.torq_text:{[json]
+    src:read0`:lib/torq/torq.q;
+    a:first where (9#'src)~\:"format:$[";
+    b:first where src like "*.ps.publish*";
+    f:hsym`$"build/test-torq-lg-",string[.z.i],".q";
+    f 0: enlist["\\d .lg"],src a+til 1+b-a;
+    f 0: (read0 f),enlist "\\d .";
+    `.proc.params set $[json;enlist[`jsonlogs]!enlist enlist "true";()!()];
+    `.proc.cp set {.z.p};
+    `.lg.outmap set `ERR`INFO`WARN!2 1 1;
+    `.lg.pubmap set `ERR`INFO`WARN!1 0 1;
+    `.ps.initialised set 1b;
+    `.ps.publish set {[t;rows] `.qt.qetl.log.published set (t;rows)};
+    system "l ",1_string f;
+    hdel f;}
+
+.qt.qetl.log.torq_text_cleanup:{[] ![`.lg;();0b;`format`publish`outmap`pubmap]; ![`.proc;();0b;`params`cp]; ![`.ps;();0b;`initialised`publish];}
+
+.qt.qetl.log.through_torq:{[json]
+    .qt.qetl.log.torq_text json;
+    `.qetl.log.emit set .qt.qetl.log.real_emit;
+    `.lg.l set {[level;proctype;proc;id;message;dict]
+        `.qt.qetl.log.text set .lg.format[level;proctype;proc;id;message]; .lg.publish[level;proctype;proc;id;message]};
+    .qetl.log.ch.warn[`coverage;"gap found";enlist[`dataset]!enlist `markouts];
+    out:(.qt.qetl.log.text;.qt.qetl.log.published);
+    ![`.lg;();0b;enlist `l];
+    .qt.qetl.log.torq_text_cleanup[];
+    out}
+
+.qt.qetl.log.test_the_channel_survives_torqs_text_log:{[t]
+    out:.qt.qetl.log.through_torq 0b;
+    fields:"|" vs first out;
+    .qunit.assertEquals[(fields 4;fields 5;fields 6);("WARNING";"coverage";"gap found dataset=`markouts");"id is the sixth field, as the reader parses it"];
+    .qunit.assertEquals[fields 3;string .qetl.log.process[];"and the fourth is the process"]};
+
+.qt.qetl.log.test_the_channel_survives_torqs_json_log:{[t]
+    out:.qt.qetl.log.through_torq 1b;
+    j:.j.k first out;
+    .qunit.assertEquals[(j`id;j`proc;j`loglevel);("coverage";string .qetl.log.process[];"WARNING");"the JSON line carries the channel under id"]};
+
+.qt.qetl.log.test_the_channel_survives_torqs_published_log:{[t]
+    out:.qt.qetl.log.through_torq 0b;
+    row:first (last out) 1;
+    .qunit.assertEquals[(row`id;row`sym;row`loglevel);(`coverage;.qetl.log.process[];`WARNING);
+        "the logmsg row has the channel as id and the process as sym - sym used to be the worker"]};

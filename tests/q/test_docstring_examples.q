@@ -190,11 +190,17 @@
 / tickerplant, a TorQ process, a licensed driver or downloaded market data,
 / none of which a test process has.
 .qt.man.examples.needs_live:([] expr:(
-        ".qtorq.publish[h;`crypto_execution_quality;out]";
+        ".qtorq.publish[h;`crypto_markout;out]";
         ".qtorq.publish[h;`trades;`sym`side`trade_price`size`pip_factor!(`EURUSD;1;1.085;1e6;10000)]";
         ".qtorq.publish[h;`trades;(enlist `EURUSD;enlist 1;enlist 1.085;enlist 1e6;enlist 10000)]";
         ".qtorq.safe_timer[`crypto_markout;0D00:00:01.000;`.qproc.stream.tick;\"Run the markout streaming job\"]";
         ".qtorq.reload_hdb[]";
+        ".qtorq.compress.plan[`:/data/hdb;`:/data/config/compressionconfig.csv;365]";
+        ".qtorq.compress.apply[`:/data/hdb;`:/data/config/compressionconfig.csv;365]";
+        ".qtorq.compress.run[`:/data/hdb;`:/data/config/compressionconfig.csv;365]";
+        ".qtorq.compress.files `:/data/hdb";
+        ".qtorq.compress.report[`:/data/hdb;.sort.params;10]";
+        ".qtorq.compress.apply_plan select from .qtorq.compress.plan[`:/data/hdb;`:/data/config/compressionconfig.csv;0W] where partition=2026.11.02";
         ".qetl.io.odbc.window_query[h;`deals;`deal_time;`deal_id`rate;from_ts;to_ts]";
         ".qdata.getBySymbolDate[`AAPL;2026.02.25]";
         ".qpipe.job.alert_sink.post[`$\":http://localhost:9/hook\";\"{}\"]";
@@ -205,13 +211,20 @@
         ".qetl.verify.check_publish_recovery[`demo_deals_feed]`status";
         ".qetl.verify.check_retries[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000]`status";
         ".qetl.verify.check_conflict[`demo_deals_backfill;.qpipe.source.demo_deals.fixture[];2026.09.11D00:00:00.000000000;2026.09.16D00:00:00.000000000]`status";
-        ".qetl.verify.check_coverage[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.14D00:00:00.000000000;3]`status");
+        ".qetl.verify.check_coverage[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.14D00:00:00.000000000;3]`status";
+        ".qetl.mapped.newest[enlist[`market]!enlist `crypto]");
     reason:(
         "sends .u.upd over a tickerplant handle";
         "sends .u.upd over a tickerplant handle";
         "sends .u.upd over a tickerplant handle";
         "registers a TorQ timer, which needs .timer and .proc from a TorQ process";
         "finds the HDB through TorQ discovery, which needs .servers from a TorQ process";
+        "runs TorQ's .cmp (showcomp), which a test process loads only inside the .qtorq.compress suite";
+        "runs TorQ's .cmp (compressmaxage) over a real HDB, which a test process loads only inside the .qtorq.compress suite";
+        "runs TorQ's .cmp over a real HDB, then asks the running hdbs to reload through .servers";
+        "walks a real HDB with TorQ's .cmp.hdbstructure, which a test process loads only inside the .qtorq.compress suite";
+        "reads a real HDB through TorQ's .cmp and .sort.params (sort.csv, as .sort.getsortcsv loads it), which a test process does not load";
+        "runs TorQ's .cmp (compressfromtable) over a real HDB's plan rows, which a test process loads only inside the .qtorq.compress suite";
         "opens an ODBC connection, which needs a licensed driver this tree does not require";
         "opens a Databento parquet file, which exists only where that data has been downloaded";
         "POSTs to a webhook, which needs an HTTP endpoint listening (#947)";
@@ -222,7 +235,8 @@
         "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
         "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
         "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
-        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)"))
+        "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
+        "reads the newest partition of the global market_data, which exists only in a process that has loaded an HDB (#2288)"))
 
 / Private: drop a trailing prose gloss - "1.016667 (2024 is a leap year)".
 / Both forms are tried by classify below rather than only the stripped one,

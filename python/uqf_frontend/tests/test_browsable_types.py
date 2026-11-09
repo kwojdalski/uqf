@@ -18,13 +18,15 @@ import polars as pl
 import pytest
 from fastapi.testclient import TestClient
 
-from uqf_frontend import models, queries
-from uqf_frontend.app import _rows, create_app
+from uqf_frontend import queries
+from uqf_frontend.app import create_app
 from uqf_frontend.catalog import UNFILTERABLE, QType, _qtype
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import ValidationFailed
 from uqf_frontend.gateway import FakeGateway, KolaGateway
+from uqf_frontend.models.query import ColumnType
 from uqf_frontend.queries import coerce
+from uqf_frontend.routes.common import _rows
 from uqs.model.schemas import _DEFINITION
 from uqs.paths import TABLES_FILE
 from uqs.scaffold.columns import TYPES, definition_columns, type_char
@@ -87,7 +89,7 @@ def test_every_plant_table_column_type_is_a_browsable_type():
 
 
 def test_column_info_type_is_exactly_the_qtype_words():
-    words = set(typing.get_args(models.ColumnType))
+    words = set(typing.get_args(ColumnType))
     assert words == {q.value for q in QType}
 
 
@@ -180,9 +182,10 @@ def test_rows_of_the_new_types_serialise(browse_port):
     got = gw.call(
         '{[u] ([] i:1 2i; h:3 4h; c:"ab"; d:2026.01.01 2026.01.02; t:00:00:01.250 00:00:02.000)}', 0
     )
+    # A time as HH:MM:SS.fff, the form its filter takes back (#2037).
     assert _rows(got) == [
-        {"i": 1, "h": 3, "c": "a", "d": dt.date(2026, 1, 1), "t": dt.time(0, 0, 1, 250000)},
-        {"i": 2, "h": 4, "c": "b", "d": dt.date(2026, 1, 2), "t": dt.time(0, 0, 2)},
+        {"i": 1, "h": 3, "c": "a", "d": dt.date(2026, 1, 1), "t": "00:00:01.250"},
+        {"i": 2, "h": 4, "c": "b", "d": dt.date(2026, 1, 2), "t": "00:00:02.000"},
     ]
 
 

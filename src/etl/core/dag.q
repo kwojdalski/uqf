@@ -14,11 +14,11 @@
 / .
 /   .qetl.job.bounded.worker_cfg     bounded workers. Input is the source's remote `table_name`,
 /                   reachable from the worker's `source`; output is the
-/                   worker's own `dataset`, the table it writes (#769).
+/                   worker's own dataset (its one declared `outputs`), the table it writes (#769).
 /   .qetl.job.continuous.feeds    continuous feeders. Output is the dataset they feed;
 /                   their input is external by definition (a live feed).
 /   .qetl.job.stream.jobs   streaming jobs, normalizers among them. Input is
-/                   `subscribe_to`, output is `publishes`; a job that is
+/                   `subscribe_to`, output is `outputs`; a job that is
 /                   also in .qetl.job.stream.normalizer.registry is drawn as
 /                   a `normalizer`.
 /   .qetl.reaction  reactions, input the dataset each watches.
@@ -293,7 +293,7 @@
 / Register every bounded worker from .qetl.job.bounded.worker_cfg, deriving its inputs and
 / outputs from the source declaration it already names.
 / .
-/ A worker reads the source's remote `table_name` and writes its `dataset`, so
+/ A worker reads the source's remote `table_name` and writes its dataset, so
 / its input is not restated on the worker - which is the whole point: a
 / worker that declared its own inputs could disagree with the source it
 / actually reads. Its output is the dataset because that is where publish
@@ -360,7 +360,7 @@
     {[norms;j]
         d:first .qetl.job.stream.jobs j;
         .qetl.dag.register[j;`kind`inputs`outputs!
-            ($[j in norms;`normalizer;`stream]; d`subscribe_to; d`publishes)]
+            ($[j in norms;`normalizer;`stream]; d`subscribe_to; d`outputs)]
       }[norms] each js;
     js}
 

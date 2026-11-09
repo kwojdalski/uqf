@@ -39,6 +39,38 @@
     if[count missing;
         '(string fn_name),": ",(string table_name)," is missing required column(s) ",", " sv string missing];
     }
+/ Option keys that were renamed, old -> new: an unknown key found here is
+/ refused with a migration message instead of the generic one (#2119). Add a
+/ row when an option is renamed; there is no alias, the old key still fails.
+.qf.util.renamed_opts:(enlist `asof)!enlist `as_of
+/ Resolve an options dictionary against its defaults, refusing a key the
+/ function does not know. The one refusal for every `opts` parameter in the
+/ library (#2113): a misspelt option used to be dropped in pricing and
+/ gave a plausible number computed with the default - `bump_pip for
+/ `bump_pips made a PV01 five times too small, with no error.
+/ .
+/ opts holds only what has a default. A value the caller must state (a pip
+/ factor, an as_of, horizons) is a positional argument of the function.
+/ @param fn_name symbol naming the CALLING function, for the message
+/ @param opts (::) for the defaults, or a dictionary of any of defaults' keys
+/ @param defaults dict of every option the function takes -> its default
+/ @return defaults with opts laid over them
+/ @throws error naming every unknown key, or a non-dictionary opts
+/ @eg .qf.util.resolve_opts[`f;enlist[`b]!enlist 2;`a`b!1 1]  -> `a`b!1 2
+/ @eg .qf.util.resolve_opts[`f;enlist[`c]!enlist 2;`a`b!1 1]  -> throws
+.qf.util.resolve_opts:{[fn_name;opts;defaults]
+    if[(::)~opts; :defaults];
+    known:", " sv string key defaults;
+    if[not 99h=type opts;
+        '(string fn_name),": opts must be (::) for the defaults, or a dictionary of ",known];
+    unknown:(key opts) except key defaults;
+    moved:unknown inter key .qf.util.renamed_opts;
+    if[count moved;
+        '(string fn_name),": ",(", " sv {"`",string[x]," is now `",string .qf.util.renamed_opts x} each moved),
+            " - options keys are renamed, not aliased"];
+    if[count unknown;
+        '(string fn_name),": unknown option(s) ",(", " sv string unknown)," - known: ",known];
+    defaults,opts}
 / Refuse a depth-quotes table that lacks a column a depth function reads:
 / time, sym and the four level vectors. The one shape every function that
 / prices from a depth book takes - synthetic cross pricing (.qf.mkt), cross

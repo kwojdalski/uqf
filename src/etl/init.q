@@ -48,11 +48,18 @@
 \l src/etl/core/backfill_state.q
 \l src/etl/core/log.q
 \l src/etl/core/coercion.q
+\l src/etl/core/declared.q
 \l src/etl/core/intervals.q
 \l src/etl/core/materialisation.q
+\l src/etl/core/mapped_books.q
+\l src/etl/core/mapped_depth.q
+\l src/etl/core/reference_variant.q
+\l src/etl/core/compression.q
 \l src/etl/core/run.q
+\l src/etl/core/config_snapshot.q
 \l src/etl/core/io_manager.q
 \l src/etl/core/io_hdb.q
+\l src/etl/core/io_hdb_eod.q
 \l src/etl/core/io_hdb_scoped.q
 \l src/etl/core/io_remote.q
 \l src/etl/core/io_remote_chunks.q
@@ -77,16 +84,28 @@
 \l src/etl/core/source_credentials.q
 \l src/etl/core/source_zones.q
 \l src/etl/core/source_local_hdb.q
+\l src/etl/core/qsql_text.q
 \l src/etl/core/source_fetch.q
+\l src/etl/core/source_csv.q
+\l src/etl/core/source_fills.q
+\l src/etl/core/source_batch_read.q
 \l src/etl/core/live_check.q
 \l src/etl/core/bounded_connect.q
 \l src/etl/core/bounded_ready.q
+\l src/etl/core/job_facts.q
 \l src/etl/core/bounded_worker.q
+\l src/etl/core/bounded_pin.q
+\l src/etl/core/bounded_outputs.q
+\l src/etl/core/twin.q
+\l src/etl/core/bounded_batching.q
+\l src/etl/core/bounded_batch_read.q
 \l src/etl/core/bounded_flags.q
 \l src/etl/core/stream_health.q
 \l src/etl/core/uptime.q
 \l src/etl/core/retention.q
 \l src/etl/core/stream_job.q
+\l src/etl/core/stream_replay_guard.q
+\l src/etl/core/stream_outputs.q
 \l src/etl/core/stream_registries.q
 \l src/etl/core/stream_carry_recovery.q
 \l src/etl/core/stream_delivery.q
@@ -99,6 +118,8 @@
 \l src/etl/core/kafka_diagnostics.q
 \l src/etl/core/kafka_decoder.q
 \l src/etl/core/horizon.q
+\l src/etl/core/horizon_reference.q
+\l src/etl/core/horizon_shared.q
 \l src/etl/core/bars.q
 \l src/etl/core/rolling.q
 \l src/etl/core/enrich.q
@@ -111,8 +132,12 @@
 \l src/etl/core/verify_behaviour.q
 \l src/etl/core/verify_behaviour_bounded.q
 \l src/etl/core/verify_report.q
+\l src/etl/core/compare.q
 / Every plant table's schema, before any job that publishes or reads one.
 \l src/etl/plant_tables.q
+
+/ How the HDB's tables are compressed, declared against the plant just loaded.
+\l src/etl/compression_policy.q
 
 / The invented market the demo's feeds publish and its jobs consume. Before
 / the core declarations, because a job filters on .qf.demo.pairs.
@@ -157,3 +182,7 @@
 / Then the graph those declarations form must be acyclic (#1090): the check is
 / here, at load, because nothing else in a running process asks for an order.
 .qetl.dag.check_acyclic[];
+/ And every declared twin must name a streaming job that loaded (#2103): a typo in
+/ twin_of would otherwise never be checked. A partial load (.qetl.load.only) lacks
+/ jobs on purpose, so only the full one asks.
+if[0=count `only`only_sources inter key `.qetl.load; .qetl.twin.require_resolved[]];

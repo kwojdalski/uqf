@@ -51,14 +51,23 @@ Popen = Callable[..., Any]
 USAGE_ERROR = 2
 
 
-def list_args(runtime: str | None, base_port: int | None, current: bool = True) -> list[str]:
+def list_args(runtime: str | None, base_port: int | None) -> list[str]:
     """The remote uqs's argv for its process list: the runtime only when one
-    was chosen here, so the release's own deploy.env otherwise decides. A
-    release from before #1858 lists them as `uqs process list` (`current`
-    False)."""
+    was chosen here, so the release's own deploy.env otherwise decides."""
     args = ["--runtime", runtime] if runtime else []
-    args += ["process", "list", "--json"] if current else ["list", "processes", "--json"]
+    args += ["process", "list", "--json"]
     return args + (["--base-port", str(base_port)] if base_port is not None else [])
+
+
+def _too_old(r: control.Remote) -> UqsError:
+    """A release that lists its processes in a form from before #1882 - as
+    `{procname}` rows, or not as `uqs process list` at all (#1858). Refused
+    with the redeploy that fixes it, never read under the old key (#2109)."""
+    return UqsError(
+        f"target {r.name}: its release lists its processes in the form from before "
+        "#1882 (`procname`, not `process`) - `uqs deploy` a current release there, "
+        "or give --port"
+    )
 
 
 def remote_ports(
@@ -67,12 +76,22 @@ def remote_ports(
     base_port: int | None = None,
     runner: Runner = subprocess.run,
 ) -> dict[str, int]:
-    """procname -> port, as the target's deployed release resolves them: by
-    `uqs process list`, or on a release from before it `uqs process list`."""
+    """process -> port, as the target's deployed release resolves them by
+    `uqs process list`."""
+    return {row["process"]: row["port"] for row in remote_processes(r, runtime, base_port, runner)}
+
+
+def remote_processes(
+    r: control.Remote,
+    runtime: str | None,
+    base_port: int | None = None,
+    runner: Runner = subprocess.run,
+) -> list[dict[str, Any]]:
+    """Every process the target's deployed release declares, as
+    `{process, proctype, port}`. The one discovery both `query --tunnel` and the tunnel plan
+    (deploy/tunnel_plan.py) read."""
     try:
         done = _list(r, list_args(runtime, base_port), runner)
-        if done.returncode == USAGE_ERROR:
-            done = _list(r, list_args(runtime, base_port, current=False), runner)
     except subprocess.TimeoutExpired:
         raise UqsError(
             f"target {r.name}: listing its processes did not finish within "
@@ -81,12 +100,14 @@ def remote_ports(
     except OSError as exc:
         raise UqsError(f"could not run ssh: {exc}") from None
     control.refuse_unreached(r, done.returncode)
+    if done.returncode == USAGE_ERROR:
+        raise _too_old(r)
     if done.returncode:
         said = diagnostic(done) or "nothing"
         raise UqsError(
             f"target {r.name}: could not list its processes (exit {done.returncode}): {said}"
         )
-    return _parse_ports(r, done.stdout or "")
+    return _parse_rows(r, done.stdout or "")
 
 
 def _list(r: control.Remote, args: list[str], runner: Runner) -> subprocess.CompletedProcess:
@@ -100,25 +121,33 @@ def _list(r: control.Remote, args: list[str], runner: Runner) -> subprocess.Comp
     )
 
 
-def _parse_ports(r: control.Remote, out: str) -> dict[str, int]:
+def _parse_rows(r: control.Remote, out: str) -> list[dict[str, Any]]:
     """The document `uqs process list --json` prints, from where it starts:
-    `{"processes": [{process, port}]}` (#1882), or the bare list of
-    `{procname, port}` a release from before it printed - the release on the
-    server is whatever was deployed there, not this checkout."""
+    `{"processes": [{process, proctype, port}]}` (#1882). The bare list of
+    `{procname, port}` an older release printed is refused (`_too_old`)."""
     start = min((i for i in (out.find("{"), out.find("[")) if i >= 0), default=-1)
     try:
-        doc = json.loads(out[start:]) if start >= 0 else []
-        rows: list = doc["processes"] if isinstance(doc, dict) else doc
-        ports = {str(row.get("process", row.get("procname"))): int(row["port"]) for row in rows}
+        doc = json.loads(out[start:]) if start >= 0 else {}
+        rows = doc["processes"] if isinstance(doc, dict) else None
+        if rows is None:
+            raise _too_old(r)
+        found = [
+            {
+                "process": str(row["process"]),
+                "proctype": str(row.get("proctype") or ""),
+                "port": int(row["port"]),
+            }
+            for row in rows
+        ]
     except ValueError, TypeError, KeyError, AttributeError:
         raise UqsError(
             f"target {r.name}: its release did not list its processes as JSON - "
             f"`uqs --target {r.name} process list --json` shows what it printed; "
             "a release older than `list --json` needs --port"
         ) from None
-    if not ports:
+    if not found:
         raise UqsError(f"target {r.name}: its release declares no processes")
-    return ports
+    return found
 
 
 def remote_port(
@@ -142,9 +171,23 @@ def free_port() -> int:
 
 
 def tunnel_argv(r: control.Remote, local: int, remote: int) -> list[str]:
-    opts = ["-o", "BatchMode=yes", "-o", f"ConnectTimeout={r.connect_timeout}"]
+    return forwards_argv(r.host, r.connect_timeout, [(local, remote)])
+
+
+def forwards_argv(
+    host: str, connect_timeout: int, forwards: Sequence[tuple[int, int]]
+) -> list[str]:
+    """ssh holding one `-L` per (local, remote) pair, loopback at both ends,
+    with the deploy transport's options - the one spelling of a tunnel, for
+    `query --tunnel`'s own and for the launch command a tunnel plan prints."""
+    opts = ["-o", "BatchMode=yes", "-o", f"ConnectTimeout={connect_timeout}"]
     opts += ["-o", "ExitOnForwardFailure=yes", "-N", "-n"]
-    return ["ssh", *opts, "-L", f"{LOOPBACK}:{local}:{LOOPBACK}:{remote}", r.host]
+    pairs = [w for local, remote in forwards for w in ("-L", forward_spec(local, remote))]
+    return ["ssh", *opts, *pairs, host]
+
+
+def forward_spec(local: int, remote: int) -> str:
+    return f"{LOOPBACK}:{local}:{LOOPBACK}:{remote}"
 
 
 def _accepts(port: int) -> bool:
@@ -178,7 +221,22 @@ def tunnel(
     """The local port forwarded to `remote` on the target, for the `with`
     block; the ssh behind it is ended however the block is left."""
     local = free_port() if local is None else local
-    argv = tunnel_argv(r, local, remote)
+    with forwarded(r, [(local, remote)], popen=popen, ready=ready, wait=wait):
+        yield local
+
+
+@contextmanager
+def forwarded(
+    r: control.Remote,
+    forwards: Sequence[tuple[int, int]],
+    *,
+    popen: Popen = subprocess.Popen,
+    ready: Callable[[int], bool] = _accepts,
+    wait: float | None = None,
+) -> Iterator[None]:
+    """One ssh holding every (local, remote) forward, for the `with` block:
+    ready once each local port accepts, ended however the block is left."""
+    argv = forwards_argv(r.host, r.connect_timeout, forwards)
     try:
         proc = popen(
             argv,
@@ -191,8 +249,8 @@ def tunnel(
     except OSError as exc:
         raise UqsError(f"could not run ssh: {exc}") from None
     try:
-        _wait_ready(r, proc, local, remote, ready, wait)
-        yield local
+        _wait_ready(r, proc, forwards, ready, wait)
+        yield
     finally:
         _stop(proc)
 
@@ -200,26 +258,29 @@ def tunnel(
 def _wait_ready(
     r: control.Remote,
     proc: subprocess.Popen,
-    local: int,
-    remote: int,
+    forwards: Sequence[tuple[int, int]],
     ready: Callable[[int], bool],
     wait: float | None,
 ) -> None:
     limit = time.monotonic() + (r.connect_timeout + READY_GRACE if wait is None else wait)
+    ports = ", ".join(str(remote) for _local, remote in forwards)
+    which = f"port{'s' if len(forwards) > 1 else ''} {ports}"
+    pending = [local for local, _remote in forwards]
     while True:
         code = proc.poll()
         if code is not None:
             said = _stderr(proc)
             raise UqsError(
-                f"could not open an ssh tunnel to target {r.name} ({r.host}) for port "
-                f"{remote} (ssh exit {code}){': ' + said if said else ''} - check that "
+                f"could not open an ssh tunnel to target {r.name} ({r.host}) for {which} "
+                f"(ssh exit {code}){': ' + said if said else ''} - check that "
                 f"`ssh -o BatchMode=yes {r.host} true` works"
             )
-        if ready(local):
+        pending = [local for local in pending if not ready(local)]
+        if not pending:
             return
         if time.monotonic() >= limit:
             raise UqsError(
-                f"the ssh tunnel to target {r.name} ({r.host}) for port {remote} "
+                f"the ssh tunnel to target {r.name} ({r.host}) for {which} "
                 "did not start accepting connections in time"
             )
         time.sleep(0.1)

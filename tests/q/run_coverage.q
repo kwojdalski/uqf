@@ -32,6 +32,8 @@
 \l src/integrations/data.q
 \l docs/man.q
 \l scripts/processes/torq_pipeline.q
+\l scripts/processes/torq_compress.q
+\l scripts/processes/torq_compress_survey.q
 \l scripts/processes/torq_metatables.q
 \l src/etl/init.q
 \l tests/lib/etl_test_doubles.q

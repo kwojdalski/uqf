@@ -47,7 +47,7 @@ def two_tables(tmp_path: Path, order: tuple[str, str]):
     (bundle / "tables.q").write_text("\n".join(tables[t] for t in order) + "\n")
     (bundle / "pb_general_ledger.q").write_text(
         ".qetl.job.stream.define[`pb_general_ledger;"
-        "`procname`subscribe_to`publishes`note!(`pb_ledger1;`symbol$();"
+        "`procname`subscribe_to`outputs`note!(`pb_ledger1;`symbol$();"
         f'`{"`".join(order)};"publishes both")];\n'
     )
     (bundle / "catalog.q").write_text("".join(f'.qcat.describe[`{t}]:"x";\n' for t in order))

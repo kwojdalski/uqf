@@ -1,12 +1,15 @@
 """A deployment end to end: the run, and the rollback when a stage fails, or
 the push is interrupted, after the previous release was stopped. What
---dry-run shows is plan.py's."""
+--dry-run shows is plan.py's.
+
+The report is handed to `on_result`, never printed here: the command prints
+it, as text or - with --json - in its one document (#2125)."""
 
 from __future__ import annotations
 
-import json
 import sys
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from uqs.deploy import bundled, components, converted_override, fetch, hdb, overrides
@@ -25,7 +28,22 @@ from uqs.stack.converted import ATTEMPT_VAR
 log = get_logger()
 
 
-def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) -> int:
+#: What a caller is handed the push's report through, when it ends.
+OnReport = Callable[[Report], None]
+
+
+def deploy(
+    cfg: Config,
+    remote: Transport,
+    *,
+    out=sys.stdout,
+    on_report: OnReport | None = None,
+    on_result: OnReport | None = None,
+) -> int:
+    """Push `cfg.artifact` to cfg's server; 0 when it deployed (or, as a dry
+    run, was planned). `out` takes a dry run's plan; `on_report` the report
+    of a push that ran, for the history; `on_result` the report it ended
+    with, a dry run's included - status `planned`."""
     local = fetch.resolve(cfg.artifact, repo=cfg.release_repo, root=repo_root())
     log.info("checking {}", local)
     pkg = load_artifact(local)
@@ -55,7 +73,7 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
         revision=pkg.manifest["revision"],
         artifact={"name": pkg.path.name, "sha256": pkg.sha256},
         dirty=pkg.manifest["dirty"],
-        host=cfg.host,
+        ssh=cfg.ssh,
         dest=cfg.dest,
         profile=cfg.profile,
         jobs=dep.selection.jobs,
@@ -64,7 +82,7 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
         live=cfg.live,
     )
 
-    log.info("preflight on {}{}", cfg.host, f" as {cfg.remote_user}" if cfg.remote_user else "")
+    log.info("preflight on {}{}", cfg.ssh, f" as {cfg.remote_user}" if cfg.remote_user else "")
     dep.check_sudo()
     facts = dep.preflight()
     report.previous_release = facts.get("current")
@@ -81,8 +99,21 @@ def deploy(cfg: Config, remote: Transport, *, out=sys.stdout, on_report=None) ->
     if cfg.dry_run:
         facts = {**facts, "hdb": hdb.planned(dep, pkg.manifest)}
         print(plan(cfg, pkg, rid, facts, dep, exceptions, report.components), file=out)
+        report.status, report.stage = "planned", "dry-run"
+        if on_result:
+            on_result(report)
         return 0
-    return _run(dep, cfg, pkg, rid, report, facts, out, on_report)
+    try:
+        code = _run(dep, cfg, pkg, rid, report, facts, on_report)
+    except BaseException:
+        # An interruption _run settled - rolled back, or deployed with its
+        # prune incomplete (#2174) - is shown before it goes on.
+        if on_result and report.status != "running":
+            on_result(report)
+        raise
+    if on_result:
+        on_result(report)
+    return code
 
 
 def _run(
@@ -92,8 +123,7 @@ def _run(
     rid: str,
     report: Report,
     facts: dict,
-    out,
-    on_report=None,
+    on_report: OnReport | None = None,
 ) -> int:
     dep.take_lock()
     release: str | None = None
@@ -112,6 +142,7 @@ def _run(
     prev_extra: list[str] = []
     stopped_previous = False
     started = False
+    activated = False
     try:
         bundled.install(dep, rid, report)
         log.info("transferring release {}", rid)
@@ -203,10 +234,13 @@ def _run(
         report.stage = "done"
         dep.write_report(release, report, required=True)
         dep.activate(rid)
+        # From here the push has succeeded: the new release is verified and
+        # `current`. Nothing after this may roll it back (#2174).
+        activated = True
         if cfg.keep is not None:
-            dep.beat()
-            report.pruned = _prune_after(dep, cfg.keep)
+            _prune_after(dep, report, cfg.keep)
     except DeployError as exc:
+        # never after activation: _prune_after catches every DeployError
         report.status = "failed"
         report.stage = exc.stage
         report.error = str(exc)
@@ -215,12 +249,14 @@ def _run(
             dep, release, started, stopped_previous, previous, (prev_profile, prev_extra)
         )
     except BaseException as exc:
+        if activated:
+            raise  # deployed; _prune_after recorded the prune as interrupted
         # Ctrl-C in the verify wait, or a bug's KeyError: the previous release
         # may already be down, so it is rolled back as a failed stage is, and
         # then the interruption goes on to the caller (#1664).
         report.status = "failed"
         report.stage = "interrupted"
-        report.error = ": ".join(filter(None, (type(exc).__name__, str(exc))))
+        report.error = _describe(exc)
         log.error("INTERRUPTED: {}", redact(report.error))
         report.rollback = _rollback(
             dep, release, started, stopped_previous, previous, (prev_profile, prev_extra)
@@ -232,19 +268,34 @@ def _run(
         dep.release_lock()
         if on_report:  # the workstation's deployment history (#956)
             on_report(report)
-    print(json.dumps(report.as_dict(), indent=2), file=out)
     return 0 if report.status == "deployed" else 1
 
 
-def _prune_after(dep: Deployment, keep: int) -> dict:
+def _prune_after(dep: Deployment, report: Report, keep: int) -> None:
     """--keep, once the release is current and the lock still held. The
     deployment has succeeded by then, so a prune that fails is reported, not
-    rolled back."""
+    rolled back - and one interrupted is reported, then the interruption goes
+    on: the push is still `deployed`, its prune incomplete (#2174)."""
     try:
-        return prune_locked(dep, keep)
+        dep.beat()
+        report.pruned = prune_locked(dep, keep)
     except DeployError as exc:
         log.warning("the deployment succeeded, but pruning old releases failed: {}", exc)
-        return {"prune": "failed", "error": redact(str(exc))}
+        report.pruned = {"prune": "failed", "keep": keep, "error": redact(str(exc))}
+    except BaseException as exc:
+        error = redact(_describe(exc))
+        log.error(
+            "deployed; prune incomplete: the new release is current and running, but pruning "
+            "old releases was interrupted ({}) - `uqs deploy prune --keep {}` finishes it",
+            error,
+            keep,
+        )
+        report.pruned = {"prune": "interrupted", "keep": keep, "error": error}
+        raise
+
+
+def _describe(exc: BaseException) -> str:
+    return ": ".join(filter(None, (type(exc).__name__, str(exc))))
 
 
 def _now() -> str:

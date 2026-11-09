@@ -35,6 +35,24 @@
 /      "every worker needs the same answer or logs become unreadable in
 /      aggregate" means in practice.
 / .
+/ PROCESS AND CHANNEL (#2274)
+/ .
+/ A record answers two different questions, and TorQ's line has a column for
+/ each: `proc` is WHICH PROCESS wrote it, and `id` is WHICH SUBSYSTEM it
+/ concerns - the channel (see .qetl.log.channels). This file used to put the
+/ worker or component name in both, so `proc` named a source rather than the
+/ process, and `id` named nothing a reader could select on. Now `proc` is the
+/ emitting process (TorQ's procname; outside TorQ, the runner's name -
+/ .qetl.log.process), and a call made through .qetl.log.ch carries a
+/ channel from the one declared list: every call goes through .qetl.log.ch,
+/ which refuses a name that is not declared. There is no id-first form, so a
+/ worker or source name can no longer pass as a category (#2279).
+/ .
+/ A channel FILTERS WHAT A READER SHOWS (`uqs logs --channel`). It does not
+/ stop a record being generated, and does not save the cost of rendering it:
+/ that is the level's job (.qetl.log.enabled). Per-channel verbosity is
+/ follow-up work, not a property of this list.
+/ .
 / WHY THIS WORKS WITHOUT TORQ LOADED
 / .
 / The ETL core is unit-tested standalone, where .lg does not exist. So the
@@ -51,6 +69,21 @@
 / which renames those three on their way into the file, so a log reads one
 / vocabulary whichever layer wrote the line.
 .qetl.log.levels:`TRACE`DEBUG`INFO`WARNING`ERROR
+
+/ The channels - the subsystems a record can concern - as the ONE declared
+/ list: .qetl.log.ch refuses a name that is not in it, uqs's `logs --channel`
+/ takes exactly these (generated into q_facts.LOG_CHANNELS), and the docs
+/ table is checked against it. A job's name or a window is a context FIELD,
+/ never a channel of its own.
+/   lifecycle  process and job start and stop, run and window completion
+/   ipc        connections, requests, responses, timeouts, retries
+/   source     source readiness, fetching, queries
+/   transform  normalisation, matching, calculations, rejected rows
+/   storage    writes, persistence, sorting, compression
+/   coverage   coverage updates, checkpoints, replay decisions
+/   eod        rollover, handover, reload coordination
+/   config     configuration, file loading, declarations
+.qetl.log.channels:`lifecycle`ipc`source`transform`storage`coverage`eod`config
 
 / The levels off unless a process switches them on, each with its own switch.
 .qetl.log.quiet:`TRACE`DEBUG
@@ -161,16 +194,42 @@
 / @private
 .qetl.log.torq_loaded:{[] @[{`l in key x};`.lg;{0b}]}
 
+/ The name a record gives as the process that wrote it when TorQ gives none:
+/ the runner script's file name without `.q` (run_backfill.q -> `run_backfill),
+/ unless the runner called .qetl.log.set_process. Never a worker's or a
+/ source's name - that is what a field is for.
+.qetl.log.standalone_name:`
+
+/ Name this process in the records it writes outside TorQ.
+/ @param name the runner's name, as a symbol
+/ @return name
+/ @eg .qetl.log.set_process`attached_backfill
+.qetl.log.set_process:{[name] .qetl.log.standalone_name::name; name}
+
+/ The process a record is attributed to: TorQ's procname when there is one
+/ (.qetl.run.proc_name, the one read of it in src/), else the runner's name.
+/ @return a symbol
+/ @eg .qetl.log.process[]
+.qetl.log.process:{[]
+    n:@[.qetl.run.proc_name;::;{[e] `}];
+    if[not null n; :n];
+    if[not null .qetl.log.standalone_name; :.qetl.log.standalone_name];
+    f:string @[value;`.z.f;`];
+    $[0=count f; `standalone; `$first "." vs last "/" vs f]}
+
 / Private: the transport. TorQ's .lg.l when loaded, stdout otherwise.
 / .
+/ `id` is the channel: TorQ's `id` column. `proc` is the emitting process, never the id.
 / Level gating outside TorQ mirrors TorQ's own default: DEBUG is suppressed
 / unless debug[] was called, TRACE unless trace[] was, everything else prints.
 / That way a test that asserts "this DEBUG line was not emitted" gets the same
-/ answer whether or not torq.q happens to be loaded.
+/ answer whether or not torq.q happens to be loaded. The stdout line is
+/ time|level|id|message and names no process: outside TorQ a log is one
+/ process's own file (the runner's stdout), so the file says whose it is.
 / @private
 .qetl.log.emit:{[level;id;msg]
     $[.qetl.log.torq_loaded[];
-        .lg.l[level;`etl;id;id;msg;()!()];
+        .lg.l[level;`etl;.qetl.log.process[];id;msg;()!()];
       not .qetl.log.switched level;
         ::;
       -1 "|" sv string[(.z.p;level;id)],enlist msg]}
@@ -290,23 +349,36 @@
 .qetl.log.request_seq:0
 .qetl.log.next_request:{[] .qetl.log.request_seq::.qetl.log.request_seq+1; .qetl.log.request_seq}
 
-/ The five levels. `id` is the worker or component name - it becomes
-/ TorQ's `id` column, so `select from logmsg where id=`demo_deals_backfill`
-/ works on a published log.
-/ @param id the worker or component, as a symbol
+/ ------------------------------------------------------------ CHANNELS
+/ .
+/ The five levels, each taking (channel; text; fields). The channel must be one of .qetl.log.channels and
+/ is refused otherwise - at the call site, so a test that reaches the line
+/ finds a misspelling. The worker, source or window the line is about is a
+/ FIELD (or the scoped context), not an argument.
+
+/ Private: refuse a channel that is not declared.
+/ @param channel the channel, as a symbol
+/ @return channel
+/ @throws a symbol naming the channel and the declared list
+/ @private
+.qetl.log.require_channel:{[channel]
+    if[not channel in .qetl.log.channels;
+        '"unknown log channel ",.Q.s1[channel],": one of ",", " sv string .qetl.log.channels];
+    channel}
+
+/ err records an error. It does NOT throw and does NOT exit - TorQ's .lg.e does
+/ both depending on .proc state, right for an init failure and wrong for a
+/ worker recording that one window failed and moving on. A worker that wants
+/ to abort throws itself; this only records.
+/ @param channel one of .qetl.log.channels
 / @param text a short fixed message - what happened, not the values
 / @param fields a dict of the values, rendered k=v after the text
-/ @eg .qetl.log.info[`demo_deals_backfill;"window published";
-/        `range_from`range_to`rows!(2026.09.11D00:00;2026.09.12D00:00;1234)]
-.qetl.log.trc:{[id;text;fields]  .qetl.log.line[`TRACE;id;text;fields]}
-.qetl.log.dbg:{[id;text;fields]  .qetl.log.line[`DEBUG;id;text;fields]}
-.qetl.log.info:{[id;text;fields] .qetl.log.line[`INFO;id;text;fields]}
-.qetl.log.warn:{[id;text;fields] .qetl.log.line[`WARNING;id;text;fields]}
-
-/ Log an error. Does NOT throw and does NOT exit - TorQ's .lg.e does both
-/ depending on .proc state, which is right for an init failure and wrong
-/ for a worker recording that one window failed and moving on. A
-/ worker that wants to abort throws itself; this only records.
-.qetl.log.err:{[id;text;fields]  .qetl.log.line[`ERROR;id;text;fields]}
+/ @throws if channel is not declared
+/ @eg .qetl.log.ch.info[`storage;"partition swapped";enlist[`rows]!enlist 3]
+.qetl.log.ch.trc:{[channel;text;fields]  .qetl.log.line[`TRACE;.qetl.log.require_channel channel;text;fields]}
+.qetl.log.ch.dbg:{[channel;text;fields]  .qetl.log.line[`DEBUG;.qetl.log.require_channel channel;text;fields]}
+.qetl.log.ch.info:{[channel;text;fields] .qetl.log.line[`INFO;.qetl.log.require_channel channel;text;fields]}
+.qetl.log.ch.warn:{[channel;text;fields] .qetl.log.line[`WARNING;.qetl.log.require_channel channel;text;fields]}
+.qetl.log.ch.err:{[channel;text;fields]  .qetl.log.line[`ERROR;.qetl.log.require_channel channel;text;fields]}
 
 \d .

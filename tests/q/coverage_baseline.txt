@@ -32,16 +32,9 @@
 .qetl.io.odbc.with_connection
 .qpipe.source.demo_events.query
 .qpipe.source.duckdb_deals.query
-.qpipe.source.hdb_executions.query
 .qpipe.source.upstream_trades.query
-# hdb_orders.query reads orders over IPC from a live HDB (#1396), as hdb_executions does
+# hdb_orders.query reads orders over IPC from a live HDB (#1396)
 .qpipe.source.hdb_orders.query
-# hdb_executions.query reads executions over IPC from a live HDB (#946)
-# hdb_crypto_book.query reads crypto_book over IPC from a live HDB (#1222), as hdb_executions does
-# hdb_market_data.query reads market_data over IPC from a live HDB (#1397), as hdb_crypto_book does
-.qpipe.source.hdb_crypto_book.query
-.qpipe.source.hdb_executions.query
-.qpipe.source.hdb_market_data.query
 
 # --- Needs a running TorQ process --------------------------------------
 # .qtorq is the TorQ block library and .qpipe.job the subscriber processes. Both
@@ -66,6 +59,9 @@
 .qtorq.feed_handle
 .qtorq.load_uqf
 .qtorq.safe_timer
+# Switch on TorQ's .sub.AUTORECONNECT and call .sub.subscribe on a restarted plant:
+# entered by python/uqs/tests/test_stream_resubscribe_stack.py on a live stack (#2201).
+.qtorq.sub_arm_resubscribe
 .qtorq.subscribe_etl
 .qtorq.subscribe_tables
 .qtorq.wait_for_tickerplant
@@ -99,3 +95,7 @@
 # test_attached_readers.q, and the whole of it, on real q processes with a fake HDB reader, by
 # python/uqs/tests/test_attach_backfill_run.py and test_attach_backfill_remote.py.
 .qdev.attached.reload_one
+
+# .qetl.io.sort_files runs only on PeachQ (the KDB-X path is xasc over the partition), and
+# coverage is measured on KDB-X. test_io_hdb_crash.q's finish tests enter it on PeachQ (#2285).
+.qetl.io.sort_files

@@ -56,7 +56,7 @@
 
 \d .
 
-.qetl.job.stream.define[`arbitrage;`procname`subscribe_to`publishes`on_batch`note!(
+.qetl.job.stream.define[`arbitrage;`procname`subscribe_to`outputs`on_batch`note!(
     `arbitrage1;
     enlist `superbook;
     enlist `arbitrage;

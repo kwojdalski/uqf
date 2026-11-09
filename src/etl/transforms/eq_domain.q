@@ -3,9 +3,9 @@
 / WHAT THIS IS. What the markout core (markout_core.q, #1929) needs to know
 / about an EQUITY and nothing else: a domain dictionary (resolve, convert, keys,
 / validate, available). It owns no queue, no clock rule, no horizon expansion
-/ and no dataset - those are the core's, and there is no equity dataset or job
-/ yet, because no equity fills source exists (#1939). docs/architecture/
-/ markout-contract.md is the contract; fx_domain.q is the FX counterpart.
+/ and no dataset - those are the core's. The dataset and its jobs are
+/ eq_markout_outputs.q's (#1981). docs/architecture/markout-contract.md is the
+/ contract; fx_domain.q is the FX counterpart.
 / .
 / THE RESOLVER. An equity is a single leg: its reference is the book of its
 / own symbol, never inverted. Its symbol does not spell its currency (AAPL,
@@ -146,7 +146,8 @@
 / @eg count .qpipe.transform.eq_domain.rows_for[([] sym:`A``B; n:1 2 3);`A]  ->  2
 .qpipe.transform.eq_domain.rows_for:{[tbl;s] tbl where (null tbl`sym) | (tbl`sym)=s}
 
-/ Do both instants lie in one session of the instrument: open_time <= t0 and t1 < close_time.
+/ Do both instants lie in one session of the instrument: open_time <= lo and hi < close_time,
+/ where lo and hi are the earlier and the later of t0 and t1 (a negative horizon has t1 < t0).
 / @param sessions the sessions table
 / @param s the instrument
 / @param t0 the execution instant
@@ -155,11 +156,14 @@
 / @eg .qpipe.transform.eq_domain.in_session[([] sym:enlist `; open_time:enlist 2026.09.17D13:30:00; close_time:enlist 2026.09.17D20:00:00);`A;2026.09.17D19:59:50;2026.09.17D19:59:55]  ->  1b
 .qpipe.transform.eq_domain.in_session:{[sessions;s;t0;t1]
     r:.qpipe.transform.eq_domain.rows_for[sessions;s];
-    started:(r`open_time)<=t0;
-    unended:(r`close_time)>t1;
+    lo:t0&t1;
+    hi:t0|t1;
+    started:(r`open_time)<=lo;
+    unended:(r`close_time)>hi;
     any started & unended}
 
-/ Does a halt overlap the closed span [t0; t1]: halt_from <= t1 and halt_to > t0.
+/ Does a halt overlap the closed span [lo; hi], lo and hi the earlier and the later of t0 and
+/ t1 (a negative horizon has t1 < t0): halt_from <= hi and halt_to > lo.
 / @param halts the halts table
 / @param s the instrument
 / @param t0 the execution instant
@@ -168,8 +172,10 @@
 / @eg .qpipe.transform.eq_domain.halted[([] sym:enlist `A; halt_from:enlist 2026.09.17D15:00:10; halt_to:enlist 2026.09.17D15:00:20);`A;2026.09.17D15:00:00;2026.09.17D15:00:30]  ->  1b
 .qpipe.transform.eq_domain.halted:{[halts;s;t0;t1]
     r:.qpipe.transform.eq_domain.rows_for[halts;s];
-    begun:(r`halt_from)<=t1;
-    unlifted:(r`halt_to)>t0;
+    lo:t0&t1;
+    hi:t0|t1;
+    begun:(r`halt_from)<=hi;
+    unlifted:(r`halt_to)>lo;
     any begun & unlifted}
 
 / The availability hook of the domain dictionary: a boolean per (execution,
@@ -188,11 +194,20 @@
 / The equity domain as the core takes it: resolver, conversion, the spec keys it
 / owns, their validation and the calendar's availability rule. No attribution:
 / a single-leg instrument has no legs to split a move over.
-.qpipe.transform.eq_domain.domain:`resolve`convert`keys`validate`available!(
+/ The revision of the rules that price an equity: its declared quote currency,
+/ the session and halt availability rule, the conversion pair. Recorded by the
+/ configuration snapshot (#1999); the calendar itself is a spec key and is recorded
+/ with the spec.
+.qpipe.transform.eq_domain.revision:`eq_r1
+
+.qpipe.transform.eq_domain.domain:`resolve`convert`keys`validate`available`name`revision`datasets!(
     .qpipe.transform.eq_domain.resolve;
     .qpipe.transform.eq_domain.convert;
     `quote_ccy`quote_ccys`benchmark`sessions`halts;
     .qpipe.transform.eq_domain.complete;
-    .qpipe.transform.eq_domain.available)
+    .qpipe.transform.eq_domain.available;
+    `eq;
+    .qpipe.transform.eq_domain.revision;
+    enlist `eq_markout)
 
 \d .

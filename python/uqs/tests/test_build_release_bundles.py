@@ -164,7 +164,7 @@ def test_an_installer_refusal_fails_the_build_with_its_reason(tmp_path):
 STREAM = """\
 / piggy_spread.q - a sidecar bundle's streaming job, for the build test.
 .qetl.job.stream.define[`piggy_spread;
-    `procname`subscribe_to`publishes`note!(`piggy_spread1;enlist `quote;enlist `piggy_quote;
+    `procname`subscribe_to`outputs`note!(`piggy_spread1;enlist `quote;enlist `piggy_quote;
         "copies quotes into piggy_quote")];
 \\d .qpipe.job.piggy_spread
 upd:{[t;x] .qpipe.job.piggy_spread.publish[`piggy_quote;x]}

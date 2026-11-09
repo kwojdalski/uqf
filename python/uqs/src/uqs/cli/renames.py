@@ -13,6 +13,10 @@ A rename whose new spelling depends on the old one's value (`job install
 --mode symlink` -> `--link`) cannot be rewritten by name: it keeps the old
 option as a hidden one, `old_spelling()`, which the command reads and warns
 about itself.
+
+A rename from #2237 on keeps NO old spelling: `refused()` makes the old one a
+usage error naming the new one, so nothing has two spellings even for a
+release.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import typer
+from typer._click.exceptions import UsageError
 from typer.core import TyperCommand
 
 from uqs.logger import get_logger
@@ -67,6 +72,19 @@ BASE_PORT = {"--port": "--base-port"}
 #: `--attach NAME` was a verb naming a noun: the saved attachment is
 #: `--attachment NAME` on every command that reads or writes one (#1855).
 ATTACHMENT = {"--attach": "--attachment"}
+
+
+#: "Partition" is an HDB date partition (#2239), as kdb+ has it; the coverage
+#: slice a bounded worker fills, which `data diff` and `job new` called
+#: `--partition`, is `--slice`. Refused, not rewritten (`refused()`).
+SLICE = {
+    "--partition": "`--partition` is now `--slice` (the coverage slice); a date partition "
+    "is `--date` (#2239)",
+}
+SLICE_COLUMN = {
+    "--partition-column": "`--partition-column` is now `--slice-column`, the column holding "
+    "--slice (#2239)",
+}
 
 
 def warn_renamed(old: str, new: str) -> None:
@@ -235,3 +253,41 @@ def old_spelling(new: str, *old: str) -> Any:
     new spelling depends on its value and so `renamed()` cannot map it; the
     command reads it and calls `warn_renamed` with the spelling to use."""
     return typer.Option(*old, hidden=True, help=f"Renamed: {new}")
+
+
+def refused(
+    spellings: Mapping[str, str],
+    mark: type[TyperCommand] = TyperCommand,
+    *,
+    extra_argument: str | None = None,
+) -> type[TyperCommand]:
+    """`cls=` for a command an old spelling is REFUSED on, not rewritten: this
+    repository keeps no compatibility (#2239), so `--partition` on `data diff`
+    is an error that names `--slice`, never a second way to say it. `spellings`
+    maps each old option (`--partition`, or `--partition=VALUE`) to the
+    message, which names the new spelling. `extra_argument` is the message
+    for a positional the command no longer takes (`data migrate TABLE DATE`,
+    now `--date`), given in place of Click's "unexpected extra argument".
+    Nothing after `--` is an option. `mark` is the command's safety class, as
+    for `renamed()`; the two compose: `renamed(R, refused(S, ChangesState))`."""
+
+    class Refused(TyperCommand):
+        #: old spelling -> its refusal, read by the tests
+        refusals: dict[str, str] = {}
+
+        def parse_args(self, ctx, args):
+            for arg in [] if ctx.resilient_parsing else args:
+                if arg == "--":
+                    break
+                message = spellings.get(arg.partition("=")[0])
+                if message is not None:
+                    raise UsageError(message, ctx=ctx)
+            try:
+                return super().parse_args(ctx, args)
+            except UsageError as exc:
+                if extra_argument and "unexpected extra argument" in exc.message:
+                    raise UsageError(extra_argument, ctx=ctx) from None
+                raise
+
+    Refused.refusals = dict(spellings)
+    return Refused if mark is TyperCommand else type("Refused", (Refused, mark), {})

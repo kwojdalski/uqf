@@ -123,7 +123,7 @@ def test_publishing_without_columns_is_refused():
 
 
 def test_columns_without_publishing_is_refused():
-    with pytest.raises(UqsError, match="no --publishes"):
+    with pytest.raises(UqsError, match="no --outputs"):
         jobs.streaming_job("j", ["trades"], None, "px:float")
 
 
@@ -134,7 +134,7 @@ def test_a_scaffolded_worker_declares_its_source_and_dataset():
     plan = backfill.bounded_worker("fx_rates", "fx_rates", "sym:symbol, mid:float")
     worker = _body(plan, "fx_rates_backfill.q")
     assert ".qetl.job.bounded.define[`fx_rates_backfill;" in worker
-    assert "`fx_rates;`fx_rates;1D;" in worker
+    assert "`fx_rates;enlist `fx_rates;1D;" in worker
 
 
 def test_a_scaffolded_fixture_carries_a_row():
@@ -407,9 +407,9 @@ def test_a_job_publishing_nothing_is_not_sent_to_the_catalog():
 
 
 def test_a_bounded_worker_is_told_about_its_dataset():
-    """A backfill's new table is its `dataset`, not a `publishes`, so it needs
-    the note by a different name - and the first version of this only wired it
-    into the streaming path."""
+    """A backfill's new table is its dataset (the worker's one output), not a
+    published table, so it needs the note by a different name - and the first
+    version of this only wired it into the streaming path."""
     plan = backfill.bounded_worker("fxprobe", "fx_probe", "sym:symbol, mid:float")
     notes = " ".join(plan.notes)
     assert "uqs_catalog.q" in notes and "fx_probe" in notes
@@ -428,7 +428,7 @@ def _writes_to(plan: jobs.ScaffoldPlan, path: Path) -> bool:
 
 @pytest.mark.parametrize("publishes", ["My_Table", "a b", "1st"])
 def test_a_published_table_name_is_checked_like_every_other_name(publishes):
-    """It was not, and `--publishes a,b` wrote `enlist `a,b` into the job and
+    """It was not, and `--outputs a,b` wrote `enlist `a,b` into the job and
     `a,b:([]...)` into plant_tables.q - q that does not load."""
     with pytest.raises(UqsError, match="published table"):
         jobs.streaming_job("j", ["quote"], publishes, "v:float", known_tables=_PLANT)
@@ -597,5 +597,5 @@ def test_a_trailing_newline_does_not_pass_as_part_of_a_name():
 
 
 def test_a_period_refuses_a_trailing_newline():
-    with pytest.raises(UqsError, match="must be a q timespan"):
+    with pytest.raises(UqsError, match="or a q timespan"):
         jobs.check_period("0D00:00:01\n")

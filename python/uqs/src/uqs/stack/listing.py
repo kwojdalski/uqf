@@ -11,18 +11,15 @@ from uqs.cells import Shown
 from uqs.interpreter import InterpreterStatus, interpreter_status
 from uqs.logger import get_logger
 from uqs.model import profiles
-from uqs.model.declarations import declaration_calls, symbols
+from uqs.model.declarations import declaration_calls, declared_outputs, symbols
 from uqs.model.dependencies import dependency_rows, inputs_by_process, outputs_by_process
 from uqs.model.jobs import job_rows
 from uqs.model.registry import PIPELINES
 from uqs.paths import WORKER_DIR, UqsError, UqsPaths
 from uqs.stack import attach_state, backfill_status, runtime_report
 from uqs.stack.env import build_env, with_interpreter
-from uqs.stack.procs import (
-    _read_overrides,
-    effective_process_rows,
-    resolve_process_config,
-)
+from uqs.stack.placeholders import resolve_process_config
+from uqs.stack.procs import _read_overrides, effective_process_rows
 from uqs.stack.runtime import query
 from uqs.stack.site_fields import process_csv_fields
 
@@ -42,14 +39,12 @@ def _worker_datasets(paths: UqsPaths) -> dict[str, str]:
     A worker writes through its IO manager, not the tickerplant, so it has no
     publish edge and `outputs_by_process` has nothing for it - yet the dataset
     is exactly what it produces. Read from the `.qetl.job.bounded.define` literal, the name
-    `uqs job new --dataset` gives it and its coverage is recorded under.
+    `uqs job new --outputs` gives it and its coverage is recorded under.
     """
     out: dict[str, str] = {}
     for path in sorted((paths.repo_root / WORKER_DIR).glob("*.q")):
         for fn, name, fields in declaration_calls(path.read_text()):
-            if fn != "qetl.job.bounded.define" or not (
-                dataset := symbols(fields.get("dataset", ""))
-            ):
+            if fn != "qetl.job.bounded.define" or not (dataset := declared_outputs(fields, name)):
                 continue
             procname = symbols(fields["procname"])[0] if "procname" in fields else f"{name}1"
             out[procname] = dataset[0]

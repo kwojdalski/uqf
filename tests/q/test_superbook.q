@@ -1,7 +1,7 @@
 / Direct source normalization, aggregation and arbitrage as one data path.
 
 .qt.qpipe.job.superbook.d:{[n] 2026.09.19D10:00:00.000000000+n*0D00:00:01}
-.qt.qpipe.job.superbook.empty:{[] `sym`source xkey 0#.qpipe.job.market_data.market_data}
+.qt.qpipe.job.superbook.empty:{[] 0#.qpipe.job.superbook.books}
 .qt.qpipe.job.superbook.fixtures:{[] ([] sym:`EURUSD`EURUSD; source:`LP_A`LP_B; market:`fx`fx; source_time:.qt.qpipe.job.superbook.d[0 0];
     bid_prices:(1.101 1.098;1.099 1.097); bid_sizes:(100 200f;500 600f);
     ask_prices:(1.103 1.104;1.100 1.102); ask_sizes:(200 300f;60 70f); clock:`receipt`receipt)}
@@ -107,14 +107,15 @@
 
 .qt.qpipe.job.superbook.test_a_row_far_beyond_the_lead_is_refused_and_logged:{[t]
     far:update source_time:.z.p+0D00:01:40 from 1#.qt.qpipe.job.superbook.fixtures[];
-    saved:.qetl.log.warn;
-    `.qetl.log.warn set {[id;text;fields] `.qt.qpipe.job.superbook.logged set (id;text;fields);};
+    saved:.qetl.log.ch.warn;
+    `.qetl.log.ch.warn set {[channel;text;fields] `.qt.qpipe.job.superbook.logged set (channel;text;fields);};
     `.qpipe.job.superbook.books set .qt.qpipe.job.superbook.empty[];
     .qetl.job.stream.wire[`superbook;{[t;x]}];
-    @[{.qpipe.job.superbook.on_batch[`market_data;x]; 1b};far;{[saved;e] `.qetl.log.warn set saved; 'e}[saved]];
-    `.qetl.log.warn set saved;
+    @[{.qpipe.job.superbook.on_batch[`market_data;x]; 1b};far;{[saved;e] `.qetl.log.ch.warn set saved; 'e}[saved]];
+    `.qetl.log.ch.warn set saved;
     .qunit.assertEquals[count .qpipe.job.superbook.books;0;"a row 100s ahead is still refused"];
-    .qunit.assertEquals[.qt.qpipe.job.superbook.logged 0;`superbook;"the refusal is logged, not silent"];
+    .qunit.assertEquals[.qt.qpipe.job.superbook.logged 0;`transform;"the refusal is logged, not silent, on the transform channel"];
+    .qunit.assertEquals[((.qt.qpipe.job.superbook.logged 2)`job);`superbook;"the job is a field, not the category"];
     .qunit.assertEquals[(.qt.qpipe.job.superbook.logged 2)`sources;enlist `LP_A;"naming the source whose clock leads"]};
 
 .qt.qpipe.job.superbook.test_pairs_and_inverse_pairs_are_kept_separate:{[t]

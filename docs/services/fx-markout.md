@@ -24,10 +24,10 @@ contract](../architecture/markout-contract.md)) with FX's between them.
 
 Nothing new is invented: the existing contracts are sufficient.
 
-  | Input         | Columns the calculation reads                                                                                      | Clock         |
-  | ---           | ---                                                                                                                | ---           |
-  | `executions`  | `source_time`, `venue`, `sym`, `side` (+1 buy, -1 sell), `size`, `price`, `fill_id`, `clock`                       | `source_time` |
-  | `market_data` | `source_time`, `sym`, `source`, `bid_prices`, `bid_sizes`, `ask_prices`, `ask_sizes`, `clock` (a snapshot per row) | `source_time` |
+  | Input         | Columns the calculation reads                                                                                               | Clock         |
+  | ---           | ---                                                                                                                         | ---           |
+  | `executions`  | `source_time`, `venue`, `sym`, `side` (+1 buy, -1 sell), `size`, `price`, `fill_id`, `clock`                                | `source_time` |
+  | `market_data` | `source_time`, `sym`, `source`, `bid`, `ask`, `clock` (the flat top of a snapshot per row, arranged: see [Memory](#memory)) | `source_time` |
 
 The plant's receipt `time` is **not** an input, so it cannot leak into the
 clock. An execution is identified by `(venue; fill_id)`.
@@ -55,10 +55,11 @@ One long table, one row per `(execution, horizon, component)`:
 `pips` is `pip_factor × move`, where `move` (the contract's column) is the
 signed move in price units. `pip_value` is the money one pip is worth per trade
 in the quote currency, `size ÷ pip_factor`. `quote_amount` is `size × move`;
-`report_amount` is that in `report_ccy` (USD in the jobs) at the book of the
-execution's instant. A quote currency with no declared rate in the spec's
-`rates` is `no_rate`: the pips and `quote_amount` are kept and `report_amount`
-is null. A site declares the rate book each of its currencies converts through.
+`report_amount` is that in the snapshot's `report_ccy` (USD in the jobs) at the
+book of the execution's instant. A quote currency with no declared rate in the
+spec's `rates` is `no_rate`: the pips and `quote_amount` are kept and
+`report_amount` is null. A site declares the rate book each of its currencies
+converts through.
 
 So `total = execution + Σ leg + residual` for every `(execution, horizon)`.
 Reference and allocation are priced along one route, so the residual is float
@@ -83,14 +84,16 @@ route is the chain available, and a test holds the calculation's allocation to
 `.qf.exec.cross_markout_attribution` there.
 
 **Reference price.** Per leg and per source, the latest snapshot at or before
-the instant; level 0 only (`.qf.mkt.top_sides`: sizes decide whether a level is
+the instant; level 0 only (the flat `bid` and `ask` market_data stores, which
+are `.qf.mkt.top_sides` taken at write time: sizes decide whether a level is
 usable, never what the price is, so there is no depth sweep). A source that has
 withdrawn a side contributes nothing on it, and does not fall back to an older
 book. Across sources, the best bid and best ask among those no older than
-`max_age` (`.qf.mkt.best_across_venues`). `max_age` defaults to
-`.qf.mkt.reference_max_age` (5s), the age `crypto_markout` and `posbook` use:
-one definition of how stale a reference may be. Both the live jobs and the
-`hdb_fx_markouts*` backfills score with the job spec's `max_age`
+`max_age` - reference variant #1 (`.qetl.reference`, equal bit for bit to
+`.qf.mkt.best_across_venues`; the spec's `reference` key names another).
+`max_age` defaults to `.qf.mkt.reference_max_age` (5s), the age `crypto_markout`
+and `posbook` use: one definition of how stale a reference may be. Both the live
+jobs and the `hdb_fx_markouts*` backfills score with the job spec's `max_age`
 (`.qpipe.transform.fx_markout_outputs.job_spec`), and the jobs pass the same
 value to their horizon declaration, so a source that stopped quoting neither
 sets a price nor is kept in the book history. A leg whose every source is older
@@ -189,7 +192,7 @@ deduplication and expiry are the horizon kind's. Neither is in a start profile
   | `horizon`, `lookback`          | 10s, 1s                                  | the furthest horizon; the -1s horizon reaches one second back                                                     |
   | `by`, `retain_by`              | `sym`, `sym` + `source`                  | readiness waits on a leg; eviction keeps each source's last book of a leg                                         |
   | `identity`, `remember`         | `venue` + `fill_id`, 1 day               | a redelivery before scoring replaces the pending execution; one scored within a day is dropped                    |
-  | `max_lateness`                 | 30s                                      | how late an execution may arrive and still find its books; bounds the history (the kind's default is a day)       |
+  | `lateness`                     | 30s                                      | how late an execution may arrive and still find its books; bounds the history (the kind's default is a day)       |
   | `expire_after`                 | 5m10s                                    | an execution whose books never cover it is given up on, with the reason, in `.qpipe.job.<name>.expired`           |
 
 The horizons are `-1s, 0, +1s, +10s` (`job_spec` in
@@ -211,9 +214,9 @@ coverage.
 Coverage is per source: every source with a book within `max_age` of the
 furthest horizon must have advanced to it, not just the first to pass it. The
 source wait and the reach back to the most negative horizon each last only until
-`max_lateness` after the horizon on the plant clock; then a silent source, or
-books that start inside the lookback, leave those horizons `unavailable` as a
-refill does, rather than holding or dropping the execution.
+`lateness` after the horizon on the plant clock; then a silent source, or books
+that start inside the lookback, leave those horizons `unavailable` as a refill
+does, rather than holding or dropping the execution.
 
 Under the same rule a live job and a refill can differ in one place only: an
 execution whose books never cover it is **not scored** live (and sits in
@@ -245,23 +248,41 @@ an idempotent replace in the HDB.
 ## Moving to the contract's columns (#1935)
 
 `fx_markout` and `fx_markout_wide` gained the contract's columns: `clock`,
-`price`, `quote_ccy`, `ref_t0`, `ref_t1`, `move`, `quote_amount`, `report_ccy`,
-`rate`, `rate_source`, `rate_sym`, `rate_time`, `rate_timing`, `report_amount`
-and `contract_version`, plus FX's `pip_value`. The core columns keep their
-relative order; FX's own sit between them. Both workers declare `revision` 1, so
-every window is planned again under `<release>@r1` and the new columns are
-written.
+`price`, `quote_ccy`, `ref_t0`, `ref_t1`, `move`, `quote_amount`, `rate`,
+`rate_source`, `rate_sym`, `rate_time` and `report_amount`, plus FX's
+`pip_value` and `config_id` (below). The core columns keep their relative order;
+FX's own sit between them. Both workers declare `revision` 1, so every window is
+planned again under `<release>@r1` and the new columns are written.
 
 History is filled, not recomputed. `fill_hdb_partitions.q` (the repair behind
 `uqs data check --apply`) adds each missing column to every partition and
 derives what the stored rows already say: `clock` is `unknown` (no stored fill
-says whose clock it was scored on), `contract_version` is 1, `quote_ccy` is the
-pair's quote leg, `move` is `pips ÷ pip_factor`, `pip_value` is
-`size ÷ pip_factor`, `quote_amount` is `size × move`, and in the long table
-`price`, `ref_t0` and `ref_t1` are read off the `total` and `execution` rows of
-the same `(execution, horizon)`. `report_ccy`, the rate columns and
-`report_amount` stay null: no rate was ever declared for a stored row. A refill
-under `revision` 1 replaces a window with rows that carry every column.
+says whose clock it was scored on), `quote_ccy` is the pair's quote leg, `move`
+is `pips ÷ pip_factor`, `pip_value` is `size ÷ pip_factor`, `quote_amount` is
+`size × move`, and in the long table `price`, `ref_t0` and `ref_t1` are read off
+the `total` and `execution` rows of the same `(execution, horizon)`. The rate
+columns and `report_amount` stay null: no rate was ever declared for a stored
+row. A refill under `revision` 1 replaces a window with rows that carry every
+column.
+
+## The configuration a row was produced under (#1999)
+
+A row does not repeat `contract_version`, `rate_timing` or `report_ccy`. It
+carries `config_id`, and the write-once snapshot that id names holds those three
+with the horizons, `max_age`, the declared rates, the FX convention and
+tolerance and the revisions of the code and of the pair rules.
+`uqs data snapshot list --dataset fx_markout` lists them and
+`uqs data snapshot show ID` prints one. The jobs record their snapshot before
+they score, and a batch naming a snapshot that is not on disk is held, so a row
+is never visible without it. See [the markout
+contract](../architecture/markout-contract.md#configuration-snapshots).
+
+History written before snapshots held the three columns.
+`uqs data check --apply` (it asks first) records one legacy snapshot per
+distinct triple in each partition, writes `config_id` and drops the three
+columns; a partition older than the columns reads as contract version 1 with the
+rate timing and reporting currency unknown. The bootstrap fill never does this
+on its own.
 
 ## The bounded twins
 
@@ -288,3 +309,35 @@ fixture, each with its own status directory and destination HDB, and reads
    `` `your_table!`your_transform ``.
 3. Nothing else. The calculation, the layouts, the jobs and the horizon engine
    are unchanged.
+
+## Memory
+
+A twin's memory grows with its executions, never with the market. `market_data`
+can run to tens of terabytes, and the twin does not select it into its heap: the
+as-of join runs where the partitions are memory-mapped and only the books the
+executions are priced against come back.
+
+- **Flat top of book.** Every `market_data` row carries `bid` and `ask`, the
+  level-0 sides as plain floats (`.qetl.plant.with_flat`, written by every
+  mapping), and `rid`, its position in the partition. The depth columns stay on
+  disk, mapped and untouched: no markout reads a ladder.
+- **Sorted for an on-disk `aj`.** A partition is sorted by `sym`, `source`,
+  `source_time` with `p#` on `sym`: uqf's own finish and TorQ's end-of-day sort
+  (`scripts/torqconfig/sort.csv`, with `scripts/processes/uqs_row_ids.q`
+  numbering the rows after it) both write it, and `uqs data compress --report`
+  names a partition that is not.
+- **One date at a time.** `.qetl.mapped.tob_at`, run by the process that maps
+  the partitions (hdb1 loads it), reads each date with
+  `select ... from market_data where date=d` - the date and nothing else, so
+  every column stays mapped - and `aj`s the executions' probes (each leg at the
+  execution and at each horizon) against it, then against the earlier dates for
+  a source that was quiet across midnight. The result, one row per distinct
+  matched book, is what comes back to the worker.
+- **The core checks, it never sorts.** `markout_core.calc` refuses a top of book
+  that is not sorted and attributed (`.qetl.mapped.require_arranged`);
+  `markout_core.score` arranges a small in-memory buffer first (the live job's),
+  and passes an arranged table - what a source reads - through untouched.
+
+`scripts/gates/check.py markout-mapped` refuses a markout file that selects
+`market_data` with a `where` beyond the date, or names a depth column.
+`docs/architecture/markout-memory.md` has the design and the measurements.

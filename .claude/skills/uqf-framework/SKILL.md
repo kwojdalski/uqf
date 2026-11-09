@@ -223,8 +223,10 @@ Apply the rules below. Each cites the file that holds or enforces it.
 
 ## Logging (G)
 
-- **G1** Log through `.qetl.log.info|warn|err|dbg|trc[id;text;fields]`, where
-  `fields` is a dict (`src/etl/core/log.q`). Not `-1`, `0N!` or `.lg` (L1).
+- **G1** Log through `.qetl.log.ch.info|warn|err|dbg|trc[channel;text;fields]`,
+  where `channel` is one of `.qetl.log.channels` and `fields` is a dict that
+  carries the worker, source or job name (`src/etl/core/log.q`). Not `-1`, `0N!`
+  or `.lg` (L1).
 - **G2** DEBUG is per process, switched on at runtime with
   `uqs query <proc> ".qetl.log.debug 1b"`. A backfill takes the global `--debug`
   (`uqs --debug job backfill ...`), or `--trace` for every source query. Never

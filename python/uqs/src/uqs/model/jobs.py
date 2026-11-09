@@ -18,7 +18,13 @@ from pathlib import Path
 from typing import Any
 
 from uqs.cells import Shown
-from uqs.model.declarations import declaration_calls, reaction_calls, read_file_text, symbols
+from uqs.model.declarations import (
+    declaration_calls,
+    declared_outputs,
+    reaction_calls,
+    read_file_text,
+    symbols,
+)
 from uqs.model.kinds import LISTED_KIND, REACTION
 from uqs.model.pipeline import PipelineKind
 from uqs.model.producers import BOUNDED, processes_by_table
@@ -62,7 +68,7 @@ def job_rows(repo_root: Path) -> list[dict[str, Any]]:
                     sources = symbols(fields.get("source", ""))
                     reads = Shown(sources, ", ".join(f"source {s}" for s in sources))
                     part = symbols(fields.get("partition", ""))
-                    datasets = symbols(fields.get("dataset", ""))
+                    datasets = declared_outputs(fields, decl.name)
                     shown = ", ".join(datasets) + (f" [{part[0]}]" if part else "")
                     writes = Shown(datasets, shown)
                 else:
@@ -93,7 +99,7 @@ def job_rows(repo_root: Path) -> list[dict[str, Any]]:
                     # No process of its own: it runs in whichever publishes.
                     "procname": ", ".join(producers.get(r.dataset, [])) or Shown(None, "-"),
                     "reads": [r.dataset],
-                    "writes": list(r.writes),
+                    "writes": list(r.outputs),
                     "starts": "triggered",
                     "state": "scaffolded" if SCAFFOLD_MARKER in text else "written",
                     "file": str(path.relative_to(repo_root)),

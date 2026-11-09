@@ -93,8 +93,8 @@ def test_a_row_carries_a_timespan_as_nanoseconds_and_an_infinity_as_a_string():
     `f:0w -0w 0n`. Before: `PT1.5S`, `PT0.000001S` (#1329) and null, null
     (#1330) - a value cut to the microsecond in a unit the filter does not
     take, and an infinity indistinguishable from a missing value."""
-    from uqf_frontend.app import _rows
-    from uqf_frontend.models import QueryResponse
+    from uqf_frontend.models.query import QueryResponse
+    from uqf_frontend.routes.common import _rows
 
     frame = pl.DataFrame(
         {
@@ -109,7 +109,7 @@ def test_a_row_carries_a_timespan_as_nanoseconds_and_an_infinity_as_a_string():
         {"s": None, "f": None},
     ]
     wire = QueryResponse(
-        poll_seconds=1, table="t", tier="rdb", rows=rows, row_count=3, truncated=False
+        poll_seconds=1, table="t", tier="rdb", rows=rows, row_count=3, truncated=False, cut_by=None
     ).model_dump_json()
     assert '"rows":[{"s":1500000000,"f":"inf"},{"s":1234,"f":"-inf"},{"s":null,"f":null}]' in wire
 
@@ -125,8 +125,8 @@ def test_a_row_carries_a_timestamp_to_the_nanosecond_and_an_infinity_as_a_string
     past a microsecond, 0Wp, -0Wp and 0Np (#1371). Before, `to_dicts` made
     each a Python datetime - both rows `10:00:00.000001`, and the infinities
     `2262-04-11T23:47:16.854775` and `1707-09-22T00:12:43.145224`."""
-    from uqf_frontend.app import _rows
-    from uqf_frontend.models import QueryResponse
+    from uqf_frontend.models.query import QueryResponse
+    from uqf_frontend.routes.common import _rows
 
     base = int(dt.datetime(2026, 10, 14, 10, tzinfo=dt.UTC).timestamp()) * 10**9
     frame = pl.DataFrame(
@@ -145,7 +145,7 @@ def test_a_row_carries_a_timestamp_to_the_nanosecond_and_an_infinity_as_a_string
         {"time": None},
     ]
     wire = QueryResponse(
-        poll_seconds=1, table="t", tier="rdb", rows=rows, row_count=5, truncated=False
+        poll_seconds=1, table="t", tier="rdb", rows=rows, row_count=5, truncated=False, cut_by=None
     ).model_dump_json()
     assert (
         '{"time":"2026-10-14T10:00:00.000001234Z"},{"time":"2026-10-14T10:00:00.000001999Z"}'
@@ -153,7 +153,7 @@ def test_a_row_carries_a_timestamp_to_the_nanosecond_and_an_infinity_as_a_string
 
 
 def test_a_zoned_or_coarser_timestamp_column_is_sent_as_utc_nanoseconds():
-    from uqf_frontend.app import _rows
+    from uqf_frontend.routes.common import _rows
 
     when = dt.datetime(2026, 10, 14, 12, 0, 0, 5, tzinfo=dt.timezone(dt.timedelta(hours=2)))
     frame = pl.DataFrame({"t": pl.Series([when], dtype=pl.Datetime("us", "Europe/Warsaw"))})
@@ -286,7 +286,7 @@ def _backfill_args() -> dict[str, str]:
     }
 
 
-def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
+def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch, tmp_path):
     from uqs import paths as stack_paths
     from uqs.paths import UqsError
     from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
@@ -305,6 +305,8 @@ def test_a_bootstrap_failure_before_a_backfill_is_reported(monkeypatch):
             runtime_declaration=RUNTIMES[DEFAULT_RUNTIME],
             # read for the deployment set a start is about to record (#1248)
             generated_deployment=Path("/repo/data/deployment"),
+            # where the stack's lifecycle lock is taken, before bootstrap (#2028)
+            torqdata=tmp_path / "data",
         ),
     )
     monkeypatch.setattr(runtime, "bootstrap", refuse)
@@ -372,3 +374,29 @@ def test_int_narrows_without_guessing(value, out):
     """A value that cannot be an int is None - not an exception from a
     probe reply's unexpected shape, and not a wrong number."""
     assert health._int(value) == out
+
+
+# ------------------------------------------------------- /coverage's window (#2222)
+
+
+@pytest.mark.parametrize(
+    ("given", "missing"), [("range_from", "range_to"), ("range_to", "range_from")]
+)
+def test_a_coverage_window_with_one_bound_is_refused_naming_the_other(given, missing):
+    """One bound alone was parsed, then dropped: 200, `requested: null`, no
+    gaps - an answer to a question that was not asked."""
+    from fastapi.testclient import TestClient
+
+    from uqf_frontend.app import create_app
+    from uqf_frontend.gateway import FakeGateway
+
+    params = {"dataset": "fx_quotes", "slice": "", "source_version": "v1"}
+    resp = TestClient(create_app(gateway=FakeGateway())).get(
+        "/coverage", params={**params, given: "2026-01-01T00:00:00Z"}
+    )
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["error"] == "RequestInvalid"
+    assert f"query.{missing}: {missing} is required with {given}" in body["detail"]
+    assert "half-open [range_from, range_to)" in body["detail"]
+    assert body["errors"][0]["loc"] == ["query", missing]

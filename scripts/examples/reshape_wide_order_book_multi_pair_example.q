@@ -82,7 +82,7 @@ mk_timestamps:{[n;start_ts]
     std_gap:0D00:00:00.001;
     min_gap:0D00:00:00.0001;
     p:1e-9+(1-2e-9)*n?1.0;
-    .qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qf.math.inv_ncdf p";()!()];
+    .qetl.log.ch.dbg[`lifecycle;"running: .qf.math.inv_ncdf p";enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
     shock:.qf.math.inv_ncdf p;
     gaps:min_gap|mean_gap+std_gap*shock;
     start_ts+sums gaps};
@@ -119,7 +119,7 @@ while[i<count pairs;
     pair_table:mk_pair_table[pairs i;base_prices i;ts_slice];
     t:$[i=0;pair_table;t,pair_table];
     i+:1];
-.qetl.log.info[`reshape_wide_order_book_multi_pair;"t - wide source table: ",.Q.s1[count t]," rows, ",.Q.s1[count cols t]," columns, ",.Q.s1[count pairs]," pairs";()!()];
+.qetl.log.ch.info[`lifecycle;"t - wide source table: ",.Q.s1[count t]," rows, ",.Q.s1[count cols t]," columns, ",.Q.s1[count pairs]," pairs";enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
 show t;
 
 / Databento's own MBP-10 naming convention: bid_px_00.._09, bid_sz_00.._09,
@@ -130,9 +130,9 @@ level_prefix_targets:(
     ("bid_sz_";`bid_sizes);
     ("ask_px_";`ask_prices);
     ("ask_sz_";`ask_sizes));
-.qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qf.mkt.derive_level_groups[cols t;level_prefix_targets]";()!()];
+.qetl.log.ch.dbg[`lifecycle;"running: .qf.mkt.derive_level_groups[cols t;level_prefix_targets]";enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
 level_groups:.qf.mkt.derive_level_groups[cols t;level_prefix_targets];
-.qetl.log.dbg[`reshape_wide_order_book_multi_pair;"level_groups - target_col -> ordered source_cols:";()!()];
+.qetl.log.ch.dbg[`lifecycle;"level_groups - target_col -> ordered source_cols:";enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
 show level_groups;
 
 / Advisory only - inspect before deciding what to symbolize. Note action/side
@@ -140,42 +140,42 @@ show level_groups;
 / values ("A"/"B"/...) kdb+ collapses that column into a plain char vector
 / rather than a list of strings, so it isn't a "string column" by
 / candidate_symbol_columns's own type check.
-.qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qf.mkt.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5]";()!()];
+.qetl.log.ch.dbg[`lifecycle;"running: .qf.mkt.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5]";enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
 candidates:.qf.mkt.candidate_symbol_columns[t;`sym`venue`exchange`side;0.5];
-.qetl.log.info[`reshape_wide_order_book_multi_pair;"candidates - columns to symbolize: ",.Q.s1[", " sv string candidates];()!()];
+.qetl.log.ch.info[`lifecycle;"candidates - columns to symbolize: ",.Q.s1[", " sv string candidates];enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
 
 / Explicit final column order - edit this list to reorder (or drop) columns.
 / `col_order#out` selects/reorders out's columns and stays a table; plain
 / `out col_order` (or `out[col_order]`) does NOT - it returns the column
 / values as a list, same idiom forwards.q's cross_book_at_sizes relies on.
 col_order:`time`sym`venue`exchange`action`side`bid_prices`ask_prices`bid_sizes`ask_sizes;
-.qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qf.mkt.book_from_wide_levels[t;level_groups;candidates]";()!()];
+.qetl.log.ch.dbg[`lifecycle;"running: .qf.mkt.book_from_wide_levels[t;level_groups;candidates]";enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
 out:col_order#.qf.mkt.book_from_wide_levels[t;level_groups;candidates];
-.qetl.log.info[`reshape_wide_order_book_multi_pair;"out - reshaped table: ",.Q.s1[count out]," rows, ",.Q.s1[count cols out]," columns";()!()];
+.qetl.log.ch.info[`lifecycle;"out - reshaped table: ",.Q.s1[count out]," rows, ",.Q.s1[count cols out]," columns";enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
 show out;
-.qetl.log.dbg[`reshape_wide_order_book_multi_pair;"meta out - column types after reshaping:";()!()];
+.qetl.log.ch.dbg[`lifecycle;"meta out - column types after reshaping:";enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
 show meta out;
 
 / sym is a real symbol now, so grouping by it works the normal way - one
 / 20-row block per pair, in the order they were stacked.
-.qetl.log.dbg[`reshape_wide_order_book_multi_pair;"select n_rows:count i by sym from out - row count per pair:";()!()];
+.qetl.log.ch.dbg[`lifecycle;"select n_rows:count i by sym from out - row count per pair:";enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
 show select n_rows:count i by sym from out;
 
 / Hand each pair's first row's book straight to sweep_price, matching
 / forwards.q's `bid_prices`bid_sizes`ask_prices`ask_sizes convention.
 first_row_per_pair:select first bid_prices,first bid_sizes,first ask_prices,first ask_sizes by sym from out;
-.qetl.log.dbg[`reshape_wide_order_book_multi_pair;"first_row_per_pair - one row per pair, for the sweep below:";()!()];
+.qetl.log.ch.dbg[`lifecycle;"first_row_per_pair - one row per pair, for the sweep below:";enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
 show first_row_per_pair;
 
 sweep_by_pair:{[t;pair]
     row:t pair;
-    .qetl.log.dbg[`reshape_wide_order_book_multi_pair;"running: .qf.mkt.sweep_price[row`ask_prices;row`ask_sizes;250] for pair ",.Q.s1[pair];()!()];
+    .qetl.log.ch.dbg[`lifecycle;"running: .qf.mkt.sweep_price[row`ask_prices;row`ask_sizes;250] for pair ",.Q.s1[pair];enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
     result:.qf.mkt.sweep_price[row`ask_prices;row`ask_sizes;250];
     result,enlist[`sym]!enlist pair}[first_row_per_pair;] each exec sym from first_row_per_pair;
-.qetl.log.info[`reshape_wide_order_book_multi_pair;"sweep_by_pair - swept 250 units against each pair's ask side (",.Q.s1[count sweep_by_pair]," pairs)";()!()];
+.qetl.log.ch.info[`lifecycle;"sweep_by_pair - swept 250 units against each pair's ask side (",.Q.s1[count sweep_by_pair]," pairs)";enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
 show sweep_by_pair;
 if[not all sweep_by_pair`fully_filled;
-    .qetl.log.err[`reshape_wide_order_book_multi_pair;"at least one pair did not fully fill - unexpected for this synthetic book's depth";()!()];
+    .qetl.log.ch.err[`lifecycle;"at least one pair did not fully fill - unexpected for this synthetic book's depth";enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
     exit 1];
 
 // exit 0

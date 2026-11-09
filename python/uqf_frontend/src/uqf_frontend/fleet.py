@@ -62,7 +62,13 @@ class KolaFleet:
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._by_name: dict[str, Process] = {p.name: p for p in settings.processes}
+
+    @property
+    def _by_name(self) -> dict[str, Process]:
+        """The fan-out as the stack's process.csv declares it now, not as it did
+        when the frontend started: a stack bootstrapped later, or restarted on
+        another base port, is reached where it is (#2027)."""
+        return {p.name: p for p in self._settings.facts().processes}
 
     @property
     def processes(self) -> tuple[str, ...]:
@@ -77,8 +83,8 @@ class KolaFleet:
         per_proc = Settings(
             host=proc.host,
             port=proc.port,
-            user=self._settings.user,
-            passwd=self._settings.passwd,
+            user=self._settings.service_login[0],
+            passwd=self._settings.service_login[1],
             timeout=self._settings.timeout,
             max_rows=self._settings.max_rows,
         )
@@ -101,8 +107,8 @@ class KolaFleet:
         at = Settings(
             host=host,
             port=port,
-            user=self._settings.user,
-            passwd=self._settings.passwd,
+            user=self._settings.service_login[0],
+            passwd=self._settings.service_login[1],
             timeout=self._settings.timeout,
             max_rows=self._settings.max_rows,
         )

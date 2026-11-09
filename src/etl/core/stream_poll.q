@@ -41,7 +41,13 @@
 /     start_cursor optional [instant] -> the cursor positioned just before
 /                  `instant`: fetching after it returns the rows at or after
 /                  it. What `uqs job preview --last` starts from (#681).
-/                  A timestamp cursor needs none - it is instant minus 1ns -
+/                  A timestamp cursor needs none - it is the LAST EVENT
+/                  OBSERVED, so the cursor just before an instant is the
+/                  largest timestamp below it, instant minus 1ns (q's
+/                  timestamps are nanoseconds, so there is nothing between
+/                  the two; a fetch after it returns the rows AT or after
+/                  the instant). A recent-data window is therefore [from;to):
+/                  a row at `to` is out, a row at `from` is in (#2055) -
 /                  but a feed with its own load/save/advances must declare
 /                  one, because only the feed knows its tie-breakers
 /     page_limit   optional positive long, the most rows fetch returns in one
@@ -91,13 +97,13 @@
     / `(enlist `close) inter`, never `` `close inter ``: inter indexes its left
     / argument, and an atom cannot be indexed - 'type at every define.
     fns:.qetl.job.stream.poll_keys,`close`start_cursor inter key p;
-    if[count bad:fns where not .qetl.job.stream.is_callable each p fns;
+    if[count bad:fns where not .qetl.declared.callable each p fns;
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be functions"];
     custom:`load`save`advances inter key p;
     if[(count custom) and 3<>count custom;
         '"define: ",string[job],"'s poll declares ",(", " sv string custom),
          " - a custom cursor needs load, save and advances together, or none of them for a timestamp"];
-    if[count bad:custom where not .qetl.job.stream.is_callable each p custom;
+    if[count bad:custom where not .qetl.declared.callable each p custom;
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be functions"];
     if[count bad:(`source`cursor inter key p) where not -11h=type each p `source`cursor inter key p;
         '"define: ",string[job],"'s poll ",(", " sv string bad)," must be symbols"];
@@ -128,15 +134,15 @@
 / @throws error when the result is neither a table nor such a dictionary
 / @private
 .qetl.job.stream.outputs:{[job;out]
-    pubs:(.qetl.job.stream.def job)`publishes;
+    pubs:(.qetl.job.stream.def job)`outputs;
     if[.Q.qt out;
         if[1<>count pubs;
-            '"normalize: ",string[job]," returned one table but publishes ",(", " sv string pubs)," - return a dictionary of table -> rows"];
+            '"normalize: ",string[job]," returned one table but declares outputs ",(", " sv string pubs)," - return a dictionary of table -> rows"];
         :(enlist first pubs)!enlist out];
     if[not 99h=type out;
         '"normalize: ",string[job]," must return a table, or a dictionary of published table -> rows"];
     if[count bad:(key out) except pubs;
-        '"normalize: ",string[job]," returned ",(", " sv string bad),", which it does not declare in publishes"];
+        '"normalize: ",string[job]," returned ",(", " sv string bad),", which it does not declare in outputs"];
     out}
 
 / Private: the timestamp cursor's advance rule, .qetl.job.continuous.advance's.

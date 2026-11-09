@@ -37,7 +37,6 @@ from __future__ import annotations
 
 from uqs.deploy.artifact import Artifact, meets
 from uqs.deploy.config import Config, DeployError
-from uqs.deploy.target_keys import FILE_KEYS
 from uqs.guardrails import Guardrail
 
 ACCEPT_DIGEST = "accept-digest"
@@ -119,12 +118,12 @@ def for_artifact(cfg: Config, pkg: Artifact) -> list[dict]:
 def for_runtime(cfg: Config, component: str, name: str, sha256: str, pinned: bool) -> list[dict]:
     """The same policy for a bundled runtime - TorQ's or q's
     (deploy/torq_runtime.py, deploy/q_runtime.py) - pinned by
-    <component>_runtime_sha256: its exceptions name it."""
+    <component>_component_sha256: its exceptions name it."""
     return _pinned(cfg, name, sha256, pinned, component)
 
 
 def _pinned(cfg: Config, name: str, sha256: str, pinned: bool, component: str) -> list[dict]:
-    key = f"{component}_runtime_sha256" if component else "expected_sha256"
+    key = f"{component}_component_sha256" if component else "expected_sha256"
     expected = getattr(cfg, key)
     whose = f"the {component} runtime's " if component else ""
     beside = f"the {component} runtime" if component else "the artifact"
@@ -134,7 +133,7 @@ def _pinned(cfg: Config, name: str, sha256: str, pinned: bool, component: str) -
         if not matched and cfg.accept_digest is None:
             raise DeployError(
                 "artifact",
-                f"{name} is {sha256}, not the {FILE_KEYS.get(key, key)} {expected} - pass "
+                f"{name} is {sha256}, not the {key} {expected} - pass "
                 "--override accept-digest --reason REASON to deploy it anyway",
             )
         if cfg.accept_digest is not None:

@@ -111,7 +111,7 @@
 
 / Once a second, the same cadence as the fills feed: an order is a rarer
 / event than a quote, and the positions service snapshots every five.
-.qetl.job.stream.define[`fx_orders_feed;`procname`subscribe_to`publishes`period`on_timer`start_with_all`note!(
+.qetl.job.stream.define[`fx_orders_feed;`procname`subscribe_to`outputs`period`on_timer`start_with_all`note!(
     `fxordersfeed1;
     `symbol$();
     enlist `orders;

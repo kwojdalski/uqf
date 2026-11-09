@@ -27,11 +27,13 @@ import socket
 import subprocess
 import time
 from collections import defaultdict
+from collections.abc import Iterable
 
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.env import build_env
-from uqs.stack.procs import effective_process_rows, resolve_process_config
+from uqs.stack.placeholders import resolve_process_config
+from uqs.stack.procs import effective_process_rows
 
 log = get_logger()
 
@@ -77,6 +79,32 @@ def _command_lines(timeout: float | None) -> list[tuple[int, str]]:
     return sorted(out)
 
 
+def _lsof_listening(selector: list[str], timeout: float | None) -> dict[int, list[int]] | None:
+    """pid -> the TCP ports it listens on, from one lsof over `selector`
+    (`-p` pids, or `-iTCP:<ports>`). None when lsof is missing or hangs."""
+    try:
+        result = subprocess.run(
+            ["lsof", "-nP", "-a", *selector, "-sTCP:LISTEN", "-Fpn"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        log.debug("lsof unavailable: {}", exc)
+        return None
+    ports: dict[int, list[int]] = defaultdict(list)
+    pid = 0
+    for line in result.stdout.splitlines():
+        if line.startswith("p") and line[1:].isdigit():
+            pid = int(line[1:])
+        elif line.startswith("n") and pid:
+            port = line.rsplit(":", 1)[-1]
+            if port.isdigit() and int(port) not in ports[pid]:
+                ports[pid].append(int(port))
+    return ports
+
+
 def _listening_ports(pids: list[int], timeout: float | None) -> dict[int, list[str]]:
     """pid -> the TCP ports it listens on, from one lsof over just those pids.
 
@@ -86,27 +114,24 @@ def _listening_ports(pids: list[int], timeout: float | None) -> dict[int, list[s
     """
     if not pids:
         return {}
-    try:
-        result = subprocess.run(
-            ["lsof", "-nP", "-a", "-p", ",".join(map(str, pids)), "-iTCP", "-sTCP:LISTEN", "-Fpn"],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=timeout,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        log.debug("lsof unavailable, ports come from process.csv: {}", exc)
+    found = _lsof_listening(["-p", ",".join(map(str, pids)), "-iTCP"], timeout) or {}
+    return {pid: [str(port) for port in ports] for pid, ports in found.items()}
+
+
+def listeners(ports: Iterable[int], timeout: float | None = None) -> dict[int, list[int]]:
+    """port -> every pid listening on it, for just `ports`, from one lsof -
+    whoever the process is (#2180). Empty when lsof is missing, so a caller
+    that cannot look goes ahead as it did before it looked."""
+    wanted = sorted({port for port in ports if port > 0})
+    if not wanted:
         return {}
-    ports: dict[int, list[str]] = defaultdict(list)
-    pid = 0
-    for line in result.stdout.splitlines():
-        if line.startswith("p") and line[1:].isdigit():
-            pid = int(line[1:])
-        elif line.startswith("n") and pid:
-            port = line.rsplit(":", 1)[-1]
-            if port.isdigit() and port not in ports[pid]:
-                ports[pid].append(port)
-    return ports
+    found = _lsof_listening([f"-iTCP:{','.join(map(str, wanted))}"], timeout) or {}
+    held: dict[int, list[int]] = defaultdict(list)
+    for pid, on in sorted(found.items()):
+        for port in on:
+            if port in wanted:
+                held[port].append(pid)
+    return dict(held)
 
 
 def instances(

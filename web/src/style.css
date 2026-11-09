@@ -29,7 +29,8 @@ input,
 select {
   font: inherit;
 }
-button {
+button,
+a.button {
   cursor: pointer;
   border: 1px solid var(--line);
   background: #fff;
@@ -39,7 +40,12 @@ button {
   font-size: 0.875rem;
   font-weight: 600;
 }
-button:hover {
+a.button {
+  display: inline-block;
+  text-decoration: none;
+}
+button:hover,
+a.button:hover {
   border-color: #8294ae;
   background: #f3f6fa;
 }
@@ -268,7 +274,11 @@ select:focus {
 .badge.completed,
 .badge.idle,
 .badge.up,
-.badge.remote-operations-enabled {
+.badge.ok,
+.badge.verified,
+.badge.listening,
+.badge.remote-operations-enabled,
+.badge.equal_in_sample {
   color: #136448;
   background: #e6f6ef;
   border-color: #a5d5be;
@@ -277,7 +287,15 @@ select:focus {
 .badge.down,
 .badge.unreachable,
 .badge.wrong-process,
-.badge.identity-mismatch {
+.badge.identity-mismatch,
+.badge.identity_mismatch,
+.badge.ssh,
+.badge.discovery,
+.badge.auth_refused,
+.badge.local_bind,
+.badge.not_ready,
+.badge.differs,
+.badge.missing_table {
   color: #9c2834;
   background: #fff0f0;
   border-color: #e4b2b7;
@@ -285,7 +303,13 @@ select:focus {
 .badge.reloading,
 .badge.running,
 .badge.gaps-found,
-.badge.undetermined {
+.badge.undetermined,
+.badge.stale,
+.badge.unverified,
+.badge.disconnected,
+.badge.incomplete_coverage,
+.badge.not_comparable,
+.badge.endpoint_unavailable {
   color: #76520c;
   background: #fff6d9;
   border-color: #e8d090;
@@ -349,6 +373,11 @@ select:focus {
   background: #fff0f0;
   border-color: #e1b2b7;
   color: #95242e;
+}
+.inspection {
+  background: #eef4fb;
+  border-color: #9fb8d6;
+  color: #1f4370;
 }
 .error-text {
   color: #95242e;
@@ -625,4 +654,94 @@ tr.blocked td {
   padding: 1rem;
   margin: 0.5rem 0;
   text-align: center;
+}
+
+/* Config push history (#2002): a diff the operator opened. */
+pre.diff {
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre;
+  font-size: 0.85em;
+  padding: 0.5rem;
+  border: 1px solid #8a8f98;
+  border-radius: 4px;
+}
+/* Desk: Table / Plot (#2043) */
+.toggle {
+  display: inline-flex;
+  margin-left: auto;
+}
+.toggle button {
+  border-radius: 0;
+}
+.toggle button:first-child {
+  border-radius: 5px 0 0 5px;
+}
+.toggle button:last-child {
+  border-radius: 0 5px 5px 0;
+  border-left: 0;
+}
+.toggle button[aria-pressed="true"] {
+  background: #e8eefb;
+  border-color: var(--blue);
+  color: var(--blue);
+}
+.plot-y {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.plot-y legend {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #3f5067;
+}
+.plot-y label.check {
+  flex-direction: row;
+  align-items: center;
+  font-weight: 500;
+}
+.plot-y input {
+  width: auto;
+}
+.plot {
+  margin-top: 1rem;
+  min-width: 0;
+}
+.workspace-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.875rem;
+  max-width: 50%;
+}
+.workspace-selector select {
+  margin-left: 0.35rem;
+}
+.workspace-selector .badge.unavailable {
+  color: #9c2834;
+  background: #fff0f0;
+  border-color: #e4b2b7;
+}
+.workspace-selector .badge.connecting {
+  color: #76520c;
+  background: #fff6d9;
+  border-color: #e8d090;
+}
+.workspace-error {
+  color: #ffd7da;
+  font-size: 0.8rem;
+}
+.target-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #344865;
+  border: 1px dashed #c6d3e3;
+  border-radius: 4px;
+  padding: 0.05rem 0.45rem;
 }

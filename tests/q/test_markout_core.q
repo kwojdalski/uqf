@@ -13,8 +13,7 @@
 
 / one source's book for one sym at one instant on one clock: a single level each side
 .qt.qpipe.transform.markout_core.bk:{[tm;sym;src;clk;bid;ask]
-    ([] source_time:enlist tm; sym:enlist sym; source:enlist src; bid_prices:enlist enlist bid; bid_sizes:enlist enlist 1e6;
-        ask_prices:enlist enlist ask; ask_sizes:enlist enlist 1e6; clock:enlist clk)}
+    ([] source_time:enlist tm; sym:enlist sym; source:enlist src; bid:enlist bid; ask:enlist ask; clock:enlist clk)}
 
 / one execution
 .qt.qpipe.transform.markout_core.fill:{[sym;side;size;px;id;clk]
@@ -34,7 +33,8 @@
 / the fixture spec with changes
 .qt.qpipe.transform.markout_core.sp:{[changes] .qpipe.transform.markout_core.fixture_spec,changes}
 
-.qt.qpipe.transform.markout_core.calc:{[spec;e;m] .qpipe.transform.markout_core.calc[.qt.qpipe.transform.markout_core.domain[];spec;e;m]}
+/ the books are built in time order, as a live buffer holds them: score arranges them, calc (the strict core) is tested on its own below
+.qt.qpipe.transform.markout_core.calc:{[spec;e;m] .qpipe.transform.markout_core.score[.qt.qpipe.transform.markout_core.domain[];spec;e;m]}
 
 / one component's column at one horizon
 .qt.qpipe.transform.markout_core.at:{[r;knd;hz;col] first (r col) where ((r`kind)=knd) and (r`horizon)=hz}
@@ -60,7 +60,7 @@
     sp:`horizons`report_ccy`rate_timing`rates!(enlist .qt.qpipe.transform.markout_core.ten_s;`USD;`execution;(enlist `XYZ)!enlist 2f);
     t:.qt.qpipe.transform.markout_core.t;
     m:.qt.qpipe.transform.markout_core.bk[t-0D00:00:01;`EURUSD;`a;`venue;1.5;1.5],.qt.qpipe.transform.markout_core.bk[t+0D00:00:09;`EURUSD;`a;`venue;1.75;1.75];
-    r:.qpipe.transform.markout_core.calc[dom;sp;.qt.qpipe.transform.markout_core.fill[`EURUSD;1;100f;1.5;`x;`venue];m];
+    r:.qpipe.transform.markout_core.score[dom;sp;.qt.qpipe.transform.markout_core.fill[`EURUSD;1;100f;1.5;`x;`venue];m];
     / the quote currency is XYZ, declared worth 2 USD: 100*(1.75-1.5) = 25 XYZ = 50 USD
     .qunit.assertEquals[first r`quote_ccy;`XYZ;"the quote currency is the resolver's"];
     .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[.qt.qpipe.transform.markout_core.at[r;`total;.qt.qpipe.transform.markout_core.ten_s;`quote_amount];25f];"25 XYZ"];
@@ -95,7 +95,9 @@
     hx:.qt.qpipe.transform.markout_core.at[h;`total;.qt.qpipe.transform.markout_core.ten_s;];
     xx:.qt.qpipe.transform.markout_core.at[ex;`total;.qt.qpipe.transform.markout_core.ten_s;];
     .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[hx`report_amount;50000%150.05];"333.22 USD at 1/150.05"];
-    .qunit.assertEquals[hx`rate_timing;`horizon;"the timing is on the row"];
+    d:.qt.qpipe.transform.markout_core.domain[];
+    .qunit.assertEquals[(.qpipe.transform.config_markout.content[d;.qt.qpipe.transform.markout_core.sp[enlist[`rate_timing]!enlist `horizon]])`rate_timing;`horizon;"the timing is in the configuration the row names"];
+    .qunit.assertTrue[not (hx`config_id)~xx`config_id;"and the two timings are two configurations"];
     .qunit.assertEquals[hx`rate_time;t+0D00:00:09;"the rate's book is the horizon's"];
     .qunit.assertEquals[xx`rate_time;t-0D00:00:01;"and the execution's book under execution timing"];
     translation:(xx`report_amount)-hx`report_amount;
@@ -218,7 +220,7 @@
     u:.qpipe.transform.markout_core.unscoreable[dom;sp;e];
     .qunit.assertEquals[u`reason;3#`no_clock;"unknown, null and anything else"];
     .qunit.assertEquals[u`fill_id;`u`n`z;"named by identity"];
-    .qunit.assertEquals[count .qpipe.transform.markout_core.calc[dom;sp;e;0#.qpipe.transform.markout_core.market_data_in];0;"and produce no rows"]};
+    .qunit.assertEquals[count .qpipe.transform.markout_core.score[dom;sp;e;0#.qpipe.transform.markout_core.market_data_in];0;"and produce no rows"]};
 
 / --- statuses and money -----------------------------------------------------------
 
@@ -266,11 +268,11 @@
 
 .qt.qpipe.transform.markout_core.test_money_is_size_times_move_and_report_is_quote_times_rate:{[tc]
     ex:.qpipe.transform.markout_core.fixture_examples[];
-    r:raze {[e] .qpipe.transform.markout_core.calc[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.fixture_spec;(e`inputs) first .qpipe.transform.markout_core.input_names;(e`inputs) last .qpipe.transform.markout_core.input_names]} each ex;
+    r:raze {[e] .qpipe.transform.markout_core.score[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.fixture_spec;(e`inputs) first .qpipe.transform.markout_core.input_names;(e`inputs) last .qpipe.transform.markout_core.input_names]} each ex;
     .qunit.assertEquals[count r;6;"three executions, two components"];
     .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[r`quote_amount;(r`size)*r`move];"quote_amount = size * move"];
     .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[r`report_amount;(r`quote_amount)*r`rate];"report_amount = quote_amount * rate"];
-    .qunit.assertEquals[distinct r`contract_version;enlist 1;"the contract version"]};
+    .qunit.assertEquals[distinct r`config_id;enlist .qpipe.transform.config_markout.id[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.validate[.qpipe.transform.markout_core.fixture_domain;.qpipe.transform.markout_core.fixture_spec]];"every row names the one configuration the fixture spec is"]};
 
 / --- the optional domain components --------------------------------------------------
 
@@ -283,7 +285,7 @@
     t:.qt.qpipe.transform.markout_core.t;
     m:.qt.qpipe.transform.markout_core.bk[t-0D00:00:01;`ACME;`q;`receipt;49.75;50.25],.qt.qpipe.transform.markout_core.bk[t+0D00:00:09;`ACME;`q;`receipt;50.5;51f];
     e:.qt.qpipe.transform.markout_core.fill[`ACME;-1;100f;50.5;`e1;`receipt],.qt.qpipe.transform.markout_core.fill[`NOBK;1;100f;50f;`e2;`receipt];
-    r:.qpipe.transform.markout_core.calc[.qt.qpipe.transform.markout_core.attributing[];.qt.qpipe.transform.markout_core.sp[()!()];e;m];
+    r:.qpipe.transform.markout_core.score[.qt.qpipe.transform.markout_core.attributing[];.qt.qpipe.transform.markout_core.sp[()!()];e;m];
     a:select from r where fill_id=`e1;
     .qunit.assertEquals[a`kind;`total`execution`half;"the core's components, then the domain's"];
     .qunit.assertEquals[a`step;0 0 1;"step is the domain's"];
@@ -298,7 +300,7 @@
     t:.qt.qpipe.transform.markout_core.t;
     m:.qt.qpipe.transform.markout_core.bk[t-0D00:00:01;`ACME;`q;`receipt;49.75;50.25],.qt.qpipe.transform.markout_core.bk[t+0D00:00:09;`ACME;`q;`receipt;50.5;51f];
     d:.qt.qpipe.transform.markout_core.domain[],enlist[`available]!enlist {[spec;fr] (count fr)#0b};
-    r:.qpipe.transform.markout_core.calc[d;.qt.qpipe.transform.markout_core.sp[()!()];.qt.qpipe.transform.markout_core.fill[`ACME;1;1f;50f;`a1;`receipt];m];
+    r:.qpipe.transform.markout_core.score[d;.qt.qpipe.transform.markout_core.sp[()!()];.qt.qpipe.transform.markout_core.fill[`ACME;1;1f;50f;`a1;`receipt];m];
     .qunit.assertEquals[r`status;`unavailable`unavailable;"books exist, the domain says no"];
     .qunit.assertTrue[all null r`move;"no move"]};
 
@@ -329,27 +331,23 @@
 
 .qt.qpipe.transform.markout_core.test_an_empty_input_gives_an_empty_result_with_the_declared_schema:{[tc]
     d:.qt.qpipe.transform.markout_core.domain[];
-    r:.qpipe.transform.markout_core.calc[d;.qt.qpipe.transform.markout_core.sp[()!()];0#.qpipe.transform.markout_core.executions_in;0#.qpipe.transform.markout_core.market_data_in];
+    r:.qpipe.transform.markout_core.score[d;.qt.qpipe.transform.markout_core.sp[()!()];0#.qpipe.transform.markout_core.executions_in;0#.qpipe.transform.markout_core.market_data_in];
     .qunit.assertEquals[count r;0;"no rows"];
     .qunit.assertEquals[meta r;meta .qpipe.transform.markout_core.result;"the declared schema"];
     / every execution excluded is the same thing
     e:.qt.qpipe.transform.markout_core.fill[`ACME;0;1f;50f;`b1;`receipt];
-    r2:.qpipe.transform.markout_core.calc[d;.qt.qpipe.transform.markout_core.sp[()!()];e;0#.qpipe.transform.markout_core.market_data_in];
+    r2:.qpipe.transform.markout_core.score[d;.qt.qpipe.transform.markout_core.sp[()!()];e;0#.qpipe.transform.markout_core.market_data_in];
     .qunit.assertEquals[meta r2;meta .qpipe.transform.markout_core.result;"an input that is all excluded"]};
 
 .qt.qpipe.transform.markout_core.test_the_result_carries_the_contracts_core_columns_in_the_contracts_order:{[tc]
     c:cols .qpipe.transform.markout_core.result;
     core:.qpipe.transform.markout_core.core_cols;
-    .qunit.assertEquals[count core;24;"the contract lists 24 core columns"];
+    .qunit.assertEquals[count core;22;"the contract lists 22 core columns"];
+    .qunit.assertTrue[not any `report_ccy`rate_timing`contract_version in c;"the configuration's three fields are the snapshot's, not the row's (#1999)"];
     .qunit.assertEquals[c except .qpipe.transform.markout_core.long_key_cols;core;"the core columns in the contract's order, and only kind and step besides"];
     .qunit.assertEquals[c?.qpipe.transform.markout_core.long_key_cols;(1+c?`horizon),2+c?`horizon;"kind and step sit right after horizon"];
     t:exec c!t from meta .qpipe.transform.markout_core.result;
-    .qunit.assertEquals[t`contract_version`side`horizon`move`rate_time`clock;"jjnfps";"types"]};
-
-.qt.qpipe.transform.markout_core.test_a_consumer_pinned_to_a_version_refuses_another:{[tc]
-    r:update contract_version:2 from first .qpipe.transform.markout_core.fixture_examples[]`expected;
-    .qunit.assertThrows[.qpipe.transform.markout_core.require_version[;1];r;"*contract version 2 is not the pinned 1*";"another version"];
-    .qunit.assertEquals[count .qpipe.transform.markout_core.require_version[r;2];count r;"the pinned version passes"]};
+    .qunit.assertEquals[t`config_id`side`horizon`move`rate_time`clock;"sjnfps";"types"]};
 
 / --- spec validation, at declaration -----------------------------------------------------
 
@@ -387,3 +385,70 @@
     f:{[d;bad] .qpipe.transform.markout_core.declare[`markout_core_bad;d;bad;.qpipe.transform.markout_core.fixture_examples[]]}[d;];
     .qunit.assertThrows[f;bad;"*rate_timing must be*";"refused when declared"];
     .qunit.assertFalse[`markout_core_bad in .qetl.transform.defined[];"and nothing is registered"]};
+
+/ --- the horizon grid: one validated spec, read by every consumer (#2080) -----------------
+
+/ a signed, sub-second grid, deliberately out of order
+.qt.qpipe.transform.markout_core.grid:{[] -0D00:00:00.250 0D 0D00:00:00.500 0D00:00:02}
+
+.qt.qpipe.transform.markout_core.test_horizon_labels_are_exact_signed_milliseconds_in_input_order:{[tc]
+    lab:.qpipe.transform.markout_core.horizon_labels[-0D00:00:01 0D 0D00:00:00.500];
+    .qunit.assertEquals[key lab;-0D00:00:01 0D 0D00:00:00.500;"keyed by the horizons, in input order"];
+    .qunit.assertEquals[value lab;`neg_1000`0`500;"-1s is neg_1000, 0 is 0, +500ms is 500"];
+    g:.qt.qpipe.transform.markout_core.grid[];
+    .qunit.assertEquals[value .qpipe.transform.markout_core.horizon_labels g;`neg_250`0`500`2000;"a signed sub-second grid, unsorted"];
+    .qunit.assertEquals[value .qpipe.transform.markout_core.horizon_labels reverse g;reverse `neg_250`0`500`2000;"the order is the caller's"];
+    .qunit.assertEquals[value .qpipe.transform.markout_core.horizon_labels enlist 0D00:01;enlist `60000;"one horizon is still a dictionary"];
+    c:.qpipe.transform.markout_core.horizon_columns[`pips;g];
+    .qunit.assertEquals[value c;`pips_neg_250`pips_0`pips_500`pips_2000;"output naming reads the same labels"]};
+
+.qt.qpipe.transform.markout_core.test_a_horizon_grid_that_cannot_be_named_is_refused_by_name:{[tc]
+    f:.qpipe.transform.markout_core.horizon_labels;
+    .qunit.assertThrows[f;1000 2000;"*horizons must be a non-empty list of timespans*";"bare longs"];
+    .qunit.assertThrows[f;0D00:00:01;"*horizons must be a non-empty list of timespans*";"an atom is not a grid"];
+    .qunit.assertThrows[f;(0D00:00:01;1000);"*horizons must be a non-empty list of timespans*";"a mixed list"];
+    .qunit.assertThrows[f;0#0D;"*horizons must be a non-empty list of timespans*";"an empty grid"];
+    .qunit.assertThrows[f;0D00:00:01 0D00:00:01;"*horizons must be distinct*";"duplicates"];
+    .qunit.assertThrows[f;(0D00:00:01;0Nn);"*horizons must not contain a null timespan*";"a null"];
+    .qunit.assertThrows[f;(0D00:00:01;0Wn);"*horizons must be finite*";"+infinity"];
+    .qunit.assertThrows[f;(0D00:00:01;-0Wn);"*horizons must be finite*";"-infinity"];
+    .qunit.assertThrows[f;0D00:00:01 0D00:00:00.000500;"*horizons must be whole milliseconds*";"half a millisecond"];
+    .qunit.assertThrows[f;enlist -0D00:00:00.000000001;"*horizons must be whole milliseconds*";"a nanosecond before"];
+    .qunit.assertThrows[.qpipe.transform.markout_core.horizon_columns[;enlist 0D00:00:01];"pips";"*stem must be a non-null symbol*";"a string stem"]};
+
+.qt.qpipe.transform.markout_core.test_a_custom_grid_is_read_alike_by_every_consumer:{[tc]
+    g:.qt.qpipe.transform.markout_core.grid[];
+    t:.qt.qpipe.transform.markout_core.t;
+    sp:.qt.qpipe.transform.markout_core.sp[enlist[`horizons]!enlist g];
+    d:.qt.qpipe.transform.markout_core.domain[];
+    / reference fetching and live holdback
+    .qunit.assertEquals[.qpipe.transform.markout_core.reach sp;0D00:00:02;"the read reaches to the furthest horizon"];
+    .qunit.assertEquals[.qpipe.transform.markout_core.lookback sp;0D00:00:00.250;"and back by the most negative"];
+    .qunit.assertEquals[.qpipe.transform.markout_core.wait[sp;0D00:00:01];0D00:00:02;"the holdback waits for the furthest horizon"];
+    .qunit.assertEquals[.qpipe.transform.markout_core.wait[sp,enlist[`horizons]!enlist enlist -0D00:00:05;0D00:00:01];0D00:00:01;"never less than settle"];
+    .qunit.assertEquals[.qpipe.transform.fx_markout.wait[sp;0D00:00:01];0D00:00:02;"a domain's wait is the core's"];
+    .qunit.assertEquals[.qpipe.transform.fx_markout.lookback sp;0D00:00:00.250;"a domain's lookback is the core's"];
+    / scoring: a row per horizon, each against the book that stood at that instant
+    m:raze (.qt.qpipe.transform.markout_core.bk[t-0D00:00:00.300;`USDJPY;`a;`venue;150f;150f];
+        .qt.qpipe.transform.markout_core.bk[t-0D00:00:00.100;`USDJPY;`a;`venue;150.01;150.01];
+        .qt.qpipe.transform.markout_core.bk[t+0D00:00:00.400;`USDJPY;`a;`venue;150.02;150.02];
+        .qt.qpipe.transform.markout_core.bk[t+0D00:00:01.900;`USDJPY;`a;`venue;150.03;150.03]);
+    r:.qpipe.transform.markout_core.score[d;sp;.qt.qpipe.transform.markout_core.fill[`USDJPY;1;1e6;150f;`f1;`venue];m];
+    tot:select from r where kind=`total;
+    .qunit.assertEquals[tot`horizon;g;"one scored row per horizon, in the grid's order"];
+    .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[tot`ref_t1;150 150.01 150.02 150.03];"each read at its own instant"];
+    / output naming: the scored horizons name exactly the columns the labels declare
+    cols_:.qpipe.transform.markout_core.horizon_columns[`ref;g];
+    named:(value cols_)!{[tot;h] first exec ref_t1 from tot where horizon=h}[tot;] each key cols_;
+    .qunit.assertEquals[key named;`ref_neg_250`ref_0`ref_500`ref_2000;"the columns come from the grid"];
+    .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[value named;150 150.01 150.02 150.03];"and carry that horizon's figure"];
+    / configuration identity
+    cid:{[d;sp] .qpipe.transform.config_markout.id[d;.qpipe.transform.markout_core.validate[d;sp]]}[d;];
+    c:.qpipe.transform.config_markout.content[d;sp];
+    .qunit.assertEquals[c`horizons;asc g;"the snapshot records the validated grid"];
+    .qunit.assertEquals[tot`config_id;(count tot)#cid sp;"and the rows name that snapshot"];
+    .qunit.assertTrue[not (cid sp)~cid .qt.qpipe.transform.markout_core.sp[enlist[`horizons]!enlist g,0D00:00:03];"a longer grid is another configuration"];
+    .qunit.assertTrue[not (cid sp)~cid .qt.qpipe.transform.markout_core.sp[enlist[`horizons]!enlist (-0D00:00:00.250;0D;0D00:00:00.501;0D00:00:02)];"one millisecond moved is another configuration"];
+    / an unnameable grid is refused by the same validation at declaration
+    .qunit.assertThrows[.qpipe.transform.markout_core.validate[d;];sp,enlist[`horizons]!enlist (0D;0Wn);"*horizons must be finite*";"infinite"];
+    .qunit.assertThrows[.qpipe.transform.markout_core.validate[d;];sp,enlist[`horizons]!enlist 0D00:00:01 0D00:00:00.000500;"*whole milliseconds*";"sub-millisecond"]};

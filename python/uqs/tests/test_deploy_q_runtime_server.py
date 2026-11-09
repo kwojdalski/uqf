@@ -9,7 +9,6 @@ bash against a destination under tmp_path, and the q is a real (shell) binary.
 
 from __future__ import annotations
 
-import io
 import json
 import os
 from pathlib import Path
@@ -117,9 +116,8 @@ def server(tmp_path):
 
 def test_prune_keeps_every_q_a_remaining_release_names(server):
     dest, torq, rts, _ = server
-    out = io.StringIO()
-    assert prune.prune(_dep(dest).cfg, LocalRemote(), keep=0, out=out) == 0
-    result = json.loads(out.getvalue())
+    code, result = prune.prune(_dep(dest).cfg, LocalRemote(), keep=0)
+    assert code == 0
     assert result["removed"] == [R1]
     gone = sorted(f"q/{rts[n].sha256}" for n in "CD")
     assert sorted(result["runtimes"]["removed"]) == gone
@@ -132,6 +130,6 @@ def test_prune_keeps_every_q_a_remaining_release_names(server):
 
 def test_rollback_runs_the_target_on_its_own_q(server):
     dest, _, rts, log = server
-    assert rollback.rollback(_dep(dest).cfg, LocalRemote(), out=io.StringIO()) == 0
+    assert rollback.rollback(_dep(dest).cfg, LocalRemote())[0] == 0
     a, b = (f"{rts[n].directory(str(dest))}/q" for n in "AB")
     assert log.read_text().splitlines() == [f"{R3} stop {b}", f"{R2} start {a}", f"{R2} deploy {a}"]

@@ -19,12 +19,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from uqf_frontend import models, status
+from uqf_frontend import status
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import ValidationFailed
 from uqf_frontend.fleet import FakeFleet
 from uqf_frontend.gateway import FakeGateway
+from uqf_frontend.models.ops import RunState
 
 STATUS_Q = Path(__file__).resolve().parents[3] / "src" / "etl" / "core" / "status.q"
 
@@ -71,7 +72,7 @@ def test_the_api_states_are_the_reader_states():
     """models.RunState is what the browser's RunState is held to by
     test_api_types.py, and STATES is held to q above - so q, the reader, the
     API and the browser name one set of states (#820)."""
-    assert set(typing.get_args(models.RunState)) == set(status.STATES)
+    assert set(typing.get_args(RunState)) == set(status.STATES)
 
 
 def q_terminal_states() -> set[str]:
@@ -150,10 +151,10 @@ def test_failed_run_surfaces_its_error_window_and_cursor(tmp_path):
     assert s.state == "failed" and not s.ok
     assert s.error == "source read failed: connection refused"
     assert (s.range_from, s.range_to) == (
-        "2026-09-13T00:00:00.000000000",
-        "2026-09-14T00:00:00.000000000",
+        "2026-09-13T00:00:00.000000000Z",
+        "2026-09-14T00:00:00.000000000Z",
     )
-    assert s.cursor == "2026-09-13T12:00:00.000000000"
+    assert s.cursor == "2026-09-13T12:00:00.000000000Z"
     assert s.rows_published == 500, "partial progress is preserved"
 
 
@@ -248,6 +249,15 @@ def test_summary_counts_failed_separately_from_running(tmp_path):
     }
 
 
+def _stack_root(base: Path) -> Path:
+    """A stack root uqs accepts - its two markers - with nothing bootstrapped:
+    the checkout's own may hold a setenv.sh, which these tests must not read."""
+    root = base / "stack_root"
+    (root / "src" / "etl").mkdir(parents=True, exist_ok=True)
+    (root / "python" / "uqs").mkdir(parents=True, exist_ok=True)
+    return root
+
+
 def test_a_stack_root_defaults_the_status_dir_to_the_workers(tmp_path, monkeypatch):
     """#1367: workers write where uqs.stack.runs.status_dir says. A frontend told
     only the stack root must read there, not report itself unconfigured."""
@@ -255,11 +265,28 @@ def test_a_stack_root_defaults_the_status_dir_to_the_workers(tmp_path, monkeypat
     from uqs.stack import runs
 
     monkeypatch.delenv("UQF_STATUS_DIR", raising=False)
-    root = stack_paths.repo_root()
+    root = _stack_root(tmp_path)
     settings = Settings(stack_root=root)
     assert status.status_directory(settings) == runs.status_dir(stack_paths.paths_for_root(root))
     monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
     assert status.status_directory(settings) == tmp_path
+
+
+def test_the_status_dir_the_stack_was_started_with_is_the_one_read(tmp_path, monkeypatch):
+    """#2038: a worker writes where the shell that ran `uqs start` pointed
+    UQF_STATUS_DIR. setenv.sh records it, and the frontend - started from
+    another shell, without it - reads that one, not $TORQDATA/status."""
+    from uqs import paths as stack_paths
+    from uqs.stack import runtime
+
+    root = _stack_root(tmp_path)
+    paths = stack_paths.paths_for_root(root)
+    paths.torqdata.mkdir(parents=True)
+    workers = tmp_path / "uqf-status"
+    monkeypatch.setenv("UQF_STATUS_DIR", str(workers))
+    runtime.write_setenv(paths, 6050)
+    monkeypatch.delenv("UQF_STATUS_DIR")
+    assert status.status_directory(Settings(stack_root=root)) == workers
 
 
 def test_without_a_stack_root_there_is_no_status_dir():
@@ -268,33 +295,32 @@ def test_without_a_stack_root_there_is_no_status_dir():
 
 
 def test_the_endpoint_reads_the_workers_directory_given_only_a_stack_root(tmp_path, monkeypatch):
-    from uqs import paths as stack_paths
-
-    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
-    write_status_file(tmp_path, "crypto_markout1")
+    workers = tmp_path / "status"
+    workers.mkdir()
+    monkeypatch.setenv("UQF_STATUS_DIR", str(workers))
+    write_status_file(workers, "crypto_markout1")
     client = TestClient(
         create_app(
             gateway=FakeGateway(),
-            settings=Settings(stack_root=stack_paths.repo_root()),
+            settings=Settings(stack_root=_stack_root(tmp_path)),
             fleet=FakeFleet(),
         )
     )
     body = client.get("/ops/backfill").json()
     assert body["workers"][0]["instance_id"] == "crypto_markout1"
-    assert body["source"] == str(tmp_path)
+    assert body["source"] == str(workers)
 
 
 # --- the endpoint ----------------------------------------------------------
 
 
 def client_for(status_dir, monkeypatch):
-    """A client over this checkout's stack, its workers writing to *status_dir*
-    (UQF_STATUS_DIR, the workers' own variable); None, no stack root at all."""
-    from uqs import paths as stack_paths
-
+    """A client over a stack nothing has bootstrapped, its workers writing to
+    *status_dir* (UQF_STATUS_DIR, the workers' own variable); None, no stack
+    root at all."""
     if status_dir is not None:
         monkeypatch.setenv("UQF_STATUS_DIR", str(status_dir))
-    root = None if status_dir is None else stack_paths.repo_root()
+    root = None if status_dir is None else _stack_root(status_dir.parent)
     return TestClient(
         create_app(
             gateway=FakeGateway(),
@@ -302,6 +328,31 @@ def client_for(status_dir, monkeypatch):
             fleet=FakeFleet(),
         )
     )
+
+
+def test_every_time_ops_backfill_sends_carries_its_zone(tmp_path, monkeypatch):
+    """q's `.j.j` writes a timestamp with no zone, and the API passed it on:
+    a window shown in the Backfills view could not be pasted into the Backfill
+    form, which refuses a zone-less bound, and a reader could not tell it was
+    UTC (#2104). Every instant goes with its `Z`, as /coverage's do."""
+    write_status_file(tmp_path, "crypto_markout1", state="running")
+    write_status_file(tmp_path, "crypto_markout2", cursor="")
+    rows = client_for(tmp_path, monkeypatch).get("/ops/backfill").json()["workers"]
+    by_id = {w["instance_id"]: w for w in rows}
+    first = by_id["crypto_markout1"]
+    assert (first["range_from"], first["range_to"], first["cursor"], first["updated_at"]) == (
+        "2026-09-13T00:00:00.000000000Z",
+        "2026-09-14T00:00:00.000000000Z",
+        "2026-09-14T00:00:00.000000000Z",
+        "2026-09-15T18:41:14.475818000Z",
+    )
+    assert by_id["crypto_markout2"]["cursor"] is None, "q's null timestamp is no cursor"
+
+
+def test_a_status_file_whose_window_is_not_a_time_is_unreadable(tmp_path):
+    write_status_file(tmp_path, "bad", range_from="soon")
+    statuses, unreadable = status.read_dir(tmp_path)
+    assert statuses == [] and "soon" in unreadable[0]["error"]
 
 
 def test_endpoint_returns_workers_and_a_poll_cadence(tmp_path, monkeypatch):

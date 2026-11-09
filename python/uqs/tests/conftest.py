@@ -14,6 +14,38 @@ import pytest
 from attach_backfill_support import receivers_under, stop_process
 
 
+@pytest.fixture(autouse=True)
+def own_lifecycle_lock(tmp_path, monkeypatch):
+    """Each test's own stack lifecycle lock file (#2028), under its tmp_path.
+
+    Many tests run a lifecycle command against the checkout's own paths, so
+    they all took one lock file, `output/uqs/.lifecycle.lock`: one xdist worker
+    holding it made another's frontend route - which refuses rather than waits
+    - raise StackBusy, and a developer's running `uqs start` could do the same.
+    The lock itself is unchanged: only where a test's lock lives moves, so a
+    test of the lock (test_generated_files.py) still contends within itself.
+    """
+    from uqs.stack import generated
+
+    lock = tmp_path / generated.LOCK_NAME
+    monkeypatch.setattr(generated, "lock_path", lambda paths: lock)
+
+
+@pytest.fixture(autouse=True)
+def no_live_port_or_start_checks(monkeypatch):
+    """A start's checks that read the machine itself (#2180) - who listens on a
+    port (alive.listeners), and whether what a start launched stayed up
+    (start_check) - see nothing here, so a test that fakes the launcher is not
+    failed by a developer's own stack, or by the processes it never really
+    started. test_start_check.py puts the real ones back.
+    """
+    from uqs.stack import alive, start_check
+
+    monkeypatch.setattr(alive, "listeners", lambda ports, timeout=None: {})
+    monkeypatch.setattr(start_check, "snapshot", lambda paths, base_port: {})
+    monkeypatch.setattr(start_check, "confirm", lambda *_a, **_k: [])
+
+
 @pytest.fixture(scope="session", autouse=True)
 def no_receiver_outlives_the_run(tmp_path_factory):
     yield

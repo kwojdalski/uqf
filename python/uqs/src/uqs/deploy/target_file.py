@@ -27,9 +27,12 @@ import re
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 
 import tomlkit
 import tomlkit.items
+
+from uqs.deploy.config import DeployError
 
 #: A table's path in the file: ("targets", "prod"), ("defaults",).
 Key = tuple[str, ...]
@@ -287,8 +290,20 @@ def changed(before: str, after: str) -> list[dict]:
 def parse_value(text: str) -> object:
     """A value given on the command line: a TOML value when it is one
     (`20`, `true`, `["a", "b"]`, `"quoted"`), else the text itself, so
-    `host=deploy@prod` needs no quotes."""
+    `ssh=deploy@prod` needs no quotes."""
     try:
         return tomllib.loads(f"v = {text}")["v"]
     except tomllib.TOMLDecodeError:
         return text
+
+
+def text_of(path: Path) -> str:
+    """The file's text, refused - not a UnicodeDecodeError's traceback - when
+    it is not UTF-8, as TOML must be: one Latin-1 byte in a comment blanked
+    the Services view (#2026)."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise DeployError(
+            "arguments", f"{path}: not UTF-8 ({exc}) - TOML is UTF-8; re-save the file as UTF-8"
+        ) from None

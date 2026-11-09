@@ -90,7 +90,7 @@ def args(req: Request, *, apply: bool, schema_path: str | None = None) -> list[s
 
 
 def parse(result: subprocess.CompletedProcess[str], where: str) -> dict[str, Any]:
-    """The script's JSON document, with its exit code as `exit` - or a refusal
+    """The script's JSON document, with its exit code as `exit_code` (#2228) - or a refusal
     saying what it printed instead."""
     lines = [line for line in (result.stdout or "").splitlines() if line.startswith("{")]
     if not lines:
@@ -102,7 +102,7 @@ def parse(result: subprocess.CompletedProcess[str], where: str) -> dict[str, Any
         doc = json.loads(lines[-1])
     except ValueError:
         raise UqsError(f"hdb_alter.q {where} printed something other than JSON") from None
-    return {**doc, "exit": result.returncode}
+    return {**doc, "exit_code": result.returncode}
 
 
 def run_local(paths: UqsPaths, req: Request, *, apply: bool) -> dict[str, Any]:
@@ -164,10 +164,23 @@ def write_lock(paths: UqsPaths) -> Iterator[None]:
 RELOAD_Q = '@[{[d] $[`reload in key `.; reload d; system "l ."]; "reloaded"}; .z.d; {[e] e}]'
 
 
-def reload_own_readers(paths: UqsPaths) -> list[dict[str, str]]:
+#: What asking a reader to reload came to: only "reloaded" is `ok` (#2122).
+#: "down": nothing listens, so it maps the change when it starts; "skipped":
+#: it serves another directory; "not asked": uqs cannot reach it.
+READER_OUTCOMES = ("reloaded", "failed", "down", "skipped", "not asked")
+
+
+def reader_row(process: str, outcome: str, detail: str) -> dict[str, Any]:
+    """One reader's reload: `ok` a bool, as in every --json document, and
+    `outcome` what happened - "skipped" and "down" are not failures, nor
+    reloads."""
+    assert outcome in READER_OUTCOMES, outcome
+    return {"process": process, "ok": outcome == "reloaded", "outcome": outcome, "detail": detail}
+
+
+def reload_own_readers(paths: UqsPaths) -> list[dict[str, Any]]:
     """Ask each HDB process this runtime declares to reload: one row per
-    process, `ok` "yes", "no" or "down" (nothing listens: it maps the change
-    when it starts)."""
+    process, its `outcome` "reloaded", "failed" or "down"."""
     out = []
     for row in _list_processes(paths, None):
         if row["proctype"] != "hdb":
@@ -176,10 +189,9 @@ def reload_own_readers(paths: UqsPaths) -> list[dict[str, str]]:
             said = query(RELOAD_Q, int(row["port"]), timeout=30)
         except Exception as exc:  # noqa: BLE001 - kola raises its own, untyped, errors
             down = "refused" in str(exc).lower() or "connect" in str(exc).lower()
-            out.append({"procname": row["procname"], "ok": "down" if down else "no",
-                        "detail": str(exc)})  # fmt: skip
+            out.append(reader_row(row["procname"], "down" if down else "failed", str(exc)))
             continue
         text = said.decode() if isinstance(said, bytes) else str(said)
-        out.append({"procname": row["procname"], "ok": "yes" if text == "reloaded" else "no",
-                    "detail": text})  # fmt: skip
+        outcome = "reloaded" if text == "reloaded" else "failed"
+        out.append(reader_row(row["procname"], outcome, text))
     return out

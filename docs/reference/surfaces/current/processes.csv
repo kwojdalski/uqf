@@ -5,11 +5,13 @@ book_liquidity_1m1,metrics,62,market_data,book_liquidity_1m
 cross1,metrics,25,fx_orderbook,
 crossarb1,metrics,45,superbook,config_change cross_arbitrage
 crypto_book_1s1,metrics,57,crypto_book,crypto_book_1s
-crypto_markout1,metrics,51,crypto_book crypto_trades,crypto_execution_quality
+crypto_markout1,metrics,51,executions market_data,crypto_markout
 cryptomock1,feed,35,,crypto_book crypto_trades
 deals_backfill1,backfill,32,,
 demo_deals_feed1,feed,70,,demo_deals
 duckdb_deals_backfill1,backfill,46,,
+eq_fills_backfill1,backfill,72,,
+eq_markout1,metrics,73,executions market_data,eq_markout
 events_backfill1,backfill,33,,
 exec_bars1,metrics,54,executions,exec_bar
 executions1,metrics,36,crypto_trades orders trades,executions
@@ -22,6 +24,8 @@ fxpositions1,metrics,39,executions,config_change fx_limit_breach fx_position fx_
 fxtradesfeed1,feed,29,,trades
 hdb_book_liquidity_1m_backfill1,backfill,63,,
 hdb_crypto_book_backfill1,backfill,58,,
+hdb_crypto_markout_backfill1,backfill,71,,
+hdb_eq_markout_backfill1,backfill,74,,
 hdb_exec_bars_backfill1,backfill,55,,
 hdb_fx_markout_wide_backfill1,backfill,66,,
 hdb_fx_markouts_backfill1,backfill,67,,

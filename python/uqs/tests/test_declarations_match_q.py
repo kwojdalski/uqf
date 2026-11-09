@@ -11,7 +11,7 @@ the registry and docs, and nothing would notice.
 This loads the ETL tree in q, the way a process does, and diffs q's own
 registries against the parser, field by field, for every job:
 
-    streaming job, normalizer   procname, subscribe_to, publishes, transform
+    streaming job, normalizer   procname, subscribe_to, outputs, transform
     bounded worker              procname, dataset, source_version, source, transform
 
 `source` is what `stack/capabilities.refuse_unsupported` picks the PeachQ gate
@@ -37,7 +37,7 @@ from pathlib import Path
 import pytest
 
 from uqs.interpreter import q_interpreter
-from uqs.model.declarations import declaration_calls, read_declarations, symbols
+from uqs.model.declarations import declaration_calls, declared_outputs, read_declarations
 from uqs.model.pipeline import PipelineKind
 from uqs.paths import WORKER_DIR
 
@@ -48,7 +48,7 @@ _DUMP = """
 \\l src/init.q
 \\l src/etl/init.q
 s:{[j] d:.qetl.job.stream.def j;
-    `procname`subscribe_to`publishes`transform!(d`procname;(),d`subscribe_to;(),d`publishes;d`transform)
+    `procname`subscribe_to`outputs`transform!(d`procname;(),d`subscribe_to;(),d`outputs;d`transform)
   } each key .qetl.job.stream.jobs;
 b:{[w] c:.qetl.job.bounded.def w;
     `procname`dataset`source_version`source`transform!(c`procname;c`dataset;c`source_version;c`source;c`transform)
@@ -74,13 +74,13 @@ def _parser_view(root: Path) -> dict[str, dict[str, dict]]:
             stream[d.name] = {
                 "procname": d.procname,
                 "subscribe_to": sorted(d.subscribe_to),
-                "publishes": sorted(d.publishes),
+                "outputs": sorted(d.publishes),
                 "transform": d.transform,
             }
     for path in sorted((root / WORKER_DIR).glob("*.q")):
         for fn, name, fields in declaration_calls(path.read_text()):
             if fn == "qetl.job.bounded.define" and name in bounded:
-                bounded[name]["dataset"] = (symbols(fields.get("dataset", "")) or ("",))[0]
+                bounded[name]["dataset"] = (declared_outputs(fields) or ("",))[0]
     return {"stream": stream, "bounded": bounded}
 
 
@@ -90,7 +90,7 @@ def _normalised(q_view: dict) -> dict[str, dict[str, dict]]:
         job: {
             **fields,
             "subscribe_to": sorted(fields["subscribe_to"]),
-            "publishes": sorted(fields["publishes"]),
+            "outputs": sorted(fields["outputs"]),
         }
         for job, fields in q_view["stream"].items()
     }
@@ -156,19 +156,19 @@ def test_a_disagreement_is_reported_not_passed_over():
     """The comparison itself can fail: a job only one side sees, and a field
     the two read differently, are both named."""
     parser = {
-        "stream": {"a": {"procname": "a1", "subscribe_to": [], "publishes": ["t"]}},
+        "stream": {"a": {"procname": "a1", "subscribe_to": [], "outputs": ["t"]}},
         "bounded": {},
     }
     q = {
         "stream": {
-            "a": {"procname": "a1", "subscribe_to": [], "publishes": ["u"]},
-            "b": {"procname": "b1", "subscribe_to": [], "publishes": []},
+            "a": {"procname": "a1", "subscribe_to": [], "outputs": ["u"]},
+            "b": {"procname": "b1", "subscribe_to": [], "outputs": []},
         },
         "bounded": {},
     }
     assert differences(parser, q) == [
         "stream job b: q loads it, the parser does not see it",
-        "stream job a.publishes: parser ['t'], q ['u']",
+        "stream job a.outputs: parser ['t'], q ['u']",
     ]
 
 
@@ -176,7 +176,7 @@ def test_a_source_or_transform_the_parser_misreads_is_reported():
     """The two fields Python decides by - the capability gate by `source`,
     `uqs job new --twin-of` by `transform` - are compared like the rest."""
     parser = {
-        "stream": {"j": {"procname": "j1", "subscribe_to": [], "publishes": [], "transform": ""}},
+        "stream": {"j": {"procname": "j1", "subscribe_to": [], "outputs": [], "transform": ""}},
         "bounded": {
             "w": {
                 "procname": "w1",
@@ -188,7 +188,7 @@ def test_a_source_or_transform_the_parser_misreads_is_reported():
         },
     }
     q = {
-        "stream": {"j": {"procname": "j1", "subscribe_to": [], "publishes": [], "transform": "xf"}},
+        "stream": {"j": {"procname": "j1", "subscribe_to": [], "outputs": [], "transform": "xf"}},
         "bounded": {
             "w": {
                 "procname": "w1",

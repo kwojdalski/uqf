@@ -119,7 +119,7 @@
     / Each of these used to be read as the bid side and return a number (#415):
     / a typo, a trade-direction word, and the trade-direction encoding.
     {[s] .qunit.assertThrows[.qf.mkt.book_convexity[enlist 1.1000 1.0998 1.0995;];s;
-        "book_convexity: side must be `bid or `ask, got *";
+        "book_convexity: book_side must be `bid or `ask, got *";
         "a side that is not a book side is refused by name, not read as `bid"]} each (`aks;`sell;-1)};
 
 / ---- vamp ----
@@ -236,13 +236,13 @@
         bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 100;
         ask_prices:enlist enlist 1.11; ask_sizes:enlist enlist 100);
     wrapper:{[q] .qf.mkt.queue_depletion_rate[q;`EURUSD;`mid]};
-    .qunit.assertThrows[wrapper;quotes;"queue_depletion_rate: side must be `bid or `ask, got `mid";
+    .qunit.assertThrows[wrapper;quotes;"queue_depletion_rate: book_side must be `bid or `ask, got `mid";
         "side other than `bid/`ask is rejected"];
     / A non-SYMBOL side used to reach `string` and throw a bare 'type, losing
     / the message this test exists to assert. #415 fixed that for the three
     / functions it named; these two kept the old shape.
     .qunit.assertThrows[{[q] .qf.mkt.queue_depletion_rate[q;`EURUSD;1]};quotes;
-        "queue_depletion_rate: side must be `bid or `ask, got 1";
+        "queue_depletion_rate: book_side must be `bid or `ask, got 1";
         "an integer side is named too, rather than throwing a bare 'type"]};
 
 / ---- ofi ----
@@ -673,9 +673,9 @@
     .qunit.assertThrows[.qf.mkt.stream_init[;::];`vpin;"stream_init: unknown metric(s) vpin*";"vpin is not streamed"];
     .qunit.assertThrows[.qf.mkt.stream_init[`ofi;];(enlist `window_mode)!enlist `time;"stream: window_mode must be `count*";"no time window yet"]};
 
-.qt.qf.mkt.microstructure.test_stream_refuses_a_config_that_is_not_a_dictionary:{[t]
+.qt.qf.mkt.microstructure.test_stream_refuses_opts_that_are_not_a_dictionary:{[t]
     / Each of these used to run on the default 20-row window (#804).
-    msg:"stream: config must be (::) for the defaults, or a dictionary*";
+    msg:"stream: opts must be (::) for the defaults, or a dictionary of*";
     / `window!enlist 5 is ENUMERATION (type 20), the case #804 found. KDB-X
     / refuses it with the message above; PeachQ throws 'window first, the
     / moment the value is used (its enumeration domain names no variable).
@@ -687,6 +687,10 @@
     .qunit.assertThrows[.qf.mkt.stream_init[`ofi;];5;msg;"a bare window"];
     .qunit.assertThrows[.qf.mkt.stream_init[`ofi;];`windw;msg;"a symbol"];
     .qunit.assertEquals[(.qf.mkt.stream_init[`ofi;::])[`config;`window];20;"(::) still gives the defaults"]};
+
+.qt.qf.mkt.microstructure.test_stream_refuses_an_unknown_option:{[t]
+    .qunit.assertThrows[.qf.mkt.stream_init[`ofi;];(enlist `windw)!enlist 5;
+        "stream: unknown option(s) windw - known: window, window_mode, late";"a misspelt window is refused, not run on 20 rows"]};
 
 .qt.qf.mkt.microstructure.test_stream_snapshot_reports_each_sym:{[t]
     q:.qt.qf.mkt.microstructure.st_quotes[];
@@ -718,7 +722,7 @@
         "a missing side, and a sym no venue quotes, both price as null"]};
 
 .qt.qf.mkt.microstructure.test_one_staleness_policy_serves_both_jobs:{[t]
-    .qunit.assertEquals[.qpipe.job.crypto_markout.max_age;.qf.mkt.reference_max_age;
+    .qunit.assertEquals[.qpipe.transform.crypto_markout_outputs.job_spec`max_age;.qf.mkt.reference_max_age;
         "crypto_markout reads the library's limit rather than keeping its own"]};
 
 / ---- float-rounding edges (#1045, #1046) ----
@@ -765,7 +769,7 @@
 
 .qt.qf.mkt.microstructure.test_an_empty_sym_still_validates_the_side:{[t]
     .qunit.assertThrows[.qf.mkt.queue_depletion_rate[1#.qt.qf.mkt.microstructure.mk_mid_quotes[::];`GBPUSD;];`mid;
-        "queue_depletion_rate: side must be `bid or `ask*";"a bad side is refused even with no rows"]};
+        "queue_depletion_rate: book_side must be `bid or `ask*";"a bad side is refused even with no rows"]};
 / --- the stream reads a withdrawn side as ofi does (#1111) ------------------
 / #1032 moved the batch functions onto side_transition, which reads an
 / absent ask as 0w with size 0. The stream kept raw nulls, so a withdrawn

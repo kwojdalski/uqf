@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import App from "./App";
-import type { RemoteEntry, RemoteFiles, Services } from "./api";
-import { remoteFilesPath } from "./api";
+import type { RemoteEntry, RemoteFiles, Services } from "./api/services";
+import { remoteFilesPath } from "./api/services";
 import { size } from "./FileTable";
 
 const ok = (body: unknown) => ({ ok: true, json: async () => body });
@@ -16,19 +16,20 @@ function services(remote: boolean): Services {
   return {
     targets: [
       {
-        name: "prod-a",
+        target: "prod-a",
         ssh: "deploy@prod-a",
         dest: "/srv/uqf",
         remote_user: null,
         environment: null,
         labels: {},
+        inspection: false,
         last_deployed: null,
       },
     ],
     source: "/repo/deploy_targets.toml",
     declared: true,
     invalid: null,
-    remote_operations_enabled: remote,
+    writes_enabled: remote,
     poll_seconds: 30,
   };
 }
@@ -38,7 +39,7 @@ function entry(over: Partial<RemoteEntry>): RemoteEntry {
     name: "x",
     kind: "file",
     size: null,
-    mtime: 0,
+    mtime: "1970-01-01T00:00:00.000000000Z",
     blocked: false,
     reason: null,
     ...over,
@@ -48,7 +49,7 @@ function entry(over: Partial<RemoteEntry>): RemoteEntry {
 function listing(path: string, entries: RemoteEntry[]): RemoteFiles {
   return {
     target: "prod-a",
-    root: "/srv/uqf",
+    dest: "/srv/uqf",
     path,
     parent: path ? path.split("/").slice(0, -1).join("/") : null,
     entries,
