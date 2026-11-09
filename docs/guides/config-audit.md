@@ -67,12 +67,13 @@ judgement each reader makes again. Names must be fully qualified --- a bare
 `` `notional `` resolves against whatever namespace is current when the timer
 fires, which is not the one the author meant, so it is refused.
 
-Watching today:
+Watching today (`.qetl.cfg.audit.watched` holds the live list):
 
-  | job               | variables                                                                                          |
-  | ---               | ---                                                                                                |
-  | `superbook`       | `max_age` — the expiry window that decides which liquidity counts as live                          |
-  | `cross_arbitrage` | `notional`, `max_skew` — the size every edge is quoted at, and how far apart a route's legs may be |
+  | job               | variables                                                                                                                                           |
+  | ---               | ---                                                                                                                                                 |
+  | `superbook`       | `max_age` — the expiry window that decides which liquidity counts as live; `.qf.mkt.max_clock_lead` — how far a source's clock may lead this host's |
+  | `cross_arbitrage` | `notional`, `max_skew` — the size every edge is quoted at, and how far apart a route's legs may be                                                  |
+  | `fx_positions`    | `limits` — the desk's position limits                                                                                                               |
 
 A job that watches anything must also declare `config_change` among its
 `outputs`, because the audit publishes through the job's own seam. A test holds
@@ -100,7 +101,7 @@ Two lines, in the file that owns it:
 .qetl.cfg.audit.watch[`my_job;`.qpipe.job.my_job.my_tunable];
 ```
 
-and `config_change` in that job's `.qetl.job.stream.define` publishes. Nothing
+and `config_change` in that job's `.qetl.job.stream.define` `outputs`. Nothing
 else --- the table already exists, the runner already polls anything declared,
 and `tests/q/test_config_audit.q` will fail if the name resolves to nothing or
 the publish is not declared.
