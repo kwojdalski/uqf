@@ -41,16 +41,16 @@
     .qunit.assertEquals[(first (c2`captures)`demo_deals_feed)[`rows]`deal_id;enlist 2;"and the one at exactly the lower bound is inside"]};
 
 .qt.qetl.verify.capture.test_capturing_changes_no_cursor_file_coverage_or_table:{[t]
-    .qetl.job.continuous.save_cursor[`demo_deals_feed;.qt.qetl.verify.capture.d 2];
+    .qetl.job.continuous.save_cursor_value[`demo_deals_feed;`deal_time`deal_id!(.qt.qetl.verify.capture.d[2];2)];
     c:.qetl.verify.capture[`demo_deals;.qt.qetl.verify.capture.d 1;.qt.qetl.verify.capture.d 4];
     .qunit.assertEquals[c`readonly;1b;"the snapshot after equals the one before"];
-    .qunit.assertEquals[(c`before)`cursors;enlist[`demo_deals_feed]!enlist .qt.qetl.verify.capture.d 2;
+    .qunit.assertEquals[(c`before)`cursors;enlist[`demo_deals_feed]!enlist `deal_time`deal_id!(.qt.qetl.verify.capture.d[2];2);
         "the saved cursor was read as it stood, and is still there"];
     .qunit.assertTrue[0<count (c`before)`files;"the status directory's files were part of what was compared"]};
 
 .qt.qetl.verify.capture.test_the_snapshot_would_see_a_change:{[t]
     a:.qetl.verify.snapshot `demo_deals;
-    .qetl.job.continuous.save_cursor[`demo_deals_feed;.qt.qetl.verify.capture.d 2];
+    .qetl.job.continuous.save_cursor_value[`demo_deals_feed;`deal_time`deal_id!(.qt.qetl.verify.capture.d[2];2)];
     .qunit.assertEquals[a~.qetl.verify.snapshot `demo_deals;0b;"a saved cursor shows in the snapshot"]};
 
 .qt.qetl.verify.capture.test_a_producer_that_saves_a_cursor_is_caught:{[t]
