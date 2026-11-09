@@ -39,6 +39,32 @@ def test_a_long_column_accepts_an_integer():
     assert queries.coerce(7, QType.LONG, "qty", as_list=False) == 7
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf"), 10**400])
+def test_a_float_column_takes_only_a_finite_number(bad):
+    """#2526: JSON's NaN / Infinity and an overflowing number would reach q
+    as 0n / 0w - `eq NaN` selecting the null rows, `gt NaN` every other."""
+    with pytest.raises(ValidationFailed, match="expected a finite number"):
+        queries.coerce(bad, QType.FLOAT, "px", as_list=False)
+    with pytest.raises(ValidationFailed, match="expected a finite number"):
+        queries.coerce([1.5, bad], QType.FLOAT, "px", as_list=True)
+
+
+@pytest.mark.parametrize("text", ["NaN", "Infinity", "-Infinity", "1e400"])
+def test_a_query_with_a_non_finite_float_filter_is_422(text):
+    from fastapi.testclient import TestClient
+
+    from uqf_frontend.app import create_app
+    from uqf_frontend.gateway import FakeGateway
+
+    gateway = FakeGateway({queries.BROWSE: []})
+    client = TestClient(create_app(gateway=gateway, settings=Settings(max_rows=5000)))
+    body = '{"table": "trades", "filters": [{"column": "trade_price", "op": "eq", "value": %s}]}'
+    r = client.post("/query", content=body % text, headers={"content-type": "application/json"})
+    assert r.status_code == 422, r.text
+    assert "finite" in r.text
+    assert not [c for c in gateway.calls if c[0] == queries.BROWSE]
+
+
 @pytest.mark.parametrize("bad", [1, "true", None])
 def test_a_boolean_column_takes_only_a_boolean(bad):
     with pytest.raises(ValidationFailed, match="is a boolean"):

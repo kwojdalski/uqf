@@ -22,8 +22,9 @@ def install(app: FastAPI, *, settings: Settings, _tunnel_gate: Callable[[str], N
     def post_compare(request: Request, req: CompareRequest) -> CompareResponse:
         """One or more tables on two endpoints - this stack (`local`) or a
         registered target - over an explicit window, as `uqs data diff --json`
-        compares them (compare.py). Each table is put to the policy like
-        /query's. A target side is held to what /services/{target}/... is,
+        compares them (compare.py). Each table must be one this stack's
+        catalog lists, and is put to the policy, like /query's; each side is
+        read to at most max_rows. A target side is held to what /services/{target}/... is,
         since only the body names it (#2066): the write token while writes
         are on (the middleware's gates - by path, and `_reaches_target`'s by
         header on scoped routes, #2067 - cannot see a side named in the body),
@@ -36,8 +37,11 @@ def install(app: FastAPI, *, settings: Settings, _tunnel_gate: Callable[[str], N
                 raise WriteTokenRequired(refused)
         for name in targets:
             require_target_access(request, f"target {name}")
+        # The catalog first, as /query does (#2524): a comparison reads only
+        # what the browser may browse, and an unknown table is a 422.
+        local = request.app.state.workspaces.local
         for table in req.tables:
-            run_policy(request, table=table)
+            run_policy(request, table=local.catalog.table(table).name)
         if targets:
             _tunnel_gate("a comparison with a target")
         return CompareResponse(**compare.run(settings, req))

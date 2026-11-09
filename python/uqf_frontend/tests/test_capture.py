@@ -342,3 +342,26 @@ def test_a_torn_last_line_is_skipped_when_recovering_the_watermark(tmp_path):
         fh.write('{"time_ns": 99')
     assert sink.last_watermark("rdb1") == row(11)["time_ns"]
     assert sink.last_watermark("never") is None
+
+
+def test_a_row_fetched_again_after_a_torn_line_is_captured_whole(tmp_path):
+    """#2584: the re-fetched row was appended onto the partial line, so it
+    became part of an unparseable line and was never captured."""
+    rows = [row(1), row(2), row(3), row(4)]
+    sink = JsonlSink(tmp_path)
+    sink.append("rdb1", rows[:2])
+    path = tmp_path / "usage-rdb1.jsonl"
+    with path.open("a") as fh:
+        fh.write('{"time_ns": 3, "cm')
+
+    def usage_since(since, lim):
+        return [r for r in rows if r["time_ns"] > since]
+
+    UsageCapture(FakeFleet({"rdb1": usage_since}), JsonlSink(tmp_path)).capture_once()
+    parsed = []
+    for line in path.read_text().splitlines():
+        try:
+            parsed.append(json.loads(line)["time_ns"])
+        except ValueError:
+            continue
+    assert parsed == [r["time_ns"] for r in rows]

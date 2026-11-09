@@ -199,6 +199,8 @@ export const UPLOAD_MAX_DEPTH = 16;
 /** The longest root-relative path, in characters, the server will split. */
 export const UPLOAD_MAX_PATH = 4096;
 export const UPLOAD_TEMP_PREFIX = ".uqf-upload-";
+/** The config push history's directory below UPLOAD_ROOT: never uploaded to. */
+export const UPLOAD_HISTORY_DIR = ".uqf-history";
 /** Longer than the server's own UPLOAD_TIMEOUT, so the server's answer -
  * including "uncertain" - arrives before the browser gives up. */
 export const UPLOAD_TIMEOUT_MS = 150 * 1000;
@@ -240,6 +242,11 @@ export function uploadPathProblem(path: string): string | null {
     root.some((part, index) => parts[index] !== part)
   )
     return `uploads go to a file below ${UPLOAD_ROOT}/ and nowhere else`;
+  // in any letter case, as the server folds it: a case-insensitive
+  // filesystem would open it all the same (#2586)
+  const history = [...root, UPLOAD_HISTORY_DIR];
+  if (history.every((part, index) => parts[index]?.toLowerCase() === part))
+    return `${history.join("/")} is the config push history - read it with the History view`;
   if (parts.length - root.length - 1 > UPLOAD_MAX_DEPTH)
     return `more than ${UPLOAD_MAX_DEPTH} directories below ${UPLOAD_ROOT}/`;
   const encoder = new TextEncoder();

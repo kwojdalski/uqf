@@ -42,6 +42,7 @@ debugging sessions (``desc`` and ``tables`` in scripts/processes/torq_pipeline.q
 from __future__ import annotations
 
 import datetime as dt
+import math
 import re
 import uuid
 from typing import Any
@@ -190,7 +191,15 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
         case QType.FLOAT:
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise ValidationFailed(f"column {column!r} is a float; expected a number")
-            return float(value)
+            # JSON's NaN / Infinity, and 1e400, would reach q as 0n / 0w: a
+            # filter on the null or infinite rows nobody asked for (#2526)
+            try:
+                number = float(value)
+            except OverflowError:
+                number = math.inf
+            if not math.isfinite(number):
+                raise ValidationFailed(f"column {column!r} is a float; expected a finite number")
+            return number
         case QType.LONG:
             return _bounded_integer(value, column, "long", _LONG_LIMIT)
         case QType.INT:

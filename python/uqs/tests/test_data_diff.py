@@ -140,6 +140,53 @@ def test_a_q_refusal_is_the_commands_error(monkeypatch):
         )
 
 
+def _compared(**kw: Any) -> dict:
+    return data_diff.compare(
+        default_paths(),
+        data_diff.Endpoint("a", "h:1"),
+        data_diff.Endpoint("b", "h:2"),
+        ["demo_deals"],
+        window(),
+        **kw,
+    )
+
+
+def test_a_q_refusal_is_not_a_fault_of_the_run(monkeypatch):
+    """#2529: the frontend tells a refusal (422) from a run that failed."""
+    fake_q(monkeypatch, {"error": "filter sym: expected COLUMN OP VALUE"})
+    with pytest.raises(UqsError) as caught:
+        _compared()
+    assert not isinstance(caught.value, data_diff.DiffNotRun | data_diff.DiffTimedOut)
+
+
+def test_no_interpreter_and_a_crashed_run_are_diff_not_run(monkeypatch):
+    monkeypatch.setattr(data_diff, "q_interpreter", lambda: None)
+    with pytest.raises(data_diff.DiffNotRun, match="no q interpreter"):
+        _compared()
+    monkeypatch.setattr(data_diff, "q_interpreter", lambda: Path("q"))
+    monkeypatch.setattr(
+        data_diff.subprocess,
+        "run",
+        lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, stdout="", stderr="'boom"),
+    )
+    with pytest.raises(data_diff.DiffNotRun, match="did not run"):
+        _compared()
+
+
+def test_a_run_past_its_timeout_is_diff_timed_out(monkeypatch):
+    monkeypatch.setattr(data_diff, "q_interpreter", lambda: Path("q"))
+    seen = {}
+
+    def run(cmd, **kw):
+        seen["timeout"] = kw["timeout"]
+        raise subprocess.TimeoutExpired(cmd, kw["timeout"])
+
+    monkeypatch.setattr(data_diff.subprocess, "run", run)
+    with pytest.raises(data_diff.DiffTimedOut, match="no result after 40s"):
+        _compared(timeout=40)
+    assert seen["timeout"] == 40
+
+
 # ------------------------------------------------------------- the command
 
 

@@ -191,14 +191,14 @@ def test_a_file_missing_a_field_is_reported_not_silently_defaulted(tmp_path):
     assert "cursor" in unreadable[0]["error"]
 
 
-def test_unknown_state_warns_but_keeps_the_row(tmp_path):
-    """Likeliest cause is a writer newer than this reader; discarding the row
-    would lose the fact that the worker is alive and reporting.
-    """
+def test_an_unknown_state_is_an_unreadable_file_not_a_row(tmp_path):
+    """#2583: the API types a state as one of STATES, so a row in another
+    failed the whole response. The file is reported unreadable, naming the
+    state - the likeliest cause is a writer newer than this reader."""
     write_status_file(tmp_path, "future1", state="quiescing")
-    s = status.read_dir(tmp_path)[0][0]
-    assert s.state == "quiescing"
-    assert any("unrecognised state" in w for w in s.warnings)
+    statuses, unreadable = status.read_dir(tmp_path)
+    assert statuses == []
+    assert "unrecognised state 'quiescing'" in unreadable[0]["error"]
 
 
 def test_failed_without_an_error_warns(tmp_path):
@@ -328,6 +328,18 @@ def client_for(status_dir, monkeypatch):
             fleet=FakeFleet(),
         )
     )
+
+
+def test_one_unknown_state_does_not_hide_the_other_workers(tmp_path, monkeypatch):
+    """#2583: one `paused` file beside a good one was a 500 for the view."""
+    write_status_file(tmp_path, "w1", state="completed")
+    write_status_file(tmp_path, "w2", state="paused")
+    r = client_for(tmp_path, monkeypatch).get("/ops/backfill")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert [w["state"] for w in body["workers"]] == ["completed"]
+    (bad,) = body["unreadable"]
+    assert "w2" in bad["file"] and "unrecognised state 'paused'" in bad["error"]
 
 
 def test_every_time_ops_backfill_sends_carries_its_zone(tmp_path, monkeypatch):

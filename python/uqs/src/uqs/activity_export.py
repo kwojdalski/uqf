@@ -22,6 +22,14 @@ from typing import Any
 
 from uqs.activity_log import COLUMNS, EXPORT_FORMATS, RENAMED_DETAIL_NOTE, stamp
 
+#: What an export cut at its limit says: the newest events are kept, so it
+#: is the oldest matching ones that are missing (#2527).
+TRUNCATED_NOTE = "truncated: older matching events omitted - raise the limit or narrow the window"
+
+#: The response header the API sets on an export cut at its limit, for the
+#: jsonl and csv files that have no header line to say it in.
+TRUNCATED_HEADER = "X-UQF-Truncated"
+
 
 def render(
     rows: Sequence[Mapping[str, Any]],
@@ -30,16 +38,20 @@ def render(
     exported_at: dt.datetime,
     filters: Mapping[str, str] | None = None,
     drops: Iterable[Mapping[str, Any]] = (),
+    truncated: bool = False,
 ) -> str:
     """`rows` (newest first, as `select` returns them) written as `fmt`,
-    oldest first: a history is read forwards."""
+    oldest first: a history is read forwards. *truncated* says older events
+    matched and were cut at the limit: the text header says so (#2527); a
+    jsonl or csv file has no header line, so its caller must say it beside
+    the file - `TRUNCATED_HEADER` on the API, a note on the CLI."""
     forwards = list(reversed(rows))
     if fmt == "jsonl":
         return "".join(json.dumps(_plain(r), separators=(",", ":")) + "\n" for r in forwards)
     if fmt == "csv":
         return _csv(forwards)
     if fmt == "text":
-        return _text(forwards, exported_at, filters or {}, list(drops))
+        return _text(forwards, exported_at, filters or {}, list(drops), truncated)
     raise ValueError(f"unknown export format {fmt!r}: one of {', '.join(EXPORT_FORMATS)}")
 
 
@@ -130,6 +142,7 @@ def _text(
     exported_at: dt.datetime,
     filters: Mapping[str, str],
     drops: list[Mapping[str, Any]],
+    truncated: bool = False,
 ) -> str:
     """A timeline a person can follow: one event a line, oldest first, and
     every event that shares a request id - the browser's submit, confirm and
@@ -141,6 +154,8 @@ def _text(
         f"# filters: {said}",
         f"# columns: {_SEP.join(TEXT_COLUMNS)}",
     ]
+    if truncated:
+        lines.append(f"# {TRUNCATED_NOTE}")
     if drops:
         lost = ", ".join(f"{d['level']} {d['reason']} {d['count']}" for d in drops)
         lines.append(f"# not in the history (counted, not shown): {lost}")

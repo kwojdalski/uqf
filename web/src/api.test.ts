@@ -81,6 +81,20 @@ it("sends a timespan as whole nanoseconds, typed either way the Desk shows it", 
     "Enter a whole number of nanoseconds",
   );
 });
+it("refuses a number or timespan JavaScript would rewrite (#2587)", () => {
+  // Number() reads hex, binary and octal; q and the server read none of them
+  for (const typed of ["0x1F", "0b101", "0o17", "1_000", "Infinity"])
+    for (const type of ["float", "long"] as const)
+      expect(() => filterValue(typed, column(type), "eq")).toThrow();
+  expect(filterValue(" -1.5e3 ", column("float"), "eq")).toBe(-1500);
+  const span = column("timespan");
+  // q refuses 0D00:61:00 with 'parse: never sent as 61 minutes
+  for (const typed of ["0D00:61:00", "0D25:00:00", "0D00:00:60"])
+    expect(() => filterValue(typed, span, "eq")).toThrow(
+      "Enter a whole number of nanoseconds",
+    );
+  expect(filterValue("0D23:59:59", span, "eq")).toBe(86_399_000_000_000);
+});
 it("takes a timestamp to the nanosecond, and orders a range by it", () => {
   // #1371: the Desk now shows nine digits. A filter must take that value as
   // shown, and a coverage range 765 ns long is a range - Date.parse, which

@@ -24,7 +24,7 @@ from uqf_frontend import activity
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
-from uqs import activity_log
+from uqs import activity_export, activity_log
 from uqs.cli.shared import app
 
 RID = "req-0123456789"
@@ -136,6 +136,24 @@ def test_export_is_what_the_api_serves(history, fmt, argv, params):
     api = client.get("/activity/export", params={**params, "format": fmt}).text
     if fmt == "text":
         cli, api = (t.split("\n", 1)[1] for t in (cli, api))  # the stamped first line
+    assert cli == api
+
+
+@pytest.mark.parametrize("fmt", activity_log.EXPORT_FORMATS)
+def test_an_export_cut_at_its_limit_is_what_the_api_serves(history, fmt):
+    """#2527: the CLI's export says it was cut, as the API's does."""
+    db, client = history
+    result = CliRunner().invoke(
+        app, ["activity", "export", "--db", str(db), "--format", fmt, "--limit", "2"]
+    )
+    assert result.exit_code == 0, result.output
+    api = client.get("/activity/export", params={"format": fmt, "limit": 2}).text
+    cli = result.stdout
+    if fmt == "text":
+        cli, api = (t.split("\n", 1)[1] for t in (cli, api))
+        assert activity_export.TRUNCATED_NOTE in cli
+    else:
+        assert activity_export.TRUNCATED_NOTE in result.stderr
     assert cli == api
 
 

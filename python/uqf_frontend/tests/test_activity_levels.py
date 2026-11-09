@@ -395,6 +395,26 @@ def test_the_export_says_what_is_not_in_the_history(tmp_path):
     assert "# not in the history (counted, not shown): debug sampled 7" in text
 
 
+def test_an_export_cut_at_its_limit_says_older_events_were_omitted(tmp_path, monkeypatch):
+    """#2527: GET /activity says `truncated`; the export kept the newest N and
+    read as a complete history. Now each format says it too."""
+    c = _client(tmp_path)
+    _correlated(c, monkeypatch)
+    total = len(c.get("/activity").json()["events"])
+    assert total > 2
+    view = c.get("/activity", params={"limit": 2}).json()
+    assert view["truncated"] is True
+    for fmt in ("text", "jsonl", "csv"):
+        r = c.get("/activity/export", params={"format": fmt, "limit": 2})
+        assert r.headers.get(activity_export.TRUNCATED_HEADER) == "true", fmt
+    text = c.get("/activity/export", params={"format": "text", "limit": 2}).text
+    assert f"# {activity_export.TRUNCATED_NOTE}" in text
+    assert "2 events, oldest first" in text
+    whole = c.get("/activity/export", params={"format": "text", "limit": total})
+    assert activity_export.TRUNCATED_HEADER not in whole.headers
+    assert "truncated" not in whole.text
+
+
 def test_a_csv_cell_a_spreadsheet_would_run_is_quoted():
     rows = [{c: None for c in activity_log.COLUMNS} | {"target": "+cmd", "items": [], "detail": {}}]
     out = activity_export.render(rows, "csv", exported_at=dt.datetime.now(dt.UTC))

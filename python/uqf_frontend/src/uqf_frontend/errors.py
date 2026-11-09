@@ -37,12 +37,14 @@ caller sent; 404 for a named thing that does not exist, path segment or not;
     ValidationFailed         422  the input failed validation
     TooManyRequests          429  over the unauthenticated event rate
     BackfillNotStarted       502  torq.sh did not start the backfill
+    CompareFailed            502  the comparison's q did not run
     RemoteFailed             502  ssh or the remote helper failed
     TargetUnavailable        502  the target's gateway could not be reached
     TunnelDiscoveryFailed    502  the target's processes could not be read
     UploadIncomplete         502  the bytes did not arrive whole
     GatewayReloading         503  the gateway is in its EOD reload window
     GatewayUnavailable       503  the gateway could not be reached
+    CompareTimedOut          504  the comparison's q ran past its budget
     DeleteOutcomeUncertain   504  a deletion may have happened in part
     QueryTimedOut            504  the gateway's query timeout fired
     RemoteTimedOut           504  a remote read timed out

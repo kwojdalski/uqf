@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
-import { FileTable } from "./FileTable";
+import { FileTable, size } from "./FileTable";
 import type { RemoteEntry } from "./api/services";
 
 const entries: RemoteEntry[] = [
@@ -101,4 +101,12 @@ it("clears selection when navigating targets or directories, or disconnecting", 
   await user.click(screen.getByLabelText("Select alpha"));
   rerender(view("target-b/root", true));
   expect(screen.getByLabelText("Select alpha")).not.toBeChecked();
+});
+
+it("shows a size just under a unit boundary in the next unit (#2588)", () => {
+  expect(size(1048575)).toBe("1.0 MiB");
+  expect(size(1023.99 * 2 ** 20)).toBe("1.0 GiB");
+  expect(size(1023)).toBe("1023 B");
+  expect(size(1024)).toBe("1.0 KiB");
+  expect(size(1536)).toBe("1.5 KiB");
 });

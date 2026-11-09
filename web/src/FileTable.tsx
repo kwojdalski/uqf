@@ -21,7 +21,9 @@ export function size(bytes: number | null): string {
   const units = ["B", "KiB", "MiB", "GiB", "TiB"];
   let value = bytes;
   let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
+  // Compared as it will be shown: 1048575 B is 1023.999 KiB, which rounds
+  // to "1024.0 KiB" - shown as 1.0 MiB instead (#2588).
+  while (Number(value.toFixed(1)) >= 1024 && unit < units.length - 1) {
     value /= 1024;
     unit += 1;
   }

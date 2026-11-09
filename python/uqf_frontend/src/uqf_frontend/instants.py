@@ -39,8 +39,9 @@ _TEXT = "%Y-%m-%dT%H:%M:%S"
 _EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.UTC)
 
 #: The fraction of a second, matched on the text before `fromisoformat` sees
-#: it - that would take any number of digits and keep the first six.
-_FRACTION = re.compile(r"^(.*?\d{2}:\d{2}:\d{2})[.,](\d+)(.*)$")
+#: it - that would take any number of digits and keep the first six. Extended
+#: `HH:MM:SS` or basic `HHMMSS`, both of which `fromisoformat` reads (#2528).
+_FRACTION = re.compile(r"^(.*?\d{2}:?\d{2}:?\d{2})[.,](\d+)(.*)$")
 
 
 class InstantRefused(ValueError):
@@ -66,6 +67,10 @@ def _split(text: str) -> tuple[dt.datetime, int]:
         raise InstantRefused(
             f"{text!r} is not an ISO-8601 instant; expected e.g. {EXAMPLE}"
         ) from None
+    if parsed.microsecond:
+        # a fraction fromisoformat read that _FRACTION did not: it would be
+        # floored away below, so refuse it rather than move the instant
+        raise InstantRefused(f"{text!r} is not an ISO-8601 instant; expected e.g. {EXAMPLE}")
     if parsed.tzinfo is None:
         raise InstantRefused(
             f"{text!r} needs an explicit timezone offset, e.g. {EXAMPLE}: without one "

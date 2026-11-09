@@ -51,7 +51,7 @@ import polars as pl
 from plotly.subplots import make_subplots
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
-from uqf_frontend import ops, queries, status
+from uqf_frontend import ops, queries, status, workspaces
 from uqf_frontend.catalog import Catalog, Table
 from uqf_frontend.config import Settings
 from uqf_frontend.errors import FrontendError, ValidationFailed
@@ -79,6 +79,8 @@ class Sources:
     settings: Settings
     #: The app's policy for one table (app.run_policy), asked before a read.
     authorize: Callable[[str], None]
+    #: The workspace read: `local`, or a target (workspaces.Scope.target).
+    target: str = "local"
 
 
 @dataclass
@@ -462,6 +464,13 @@ def _covered_days(range_from: str, range_to: str) -> tuple[dt.date, dt.date] | N
 
 
 def _coverage_read(sources: Sources, p: CoverageParams) -> Read:
+    if sources.target != workspaces.LOCAL:
+        # The status files are this server's own stack's: a target's are on
+        # its machine, out of reach, as /ops/backfill is (#2585).
+        raise workspaces.TargetNotScoped(
+            f"chart 'backfill_coverage' reads this server's own backfill status files, "
+            f"so it is not available in workspace {sources.target} - switch to local for it"
+        )
     statuses, unreadable = status.read_dir(status.status_directory(sources.settings))
     rows = [
         {
