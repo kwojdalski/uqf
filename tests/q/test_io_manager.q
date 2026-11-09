@@ -545,6 +545,32 @@
     r:.qetl.io.resolve[`replace;.qt.qetl.io.held[];.qt.qetl.io.incoming[];o];
     .qunit.assertEquals[r`id;1 2 3;"id 1 at 01:00 is before the window, so it stays"]};
 
+/ #2595: a key that leaves out time recurs from window to window; replacing
+/ one window must keep the earlier window's row of the same key.
+.qt.qetl.io.test_replace_keeps_a_key_match_outside_the_window:{[t]
+    held:([] account:`A1`A1; bal:100 110f; time:2026.01.01D09:00:00.000000000 2026.01.01D10:00:00.000000000);
+    o:`row_key`target`time_column`range_from`range_to!(`account;`t;`time;2026.01.01D10:00:00.000000000;2026.01.01D11:00:00.000000000);
+    r:.qetl.io.resolve[`replace;held;([] account:enlist `A1; bal:enlist 111f; time:enlist 2026.01.01D10:00:00.000000000);o];
+    .qunit.assertEquals[r`bal;100 111f;"the 09:00 row stays, the 10:00 row is restated"]};
+
+.qt.qetl.io.test_hdb_replace_of_an_hour_keeps_the_earlier_hour:{[t]
+    root:.qt.qetl.io.hdb_dir[];
+    m:.qetl.io.hdb[root;`time];
+    snap:{[ts;v] ([] time:2#ts; sym:`ACC1`ACC2; account:`A1`A2; bal:v)};
+    o:{[f;t] `on_conflict`row_key`time_column`range_from`range_to!(`replace;`account;`time;f;t)};
+    .qetl.io.write_keyed[m;`iobal_hr;snap[2026.01.01D09:00:00.000000000;100 200f];o[2026.01.01D09:00:00.000000000;2026.01.01D10:00:00.000000000]];
+    .qetl.io.write_keyed[m;`iobal_hr;snap[2026.01.01D10:00:00.000000000;110 210f];o[2026.01.01D10:00:00.000000000;2026.01.01D11:00:00.000000000]];
+    .qunit.assertEquals[asc .qt.qetl.io.part[root;2026.01.01;`iobal_hr]`bal;100 110 200 210f;"both hours are in the partition"]};
+
+.qt.qetl.io.test_memory_replace_of_a_day_keeps_the_previous_day:{[t]
+    `iobal_keep set 0#.qt.qetl.io.balances[2026.01.01;100 200f];
+    o:.qt.qetl.io.balance_opts;
+    .qetl.io.write_keyed[.qetl.io.memory;`iobal_keep;.qt.qetl.io.balances[2026.01.01;100 200f];o];
+    .qetl.io.write_keyed[.qetl.io.memory;`iobal_keep;.qt.qetl.io.balances[2026.01.02;110 210f];
+        @[@[o;`range_from;:;2026.01.02D00:00:00.000000000];`range_to;:;2026.01.03D00:00:00.000000000]];
+    .qunit.assertEquals[(get `iobal_keep)`bal;100 200 110 210f;"the 1st's balances survive the 2nd's replace"];
+    delete iobal_keep from `.};
+
 .qt.qetl.io.test_a_batch_that_repeats_a_key_writes_it_once:{[t]
     b:([] id:3 3; v:30 31; time:2#2026.01.02D03:00:00.000000000);
     .qunit.assertEquals[exec v from .qetl.io.resolve[`upsert;.qt.qetl.io.held[];b;.qt.qetl.io.opts[]] where id=3;enlist 31;
