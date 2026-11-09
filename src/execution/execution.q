@@ -425,16 +425,19 @@
 / WHAT EACH ORDER CONTRIBUTES, per target (`any = any part filled, `full =
 / all of it) and per horizon h:
 / .
-/   fill       the target's fill time is within [submit_time; submit_time+h]
-/   cancelled  not that, and it was cancelled before submit_time+h
-/   failure    neither, and the whole horizon was observed
-/   censored   none of those: observation ended before the horizon did, so
-/              the order might still have filled - it is NOT a failure
+/   fill       the whole horizon was observed, and the target's fill time
+/              is within [submit_time; submit_time+h]
+/   cancelled  observed, not that, and cancelled before submit_time+h
+/   failure    observed, and neither
+/   censored   observation ended before the horizon did - whatever has
+/              happened so far, it is NOT a failure, and not a fill either
 / .
 / The estimate is fill / observed, where observed is fill + failure, plus
 / cancelled under cancel_policy `failure. Counting a censored order as a
 / failure is the classic bias here: every order still resting when the data
-/ stops would pull the probability down.
+/ stops would pull the probability down. Censoring is decided by the
+/ window alone: scoring an open horizon's early fills while censoring its
+/ not-yet-fills would push it up instead (#2429).
 / .
 / AS OF, AND NOTHING LATER. An order counts only if submitted at or before
 / as_of, and an event counts only if it happened at or before
@@ -565,11 +568,13 @@
 / @return a symbol vector, one per row
 / @private
 .qf.exec.fill_outcome:{[event_time;cancel_time;horizon_end;known_by]
-    seen_event:(not null event_time) and event_time<=known_by;
-    filled:seen_event and event_time<=horizon_end;
-    seen_cancel:(not null cancel_time) and cancel_time<=known_by;
-    cancelled:(not filled) and seen_cancel and cancel_time<horizon_end;
-    failed:(not filled) and (not cancelled) and horizon_end<=known_by;
+    / An open horizon is censored whatever it has seen so far (#2429), so
+    / every outcome needs the horizon closed by known_by - and then any event
+    / inside it was seen too.
+    observed:horizon_end<=known_by;
+    filled:observed and (not null event_time) and event_time<=horizon_end;
+    cancelled:observed and (not filled) and (not null cancel_time) and cancel_time<horizon_end;
+    failed:observed and (not filled) and not cancelled;
     ?[filled;`fill;?[cancelled;`cancelled;?[failed;`failure;`censored]]]};
 
 / Private: one target's outcomes as rows to be counted - the grouping

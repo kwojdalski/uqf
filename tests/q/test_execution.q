@@ -522,8 +522,25 @@
     / and it is part-filled (20s in) but not complete.
     r:.qf.exec.fill_probability_by[.qt.qf.exec.execution.mk_fill_orders[];0D00:01:00;`symbol$();2026.01.01D10:05:30.000000000;::];
     .qunit.assertEquals[.qt.qf.exec.execution.fill_row[r;`any]`order_count;6;"orders submitted after as_of are not counted at all"];
-    .qunit.assertEquals[.qt.qf.exec.execution.fill_row[r;`any]`censored_count;0;"order 5's first fill at 10:05:20 was already seen"];
+    / Its first fill at 10:05:20 is already seen, but scoring it while an
+    / unfilled open order is censored biases the estimate up (#2429).
+    .qunit.assertEquals[.qt.qf.exec.execution.fill_row[r;`any]`censored_count;1;"order 5's horizon is open, so it is censored though it has part-filled"];
     .qunit.assertEquals[.qt.qf.exec.execution.fill_row[r;`full]`censored_count;1;"its full fill had not happened yet, and might"]};
+
+/ #2429: 100 recent orders, same 0.3 process, 30 already filled 2s in when
+/ as_of falls 5s into their 10s horizon. Scoring those 30 while censoring
+/ the other 70 read 0.46.
+.qt.qf.exec.execution.test_fill_probability_recent_orders_do_not_bias_it:{[t]
+    mk:{[t0;n] s:t0+0D00:01:00*til n; ([] submit_time:s; observed_until:n#0Np;
+        first_fill_time:s+0D00:00:02*n#1 1 1 0N 0N 0N 0N 0N 0N 0N;
+        full_fill_time:s+0D00:00:02*n#1 1 1 0N 0N 0N 0N 0N 0N 0N; cancel_time:n#0Np)};
+    as_of:2026.01.01D12:00:00.000000000;
+    recent:update submit_time:as_of-0D00:00:05,
+        first_fill_time:?[null first_fill_time;0Np;as_of-0D00:00:03],
+        full_fill_time:?[null full_fill_time;0Np;as_of-0D00:00:03] from mk[2026.01.01D11:00:00.000000000;100];
+    r:.qf.exec.fill_probability_by[mk[2026.01.01D09:00:00.000000000;100],recent;0D00:00:10;`symbol$();as_of;::];
+    .qunit.assertEquals[exec fill_probability from r where target=`any;enlist 0.3;"open horizons are censored whatever happened so far"];
+    .qunit.assertEquals[exec censored_count from r where target=`any;enlist 100;"all 100 recent orders, filled or not"]};
 
 .qt.qf.exec.execution.test_fill_probability_fill_on_the_horizon_counts:{[t]
     o:([] submit_time:enlist 2026.01.01D10:00:00.000000000; observed_until:enlist 0Np;
