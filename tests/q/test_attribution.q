@@ -295,6 +295,12 @@
     / #2537: a long horizon read as nanoseconds, a 1 ns markout of 0 pips
     .qunit.assertThrows[{.qf.exec.attribution_review[x 0;x 1;1000;10000;1]};(q;tr);"attribution_review: horizons must be a timespan or list of timespans*";"a long horizon"]};
 
+/ #2541: a keyed trades table (fills keyed on fill_id) threw a bare 'type.
+.qt.qf.exec.attribution.test_review_reads_a_keyed_trades_table:{[t]
+    q:.qt.qf.exec.attribution.review_fixture_quotes[];
+    tr:update fill_id:`$string 100+i from .qt.qf.exec.attribution.review_fixture_trades[];
+    .qunit.assertEquals[.qf.exec.attribution_review[q;`fill_id xkey tr;enlist 0D00:00:01;10000;1];.qf.exec.attribution_review[q;tr;enlist 0D00:00:01;10000;1];"keyed or not, the same review"]};
+
 / #2432: a pair missing from the pip_factor dict got a null factor, so every
 / trade in it read as n_unavailable - the signal for a missing book.
 .qt.qf.exec.attribution.test_review_refuses_a_pair_with_no_pip_factor:{[t]

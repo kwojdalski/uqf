@@ -125,6 +125,9 @@
 /   cross_markout_attribution_with throws
 / @eg .qf.exec.attribution_review_with[.qf.mkt.attribution_convention;.qt.qf.exec.attribution.review_fixture_quotes[];.qt.qf.exec.attribution.review_fixture_trades[];enlist 0D00:00:01;10000;1]`share
 .qf.exec.attribution_review_with:{[conv;quotes;trades;horizons;pip_factor;ref_size]
+    / cols reads a keyed table's key columns too, but trades i looks a row
+    / number up as a key: a bare 'type, as markout_at_horizons had (#2433, #2541)
+    trades:0!trades;
     miss:`time`sym`side except cols trades;
     if[count miss; '"attribution_review: trades is missing column ",string first miss];
     if[0=count trades; '"attribution_review: no trades"];
