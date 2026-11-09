@@ -25,11 +25,11 @@
 
 .qt.qetl.io.remote.client:{[] .qetl.io.remote.manager[{[m] value m};`uat;`deals]}
 
-.qt.qetl.io.remote.send:{[s;b] .qetl.io.write_keyed[.qt.qetl.io.remote.client[];`rdeals;b;.qt.qetl.io.remote.opts s]}
+.qt.qetl.io.remote.send:{[s;b] .qetl.io.write_keyed[.qt.qetl.io.remote.client[];`rdeals;b;.qt.qetl.io.remote.opts[s]]}
 
 / The request a client would send, for cases that tamper with one.
 .qt.qetl.io.remote.request:{[s;b]
-    o:.qt.qetl.io.remote.opts s;
+    o:.qt.qetl.io.remote.opts[s];
     .qetl.io.remote.request_keys!(`uat;`deals;`rdeals;.qetl.io.remote.batch_id[`uat;`deals;`rdeals;o;b];o;b)}
 
 / --- a batch lands through the receiver's manager -------------------------------------
@@ -47,7 +47,7 @@
     .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
     / the receiver commits, the answer is lost on the way back
     lossy:.qetl.io.remote.manager[{[m] value m; '"connection lost"};`uat;`deals];
-    .qunit.assertThrows[{[mgr;b] .qetl.io.write_keyed[mgr;`rdeals;b;.qt.qetl.io.remote.opts `append]}[lossy];
+    .qunit.assertThrows[{[mgr;b] .qetl.io.write_keyed[mgr;`rdeals;b;.qt.qetl.io.remote.opts[`append]]}[lossy];
         .qt.qetl.io.remote.batch[];"connection lost";"the client saw a failure"];
     .qunit.assertEquals[count rdeals;2;"though the receiver committed"];
     .qunit.assertEquals[.qt.qetl.io.remote.send[`append;.qt.qetl.io.remote.batch[]];2;"the retry is acknowledged"];
@@ -74,7 +74,7 @@
     .qt.qetl.io.remote.reset[];
     .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
     .qt.qetl.io.remote.send[`append;.qt.qetl.io.remote.batch[]];
-    o:@[.qt.qetl.io.remote.opts `append;`source_version;:;`v2];
+    o:@[.qt.qetl.io.remote.opts[`append];`source_version;:;`v2];
     .qetl.io.write_keyed[.qt.qetl.io.remote.client[];`rdeals;update notional:5e6 from .qt.qetl.io.remote.batch[];o];
     .qunit.assertEquals[count rdeals;4;"under a new source_version, append does what it says"]};
 
@@ -117,6 +117,16 @@
     .qt.qetl.io.remote.reset[];
     .qunit.assertThrows[{[ignored;b] .qt.qetl.io.remote.send[`append;b]}[::];.qt.qetl.io.remote.batch[];
         "remote: nothing is granted for deals of attachment uat";"refused"]};
+
+.qt.qetl.io.remote.test_two_distinct_pairs_never_share_a_grant:{[t]
+    / joined with "|", (a|b; c) and (a; b|c) were one key (#2316)
+    .qt.qetl.io.remote.reset[];
+    g:{[tgt] `mgr`target`schema`max_rows`users!(.qetl.io.memory;tgt;.qt.qetl.io.remote.schema[];100;`symbol$())};
+    .qetl.io.remote.serve[`$"a|b";`c;g `ra];
+    .qetl.io.remote.serve[`a;`$"b|c";g `rb];
+    .qunit.assertEquals[count 1_key .qetl.io.remote.grants;2;"two grants"];
+    .qunit.assertEquals[.qetl.io.remote.withdraw[`a;`$"b|c"];1b;"the second is withdrawn"];
+    .qunit.assertEquals[.qetl.io.remote.grant_for[`$"a|b";`c]`target;`ra;"the first is still granted, to its own target"]};
 
 .qt.qetl.io.remote.test_a_user_the_grant_does_not_name_is_refused:{[t]
     .qt.qetl.io.remote.reset[];
@@ -202,7 +212,7 @@
     .qunit.assertEquals[.qetl.io.finish .qt.qetl.io.remote.client[];1;"one partition finished"];
     .qunit.assertEquals[count get ` sv .Q.par[root;2026.01.02;`rdeals],`sym;2;"the rows are in the day's partition"];
     late:update time:2026.02.01D09:00:00.000000000 from .qt.qetl.io.remote.batch[];
-    o:@[.qt.qetl.io.remote.opts `upsert;`range_from`range_to;:;2026.02.01D00:00:00.000000000 2026.02.02D00:00:00.000000000];
+    o:@[.qt.qetl.io.remote.opts[`upsert];`range_from`range_to;:;2026.02.01D00:00:00.000000000 2026.02.02D00:00:00.000000000];
     .qunit.assertThrows[{[mgr;x] .qetl.io.write_keyed[mgr;`rdeals;x 0;x 1]}[.qt.qetl.io.remote.client[]];(late;o);
         "hdb_scoped: rdeals would write 2026.02.01*";"the scoped writer's date bounds still hold"];
     .qunit.assertEquals[exec state from .qetl.io.remote.journal where range_from=2026.02.01D00:00:00.000000000;
@@ -218,7 +228,7 @@
     b:`max_date`deadline`destination!(2026.01.31;2000.01.01D00:00:00.000000000;`dest_test);
     .qt.qetl.io.remote.grant[.qetl.io.hdb_scoped[root;`time;b];`symbol$()];
     .qunit.assertThrows[{[mgr;x] .qetl.io.write_keyed[mgr;`rdeals;x 0;x 1]}[.qt.qetl.io.remote.client[]];
-        (.qt.qetl.io.remote.batch[];.qt.qetl.io.remote.opts `upsert);
+        (.qt.qetl.io.remote.batch[];.qt.qetl.io.remote.opts[`upsert]);
         "hdb_scoped: rdeals - the end-of-day fence began at 2000.01.01D00:00:00*";"refused at the fence"];
     .qunit.assertEquals[key root;enlist `sym;"no partition was written"];
     .qunit.assertEquals[distinct exec state from .qetl.io.remote.journal;enlist `pending;"nothing committed"]};
@@ -251,7 +261,7 @@
     $[(0h=type r) and `error~first r; 'last r; r]}
 
 .qt.qetl.io.remote.chunk:{[s;seq;of;b]
-    o:.qt.qetl.io.remote.opts s;
+    o:.qt.qetl.io.remote.opts[s];
     .qetl.io.remote.chunk_keys!(`uat;`deals;`rdeals;.qetl.io.remote.batch_id[`uat;`deals;`rdeals;o;b];o;seq;of;$[of=1; b; enlist b seq])}
 
 .qt.qetl.io.remote.test_a_batch_in_chunks_commits_once_it_is_whole:{[t]
