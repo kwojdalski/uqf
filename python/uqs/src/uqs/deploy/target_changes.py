@@ -349,4 +349,14 @@ def revert(root: Path, ref: str | None, command: str, **kw) -> Result:
         names = [t["table"].split(".", 1)[1] for t in tables if t["table"].startswith("targets.")]
         return Edit(new, ",".join(names) or None, lambda d: expected)
 
-    return change(root, "revert", f"{command} (change {number})", edit, **kw)
+    then = None
+    if entry.get("kind") == "rename":
+        from uqs.deploy import history  # history imports this module
+
+        # the history followed the rename to NEW, so it follows the revert back (#2582)
+        gone = [t["table"] for t in tables if t["before"] and not t["after"]]
+        made = [t["table"] for t in tables if t["after"] and not t["before"]]
+        if len(gone) == len(made) == 1:
+            old, new = (t.split(".", 1)[1] for t in (gone[0], made[0]))
+            then = lambda: history.rename_target(root, new, old)  # noqa: E731
+    return change(root, "revert", f"{command} (change {number})", edit, then=then, **kw)

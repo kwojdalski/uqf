@@ -406,6 +406,17 @@ def test_rename_keeps_the_deployments_recorded_under_the_old_name(declared):
     assert [e["target"] for e in history.read(ROOT)] == ["production"]
 
 
+def test_reverting_a_rename_takes_its_deployments_back_to_the_old_name(declared):
+    """#2582: the history followed the rename but not its revert."""
+    with history._updating(ROOT) as entries:
+        entries.append({"target": "prod", "host": "deploy@prod", "status": "deployed"})
+    assert uqs("target", "rename", "prod", "production").exit_code == 0
+    r = uqs("target", "revert", "last")
+    assert r.exit_code == 0, r.output
+    assert "prod" in targets.read(ROOT)
+    assert [e["target"] for e in history.read(ROOT)] == ["prod"]
+
+
 # ------------------------------------------------------------------------ pushes
 
 
