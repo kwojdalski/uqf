@@ -99,3 +99,12 @@
 .qt.qf.port.risk.test_is_flat_is_false_for_null:{[t]
     .qunit.assertFalse[.qf.port.is_flat 0n;"an unknown quantity is not flat"];
     .qunit.assertEquals[.qf.port.is_flat 0 0n 1e-12 1f;1010b;"a list keeps nulls out of flat too"]};
+
+/ #2431: the percentile index was clamped into range, so 95 (meant as 95%)
+/ silently returned the worst outcome and -3 the best.
+.qt.qf.port.risk.test_var_historical_refuses_a_percentage_confidence:{[t]
+    pat:"var_historical: confidence must be strictly between 0 and 1*";
+    .qunit.assertThrows[.qf.port.var_historical[-100+til 200;];95;pat;"95 is not a confidence level"];
+    .qunit.assertThrows[.qf.port.var_historical[-100+til 200;];0f;pat;"nor is 0"];
+    .qunit.assertThrows[.qf.port.var_historical[-100+til 200;];1f;pat;"nor is 1"];
+    .qunit.assertThrows[.qf.port.var_historical[-100+til 200;];0n;pat;"nor a null"]};

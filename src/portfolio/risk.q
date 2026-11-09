@@ -100,9 +100,13 @@
 / @param confidence one-tailed confidence level, e.g. 0.95 or 0.99
 / @return the loss at that percentile, in the same units as pnl_series -
 /   negative when the percentile outcome is a gain
-/ @throws error when pnl_series holds no non-null outcome
+/ @throws error when pnl_series holds no non-null outcome, or confidence is
+/   not strictly between 0 and 1 - a 95 meant as 95% would otherwise clamp to
+/   the worst outcome without a word, where var_parametric refuses it (#2431)
 / @eg .qf.port.var_historical[-100+til 200;0.95]  -> 90 (5th percentile of a 200-outcome series)
 .qf.port.var_historical:{[pnl_series;confidence]
+    if[not (confidence>0) and confidence<1;
+        '"var_historical: confidence must be strictly between 0 and 1, e.g. 0.95"];
     outcomes:pnl_series where not null pnl_series;
     if[0=count outcomes; '"var_historical: no non-null P&L outcome to take a percentile of"];
     n:count outcomes;
