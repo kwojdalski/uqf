@@ -289,6 +289,18 @@ case["a FIX 4.4 session receives a FIX 4.4 field (the type map is FIX42.xml only
     r:rt with[@[ord;8;:;"FIX.4.4"];528;enlist "A"];
     $[99h=type r; ("A"~r 528; "got 528=",-3!r 528); (0b; describe r)]}];
 
+/ Not a session case: the library reads ./spec/FIX42.xml when it loads.
+nospec:{[]
+    d:dir,"/nospec";
+    system "mkdir -p ",d;
+    system "cp ",dir,"/kdbfix.so ",dir,"/fix.q ",d;
+    (hsym `$d,"/load.q") 0: ("r:@[system;\"l fix.q\";{[e] e}]";"-1 \"signalled: \",$[10h=type r;r;\"nothing\"]";"exit 0");
+    out:system "(cd ",d," && ",qbin," load.q -q 2>&1; echo exit=$?)";
+    / Without the library's load banner (its lines carry U+2588 or U+00BB).
+    out:out where not (out like "*\342\226\210*") or out like "*\302\273*";
+    ((any out like "signalled: *") and any out like "exit=0"; "; " sv out)}
+check["loading the library away from ./spec/FIX42.xml signals in q rather than aborting";`defect;@[nospec;::;{[e] (0b;"threw: ",e)}]];
+
 $[has_python;
     [case["an inbound repeating group reaches q";`defect;raw_only;{[]
         r:raw enlist "35=D|11=ORD1|21=1|55=EURUSD|54=1|60=20160304-14:21:36.567|40=2|78=2|79=A1|80=100|79=A2|80=200";
