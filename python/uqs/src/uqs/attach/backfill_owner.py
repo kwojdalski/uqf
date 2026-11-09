@@ -25,7 +25,7 @@ from typing import Any
 
 from uqs.attach import config
 from uqs.attach.config import AttachmentError
-from uqs.liveness import on_this_host, pid_alive
+from uqs.liveness import process_gone
 from uqs.stack.backfill_status import OWNER_SUBDIR
 
 SUBDIR = OWNER_SUBDIR
@@ -63,7 +63,7 @@ def _live(record: dict[str, Any]) -> bool:
         pid, host = int(record["pid"]), str(record["host"])
     except KeyError, TypeError, ValueError:
         return True  # a record this cannot read is not one it can prove dead
-    return pid_alive(pid) if on_this_host(host) else True
+    return not process_gone(host, pid, record.get("started"))
 
 
 def active(attachment: str, root: Path | None = None) -> list[dict[str, Any]]:

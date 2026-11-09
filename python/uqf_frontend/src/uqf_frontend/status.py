@@ -223,9 +223,10 @@ def _process_gone(status: WorkerStatus) -> bool:
 
     The heartbeat dies with its process, so without this a killed run read
     as running forever. Whether the process is gone is uqs.liveness's rule,
-    the one `uqs job backfill --wait` and the Airflow sensor apply too (#1362).
+    the one `uqs job backfill --wait` and the Airflow sensor apply too (#1362):
+    `updated_at` lets it see a recycled pid for what it is (#2652).
     """
-    return not status.terminal and process_gone(status.host, status.pid)
+    return not status.terminal and process_gone(status.host, status.pid, status.updated_at)
 
 
 def _instant(value: Any) -> str:

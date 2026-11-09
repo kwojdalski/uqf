@@ -103,7 +103,8 @@ def wait_for_outcome(
                 return state, 0, ""
             if state in STATUS_TERMINAL_STATES:
                 return state, 1, str(status.get("error") or "")
-            if process_gone(str(status.get("host", "")), int(status["pid"])):
+            host, pid = str(status.get("host", "")), int(status["pid"])
+            if process_gone(host, pid, status.get("updated_at")):
                 return "abandoned", 1, "its process is gone and it never recorded an outcome"
         sleep(poll_seconds)
 

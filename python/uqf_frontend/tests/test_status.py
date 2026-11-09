@@ -14,6 +14,7 @@ import socket
 import subprocess
 import sys
 import typing
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,13 @@ from uqf_frontend.gateway import FakeGateway
 from uqf_frontend.models.ops import RunState
 
 STATUS_Q = Path(__file__).resolve().parents[3] / "src" / "etl" / "core" / "status.q"
+
+
+def written_now() -> str:
+    """`updated_at` as q writes it, at this moment: a file this live process
+    wrote. One dated before the process started would name a recycled pid,
+    which reads as gone (#2652)."""
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f000")
 
 
 def write_status_file(directory: Path, instance: str, **overrides) -> Path:
@@ -234,7 +242,7 @@ def test_a_missing_directory_is_a_validation_failure_not_a_crash(tmp_path):
 
 def test_summary_counts_failed_separately_from_running(tmp_path):
     write_status_file(tmp_path, "a", state="completed")
-    write_status_file(tmp_path, "b", state="running")
+    write_status_file(tmp_path, "b", state="running", updated_at=written_now())
     write_status_file(tmp_path, "c", state="failed", error="boom")
     write_status_file(tmp_path, "d", state="idle")
     statuses, _ = status.read_dir(tmp_path)
@@ -423,7 +431,7 @@ def test_a_running_file_whose_process_is_gone_reads_as_abandoned(tmp_path):
     """The heartbeat dies with its process, so a killed run read as running
     forever - in this view, the headline count, and the Airflow sensor."""
     write_status_file(tmp_path, "dead1", state="running", pid=_dead_pid())
-    write_status_file(tmp_path, "live1", state="running")
+    write_status_file(tmp_path, "live1", state="running", updated_at=written_now())
     statuses, _ = status.read_dir(tmp_path)
     by_id = {s.instance_id: s for s in statuses}
     assert by_id["dead1"].abandoned is True
