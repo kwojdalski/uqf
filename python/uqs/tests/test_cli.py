@@ -1687,6 +1687,11 @@ def test_connector_logs_shows_the_tail_of_the_log_its_status_names(monkeypatch, 
              "message": "a|b"},
         ),
         ("started, pid 42", {"time": None, "level": None, "message": "started, pid 42"}),
+        # a bracketed level leaves no ] in the message (#2636)
+        (
+            "[2026-11-09 10:00:00] [warn] lag",
+            {"time": "2026-11-09T10:00:00+00:00", "level": "WARNING", "message": "lag"},
+        ),
     ],
 )  # fmt: skip
 def test_connector_logs_json_lines_are_records_as_logs_prints_them(
