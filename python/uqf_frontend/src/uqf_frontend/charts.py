@@ -23,6 +23,11 @@ Each entry in CHARTS is four things:
               triangle three buckets), which keeps the shape a line is read
               by, and anything that cannot be reduced is cut and said to be.
   build       the plotly.py figure, from what `read` returned.
+  requires    the (feature, action) of the view whose data `read` reaches -
+              `usage:read` for the query log, `backfills:read` for the status
+              files, `desk:read` for a published table. POST /charts/{name}
+              needs it as well as charts:read, so a chart never shows a caller
+              what that view would refuse them (#2476).
 
 Why LTTB in Python and not `xbar` in q: the data login may run `.uqf.browse`
 and nothing else (#889), and `.uqf.browse` returns rows. Bucketing in q would
@@ -111,6 +116,8 @@ class Chart:
     max_points: int
     read: Callable[[Sources, Any], Read]
     build: Callable[[Read, Any, int], Built]
+    #: What the caller must also hold to draw it (module docstring).
+    requires: tuple[str, str]
 
 
 @dataclass(frozen=True)
@@ -766,6 +773,7 @@ CHARTS: dict[str, Chart] = {
             max_points=600,
             read=_markout_read,
             build=_markout_build,
+            requires=("desk", "read"),
         ),
         Chart(
             name="backfill_coverage",
@@ -775,6 +783,7 @@ CHARTS: dict[str, Chart] = {
             max_points=4000,
             read=_coverage_read,
             build=_coverage_build,
+            requires=("backfills", "read"),
         ),
         Chart(
             name="mid_spread_fills",
@@ -784,6 +793,7 @@ CHARTS: dict[str, Chart] = {
             max_points=3000,
             read=_mid_spread_read,
             build=_mid_spread_build,
+            requires=("desk", "read"),
         ),
         Chart(
             name="ops_latency",
@@ -793,6 +803,7 @@ CHARTS: dict[str, Chart] = {
             max_points=5000,
             read=_latency_read,
             build=_latency_build,
+            requires=("usage", "read"),
         ),
     )
 }

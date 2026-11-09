@@ -404,11 +404,15 @@ def test_a_write_under_another_workspace_is_not_inspection_modes(
 ):
     """Under a target not in inspection mode the write still goes no further
     than #2029 lets it - its 409 for an unscoped route - but not as
-    inspection mode."""
+    inspection mode. A neutral route (/settings, #2481) reads no stack, so
+    the target does not stop it: it reaches the route's own validation."""
     c, _ = _workspace_client(tmp_path)
     resp = _call(c, method, template, **{workspaces.TARGET_HEADER: "uat"})
     assert not _is_inspection_refusal(resp)
-    assert resp.status_code == 409, resp.text
+    if workspaces.is_neutral(template):
+        assert resp.status_code == 422, resp.text
+    else:
+        assert resp.status_code == 409, resp.text
 
 
 def test_a_read_under_an_inspection_workspace_is_not_refused(tmp_path, registry):

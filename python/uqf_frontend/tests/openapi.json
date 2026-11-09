@@ -801,7 +801,7 @@
     "/charts/{name}": {
       "post": {
         "summary": "Draw Chart",
-        "description": "One prepared chart's figure. The body is validated against the\nchart's own schema; it reads only through the chart's vetted query\n(charts.py), and a table it reads is put to the policy like /query's.",
+        "description": "One prepared chart's figure. The body is validated against the\nchart's own schema; it reads only through the chart's vetted query\n(charts.py), and a table it reads is put to the policy like /query's.\nIt needs the feature of the view whose data it reads, as well as\ncharts:read (#2476).",
         "operationId": "draw_chart_charts__name__post",
         "parameters": [
           {
@@ -1456,7 +1456,7 @@
     "/activity/events": {
       "post": {
         "summary": "Record Activity",
-        "description": "What an operator did in the UI. Intent, as the browser reports it -\nthe server's own rows are the authority on what happened. Written in\none transaction, and with it the count of what the browser could not\nsend. Without the write token, rate-limited (#2019).",
+        "description": "What an operator did in the UI. Intent, as the browser reports it -\nthe server's own rows are the authority on what happened. Written in\none transaction, and with it the count of what the browser could not\nsend. Without the write token, rate-limited (#2019) - its drops as\nwell as its events, so a drop-only batch is not free (#2480).",
         "operationId": "record_activity_activity_events_post",
         "requestBody": {
           "content": {
@@ -2114,6 +2114,18 @@
             "type": "array",
             "maxItems": 16,
             "title": "Drops"
+          },
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{8,64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Id"
           }
         },
         "additionalProperties": false,

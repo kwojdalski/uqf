@@ -288,6 +288,36 @@ def test_an_invalid_action_is_refused_before_acting(tmp_path):
     assert (row["action"], row["outcome"]) == ("process", "refused")
 
 
+@pytest.mark.parametrize(
+    ("method", "path", "body", "status"),
+    [
+        (
+            "post",
+            "/control/backfill",
+            {
+                "worker": "demo_deals_backfill",
+                "source_version": "v1",
+                "range_from": "2026-01-02T00:00:00Z",
+                "range_to": "2026-01-01T00:00:00Z",
+            },
+            422,
+        ),
+        ("put", "/control/processes/nosuchproc/config", {"field": "port", "value": "1"}, 404),
+        ("put", "/control/processes/rdb1/config", {"field": "nosuchfield", "value": "1"}, 422),
+    ],
+)
+def test_a_write_refused_by_validation_before_it_acted_is_refused(
+    tmp_path, method, path, body, status
+):
+    """uqs refuses these before any file is written or process started, so
+    the audit says `refused`, not `unknown` (#2477)."""
+    c = _client(_settings(tmp_path))
+    r = getattr(c, method)(path, json=body)
+    assert r.status_code == status, r.text
+    (row,) = _history(c)
+    assert row["outcome"] == "refused"
+
+
 def test_a_detached_backfill_is_accepted_not_succeeded(tmp_path, monkeypatch):
     def fake(settings, **kw):
         control._acting()
@@ -386,7 +416,7 @@ def test_a_typed_config_value_is_never_stored(tmp_path, monkeypatch):
     """The field is recorded; the value - whatever was typed - is not."""
     _patch_core(
         monkeypatch,
-        set_process_config=lambda p, n, f, v: None,
+        set_process_config=lambda p, n, f, v, dry_run=False: None,
         get_process_config=lambda p, n, base_port=6050: {"procname": n},
     )
     gw = FakeGateway()
@@ -703,6 +733,56 @@ def test_unauthenticated_browser_events_are_rate_limited(tmp_path, monkeypatch):
     assert authorised.post("/activity/events", json=more).status_code == 200, (
         "the operator's token is not rate-limited"
     )
+
+
+#: Six counters a million apiece: what one drop-only batch can claim (#2480).
+_BIG_DROPS = [
+    {"level": level, "reason": reason, "count": 1_000_000}
+    for level in ("actions", "interactions", "debug")
+    for reason in ("sampled", "queue_overflow")
+]
+
+
+def test_drop_reports_without_the_token_are_rate_limited_too(tmp_path, monkeypatch):
+    """#2480: a batch's drops are charged to the no-token bucket as its events
+    are, so once it is empty a drop-only batch is 429 and counts nothing."""
+    monkeypatch.setattr(activity, "BROWSER_EVENT_BURST", 100)
+    monkeypatch.setattr(activity, "BROWSER_EVENTS_PER_SECOND", 0.0)
+    c = TestClient(create_app(gateway=FakeGateway(), settings=_settings(tmp_path)))
+    assert (
+        c.post("/activity/events", json={"events": [_event() for _ in range(100)]}).status_code
+        == 200
+    )
+    before = c.get("/activity").json()["drops"]
+    r = c.post(
+        "/activity/events",
+        json={"events": [], "drops": _BIG_DROPS, "batch_id": activity.new_id()},
+    )
+    assert r.status_code == 429, r.text
+    assert c.get("/activity").json()["drops"] == before
+
+
+def test_a_retried_drop_report_is_counted_once(tmp_path):
+    """#2480: the browser resends a report whose answer it lost with the same
+    batch_id, and the server counts its drops once - as it stores an event
+    once by its event_id."""
+    c = _client(_settings(tmp_path))
+    report = {"events": [], "drops": _BIG_DROPS[:1], "batch_id": activity.new_id()}
+    assert c.post("/activity/events", json=report).status_code == 200
+    assert c.post("/activity/events", json=report).status_code == 200
+    (drop,) = [d for d in c.get("/activity").json()["drops"] if d["reason"] == "sampled"]
+    assert drop["count"] == 1_000_000
+    again = {**report, "batch_id": activity.new_id()}
+    assert c.post("/activity/events", json=again).status_code == 200
+    (drop,) = [d for d in c.get("/activity").json()["drops"] if d["reason"] == "sampled"]
+    assert drop["count"] == 2_000_000
+
+
+def test_a_drop_report_without_a_batch_id_is_refused(tmp_path):
+    c = _client(_settings(tmp_path))
+    r = c.post("/activity/events", json={"events": [], "drops": _BIG_DROPS[:1]})
+    assert r.status_code == 422, r.text
+    assert "batch_id" in r.text
 
 
 def test_a_browser_batch_over_the_size_limit_is_refused_before_it_is_read(tmp_path):

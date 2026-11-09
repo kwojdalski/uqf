@@ -38,6 +38,9 @@ log = get_logger()
 #: stream_health reader and pipeline registry. .z.p, which each record's `at`
 #: is, is UTC; .j.j writes it `2026-11-09T11:35:54.823627317` on KDB-X and
 #: with a `D` for the `T` on PeachQ, and fromisoformat takes either (#2392).
+#: `failing` is only "a batch failed since the previous beat", so a job is
+#: also failing when its `last_failure_at` (`string .z.p`, dotted:
+#: `2026.11.09D14:57:46.381332562`) falls inside the soak (#2474).
 SOAK_PY = r"""
 import json, sys
 from datetime import UTC, datetime
@@ -50,16 +53,20 @@ started = {p for p in sys.argv[2].split(",") if p}
 streaming = {p.procname for p in PIPELINES if p.kind is not PipelineKind.BACKFILL}
 records = stream_health.read(default_paths())
 out = {}
+def epoch(text):
+    day, clock = text[:10].replace(".", "-"), text[11:]
+    stamp, _, fraction = clock.partition(".")
+    at = datetime.fromisoformat(f"{day}T{stamp}.{(fraction or '0')[:6].ljust(6, '0')}")
+    return at.replace(tzinfo=UTC).timestamp()
 def verdict(r):
     if r is None:
         return "no beat", "it wrote no stream_health record"
-    stamp, _, fraction = str(r.get("at", "")).partition(".")
-    at = datetime.fromisoformat(f"{stamp}.{(fraction or '0')[:6].ljust(6, '0')}")
-    if at.replace(tzinfo=UTC).timestamp() < since:
+    if epoch(str(r.get("at", ""))) < since:
         return "no beat", f"its last record is from {r['at']}, before the soak"
-    if r.get("failing"):
+    failed_at = str(r.get("last_failure_at") or "")
+    if r.get("failing") or (failed_at and epoch(failed_at) >= since):
         return "failing", f"{r.get('failed')} batch(es) failed, last: {r.get('last_error')}"
-    return "ok", f"{r.get('ok')} batch(es), none failed since the last beat"
+    return "ok", f"{r.get('ok')} batch(es), none failed during the soak"
 for proc in sorted(started & streaming):
     v, detail = verdict(records.get(proc))
     out[proc] = {"verdict": v, "detail": detail}

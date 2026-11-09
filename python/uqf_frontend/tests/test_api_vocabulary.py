@@ -167,7 +167,7 @@ def test_the_renames_are_steps_of_the_one_history_version():
     """One version scheme for the history file: #2242's column rename is the
     step after #2234's subject split, #2254's `ts` -> `time` the step after
     that, and the reader expects all of them."""
-    assert activity_log.SCHEMA_VERSION == len(activity._MIGRATIONS) == 4
+    assert activity_log.SCHEMA_VERSION == len(activity._MIGRATIONS) == 5
     assert activity._MIGRATIONS[2] == (
         "ALTER TABLE activity RENAME COLUMN dropped TO dropped_detail",
     )
@@ -227,7 +227,7 @@ def test_a_file_at_version_3_takes_only_the_time_rename(tmp_path):
         columns = {r[1] for r in db.execute("PRAGMA table_info(activity)")}
         version = db.execute("PRAGMA user_version").fetchone()[0]
     assert "time" in columns and "ts" not in columns
-    assert version == 4
+    assert version == activity_log.SCHEMA_VERSION
 
 
 def test_a_new_file_ends_at_the_same_shape_as_an_upgraded_one(tmp_path):
@@ -250,7 +250,7 @@ def test_a_new_file_ends_at_the_same_shape_as_an_upgraded_one(tmp_path):
 def test_a_reader_refuses_a_file_not_yet_migrated(tmp_path):
     path = tmp_path / "a.sqlite3"
     _old_history(path, version=2)
-    with pytest.raises(sqlite3.DatabaseError, match="schema 2, this reads 4"):
+    with pytest.raises(sqlite3.DatabaseError, match="schema 2, this reads 5"):
         activity_log.open_readonly(path)
 
 
@@ -259,7 +259,7 @@ def test_a_reader_refuses_a_file_still_saying_ts(tmp_path):
     upgrade, rather than reading when an event happened under the old name."""
     path = tmp_path / "a.sqlite3"
     _old_history(path, version=3)
-    with pytest.raises(sqlite3.DatabaseError, match="schema 3, this reads 4"):
+    with pytest.raises(sqlite3.DatabaseError, match="schema 3, this reads 5"):
         activity_log.open_readonly(path)
 
 

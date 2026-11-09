@@ -13,7 +13,8 @@ named workspace's gateway and processes: Desk (/query, /catalog, /coverage,
 /ops/clients) and the Queue and Usage views. A route that reads no stack
 (NEUTRAL) ignores the header: the target registry, the Services routes - which
 name their target in the path - /compare, which names both its sides in its
-body (#2033), the activity history, identity, health. Every
+body (#2033), the activity history, identity, health, and this frontend's
+own settings - its access policy and runtime settings (#2481). Every
 OTHER route - control, backfill status, any route added later - refuses a
 non-local target with 409 rather than answering from the local stack: a
 route nobody scoped is closed to a target, never silently local.
@@ -96,7 +97,7 @@ SCOPED: frozenset[tuple[str, str]] = frozenset(
 )
 #: Routes that read no stack, and so mean the same whatever the workspace.
 #: Matched by template prefix for the Services and activity families.
-NEUTRAL_PREFIXES: tuple[str, ...] = ("/services", "/activity", "/me/")
+NEUTRAL_PREFIXES: tuple[str, ...] = ("/services", "/activity", "/me/", "/settings")
 NEUTRAL: frozenset[str] = frozenset({"/health", "/workspaces", "/charts", "/compare"})
 
 

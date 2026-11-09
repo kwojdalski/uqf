@@ -381,6 +381,19 @@ def test_neutral_routes_ignore_the_target(declared, targets, local_gw):
     assert not targets.opened
 
 
+def test_settings_mean_the_same_in_every_workspace(declared, targets, local_gw):
+    """#2481: /settings is this frontend's own policy and runtime settings -
+    no stack - so a selected target is ignored, never a 409."""
+    c = _client(_app(targets, local_gw))
+    local = c.get("/settings")
+    assert local.status_code == 200, local.text
+    resp = c.get("/settings", headers={HEADER: "prod-a"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == local.json()
+    assert HEADER not in resp.headers
+    assert not targets.opened
+
+
 def test_a_malformed_target_is_refused(declared, targets, local_gw):
     c = _client(_app(targets, local_gw))
     resp = _query(c, "../etc")

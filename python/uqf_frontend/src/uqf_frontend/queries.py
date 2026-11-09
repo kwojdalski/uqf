@@ -192,9 +192,7 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
                 raise ValidationFailed(f"column {column!r} is a float; expected a number")
             return float(value)
         case QType.LONG:
-            if isinstance(value, bool) or not isinstance(value, int):
-                raise ValidationFailed(f"column {column!r} is a long; expected an integer")
-            return value
+            return _bounded_integer(value, column, "long", _LONG_LIMIT)
         case QType.INT:
             return _bounded_integer(value, column, "int", _INT_LIMIT)
         case QType.SHORT:
@@ -232,16 +230,18 @@ def coerce(value: Any, qtype: QType, column: str, *, as_list: bool) -> Any:
     raise ValidationFailed(f"column {column!r} has unsupported type {qtype}")  # pragma: no cover
 
 
-#: The widest finite int and short q holds. q reserves the null at the
+#: The widest finite long, int and short q holds. q reserves the null at the
 #: bottom (0Ni is -2^31) and the infinities next to it at each end (0Wi is
 #: 2^31-1, -0Wi is -(2^31-1)): a filter value there would match a sentinel,
-#: so the finite range stops one short of each infinity (#2414).
+#: so the finite range stops one short of each infinity (#2414, #2475). A
+#: long past it would not reach q at all: kola fails converting it.
+_LONG_LIMIT = 2**63 - 2
 _INT_LIMIT = 2**31 - 2
 _SHORT_LIMIT = 2**15 - 2
 
 
 def _bounded_integer(value: Any, column: str, name: str, limit: int) -> int:
-    """A JSON integer for an int or short column. Sent as a long, which q
+    """A JSON integer for a long, int or short column. Sent as a long, which q
     compares with the column by value (`5i=5j`, `5h<6j`, `1 2i in 1 2j`), so
     no cast is needed - only the range check, because a value q's int cannot
     hold would otherwise match nothing and say nothing. The exception is an
@@ -289,8 +289,10 @@ def _time_of_day(value: Any, column: str) -> dt.time:
         raise ValidationFailed(f"column {column!r} is a time; {value!r} is not one") from exc
 
 
-#: The widest timespan q holds, in nanoseconds: 0Wn. One further is 0Nn.
-_SPAN_LIMIT = 2**63 - 1
+#: The widest finite timespan q holds, in nanoseconds: one short of 0Wn
+#: (2^63-1), which a filter value would otherwise match; one further is 0Nn
+#: (#2475).
+_SPAN_LIMIT = 2**63 - 2
 
 
 def _nanoseconds(value: Any, column: str) -> pl.Series:
