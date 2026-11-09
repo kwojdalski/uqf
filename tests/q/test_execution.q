@@ -721,3 +721,12 @@
     qs:([] sym:enlist `EURUSD; time:enlist 2026.01.01D00:00:00.000000000; mid:enlist 1.1);
     r:.qf.exec.markout_at_horizons[tr;qs;0D00:00:01 0D00:00:10];
     .qunit.assertEquals[(count r;`markout_pips in cols r);(0;1b);"no rows, and the columns a caller selects"]};
+
+/ #2433: a keyed fills table passed the column check, then indexing it by row
+/ number looked the numbers up as keys and threw a bare 'length.
+.qt.qf.exec.execution.test_markout_at_horizons_accepts_keyed_trades:{[t]
+    tr:([] sym:`EURUSD`EURUSD; time:2026.01.02D10:00:00.000000000 2026.01.02D10:00:05.000000000; side:1 -1; trade_price:1.1 1.1001; pip_factor:10000 10000; fill_id:`a`b);
+    qs:([] sym:4#`EURUSD; time:2026.01.02D10:00:00.000000000+1000000000*0 1 5 6; mid:1.1 1.1002 1.1001 1.0999);
+    r:.qf.exec.markout_at_horizons[`fill_id xkey tr;qs;0D00:00:01];
+    .qunit.assertEquals[r`fill_id;`a`b;"keyed fills mark out, carrying the key"];
+    .qunit.assertEquals[r;.qf.exec.markout_at_horizons[tr;qs;0D00:00:01];"the same rows as the unkeyed fills"]};

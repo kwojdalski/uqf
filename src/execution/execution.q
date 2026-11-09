@@ -52,7 +52,9 @@
 /   synthetic markouts join with uj. Rows are trade-major in the input order of
 /   trades. Any other column of trades (anything beyond `sym`time`side`trade_price`pip_factor,
 /   e.g. a fill_id or book) is carried through AFTER those columns, repeated per
-/   horizon, so a consumer reads it from the row instead of pairing by position
+/   horizon, so a consumer reads it from the row instead of pairing by position.
+/   A keyed trades table (fills keyed on fill_id) is unkeyed first, its key
+/   carried through the same way (#2433)
 / @throws error naming every column missing from trades (`sym`time`side`trade_price`pip_factor)
 /   or quotes (`sym`time`mid) - checked explicitly up front so a malformed/mistyped
 /   table fails loudly here rather than surfacing as a bare `domain error deep inside aj;
@@ -63,6 +65,9 @@
     .qf.exec.require_horizons[`markout_at_horizons;horizons];
     .qf.util.require_cols[`markout_at_horizons;`trades;trades;`sym`time`side`trade_price`pip_factor];
     .qf.util.require_cols[`markout_at_horizons;`quotes;quotes;`sym`time`mid];
+    / require_cols reads a keyed table's key columns too, but indexing one by
+    / row number looks the numbers up as keys: a bare 'length (#2433)
+    trades:0!trades;
     horizon_list:$[0>type horizons; enlist horizons; horizons];
     num_trades:count trades;
     num_horizons:count horizon_list;
