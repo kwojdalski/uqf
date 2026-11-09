@@ -67,8 +67,11 @@
 / Where a setting takes its secret.
 .qetl.source.secret_placeholder:"{secret}"
 
-/ Keys of a key=value setting whose value is a secret, lowercased.
-.qetl.source.secret_keys:("pwd";"password";"passwd";"secret";"token";"apikey";"api_key";"key")
+/ Keys of a key=value setting whose value is a secret, lowercased. The one
+/ list: the live check redacts these same keys, so a key refused inline here
+/ is also masked in its diagnostics (#2334 - two lists, each missing a key
+/ the other had).
+.qetl.source.secret_keys:("pwd";"password";"passwd";"secret";"token";"apikey";"api_key";"accesskey";"access_key";"key")
 
 / Does a setting carry a secret inline? A key=value pair (an ODBC string)
 / whose key is one of secret_keys and whose value is not {secret}, or an IPC
