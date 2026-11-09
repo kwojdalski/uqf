@@ -42,6 +42,7 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,6 +55,11 @@ log = get_logger()
 #: Bound at import, so a test that stubs `subprocess.run` for a cargo build
 #: does not also stub the ps that identifies the process it spawned.
 _run = subprocess.run
+
+#: How long `stop` waits for a SIGTERMed process to exit. A Kafka consumer
+#: leaving its group takes a poll interval and a round trip; a restart that
+#: started the next one sooner would race the old one for the partitions.
+STOP_GRACE_SECONDS = 15.0
 
 #: The locale and timezone every identity is read in, whoever asks (#1055).
 _PS_ENV = {"LC_ALL": "C", "TZ": "UTC0"}
@@ -282,7 +288,9 @@ class DetachedProcess:
 
         SIGTERM, not SIGKILL, so a streamer's `finally` runs - a Kafka
         consumer leaves its group cleanly instead of holding its partitions
-        until the broker's session timeout.
+        until the broker's session timeout. It waits for the process to exit
+        (STOP_GRACE_SECONDS), so a restart does not start the next consumer
+        while the old one is still leaving (#2629).
         """
         pid = self.pid()
         if pid is None:
@@ -318,6 +326,17 @@ class DetachedProcess:
         except ProcessLookupError:
             pass
         self.pid_path.unlink(missing_ok=True)
+        deadline = time.monotonic() + STOP_GRACE_SECONDS
+        while self._alive(pid):
+            if time.monotonic() >= deadline:
+                log.warning(
+                    "{}: pid {} is still exiting {:g}s after SIGTERM",
+                    self.label,
+                    pid,
+                    STOP_GRACE_SECONDS,
+                )
+                break
+            time.sleep(0.05)
         return pid
 
     def status(self, **extra: str) -> dict[str, str]:

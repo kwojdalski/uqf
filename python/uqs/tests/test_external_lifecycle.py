@@ -191,7 +191,9 @@ def test_a_start_time_ps_recomputes_on_each_call_does_not_disown_the_feed(
 
     assert proc.running() and proc.running(), "still ours on every later look"
     assert proc.stop(missing_ok=False) == stranger.pid
-    assert stranger.wait(timeout=5) == -15, "the feed itself was stopped"
+    # stop() waits for the exit and reaps it (#2629), so its Popen sees no status.
+    with pytest.raises(ProcessLookupError):
+        os.kill(stranger.pid, 0)
 
 
 def test_a_feed_whose_argv_was_read_mid_exec_is_still_recognised_as_itself(proc, monkeypatch):
