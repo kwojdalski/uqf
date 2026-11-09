@@ -298,6 +298,55 @@ def test_every_scaffolded_kind_loads_and_registers(tmp_path):
     assert not failed, f"checks that failed: {failed}\n{tail}"
 
 
+#: What `_scaffold_every_kind` ASKED each job for: streaming (subscribe_to, outputs),
+#: bounded (source, dataset). The procname is the default, `<job>1`, for all.
+_ASKED_STREAM = {
+    "smokefeed": ([], ["smoke_ticks"]),
+    "smokepoll": ([], ["smoke_poll_ticks"]),
+    "smokepollc": ([], ["smoke_pollc_ticks"]),
+    "smokeetl": (["smoke_ticks"], ["smoke_stats"]),
+    "smokenorm": (["smoke_ticks"], ["smokenorm"]),
+    "smokehz": (["smoke_poll_ticks", "smoke_ticks"], ["smokehz"]),
+    "smokepass": (["smoke_ticks"], ["smoke_echo"]),
+    "smokederive": (["smoke_ticks"], ["smoke_derived"]),
+}
+_ASKED_BOUNDED = {
+    "smokebf_backfill": ("smokebf", "smoke_hist"),
+    "smokebfd_backfill": ("smokebfd", "smoke_bfd"),
+    "smokedb_backfill": ("smokedb", "smoke_db"),
+    "smokelocal_backfill": ("smokelocal", "smoke_local"),
+    "smokeone_backfill": ("smokeone", "smoke_one"),
+    "smoketwin_backfill": ("smoketwin", "smoke_ticks"),
+}
+
+
+def test_every_scaffolded_declaration_reads_back_as_asked_and_as_q_loads_it(tmp_path):
+    """args -> q declaration -> (the registry's text parser, and q).
+
+    test_declarations_match_q.py holds the parser to q for the jobs already in
+    the tree; a template's spelling of a kind those jobs do not use yet would
+    pass there and be misread here. So each kind is scaffolded, both readers
+    read it back, they must agree field by field, and what they read must be
+    what the scaffold was asked for."""
+    from test_declarations_match_q import _parser_view, _q_view, differences
+
+    _kdbx()
+    _copy_of_the_tree(tmp_path)
+    _scaffold_every_kind(tmp_path)
+    parser, q = _parser_view(tmp_path), _q_view(tmp_path)
+    assert differences(parser, q) == []
+    smoke = {
+        family: {job: fields for job, fields in jobs_.items() if job.startswith("smoke")}
+        for family, jobs_ in parser.items()
+    }
+    assert {
+        job: (f["subscribe_to"], f["outputs"], f["procname"]) for job, f in smoke["stream"].items()
+    } == {job: (*edges, f"{job}1") for job, edges in _ASKED_STREAM.items()}
+    assert {
+        job: (f["source"], f["dataset"], f["procname"]) for job, f in smoke["bounded"].items()
+    } == {job: (*edges, f"{job}1") for job, edges in _ASKED_BOUNDED.items()}
+
+
 #: Every job `_scaffold_every_kind` writes, by the name `.qpipe.job.<job>` it registers under.
 _SCAFFOLDED_JOBS = [
     "smokefeed", "smokepoll", "smokepollc", "smokeetl", "smokenorm", "smokehz",
