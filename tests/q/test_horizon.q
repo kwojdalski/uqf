@@ -82,6 +82,18 @@
         "*claims procname hz_l1 which hz_l already runs*";"the streaming registry refuses it"];
     .qunit.assertFalse[`hz_m in .qetl.job.stream.horizons.defined[];"and nothing half-registered is left"]};
 
+/ #2425: a refused shared_reference declaration used to stay a member of the shared buffer,
+/ so every reference batch of the job that survived threw looking it up.
+.qt.qetl.job.stream.horizons.test_a_refused_shared_registration_leaves_the_buffer_as_it_was:{[t]
+    shared:enlist[`shared_reference]!enlist 1b;
+    nm:.qt.qetl.job.stream.horizons.job[`hz_rx;shared];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_ry;];.qt.qetl.job.stream.horizons.decl_for[`hz_rx],shared;
+        "*claims procname hz_rx1 which hz_rx already runs*";"the streaming registry refuses it"];
+    .qunit.assertFalse[`hz_ry in .qetl.job.stream.horizons.shared.names `hz_refs;"not left in the shared buffer"];
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_refs;.qt.qetl.job.stream.horizons.rf[`a;enlist .qt.qetl.job.stream.horizons.t0+0D00:00:00.5;enlist 1.5]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.horizons.ns[nm;`history];1;"the surviving job buffers its reference"];
+    .qetl.job.stream.horizons.shared.leave nm};
+
 .qt.qetl.job.stream.horizons.test_the_retired_publishes_key_is_refused_and_outputs_holds_exactly_one_table:{[t]
     .qt.qetl.job.stream.horizons.define_transform[];
     old:(`outputs _ .qt.qetl.job.stream.horizons.decl[]),enlist[`publishes]!enlist `hz_out;
@@ -278,6 +290,18 @@
     gone:.qt.qetl.job.stream.horizons.ns[nm;`expired];
     .qunit.assertEquals[(count gone;count .qt.qetl.job.stream.horizons.ns[nm;`pending]);1 0;"given up on after expire_after"];
     .qunit.assertEquals[first gone`reason;`$"no reference for b";"and the diagnostic names the leg"]};
+
+/ #2424: an event with no event_time has no horizon. A null compares below every instant,
+/ so it used to be scored on the first tick - published with a null time and reference.
+.qt.qetl.job.stream.horizons.test_an_event_without_an_event_time_is_expired_not_scored:{[t]
+    nm:.qt.qetl.job.stream.horizons.sjob[`hz_s12;enlist[`event_time]!enlist `source_time];
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;update source_time:0Np from .qt.qetl.job.stream.horizons.sev[`a;.qt.qetl.job.stream.horizons.t0;`e1]];
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.sev[`a;.qt.qetl.job.stream.horizons.t0;`e2]];
+    (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:00.1;
+    .qunit.assertEquals[count .qt.qetl.job.stream.horizons.sent;0;"nothing published: no horizon has elapsed"];
+    .qunit.assertEquals[exec id from .qt.qetl.job.stream.horizons.ns[nm;`pending];enlist `e2;"only the timed event waits"];
+    gone:.qt.qetl.job.stream.horizons.ns[nm;`expired];
+    .qunit.assertEquals[(gone`id;gone`reason);(enlist `e1;enlist `no_event_time);"the untimed one is expired, with the reason"]};
 
 .qt.qetl.job.stream.horizons.test_a_negative_window_keeps_its_history_and_an_older_anchor:{[t]
     / the window reaches 60s back: quotes at T-60s and T-30s must survive

@@ -12,14 +12,16 @@
 / mid, or across venues - the best bid and ask over live venues. One rule per
 / market, read by every consumer that prices from market_data (posbook,
 / last_value), so a market added without one is refused by name rather than
-/ falling into whichever branch each consumer wrote.
-.qf.mkt.price_rules:`fx`crypto!`own_book`across_venues
+/ falling into whichever branch each consumer wrote. An equity book is one
+/ venue's own book (the databento sidecar's MBP-10), priced on its own mid as
+/ the equity markout scores it (#2417).
+.qf.mkt.price_rules:`fx`crypto`equity!`own_book`across_venues`own_book
 
 / The pricing rule for each market.
 / @param markets symbol list
 / @return the rule for each, aligned
 / @throws when a market has no rule, naming it
-/ @eg .qf.mkt.price_rule `fx`crypto`fx  ->  `own_book`across_venues`own_book
+/ @eg .qf.mkt.price_rule `fx`crypto`equity  ->  `own_book`across_venues`own_book
 .qf.mkt.price_rule:{[markets]
     u:distinct markets except key .qf.mkt.price_rules;
     if[count u; '"price_rule: no pricing rule for market ",(", " sv string u)," - add it to .qf.mkt.price_rules"];

@@ -283,7 +283,7 @@ def test_upgrade_migrates_legacy_rows_when_bundle_file_exists(bundle: Path, repo
     (repo / OVERRIDES_FILE).unlink()
     (repo / OVERRIDES_FILE).write_text("procname,field,value\nother_process,startwithall,0\n")
     host = repo / "python/uqs/process_overrides.csv"
-    host.write_text(old + "tap1,extras,-tables quote wide_book\n")
+    host.write_text(old + "tap1,extras,-tables quote wide_orderbook\n")
     (bundle / "bundle.json").write_text('{"name": "piggybank", "version": "1.1.0"}')
     (bundle / "process_overrides.csv").write_text(
         "procname,field,value\npiggy_spread1,startwithall,1\n"
@@ -292,7 +292,7 @@ def test_upgrade_migrates_legacy_rows_when_bundle_file_exists(bundle: Path, repo
     assert (repo / OVERRIDES_FILE).read_text() == (
         "procname,field,value\nother_process,startwithall,0\npiggy_spread1,startwithall,1\n"
     )
-    assert host.read_text() == "procname,field,value\ntap1,extras,-tables quote wide_book\n"
+    assert host.read_text() == "procname,field,value\ntap1,extras,-tables quote wide_orderbook\n"
 
 
 def test_damaged_markers_are_refused() -> None:

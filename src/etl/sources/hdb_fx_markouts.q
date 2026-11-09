@@ -180,15 +180,16 @@
 / How the source reads a window a batch at a time (.qetl.source BATCH READ, source_batch_read.q).
 .qpipe.source.hdb_fx_markouts.batch_read:`window`needs`read`keys`sort!(.qpipe.source.hdb_fx_markouts.window;.qpipe.source.hdb_fx_markouts.needs;.qpipe.source.hdb_fx_markouts.read_batch;enlist[`market_data]!enlist `sym;enlist[`market_data]!enlist `source_time)
 
-/ How far the HDB's books reach, less the furthest horizon: a window ending at or before
+/ How far the HDB's FX books reach, less the furthest horizon: a window ending at or before
 / this has every book its executions are scored against (#1927). The latest book is read
-/ from the newest partition only; a recorder that has not landed any gives -0Wp, and a
+/ from the newest partition only, and only FX's (#2416): a crypto or equity book newer than
+/ the last FX one would overstate it. A recorder that has not landed any gives -0Wp, and a
 / -0Wp bound means nothing is complete yet, so no window is planned.
 / @param h an open handle to the HDB
 / @return the exclusive instant through which the books the scoring needs are present
 / @eg .qpipe.source.hdb_fx_markouts.complete_through[{2026.09.17D10:00:25}]  ->  2026.09.17D10:00:15.000000000
 .qpipe.source.hdb_fx_markouts.complete_through:{[h]
-    latest:.qetl.source.ipc_call[h;{[a] .qetl.mapped.newest a};enlist enlist[`market]!enlist `];
+    latest:.qetl.source.ipc_call[h;{[a] .qetl.mapped.newest a};enlist enlist[`market]!enlist `fx];
     / max of no rows is -0Wp, and arithmetic on it wraps to a far-future instant
     $[latest<=-0Wp; -0Wp; latest-.qpipe.transform.markout_core.reach .qpipe.transform.fx_markout_outputs.job_spec]}
 

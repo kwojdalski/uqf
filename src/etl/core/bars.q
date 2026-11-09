@@ -23,10 +23,15 @@
 / LATENESS. A window closes, and its bar is published once, when its end plus
 / the allowed lateness has passed on the process clock. A row that arrives
 / before that amends the still-open window; one that arrives after is dropped
-/ and logged (the `dropped` ledger), because the bar it belongs to is out. A
+/ and logged (the `dropped` ledger), because the bar it belongs to is out. On
+/ the plant's own `time` there is no receipt stamp to judge by, so a row is
+/ dropped only when its window has actually closed (#2423), which the job
+/ remembers for a day. A
 / window is also closed at end of day (on_endofday, #943), for every window of
 / the day that ended, whatever its lateness: the open window must not wait for
-/ a tick that, at the day's roll, belongs to the next day.
+/ a tick that, at the day's roll, belongs to the next day. That is why a width
+/ must divide a day (#2422): then no window straddles the roll, and every
+/ window end of day closes has ended.
 / .
 / REPLAY. The job subscribes to its own output as well and replays with it
 / (restore_from, #943): a replayed bar evicts its window's rows, so a restart
@@ -77,8 +82,8 @@
 / Declare a job that aggregates a stream into time bars.
 / @param name the job's name
 / @param decl dict of procname, events (the table aggregated), transform (one
-/   input, the events plus bar_start), outputs (a one-table symbol list: the bar table), width and
-/   lateness (timespans, lateness may be 0D), period (the timer, how often
+/   input, the events plus bar_start), outputs (a one-table symbol list: the bar table), width (dividing
+/   a day) and lateness (timespans, lateness may be 0D), period (the timer, how often
 /   closed windows are looked for); optionally procname (default `<name>1), by (grouping columns, default
 /   `sym), event_time (default `time), and the passthrough options of
 /   .qetl.job.stream.define (start_with_all, note, on_start, check with on_fail)
@@ -98,6 +103,10 @@
         'who,"'s outputs must be a symbol list of exactly one table - the table it publishes, e.g. enlist `my_table"];
     if[not $[-16h=type decl`width; 0D<decl`width; 0b];
         'who,"'s width must be a positive timespan"];
+    / windows are cut on q's epoch, a midnight: only a width that divides a day makes the
+    / last window end at the roll, which end of day closes every window by (#2422)
+    if[0<>(`long$1D) mod `long$decl`width;
+        'who,"'s width ",string[decl`width]," does not divide a day - a window would straddle midnight, and end of day would close it early"];
     if[not $[-16h=type decl`lateness; 0D<=decl`lateness; 0b];
         'who,"'s lateness must be a timespan, 0D for none"];
     if[not (decl`transform) in .qetl.transform.defined[];
@@ -156,6 +165,14 @@
 / @eg `exec_bars in .qetl.job.stream.bars.defined[]  ->  1b
 .qetl.job.stream.bars.defined:{[] key .qetl.job.stream.bars.registry}
 
+/ Private: how long after its window's end the process clock refuses a row, and so how long a
+/ closed window is remembered: the lateness. On the plant's own `time` the lateness is 0D,
+/ but the plant stamps a row before the job sees it, so the clock passes a window's end
+/ before its last rows land (#2423): there a row is refused only when its window is out
+/ (in `closed`), which is remembered for a day, the clock refusing only a row a day late.
+/ @private
+.qetl.job.stream.bars.refuse_after:{[d] $[`time=d`event_time; 1D|d`lateness; d`lateness]}
+
 / Private: a table's key columns as a list of rows, so membership is one `in`.
 / @private
 .qetl.job.stream.bars.wkey:{[cs;t] flip value flip cs#t}
@@ -180,7 +197,7 @@
     rcv:.qetl.job.stream.clock_of[now;x];
     x:.qetl.job.stream.bars.assign[d`width;d`event_time;(cols[get pq] except `bar_start)#x];
     x:(cols get pq)#x;
-    stale:(x[`bar_start]+(d`width)+d`lateness)<=rcv;
+    stale:(x[`bar_start]+(d`width)+.qetl.job.stream.bars.refuse_after[d])<=rcv;
     out:stale | .qetl.job.stream.bars.wkey[ck;x] in .qetl.job.stream.bars.wkey[ck;get ` sv ns,`closed];
     if[any out;
         gone:x where out;
@@ -228,7 +245,7 @@
     d:.qetl.job.stream.bars.def[name];
     ns:.qetl.job.stream.namespace name; cq:` sv ns,`closed;
     n:.qetl.job.stream.bars.close_windows[name;{[w;l;now;p] (p[`bar_start]+w+l)<=now}[d`width;d`lateness;now]];
-    cq set (get cq) where (((get cq)`bar_start)+(d`width)+d`lateness)>now;
+    cq set (get cq) where (((get cq)`bar_start)+(d`width)+.qetl.job.stream.bars.refuse_after[d])>now;
     n}
 
 / Close every window of the day that ended, whatever its lateness (#943).

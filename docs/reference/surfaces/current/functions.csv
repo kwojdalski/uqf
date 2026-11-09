@@ -2227,6 +2227,7 @@ qpipe.transform.eq_domain,resolve,function,2,spec syms
 qpipe.transform.eq_domain,revision,value,,
 qpipe.transform.eq_domain,rows_for,function,2,tbl s
 qpipe.transform.eq_markout_outputs,available,function,2,spec fr
+qpipe.transform.eq_markout_outputs,calendar_floor,value,,
 qpipe.transform.eq_markout_outputs,calendar_from,value,,
 qpipe.transform.eq_markout_outputs,calendar_horizon,value,,
 qpipe.transform.eq_markout_outputs,calendar_to,value,,

@@ -249,6 +249,28 @@
     .qunit.assertThrows[f;(sp;fr);"eq_markout_outputs: a fill at*";"named refusal"];
     .qunit.assertThrows[f;(sp;fr);"*calendar horizon 2099.12.31*";"naming the horizon"]};
 
+/ #2419: the rule reaches backwards too, so a backfilled fill before calendar_from is scored.
+.qt.qpipe.job.eq_markout.test_fills_before_the_declared_calendar_are_in_session:{[tc]
+    sp:.qpipe.transform.markout_core.validate[.qpipe.transform.eq_domain.domain;.qpipe.transform.eq_markout_outputs.job_spec];
+    / the same weekday 15:00 UTC (mid-session) in 2025, 2026 and 2035
+    fr:([] sym:3#`AAPL; t0:2025.06.16D15:00:00 2026.06.15D15:00:00 2035.06.18D15:00:00; t1:2025.06.16D15:00:05 2026.06.15D15:00:05 2035.06.18D15:00:05);
+    .qunit.assertEquals[.qpipe.transform.eq_markout_outputs.available[sp;fr];111b;"2025 is in session as 2026 and 2035 are"];
+    f:.qt.qpipe.job.eq_markout.shifted_status;
+    .qunit.assertEquals[f 2025.03.07D13:45:00;3#`unavailable;"2025-03-07 is standard time: 13:45 UTC is before the 14:30 open"];
+    .qunit.assertEquals[f 2025.03.10D13:45:00;3#`ok;"2025-03-10 is daylight time: opens 13:30 UTC"];
+    e:([] source_time:enlist 2025.06.16D15:00:00; venue:enlist `XNAS; sym:enlist `AAPL; side:enlist 1; size:enlist 100f; price:enlist 271.5; fill_id:enlist `e1; clock:enlist `venue);
+    m:([] source_time:2025.06.16D15:00:00 2025.06.16D15:00:03 2025.06.16D15:00:20 2025.06.16D15:00:50; sym:4#`AAPL; source:4#`XNAS; bid:271.25 271.5 271.75 272f; ask:271.5 271.75 272 272.25f; clock:4#`venue);
+    r:.qpipe.transform.eq_markout_outputs.live[e;m];
+    .qunit.assertEquals[distinct r`status;enlist `ok;"every row of the 2025 fill is scored"];
+    .qunit.assertEquals[exec move from r where kind=`total, horizon=0D00:00:05;enlist 0.125;"+5s: 271.625 against the 271.5 fill"]};
+
+.qt.qpipe.job.eq_markout.test_a_fill_before_the_calendar_floor_is_refused_not_marked_unavailable:{[tc]
+    sp:.qpipe.transform.markout_core.validate[.qpipe.transform.eq_domain.domain;.qpipe.transform.eq_markout_outputs.job_spec];
+    fr:([] sym:enlist `AAPL; t0:enlist 2006.06.15D15:00:00; t1:enlist 2006.06.15D15:00:05);
+    f:{[a] .qpipe.transform.eq_markout_outputs.available[a 0;a 1]};
+    .qunit.assertThrows[f;(sp;fr);"eq_markout_outputs: a fill at*";"named refusal"];
+    .qunit.assertThrows[f;(sp;fr);"*calendar floor 2007.01.01*";"naming the floor"]};
+
 / --- a live row is the row a refill writes ------------------------------------------------
 
 .qt.qpipe.job.eq_markout.key_order:{[t] `venue`fill_id`horizon`kind`step xasc t}

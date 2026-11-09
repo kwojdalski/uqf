@@ -179,6 +179,23 @@ def _tree(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def test_a_non_job_process_subscribes_only_to_plant_tables():
+    """tap1's default `-tables` names tables the plant has (#2420): TorQ only
+    logs, at info level, a table the tickerplant does not carry, so a stale
+    name taps nothing without an error."""
+    from uqs.model import plant_metadata
+
+    plant = set(plant_metadata.load().tables)
+    for p in registry.NON_JOB_PIPELINES:
+        words = p.extras.split()
+        if "-tables" not in words:
+            continue
+        named = words[words.index("-tables") + 1 :]
+        named = named[: next((i for i, w in enumerate(named) if w.startswith("-")), len(named))]
+        assert named, p.procname
+        assert set(named) <= plant, (p.procname, sorted(set(named) - plant))
+
+
 def test_a_job_file_is_the_whole_registration(tmp_path):
     """The point of the change: drop a job and a worker into the tree and both
     are processes, with ports, and nothing else was edited."""
