@@ -90,6 +90,12 @@
         "; " sv {[j;i;c] string[c],": ",.qf.util.full[j[c] i]," -> ",.qf.util.full j[`$"b_",string c] i}[j;i] each rest where neq[;i]}[j;rest;neq] each bad;
     out,([] rowkey:.qetl.verify.key_text[ks] each j bad; kind:(count bad)#`changed; detail:detail)}
 
+/ Private: why a capture with failed windows is no sample - its producer, how many
+/ windows failed and the distinct failures, as capture_bounded wrote them.
+/ @private
+.qetl.verify.failed_text:{[r]
+    "capture of ",string[r`producer]," failed ",string[count r`failures]," window(s): ","; " sv distinct r`failures}
+
 / Private: a verdict that is not a verdict.
 / @private
 .qetl.verify.unverified:{[reason] `status`reason`findings`basis!(`UNVERIFIED;reason;.qetl.verify.no_differences[];"")}
@@ -112,6 +118,12 @@
     got:{[c;n] first c n}[cap`captures] each names;
     errs:{x`error} each got;
     if[any 0<count each errs; :.qetl.verify.unverified "; " sv errs where 0<count each errs];
+    / A bounded capture with a failed window leaves `rows unset (#2401): it is a
+    / capture that failed, not a producer that returned nothing. A stream
+    / capture's failures are contract messages that come WITH its rows, and are
+    / the schema check's to judge.
+    failed:{[r] ((::)~r`rows) and 0<count r`failures} each got;
+    if[any failed; :.qetl.verify.unverified "; " sv .qetl.verify.failed_text each got where failed];
     if[any {x`limited} each got; :.qetl.verify.unverified "a capture stopped at the page limit, so the window was not read to its end"];
     rows:{[r] r`rows} each got;
     filled:{(98h=type x) and 0<count x} each rows;
