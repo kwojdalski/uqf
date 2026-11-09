@@ -72,6 +72,7 @@ qetl.compression,algos,dict,,
 qetl.compression,apply_columns,function,2,tbl dir
 qetl.compression,beyond_torq,dict,,
 qetl.compression,block_range,value,,
+qetl.compression,column_minage,function,2,m v
 qetl.compression,column_policy,dict,,
 qetl.compression,column_triples,function,1,tbl
 qetl.compression,csv,function,1,

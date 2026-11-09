@@ -169,6 +169,35 @@
         r:.qt.qetl.compression.write.age_plan[root;tbl];
         .qunit.assertEquals[distinct r`action;enlist `compress;"the control: an age table is the age pass's"]}};
 
+/ --- a column left uncompressed (algorithm 0) is never decompressed by the age pass (#2294) ------
+
+.qt.qetl.compression.write.test_a_column_override_of_zero_is_held_out_of_the_age_pass:{[t]
+    .qt.qetl.compression.write.sandboxed {[]
+        tbl:first .qetl.plant.names[];
+        root:.qt.qetl.compression.write.save[tbl;`age];
+        `.qetl.compression.column_policy upsert (tbl;`time;0j;0j;0j);
+        before:.qt.qetl.compression.write.age_plan[root;tbl];
+        .qunit.assertEquals[asc exec column from before where action=`compress;`flag`px`sym;"the other columns are the age pass's"];
+        .qunit.assertFalse[`time in before`column;"time is not in the age pass's selection at all"];
+        / time compressed by someone else - a writer, an older policy - must stay as it is
+        f:.qt.qetl.compression.write.file[root;tbl;`time];
+        .qetl.compression.recompress_column[f;17 2 6];
+        after:.qt.qetl.compression.write.age_plan[root;tbl];
+        .qunit.assertFalse[`decompress in after`action;"the age pass plans no decompression of a column the writer compressed"];
+        .qunit.assertEquals[.qt.qetl.compression.write.triple -21!f;2 17 6i;"and the file is as it was"]}};
+
+.qt.qetl.compression.write.test_a_both_table_leaves_a_column_of_zero_uncompressed_and_the_age_pass_leaves_it_so:{[t]
+    .qt.qetl.compression.write.sandboxed {[]
+        tbl:first .qetl.plant.names[];
+        `.qetl.compression.column_policy upsert (tbl;`time;0j;0j;0j);
+        root:.qt.qetl.compression.write.save[tbl;`both];
+        st:.qt.qetl.compression.write.triple each .qt.qetl.compression.write.state[root;tbl];
+        .qunit.assertEquals[st;`time`sym`px`flag!(0 0 0i;2 17 6i;2 17 6i;2 17 6i);"time uncompressed at save, the rest at the table's"];
+        .qunit.assertEquals[asc get .qt.qetl.compression.write.file[root;tbl;`time];(.qt.qetl.compression.write.batch 20000)`time;"time still reads back"];
+        r:.qt.qetl.compression.write.age_plan[root;tbl];
+        .qunit.assertEquals[distinct r`action;enlist `skip;"the age pass has nothing to do"];
+        .qunit.assertFalse[`time in r`column;"and time is outside it"]}};
+
 / What TorQ's age pass would do to tbl's partition under the policy's own CSV, with the real .cmp
 / loaded for the duration (the fixture of test_torq_compress.q).
 .qt.qetl.compression.write.age_plan:{[root;tbl]
