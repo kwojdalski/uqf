@@ -7,10 +7,12 @@
 / stages them and commits the window only when its last chunk arrives:
 / .
 /   ALL OR NOTHING. A staged batch is not written until every chunk is in, and
-/   then through .qetl.io.remote.accept - the same admission, journal and
-/   id check (the reassembled rows must hash to the id the client claimed) as
-/   a batch sent whole. A window whose chunks stop half-way writes nothing, and
-/   its coverage does not move: the client's publish threw.
+/   then through .qetl.io.remote.accept's own path - the same admission, journal
+/   and id check (the reassembled rows must hash to the id the client claimed)
+/   as a batch sent whole, except that the whole may be larger than max_rows:
+/   max_staged_rows bounds it instead (#2313). A window whose chunks stop
+/   half-way writes nothing, and its coverage does not move: the client's
+/   publish threw.
 / .
 /   BACKPRESSURE. Every chunk is a synchronous call, so a client sends the next
 /   only once the receiver has taken the last; and the receiver holds at most
@@ -81,10 +83,8 @@
 .qetl.io.remote.accept_chunk:{[req;user]
     .qetl.io.remote.require_chunk req;
     whole:(`seq`of`rows _ req),enlist[`batch]!enlist req`rows;
-    k:.qetl.io.remote.grant_key[req`attachment;req`dataset];
-    if[not k in key .qetl.io.remote.grants;
-        '"remote: nothing is granted for ",string[req`dataset]," of attachment ",string req`attachment];
-    .qetl.io.remote.require_admitted[.qetl.io.remote.grants k;whole;user];
+    g:.qetl.io.remote.grant_for[req`attachment;req`dataset];
+    .qetl.io.remote.require_admitted[g;whole;user;g`max_rows];
     id:req`batch_id;
     held:exec rows from .qetl.io.remote.journal where batch_id=id, state=`committed;
     if[count held; :`status`batch_id`rows!(`duplicate;id;first held)];
@@ -103,7 +103,7 @@
         .qetl.io.remote.staged[id]:e;
         :`status`batch_id`rows!(`staged;id;count req`rows)];
     .qetl.io.remote.staged:(enlist id) _ .qetl.io.remote.staged;
-    .qetl.io.remote.accept[(e`req),enlist[`batch]!enlist raze e`chunks;user]}
+    .qetl.io.remote.take[(e`req),enlist[`batch]!enlist raze e`chunks;user;1b]}
 
 / The entry point a client's chunk names: accept_chunk, as this connection's user.
 / @param req the chunk
