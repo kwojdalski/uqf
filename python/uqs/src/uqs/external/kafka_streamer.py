@@ -58,6 +58,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import signal
 import sys
 from datetime import UTC, datetime
 from typing import Any
@@ -210,7 +211,16 @@ def publish_message(q: Any, table: str, msg: Any, fields: list[str]) -> None:
         )
 
 
+def _exit_on_sigterm(signum: int, frame: Any) -> None:
+    """SIGTERM as a clean exit: Python's default terminates without unwinding,
+    so `finally: consumer.close()` never ran and the member held its
+    partitions until the broker's session timeout - the delay `uqs connector
+    stop` sends SIGTERM rather than SIGKILL to avoid (#2629)."""
+    raise SystemExit(0)
+
+
 def main(argv: list[str] | None = None) -> int:
+    signal.signal(signal.SIGTERM, _exit_on_sigterm)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, required=True)

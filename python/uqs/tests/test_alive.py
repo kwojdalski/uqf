@@ -44,6 +44,7 @@ def fake_os(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     monkeypatch.setattr(alive.subprocess, "run", run)
     monkeypatch.setattr(alive, "_process_rows", lambda paths, base_port: ROWS)
+    monkeypatch.setattr(alive, "_hostname_words", lambda flag: set())
     return seen
 
 
@@ -113,3 +114,38 @@ def test_a_ps_that_hangs_is_a_refusal(monkeypatch) -> None:
     monkeypatch.setattr(alive.subprocess, "run", run)
     with pytest.raises(UqsError, match="within 2s"):
         alive.status_table(stack_paths.default_paths(), timeout=2)
+
+
+def test_a_process_on_one_of_this_machines_addresses_is_local(monkeypatch) -> None:
+    """torq.sh starts a row whose host is any `hostname -I` address or
+    `hostname -A` name; a check that left it out could neither see nor stop
+    what torq.sh started (#2579)."""
+    answers = {"-i": "10.0.0.5\n", "-I": "10.0.0.5 192.168.1.7 \n", "-A": "box.lan \n"}
+
+    def run(cmd, **kw):
+        if cmd[0] == "hostname":
+            return subprocess.CompletedProcess(cmd, 0, answers[cmd[1]], "")
+        return subprocess.CompletedProcess(cmd, 0, PS, "")
+
+    monkeypatch.setattr(alive.subprocess, "run", run)
+    rows = [
+        {"host": "192.168.1.7", "proctype": "rdb", "procname": "rdb1"},
+        {"host": "box.lan", "proctype": "rdb", "procname": "rdb10"},
+        {"host": "192.168.1.70", "proctype": "hdb", "procname": "hdb1"},
+    ]
+    monkeypatch.setattr(alive, "_process_rows", lambda paths, base_port: rows)
+    found = alive.instances(stack_paths.default_paths(), base_port=6050)
+    assert set(found) == {"rdb1", "rdb10"}
+
+
+def test_a_hostname_without_the_flags_adds_nothing(monkeypatch) -> None:
+    """BSD hostname (macOS) refuses -I and -A: that is not a failure."""
+
+    def run(cmd, **kw):
+        if cmd[0] == "hostname":
+            return subprocess.CompletedProcess(cmd, 1, "", "hostname: illegal option")
+        raise FileNotFoundError(cmd[0])
+
+    monkeypatch.setattr(alive.subprocess, "run", run)
+    assert alive._local_hosts() >= {"localhost", "127.0.0.1", "::1"}
+    assert "" not in alive._local_hosts()

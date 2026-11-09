@@ -27,23 +27,41 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 
-_PORT_CELL = re.compile(r"^(?:(?P<literal>\d+)|\{(?P<name>\w+)\}(?P<offset>[+-]\d+)?)$")
+_PORT_CELL = re.compile(r"^(?:(?P<literal>[0-9]+)|\{(?P<name>\w+)\}(?P<offset>[+-][0-9]+)?)$")
+_INTEGER = re.compile(r"-?[0-9]+")
+MAX_PORT = 65535
 
 
-def resolve(raw: str | None, env: Mapping[str, str]) -> int | None:
-    """The port a cell names under *env*, or None when it cannot be known.
-
-    None covers an empty cell, text outside the grammar, and a variable that
-    is absent from *env* or not an integer. Never raises: one unreadable row
-    must not take down a whole fleet view, and the caller reports the row as
-    undetermined rather than as some other port.
-    """
+def evaluate(raw: str | None, env: Mapping[str, str]) -> int | None:
+    """The number a cell evaluates to under *env*, unbounded: `resolve`
+    without the 1..65535 check, for a caller that refuses an out-of-range
+    result rather than treating it as unknown (stack/placeholders.py). None
+    and never-raises as `resolve`, otherwise."""
     match = _PORT_CELL.match((raw or "").strip())
     if match is None:
         return None
     if match["literal"] is not None:
         return int(match["literal"])
     value = env.get(match["name"], "").strip()
-    if not value.lstrip("-").isdigit():
+    if not _INTEGER.fullmatch(value):
         return None
     return int(value) + int(match["offset"] or 0)
+
+
+def in_range(port: int) -> bool:
+    """Whether a socket can listen on *port*."""
+    return 0 < port <= MAX_PORT
+
+
+def resolve(raw: str | None, env: Mapping[str, str]) -> int | None:
+    """The port a cell names under *env*, or None when it cannot be known.
+
+    None covers an empty cell, text outside the grammar, a variable that is
+    absent from *env* or not an integer, and a result outside 1..65535: no
+    socket listens on such a number, so naming it would only mislead. Never
+    raises: one unreadable row
+    must not take down a whole fleet view, and the caller reports the row as
+    undetermined rather than as some other port.
+    """
+    port = evaluate(raw, env)
+    return port if port is not None and in_range(port) else None

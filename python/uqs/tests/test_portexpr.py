@@ -26,6 +26,11 @@ CELLS = [
     ("{KDBBASEPORT}+x", None),
     ("", None),
     ("garbage", None),
+    ("99999999", None),
+    ("0", None),
+    ("{KDBBASEPORT}-6050", None),
+    ("{KDBBASEPORT}-7000", None),
+    ("{KDBBASEPORT}+60000", None),
 ]
 
 
@@ -36,6 +41,16 @@ def test_the_shared_resolver(raw, expected):
 
 def test_another_variable_resolves_from_the_environment_it_is_given():
     assert portexpr.resolve("{HDBPORT}-1", {"HDBPORT": "7001"}) == 7000
+
+
+@pytest.mark.parametrize("value", ["--5000", "5\u00b2", "+5000", "5 000", "", "x"])
+def test_an_unparsable_variable_is_undetermined_not_a_crash(value):
+    # "Never raises" is the contract the fleet view leans on (#2521).
+    assert portexpr.resolve("{X}+1", {"X": value}) is None
+
+
+def test_a_negative_variable_with_an_offset_back_in_range_resolves():
+    assert portexpr.resolve("{X}+10", {"X": "-5"}) == 5
 
 
 @pytest.mark.parametrize(("raw", "expected"), CELLS)

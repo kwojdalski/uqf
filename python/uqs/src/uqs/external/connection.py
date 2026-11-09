@@ -106,6 +106,18 @@ TP_CREDENTIAL = FeedOption(
 )
 
 
+#: The stack's base port: one option, every connector lists it in its options=
+#: and passes it to `tickerplant_port`, so a connector reaches a stack started
+#: with `uqs start --base-port N` rather than the runtime's default (#2631).
+BASE_PORT = FeedOption(
+    "base_port",
+    "Stack base port",
+    type=int,
+    default_help="the runtime's own",
+    aliases=("--port",),  # #1729's rename
+)
+
+
 def tp_credential(given: str | None = None, environ: Mapping[str, str] | None = None) -> str:
     """The credential a connector presents to stp1: `given`, else
     $UQF_TP_CREDENTIAL, else the demo default - checked, and logged (by its

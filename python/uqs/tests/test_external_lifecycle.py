@@ -191,7 +191,9 @@ def test_a_start_time_ps_recomputes_on_each_call_does_not_disown_the_feed(
 
     assert proc.running() and proc.running(), "still ours on every later look"
     assert proc.stop(missing_ok=False) == stranger.pid
-    assert stranger.wait(timeout=5) == -15, "the feed itself was stopped"
+    # stop() waits for the exit and reaps it (#2629), so its Popen sees no status.
+    with pytest.raises(ProcessLookupError):
+        os.kill(stranger.pid, 0)
 
 
 def test_a_feed_whose_argv_was_read_mid_exec_is_still_recognised_as_itself(proc, monkeypatch):
@@ -271,3 +273,63 @@ def test_a_launcher_that_execs_its_real_program_is_still_ours(proc):
     )
     assert proc.running(), "the exec'd launcher is the process start() spawned"
     assert proc.stop(missing_ok=False) == pid
+
+
+def test_on_linux_with_no_ps_the_ticks_alone_are_recorded_and_stop_works(proc, monkeypatch):
+    """#2515: with no `ps` (a slim container) the identity was None, the pid
+    file recorded none, and stop() called the feed "another process", deleted
+    the pid file and never signalled it. The ticks alone are the identity."""
+    monkeypatch.setattr(lifecycle, "_ps", lambda pid, *fields, fixed=True: None)
+    monkeypatch.setattr(lifecycle, "_boot_ticks", lambda pid: "boot+4242")
+    pid = proc.start(SLEEP, cwd=proc.pid_path.parent)
+    assert proc.pid_path.read_text() == f"{pid}\nboot+4242\n"
+    assert proc.running()
+    assert proc.stop(missing_ok=False) == pid
+    try:
+        _, status = os.waitpid(pid, 0)
+    except ChildProcessError:  # already reaped: it exited
+        return
+    assert os.WIFSIGNALED(status), "signalled, not orphaned"
+
+
+def test_a_start_that_cannot_identify_its_process_stops_it_and_refuses(proc, monkeypatch):
+    """#2515, elsewhere: no /proc and no answer from ps leaves nothing to
+    identify the process by, so it is stopped and the start refused rather
+    than recorded where stop() can never reach it."""
+    monkeypatch.setattr(lifecycle, "_ps", lambda pid, *fields, fixed=True: None)
+    monkeypatch.setattr(lifecycle, "_boot_ticks", lambda pid: None)
+    with pytest.raises(UqsError, match=r"started pid (\d+) but could not read") as refused:
+        proc.start(SLEEP, cwd=proc.pid_path.parent)
+    assert not proc.pid_path.exists()
+    pid = int(str(refused.value).split("started pid ")[1].split()[0])
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
+
+
+def test_a_child_that_exited_is_not_running_though_nothing_reaped_it(proc, monkeypatch):
+    """#2630: uqs-mcp starts a connector as its own child and keeps no Popen,
+    so a crashed connector stays a zombie, which answers kill(pid, 0) - status
+    said running and a start was refused as "already running". Linux's start
+    ticks, which a zombie keeps, are what made it look like the feed."""
+    monkeypatch.setattr(lifecycle, "_boot_ticks", lambda pid: "boot+4242")
+    proc.start([sys.executable, "-c", "import sys; sys.exit(1)"], cwd=proc.pid_path.parent)
+    deadline = time.monotonic() + 10
+    while proc.running():
+        assert time.monotonic() < deadline, "an exited child still reads as running"
+        time.sleep(0.05)
+    assert proc.status()["running"] == "False"
+    proc.start(SLEEP, cwd=proc.pid_path.parent)  # not refused
+
+
+def test_a_zombie_someone_else_has_not_reaped_reads_as_dead(proc, stranger, monkeypatch, tmp_path):
+    """Not this process's child, so nothing to reap: /proc's state says it is gone."""
+    _fake_proc_stat(tmp_path, stranger.pid, "python", 4242)
+    stat = tmp_path / str(stranger.pid) / "stat"
+    stat.write_text(stat.read_text().replace(") S ", ") Z ", 1))
+    monkeypatch.setattr(lifecycle, "_PROC", tmp_path)
+    assert not proc._alive(stranger.pid)
+
+
+def test_a_pid_file_naming_a_process_group_is_never_alive(proc):
+    proc.pid_path.write_text("0\n\n")
+    assert not proc.running() and not proc._alive(0) and not proc._alive(-1)

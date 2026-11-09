@@ -42,7 +42,8 @@ _CHECKABLE = re.compile(r"\.qpipe\.job\.(?P<job>\w+)\.publish\[\s*`(?P<table>\w+
 def _blank_comments(source: str) -> str:
     """Comment lines emptied rather than dropped, so line numbers stay true.
 
-    The same line rule as `declarations.strip_q_comments`, which drops them.
+    Whole comment lines only - `q_source.strip_q_comments` also drops
+    trailing and block comments, which this check has never needed to.
     """
     return "\n".join("" if ln.lstrip().startswith("/") else ln for ln in source.splitlines())
 

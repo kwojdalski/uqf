@@ -32,8 +32,9 @@ def _process(paths: UqsPaths) -> DetachedProcess:
 
 def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
     """stp1's host, port and credential are every connector's
-    (uqs.external.connection): `options` holds the credential, resolved."""
-    port = connection.tickerplant_port(paths)
+    (uqs.external.connection): `options` holds the base port and the
+    credential, resolved."""
+    port = connection.tickerplant_port(paths, options["base_port"])
     credential = connection.tp_credential(options["tp_credential"])
     runner = Path(__file__).resolve().parent / "flink_vwap_streamer.py"
     cmd = [
@@ -71,6 +72,6 @@ FEED = ExternalFeed(
     start,
     stop,
     status,
-    options=(connection.TP_CREDENTIAL,),
+    options=(connection.BASE_PORT, connection.TP_CREDENTIAL),
     produces={RAW_TABLE: "the external flink_vwap feed (`uqs connector start flink_vwap`)"},
 )
