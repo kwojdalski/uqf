@@ -627,7 +627,6 @@ qetl.kafka.topic,payload_schema,function,1,out
 qetl.kafka.topic,registry,dict,,
 qetl.livecheck,check,function,2,source window
 qetl.livecheck,redact,function,2,text cred
-qetl.livecheck,secret_keys,value,,
 qetl.livecheck,tls_off,dict,,
 qetl.load,declarations,function,1,dirs
 qetl.load,declares,dict,,

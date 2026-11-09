@@ -36,9 +36,8 @@
 
 \d .
 
-/ Setting names whose values are secrets, lower case. Matched against the
-/ `key=value` parts of a credential.
-.qetl.livecheck.secret_keys:`pwd`password`passwd`secret`token`apikey`api_key`accesskey`access_key
+/ Which settings are secrets is .qetl.source.secret_keys, the list sources.csv
+/ is validated with - not a copy here (#2334).
 
 / Settings that turn certificate verification off, lower case: key -> the
 / values that do it. A credential carrying one is refused.
@@ -104,7 +103,7 @@
 .qetl.livecheck.redact:{[text;cred]
     if[0=count cred; :text];
     s:.qetl.livecheck.settings[cred];
-    secrets:value[s] where key[s] in .qetl.livecheck.secret_keys;
+    secrets:value[s] where key[s] in `$.qetl.source.secret_keys;
     / a quoted secret also as it was written, }} and all
     secrets,:{ssr[x;"}";"}}"]} each secrets;
     / an ipc credential host:port:user:password: the password is everything after the third

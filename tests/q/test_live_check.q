@@ -311,3 +311,13 @@
 .qt.qetl.livecheck.test_a_credential_with_no_secret_is_shown_whole:{[t]
     .qunit.assertEquals[.qetl.livecheck.redact["local: /data/hdb does not exist";"/data/hdb"];
         "local: /data/hdb does not exist";"a path is what makes the message actionable"]};
+
+/ #2334: sources.csv validation and the live check each kept a list of secret
+/ keys, and each lacked one the other had - KEY reached a diagnostic unmasked,
+/ an inline ACCESSKEY passed validation. Now one list, held to one policy.
+.qt.qetl.livecheck.test_every_secret_key_is_refused_inline_and_redacted:{[t]
+    ks:.qetl.source.secret_keys,("accesskey";"key");
+    inline:{.qetl.source.inline_secret[`odbc;"DRIVER=x;",upper[x],"=fake_s3cret"]} each ks;
+    .qunit.assertEquals[inline;(count ks)#1b;"each key's value is a secret sources.csv refuses inline"];
+    masked:{s:upper[x],"=fake_s3cret"; .qetl.livecheck.redact["login failed: ",s;"DRIVER=x;",s]} each ks;
+    .qunit.assertEquals[masked;{"login failed: ",upper[x],"=<redacted>"} each ks;"and each key's value is masked in a diagnostic"]};
