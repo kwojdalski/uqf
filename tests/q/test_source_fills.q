@@ -184,6 +184,12 @@
     ok:.qt.qetl.source.fills.with_source[`t_fills;("2026-02-25T14:30:00+00:00,XNAS,a1,AAPL,B,10,271.7,0.1,USD";"2026-02-25T14:31:00Z,XNAS,a2,AAPL,B,10,271.7,0.1,USD");{.qt.qetl.source.fills.window[`t_fills;x]}];
     .qunit.assertEquals[ok`source_time;2026.02.25D14:30:00.000000000 2026.02.25D14:31:00.000000000;"a zero offset and Z are UTC"]};
 
+/ #2548: a padded time parsed, but the offset check read the leading space as the clock's.
+.qt.qetl.source.fills.test_a_time_with_a_leading_space_is_read_as_utc:{[t]
+    r:.qt.qetl.source.fills.with_source[`t_fills;enlist " 2026-02-25T14:31:00.020000,XNAS,a2,AAPL,B,10,271.7,0.1,USD";{.qt.qetl.source.fills.window[`t_fills;x]}];
+    .qunit.assertEquals[r`source_time;enlist 2026.02.25D14:31:00.020000000;"read, not refused as carrying an offset"];
+    .qunit.assertEquals[.qetl.coerce.utc_offset " 2026-02-25T14:30:00.5";("2026-02-25T14:30:00.5";0D);"no offset, as to_timestamp reads it"]};
+
 .qt.qetl.source.fills.test_an_empty_fill_id_refuses_the_window:{[t]
     r:.qt.qetl.source.fills.with_source[`t_fills;enlist "2026-02-25T14:31:00Z,XNAS,,AAPL,B,10,271.7,0.1,USD";{.qt.qetl.source.fills.window[`t_fills;x]}];
     .qunit.assertEquals[r;(`threw;"fills: t_fills data row 1 has an empty fill id (fill_id; 1 row(s) in the window)");"a fill with no id cannot be keyed"]};
