@@ -34,16 +34,26 @@ def catalog_actions(table: str, cols: list[tuple[str, str]], notes: list[str]) -
     tell them nothing. `test_no_scaffold_left.py` fails until someone
     replaces it.
 
+    A browsable table also needs a querypolicy.csv row or a `.qcat.unbounded`
+    reason (tests/q/test_catalog.q, #889), so a SCAFFOLDED reason goes with
+    the description: whether the table is read bounded is a decision nobody
+    has made yet, and the placeholder says so where the to-do list finds it
+    rather than failing the catalog gate unexplained (#2461).
+
     `cols` is accepted and unused - the signature is shared with the other
     scaffold writers, and the columns are `meta`'s answer now, not ours.
     """
     notes.append(
-        f"describe {table}: replace its SCAFFOLDED line in {CATALOG_FILE} - or, if the "
-        "desk should not see it, delete that line and add the table to .qcat.hidden "
-        "with the reason"
+        f"describe {table}: replace its two SCAFFOLDED lines in {CATALOG_FILE} - the "
+        "description, and the .qcat.unbounded reason (or swap that for a querypolicy.csv "
+        "row) - or, if the desk should not see it, delete both and add the table to "
+        ".qcat.hidden with the reason"
     )
     entry = (
         f".qcat.describe[`{table}]:\n"
         f'    "SCAFFOLDED: what one row of {table} is, for someone choosing a table";\n'
+        f".qcat.unbounded[`{table}]:\n"
+        f'    "SCAFFOLDED: how many rows {table} gets a day, and why a whole select of it '
+        'is safe - or a querypolicy.csv row instead";\n'
     )
     return [FileAction(CATALOG_FILE, entry, mode=WriteMode.APPEND)]

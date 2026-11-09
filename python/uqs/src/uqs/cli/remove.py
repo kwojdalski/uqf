@@ -15,13 +15,7 @@ import typer
 
 from uqs.cli import safety
 from uqs.cli.concepts import job_arg
-from uqs.cli.regenerate import (
-    _CONTRACT_SURFACE,
-    _DERIVED,
-    _export_contract_surface,
-    _regenerate_derived,
-    derived_command,
-)
+from uqs.cli.regenerate import report_regeneration
 from uqs.cli.renames import bypass_flag, renamed
 from uqs.cli.safety import ChangesState, OverrideOpt, ReasonOpt, dry_run_note
 from uqs.cli.shared import JOB_AUTHORING_PANEL, _die, _paths, console, job_app, log
@@ -106,12 +100,4 @@ def remove_job(
         return
     removal.apply(repo_root)
     console.print(f"\n[green]removed {removal.name}[/]")
-    for derived, regen in zip(_DERIVED, _regenerate_derived(repo_root), strict=True):
-        state = "regenerated" if regen.returncode == 0 else "[red]could not regenerate[/]"
-        said = "" if regen.returncode == 0 else ":" + regen.stderr
-        console.print(f"{state} via {' '.join(derived)}{said}")
-    if _export_contract_surface(repo_root) is None:
-        console.print(
-            f"[yellow]no q on PATH[/] - run `{derived_command(_CONTRACT_SURFACE)}` where "
-            "q is installed"
-        )
+    report_regeneration(repo_root)

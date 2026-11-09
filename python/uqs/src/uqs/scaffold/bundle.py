@@ -163,6 +163,7 @@ def into_bundle(plan: ScaffoldPlan, bundle_dir: Path) -> ScaffoldPlan:
         if ".qcat.hidden" in note:
             # The installer refuses a bundle table its catalog.q leaves out.
             note = note.split(" - or,")[0] + " - a bundle describes every table it defines"
+            note = note.replace(" (or swap that for a querypolicy.csv row)", "")
         for old, new in renamed.items():
             note = note.replace(old, new)
         note = note.replace(f"{EXTERNAL_DIR}/", f"{bundle_dir}/")

@@ -349,9 +349,10 @@ def _drop_definition(text: str, table: str) -> str:
 
 
 def _drop_catalog(text: str, table: str) -> str:
-    """`text` without `table`'s `.qcat.describe` and `.qcat.hidden` entries and
-    their continuation lines."""
-    for head in (f".qcat.describe[`{table}]:", f".qcat.hidden[`{table}]:"):
+    """`text` without `table`'s `.qcat.describe`, `.qcat.hidden` and
+    `.qcat.unbounded` entries and their continuation lines."""
+    heads = ("describe", "hidden", "unbounded")
+    for head in (f".qcat.{h}[`{table}]:" for h in heads):
         lines = text.splitlines(keepends=True)
         for i, line in enumerate(lines):
             if line.startswith(head):

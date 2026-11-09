@@ -122,13 +122,16 @@ A backfill also gets a worked example, `scripts/examples/<name>_example.q`: it
 runs the worker once on its fixture into a throwaway HDB and shows what it
 published, with no stack running.
 
-A new table's desk catalog entry is written for you: a SCAFFOLDED line in
-[`uqs_catalog.q`](../../scripts/processes/uqs_catalog.q). The description is
-yours: it is read by someone deciding whether your table is the one they want,
-and the table's own name there would pass every test and tell them nothing. If
-the desk should not see the table, delete that line and add the table to
-`.qcat.hidden` with the reason --- `tests/q/test_catalog.q` refuses a published
-table that is in neither list.
+A new table's desk catalog entry is written for you: a SCAFFOLDED description in
+[`uqs_catalog.q`](../../scripts/processes/uqs_catalog.q), and a SCAFFOLDED
+`.qcat.unbounded` reason beside it. The description is yours: it is read by
+someone deciding whether your table is the one they want, and the table's own
+name there would pass every test and tell them nothing. The reason says why a
+whole select of the table is safe to read; replace it with a `querypolicy.csv`
+row where it is not. If the desk should not see the table, delete both and add
+the table to `.qcat.hidden` with the reason --- `tests/q/test_catalog.q` refuses
+a published table that is in neither list, and a browsable one with neither a
+policy row nor an unbounded reason.
 
 Everything that IS derived - `processes.md`, `src/etl/generated/pipeline_dag.q`
 and `docs/man.q` - it regenerates before it returns.

@@ -314,7 +314,19 @@ def test_without_q_the_contract_surface_step_is_named(tmp_path, monkeypatch):
     from uqs.cli import regenerate
 
     monkeypatch.setattr(regenerate, "q_interpreter", lambda: None)
-    assert regenerate._export_contract_surface(tmp_path) is None
+    assert regenerate._regenerate_with_q(tmp_path) is None
+
+
+def test_a_scaffold_regenerates_every_file_a_new_table_or_source_makes_stale():
+    """q_facts.py records a new source and a worker's dataset, and
+    tableproperties.csv - read from it - lists getdata's tables: left stale,
+    their --check hooks and test_catalog.q failed straight after `uqs job new`,
+    and `uqs config sources stub` refused the scaffold's own source (#2461)."""
+    from uqs.cli import regenerate
+
+    targets = [d[1] for d in (*regenerate._DERIVED, *regenerate._WITH_Q)]
+    assert {"q-facts", "table-properties", "contract-surface"} <= set(targets)
+    assert targets.index("q-facts") < targets.index("table-properties")
 
 
 def test_a_backfill_into_a_vendored_table_does_not_redefine_it():
@@ -356,3 +368,21 @@ def test_columns_is_the_old_spelling_of_schema(monkeypatch, argv, given, renames
     _refusals(monkeypatch, "x", "--outputs", "x", *argv)
     assert seen == [given]
     assert said == [rename_support.renamed(*r) for r in renames]
+
+
+def test_a_new_tables_catalog_entry_says_whether_it_is_read_bounded():
+    """test_catalog.q needs a querypolicy.csv row or a .qcat.unbounded reason
+    for every browsable table: the scaffold writes a SCAFFOLDED reason beside
+    the description, which the to-do list finds and `uqs job remove` takes
+    back out (#2461)."""
+    from uqs.scaffold.catalog import catalog_actions
+    from uqs.scaffold.remove import _drop_catalog
+
+    notes: list[str] = []
+    (action,) = catalog_actions("hunt_metric", [], notes)
+    assert ".qcat.unbounded[`hunt_metric]:\n" in action.body
+    reason = action.body.split(".qcat.unbounded[`hunt_metric]:\n", 1)[1]
+    assert reason.strip().startswith('"SCAFFOLDED:') and reason.rstrip().endswith('";')
+    assert any(".qcat.unbounded" in n for n in notes)
+    before = "x:1;\n"
+    assert _drop_catalog(before + action.body, "hunt_metric") == before

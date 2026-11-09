@@ -24,7 +24,7 @@ scaffold pulsefeed:
   create tests/q/test_pulsefeed.q
   append to docs/architecture/stack.md
   append to docs/services/README.md
-  note: describe pulse: replace its SCAFFOLDED line in scripts/processes/uqs_catalog.q - or, if the desk should not see it, delete that line and add the table to .qcat.hidden with the reason
+  note: describe pulse: replace its two SCAFFOLDED lines in scripts/processes/uqs_catalog.q - the description, and the .qcat.unbounded reason (or swap that for a querypolicy.csv row) - or, if the desk should not see it, delete both and add the table to .qcat.hidden with the reason
   note: implement .qpipe.job.pulsefeed.on_timer, then replace the scaffolded test
   note: describe pulsefeed1: replace its SCAFFOLDED card in docs/services/README.md and its SCAFFOLDED comment in docs/architecture/stack.md
   note: add pulsefeed1 to a profile (--profile NAME), or exempt it with --unprofiled REASON - `uqs profile list` shows the sets and their connection budget
