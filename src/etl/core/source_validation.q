@@ -13,7 +13,9 @@
 / `meta`'s `t` column is exactly this, and using it rather than `type each`
 / means an empty table validates the same way a populated one does - which
 / matters because a fixture may legitimately be empty, and a source may
-/ legitimately return no rows for a window.
+/ legitimately return no rows for a window. The one exception is a nested
+/ column: meta reads an empty general list as " ", so check_table lets an
+/ empty table's " " stand for a declared upper-case (nested) type (#2400).
 / @private
 .qetl.source.type_chars:{[tbl] exec t from 0!meta tbl}
 
@@ -46,7 +48,10 @@
 / Private: refuse `tbl` unless it carries `columns` with `types`, naming
 / every missing field and every type mismatch at once. `what` is "" for a
 / source's only input, or "'s input <name>" for one of several. A type of
-/ " " - a general column in a supporting input's contract - accepts any.
+/ " " - a general column in a supporting input's contract - accepts any. An
+/ empty table's nested column is an untyped `()` that meta reads as " ", so
+/ there " " satisfies a declared upper-case type: a quiet window passes
+/ whenever a populated one would (#2400).
 / @private
 .qetl.source.check_table:{[source;what;columns;types;tbl]
     present:.qetl.source.column_names[tbl];
@@ -58,7 +63,8 @@
     checkable:columns where columns in present;
     expected:types columns?checkable;
     actual:chars present?checkable;
-    bad:not (expected=actual) or expected=" ";
+    untyped:(actual=" ") and (expected in .Q.A) and 0=count tbl;
+    bad:not (expected=actual) or (expected=" ") or untyped;
     wrong:checkable where bad;
     if[count missing,wrong;
         '"validate: ",string[source],what," does not satisfy its contract",
