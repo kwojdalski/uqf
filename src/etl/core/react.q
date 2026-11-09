@@ -60,8 +60,8 @@
 /   A replay also RE-FETCHES the window from the source, so a source that
 /   changed since shows the handler its rows now, not the first attempt's.
 / .
-/   A CASCADE TERMINATES. The same (dataset; range) is not dispatched twice
-/   within one drain, and `max_depth` bounds how far a chain may travel. A
+/   A CASCADE TERMINATES. The same publication - (dataset; partition;
+/   source_version; range) - is not dispatched twice within one drain, and `max_depth` bounds how far a chain may travel. A
 /   cycle in the graph therefore stops rather than spinning - .qetl.dag.check_acyclic
 /   refuses a cycle among DECLARED outputs when src/etl/init.q finishes loading
 /   (not at `register`), but a handler can always publish anywhere.
@@ -539,6 +539,12 @@
 / once per drain, so A -> B -> A settles instead of spinning. It is per-drain
 / rather than global on purpose - the same range published again later is a
 / new event and must fire again.
+/ .
+/ Keyed by partition and source_version too (#2332): EURUSD's and USDJPY's
+/ publications of one window are two events, and keyed on the window alone
+/ the second was dropped before its handler ran, recording no outcome. A
+/ cycle still repeats its key - a handler's own publication carries the same
+/ (partition; source_version) each time round - and max_depth bounds the rest.
 / @private
 .qetl.reaction.drain:{[]
     `.qetl.reaction.draining set 1b;
@@ -547,9 +553,9 @@
     while[count .qetl.reaction.queue;
         item:first .qetl.reaction.queue;
         `.qetl.reaction.queue set 1_.qetl.reaction.queue;
-        k:(item`dataset;item`range_from;item`range_to);
+        k:(item`dataset;item`partition;item`source_version;item`range_from;item`range_to);
         / `not any done~\:k`, not `not k in done`: `in` tests ATOM
-        / membership, and k is a triple - it throws 'type rather than
+        / membership, and k is a list - it throws 'type rather than
         / answering false, so the guard would have failed on the first
         / cascade rather than on a repeat.
         if[not any done~\:k;

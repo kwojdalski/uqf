@@ -182,6 +182,19 @@
     .qunit.assertEquals[count select from .qetl.reaction.history where outcome=`ok;2;
         "a -> b -> a settles after each fires once rather than spinning"]};
 
+/ #2332: the guard keys a publication, not only its window. Partitions of one
+/ dataset - and two releases of one partition - publishing the same window in
+/ one drain are distinct events and each reaches the handler once; the exact
+/ same publication queued twice is still dispatched once.
+.qt.qetl.reaction.test_same_window_publications_of_other_partitions_each_fire_once:{[t]
+    .qetl.reaction.on[`a;`by_part;{[ds;f;t] `.qt.qetl.reaction.fired set .qt.qetl.reaction.fired,first .qetl.reaction.published[]`sym}];
+    .qetl.reaction.on[`upstream;`fan_out;{[ds;f;t]
+        {[f;t;p;v] .qetl.reaction.notify_published_for[`a;p;v;f;t;([] sym:enlist p);::]}[f;t] .' (`EURUSD`v1;`USDJPY`v1;`EURUSD`v2;`EURUSD`v1)}];
+    .qetl.reaction.notify[`upstream;.qt.qetl.reaction.d[1];.qt.qetl.reaction.d[2]];
+    .qunit.assertEquals[(.qt.qetl.reaction.fired;count select from .qetl.reaction.history where name=`by_part, outcome=`ok);
+        (`EURUSD`USDJPY`EURUSD;3);
+        "EURUSD, USDJPY and EURUSD's second release each fired once; the repeat of EURUSD v1 did not"]};
+
 .qt.qetl.reaction.test_the_same_range_fires_again_on_a_later_publication:{[t]
     / The cycle guard is per-drain on purpose. Publishing the same range
     / again later is a NEW event - a restatement, say - and must fire.
