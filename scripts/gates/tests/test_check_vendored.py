@@ -4,6 +4,7 @@ change a vendored tree, `scripts/dev/revendor.py` (#2157)."""
 from __future__ import annotations
 
 import importlib.util
+import re
 import shutil
 import subprocess
 import sys
@@ -116,6 +117,51 @@ def test_a_line_added_to_recorded_drift_is_refused(tmp_path):
         out.write(f"{p}\t{listing[p][1]}\t{vendored.file_entry(f)[1]}\twhitespace\n")
     found = vendored.tree_problems(root, tree)
     assert found and any(f.startswith(tree.drift_file) for f in found)
+
+
+# ------------------------------------------------- kdb-fix-adaptor (#2448)
+
+FIX_ADAPTOR = REPO / "lib" / "kdb-fix-adaptor"
+
+
+def _cmake_source_reads(text: str) -> set[str]:
+    """Paths under ${CMAKE_SOURCE_DIR} that a CMakeLists reads: add_library
+    sources, and the input of configure_file and file(COPY). Simple
+    `set(VAR "x")` values are substituted first. include_directories is not
+    a read (a missing include directory is no error), and neither is a path
+    still holding a variable, such as build_package's tarball."""
+    sets = dict(re.findall(r'^\s*set\((\w+)\s+"([^"$]*)"\)', text, re.M))
+    text = re.sub(r"\$\{(\w+)\}", lambda m: sets.get(m[1], m[0]), text)
+    reads: set[str] = set()
+    for call, body in re.findall(r"\b(add_library|configure_file|file)\(([^)]*)\)", text):
+        args = re.findall(r'"\$\{CMAKE_SOURCE_DIR\}/([^"]+)"', body)
+        reads.update(a for a in (args if call == "add_library" else args[:1]) if "${" not in a)
+    return reads
+
+
+def test_fix_adaptor_cmake_reads_only_files_in_the_tree():
+    # Upstream's CMakeLists configured LICENSE.md, which this tree renames, so
+    # `cmake lib/kdb-fix-adaptor` failed before compiling anything (#2448).
+    reads = _cmake_source_reads((FIX_ADAPTOR / "CMakeLists.txt").read_text())
+    assert {"src/main.cxx", "LICENSE-kdb-fix-adaptor", "src/config/spec"} <= reads
+    assert sorted(p for p in reads if not (FIX_ADAPTOR / p).exists()) == []
+
+
+def test_fix_adaptor_cmake_check_catches_a_missing_file():
+    text = (FIX_ADAPTOR / "CMakeLists.txt").read_text()
+    stale = text.replace("/LICENSE-kdb-fix-adaptor", "/LICENSE.md")
+    assert _cmake_source_reads(stale) - _cmake_source_reads(text) == {"LICENSE.md"}
+
+
+def test_fix_adaptor_notice_names_every_recorded_change():
+    # The drift record freezes the bytes; NOTICE.md says what changed and why.
+    # A patch recorded in one but not the other is the state #2448 fixed.
+    (tree,) = [t for t in vendored.load_record(REPO) if t.name == "kdb-fix-adaptor"]
+    drift = vendored.read_drift(REPO, tree)
+    assert drift, "kdb-fix-adaptor carries recorded patches (#2448)"
+    notice = (FIX_ADAPTOR / "NOTICE.md").read_text()
+    assert [p for p in drift if f"`{p}`" not in notice] == []
+    assert "unchanged" not in notice.split("\n## ")[0]  # the opening claim
 
 
 # ----------------------------------------------------- a fixture upstream

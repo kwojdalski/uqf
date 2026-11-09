@@ -57,9 +57,11 @@ are listed, not accepted, in `lib/.vendored/<tree>.drift.tsv`.
   (MIT) and KX's `k.h`, and builds against QuickFIX, which is not included
   (QuickFIX Software License). Upstream calls it alpha and unused in production.
   Four compiled executables upstream committed and its `.gitignore` were not
-  copied (#2292); see `lib/kdb-fix-adaptor/NOTICE.md`. Not loaded by `src/` or
-  anything else in this repo, and not built or verified here: it needs KDB-X,
-  since PeachQ has no `2:`.
+  copied (#2292). `CMakeLists.txt` and `src/main.cxx` carry small local patches
+  so that it builds against current QuickFIX and CMake (#2448); they are listed
+  in `lib/kdb-fix-adaptor/NOTICE.md`. Not loaded by `src/` or anything else in
+  this repo; compiled once, but never loaded or run: it needs KDB-X, since
+  PeachQ has no `2:`.
 - `lib/torq/`, vendored from
   [DataIntellectTech/TorQ](https://github.com/DataIntellectTech/TorQ) at commit
   `a6cee6c`, distributed under the MIT License (full text at
