@@ -97,11 +97,7 @@ def test_an_allow_listed_torq_variable_is_allowed_only_in_its_file(tmp_path):
 def test_a_uqf_variable_a_comment_or_a_string_is_not_a_torq_read(tmp_path):
     root = _tree(
         tmp_path,
-        {
-            "src/etl/core/other.q": (
-                'a:getenv`UQF_STATUS_DIR\n/ getenv`TORQDATA\ns:"getenv`TORQDATA"\n'
-            )
-        },
+        {"src/etl/core/other.q": ('a:getenv`UQF_MODE\n/ getenv`TORQDATA\ns:"getenv`TORQDATA"\n')},
     )
     assert layering.torq_env_reach(root) == []
 
