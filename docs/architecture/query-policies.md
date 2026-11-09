@@ -76,6 +76,12 @@ Some parameters are refused for every ordinary caller, whatever the table:
 `postback` and `join`. Each runs q, or a query, that the policy cannot see into.
 `sqlquery` especially: TorQ's checks return early when they see it.
 
+A request may not name its own `instrumentcolumn` or `timecolumn` either, unless
+it is the table's own in `tableproperties.csv`. TorQ filters `instruments` on
+the table's instrument column whatever the request says (#2593), and `maxrange`
+bounds the primary time column: a `timecolumn` of `date` reads every row of each
+day the window touches (#2589).
+
 A table with no row is refused. So is a policy file that would allow more than
 it says: an unknown operation, or a blank or zero limit. If the file cannot be
 read, the gateway loads no policies and refuses every ordinary request.

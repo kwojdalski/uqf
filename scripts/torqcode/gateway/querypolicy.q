@@ -215,14 +215,26 @@ callerroles:{[] $[0=.z.w;trustedroles;@[{exec role from .pm.userrole where user=
 policyinstcol:{[table]
     @[{first exec instrumentcolumn from .checkinputs.tablepropertiesconfig where tablename=x};table;`sym]}
 
-/ Refuse a request that names its own instrument column. TorQ ignores it and
-/ filters instruments on the table's, so trusting it would let instruments
-/ satisfy a required filter on a column that is never filtered (#2593).
+/ The time column a policy's maxrange bounds: the table's primary time
+/ column in TorQ's table properties.
+policytimecol:{[table]
+    @[{first exec primarytimecolumn from .checkinputs.tablepropertiesconfig where tablename=x};table;`time]}
+
+/ Refuse a request that names its own instrument or time column. TorQ
+/ ignores a request's instrument column and filters instruments on the
+/ table's, so trusting it would let instruments satisfy a required filter on
+/ a column that is never filtered (#2593). The span check bounds the primary
+/ time column alone: `date reads every row of each day the window touches,
+/ and another column is one no policy considered (#2589).
 / @param instcol the table's instrument column
+/ @param timecol the table's primary time column
 / @param dict the request
-checkcolumns:{[instcol;dict]
+checkcolumns:{[instcol;timecol;dict]
+    t:string dict`tablename;
     if[(`instrumentcolumn in key dict)&not instcol~dict`instrumentcolumn;
-        '"querypolicy: ",string[dict`tablename]," filters instruments on ",string[instcol]," - drop instrumentcolumn"];
+        '"querypolicy: ",t," filters instruments on ",string[instcol]," - drop instrumentcolumn"];
+    if[(`timecolumn in key dict)&not timecol~dict`timecolumn;
+        '"querypolicy: ",t," bounds starttime/endtime on ",string[timecol]," - drop timecolumn"];
     dict}
 
 / The policies this gateway enforces. Read once, as it loads; a missing or
@@ -268,7 +280,7 @@ if[(not ()~key`.checkinputs.checkinputs)&not`querypolicywrapped in key`.checkinp
         r:callerroles[];
         if[any r in trustedroles;:f dict];
         c:policyinstcol dict`tablename;
-        dict:f checkprohibited checkcolumns[c] dict;
+        dict:f checkprohibited checkcolumns[c;policytimecol dict`tablename] dict;
         checkrequest[resolvepolicy[allpolicies[];policyceiling;dict`tablename;r];c;dict]}[checkinputs];
     querypolicywrapped:1b]
 

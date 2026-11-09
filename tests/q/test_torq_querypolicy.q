@@ -208,9 +208,20 @@
     / TorQ filters instruments on the table's own column, so a request's
     / instrumentcolumn must not satisfy a required filter on another (#2593).
     d:.qt.qtorq.querypolicy.book,enlist[`instrumentcolumn]!enlist`sym;
-    .qunit.assertThrows[.checkinputs.checkcolumns[`book];d;
+    .qunit.assertThrows[.checkinputs.checkcolumns[`book;`time];d;
         "querypolicy: mkt_orderbook filters instruments on book - drop instrumentcolumn";"not the column TorQ filters"];
-    .qunit.assertEquals[.checkinputs.checkcolumns[`sym;d];d;"the table's own column passes"]};
+    .qunit.assertEquals[.checkinputs.checkcolumns[`sym;`time;d];d;"the table's own column passes"]};
+
+.qt.qtorq.querypolicy.test_a_request_naming_another_time_column_is_refused:{[t]
+    / maxrange bounds the primary time column: `date reads whole days, so a
+    / 1 ns window would return the pair's entire day (#2589).
+    d:@[.qt.qtorq.querypolicy.book;`endtime;:;2026.01.01D00:00:00.000000001];
+    .qunit.assertThrows[.checkinputs.checkcolumns[`sym;`time];d,enlist[`timecolumn]!enlist`date;
+        "querypolicy: mkt_orderbook bounds starttime/endtime on time - drop timecolumn";"a whole day for a nanosecond"];
+    .qunit.assertThrows[.checkinputs.checkcolumns[`sym;`time];d,enlist[`timecolumn]!enlist`source_time;
+        "querypolicy: mkt_orderbook bounds starttime/endtime on time - drop timecolumn";"a column no policy considered"];
+    e:d,enlist[`timecolumn]!enlist`time;
+    .qunit.assertEquals[.checkinputs.checkcolumns[`sym;`time;e];e;"its own time column passes"]};
 
 .qt.qtorq.querypolicy.test_the_wrapped_checkinputs_holds_an_ordinary_caller_to_the_policy:{[t]
     was:.checkinputs.callerroles;held:.checkinputs.querypolicies;
