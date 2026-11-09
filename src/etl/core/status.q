@@ -169,7 +169,7 @@
 / old fallback was "/status", the filesystem root (#2653).
 / @return the directory, as a string
 / @throws "status_dir: set UQF_STATUS_DIR (or TORQDATA)..." when neither is set
-/ @eg .qetl.status.status_dir[]  ->  "output/uqs/status"
+/ @eg 0<count .qetl.status.status_dir[]  ->  1b
 .qetl.status.status_dir:{[]
     d:getenv`UQF_STATUS_DIR;
     if[0<count d; :d];
