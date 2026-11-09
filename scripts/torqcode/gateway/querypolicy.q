@@ -76,6 +76,8 @@ policylist:{[s] {x where not null x}`$"|"vs s}
 / @eg .checkinputs.readquerypolicy `:scripts/torqconfig/dataaccess/querypolicy.csv
 readquerypolicy:{[path]
     t:("SSN***JJN*";enlist",")0:path;
+    / A blank line reads as an all-null row, which would refuse the file (#2592).
+    t:select from t where not null tablename;
     / Qualified: inside qSQL a bare name resolves at the root, not in this
     / namespace, so `policylist` alone was 'policylist at load.
     t:update requiredfilters:.checkinputs.policylist each requiredfilters,
@@ -208,10 +210,32 @@ checkprohibited:{[dict]
 / gateway's own console.
 callerroles:{[] $[0=.z.w;trustedroles;@[{exec role from .pm.userrole where user=x};.z.u;`symbol$()]]}
 
-/ The instrument column for a table, from TorQ's table properties.
-policyinstcol:{[dict]
-    $[`instrumentcolumn in key dict;dict`instrumentcolumn;
-        @[{first exec instrumentcolumn from .checkinputs.tablepropertiesconfig where tablename=x};dict`tablename;`sym]]}
+/ The instrument column for a table, from TorQ's table properties: the one
+/ TorQ filters `instruments` on, whatever a request names.
+policyinstcol:{[table]
+    @[{first exec instrumentcolumn from .checkinputs.tablepropertiesconfig where tablename=x};table;`sym]}
+
+/ The time column a policy's maxrange bounds: the table's primary time
+/ column in TorQ's table properties.
+policytimecol:{[table]
+    @[{first exec primarytimecolumn from .checkinputs.tablepropertiesconfig where tablename=x};table;`time]}
+
+/ Refuse a request that names its own instrument or time column. TorQ
+/ ignores a request's instrument column and filters instruments on the
+/ table's, so trusting it would let instruments satisfy a required filter on
+/ a column that is never filtered (#2593). The span check bounds the primary
+/ time column alone: `date reads every row of each day the window touches,
+/ and another column is one no policy considered (#2589).
+/ @param instcol the table's instrument column
+/ @param timecol the table's primary time column
+/ @param dict the request
+checkcolumns:{[instcol;timecol;dict]
+    t:string dict`tablename;
+    if[(`instrumentcolumn in key dict)&not instcol~dict`instrumentcolumn;
+        '"querypolicy: ",t," filters instruments on ",string[instcol]," - drop instrumentcolumn"];
+    if[(`timecolumn in key dict)&not timecol~dict`timecolumn;
+        '"querypolicy: ",t," bounds starttime/endtime on ",string[timecol]," - drop timecolumn"];
+    dict}
 
 / The policies this gateway enforces. Read once, as it loads; a missing or
 / malformed file leaves none, which refuses every ordinary request rather
@@ -255,8 +279,9 @@ if[(not ()~key`.checkinputs.checkinputs)&not`querypolicywrapped in key`.checkinp
         if[99h<>type dict;:f dict];
         r:callerroles[];
         if[any r in trustedroles;:f dict];
-        dict:f checkprohibited dict;
-        checkrequest[resolvepolicy[allpolicies[];policyceiling;dict`tablename;r];policyinstcol[dict];dict]}[checkinputs];
+        c:policyinstcol dict`tablename;
+        dict:f checkprohibited checkcolumns[c;policytimecol dict`tablename] dict;
+        checkrequest[resolvepolicy[allpolicies[];policyceiling;dict`tablename;r];c;dict]}[checkinputs];
     querypolicywrapped:1b]
 
 \d .dataaccess

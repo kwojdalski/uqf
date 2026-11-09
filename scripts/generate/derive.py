@@ -381,7 +381,11 @@ def _contract_surface_check(contract: ModuleType) -> int:
             file=sys.stderr,
         )
         return 1
-    committed = contract.read_surface(contract.BASELINE)
+    try:
+        committed = contract.read_surface(contract.BASELINE)
+    except ValueError as exc:
+        print(f"{exc} - {_hint('contract-surface')}", file=sys.stderr)
+        return 1
     lines = contract.diff_surfaces(committed, contract.build_surface(), "committed", "current")
     if not lines:
         print(f"{baseline} matches this tree's contract surface")

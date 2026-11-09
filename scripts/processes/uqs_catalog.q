@@ -132,33 +132,33 @@ unbounded:(`symbol$())!();
 unbounded[`predictions`ccy_exposure`reference_data`order_routing`connections`economic_calendar]:
     6#enlist "declared, not yet produced: no rows to bound. Its policy row is due with its first producer";
 unbounded[`config_change]:
-    enlist "one row per watched variable per change - a handful a day";
+    "one row per watched variable per change - a handful a day";
 unbounded[`crypto_book_1s]:
-    enlist "one row per venue and sym per second with an update - at most 86400 a day per pair, a downsample of crypto_book rather than ticks; its policy row is due once a desk reads it through the gateway";
+    "one row per venue and sym per second with an update - at most 86400 a day per pair, a downsample of crypto_book rather than ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`book_liquidity_1m]:
-    enlist "one row per FX provider and requested size per minute with a book - a few thousand a day for a handful of providers and sizes, not ticks; its policy row is due once a desk reads it through the gateway";
+    "one row per FX provider and requested size per minute with a book - a few thousand a day for a handful of providers and sizes, not ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`exec_bar]:
-    enlist "one row per sym per minute - 1440 a day for a sym that trades all day, not ticks; its policy row is due once a desk reads it through the gateway";
+    "one row per sym per minute - 1440 a day for a sym that trades all day, not ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`order_outcomes]:
-    enlist "one row per status event the order sources report - about one a second from the demo orders feed, a few a request from a real OMS: bounded by order flow, not ticks; its policy row is due once a desk reads it through the gateway";
+    "one row per status event the order sources report - about one a second from the demo orders feed, a few a request from a real OMS: bounded by order flow, not ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`order_quality]:
-    enlist "one row per book per window length every five seconds - 52 thousand a day for a book that has traded in the last hour: bounded by books and time, not by ticks; its policy row is due once a desk reads it through the gateway";
+    "one row per book per window length every five seconds - 52 thousand a day for a book that has traded in the last hour: bounded by books and time, not by ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`fx_limit_breach]:
-    enlist "one row per limit newly crossed, throttled so a standing breach does not repeat";
+    "one row per limit newly crossed, throttled so a standing breach does not repeat";
 unbounded[`etl_coverage]:
-    enlist "one ledger row per published window per dataset - hundreds a day, not ticks";
+    "one ledger row per published window per dataset - hundreds a day, not ticks";
 unbounded[`fx_markout]:
-    enlist "a row per component per horizon per execution - about 18 rows a second at one execution a second, not ticks; its policy row is due once a desk reads it through the gateway";
+    "a row per component per horizon per execution - about 18 rows a second at one execution a second, not ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`fx_markout_wide]:
-    enlist "a row per horizon per execution - about 4 rows a second at one execution a second, not ticks; its policy row is due once a desk reads it through the gateway";
+    "a row per horizon per execution - about 4 rows a second at one execution a second, not ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`eq_markout]:
-    enlist "a row per component per horizon per equity fill (six a fill at the shipped grid), at the rate fills arrive - orders of magnitude below ticks; its policy row is due once a desk reads it through the gateway";
+    "a row per component per horizon per equity fill (six a fill at the shipped grid), at the rate fills arrive - orders of magnitude below ticks; its policy row is due once a desk reads it through the gateway";
 unbounded[`deal_positions]:
-    enlist "one row per pair per published window of demo_deals";
+    "one row per pair per published window of demo_deals";
 unbounded[`kafka_dead_letter]:
-    enlist "NOT YET ASSESSED (#1481): empty on a healthy topic and one row per undecodable record otherwise, so its volume is the producer's, not ours. Read with no time range until a querypolicy.csv row has a measured basis";
+    "NOT YET ASSESSED (#1481): empty on a healthy topic and one row per undecodable record otherwise, so its volume is the producer's, not ours. Read with no time range until a querypolicy.csv row has a measured basis";
 unbounded[`imported_trades]:
-    enlist "NOT YET ASSESSED (#1363): found by the catalog gate once it counted worker datasets; a backfilled sample, not a feed - its policy row is due with a measured basis";
+    "NOT YET ASSESSED (#1363): found by the catalog gate once it counted worker datasets; a backfilled sample, not a feed - its policy row is due with a measured basis";
 / One reason for many tables: its length is the list's own, never a typed count (#1840).
 unbounded,:{x!(count x)#enlist y}[`arbitrage`cross_arbitrage`crypto_book`crypto_sim_fills`crypto_trades`demo_deals`event_tape`executions`fx_position`market_data`orders`position`fx_orderbook`superbook`trades`wide_orderbook`client_flow`trades_copy;
     "NOT YET ASSESSED (#889): browsable before this list existed; read with no time range or byte limit, only max_rows, until a querypolicy.csv row with a measured basis replaces this"];
