@@ -35,9 +35,13 @@ def export_table(rows: Any, path: Path) -> None:
         )
 
     suffix = path.suffix.lower()
-    if suffix == ".csv":
-        df.write_csv(path)
-    elif suffix == ".parquet":
-        df.write_parquet(path)
-    else:
+    if suffix not in (".csv", ".parquet"):
         raise UqsError(f"unsupported export extension {suffix!r} - use .csv or .parquet")
+    # a missing or unwritable directory is a refusal, not polars' traceback (#2606)
+    try:
+        if suffix == ".csv":
+            df.write_csv(path)
+        else:
+            df.write_parquet(path)
+    except (OSError, pl.exceptions.PolarsError) as exc:
+        raise UqsError(f"cannot write {path}: {exc}") from None

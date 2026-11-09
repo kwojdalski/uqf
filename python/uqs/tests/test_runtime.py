@@ -283,6 +283,12 @@ def test_an_unknown_extension_is_refused(tmp_path):
         table_export.export_table([{"a": 1}], tmp_path / "out.xlsx")
 
 
+def test_a_path_that_cannot_be_written_is_a_refusal_not_a_traceback(tmp_path):
+    """#2606: polars' FileNotFoundError reached the user as a traceback."""
+    with pytest.raises(UqsError, match="cannot write"):
+        table_export.export_table([{"a": 1}], tmp_path / "missing" / "out.csv")
+
+
 # ---------------------------------------------------- schema_view, live meta
 
 
