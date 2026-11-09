@@ -30,8 +30,19 @@
 
 / A live batch, shaped as it arrives off the tickerplant - the source's own
 / fixture with a `time` prepended, which is what .u.upd does to every message
-/ on receipt.
-.qt.qpipe.job.eq_orderbook.mbp10_batch:{[] update time:.z.p from .qpipe.source.databento_mbp10.fixture[]}
+/ on receipt, and its columns named by the plant table.
+.qt.qpipe.job.eq_orderbook.mbp10_batch:{[] .qt.qpipe.job.eq_orderbook.plant_shaped .qpipe.source.databento_mbp10.fixture[]}
+
+/ Source-contract rows as the tickerplant delivers them: its `time` first and
+/ the instrument named `sym`, as the plant table databento_mbp10 names it.
+.qt.qpipe.job.eq_orderbook.plant_shaped:{[f] `time xcols update time:.z.p from @[cols f;where `symbol=cols f;:;`sym] xcol f}
+
+.qt.qpipe.job.eq_orderbook.test_a_plant_shaped_batch_is_folded_not_refused:{[t]
+    .qt.qpipe.job.eq_orderbook.drive_ready[];
+    live:.qt.qpipe.job.eq_orderbook.mbp10_batch[];
+    .qunit.assertEquals[3#cols live;`time`ts_event`sym;"the batch is the plant table's shape"];
+    .qpipe.job.eq_orderbook.on_batch[`databento_mbp10;live];
+    .qunit.assertEquals[count .qt.qpipe.job.eq_orderbook.last_rows[];count live;"a live batch is folded and published (#2600)"]};
 
 .qt.qpipe.job.eq_orderbook.test_databento_folds_a_live_batch_and_republishes_it:{[t]
     .qt.qpipe.job.eq_orderbook.drive_ready[];

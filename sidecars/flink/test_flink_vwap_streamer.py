@@ -44,12 +44,58 @@ def plant_order(text: str | None = None) -> list[str]:
     return plant_table_fields(str(REPO), "flink_vwap_raw", text=text or plant_text())
 
 
+def by_name(cols) -> dict:
+    return {c.name: c.to_list() for c in cols}
+
+
 def test_columns_follow_the_plant_order():
     records = [r for b in flink_vwap_streamer.batches(ROWS) for r in b]
     cols = flink_vwap_streamer.to_columns(records, plant_order())
-    assert list(cols) == plant_order()
-    assert cols["sym"] == ["EURUSD", "GBPUSD"]
-    assert cols["n"] == [7, 4]
+    assert [c.name for c in cols] == plant_order()
+    assert by_name(cols)["sym"] == ["EURUSD", "GBPUSD"]
+    assert by_name(cols)["n"] == [7, 4]
+
+
+def test_columns_go_as_a_typed_list_not_a_dict():
+    """A dict arrives in q as a dictionary, which the segmented tickerplant's
+    time-stamping refuses with 'type - every window was lost (#2601)."""
+    import polars as pl
+
+    records = [r for b in flink_vwap_streamer.batches(ROWS) for r in b]
+    cols = flink_vwap_streamer.to_columns(records, plant_order())
+    assert isinstance(cols, list)
+    dtypes = {c.name: c.dtype for c in cols}
+    assert dtypes == {
+        "sym": pl.Categorical,
+        "window_end": pl.Datetime("ns"),
+        "vwap": pl.Float64,
+        "volume": pl.Float64,
+        "n": pl.Int64,
+    }
+
+
+class FakeQ:
+    def __init__(self, answer):
+        self.answer, self.calls = answer, []
+
+    def sync(self, *args):
+        self.calls.append(args)
+        return self.answer
+
+
+def test_publish_goes_through_accept_q_and_raises_on_a_refusal():
+    """A bare `.u.upd` answers success for a row the plant sent to its error log."""
+    import pytest
+
+    from uqs.external.kafka_streamer import ACCEPT_Q
+    from uqs.paths import UqsError
+
+    records = [r for b in flink_vwap_streamer.batches(ROWS) for r in b]
+    ok = FakeQ(True)
+    flink_vwap_streamer.publish(ok, "flink_vwap_raw", records, plant_order())
+    assert ok.calls[0][:2] == (ACCEPT_Q, "flink_vwap_raw")
+    with pytest.raises(UqsError, match="type"):
+        flink_vwap_streamer.publish(FakeQ("type"), "flink_vwap_raw", records, plant_order())
 
 
 def test_the_sql_selects_exactly_the_plants_columns():
@@ -77,10 +123,26 @@ def test_a_reordered_plant_reorders_what_is_sent():
     assert order == ["sym", "window_end", "volume", "vwap", "n"]
     records = [r for b in flink_vwap_streamer.batches(ROWS) for r in b]
     cols = flink_vwap_streamer.to_columns(records, order)
-    assert list(cols) == order
+    assert [c.name for c in cols] == order
     # Each value stays under its own name; only the position moves.
-    assert cols["vwap"] == [1.1012, 1.2701]
-    assert cols["volume"] == [3_000_000.0, 1_500_000.0]
+    assert by_name(cols)["vwap"] == [1.1012, 1.2701]
+    assert by_name(cols)["volume"] == [3_000_000.0, 1_500_000.0]
+
+
+def test_the_session_runs_in_utc():
+    """LOCALTIMESTAMP is host-local by default; q reads window_end as UTC (#2603)."""
+    settings = {}
+
+    class Config:
+        def set(self, key, value):
+            settings[key] = value
+
+    class Env:
+        def get_config(self):
+            return Config()
+
+    flink_vwap_streamer.configure(Env())
+    assert settings == {"table.local-time-zone": "UTC"}
 
 
 def test_the_window_query_selects_fields_in_order():

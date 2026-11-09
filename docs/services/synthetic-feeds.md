@@ -6,17 +6,17 @@ The two feeds that invent market data for the demo, and how to add another.
 Starting, stopping and inspecting the stack as a whole is in [running the uqf
 stack](../guides/uqs.md).
 
-![The two feed declarations, both walking the same .qf.demo spot, publish quote and fx_orderbook to stp1; the schema file from bootstrap is what lets the unchanged rdb1, wdb1 and hdb store the new table](../diagrams/synthetic-feeds.svg)
+![The two feed declarations, both reading the same .qf.demo level, publish quote and fx_orderbook to stp1; the schema file from bootstrap is what lets the unchanged rdb1, wdb1 and hdb store the new table](../diagrams/synthetic-feeds.svg)
 
 ## fxfeed1
 
 `src/etl/streaming/fx_feed.q` is a second, independent feed process publishing
 synthetic top-of-book quotes for `EURUSD`/`GBPUSD`/`USDJPY`/`AUDUSD`/`EURJPY` (a
-small random walk around a fixed spot, `+/-` 1 pip wide) into the same `quote`
-table the vendored `feed1` already writes equity quotes into - `sym` is just a
-symbol column, so FX pairs and equity tickers coexist in one table with no
-schema change. It's the concrete worked example for "how do I add a process that
-publishes rows".
+level that wanders around a fixed spot, shared with every other feed through
+`.qf.demo.level`, `+/-` 1 pip wide) into the same `quote` table the vendored
+`feed1` already writes equity quotes into - `sym` is just a symbol column, so FX
+pairs and equity tickers coexist in one table with no schema change. It's the
+concrete worked example for "how do I add a process that publishes rows".
 
 **It is a declaration, not a process script.** Since #204 a feed says what it is
 and the framework does the rest: the job file declares its timer body and the

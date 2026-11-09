@@ -106,12 +106,24 @@
 
 .qt.qpipe.job.crypto_markout.test_the_job_keeps_only_what_scoring_can_use:{[tc]
     k:.qpipe.job.crypto_markout.keep;
-    .qunit.assertEquals[k ([] sym:`$("BTC-USDT";"EURUSD";"ETH-USDT"));101b;"books of BASE-QUOTE pairs"];
+    .qunit.assertEquals[k ([] sym:`$("BTC-USDT";"EURUSD";"ETH-USDT"); source:`a`a`a);101b;"books of BASE-QUOTE pairs"];
     e:.qt.qpipe.job.crypto_markout.ex[.qt.qpipe.job.crypto_markout.t;.qt.qpipe.job.crypto_markout.t;`a;.qt.qpipe.job.crypto_markout.btc;1;62000f;`a1;`venue],
         .qt.qpipe.job.crypto_markout.ex[.qt.qpipe.job.crypto_markout.t;.qt.qpipe.job.crypto_markout.t;`a;`EURUSD;1;1.1;`a2;`receipt],
         .qt.qpipe.job.crypto_markout.ex[.qt.qpipe.job.crypto_markout.t;.qt.qpipe.job.crypto_markout.t;`a;.qt.qpipe.job.crypto_markout.btc;1;62000f;`a3;`],
         .qt.qpipe.job.crypto_markout.ex[0Np;.qt.qpipe.job.crypto_markout.t;`a;.qt.qpipe.job.crypto_markout.btc;1;62000f;`a4;`venue];
     .qunit.assertEquals[k e;1000b;"a crypto pair with an identity, a time and a clock; not FX, not a null clock, not a null time"]};
+
+/ #2574: the resolver prices any BASE-QUOTE symbol, so an equity ticker with a
+/ dash - XNAS `BF-B` - was kept and scored as a pair quoted in `B`.
+.qt.qpipe.job.crypto_markout.test_an_equity_venues_dashed_ticker_is_not_crypto:{[tc]
+    k:.qpipe.job.crypto_markout.keep;
+    bfb:`$"BF-B";
+    .qunit.assertEquals[k ([] sym:(bfb;bfb;.qt.qpipe.job.crypto_markout.btc); source:`XNAS`a`a);011b;"an XNAS book is equity, whatever its ticker"];
+    e:.qt.qpipe.job.crypto_markout.ex[.qt.qpipe.job.crypto_markout.t;.qt.qpipe.job.crypto_markout.t;`XNAS;bfb;1;45f;`x1;`venue],
+        .qt.qpipe.job.crypto_markout.ex[.qt.qpipe.job.crypto_markout.t;.qt.qpipe.job.crypto_markout.t;`a;.qt.qpipe.job.crypto_markout.btc;1;62000f;`a1;`venue];
+    .qunit.assertEquals[k e;01b;"and so is an XNAS fill"];
+    md:([] source_time:.qt.qpipe.job.crypto_markout.t+0D00:00:00 0D00:00:10; sym:2#bfb; source:2#`XNAS; bid:45 46f; ask:45.1 46.1; clock:2#`venue);
+    .qunit.assertEquals[count .qpipe.transform.crypto_markout_outputs.rows[1#e;md];0;"scoring an XNAS fill directly produces no crypto rows"]};
 
 / --- readiness: the wall AND the reference ------------------------------------------
 

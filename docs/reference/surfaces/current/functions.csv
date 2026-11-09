@@ -1111,16 +1111,21 @@ qetl.webhook,check,function,1,raw
 qetl.webhook,post,function,2,target body
 qetl.webhook,request,function,4,host path cred body
 qetl.webhook,status_of,function,1,raw
+qf.demo,cycles,value,,
 qf.demo,drift_one,function,1,s
+qf.demo,level,function,1,t
 qf.demo,level_size_unit,value,,
 qf.demo,levels_one,function,4,mid step dir levels
 qf.demo,levels_size,function,1,levels
 qf.demo,pairs,value,,
+qf.demo,phases,value,,
 qf.demo,pip,value,,
 qf.demo,pip_size,value,,
 qf.demo,size_row_drift,value,,
 qf.demo,size_unit,value,,
+qf.demo,source_level,function,1,t
 qf.demo,spot,value,,
+qf.demo,swing,value,,
 qf.exec,all_rows,function,1,t
 qf.exec,allocate,function,2,trades opts
 qf.exec,attribution_review,function,5,quotes trades horizons pip_factor ref_size
@@ -1500,11 +1505,15 @@ qpipe.job.crypto_mock,publish,value,,
 qpipe.job.crypto_mock,quote_ccy,function,1,s
 qpipe.job.crypto_mock,quote_share,value,,
 qpipe.job.crypto_mock,quote_size,value,,
+qpipe.job.crypto_mock,run_id,value,,
 qpipe.job.crypto_mock,skewed,function,2,p tox
+qpipe.job.crypto_mock,sym_mid,value,,
 qpipe.job.crypto_mock,syms,value,,
 qpipe.job.crypto_mock,tick_seconds,value,,
 qpipe.job.crypto_mock,touch,function,1,mid
 qpipe.job.crypto_mock,toxicity_factor,value,,
+qpipe.job.crypto_mock,venue_jitter,value,,
+qpipe.job.crypto_mock,venue_mids,function,2,mkt mids
 qpipe.job.crypto_mock,venues,value,,
 qpipe.job.crypto_mock,walk,function,1,m
 qpipe.job.demo_deals_backfill,checkpoint,function,1,cursor
@@ -1661,6 +1670,7 @@ qpipe.job.fx_orders_feed,products,value,,
 qpipe.job.fx_orders_feed,publish,value,,
 qpipe.job.fx_orders_feed,seed_id,function,1,
 qpipe.job.fx_orders_feed,sizes,value,,
+qpipe.job.fx_orders_feed,spot,value,,
 qpipe.job.fx_orders_feed,statuses,value,,
 qpipe.job.fx_positions,alert_period,value,,
 qpipe.job.fx_positions,alerts,dict,,

@@ -438,3 +438,18 @@
     .qunit.assertEquals[.qetl.kafka.decoder.unpublished `kafka_flow;`symbol$();"every declared topic's output is one the job publishes"];
     .qetl.kafka.topic.registry[`orphan.topic]:`mapping`output`format`owner!(`kafka_client_flow;`trades;`json;`kafka_flow);
     .qunit.assertEquals[.qetl.kafka.decoder.unpublished `kafka_flow;enlist `orphan.topic;"and one that is not is named"]};
+
+/ #2575: only qty<=0 and price<=0 were refused; a side of hold or null, a null
+/ sym, a null trade_id and an infinite qty were published as trades.
+.qt.qpipe.job.kafka_flow.test_the_client_flow_mapping_refuses_what_cannot_be_a_trade:{[t]
+    ok:enlist `topic`partition`offset`broker_time`sym`side`qty`price`client`trade_id!
+        (`uqf.client.flow;0j;7j;2026.10.20D09:00:00.000000000;`EURUSD;`buy;1e6;1.1;`ACME;100j);
+    map:.qpipe.transform.kafka_client_flow.map;
+    .qunit.assertEquals[count map ok;1;"a well-formed trade maps"];
+    .qunit.assertThrows[map;update side:`hold from ok;"side must be buy or sell: offsets 7";"a hold is not a trade"];
+    .qunit.assertThrows[map;update side:` from ok;"side must be buy or sell: offsets 7";"nor a null side"];
+    .qunit.assertThrows[map;update sym:` from ok;"sym must not be null: offsets 7";"a trade names its instrument"];
+    .qunit.assertThrows[map;update trade_id:0Nj from ok;"trade_id must not be null: offsets 7";"and its id"];
+    .qunit.assertThrows[map;update qty:0w from ok;"quantity must be positive and finite: offsets 7";"an infinite quantity is not one"];
+    .qunit.assertThrows[map;update price:0w from ok;"price must be positive and finite: offsets 7";"nor an infinite price"];
+    .qunit.assertThrows[map;update qty:0f, side:`hold from ok;"quantity must be positive and finite: offsets 7; side must be buy or sell: offsets 7";"every reason is named"]};
