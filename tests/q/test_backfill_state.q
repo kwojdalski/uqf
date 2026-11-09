@@ -157,6 +157,16 @@
         "a lock held by a RUNNING process is refused - breaking it would let two instances advance one checkpoint"];
     .qetl.job.bounded.state.release_lock[`lock_live]};
 
+/ #2497: a restarted container gives its worker the same pid (often 1), so a
+/ lock its killed predecessor left names a pid that is alive - this process.
+/ One recorded before this process began cannot be this process's own.
+.qt.qetl.job.bounded.state.test_a_lock_naming_this_pid_from_before_this_process_began_is_broken:{[t]
+    path:.qt.qetl.job.bounded.state.plant_lock[`lock_reused;.z.i;string .z.h];
+    (hsym `$path,"/owner") 0: enlist .j.j `pid`started`host!(.z.i;2000.01.01D00:00:00;string .z.h);
+    .qunit.assertTrue[0<count .qetl.job.bounded.state.acquire_lock[`lock_reused];
+        "its holder is a predecessor whose pid was reused by this process, so the lock is broken and retaken"];
+    .qetl.job.bounded.state.release_lock[`lock_reused]};
+
 .qt.qetl.job.bounded.state.test_a_lock_from_another_host_is_never_broken:{[t]
     / A dead pid, but not ours to judge: pids are meaningless across hosts.
     .qt.qetl.job.bounded.state.plant_lock[`lock_otherhost;.qt.qetl.job.bounded.state.dead_pid;"some-other-host"];

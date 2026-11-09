@@ -186,6 +186,25 @@
     out:@[system;"ps -p ",string["j"$pid]," > /dev/null 2>&1; echo $?";{[e] ""}];
     $[0=count out; 1b; "0"=first first out]}
 
+/ When this process first loaded this file: a lock owner naming this pid but
+/ started earlier was written by a predecessor whose number this process now
+/ has (#2497). Kept across a reload, since a later value would make a lock
+/ this process took in between look like a predecessor's.
+/ @private
+.qetl.job.bounded.state.loaded_at:@[get;`.qetl.job.bounded.state.loaded_at;{[e] .z.p}]
+
+/ Private: does a lock owner name THIS pid on this host, recorded before this
+/ process began? That holder is gone - only its number lives on, in the
+/ process asking - which a restarted container makes the usual case: its
+/ worker is pid 1 again (#2497). An owner without a readable `started`
+/ is not judged here.
+/ @private
+.qetl.job.bounded.state.held_by_predecessor:{[o]
+    if[not ("j"$o`pid)=.z.i; :0b];
+    if[not `started in key o; :0b];
+    started:@["P"$;o`started;{[e] 0Np}];
+    $[null started; 0b; started<.qetl.job.bounded.state.loaded_at]}
+
 / Is this lock left behind by a process that is gone?
 / .
 / Four ways to answer no, and every one of them is the safe direction:
@@ -198,7 +217,9 @@
 /                       compared without case, since .z.h is lower-case on
 /                       macOS and a non-q writer's hostname need not be (#726)
 /   the pid is running  it holds the lock, or a reused number does, and
-/                       neither is ours to break
+/                       neither is ours to break - unless the number is
+/                       this process's own and the lock is older than this
+/                       process, when the holder is certainly gone (#2497)
 / @param path the lock directory
 / @return 1b when the recorded holder is gone from this host
 / @eg .qetl.job.bounded.state.lock_is_stale["/tmp/nonexistent.lock"]  ->  0b
@@ -207,6 +228,7 @@
     $[()~o;                          0b;
       not all `pid`host in key o;    0b;
       not lower[o`host]~lower string .z.h; 0b;
+      .qetl.job.bounded.state.held_by_predecessor[o]; 1b;
       not .qetl.job.bounded.state.pid_alive o`pid]}
 
 / Break a stale lock, if it is still stale - without ever removing a live one.
