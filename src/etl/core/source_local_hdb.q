@@ -169,6 +169,10 @@
         if[count absent;
             '"local: ",string[table]," in ",(1_base)," has no column(s) ",", " sv string absent];
         cs:want except `date];
+    / `date is virtual, so a date-only request has no column to carry the
+    / row count: read the first physical one for it (#2318).
+    if[0=count cs;
+        :([] date:(count first .qetl.source.local_columns[root;base;1#get hsym `$base,"/.d";n])#part`date)];
     `date xcols update date:part`date from flip cs!.qetl.source.local_columns[root;base;cs;n]}
 
 / The rows of `table` from every date partition that [from_ts;to_ts) touches

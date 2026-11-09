@@ -57,6 +57,11 @@
 
 .qpipe.job.cross_arbitrage.cross_arbitrage:.qetl.plant.published `cross_arbitrage
 
+/ The pairs the last publish reported active. A pair that loses its route,
+/ or its own book, is not evaluated at all, so without this nothing ever
+/ said its opportunity ended and a last-value consumer kept it (#2325).
+.qpipe.job.cross_arbitrage.active:`symbol$()
+
 / The four vectors forwards.q's sweep functions want, out of a superbook row.
 / @param row one superbook snapshot
 / @return dict `bid_prices`bid_sizes`ask_prices`ask_sizes
@@ -162,6 +167,10 @@
     swept:.qf.mkt.sweep_price[prices;sizes;size];
     `price`fully_filled!(swept`avg_price;swept`fully_filled)}
 
+/ Private: an inactive row with no route - a pair with nothing to compare.
+/ @private
+.qpipe.job.cross_arbitrage.cleared:{[sym;size;as_of] (sym;as_of;0b;`;`symbol$();0n;0n;size;0n;0n;0b;0Nn)}
+
 / One pair's status row: the direct book against its synthetic route.
 / .
 / Two directions, and they cannot both be genuine: either the synthetic bid
@@ -176,7 +185,7 @@
 / @param as_of the evaluation timestamp
 / @return one cross_arbitrage status row
 .qpipe.job.cross_arbitrage.opportunity:{[state;avail;sym;size;as_of]
-    idle:(sym;as_of;0b;`;`symbol$();0n;0n;size;0n;0n;0b;0Nn);
+    idle:.qpipe.job.cross_arbitrage.cleared[sym;size;as_of];
     route:.qpipe.job.cross_arbitrage.route_for[avail;sym];
     if[0=count route; :idle];
     / The direct book is timed with the route: it is one side of the
@@ -246,8 +255,14 @@
     / runs under run_stream.q, where the plant has not stamped a `time`.
     rows:$[`time in cols x; ![x;();0b;enlist `time]; x];
     `.qpipe.job.cross_arbitrage.books upsert `sym xkey rows;
-    rows:.qpipe.job.cross_arbitrage.evaluate[.qpipe.job.cross_arbitrage.books;.qpipe.job.cross_arbitrage.notional;.z.p];
+    now:.z.p;
+    rows:.qpipe.job.cross_arbitrage.evaluate[.qpipe.job.cross_arbitrage.books;.qpipe.job.cross_arbitrage.notional;now];
+    / an active pair that can no longer be evaluated is reported cleared,
+    / or its last row would say it is still there to trade (#2325)
+    gone:.qpipe.job.cross_arbitrage.active except exec sym from rows;
+    rows:upsert/[rows;.qpipe.job.cross_arbitrage.cleared[;.qpipe.job.cross_arbitrage.notional;now] each gone];
     if[count rows; .qpipe.job.cross_arbitrage.publish[`cross_arbitrage;rows]];
+    `.qpipe.job.cross_arbitrage.active set exec sym from rows where active;
     }
 
 \d .
@@ -264,5 +279,5 @@
     `cross_arbitrage`config_change;
     .qpipe.job.cross_arbitrage.on_batch;
     "the direct book against a synthetic route through other pairs (EURJPY against EURUSD x USDJPY), where arbitrage1 compares two sources on the SAME pair. Reads superbook like arbitrage1, so it is the second consumer of the marketdata1 chain rather than a fifth link - see there. startwithall:0 for that chain's reason (#285), and note that the chain plus this one is four more plant connections than the default start holds: start `--profile arbitrage`, which is that set, rather than adding them to a running default";
-    enlist `books;
-    "each source's next book replaces the one held, so a restart is current again within one feed cycle; until then that pair's opportunities are not reported")];
+    `books`active;
+    "each source's next book replaces the one held, so a restart is current again within one feed cycle; until then that pair's opportunities are not reported, and one active before the restart that cannot be evaluated after it is not reported cleared")];

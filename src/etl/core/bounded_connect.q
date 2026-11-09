@@ -35,14 +35,14 @@
 / .
 / The driver's own text comes FIRST because it is the actionable half: it
 / names what is missing and how to install it. Ours follows, and is trimmed
-/ rather than the driver's if the two together still do not fit.
+/ rather than the driver's if the two together still do not fit. (Ours led
+/ until #2335, so a long source name pushed the driver's text off the end.)
 / @param source the source that could not be reached
 / @param e the opener's error text
 / @return the message to throw, never longer than q will carry
 / @eg 256>count .qetl.job.bounded.connect_error[`duckdb_deals;"driver not loaded"]  ->  1b
 .qetl.job.bounded.connect_error:{[source;e]
-    msg:"connect: ",string[source]," unreachable - ",e,
-        ". Not falling back to the fixture: that would record synthetic data as covered";
+    msg:e," - connect: ",string[source]," unreachable. Not falling back to the fixture: that would record synthetic data as covered";
     $[254<count msg; 254#msg; msg]}
 
 \d .

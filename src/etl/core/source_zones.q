@@ -153,7 +153,15 @@
     if[0=count offs;
         '"local_candidates: no offsets for zone ",string tz];
     cands:tsv -\: offs;
-    ok:flip {[tz;tsv;o] tsv = .qetl.source.utc_to_local[tz;tsv-o]}[tz;tsv] each offs;
+    / offset_at rather than utc_to_local: a candidate before the table's
+    / coverage gets a null offset, so it simply fails the round trip instead
+    / of throwing for a reading another offset resolves (#2317).
+    adj:{[tz;tsv;o] .qetl.source.offset_at[tz;tsv-o]}[tz;tsv] each offs;
+    uncovered:all null adj;
+    if[any uncovered;
+        '"local_candidates: ",string[tz]," has no rule covering local time ",
+         (-3!first tsv where uncovered)," - it predates the zone table's coverage"];
+    ok:flip {[tsv;o;a] tsv = (tsv-o)+a}[tsv]'[offs;adj];
     cands @' where each ok}
 
 / Private: the two error texts, shared by local_to_utc and narrow_to_utc so

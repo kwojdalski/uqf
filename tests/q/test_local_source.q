@@ -346,6 +346,18 @@
     .qunit.assertThrows[{.qetl.source.local_read[.qt.qetl.source.local.root;(`trades;`time`qty);x;x+1D]};2026.09.17D00:00;
         "*has no column(s) qty*";"a missing column is named, not read as nulls"]};
 
+/ `date is virtual, so a date-only read has no column file of its own to
+/ count rows by (#2318).
+.qt.qetl.source.local.test_a_date_only_read_returns_one_date_per_row:{[t]
+    r:.qetl.source.local_read[.qt.qetl.source.local.root;(`trades;enlist `date);2026.09.17D00:00;2026.09.19D00:00];
+    .qunit.assertEquals[r;([] date:2026.09.17 2026.09.17 2026.09.18 2026.09.18);
+        "one date per row of each partition, and no other column"]};
+
+.qt.qetl.source.local.test_a_date_only_read_of_no_partition_stays_empty:{[t]
+    r:.qetl.source.local_read[.qt.qetl.source.local.root;(`trades;enlist `date);2026.10.01D00:00;2026.10.02D00:00];
+    .qunit.assertEquals[(count r;meta r);(0;([c:enlist `date] t:enlist "d"; f:enlist `; a:enlist `));
+        "empty, still a typed date column"]};
+
 .qt.qetl.source.local.test_metadata_decodes_one_row_not_the_partition:{[t]
     / The sym file now holds one entry: enough for the first row of the newest
     / partition (position 0), too few to decode all of it (positions 0 1).

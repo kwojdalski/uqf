@@ -54,6 +54,8 @@
 \l src/etl/core/mapped_books.q
 \l src/etl/core/mapped_depth.q
 \l src/etl/core/reference_variant.q
+\l src/etl/core/reference_library.q
+\l src/etl/core/variant_run.q
 \l src/etl/core/compression.q
 \l src/etl/core/run.q
 \l src/etl/core/config_snapshot.q
@@ -72,6 +74,10 @@
 \l src/etl/generated/pipeline_dag.q
 \l src/etl/core/declaration_load.q
 \l src/etl/generated/load_plan.q
+/ The declared reference variants (#2289): every .q file under src/etl/core/variants registers variants on load. Globbed like
+/ the declaration directories below, so adding a variant means adding a file and nothing else - but loaded here, with the
+/ core, because a spec names a variant and the transforms that check the name load before the declarations.
+.qetl.load.one each .qetl.load.dir_files "src/etl/core/variants";
 \l src/etl/core/worker_config.q
 \l src/etl/core/worker_runtime.q
 \l src/etl/core/worker_dependencies.q

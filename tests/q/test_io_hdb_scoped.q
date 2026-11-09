@@ -95,6 +95,24 @@ system "l scripts/dev/attached_calendar.q";
         "the fence is where end of day starts to touch the whole database"];
     .qunit.assertEquals[.qt.qetl.hdb_scoped.fingerprint[root];before;"and nothing was written"]};
 
+/ #2331: the deadline was checked only before the write waited for the root's lock, so a write
+/ that got the lock after the fence began still wrote. The wait is injected: taking the lock
+/ first sleeps past the deadline. Both entries, the plain write and the keyed one.
+.qt.qetl.hdb_scoped.test_a_write_that_gets_the_lock_after_the_deadline_is_refused:{[t]
+    root:.qt.qetl.hdb_scoped.native[];
+    before:.qt.qetl.hdb_scoped.fingerprint[root];
+    take:.qetl.job.bounded.state.take_lock_at;
+    `.qetl.job.bounded.state.take_lock_at set {[take;path;wait;pid] system"sleep 0.3"; take[path;wait;pid]}[take];
+    try:{[root;f]
+        m:.qetl.io.hdb_scoped[root;`time;`max_date`deadline`destination!(2026.01.31;.z.p+0D00:00:00.100;`dest_test)];
+        @[f;m;{x}]}[root];
+    r:try each ({[m] .qetl.io.write[m;`iodeals;.qt.qetl.hdb_scoped.batch[]]};
+        {[m] .qetl.io.write_keyed[m;`iodeals;.qt.qetl.hdb_scoped.batch[];.qt.qetl.hdb_scoped.opts`upsert]});
+    `.qetl.job.bounded.state.take_lock_at set take;
+    .qunit.assertEquals[{$[10h=type x; x like "hdb_scoped: iodeals - the end-of-day fence began at *"; 0b]} each r;11b;
+        "both refused under the lock: the fence had begun by the time they held it"];
+    .qunit.assertEquals[.qt.qetl.hdb_scoped.fingerprint[root];before;"and nothing was written"]};
+
 / A waived end-of-day fence (#1828): the launcher passes -deadline 0Wp, which no .z.p passes. The
 / write the deadline above refuses goes through; max_date still refuses, because completed history
 / is never waived.

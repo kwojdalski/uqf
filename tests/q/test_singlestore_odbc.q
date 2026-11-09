@@ -184,7 +184,7 @@
     `.odbc.open set {[c] 7};
     `.odbc.eval set {[h;sql] ([] h:enlist h; sql:enlist sql)};
     r:@[f;::;{(`threw;x)}];
-    ![`.odbc;();0b;`open`eval];
+    ![`.odbc;();0b;`open`eval`close];
     r}
 
 .qt.qetl.io.odbc.test_run_sql_returns_the_drivers_table:{[t]
@@ -204,6 +204,30 @@
         @[.qetl.io.odbc.run_sql[7;];"select nope";{x}]}];
     / two likes: a pattern with more than one inner `*` throws 'nyi here
     .qunit.assertTrue[(err like "*syntax*") and err like "*select nope";"a failing statement is named in the error, with the driver's reason"]};
+
+/ --- with_connection, against a stubbed driver (#2309) ----------------------
+
+/ Run with_connection under the fake driver, with a close that records the
+/ handle it was given. Returns (what with_connection returned or threw;
+/ the handles closed).
+.qt.qetl.io.odbc.closed:`long$()
+.qt.qetl.io.odbc.connected:{[f]
+    .qt.qetl.io.odbc.closed:`long$();
+    / binary, so the projection waits for with_fake_driver to apply it
+    r:.qt.qetl.io.odbc.with_fake_driver[{[f;u]
+        `.odbc.close set {[h] .qt.qetl.io.odbc.closed,:h};
+        @[.qetl.io.odbc.with_connection["DRIVER=fake"];f;{(`threw;x)}]}[f]];
+    (r;.qt.qetl.io.odbc.closed)}
+
+.qt.qetl.io.odbc.test_with_connection_returns_an_error_shaped_value_unchanged:{[t]
+    r:.qt.qetl.io.odbc.connected {[h] (`error;"legitimate result")};
+    .qunit.assertEquals[r;((`error;"legitimate result");enlist 7);
+        "a callback's value comes back as it returned it, and the handle is closed"]};
+
+.qt.qetl.io.odbc.test_with_connection_rethrows_a_callback_error_after_closing:{[t]
+    r:.qt.qetl.io.odbc.connected {[h] '"boom"};
+    .qunit.assertEquals[r;((`threw;"qetl.io.odbc: boom");enlist 7);
+        "a genuine failure still propagates, after the handle is closed"]};
 
 / Every log line `f` writes, as (level;id;text;fields): a recorder in place of
 / .qetl.log.line, which every level calls - so this sees what is logged, ahead

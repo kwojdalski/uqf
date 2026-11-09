@@ -62,9 +62,8 @@
 / WHAT THIS FILE DOES NOT DO. It knows no TorQ (scripts/gates/
 / check_etl_layering.py): connecting, authenticating a handle and gating
 / .z.pg belong to the deployment. .qetl.io.remote.permitted is the pure
-/ check such a gate calls. A batch is one message; chunked transfer with
-/ backpressure is a later slice of #1650, and max_rows bounds a message until
-/ then.
+/ check such a gate calls. max_rows bounds one message; a larger batch is sent
+/ in chunks (io_remote_chunks.q).
 
 \d .
 
@@ -112,9 +111,12 @@
 .qetl.io.remote.reloads:([] attachment:`symbol$(); dataset:`symbol$(); at:`timestamp$(); final:`boolean$();
     finished:`long$(); outcome:`symbol$(); error:())
 
-/ Private: the key a grant is filed under.
+/ Private: the key a grant is filed under. The attachment's length leads, so
+/ no two (attachment; dataset) pairs share a key whatever "|" either holds (#2316).
 / @private
-.qetl.io.remote.grant_key:{[attachment;dataset] `$string[attachment],"|",string dataset}
+.qetl.io.remote.grant_key:{[attachment;dataset]
+    a:string attachment;
+    `$string[count a],":",a,"|",string dataset}
 
 / Open the receiver's journal: load what an earlier receiver persisted, so a
 / restarted receiver still knows which batches it committed.
@@ -207,7 +209,7 @@
 
 / Private: refuse a batch the grant does not admit.
 / @private
-.qetl.io.remote.require_admitted:{[g;req;user]
+.qetl.io.remote.require_admitted:{[g;req;user;limit]
     if[(not null user) and not user in g`users;
         '"remote: ",string[user]," may not write ",string[req`dataset]," of attachment ",string req`attachment];
     if[not req[`target]=g`target;
@@ -219,8 +221,8 @@
     if[(count b) and not (exec t from meta b)~want;
         '"remote: ",string[g`target],"'s batch types differ from its schema"];
     if[`contract in key g; .qetl.io.remote.contract.require_opts[g`contract;req`opts]];
-    if[count[b]>g`max_rows;
-        '"remote: a batch of ",string[count b]," rows is over ",string[g`target],"'s limit of ",string g`max_rows];
+    if[count[b]>limit;
+        '"remote: a batch of ",string[count b]," rows is over ",string[g`target],"'s limit of ",string limit];
     o:req`opts;
     tc:$[(`time_column in key o) and not null o`time_column; o`time_column; `time];
     if[(count b) and tc in cols b;
@@ -278,13 +280,19 @@
 / @param user the remote user, or ` for an in-process call
 / @return dict status (`committed or `duplicate), batch_id and rows
 / @throws error, writing nothing, for anything not admitted or in doubt
-.qetl.io.remote.accept:{[req;user]
+.qetl.io.remote.accept:{[req;user] .qetl.io.remote.take[req;user;0b]}
+
+/ Private: accept, for one message or a batch reassembled from chunks. max_rows
+/ bounds a message, so it bounds each chunk but not their whole (#2313): a
+/ reassembled batch is held to the staging limit that already bounded it.
+/ @private
+.qetl.io.remote.take:{[req;user;reassembled]
     .qetl.io.remote.require_request req;
     k:.qetl.io.remote.grant_key[req`attachment;req`dataset];
     if[not k in key .qetl.io.remote.grants;
         '"remote: nothing is granted for ",string[req`dataset]," of attachment ",string req`attachment];
     g:.qetl.io.remote.grants k;
-    .qetl.io.remote.require_admitted[g;req;user];
+    .qetl.io.remote.require_admitted[g;req;user;$[reassembled; .qetl.io.remote.max_staged_rows; g`max_rows]];
     o:req`opts;
     id:.qetl.io.remote.batch_id[req`attachment;req`dataset;req`target;o;req`batch];
     if[(not null req`batch_id) and not id=req`batch_id;

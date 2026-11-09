@@ -615,6 +615,14 @@
 .qt.qetl.coverage.test_require_types_ignores_a_general_column:{[t]
     .qunit.assertEquals[.qetl.job.bounded.state.require_types[`t;([] a:enlist 1; b:enlist "x");([] a:`long$(); b:())];1b;
         "a general column has no single type to hold it to"]};
+
+/ #2308: only an EMPTY general column read back is skipped. A populated one
+/ mixing longs and symbols passed for a long column.
+.qt.qetl.coverage.test_require_types_refuses_a_populated_general_column_for_a_typed_one:{[t]
+    .qunit.assertThrows[.qetl.job.bounded.state.require_types[`t;;([] id:`long$())];([] id:(1;`a));
+        "require_types: t has id as general, not j*";"a mixed column is not a long one"];
+    .qunit.assertEquals[.qetl.job.bounded.state.require_types[`t;([] id:());([] id:`long$())];1b;
+        "an empty general column read back still passes - it has no type to be wrong"]};
 / --- query readiness (#1094) -------------------------------------------------
 / Coverage means written. Readiness is a watermark per (dataset, partition,
 / release): the claims recorded at or before it are queryable.

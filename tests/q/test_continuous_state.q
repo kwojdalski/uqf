@@ -24,6 +24,22 @@
     .qetl.job.continuous.clear_cursor `tailer;
     }
 
+/ A cursor saved, and saved again, into a status directory that does not
+/ exist yet and whose path is several shell words (#2324): save_cursor's
+/ `mkdir -p` and the rename behind it each split it, unquoted.
+.qt.qetl.job.continuous.test_a_cursor_round_trips_under_a_path_of_several_shell_words:{[t]
+    root:"build/test-status/odd cursor";
+    system"rm -rf ",.qetl.job.bounded.state.shell_word root;
+    setenv[`UQF_STATUS_DIR;root,"/state with spaces;$HOME"];
+    r:@[{.qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[1]];
+        .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[2]];
+        c:.qetl.job.continuous.load_cursor `tailer;
+        .qetl.job.continuous.clear_cursor `tailer;
+        c};::;{[e] e}];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    system"rm -rf ",.qetl.job.bounded.state.shell_word root;
+    .qunit.assertEquals[r;.qt.qetl.job.continuous.d[2];"the cursor written last is the one read back"]};
+
 / --- a crash mid-write (#633) --------------------------------------
 
 / What 0: onto the cursor file used to leave after a kill mid-write: half a
@@ -43,6 +59,29 @@
     .qt.qetl.job.continuous.truncate[.qetl.job.continuous.cursor_path `tailer];
     .qunit.assertThrows[.qetl.job.continuous.load_cursor;`tailer;"*and so is its .bak*";
         "refused, never a null a feed would read as its first run"]};
+
+/ #2314: valid JSON with a bad value was accepted as the primary, so the .bak
+/ was never tried - an invalid timestamp read as 0Np, a first start, and a
+/ missing field threw.
+.qt.qetl.job.continuous.test_a_cursor_that_is_not_a_timestamp_falls_back_to_the_previous_one:{[t]
+    p:.qetl.job.continuous.cursor_path `tailer;
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[1]];
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[2]];
+    (hsym `$p) 0: enlist "{\"cursor\":\"not-a-time\"}";
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.qt.qetl.job.continuous.d[1];
+        "an invalid timestamp is a bad file, not a first start"];
+    (hsym `$p) 0: enlist "{\"saved_at\":\"2026-09-11T00:00:00.000000000\"}";
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.qt.qetl.job.continuous.d[1];
+        "and so is one with no cursor field"]};
+
+.qt.qetl.job.continuous.test_two_cursor_files_that_are_not_timestamps_are_refused:{[t]
+    p:.qetl.job.continuous.cursor_path `tailer;
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[1]];
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[2]];
+    {(hsym `$x) 0: enlist "{\"cursor\":\"not-a-time\"}"} each (p;p,".bak");
+    e:.qunit.assertThrows[.qetl.job.continuous.load_cursor;`tailer;"*and so is its .bak*";
+        "unreadable state, never a valid first start"];
+    .qunit.assertTrue[e like "*is not a timestamp*";"and it says what is wrong with the file"]};
 
 / Clearing only the cursor file would leave its .bak behind, and a later
 / unreadable write would then fall back to the cursor from BEFORE the clear.
@@ -224,6 +263,21 @@
     `.qt.qetl.job.continuous.page set ([] ts:enlist .qt.qetl.job.continuous.d 1; v:enlist 1.5);
     .qetl.job.continuous.poll_once[`tailer;{[c] .qt.qetl.job.continuous.page};{[p] count p};{[p] .qt.qetl.job.continuous.d 2}];
     .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.qt.qetl.job.continuous.d[2];"the advance is durable, so a restart resumes from it"]};
+
+/ #2315: the next cursor was checked only after publish_page, so a page whose
+/ cursor did not move was sent on every retry. Refused now with nothing sent
+/ and the saved cursor untouched - a null cursor and an unmoved one alike.
+.qt.qetl.job.continuous.test_a_cursor_that_does_not_advance_publishes_nothing:{[t]
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[2]];
+    `.qt.qetl.job.continuous.page set ([] ts:enlist .qt.qetl.job.continuous.d 2; v:enlist 1.5);
+    `.qt.qetl.job.continuous.sent set 0;
+    send:{[p] `.qt.qetl.job.continuous.sent set .qt.qetl.job.continuous.sent+1; count p};
+    .qunit.assertThrows[.qetl.job.continuous.poll_once[`tailer;{[c] .qt.qetl.job.continuous.page};send;];{[p] .qt.qetl.job.continuous.d 2};
+        "advance: refusing to move*";"an unmoved cursor is refused"];
+    .qunit.assertThrows[.qetl.job.continuous.poll_once[`tailer;{[c] .qt.qetl.job.continuous.page};send;];{[p] 0Np};
+        "advance: refusing a null cursor*";"and so is a null one"];
+    .qunit.assertEquals[.qt.qetl.job.continuous.sent;0;"neither page was sent"];
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.qt.qetl.job.continuous.d[2];"and the saved cursor did not move"]};
 
 / A tailer on a quiet source is working correctly. An orchestrator that
 / cannot tell "nothing new" from "broken" alerts all night on a healthy

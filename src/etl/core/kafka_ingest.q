@@ -410,7 +410,13 @@
     if[0=count rows; :st];
     p:select resume:1+max offset, tries:0 by topic,partition from rows;
     before:((st`pending) key p)`resume;
-    st[`pending]:(st`pending) upsert update resume:resume|before from p;
+    p:update resume:resume|before from p;
+    / A partition that restarted inside the batch resumes after its LAST restart run's top, as
+    / its mark does (#1659), and replaces whatever the older run owed: 1 + the old tail's top
+    / would tell the broker to skip new-run records not yet delivered (#2361).
+    tops:.qetl.kafka.restart_tops[rows];
+    if[count tops; p:p upsert select resume:1+max offset, tries:0 by topic,partition from 0!tops];
+    st[`pending]:(st`pending) upsert p;
     st}
 
 / Private: poll and hold what came back.
@@ -431,7 +437,7 @@
     st[`backlog]:(st`backlog),env;
     .qetl.kafka.bump[st;`polled;count env]}
 
-/ The partitions whose offsets have restarted: those whose rows all sit BELOW their mark and are not older than it.
+/ The partitions whose offsets have restarted: those whose rows all sit BELOW their mark and are not older than it, or whose every row at or below the mark is newer than it.
 / .
 / A held partition whose rows are all below its mark has had its log truncated
 / or its topic recreated (#1504): its new records would be counted as
@@ -442,22 +448,35 @@
 / redelivery were written no later than the record the mark stands for, while a
 / restarted partition's new records come after it. Only when the timestamps say
 / "not newer" (both known) is the batch a redelivery; unknown times take the
-/ restart reading, as before. The feed (reset_restarted) and every decoder
-/ (decoder.fresh, #1519) apply this one rule, so a restarted record is neither
-/ lost at the feed nor at a decoder, and a redelivery is not decoded twice.
+/ restart reading, as before.
+/ .
+/ A new generation's first batch can also REACH the mark (a recreated topic
+/ whose first page runs 0..N with N at or past it): then not every row is
+/ below, and its records at or below the mark were dropped as duplicates and
+/ committed (#2320). Time tells them apart again: a redelivery that reaches
+/ the mark carries the mark's own record, which is not newer than itself, so
+/ when EVERY row at or below the mark is newer than the mark's record (both
+/ times known), the rows are a new generation, not a redelivery.
+/ .
+/ The feed (reset_restarted) and every decoder (decoder.fresh, #1519) apply
+/ this one rule, so a restarted record is neither lost at the feed nor at a
+/ decoder, and a redelivery is not decoded twice.
 / @param marks the marks table
 / @param rows envelope rows
 / @return a table of topic and partition, one row for each restarted partition
 / @eg .qetl.kafka.restarted[([topic:enlist `a; partition:enlist 0j] offset:enlist 4j; broker_time:enlist 2026.10.20D09:00:04.000000000); ([] topic:2#`a; partition:2#0j; offset:0 1j; broker_time:2026.10.20D10:00:00.000000000+0 1000000000)]`partition  ->  enlist 0j
 .qetl.kafka.restarted:{[marks;rows]
     if[0=count rows; :select topic,partition from 0#rows];
-    m:0!select top:max offset, newest:max broker_time by topic,partition from rows;
-    held:marks select topic,partition from m;
-    before:held`offset;
-    mbt:$[`broker_time in cols held; held`broker_time; (count m)#0Np];
+    bt:$[`broker_time in cols rows; rows`broker_time; (count rows)#0Np];
+    held:marks ([] topic:rows`topic; partition:rows`partition);
+    mbt:$[`broker_time in cols held; held`broker_time; (count rows)#0Np];
+    t:([] topic:rows`topic; partition:rows`partition; offset:rows`offset; broker_time:bt; before:held`offset; mbt:mbt);
+    / a null mark compares below every offset, so an unseen partition has no row at or below it
+    t:update reach:offset<=before, later:(not null mbt) and (not null broker_time) and broker_time>mbt from t;
+    m:0!select top:max offset, newest:max broker_time, before:first before, mbt:first mbt, gen:(any reach) and all later where reach by topic,partition from t;
     / max of nothing but nulls is -0Wp, not null
-    older:(not null mbt) and (m[`newest]>-0Wp) and m[`newest]<=mbt;
-    select topic,partition from m where (top<before) and not older}
+    older:(not null m`mbt) and (m[`newest]>-0Wp) and m[`newest]<=m`mbt;
+    select topic,partition from m where ((top<before) and not older) or gen}
 
 / A marks-shaped or done-shaped keyed table without the rows of some partitions.
 / @param keyed a keyed table whose key starts with topic, partition
@@ -469,16 +488,22 @@
     t:0!keyed;
     k xkey t where not .qetl.kafka.pair_key[t`topic;t`partition] in .qetl.kafka.pair_key[pairs`topic;pairs`partition]}
 
-/ Private: forget the mark of a partition whose offsets have restarted (see restarted).
+/ Private: forget the mark and the pending commit of a partition whose offsets have restarted (see restarted).
+/ .
+/ The pending commit goes too: it is a position in the OLD generation, and
+/ plan_commit keeps the higher of it and the new one, so an earlier commit that
+/ failed and was kept would commit the new generation past records never read
+/ (#2321).
 / @param st the state
 / @param b the backlog (envelope rows)
-/ @return the state, with those partitions' marks dropped
+/ @return the state, with those partitions' marks and pending commits dropped
 / @private
 .qetl.kafka.reset_restarted:{[st;b]
     back:.qetl.kafka.restarted[st`marks;b];
     if[0=count back; :st];
     .qetl.log.ch.warn[`source;"partition offsets went backwards - its mark is reset and the new records are published";enlist[`partitions]!enlist count back];
     st[`marks]:.qetl.kafka.forget[st`marks;back];
+    st[`pending]:.qetl.kafka.forget[st`pending;back];
     st}
 
 / Private: publish the backlog onto kafka_message; on success raise the marks

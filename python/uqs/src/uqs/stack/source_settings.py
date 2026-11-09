@@ -32,6 +32,7 @@ from pathlib import Path
 from uqs.generated import q_facts
 from uqs.model.qnames import credential_var
 from uqs.paths import UqsError, UqsPaths
+from uqs.stack import redact
 from uqs.stack.env import build_env
 
 #: The file, in each config layer.
@@ -46,10 +47,9 @@ STUB = "SCAFFOLDED"
 #: Where a setting takes its secret (`.qetl.source.secret_placeholder`).
 SECRET_PLACEHOLDER = "{secret}"
 
-#: Keys of a key=value setting whose value is a secret (`.qetl.source.secret_keys`).
-SECRET_KEYS = frozenset(
-    ("pwd", "password", "passwd", "secret", "token", "apikey", "api_key", "key")
-)
+#: Keys of a key=value setting whose value is a secret (`.qetl.source.secret_keys`):
+#: the ones redaction masks, so a key refused inline is also masked (#2334).
+SECRET_KEYS = frozenset(redact.SECRET_KEYS)
 
 #: The config layers, most specific first - `.proc.getconfig`'s order.
 LAYER_VARS = ("KDBAPPCONFIG", "KDBSERVCONFIG", "KDBCONFIG")

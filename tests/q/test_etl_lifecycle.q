@@ -355,6 +355,15 @@
     .qunit.assertTrue[m like "*record synthetic data as covered";
         "and the reason is still the part that reaches the reader"]};
 
+/ #2335: the source name led and the whole was cut at 254 bytes, so a long
+/ name pushed the driver's own diagnostic - the actionable part - out.
+.qt.qetl.job.bounded.test_a_long_source_name_never_removes_the_driver_diagnostic:{[t]
+    m:.qetl.job.bounded.connect_error[`$240#"a";"DRIVER_DETAIL: fix this"];
+    .qunit.assertTrue[255>count m;"within what q will carry"];
+    .qunit.assertTrue[m like "DRIVER_DETAIL: fix this - connect: aaa*";"the driver's text whole, ahead of ours"];
+    e:@[{.qetl.io.odbc.require_available[]};::;{[x] x}];
+    .qunit.assertEquals[(count e)#.qetl.job.bounded.connect_error[`$240#"a";e];e;"the real driver message too"]};
+
 .qt.qetl.job.bounded.test_the_driver_error_does_not_send_a_duckdb_operator_to_singlestore:{[t]
     / Every ODBC source in this tree is a DuckDB file, and none is
     / SingleStore. The advice used to name singlestore_odbc.q's installer.

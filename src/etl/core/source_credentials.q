@@ -67,8 +67,11 @@
 / Where a setting takes its secret.
 .qetl.source.secret_placeholder:"{secret}"
 
-/ Keys of a key=value setting whose value is a secret, lowercased.
-.qetl.source.secret_keys:("pwd";"password";"passwd";"secret";"token";"apikey";"api_key";"key")
+/ Keys of a key=value setting whose value is a secret, lowercased. The one
+/ list: the live check redacts these same keys, so a key refused inline here
+/ is also masked in its diagnostics (#2334 - two lists, each missing a key
+/ the other had).
+.qetl.source.secret_keys:("pwd";"password";"passwd";"secret";"token";"apikey";"api_key";"accesskey";"access_key";"key")
 
 / Does a setting carry a secret inline? A key=value pair (an ODBC string)
 / whose key is one of secret_keys and whose value is not {secret}, or an IPC
@@ -175,6 +178,10 @@
             'who,": ${",(string nm),"} is not a path it may use - only ",", " sv string .qetl.source.settings_path_vars];
         v:getenv nm;
         if[0=count v; 'who,": ${",(string nm),"} is not set in this process"];
+        / Each pass rescans from the start, so a value holding ${ - itself, or
+        / a variable naming it back - never finished (#2306). Refused instead:
+        / every ${ expanded removes one and adds none, so the loop ends.
+        if[0<count v ss "${"; 'who,": ${",(string nm),"}'s value holds a ${ of its own - a path variable must be a path, not name another"];
         txt:(b#txt),v,(e+1)_txt];
     txt}
 
@@ -197,6 +204,9 @@
     if[not uses; :txt];
     v:getenv r`secret_env;
     if[0=count v; 'who,": its secret_env, ",(string r`secret_env),", is not set"];
+    / An ODBC secret holding ; { or } goes in as a braced value, } doubled.
+    / Raw, PWD=fake;Encrypt=no became a password and a setting (#2336).
+    if[(`odbc~tr) and any v in ";{}"; v:"{",ssr[v;"}";"}}"],"}"];
     ssr[txt;.qetl.source.secret_placeholder;v]}
 
 / Read a source's credential, or refuse.

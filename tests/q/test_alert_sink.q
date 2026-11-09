@@ -142,6 +142,22 @@
     .qunit.assertEquals[count .qpipe.job.alert_sink.pending;0;"and the queue is clear"];
     .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[.qt.qpipe.job.alert_sink.breach_at[enlist `EURUSD;.qt.qpipe.job.alert_sink.t0+0D00:00:30];.qt.qpipe.job.alert_sink.t0+0D00:00:30];1;"a dead breach leaves the dedup state, so its next report is queued"]};
 
+/ #2307: an older report given up on dropped its breach's dedup entry even
+/ when a newer reminder owned it, so a repeat of that reminder was posted.
+.qt.qpipe.job.alert_sink.test_an_old_reports_give_up_keeps_a_newer_reminders_dedup:{[t]
+    .qt.qpipe.job.alert_sink.ready[];
+    `.qt.qpipe.job.alert_sink.failures set 3;
+    e:{[tm] .qt.qpipe.job.alert_sink.breach_at[enlist `EURUSD;tm]};
+    .qpipe.job.alert_sink.enqueue[e .qt.qpipe.job.alert_sink.t0;.qt.qpipe.job.alert_sink.t0];
+    .qpipe.job.alert_sink.flush .qt.qpipe.job.alert_sink.t0;
+    .qpipe.job.alert_sink.flush .qt.qpipe.job.alert_sink.t0;
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .qt.qpipe.job.alert_sink.t0+0D00:05;.qt.qpipe.job.alert_sink.t0+0D00:05];1;
+        "the 09:05 reminder is queued behind the failing 09:00 report"];
+    r:.qpipe.job.alert_sink.flush .qt.qpipe.job.alert_sink.t0+0D00:05;
+    .qunit.assertEquals[r;`delivered`retrying`failed!1 0 1;"the 09:00 report is given up on and the reminder delivered"];
+    .qunit.assertEquals[.qpipe.job.alert_sink.enqueue[e .qt.qpipe.job.alert_sink.t0+0D00:05;.qt.qpipe.job.alert_sink.t0+0D00:06];0;
+        "a repeat of the delivered reminder is still a repeat"]};
+
 .qt.qpipe.job.alert_sink.test_an_http_error_is_a_failed_delivery_not_a_delivered_one:{[t]
     .qt.qpipe.job.alert_sink.ready[];
     `.qpipe.job.alert_sink.post set .qt.qpipe.job.alert_sink.answering_post;

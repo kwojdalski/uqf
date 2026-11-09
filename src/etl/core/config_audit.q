@@ -168,9 +168,13 @@
 / @eg .qetl.cfg.audit.poll_and_publish[]
 .qetl.cfg.audit.poll_and_publish:{[]
     if[null .qetl.cfg.audit.owner_here; :()];
+    before:.qetl.cfg.audit.seen;
     rows:.qetl.cfg.audit.poll[.qetl.cfg.audit.owner_here;.z.p];
     if[0=count rows; :()];
-    (get ` sv (.qetl.job.stream.def[.qetl.cfg.audit.owner_here]`ns),`publish)[`config_change;rows];
+    / poll marked these seen; a send that throws puts that back and rethrows,
+    / or the next poll would find nothing new and the change is lost (#2322)
+    .[get ` sv (.qetl.job.stream.def[.qetl.cfg.audit.owner_here]`ns),`publish;(`config_change;rows);
+        {[before;e] `.qetl.cfg.audit.seen set before; 'e}[before]];
     }
 
 / Forget every observation, so the next poll reports each watched name as

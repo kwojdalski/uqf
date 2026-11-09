@@ -95,6 +95,7 @@ def test_a_row_is_read_with_its_line(tmp_path):
         (HEADER + "a,ipc,h:1,\na,ipc,h:2,\n", "a has more than one row - lines 2, 3"),
         (HEADER + "a,odbc,DRIVER=x;PWD=hunter2,\n", "secret inline"),
         (HEADER + "a,ipc,db1:5010:svc:hunter2,\n", "secret inline"),
+        (HEADER + "a,odbc,DRIVER=x;ACCESSKEY=fake,\n", "secret inline"),  # #2334
     ],
 )
 def test_a_malformed_file_is_refused_naming_what_is_wrong(tmp_path, text, complaint):

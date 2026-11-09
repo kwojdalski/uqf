@@ -277,6 +277,25 @@
     .qunit.assertEquals[count st`pending;0;"nothing left owing once the commit returned"];
     .qunit.assertEquals[st[`stats]`published;3;"counted"]};
 
+/ #2361: one batch carrying a partition's old tail and then its restarted records (#1659). The
+/ commit must resume after the restarted run's top, as the mark does - committing 1 + the old
+/ tail's top told the broker to skip the new run's records it had not yet delivered.
+.qt.qetl.kafka.test_a_batch_that_restarts_commits_after_the_restarted_run_not_the_old_tail:{[t]
+    .qt.qetl.kafka.reset[];
+    / one partition: the old run's 3 4, then the restarted 0 1 - later broker times, so a restart
+    `.qt.qetl.kafka.inbox set enlist .qt.qetl.kafka.msgs[`t;0 0 0 0;3 4 0 1;4#enlist "x"];
+    .qetl.kafka.cycle[.qt.qetl.kafka.transport;.qetl.kafka.state_new[]];
+    .qunit.assertEquals[exec offset from .qt.qetl.kafka.published[];3 4 0 1j;"every record is published, the restarted ones included"];
+    c:last .qt.qetl.kafka.of`commit;
+    .qunit.assertEquals[(c 1;c 2);(`t;(enlist 0i)!enlist 2j);"resume at 2, after the restarted run's 1 - not at 5, past records 2-4 of the new run"]};
+
+.qt.qetl.kafka.test_a_batch_without_a_restart_still_commits_one_past_its_highest:{[t]
+    .qt.qetl.kafka.reset[];
+    `.qt.qetl.kafka.inbox set enlist .qt.qetl.kafka.msgs[`t;0 0 0;3 4 5;3#enlist "x"];
+    .qetl.kafka.cycle[.qt.qetl.kafka.transport;.qetl.kafka.state_new[]];
+    c:last .qt.qetl.kafka.of`commit;
+    .qunit.assertEquals[c 2;(enlist 0i)!enlist 6j;"no restart: one past the highest offset, as before"]};
+
 .qt.qetl.kafka.test_a_publish_that_throws_commits_nothing_and_loses_nothing:{[t]
     .qt.qetl.kafka.reset[];
     `.qt.qetl.kafka.inbox set enlist .qt.qetl.kafka.msgs[`t;0 0;0 1;2#enlist "x"];
@@ -347,6 +366,19 @@
     .qunit.assertEquals[st[`stats]`duplicates;0;"none counted as duplicates"];
     .qunit.assertEquals[(last .qt.qetl.kafka.log) 2;(enlist 0i)!enlist 3j;"and the commit follows the new log"]};
 
+/ #2321: an old commit to 5 failed and was kept; the partition then restarts at 0, and the flush committed 5 - past new records 1-4 never read.
+.qt.qetl.kafka.test_a_restart_drops_the_old_generations_pending_commit:{[t]
+    .qt.qetl.kafka.reset[];
+    `.qt.qetl.kafka.inbox set enlist .qt.qetl.kafka.msgs[`t;5#0;til 5;5#enlist "old"];
+    `.qt.qetl.kafka.failing set enlist `commit;
+    st:.qetl.kafka.cycle[.qt.qetl.kafka.transport;.qetl.kafka.state_new[]];
+    .qunit.assertEquals[exec resume from st`pending;enlist 5j;"the old generation's commit is owed"];
+    `.qt.qetl.kafka.failing set `symbol$();
+    `.qt.qetl.kafka.inbox set enlist update msgtime:msgtime+0D01:00:00 from .qt.qetl.kafka.msgs[`t;enlist 0;enlist 0;enlist "new"];
+    st:.qetl.kafka.cycle[.qt.qetl.kafka.transport;st];
+    .qunit.assertEquals[(last .qt.qetl.kafka.log) 2;(enlist 0i)!enlist 1j;"only the new generation's processed position is committed"];
+    .qunit.assertEquals[count st`pending;0;"and nothing of the old one is left owing"]};
+
 / A rebalance re-reads batches wholly below the mark; their records are not newer than the mark's, so they are a redelivery, not a restart (#1519).
 .qt.qetl.kafka.test_a_redelivery_wholly_below_the_mark_is_not_a_restart:{[t]
     .qt.qetl.kafka.reset[];
@@ -358,12 +390,43 @@
     .qunit.assertEquals[.qt.qetl.kafka.published[]`offset;til 8;"nothing republished"];
     .qunit.assertEquals[st[`stats]`duplicates;3;"counted as duplicates"]};
 
+/ #2320: a recreated topic whose first page runs 0..6 reaches the old mark 4; its records 0..4 were dropped as duplicates and committed.
+.qt.qetl.kafka.test_a_new_generation_whose_first_batch_crosses_the_mark_is_published:{[t]
+    .qt.qetl.kafka.reset[];
+    `.qt.qetl.kafka.assignment set ([] topic:enlist `t; partition:enlist 0i);
+    `.qt.qetl.kafka.inbox set enlist .qt.qetl.kafka.msgs[`t;5#0;til 5;5#enlist "old"];
+    st:.qetl.kafka.cycle[.qt.qetl.kafka.transport;.qetl.kafka.state_new[]];
+    gen:update msgtime:msgtime+0D01:00:00 from .qt.qetl.kafka.msgs[`t;7#0;til 7;7#enlist "new"];
+    `.qt.qetl.kafka.inbox set enlist gen;
+    st:.qetl.kafka.cycle[.qt.qetl.kafka.transport;st];
+    .qunit.assertEquals[.qt.qetl.kafka.published[]`offset;(til 5),til 7;"every record of the new generation is published, those at or below the old mark too"];
+    .qunit.assertEquals[(st[`stats]`duplicates;first exec offset from st`marks);(0;6j);"none counted as duplicates, and the mark is the new generation's top"];
+    .qunit.assertEquals[(last .qt.qetl.kafka.log) 2;(enlist 0i)!enlist 7j;"the commit follows the new log"];
+    / a redelivery of that page is the same records at the same times: dropped
+    `.qt.qetl.kafka.inbox set enlist gen;
+    st:.qetl.kafka.cycle[.qt.qetl.kafka.transport;st];
+    .qunit.assertEquals[(count .qt.qetl.kafka.published[];st[`stats]`duplicates);(12;7);"a genuine redelivery is still suppressed"]};
+
+/ #2320: the single-record form - an old offset 0, then a new generation's offset 0.
+.qt.qetl.kafka.test_a_new_generations_record_at_the_marks_offset_is_published:{[t]
+    .qt.qetl.kafka.reset[];
+    `.qt.qetl.kafka.inbox set enlist .qt.qetl.kafka.msgs[`t;enlist 0;enlist 0;enlist "old"];
+    st:.qetl.kafka.cycle[.qt.qetl.kafka.transport;.qetl.kafka.state_new[]];
+    `.qt.qetl.kafka.inbox set enlist update msgtime:msgtime+0D01:00:00 from .qt.qetl.kafka.msgs[`t;enlist 0;enlist 0;enlist "new"];
+    st:.qetl.kafka.cycle[.qt.qetl.kafka.transport;st];
+    .qunit.assertEquals["c"$.qt.qetl.kafka.published[]`payload;("old";"new");"the newer record is kept, not taken for a repeat"];
+    .qunit.assertEquals[st[`stats]`duplicates;0;"and not counted as one"]};
+
 .qt.qetl.kafka.test_restarted_names_a_partition_only_when_its_rows_are_below_and_newer:{[t]
     marks:.qetl.kafka.advance[.qetl.kafka.marks_empty;update broker_time:2026.10.20D09:00:00+0D00:00:01*til 5 from .qt.qetl.kafka.env[`t;5#0;til 5;5#enlist "x"]];
     mk:{[marks;offs;shift] .qetl.kafka.restarted[marks;update broker_time:2026.10.20D09:00:00+shift+0D00:00:01*til count offs from .qt.qetl.kafka.env[`t;(count offs)#0;offs;(count offs)#enlist "x"]]}[marks];
     .qunit.assertEquals[count mk[0 1 2;0D01:00:00];1;"below the mark and written later: a restart"];
     .qunit.assertEquals[count mk[0 1 2;0D00:00:00];0;"below the mark and not newer: a redelivery"];
-    .qunit.assertEquals[count mk[3 4 5;0D01:00:00];0;"reaching the mark: never a restart, whatever the time"];
+    .qunit.assertEquals[count mk[3 4 5;0D00:00:03];0;"reaching the mark with the mark's own record: a redelivery"];
+    .qunit.assertEquals[count mk[3 4 5;0D01:00:00];1;"reaching the mark, every row at or below it written later: a new generation (#2320)"];
+    .qunit.assertEquals[count mk[enlist 4;0D01:00:00];1;"the mark's offset alone, written later: a new generation too"];
+    u:update broker_time:0Np from .qt.qetl.kafka.env[`t;3#0;3 4 5;3#enlist "x"];
+    .qunit.assertEquals[count .qetl.kafka.restarted[marks;u];0;"with no timestamps, a batch that reaches the mark stays a redelivery"];
     .qunit.assertEquals[count mk[enlist 7;0D01:00:00];0;"above the mark: new records"];
     e:update broker_time:0Np from .qt.qetl.kafka.env[`t;3#0;0 1 2;3#enlist "x"];
     .qunit.assertEquals[count .qetl.kafka.restarted[marks;e];1;"with no timestamps to compare, a wholly-lower batch keeps the restart reading"];

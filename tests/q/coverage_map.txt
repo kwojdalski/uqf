@@ -602,6 +602,7 @@ src/etl/core/run.q	.qetl.run.under_lock	test_complete_through.q,test_demo_deals_
 src/etl/core/run.q	.qetl.run.unfinished	test_run.q
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.available	test_etl_lifecycle.q,test_singlestore_odbc.q
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.build_connection_string	test_singlestore_odbc.q
+src/etl/core/singlestore_odbc.q	.qetl.io.odbc.close	test_singlestore_odbc.q
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.datetime6	test_singlestore_odbc.q
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.duckdb_timestamp	test_docstring_examples.q,test_duckdb_deals_backfill.q
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.escape_text	test_docstring_examples.q,test_singlestore_odbc.q
@@ -610,6 +611,7 @@ src/etl/core/singlestore_odbc.q	.qetl.io.odbc.loaded	test_etl_lifecycle.q,test_s
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.open	test_singlestore_odbc.q
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.require_available	test_etl_lifecycle.q,test_singlestore_odbc.q
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.run_sql	test_singlestore_odbc.q
+src/etl/core/singlestore_odbc.q	.qetl.io.odbc.with_connection	test_singlestore_odbc.q
 src/etl/core/source_credentials.q	.qetl.source.clear_settings	test_source_contract.q,test_torq_pipeline.q
 src/etl/core/source_credentials.q	.qetl.source.configured	test_complete_through.q,test_demo_deals_backfill.q,test_docstring_examples.q,test_duckdb_deals_backfill.q,test_event_tape.q,test_every_worker_runs.q,test_hdb_crypto_book_backfill.q,test_hdb_exec_bars_backfill.q,test_hdb_fx_markout_wide_backfill.q,test_hdb_fx_markouts_backfill.q,test_hdb_order_quality_backfill.q,test_io_hdb_scoped.q,test_live_check.q,test_local_source.q,test_partition_replace.q,test_react.q,test_rebuild_positions.q,test_source_contract.q,test_torq_pipeline.q
 src/etl/core/source_credentials.q	.qetl.source.credential_example	test_complete_through.q,test_demo_deals_backfill.q,test_docstring_examples.q,test_duckdb_deals_backfill.q,test_event_tape.q,test_every_worker_runs.q,test_hdb_crypto_book_backfill.q,test_hdb_exec_bars_backfill.q,test_hdb_fx_markout_wide_backfill.q,test_hdb_fx_markouts_backfill.q,test_hdb_order_quality_backfill.q,test_io_hdb_scoped.q,test_local_source.q,test_react.q,test_rebuild_positions.q,test_source_contract.q,test_transports.q
@@ -693,6 +695,7 @@ src/etl/core/stream_carry_recovery.q	.qetl.job.stream.catch_up	test_endofday.q,t
 src/etl/core/stream_carry_recovery.q	.qetl.job.stream.last_end_seen	test_endofday.q,test_stream_job.q,test_torq_pipeline.q
 src/etl/core/stream_carry_recovery.q	.qetl.job.stream.missed_end_of_day	test_endofday.q,test_stream_job.q
 src/etl/core/stream_carry_recovery.q	.qetl.job.stream.plant_today	test_endofday.q,test_kafka_flow.q,test_last_value.q,test_stream_job.q,test_torq_pipeline.q,test_uptime.q
+src/etl/core/stream_carry_recovery.q	.qetl.job.stream.replayed	test_docstring_examples.q,test_endofday.q,test_kafka_flow.q,test_last_value.q,test_stream_job.q,test_uptime.q
 src/etl/core/stream_carry_recovery.q	.qetl.job.stream.require_recovery	test_endofday.q,test_kafka_flow.q,test_last_value.q,test_stream_job.q,test_uptime.q
 src/etl/core/stream_delivery.q	.qetl.job.stream.delivery.absent	test_stream_delivery.q
 src/etl/core/stream_delivery.q	.qetl.job.stream.delivery.acked	test_stream_delivery.q
@@ -736,7 +739,6 @@ src/etl/core/stream_job.q	.qetl.job.stream.is_callable	test_bars.q,test_book_liq
 src/etl/core/stream_job.q	.qetl.job.stream.namespace	test_alert_sink.q,test_bars.q,test_book_liquidity_1m.q,test_cross_arbitrage.q,test_crypto_book_1s.q,test_crypto_markout.q,test_docstring_examples.q,test_endofday.q,test_fx_markout.q,test_fx_source_adapters.q,test_hdb_order_quality_backfill.q,test_horizon.q,test_job_output_contracts.q,test_kafka_decoder.q,test_kafka_flow.q,test_kafka_provenance.q,test_last_value.q,test_normalizer.q,test_order_quality.q,test_registries.q,test_replay_equivalence.q,test_rolling.q,test_stack_tables.q,test_stream_delivery.q,test_stream_job.q,test_stream_poll.q,test_superbook.q,test_torq_pipeline.q
 src/etl/core/stream_job.q	.qetl.job.stream.passthrough	test_bars.q,test_docstring_examples.q,test_fx_source_adapters.q,test_horizon.q,test_normalizer.q,test_rolling.q,test_stream_job.q
 src/etl/core/stream_job.q	.qetl.job.stream.record	test_endofday.q,test_replay_equivalence.q,test_stream_job.q
-src/etl/core/stream_job.q	.qetl.job.stream.replayed	test_docstring_examples.q,test_endofday.q,test_kafka_flow.q,test_last_value.q,test_stream_job.q,test_uptime.q
 src/etl/core/stream_job.q	.qetl.job.stream.reset	test_alert_sink.q,test_bars.q,test_book_liquidity_1m.q,test_cross_arbitrage.q,test_crypto_book_1s.q,test_crypto_markout.q,test_docstring_examples.q,test_endofday.q,test_fx_markout.q,test_hdb_order_quality_backfill.q,test_job_output_contracts.q,test_kafka_flow.q,test_last_value.q,test_order_quality.q,test_replay_equivalence.q,test_rolling.q,test_stream_job.q,test_torq_pipeline.q
 src/etl/core/stream_job.q	.qetl.job.stream.restore	test_endofday.q
 src/etl/core/stream_job.q	.qetl.job.stream.row_count	test_bars.q,test_endofday.q,test_horizon.q,test_rolling.q,test_stream_delivery.q,test_stream_job.q,test_stream_poll.q

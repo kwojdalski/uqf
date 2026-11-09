@@ -107,8 +107,8 @@
     md:([] sym:2#`EURUSD; source:`a`b; source_time:2#2026.09.17D10:00:00; bid:1.0 1.2; ask:2.0 2.2; clock:2#`venue);
     tob:.qetl.mapped.arrange md;
     / the WORST bid across venues instead of the best: a different COMBINE, the same SELECT and TRANSFORM
-    `.qetl.reference.combines set .qetl.reference.combines,enlist[`worst]!enlist {[tid;bid;ask;n]
-        g:0!select b:min bid, a:max ask by tid from ([] tid:tid; bid:bid; ask:ask);
+    `.qetl.reference.combines set .qetl.reference.combines,enlist[`worst]!enlist {[tid;px;n]
+        g:0!select b:min bid, a:max ask by tid from ([] tid:tid; bid:px`bid; ask:px`ask);
         bb:@[n#0n;g`tid;:;g`b];
         ba:@[n#0n;g`tid;:;g`a];
         ([] bid:bb; ask:ba; mid:0.5*bb+ba)};

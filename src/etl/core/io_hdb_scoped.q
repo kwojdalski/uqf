@@ -81,7 +81,7 @@
 / @param times a timestamp or a list of them (UTC)
 / @return the date or dates
 / @eg .qetl.io.scoped_day_of 2026.01.02D10:00:00.000000000  ->  2026.01.02
-.qetl.io.scoped_day_of:{[times] $[0=count .qetl.io.calendar; `date$times; .qetl.io.native_day_fn times]}
+.qetl.io.scoped_day_of:{[times] $[0=count .qetl.io.calendar; `date$times; .qetl.io.native_day_fn[times]]}
 
 / The calendar the launcher passed (-calendar), as a bounds entry: absent when the stack files rows by UTC midnight.
 / @param opts the parsed command line (.Q.opt)
@@ -124,10 +124,18 @@
 / @throws error naming the bound that was crossed
 / @private
 .qetl.io.scoped_check:{[bounds;partition_col;target;batch;window_to]
+    .qetl.io.scoped_fence[bounds;target];
+    .qetl.io.scoped_check_date[bounds;partition_col;target;batch;window_to]}
+
+/ Private: refuse a write once the end-of-day fence has begun.
+/ @param bounds dict of deadline and destination
+/ @param target the table
+/ @throws error naming the deadline
+/ @private
+.qetl.io.scoped_fence:{[bounds;target]
     if[.z.p>bounds`deadline;
         '"hdb_scoped: ",string[target]," - the end-of-day fence began at ",string[bounds`deadline],
-         " for ",string[bounds`destination],"; no further writes"];
-    .qetl.io.scoped_check_date[bounds;partition_col;target;batch;window_to]}
+         " for ",string[bounds`destination],"; no further writes"];}
 
 / A manager for an explicit, existing HDB root, fenced by `bounds`.
 / @param root the HDB directory, as a file symbol; it must exist
@@ -143,14 +151,20 @@
         '"hdb_scoped: bounds needs max_date, deadline and destination"];
     if[()~key root; '"hdb_scoped: ",string[root]," does not exist - nothing creates a destination"];
     .qetl.io.scoped_roots,:enlist `$string root;
-    if[`calendar in key bounds; .qetl.io.use_calendar bounds`calendar];
+    if[`calendar in key bounds; .qetl.io.use_calendar[bounds`calendar]];
     m:.qetl.io.hdb[root;partition_col];
     / Two named lambdas rather than one with a joined argument list: the check first, then the
-    / underlying write, with every argument named.
+    / underlying write, with every argument named. The deadline is checked again once the root's
+    / lock is held (#2331): a write can wait for it up to .qetl.io.hdb_lock_wait, and one that
+    / got it after the fence began would otherwise still write.
     m,`write`write_keyed!(
-        {[b;pc;f;t;rows] .qetl.io.scoped_check[b;pc;t;rows;0Np]; f[t;rows]}[bounds;partition_col;m`write];
-        {[b;pc;f;t;rows;o]
+        {[r;b;pc;t;rows]
+            .qetl.io.scoped_check[b;pc;t;rows;0Np];
+            .qetl.io.locked[r;{[b;r;pc;t;rows] .qetl.io.scoped_fence[b;t]; .qetl.io.write_hdb[r;pc;t;rows]};(b;r;pc;t;rows)]
+            }[root;bounds;partition_col];
+        {[r;b;pc;t;rows;o]
             .qetl.io.scoped_check[b;pc;t;rows;$[`replace=o`on_conflict; o`range_to; 0Np]];
-            f[t;rows;o]}[bounds;partition_col;m`write_keyed])}
+            .qetl.io.locked[r;{[b;r;pc;t;rows;o] .qetl.io.scoped_fence[b;t]; .qetl.io.write_hdb_keyed[r;pc;t;rows;o]};(b;r;pc;t;rows;o)]
+            }[root;bounds;partition_col])}
 
 \d .

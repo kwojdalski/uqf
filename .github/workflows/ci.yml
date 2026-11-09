@@ -523,7 +523,23 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
+      - name: Identify all documentation inputs
+        id: docs-tree
+        # The whole checkout, not just docs/: links may name any tracked file,
+        # and pre-render generates the API pages from staged q sources. Empty
+        # attestation commits change the SHA but preserve this tree. Tool pins
+        # and the checking workflow itself are tracked inputs too.
+        run: echo "tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+      - name: Restore an identical validated site
+        id: docs-cache
+        # Full mode always renders, even if this tree has been checked before.
+        if: ${{ needs.scope.outputs.full != 'true' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/docs-site
+          key: docs-site-${{ runner.os }}-${{ runner.arch }}-${{ steps.docs-tree.outputs.tree }}
       - name: Install Quarto
+        if: ${{ steps.docs-cache.outputs.cache-hit != 'true' }}
         # The doc-links hook renders docs/ to resolve every link. Pinned for
         # the same reason qlinter is: a renderer that changes how it resolves
         # a link must not turn this repository red without anyone choosing it.
@@ -538,6 +554,7 @@ jobs:
         with:
           version: "1.10.18"
       - name: Restore PeachQ built from its pinned commit
+        if: ${{ steps.docs-cache.outputs.cache-hit != 'true' }}
         # The render's pre-render step writes the q API pages under
         # docs/reference/q-api/ from the qDoc comments, which needs a q
         # (scripts/generate/q_api_docs.py). Same pin and cache as peachq-q.
@@ -546,6 +563,7 @@ jobs:
           path: ~/.cache/uqf/peachq
           key: peachq-${{ hashFiles('scripts/peachq.json') }}-${{ runner.os }}-${{ runner.arch }}
       - name: Provide PeachQ for the q API pages
+        if: ${{ steps.docs-cache.outputs.cache-hit != 'true' }}
         # Builds the pinned commit on a cold cache (about 40s). Through QCMD
         # only, as everywhere else: nothing is put on PATH.
         shell: bash
@@ -554,12 +572,28 @@ jobs:
           bin="$(python3 scripts/peachq.py)"
           echo "QCMD=$bin" >> "$GITHUB_ENV"
       - name: Check every link and anchor in docs/ resolves
+        if: ${{ steps.docs-cache.outputs.cache-hit != 'true' }}
         # WITHOUT --allow-missing, which the pre-commit hook passes. The
         # hook's flag exists so a q developer without Quarto is not blocked;
         # on CI a missing Quarto must be a hard error rather than a gate that
         # quietly checked nothing - the failure mode this repository already
         # has on the contract surface.
-        run: python3 scripts/gates/check_doc_links.py
+        run: python3 scripts/gates/check_doc_links.py --output-dir "$RUNNER_TEMP/docs-site"
+      - name: Save the validated site
+        if: ${{ steps.docs-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/docs-site
+          key: docs-site-${{ runner.os }}-${{ runner.arch }}-${{ steps.docs-tree.outputs.tree }}
+      - name: Keep the validated master site for Pages
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: docs-site-${{ github.sha }}
+          path: ${{ runner.temp }}/docs-site
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
 
   # The one name branch protection requires: green only when every job in
   # this workflow passed, or was skipped because Scope said its change could

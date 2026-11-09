@@ -176,8 +176,8 @@
 / @param job the job's name
 / @return dict of state (`idle or `published), rows and cursor
 / @throws error when the page does not fit its plant tables (.qetl.plant.problems),
-/   the proposed cursor does not advance, a publish is not acknowledged, or a
-/   step throws
+/   the proposed cursor does not advance, a publish is not acknowledged, the
+/   publish check holds the page (on_fail `hold), or a step throws
 .qetl.job.stream.tick:{[job]
     d:.qetl.job.stream.def job;
     p:d`poll;
@@ -205,7 +205,15 @@
     out:.qetl.job.stream.delivery.settle[job;doubt;out];
     n:sum .qetl.job.stream.row_count'[key out;value out];
     .qetl.job.stream.delivery.mark[name;current;proposed;n];
+    n0:.qetl.job.stream.withheld_n;
     .qetl.job.stream.delivery.send[job;out];
+    / A page the publish check holds returns :: and no error, as the carry
+    / snapshot found (#1307): saving now would skip rows never published. Under
+    / `hold the cursor and the marker stay and the page is fetched again; what
+    / `drop withholds is the job's declared loss (#2312).
+    if[(n0<>.qetl.job.stream.withheld_n) and $[`on_fail in key d; `hold~d`on_fail; 0b];
+        '"tick: ",string[job],"'s page was held by its publish check - the cursor stays at ",(-3!current),
+         " and the page is fetched again"];
     ops[`save][name;proposed];
     .qetl.job.stream.delivery.unmark name;
     `state`rows`cursor!(`published;n;proposed)}

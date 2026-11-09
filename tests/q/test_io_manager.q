@@ -156,6 +156,25 @@
     .qunit.assertEquals[.qetl.io.hdb_lock `:data/hdb/;(system"cd"),"/data/hdb.write.lock";
         "a relative root is the one under this process's directory"]};
 
+/ #2311: `.`, `..` and `//` inside the root are normalised away too, as
+/ pathlib drops them, so every spelling of one directory takes one lock.
+.qt.qetl.io.test_the_root_lock_ignores_dot_and_dot_dot_parts:{[t]
+    .qunit.assertEquals[.qetl.io.hdb_lock each `:/data/hdb/.`:/data/./hdb`:/data//hdb`:/data/x/../hdb;4#enlist "/data/hdb.write.lock";
+        "a . part, a doubled slash and a .. that cancels its parent all name the same root"];
+    .qunit.assertEquals[.qetl.io.hdb_lock each `:./data/hdb`:data/x/../hdb;2#enlist (system"cd"),"/data/hdb.write.lock";
+        "and so do they in a relative root"]};
+
+.qt.qetl.io.test_a_root_held_under_one_spelling_refuses_a_write_under_another:{[t]
+    root:.qt.qetl.io.hdb_dir[];
+    held:.qt.qetl.io.hold_root[`$(string root),"/."];
+    saved:.qetl.io.hdb_lock_wait;
+    `.qetl.io.hdb_lock_wait set 0D00:00:00.050;
+    r:@[{.qetl.io.write[.qetl.io.hdb[x;`deal_time];`iodeals;.qt.qetl.io.deals[]]; `wrote};root;{x}];
+    `.qetl.io.hdb_lock_wait set saved;
+    system"rm -rf ",held;
+    .qunit.assertTrue[r like "*could not take the lock at*";"the root held through `:<root>/. refuses a writer given `:<root>"];
+    .qunit.assertEquals[count key root;0;"and nothing was written meanwhile"]};
+
 .qt.qetl.io.test_hdb_gives_the_rows_a_time_from_the_partition_column:{[t]
     root:.qt.qetl.io.hdb_dir[];
     .qetl.io.write[.qetl.io.hdb[root;`deal_time];`iodeals;.qt.qetl.io.deals[]];
@@ -176,6 +195,22 @@
     .qetl.io.write[m;`iodeals;.qt.qetl.io.deals[]];
     .qetl.io.write[m;`iodeals;.qt.qetl.io.deals[]];
     .qunit.assertEquals[count .qt.qetl.io.part[root;2026.01.02;`iodeals];4;"windows accumulate in the partition"]};
+
+/ #2329: an append whose column types are not the partition's own threw
+/ part-way and left columns of different lengths (on PeachQ, which rewrites
+/ the partition whole, it retyped the rows already there). Every date is
+/ checked first, so the batch's new date is not written either.
+.qt.qetl.io.test_an_append_of_another_type_is_refused_before_any_column_is_written:{[t]
+    root:.qt.qetl.io.hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write[m;`iodeals;.qt.qetl.io.deals[]];
+    b:([] deal_time:2026.01.01D10:00:00.000000000 2026.01.02D11:00:00.000000000; sym:`AUDUSD`AUDUSD; notional:("5e6";"6e6"));
+    .qunit.assertThrows[.qetl.io.write[m;`iodeals];b;"*notional: partition f, batch C*";"refused, naming the column and both types"];
+    base:.qetl.io.part_path[root;2026.01.02;`iodeals];
+    .qunit.assertEquals[{[base;c] count get hsym `$base,"/",string c}[base] each `time`deal_time`sym`notional;4#2;
+        "every column still ends at the partition's own two rows"];
+    .qunit.assertEquals[type .qt.qetl.io.part[root;2026.01.02;`iodeals]`notional;9h;"and the rows already there keep their type"];
+    .qunit.assertTrue[()~key hsym `$.qetl.io.part_path[root;2026.01.01;`iodeals];"the batch's other date is not written either"]};
 
 .qt.qetl.io.test_hdb_refuses_today:{[t]
     root:.qt.qetl.io.hdb_dir[];

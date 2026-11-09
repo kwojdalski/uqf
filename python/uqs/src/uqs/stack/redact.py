@@ -4,9 +4,10 @@ Every front end that echoes an error from somewhere a credential travels -
 ssh output in `uqs deploy`, a driver's login error in a live source check -
 masks it here first, so there is one list of what counts as a secret.
 
-The q side masks the same names in src/etl/core/live_check.q
-(.qetl.livecheck.secret_keys); python/uqs/tests/test_live_check.py holds the
-two lists equal.
+The q side masks the same names: .qetl.source.secret_keys in
+src/etl/core/source_credentials.q, the list sources.csv is validated with and
+the live check redacts with (#2334). python/uqs/tests/test_live_check.py
+holds the two lists equal, and source_settings validates with this one.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ SECRET_KEYS = (
     "api_key",
     "accesskey",
     "access_key",
+    "key",
 )
 
 #: A value runs to the next whitespace - or, ODBC {}-quoted, to its closing }

@@ -326,6 +326,26 @@
     setenv[`SRCTEST_HOST;""];
     .qunit.assertEquals[got;"db1:5010";"a variable the loader allows is expanded when the source connects"]};
 
+/ #2306: expansion rescanned the whole setting after each substitution, so a
+/ variable whose value held ${...} - itself, or one naming it back - hung.
+.qt.qetl.source.test_a_path_variable_naming_a_variable_is_refused_not_looped:{[t]
+    setenv[`SRCTEST_LOOP;"${SRCTEST_LOOP}"];
+    setenv[`SRCTEST_A;"/a/${SRCTEST_B}"];
+    setenv[`SRCTEST_B;"/b/${SRCTEST_A}"];
+    .qetl.source.load_settings[.qt.qetl.source.settings_file[enlist "demo_deals,ipc,${SRCTEST_A}:5010,"];`SRCTEST_A`SRCTEST_B`SRCTEST_LOOP];
+    .qunit.assertThrows[.qetl.source.expand_path_vars["who"];"${SRCTEST_LOOP}/x";
+        "who: ${SRCTEST_LOOP}'s value holds a ${ of its own - a path variable must be a path*";"a self-reference is refused, naming the variable"];
+    .qunit.assertThrows[.qetl.source.require_credentials;`demo_deals;
+        "*${SRCTEST_A}'s value holds a ${ of its own*";"a mutual reference is refused at the first variable"];
+    setenv[`SRCTEST_LOOP;""]; setenv[`SRCTEST_A;""]; setenv[`SRCTEST_B;""]};
+
+.qt.qetl.source.test_several_path_variables_still_expand:{[t]
+    setenv[`SRCTEST_HOST;"db1"]; setenv[`SRCTEST_PORT;"5010"];
+    .qetl.source.load_settings[.qt.qetl.source.settings_file[enlist "demo_deals,ipc,${SRCTEST_HOST}:${SRCTEST_PORT},"];`SRCTEST_HOST`SRCTEST_PORT];
+    got:.qetl.source.require_credentials `demo_deals;
+    setenv[`SRCTEST_HOST;""]; setenv[`SRCTEST_PORT;""];
+    .qunit.assertEquals[got;"db1:5010";"every ${VAR} in a setting is expanded"]};
+
 .qt.qetl.source.test_an_unlisted_path_variable_is_refused:{[t]
     .qetl.source.load_settings[.qt.qetl.source.settings_file[enlist "demo_deals,ipc,${HOME}:5010,"];`SRCTEST_HOST];
     .qunit.assertThrows[.qetl.source.require_credentials;`demo_deals;"*${HOME} is not a path it may use*";"only the variables the loader names are expanded"]};
@@ -336,6 +356,20 @@
     got:.qetl.source.require_credentials `demo_deals;
     setenv[`SRCTEST_PWD;""];
     .qunit.assertEquals[got;"db1:5010:svc:s3cret";"{secret} is filled from the environment when the source connects"]};
+
+/ #2336: an ODBC secret went into the connection string raw, so a ; in it
+/ ended the password and the rest was read as settings of their own.
+.qt.qetl.source.test_an_odbc_secret_is_inserted_as_one_braced_value:{[t]
+    .qetl.source.define[`t;.qt.qetl.source.decl[],`transport`credential_example!(`odbc;"DSN=x")];
+    .qetl.source.load_settings[.qt.qetl.source.settings_file[enlist "t,odbc,DRIVER=x;PWD={secret},SRCTEST_PWD"];`symbol$()];
+    setenv[`SRCTEST_PWD;"fake;Encrypt=no}{x"];
+    got:.qetl.source.require_credentials `t;
+    setenv[`SRCTEST_PWD;"plain"];
+    plain:.qetl.source.require_credentials `t;
+    setenv[`SRCTEST_PWD;""];
+    .qunit.assertEquals[got;"DRIVER=x;PWD={fake;Encrypt=no}}{x}";"braced, its } doubled"];
+    .qunit.assertEquals[.qetl.livecheck.settings got;`driver`pwd!(enlist "x";"fake;Encrypt=no}{x");"read back, the whole password is one value"];
+    .qunit.assertEquals[plain;"DRIVER=x;PWD=plain";"a secret with nothing to quote goes in as it is"]};
 
 / A configured source is live, so a row that cannot resolve fails the run
 / instead of quietly reading the fixture.

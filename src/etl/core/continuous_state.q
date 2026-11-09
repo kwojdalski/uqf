@@ -78,10 +78,20 @@
 .qetl.job.continuous.load_cursor:{[worker]
     path:.qetl.job.continuous.cursor_path[worker];
     if[()~key hsym `$path; :0Np];
-    saved:.qetl.job.bounded.state.durable_read["load_cursor";path;.qetl.job.bounded.state.read_json_dict];
-    if[not `cursor in key saved;
-        '"load_cursor: ",path," holds no cursor field - ",(-3!saved)];
-    "P"$saved`cursor}
+    .qetl.job.bounded.state.durable_read["load_cursor";path;.qetl.job.continuous.read_cursor_file]}
+
+/ Private: one generation of a cursor file as its timestamp, throwing unless
+/ it holds a `cursor` that parses to one. A durable_read reader: checked only
+/ after the read, {"cursor":"not-a-time"} came back as 0Np - a first start -
+/ and a primary with no `cursor` threw, each without trying the .bak (#2314).
+/ advance never saves a null, so a null here is always a bad file.
+/ @private
+.qetl.job.continuous.read_cursor_file:{[path]
+    saved:.qetl.job.bounded.state.read_json_dict path;
+    if[not `cursor in key saved; '"no cursor field - ",-3!saved];
+    c:@[{"P"$x};saved`cursor;{[e] 0Np}];
+    if[null c; '"cursor ",(-3!saved`cursor)," is not a timestamp"];
+    c}
 
 / Persist the cursor AFTER the page it acknowledges has been published
 /.
@@ -95,7 +105,7 @@
 / Written through durable_lines, never 0: onto the file: 0: truncates first,
 / so a kill mid-write left a file load_cursor could not read.
 .qetl.job.continuous.save_cursor:{[worker;cursor]
-    system"mkdir -p ",.qetl.job.bounded.state.lock_dir[];
+    system"mkdir -p ",.qetl.job.bounded.state.shell_word[.qetl.job.bounded.state.lock_dir[]];
     .qetl.job.bounded.state.durable_lines[.qetl.job.continuous.cursor_path[worker];enlist .j.j `cursor`saved_at!(cursor;.z.p)]}
 
 / Forget a feeder's saved cursor, so its next run starts from the source's
@@ -139,7 +149,7 @@
 / @param cursor the cursor, e.g. `time`securityId`priceBookType!(...)
 / @return the path written
 .qetl.job.continuous.save_cursor_value:{[worker;cursor]
-    system"mkdir -p ",.qetl.job.bounded.state.lock_dir[];
+    system"mkdir -p ",.qetl.job.bounded.state.shell_word[.qetl.job.bounded.state.lock_dir[]];
     .qetl.job.bounded.state.durable_set[.qetl.job.continuous.cursor_value_path[worker];cursor]}
 
 / Is `proposed` strictly after `current`, comparing the fields `ks` in order?
@@ -177,13 +187,21 @@
 / `saved_at` useless as a signal of when progress last actually happened.
 / @throws error when the new cursor is not strictly ahead
 .qetl.job.continuous.advance:{[worker;current;next_cursor]
+    .qetl.job.continuous.require_advance[worker;current;next_cursor];
+    .qetl.job.continuous.save_cursor[worker;next_cursor];
+    next_cursor}
+
+/ Private: advance's refusals, without the save - so a caller can make them
+/ before an irreversible publish rather than after it (#2315).
+/ @throws error when the new cursor is null or not strictly ahead
+/ @private
+.qetl.job.continuous.require_advance:{[worker;current;next_cursor]
     if[null next_cursor;
         '"advance: refusing a null cursor for ",string[worker]," - a cursor that cannot be compared cannot be trusted to move forward"];
     if[(not null current) and not next_cursor>current;
         '"advance: refusing to move ",string[worker],"'s cursor from ",
          string[current]," to ",string[next_cursor],
          " - a continuous cursor that does not move strictly forward re-publishes pages, and continuous output has no coverage ledger to notice"];
-    .qetl.job.continuous.save_cursor[worker;next_cursor];
     next_cursor}
 
 / ------------------------------------------------------------- FRESHNESS
@@ -302,9 +320,13 @@
     page:fetch_page current;
     if[0=count page;
         :`state`rows`cursor!(`idle;0;current)];
-    / publish, THEN advance. See save_cursor on why this order.
+    / The next cursor is checked BEFORE the publish, as stream.tick does: a
+    / cursor that does not move was refused only after the send, so every
+    / retry of the page sent it again (#2315). Then publish, THEN advance -
+    / see save_cursor on why this order.
+    nc:.qetl.job.continuous.require_advance[worker;current;next_cursor page];
     rows:publish_page page;
-    c:.qetl.job.continuous.advance[worker;current;next_cursor page];
+    c:.qetl.job.continuous.advance[worker;current;nc];
     `state`rows`cursor!(`published;rows;c)}
 
 \d .

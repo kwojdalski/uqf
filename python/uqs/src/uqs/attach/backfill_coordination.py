@@ -76,7 +76,21 @@ IN_PLACE_PROCTYPES = ("compression",)
 #: Processes that may touch the directory, per a config this cannot see.
 MAYBE_PROCTYPES = ("housekeeping",)
 #: Filesystem types whose advisory locking kdb+'s sym-file serialisation cannot rely on.
-NETWORK_FILESYSTEMS = ("nfs", "nfs4", "cifs", "smbfs", "smb3", "afpfs", "webdav", "sshfs", "9p")
+#: A FUSE mount is matched by its subtype: Linux reports SSHFS as `fuse.sshfs` (#2304).
+NETWORK_FILESYSTEMS = (
+    "nfs",
+    "nfs4",
+    "cifs",
+    "smbfs",
+    "smb3",
+    "afpfs",
+    "webdav",
+    "sshfs",
+    "9p",
+    "rclone",
+    "s3fs",
+    "gcsfuse",
+)
 #: This machine, as the checks ask about it (a test replaces it).
 HOST = Host()
 
@@ -314,7 +328,7 @@ def examine(
             )
         )
     kind = filesystem_of(dest.hdb_dir)
-    if kind in NETWORK_FILESYSTEMS:
+    if kind.removeprefix("fuse.") in NETWORK_FILESYSTEMS:
         blockers.append(
             _blocker(
                 "network-filesystem",

@@ -144,7 +144,7 @@ def _free_port() -> int:
 _PUBLISH = """h:hopen {port};
 f:{{[sz] ([] source_time:enlist .z.p; sym:enlist `EURUSD; venue:enlist `v; side:enlist 1;
     size:enlist sz; price:enlist 1.1; fee:enlist 0f; fee_ccy:enlist `USD;
-    fill_id:enlist `$string sz; book:enlist `london; product:enlist `spot)}};
+    fill_id:enlist `$string sz; book:enlist `london; product:enlist `spot; clock:enlist `venue)}};
 h(`.qetl.tick.publish;`executions;f 1e6);
 h(`.qetl.tick.publish;`executions;f 5e5);
 exit 0

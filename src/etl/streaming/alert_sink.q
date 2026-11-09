@@ -83,8 +83,9 @@
 .qpipe.job.alert_sink.alerts:.qf.port.no_alerts[]
 
 / Breaches awaiting delivery. `body` is the JSON text to POST, built once so
-/ that every attempt sends the same bytes.
-.qpipe.job.alert_sink.pending:([] id:`symbol$(); body:(); attempts:`long$(); error:())
+/ that every attempt sends the same bytes. `time` is the plant's, so a row
+/ given up on can tell whether the dedup entry is still its own (#2307).
+.qpipe.job.alert_sink.pending:([] id:`symbol$(); time:`timestamp$(); body:(); attempts:`long$(); error:())
 
 / Breaches given up on after max_attempts, with the last error. The record
 / that makes a failed delivery visible rather than dropped.
@@ -141,12 +142,13 @@
     fresh:x pick;
     fids:ids pick;
     `.qpipe.job.alert_sink.alerts set cur,fids!fresh`time;
-    `.qpipe.job.alert_sink.pending upsert flip `id`body`attempts`error!(fids;.qpipe.job.alert_sink.payload each .qpipe.job.alert_sink.breach_cols#fresh;(count fresh)#0j;(count fresh)#enlist "");
+    `.qpipe.job.alert_sink.pending upsert flip `id`time`body`attempts`error!(fids;fresh`time;.qpipe.job.alert_sink.payload each .qpipe.job.alert_sink.breach_cols#fresh;(count fresh)#0j;(count fresh)#enlist "");
     count fresh}
 
 / Attempt every pending delivery once. A success leaves the queue; a failure
 / is counted and stays, until its last attempt, when it is recorded in
-/ `dead`, logged, and forgotten by the dedup state.
+/ `dead`, logged, and forgotten by the dedup state - unless a newer report
+/ of the same breach was queued since, which keeps its own entry.
 / @param now the time to record a dead breach at
 / @return a dict of delivered, retrying and failed counts
 / @throws error when no URL is configured
@@ -162,8 +164,11 @@
     gave_up:tried where exhausted;
     `.qpipe.job.alert_sink.pending set tried where (not ok) and not exhausted;
     if[count gave_up;
-        `.qpipe.job.alert_sink.dead upsert update failed_at:now from gave_up;
-        `.qpipe.job.alert_sink.alerts set (key[.qpipe.job.alert_sink.alerts] except gave_up`id)#.qpipe.job.alert_sink.alerts;
+        `.qpipe.job.alert_sink.dead upsert update failed_at:now from delete time from gave_up;
+        / only an entry this row still owns: an older report's give-up used to
+        / clear a newer reminder's, and its repeat was posted again (#2307)
+        own:exec id from gave_up where time=.qpipe.job.alert_sink.alerts id;
+        `.qpipe.job.alert_sink.alerts set (key[.qpipe.job.alert_sink.alerts] except own)#.qpipe.job.alert_sink.alerts;
         {[r] .qetl.log.ch.err[`ipc;"breach not delivered - recorded in dead";(enlist[`job]!enlist `alert_sink),`id`attempts`error!(r`id;r`attempts;r`error)]} each gave_up];
     `delivered`retrying`failed!(count where ok;count .qpipe.job.alert_sink.pending;count gave_up)}
 

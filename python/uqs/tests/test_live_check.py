@@ -59,11 +59,14 @@ def _run(sources, runner, **kw):
 
 
 def test_the_q_and_python_secret_lists_are_the_same():
-    """Two languages mask secrets; this holds them to one list."""
-    text = (REPO / "src/etl/core/live_check.q").read_text()
+    """Two languages mask secrets; this holds them to one list - q's single
+    .qetl.source.secret_keys, which the live check also redacts with (#2334)."""
+    text = (REPO / "src/etl/core/source_credentials.q").read_text()
     m = re.search(r"^(?:\.[A-Za-z_][\w.]*\.)?secret_keys:(.*)$", text, re.M)
-    assert m, "live_check.q declares secret_keys"
-    assert m.group(1).strip().strip("`").split("`") == list(redact.SECRET_KEYS)
+    assert m, "source_credentials.q declares secret_keys"
+    assert re.findall(r'"([^"]*)"', m.group(1)) == list(redact.SECRET_KEYS)
+    live = (REPO / "src/etl/core/live_check.q").read_text()
+    assert not re.search(r"^\S*secret_keys:", live, re.M), "live_check.q keeps no list of its own"
 
 
 def test_each_source_runs_in_its_own_q_with_live_sources_required(monkeypatch):
@@ -138,6 +141,9 @@ def test_a_diagnostic_is_redacted_again_on_the_way_out():
         ("login failed: PWD={s3 cret};UID=me", (), "login failed: PWD=<redacted>;UID=me"),
         ("login failed: PWD={a}} b};UID=me", (), "login failed: PWD=<redacted>;UID=me"),
         ("login failed: PWD={never closed", (), "login failed: PWD=<redacted>"),
+        # every key sources.csv refuses inline is masked, KEY and ACCESSKEY too (#2334)
+        ("login failed: KEY=fake;UID=me", (), "login failed: KEY=<redacted>"),
+        ("login failed: ACCESSKEY=fake;UID=me", (), "login failed: ACCESSKEY=<redacted>"),
     ],
 )
 def test_redaction_masks_every_shape_of_secret(text, secrets, want):
