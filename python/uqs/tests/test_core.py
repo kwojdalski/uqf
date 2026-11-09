@@ -28,7 +28,7 @@ from uqs.model.pipelines import PIPELINE_OFFSETS, PROCESS_CSV_FIELDS
 from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths, repo_root
 from uqs.stack import clean as stack_clean
-from uqs.stack import deployment, hdb_types, listing, monitor_budget, runtime
+from uqs.stack import deployment, hdb_types, listing, monitor_budget, process_unset, runtime
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
@@ -289,6 +289,28 @@ def test_resolve_process_config_leaves_unknown_var_literal():
 def test_set_process_config_unknown_field_raises(fake_paths: UqsPaths):
     with pytest.raises(UqsError):
         stack_procs.set_process_config(fake_paths, "discovery1", "not_a_field", "x")
+
+
+def test_set_process_config_refuses_a_rename_onto_another_process(fake_paths: UqsPaths):
+    """Process names are the stack's identity - discovery, ports, logs, pid
+    files - so two rows may not share one (#2464)."""
+    with pytest.raises(UqsError, match="stp1"):
+        stack_procs.set_process_config(fake_paths, "discovery1", "procname", "stp1")
+    names = stack_procs.list_process_names(fake_paths)
+    assert names.count("stp1") == 1 and "discovery1" in names
+
+
+def test_a_renamed_process_is_set_under_its_new_name(fake_paths: UqsPaths):
+    """An override is keyed by the row's own procname, so one set through the
+    new name must land there, or it is reported as set and never applied
+    (#2464). The old name is still refused, as a process that is gone."""
+    stack_procs.set_process_config(fake_paths, "discovery1", "procname", "discovery9")
+    stack_procs.set_process_config(fake_paths, "discovery9", "g", "1")
+    assert stack_procs.get_process_config(fake_paths, "discovery9", resolve=False)["g"] == "1"
+    with pytest.raises(UqsError, match="no process discovery1"):
+        stack_procs.set_process_config(fake_paths, "discovery1", "g", "0")
+    process_unset.unset_process_config(fake_paths, "discovery9", ["g"])
+    assert stack_procs.get_process_config(fake_paths, "discovery9", resolve=False)["g"] == "0"
 
 
 def test_set_process_config_persists_and_is_read_back(fake_paths: UqsPaths):

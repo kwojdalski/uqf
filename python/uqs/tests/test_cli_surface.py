@@ -22,6 +22,7 @@ def test_config_set_takes_several_field_value_pairs_and_unset_removes_one(monkey
     paths = UqsPaths.__new__(UqsPaths)
     monkeypatch.setattr("uqs.cli.config._paths", lambda: paths)
     monkeypatch.setattr(type(paths), "overrides_path", tmp_path / "o.csv", raising=False)
+    monkeypatch.setattr(type(paths), "repo_root", tmp_path, raising=False)  # no bundle rows
     monkeypatch.setattr(type(paths), "orchestrator_dir", tmp_path, raising=False)
     monkeypatch.setattr(stack_procs, "list_process_names", lambda _p: ["rdb1"])
     ok = runner.invoke(cli.app, ["config", "set", "rdb1", "startwithall=0", "port=6061"])
