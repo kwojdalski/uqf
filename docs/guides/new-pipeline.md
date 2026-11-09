@@ -802,13 +802,18 @@ it that. `.qtorq.safe_timer` remains the tool for that question.
 
 ## Filling one dataset with several workers
 
-One worker per `(dataset, partition)` pair. Declare a `partition` and two
-workers can fill one dataset at once:
+One worker per `(dataset, partition)` pair. Declare a `partition`, and the
+`partition_column` of the output that holds it, and two workers can fill one
+dataset at once:
 
+<!-- q-example: run -->
 ```q
 .qetl.job.bounded.define[`fx_rates_eurusd;
-    `source`outputs`width`transform`partition!(`fx_rates;enlist `fx_rates;1D;`fx_rates_pips;`EURUSD)];
+    `source`outputs`width`transform`partition`partition_column!(`fx_rates;enlist `fx_rates;1D;`fx_rates_pips;`EURUSD;`sym)];
 ```
+
+`define` refuses a `partition` without its column: publish uses it to refuse
+another partition's rows, and a `replace` to clear only this partition's.
 
 Coverage is then recorded and read under that partition, and **no read unions
 across partitions** --- a range covered for `` `EURUSD `` says nothing about
