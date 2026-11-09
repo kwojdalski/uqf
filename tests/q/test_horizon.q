@@ -10,6 +10,21 @@
 .qt.qetl.job.stream.horizons.beforeNamespace_save_jobs:{[] .qt.support.save_stream_jobs[`.qt.qetl.job.stream.horizons]}
 .qt.qetl.job.stream.horizons.afterNamespace_restore_jobs:{[] .qt.support.restore_stream_jobs[`.qt.qetl.job.stream.horizons]}
 
+/ So are the horizontest_* transforms it defines: left registered, a later suite
+/ scanning .qetl.transform.defined[] judges them as the tree's own (#2506).
+/ Each test defines the ones it needs, guarded on whether they already exist.
+.qt.qetl.job.stream.horizons.afterNamespace_drop_transforms:{[]
+    t:.qetl.transform.defined[];
+    .qt.support.drop_rows[`.qetl.transform.registry;t where t like "horizontest_*"];
+    }
+
+.qt.qetl.job.stream.horizons.test_the_suite_leaves_no_transform_of_its_own:{[]
+    .qt.qetl.job.stream.horizons.define_transform[];
+    .qt.qetl.job.stream.horizons.afterNamespace_drop_transforms[];
+    t:.qetl.transform.defined[];
+    .qunit.assertEquals[t where t like "horizontest_*";`symbol$();"no horizontest_* transform outlives the suite"];
+    }
+
 .qt.qetl.job.stream.horizons.t0:2026.10.09D10:00:00
 
 .qt.qetl.job.stream.horizons.events:([] time:`timestamp$(); sym:`symbol$(); px:`float$())
