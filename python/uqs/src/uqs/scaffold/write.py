@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
@@ -74,6 +75,7 @@ def apply_plan(plan: ScaffoldPlan, repo_root: Path) -> list[Path]:
     (a profile line past the limit, a list it cannot find), so existence alone
     is not enough to check (#1568). A write that fails part way is undone.
     """
+    _check_filenames(plan)
     _check_processes(plan, repo_root)
     contents: dict[Path, str] = {}
     created: set[Path] = set()
@@ -122,7 +124,10 @@ def _write_all(contents: dict[Path, str], created: set[Path], repo_root: Path) -
     except BaseException:
         for target in done:
             if target in created:
-                target.unlink(missing_ok=True)
+                # lexists, not unlink(missing_ok=True): a path the filesystem
+                # refused (a name too long) raises again on unlink (#2507).
+                if os.path.lexists(target):
+                    target.unlink()
             elif target.read_bytes() != originals[target]:
                 # An open refused before truncation leaves the file unchanged
                 # (and may still refuse writes). Restore only changed bytes.
@@ -131,6 +136,26 @@ def _write_all(contents: dict[Path, str], created: set[Path], repo_root: Path) -
             if folder.is_dir() and folder != repo_root and not any(folder.iterdir()):
                 folder.rmdir()
         raise
+
+
+#: The longest filename, in bytes, the filesystems this runs on take.
+MAX_FILENAME = 255
+
+
+def _check_filenames(plan: ScaffoldPlan) -> None:
+    """Refuse a file the filesystem would refuse, before anything is written.
+
+    A name passes the identifier pattern at any length, and becomes a filename
+    with a prefix and a suffix (`test_<name>.q`); one past the limit failed the
+    write part way, with a traceback, instead of being refused (#2507).
+    """
+    for action in plan.actions:
+        name = action.path.name
+        if len(name.encode()) > MAX_FILENAME:
+            raise UqsError(
+                f"{name[:40]}... would be a {len(name.encode())}-byte filename, over the "
+                f"{MAX_FILENAME} a filesystem takes - pick a shorter name"
+            )
 
 
 def _check_processes(plan: ScaffoldPlan, repo_root: Path) -> None:

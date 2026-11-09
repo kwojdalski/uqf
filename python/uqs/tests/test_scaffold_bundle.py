@@ -7,6 +7,7 @@ own files are left as they were.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -85,6 +86,24 @@ def test_a_streaming_job_may_subscribe_to_a_bundle_table(tmp_path, monkeypatch, 
     _out, refused = _job_new(etl, monkeypatch)
     assert refused == []
     assert "mock_mids:([]" in (folder / "tables.q").read_text()
+
+
+def test_a_bundle_job_passes_the_nested_contexts_gate(tmp_path, monkeypatch, tree_files):
+    """#2502: a bundle's job file is written fully qualified, as a tree one is:
+    the nested-contexts gate scans sidecars/, and installing copies it to src/."""
+    spec = importlib.util.spec_from_file_location(
+        "nested_contexts_2502", UQF_ROOT / "scripts/gates/policy/nested_contexts.py"
+    )
+    assert spec is not None and spec.loader is not None
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    folder = tmp_path / "sidecars" / "bx"
+    argv = ["bx", "--subscribe-to", "trades", "--outputs", "bx_out",
+            "--schema", "sym:symbol, px:float", "--bundle", str(folder)]  # fmt: skip
+    _out, refused = _job_new(argv, monkeypatch)
+    assert refused == [] and (folder / "bx.q").is_file()
+    assert gate.problems(tmp_path) == []
+    assert ".qpipe.job.bx.on_batch:" in (folder / "bx.q").read_text()
 
 
 def test_a_dry_run_writes_nothing(tmp_path, monkeypatch, tree_files):
