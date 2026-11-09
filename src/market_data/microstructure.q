@@ -465,12 +465,11 @@
     log 1+gap_sec};
 
 / Rolling lag-1 autocorrelation of an OFI series: for each window-sized
-/ trailing slice, correlates the slice's first window-1 values against
-/ its last window-1 values (a lag-1 pairing) with kdb+'s builtin cor, and
-/ writes the result at the index the window ends on. No builtin exists for a rolling correlation,
-/ unlike rolling_ofi/spread_ratio, so this is a genuine loop; every index before the first full window is null (0n).
+/ trailing slice, cor of its first window-1 values against its last window-1
+/ (lag-1 pairs), written at the index the window ends on. No builtin rolls a
+/ correlation, so this loops; every index before the first full window is null (0n).
 / @param ofi_series an OFI vector, e.g. from ofi or ofi_multilevel
-/ @param window the moving-window size, in rows (needs >=4: w rows give w-1 lag pairs, and 1 or 2 pairs give a null or a forced +-1 cor)
+/ @param window the moving-window size, in rows (needs >=4: w rows give w-1 lag pairs; under 3 non-null pairs, as with ofi's warm-up null, is null, #2430)
 / @return a vector, same length as ofi_series, lag-1 autocorrelation per window ending at that index
 / @throws error if window < 4
 / @eg .qf.mkt.ofi_autocorrelation[1 -1 2 0 -3 4;4]
@@ -483,7 +482,8 @@
         segment:ofi_series (i-window)+til window;
         lagged:-1_segment;
         current:1_segment;
-        result[i-1]:cor[lagged;current];
+        ok:not null lagged+current;
+        result[i-1]:$[3>sum ok; 0n; cor[lagged where ok;current where ok]];
         i+:1];
     result};
 

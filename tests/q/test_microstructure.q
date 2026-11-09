@@ -373,6 +373,13 @@
     .qunit.assertThrows[f;2;pat;"window 2 (one pair, always null) is refused"];
     .qunit.assertThrows[f;3;pat;"window 3 (two pairs, forced +-1) is refused"]};
 
+/ #2430: ofi's index 0 is null, so the first full window held only two lag
+/ pairs and wrote the forced -1 that window>=4 was meant to refuse.
+.qt.qf.mkt.microstructure.test_ofi_autocorrelation_skips_the_warmup_null:{[t]
+    r:.qf.mkt.ofi_autocorrelation[0n 700 800 300 0 -200 300f;4];
+    .qunit.assertTrue[null r 3;"two lag pairs are not a correlation"];
+    .qt.support.assertApprox[r 4;cor[700 800 300f;800 300 0f];1e-9;"the next window has three full pairs"]};
+
 / ---- require_depth_quotes reuse ----
 
 .qt.qf.mkt.microstructure.test_ofi_rejects_quotes_missing_a_required_column:{[t]
