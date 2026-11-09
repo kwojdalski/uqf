@@ -67,6 +67,23 @@ def test_list_shows_each_runs_range_and_counts(monkeypatch):
     assert "42" in result.output and "42.0" not in result.output
 
 
+@pytest.mark.parametrize("blank", [None, ""])
+def test_a_run_with_no_recorded_range_meets_no_window(blank):
+    """KDB-X's `.j.j` writes a null timestamp as "", PeachQ's as null: a
+    rangeless run is left out of a filtered list, not an error about the
+    user's input (#2471)."""
+    from uqs import timerange
+
+    window = timerange.resolve(None, None, None, "7d", open_ended=True)
+    rangeless = {"run_id": "a", "range_from": blank, "range_to": blank}
+    ranged = {
+        "run_id": "b",
+        "range_from": "2000-01-01T00:00:00.000000000",
+        "range_to": "2100-01-01T00:00:00.000000000",
+    }
+    assert [r["run_id"] for r in (rangeless, ranged) if cli_runs._overlaps(r, window)] == ["b"]
+
+
 # --- what to do next, from `uqs job runs show` (#636) -----------------------------
 
 _FAILED_RUN = {

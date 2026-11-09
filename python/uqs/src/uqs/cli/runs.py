@@ -183,9 +183,14 @@ def list_runs(
 
 
 def _overlaps(row: dict, window: timerange.TimeRange) -> bool:
-    """Whether a run's [range_from, range_to) meets `window`."""
+    """Whether a run's [range_from, range_to) meets `window`.
+
+    A run with no recorded range meets no window. q spells that null as JSON
+    `null` on PeachQ and as `""` on KDB-X (`.j.j` formats `string 0Np`), so
+    both are read as absent rather than parsed as a bound (#2471).
+    """
     lo, hi = row.get("range_from"), row.get("range_to")
-    if lo is None or hi is None:
+    if not lo or not hi:
         return False
     start = timerange.parse_bound("range_from", str(lo))
     end = timerange.parse_bound("range_to", str(hi))
