@@ -66,7 +66,10 @@
 
 / What the feed handler publishes: the source contract's own fields, so the
 / live rows and the ODBC backfill's rows are the same shape by construction
-/ rather than by agreement. Derived from the declaration, not restated -
+/ rather than by agreement - except one name: the plant table calls the
+/ instrument `sym`, as every plant table does, so a live batch arrives with
+/ `sym` where the contract has `symbol`, and on_batch renames it (#2600).
+/ Derived from the declaration, not restated -
 / a level added to .qpipe.source.databento_mbp10 reaches this table with no edit
 / here.
 .qpipe.job.eq_orderbook.raw:flip .qpipe.source.databento_mbp10.columns!{[c] $[c within "AZ"; (); c$()]} each .qpipe.source.databento_mbp10.types
@@ -134,7 +137,9 @@
 / .
 / The batch arrives with the tickerplant's own `time` prepended, which the
 / transform's contract does not have; it is dropped before applying, and
-/ the venue's ts_event is carried through to the output instead.
+/ the venue's ts_event is carried through to the output instead. It also
+/ arrives named by the plant table, `sym`, which is renamed to the contract's
+/ `symbol` - otherwise the transform refuses every live batch (#2600).
 / @param t the table the batch arrived on
 / @param x the rows, as a table
 / @return nothing
@@ -142,6 +147,8 @@
     if[not t=`databento_mbp10; :()];
     if[0=count x; :()];
     rows:$[`time in cols x; ![x;();0b;enlist `time]; x];
+    c:cols rows;
+    rows:@[c;where c=`sym;:;`symbol] xcol rows;
     folded:.qetl.transform.apply[`eq_orderbook;enlist[`batch]!enlist rows];
     / The transform's output is the plant shape (#1076), its `time` the
     / venue clock; dropped here, so .u.upd stamps the receipt time instead.
