@@ -5,7 +5,7 @@ the end-of-day fence: the process at `--writer` is any q process of the stack, a
 nothing of uqf's runs there. It does NOT skip the date bound, which no waiver lifts
 (#1828): a row dated on or after the date that writer is filling belongs to native end
 of day. The bound is asked of that writer itself - `writer_state`, the same read-only
-operation a checked run asks, read by the same rule (`backfill_coordination.fence`) -
+operation a checked run asks, read by the same rule (`backfill_fence.fence`) -
 and handed to the runner as `-max_date`, where `.qetl.io.scoped_check_date` refuses a
 row past it, with the message the checked path gives.
 """
@@ -15,7 +15,8 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from uqs.attach import writer_calendar
-from uqs.attach.backfill_coordination import EOD_GUARD, fence
+from uqs.attach.backfill_coordination import EOD_GUARD
+from uqs.attach.backfill_fence import fence
 from uqs.attach.remote import Endpoint, Ipc, IpcError
 from uqs.guardrails import Guardrail
 from uqs.paths import UqsError
