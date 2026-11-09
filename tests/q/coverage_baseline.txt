@@ -22,14 +22,12 @@
 # These reach a real database, a real ODBC driver or a real qls server. The
 # deterministic suite has no such thing by design, and the smoke
 # lanes that do exercise them are not part of this run.
-.qetl.io.odbc.close
 .qetl.io.odbc.table_names
 .qetl.io.odbc.window_query
 # alert_sink.post POSTs to a webhook, so needs an HTTP endpoint (#947)
 .qpipe.job.alert_sink.post
 # webhook.post is the seam alert_sink.post calls, for the same reason (#987)
 .qetl.webhook.post
-.qetl.io.odbc.with_connection
 .qpipe.source.demo_events.query
 .qpipe.source.duckdb_deals.query
 .qpipe.source.upstream_trades.query

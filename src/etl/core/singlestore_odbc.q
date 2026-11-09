@@ -232,10 +232,12 @@
 / @throws whatever f throws, after the handle is closed
 .qetl.io.odbc.with_connection:{[conn;f]
     h:.qetl.io.odbc.open conn;
-    r:@[f;h;{[e] (`error;e)}];
+    / The trap's outcome is tagged apart from f's value, so a callback that
+    / returns (`error;...) is handed back rather than rethrown (#2309).
+    r:@[{(1b;x y)}[f];h;{[e] (0b;e)}];
     .qetl.io.odbc.close h;
-    if[(0h=type r) and 2=count r; if[`error~first r; '"qetl.io.odbc: ",last r]];
-    r}
+    if[not first r; '"qetl.io.odbc: ",last r];
+    last r}
 
 / ---------------------------------------------------------- QUERYING
 
