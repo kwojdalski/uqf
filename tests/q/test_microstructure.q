@@ -573,6 +573,16 @@
     .qunit.assertEquals[count r where not null r;2;
         "the withdrawn row nulls out and the other two survive"]};
 
+/ #2535: P_last came from the ladder's raw end, so a null pad nulled the row
+/ and a zero pad inflated the slope ~5000x; convexity read a zero pad as P2.
+.qt.qf.mkt.microstructure.test_book_shape_skips_levels_that_are_not_level_ok:{[t]
+    r:.qf.mkt.book_slope[(1.1 1.0998 0n 0n;1.1 1.0998 0 0f;1.1 0 0f);(100 100 0n 0n;100 100 0 0f;100 0 0f)];
+    .qt.support.assertApprox[2#r;2#1e-6;1e-15;"a null or zero pad is skipped: (1.1-1.0998)/200"];
+    .qunit.assertTrue[null last r;"one usable level has no slope"];
+    c:.qf.mkt.book_convexity[(1.1 1.0998 0n;1.1 1.0998 0f;1.1 1.0998 0w 1.0995);`bid];
+    .qunit.assertEquals[2#c;0n 0n;"two usable levels have no convexity, not -1.0996"];
+    .qt.support.assertApprox[last c;-0.0001;1e-12;"an infinite level is skipped too"]};
+
 .qt.qf.mkt.microstructure.test_book_slope_and_depth_ratio_are_unchanged_on_normal_books:{[t]
     .qt.support.assertApprox[first .qf.mkt.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100f];
         1.333333e-06;1e-12;"the guard must not move a normal answer"];

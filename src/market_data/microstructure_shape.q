@@ -39,16 +39,18 @@
         i+:1];
     result};
 
-/ Private: book_slope for a single row - (P0-P_last)/sum(sizes).
+/ Private: book_slope for a single row - (P0-P_last)/sum(sizes), over the
+/ level_ok levels only (the #1021 rule): a null-padded ladder nulled the row
+/ and a zero-padded one took P_last as 0, a slope ~5000x too steep (#2535).
 / .
-/ A row with no size at all - every level zero, which is what a withdrawn
-/ book looks like - is null rather than 0w. See depth_ratio above: infinity
-/ is not null, so it survives a null filter and poisons any aggregate over
-/ the series.
+/ A row with fewer than two usable levels - a withdrawn book, every size
+/ zero, among them - is null rather than 0w. See microstructure.q's
+/ depth_ratio: infinity is not null, so it survives a null filter and
+/ poisons any aggregate over the series.
 / @private
 .qf.mkt.book_slope_one:{[prices;sizes]
-    total:sum sizes;
-    $[total=0;0n;(first[prices]-last prices)%total]};
+    ok:where .qf.mkt.level_ok["f"$prices;"f"$sizes];
+    $[2>count ok;0n;(prices[first ok]-prices last ok)%sum sizes ok]};
 
 / Book slope: (P0-P_last)/sum(sizes), called once per side - pass
 / bid_prices/bid_sizes for the bid-side slope, ask_prices/ask_sizes for
@@ -57,9 +59,10 @@
 / so sweep_price's own validation isn't reused, just its argument order.
 / @param prices a vector of vectors, one level-0-first vector per row
 / @param sizes a vector of vectors, one level-0-first vector per row
-/ @return a vector, slope per row - null for a row carrying no size
+/ @return a vector, slope per row - over its level_ok levels, null for a row with fewer than two
 / @eg .qf.mkt.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100]  -> ,1.333333e-06
 / @eg .qf.mkt.book_slope[enlist 1.1000 1.0998;enlist 0 0f]  -> ,0n
+/ @eg .qf.mkt.book_slope[enlist 1.1 1.0998 0 0f;enlist 100 100 0 0f]  -> ,1e-06
 .qf.mkt.book_slope:{[prices;sizes]
     n:count prices;
     result:n#0n;
@@ -70,10 +73,12 @@
     result};
 
 / Private: book_convexity for a single row - (P0-P1)-(P1-P2), negated for
-/ side=`ask. Nulls out a row with fewer than 3 levels rather than
-/ indexing out of bounds.
+/ side=`ask, over the levels whose price level_ok accepts (a zero pad read
+/ as P2 gave -1.0996, #2535). Nulls out a row with fewer than 3 of them
+/ rather than indexing out of bounds.
 / @private
 .qf.mkt.book_convexity_one:{[prices;book_side]
+    prices:prices where .qf.mkt.level_ok["f"$prices;1f];
     $[3>count prices;
         0n;
         [raw:(prices[0]-prices[1])-(prices[1]-prices[2]);
@@ -84,8 +89,9 @@
 / decrease level-by-level while ask prices increase, so mirroring the
 / ask-side sign keeps convexity comparably signed across both sides
 / (a "cheaper to go deeper than the first step implies" book reads the
-/ same sign whichever side it's on). Needs >=3 levels; a shorter row is
-/ nulled, not an error.
+/ same sign whichever side it's on). Needs >=3 levels with a price level_ok
+/ accepts (null, non-positive and infinite pads are skipped); a shorter row
+/ is nulled, not an error.
 / @param prices a vector of vectors, one level-0-first vector per row
 / @param book_side `bid or `ask - which side prices belongs to
 / @return a vector, convexity per row
