@@ -781,6 +781,39 @@
     .qunit.assertEquals[.qetl.job.bounded.state.lock_held `demo_deals_backfill;0b;
         "an init that threw released its lock, so the next attempt need not break a stale one"]};
 
+/ A second instance's init, run while a live holder - this process's own pid,
+/ so certainly running - has the lock and a `running status file (#2319). It
+/ returns what the init threw, and whether the holder's lock and status file
+/ are byte for byte what they were.
+.qt.qpipe.job.demo_deals_backfill.beside_a_live_holder:{[spec]
+    w:`demo_deals_backfill;
+    lock:.qetl.job.bounded.state.lock_path w;
+    status:hsym `$.qetl.status.file_path w;
+    system"mkdir -p ",.qetl.job.bounded.state.shell_word[lock];
+    .qetl.job.bounded.state.write_owner_as[lock;.z.i];
+    status 0: enlist .j.j `worker`instance_id`state!(w;w;`running);
+    before:(read0 hsym `$lock,"/owner";read0 status);
+    err:@[{.qpipe.job.demo_deals_backfill.init[x]; ""};spec;{x}];
+    after:@[{(read0 hsym `$x,"/owner";read0 y)}[lock];status;{[e] ()}];
+    .qetl.job.bounded.state.release_lock w;
+    hdel status;
+    (err;before~after)}
+
+/ The refusal used to run init's failure branch: its cleanup deleted the
+/ holder's lock, so a third instance could start beside the first, and it
+/ wrote `failed` over the first's running status (#2319).
+.qt.qpipe.job.demo_deals_backfill.test_a_refused_second_instance_leaves_the_holders_lock_and_status:{[t]
+    r:.qt.qpipe.job.demo_deals_backfill.beside_a_live_holder[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
+    .qunit.assertTrue[(first r) like "*is already running*";"the second instance is refused because the first holds the lock"];
+    .qunit.assertTrue[last r;"the refusal leaves the live holder's lock and status file exactly as they were"]};
+
+/ Any init failure, not only the refusal: one that would throw before the
+/ lock line - here a reversed range - deleted the holder's lock too (#2319).
+.qt.qpipe.job.demo_deals_backfill.test_an_early_init_failure_leaves_another_runs_lock_alone:{[t]
+    r:.qt.qpipe.job.demo_deals_backfill.beside_a_live_holder[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;4;1]];
+    .qunit.assertTrue[0<count first r;"the init still fails"];
+    .qunit.assertTrue[last r;"a failed init leaves another run's lock and status file alone"]};
+
 / The other half of the same rule: a SUCCESSFUL init must KEEP the lock.
 / Releasing on both branches would defeat the point of taking it.
 .qt.qpipe.job.demo_deals_backfill.test_an_init_that_succeeds_keeps_the_lock:{[t]
