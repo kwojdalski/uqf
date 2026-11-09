@@ -293,6 +293,20 @@
     .qunit.assertThrows[{.qf.exec.attribution_review[x 0;delete side from x 1;enlist 0D00:00:01;10000;1]};(q;tr);"*missing column side*";"trades without side"];
     .qunit.assertThrows[{.qf.exec.attribution_review[x 0;x 1;`timespan$();10000;1]};(q;tr);"*non-empty list of positive timespans*";"no horizons"]};
 
+/ #2432: a pair missing from the pip_factor dict got a null factor, so every
+/ trade in it read as n_unavailable - the signal for a missing book.
+.qt.qf.exec.attribution.test_review_refuses_a_pair_with_no_pip_factor:{[t]
+    pf:`EURUSD`EURPLN`AUDPLN`EURMXN`GBPPLN!5#10000;
+    .qunit.assertThrows[.qf.exec.attribution_review[.qt.qf.exec.attribution.review_fixture_quotes[];.qt.qf.exec.attribution.review_fixture_trades[];enlist 0D00:00:01;;1];
+        pf;"attribution_review: no pip factor for USDPLN";"a missing factor is not a missing book"]};
+
+.qt.qf.exec.attribution.test_review_pip_factor_keys_are_normalized:{[t]
+    q:.qt.qf.exec.attribution.review_fixture_quotes[];
+    tr:select from .qt.qf.exec.attribution.review_fixture_trades[] where sym=`EURUSD;
+    plain:.qf.exec.attribution_review[q;tr;enlist 0D00:00:01;(enlist `EURUSD)!enlist 100f;1];
+    slashed:.qf.exec.attribution_review[q;tr;enlist 0D00:00:01;(enlist `$"EUR/USD")!enlist 100f;1];
+    .qunit.assertEquals[slashed;plain;"a key spelt EUR/USD finds the EURUSD trades"]};
+
 / --- route table -------------------------------------------------------------
 
 .qt.qf.exec.attribution.test_route_table_covers_every_pair_with_inversion_text:{[t]
