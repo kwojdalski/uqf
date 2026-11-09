@@ -1104,6 +1104,7 @@ qetl.verify,snapshot,function,1,dataset
 qetl.verify,statuses,value,,
 qetl.verify,type_name,function,1,c
 qetl.verify,type_names,dict,,
+qetl.verify,typed_scope,function,2,m scope
 qetl.webhook,address,function,1,u
 qetl.webhook,auth_header,function,1,cred
 qetl.webhook,check,function,1,raw

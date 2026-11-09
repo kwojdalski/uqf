@@ -138,7 +138,7 @@
         .qetl.verify.result[`schema;sc 0;dataset;"";(from_ts;to_ts);sc 2;sc 1;sc 3];
         .qetl.verify.result[`behaviour;bstatus;dataset;"";(from_ts;to_ts);sb;breason;blines];
         .qetl.verify.result[`cross_mode;cr 0;dataset;"";(from_ts;to_ts);cr 2;cr 1;cr 3];
-        .qetl.verify.result[`completeness;co 0;dataset;$[count scope; ", " sv {string[x],"=",.qf.util.full y}'[key scope;value scope]; ""];(from_ts;to_ts);co 2;co 1;co 3]);
+        .qetl.verify.result[`completeness;co 0;dataset;$[count scope; ", " sv {string[x],"=",$[10h=abs type y; (),y; .qf.util.full y]}'[key scope;value scope]; ""];(from_ts;to_ts);co 2;co 1;co 3]);
     `dataset`range_from`range_to`producers`readonly`checks`behaviours!(dataset;from_ts;to_ts;select producer,mode,source from cap`producers;cap`readonly;checks;bh)}
 
 \d .

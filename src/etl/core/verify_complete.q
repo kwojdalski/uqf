@@ -41,6 +41,21 @@
     keep:(rows[time_col]>=from_ts) & rows[time_col]<to_ts;
     rows where {[rows;keep;c;v] keep & rows[c] in (),v}[rows]/[keep;key scope;value scope]}
 
+/ A scope's text values typed as their columns are, so `sym=0005` is the symbol `0005
+/ on a symbol column and `day=2026.09.13` a date on a date column - not a value guessed
+/ from how its text looks (#2473). A value that is already typed is left as it is.
+/ @param m the dataset's schema, as meta returns it
+/ @param scope a dict of column -> value, a value given as text typed here
+/ @return the scope, each text value an atom of its column's type
+/ @throws error naming the column, for a value its type refuses
+/ @eg .qetl.verify.typed_scope[meta ([] sym:`$(); day:`date$());`sym`day!("0005";"2026.09.13")]  ->  `sym`day!(`0005;2026.09.13)
+.qetl.verify.typed_scope:{[m;scope]
+    types:exec c!t from m;
+    one:{[types;c;v]
+        if[not 10h=abs type v; :v];
+        .[.qetl.compare.typed;(types c;(),v);{[c;e] '"scope ",string[c],": ",e}[c]]}[types];
+    (key scope)!one'[key scope;value scope]}
+
 / Private: the source's rows for a window, read through its own adapter, and what that
 / read rests on. Opens a live source for the read and closes it.
 / @return a dict rows, live, cutoff (the source's complete_through), closed (1b when the
@@ -61,7 +76,8 @@
 
 / Is every source record in scope and range in the destination, and no other?
 / @param dataset the dataset
-/ @param scope a dict of column -> value (or values), applied to both sides; empty is refused as UNVERIFIED
+/ @param scope a dict of column -> value (or values), applied to both sides; empty is refused as
+/   UNVERIFIED. A value given as text is typed by its column (typed_scope)
 / @param from_ts the window's first instant
 / @param to_ts the instant after its last
 / @param reader a function [dataset; from; to] -> the destination's rows, or (::) for none
@@ -87,6 +103,7 @@
     wanted:(key scope),ks,tc;
     if[count lost:wanted where not wanted in d`columns; :unv "the source does not carry ",(", " sv string lost)];
     if[count lost:wanted where not wanted in cols dest`published; :unv "the destination does not carry ",(", " sv string lost)];
+    scope:.qetl.verify.typed_scope[meta dest`published;scope];
     src:.[.qetl.verify.read_source;(source;from_ts;to_ts);{[e] e}];
     if[10h=type src; :unv src];
     if[(not src`declared) and src`live; :unv "the live source declares no complete_through, so it has no known end to reconcile against"];
