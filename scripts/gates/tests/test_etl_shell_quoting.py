@@ -30,11 +30,8 @@ STRICT = {"core/io_hdb.q", "core/compression.q"}
 BASELINE = {
     "core/verify_behaviour.q": 1,
     "core/backfill_state.q": 2,
-    "core/uptime.q": 1,
-    "core/stream_health.q": 2,
     "core/react.q": 1,
     "core/worker_runtime.q": 1,
-    "core/status.q": 2,
     "core/tick.q": 1,
     "streaming/kafka_feed.q": 2,
 }
