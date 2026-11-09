@@ -101,7 +101,6 @@
     jobs:(exec session!job from .qetl.uptime.sessions[]) .qetl.uptime.mine;
     failed:{.qetl.stream_health.of[x]`failed} each jobs;
     broken:failed>0^.qetl.uptime.failed_seen jobs;
-    `.qetl.uptime.failed_seen set .qetl.uptime.failed_seen,jobs!failed;
     renew:.qetl.uptime.mine where broken;
     fresh:.qetl.run.mint each til count renew;
     .qetl.uptime.update_shared[{[keep;renew;fresh;now]
@@ -110,6 +109,10 @@
         delete from `etl_stream_uptime where session in renew, last_seen=started_at;
         `etl_stream_uptime insert update session:(renew!fresh) session, started_at:now, last_seen:now from ended};
         (.qetl.uptime.mine except renew;renew;fresh;now)];
+    / only once the durable write returned: advanced before it, a write that
+    / threw left the failure counted as handled, and the next beat carried
+    / the old session on across the lost batch (#2333)
+    `.qetl.uptime.failed_seen set .qetl.uptime.failed_seen,jobs!failed;
     `.qetl.uptime.mine set (.qetl.uptime.mine except renew),fresh;
     {[job;failing] .[.qetl.stream_health.write;(job;failing);{[job;e]
         .qetl.log.ch.warn[`storage;"could not write its stream_health file";(enlist[`job]!enlist job),enlist[`error]!enlist e];}[job]]}'[

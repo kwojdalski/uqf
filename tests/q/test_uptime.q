@@ -164,6 +164,25 @@
     .qunit.assertEquals[holes;([] range_from:enlist last_ok; range_to:enlist failed_beat);
         "the span with the failed batch is a gap, and the healthy beat after it is not"]};
 
+.qt.qetl.uptime.test_a_failure_survives_a_beat_whose_write_threw:{[t]
+    id:.qetl.uptime.begin[`crypto_markout];
+    system"sleep 0.01";
+    .qetl.uptime.beat[];
+    last_ok:exec first last_seen from .qetl.uptime.sessions[] where session=id;
+    @[.qetl.job.stream.guarded[`crypto_markout;.qt.qetl.uptime.throws;`tbl];();::];
+    keep:.qetl.job.bounded.state.durable_set;
+    .qetl.job.bounded.state.durable_set:{[p;v] '"disk full"};
+    r:@[.qetl.uptime.beat;();{x}];
+    .qetl.job.bounded.state.durable_set:keep;
+    .qunit.assertEquals[r;"disk full";"the beat whose write threw failed"];
+    system"sleep 0.01";
+    .qetl.uptime.beat[];
+    s:.qetl.uptime.sessions[];
+    .qunit.assertEquals[exec first last_seen from s where session=id;last_ok;
+        "the retry still ends the session at its last healthy beat (#2333)"];
+    holes:.qetl.uptime.gaps[`crypto_markout;exec min started_at from s;exec max last_seen from s];
+    .qunit.assertEquals[count holes;1;"and the span with the lost batch is a gap"]};
+
 .qt.qetl.uptime.test_a_job_that_keeps_failing_keeps_one_empty_session:{[t]
     .qetl.uptime.begin `crypto_markout;
     do[3;
