@@ -135,6 +135,14 @@ some other writer left uncompressed must still be caught.
   this table alone": algorithm 0 *decompresses* what the writer compressed, so
   the generated CSV instead gives the table a `minage` of 36500 days, which no
   partition reaches.
+- A column override of algorithm 0 (`quote`'s `time`) means "leave this column
+  uncompressed", and its CSV row gets the same 36500 days, whatever the table's
+  own `minage`. At the table's `minage` it would let the age pass *decompress*
+  the column wherever it is compressed: in a `both` partition between the
+  writer's `.z.zd` and its column rewrite, or in one an older policy or another
+  writer compressed. The column needs no age pass: an `age` table's writer
+  leaves it uncompressed, and a `write`/`both` writer rewrites it uncompressed
+  after the sort.
 
 **How the writer does it.** `.qetl.io.finish_parts` (the finish of every bounded
 worker, `flush` included) sorts each partition it wrote --- the one write that
@@ -234,6 +242,40 @@ From the KX compression whitepaper (<https://code.kx.com/q/wp/compress/>):
   | `crypto_markout`, `eq_markout`                                                                                                                                     | gzip, block 16, level 6, after 14 days              | derived and re-derived by backfills, so left alone for a fortnight                                         |
   | `fx_markout` (`invert`), `fx_markout_wide` (`leg1_invert`, `leg2_invert`, `leg3_invert`)                                                                           | as above, 14 days; the booleans at gzip level 9     | one byte of two values: the best candidates there are, and the top level costs nothing worth counting      |
   | `reference_data`, `economic_calendar`, `connections`, `config_change`, `ccy_exposure`, `order_routing`                                                             | algorithm 0                                         | a few rows a day: nothing to save, and every read would inflate                                            |
+  | `quote` (`time`)                                                                                                                                                   | the default; `time` algorithm 0                     | `time` is what `aj` binary-searches on the right-hand side: measured faster on every shape, see below      |
+
+### Measured, and what was not adopted (#2294, #2296)
+
+From `scripts/dev/bench_compression.q` on the local HDB (macOS arm64, warm page
+cache, times only: read syscalls cannot be counted there without root). Each row
+is the change against the table's policy, on the same run; the `time` rows are
+from a second run of five repetitions, which reproduced the first within 3%.
+
+  | Table, partition (rows)          | Change              | Bytes on disk | `aj` | sweep | range | point |
+  | ---                              | ---                 | ---           | ---  | ---   | ---   | ---   |
+  | `quote`, 2026.10.07 (720k)       | `time` uncompressed | +17%          | -21% | -19%  | -11%  | -14%  |
+  | `quote`, 2026.09.18 (4.9M)       | `time` uncompressed | +65%          | -18% | -13%  | -11%  | -5%   |
+  | `quote`, 2026.10.07              | `sym` block 20      | 0%            | +3%  | -1%   | +26%  | +34%  |
+  | `quote`, 2026.09.18              | `sym` block 20      | 0%            | +1%  | -3%   | +10%  | +55%  |
+  | `trade`, 2026.09.18 (912k)       | `sym` block 20      | 0%            | +3%  | -3%   | +34%  | +59%  |
+  | `market_data`, 2026.09.19 (49k)  | `sym` block 20      | 0%            | 0%   | +1%   | -4%   | +1%   |
+  | `quotes`, 2026.09.22 (720k)      | `sym` block 20      | 0%            | 0%   | -1%   | +17%  | +30%  |
+  | `crypto_book`, 2026.09.18 (167k) | `sym` block 20      | 0%            | +1%  | -1%   | +7%   | +12%  |
+
+- **`time` uncompressed is declared for `quote` only.** It is faster on every
+  shape, and it costs disk: `time` is not incompressible here, as the guidance
+  this followed assumed (gzip 1.36--1.38 there; 1.65 and 4.92 on these days), so
+  the dense day takes 65% more bytes.
+- **Not for `market_data`.** Its on-disk as-of (`.qetl.mapped.asof`) searches
+  `source_time` inside `(sym; source)` runs, not `time`, and the benchmark's
+  `aj` shape cannot express that search. Not for `fx_orderbook`: the local HDB
+  holds no rows of it to measure. Not for `trade` and `crypto_book`: they are
+  not the right-hand side of an on-disk `aj` here, and `trade`'s `time`
+  compresses 2.46x, so leaving it uncompressed costs 68% more bytes.
+- **`sym` at block 20 is declared for no table.** `sym` (`p#`) is already about
+  500x smaller on disk at block 16 or 17, so a larger block saves nothing a
+  sweep or an `aj` can see, and point lookups and ranges pay for inflating 1 MB
+  blocks. Lookup tables are left as they are.
 
 ## Measuring a setting on this HDB
 
@@ -244,7 +286,12 @@ repository root, on KDB-X:
 q scripts/dev/bench_compression.q -hdb output/uqs/hdb -table quote -partition 2026.10.07
 q scripts/dev/bench_compression.q -hdb output/uqs/hdb -table quote -partition 2026.10.07 \
     -candidates current,policy,gzip/16/6,gzip/18/6,zstd/17/3 -reps 5
+q scripts/dev/bench_compression.q -hdb output/uqs/hdb -table quote -partition 2026.10.07 \
+    -candidates policy,gzip/16/6+time=none,gzip/16/6+time=none+sym=gzip/20/6
 ```
+
+A setting followed by `+column=setting` overrides one column, so a per-column
+policy can be measured before it is declared.
 
 It copies the one partition into a temporary directory once per setting and
 never writes to the HDB. It prints, per setting and query shape (whole-day

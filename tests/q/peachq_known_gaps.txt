@@ -18,6 +18,7 @@
 platform: Linux-x86_64
 
 .qt.qdev.cbench.test_a_compressed_copy_reads_back_equal_and_leaves_the_source  # peachq-lacks: -19!, which writes the compressed copy under test (#2153)
+.qt.qdev.cbench.test_a_mixed_setting_writes_each_column_its_own  # peachq-lacks: -19!, which writes each column of the copy under test (#2153)
 .qt.qdev.cbench.test_the_command_prints_setting_by_shape_and_never_writes_the_hdb  # peachq-lacks: get of a splayed table directory (nyi), which the benchmark reads the partition with, and -19! (#2153); it is a KDB-X tool (#2297)
 .qt.qetl.attached.test_a_covered_date_missing_a_column_is_named  # peachq-lacks: .Q.dpft, which the fixture uses to write its partitioned database; the check under test runs on a KDB-X HDB reader (#1773)
 .qt.qetl.attached.test_a_covered_date_with_an_incompatible_column_type_is_named  # peachq-lacks: .Q.dpft, which the fixture uses to write its partitioned database; the check under test runs on a KDB-X HDB reader (#1773)
@@ -157,6 +158,8 @@ platform: Linux-x86_64
 .qt.qetl.compress.primitives.test_an_unsupported_algorithm_is_refused_naming_it  # peachq-lacks: KDB-X's error text - an algorithm beyond 5 throws 'nyi, which reads as an unimplemented feature rather than a bad argument (#2153)
 .qt.qetl.compress.primitives.test_select_reads_a_compressed_partitioned_database  # peachq-lacks: \l of a partitioned database defines none of its tables, compressed or not, so the child q's select signals the table's name (#2153)
 .qt.qetl.compress.primitives.test_a_file_kdbx_compressed_reads_back  # peachq-lacks: KDB-X's on-disk layout for a compressed file of more than one block - get and -21! throw 'corrupt on it; a one-block file is byte-identical between the two, and KDB-X in turn refuses PeachQ's multi-block files ('bad logicalBlockSize') (#2153)
+.qt.qetl.compression.write.test_a_both_table_leaves_a_column_of_zero_uncompressed_and_the_age_pass_leaves_it_so  # peachq-lacks: PeachQ has no -19! and its set takes no compression triple or .z.zd (#2153), so the file is never compressed and -21! describes none
+.qt.qetl.compression.write.test_a_column_override_of_zero_is_held_out_of_the_age_pass  # peachq-lacks: PeachQ has no -19! (#2153), so the column cannot be compressed to show the age pass leaves it so
 .qt.qetl.compression.write.test_a_column_override_is_applied_at_save  # peachq-lacks: PeachQ has no -19! and its set takes no compression triple or .z.zd (#2153), so the file is never compressed and -21! describes none
 .qt.qetl.compression.write.test_a_column_override_is_logged_on_the_storage_channel  # peachq-lacks: PeachQ has no -19! and its set takes no compression triple or .z.zd (#2153), so no column is rewritten and the line under test is never logged
 .qt.qetl.compression.write.test_a_compressed_partition_is_not_compressed_again_by_a_later_finish  # peachq-lacks: PeachQ has no -19! and its set takes no compression triple or .z.zd (#2153), so the file is never compressed and -21! describes none

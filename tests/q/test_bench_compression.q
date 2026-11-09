@@ -62,6 +62,20 @@ system "l scripts/dev/bench_compression_lib.q";
     .qunit.assertThrows[.qdev.cbench.parse_candidate;"gzip/17";"*is not current, policy, none or algo/blocksize/level";"shape"];
     .qunit.assertThrows[.qdev.cbench.parse_candidate;"gzip/x/6";"*block size and level must be integers";"integers"]}
 
+.qt.qdev.cbench.test_a_setting_takes_column_overrides:{[t]
+    c:.qdev.cbench.parse_candidate "gzip/16/6+time=none+sym=2/20/6";
+    .qunit.assertEquals[c`name;`$"gzip/16/6+time=none+sym=gzip/20/6";"named by its settings, algorithms by name"];
+    .qunit.assertEquals[c`triple;2 16 6j;"the table's triple"];
+    .qunit.assertEquals[c`columns;`time`sym!(0 0 0j;2 20 6j);"each column's, in the order given"];
+    .qunit.assertEquals[.qdev.cbench.column_triple[c;`time];0 0 0j;"time uncompressed"];
+    .qunit.assertEquals[.qdev.cbench.column_triple[c;`px];2 16 6j;"the rest take the table's"];
+    .qunit.assertEquals[(.qdev.cbench.parse_candidate "none+sym=qipc/17/0")`columns;(enlist `sym)!enlist 1 17 0j;"over an uncompressed table"];
+    .qunit.assertThrows[.qdev.cbench.parse_candidate;"gzip/16/6+time";"bench: candidate gzip/16/6+time: a column override is +column=setting";"no setting"];
+    .qunit.assertThrows[.qdev.cbench.parse_candidate;"gzip/16/6+=none";"*: a column override names no column";"no column"];
+    .qunit.assertThrows[.qdev.cbench.parse_candidate;"gzip/16/6+a=none+a=gzip/17/6";"*: a column is overridden twice";"twice"];
+    .qunit.assertThrows[.qdev.cbench.parse_candidate;"gzip/16/6+a=gzip/21/6";"*: block size 21 is not 12-20*";"the override is checked"];
+    .qunit.assertThrows[.qdev.cbench.parse_candidate;"policy+a=none";"*is not current, policy, none or algo/blocksize/level";"policy takes no overrides"]}
+
 .qt.qdev.cbench.test_a_list_keeps_its_order_and_refuses_a_repeat:{[t]
     c:.qdev.cbench.parse_candidates "current, none,gzip/17/6,";
     .qunit.assertEquals[{x`name} each c;`current`none,`$"gzip/17/6";"in the order given, empty items dropped"];
@@ -289,6 +303,25 @@ system "l scripts/dev/bench_compression_lib.q";
     out:.qt.qdev.cbench.run "-hdb ",(1_string root)," -table quote -partition 2026.01.02 -candidates none,lz4hc/11/5";
     .qunit.assertEquals[last out;"exit=1";"refused"];
     .qunit.assertTrue[any out like "bench_compression: bench: candidate lz4hc/11/5: block size 11 is not 12-20*";"naming the candidate"];
+    system "rm -rf ",1_string root}
+
+.qt.qdev.cbench.test_a_mixed_setting_writes_each_column_its_own:{[t]
+    root:.qt.qdev.cbench.hdb[];
+    src:` sv root,`2026.01.02`quote;
+    out:hsym `$first system "mktemp -d";
+    dst:` sv out,`quote;
+    c:.qdev.cbench.parse_candidate "gzip/17/6+time=none+sym=gzip/20/6";
+    .qt.qdev.cbench.with_sym[get ` sv root,`sym;{[src;dst;c;u] .qdev.cbench.write_copy[src;dst;c]}[src;dst;c]];
+    .qunit.assertEquals[count -21!` sv dst,`time;0;"time uncompressed"];
+    .qunit.assertEquals[(-21!` sv dst,`sym)`logicalBlockSize;20i;"sym in its own block size"];
+    .qunit.assertEquals[(-21!` sv dst,`px)`logicalBlockSize;17i;"the rest in the table's"];
+    system "rm -rf ",(1_string root)," ",1_string out}
+
+.qt.qdev.cbench.test_an_override_of_a_column_the_table_lacks_is_refused:{[t]
+    root:.qt.qdev.cbench.hdb[];
+    out:.qt.qdev.cbench.run "-hdb ",(1_string root)," -table quote -partition 2026.01.02 -candidates none,gzip/17/6+nope=none";
+    .qunit.assertEquals[last out;"exit=1";"refused"];
+    .qunit.assertTrue[any out like "bench_compression: bench: candidate gzip/17/6+nope=none: the table has no column nope";"naming the column"];
     system "rm -rf ",1_string root}
 
 .qt.qdev.cbench.test_a_scratch_directory_inside_the_hdb_is_refused:{[t]

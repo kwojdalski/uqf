@@ -338,6 +338,18 @@
 / @eg .qetl.compression.for_age 5 17 3  ->  0 0 0j
 .qetl.compression.for_age:{[t] $[(t 0) in key .qetl.compression.beyond_torq; 0 0 0j; t]}
 
+/ The minage TorQ's age pass is given for one column override: the table's, except for an
+/ override of algorithm 0, which is held out of the age pass. A column override of 0 means
+/ "leave this column uncompressed", and .cmp's algorithm 0 DECOMPRESSES a file that is
+/ compressed - one the writer compressed (a `both table, before its column rewrite) or an
+/ older policy did - so, as for a `write table, the row is made to select nothing. A column
+/ left as written needs no age pass: the writer leaves it uncompressed, or rewrites it so.
+/ @param m the table's age-pass minage, from `age_minage`
+/ @param v the column's (algo;blocksize;level)
+/ @return a long
+/ @eg .qetl.compression.column_minage[7j;0 0 0j]  ->  36500j
+.qetl.compression.column_minage:{[m;v] $[0=v 0; .qetl.compression.never; m]}
+
 / Private: one row of TorQ's file.
 / @private
 .qetl.compression.row:{[t;m;c;a;b;l]
@@ -365,7 +377,7 @@
         v:.qetl.compression.for_age[(r`algo;r`blocksize;r`level)];
         one:.qetl.compression.row[t;m;`default;v 0;v 1;v 2];
         cd:r`columns;
-        $[0=count cd; one; one,raze {[t;m;c;v] v:.qetl.compression.for_age[v]; .qetl.compression.row[t;m;c;v 0;v 1;v 2]}[t;m]'[key cd;value cd]]
+        $[0=count cd; one; one,raze {[t;m;c;v] w:.qetl.compression.for_age[v]; .qetl.compression.row[t;.qetl.compression.column_minage[m;v];c;w 0;w 1;w 2]}[t;m]'[key cd;value cd]]
         } each ts];
     head,ledger,body}
 

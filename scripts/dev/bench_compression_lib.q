@@ -83,23 +83,40 @@
 
 / Parse one candidate: current (the files as the HDB holds them), policy (this stack's
 / declared policy for the table, resolved by the command), none (uncompressed), or
-/ algo/blocksize/level with the algorithm by number or name (gzip/17/6, 2/17/6).
+/ algo/blocksize/level with the algorithm by number or name (gzip/17/6, 2/17/6). A setting
+/ may be followed by column overrides, +column=setting each, to measure a per-column policy
+/ before it is declared: gzip/16/6+time=none+sym=gzip/20/6.
 / @param s a string
 / @return dict of name, kind (`current`policy`triple), triple and columns (column -> triple)
 / @throws error naming what is wrong with it
 / @eg .qdev.cbench.parse_candidate["gzip/17/6"]`triple  ->  2 17 6
+/ @eg key .qdev.cbench.parse_candidate["gzip/16/6+time=none"]`columns  ->  enlist `time
 .qdev.cbench.parse_candidate:{[s]
     s:trim s;
     who:"bench: candidate ",s;
     none:(`symbol$())!();
     if[s~"current"; :.qdev.cbench.candidate[`current;`current;();none]];
     if[s~"policy"; :.qdev.cbench.candidate[`policy;`policy;();none]];
-    if[s~"none"; :.qdev.cbench.candidate[`none;`triple;0 0 0j;none]];
+    p:"+" vs s;
+    t:.qdev.cbench.parse_triple[who;first p];
+    if[1=count p; :.qdev.cbench.candidate[.qdev.cbench.label[t];`triple;t;none]];
+    kv:"=" vs/: 1_p;
+    if[not all 2=count each kv; 'who,": a column override is +column=setting"];
+    cn:`$kv[;0];
+    if[any null cn; 'who,": a column override names no column"];
+    if[not count[cn]=count distinct cn; 'who,": a column is overridden twice"];
+    ct:{[who;x] .qdev.cbench.parse_triple[who;x]}[who] each kv[;1];
+    nm:`$"+" sv (enlist string .qdev.cbench.label t),{[c;x] string[c],"=",string .qdev.cbench.label x}'[cn;ct];
+    .qdev.cbench.candidate[nm;`triple;t;cn!ct]}
+
+/ Private: one setting, none or algo/blocksize/level, as a triple.
+/ @private
+.qdev.cbench.parse_triple:{[who;s]
+    if[s~"none"; :0 0 0j];
     p:"/" vs s;
     if[not 3=count p; 'who," is not current, policy, none or algo/blocksize/level"];
     if[not all {(count x) and all x in .Q.n,"-"} each 1_p; 'who,": block size and level must be integers"];
-    t:.qdev.cbench.check_triple[who;(.qdev.cbench.algo_of[who;p 0];"J"$p 1;"J"$p 2)];
-    .qdev.cbench.candidate[.qdev.cbench.label[t];`triple;t;none]}
+    .qdev.cbench.check_triple[who;(.qdev.cbench.algo_of[who;p 0];"J"$p 1;"J"$p 2)]}
 
 / Parse a comma-separated list of candidates.
 / @param s a string, such as "current,none,gzip/17/6"
