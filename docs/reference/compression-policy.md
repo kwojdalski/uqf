@@ -21,10 +21,11 @@ loads. The `compression-config` hook runs the check on commit.
 
 **TorQ's `.cmp` is the engine.** The library that applies a policy (#2146) wraps
 `.cmp.showcomp` and `.cmp.compressmaxage`; the CSV below is exactly the file
-`.cmp` reads, `default` rows included. A policy is therefore refused if `.cmp`
-could not take it, and nothing under `src/` copies `.cmp`'s rules --- the
-authority on what it loads is `.cmp.checkcsv`, run by `derive.py` and by
-`scripts/gates/tests/test_derive.py`.
+`.cmp` reads, `default` rows included. A policy the age pass applies is
+therefore refused if `.cmp` could not take it (a `write` table, which it never
+applies, may use lz4hc and zstd: see [lz4hc and zstd](#lz4hc-and-zstd)), and
+nothing under `src/` copies `.cmp`'s rules --- the authority on what it loads is
+`.cmp.checkcsv`, run by `derive.py` and by `scripts/gates/tests/test_derive.py`.
 
 ## Why a declaration and not a CSV
 
@@ -57,9 +58,9 @@ One q dict per table. Keys `algo`, `blocksize`, `level`, `minage`, `columns` and
 
   | Key         | Meaning                                                                        | Accepted                                                           |
   | ---         | ---                                                                            | ---                                                                |
-  | `algo`      | the algorithm, as `.cmp` takes it                                              | 0 decompress, 1 qipc, 2 gzip, 3 snappy                             |
+  | `algo`      | the algorithm                                                                  | 0 decompress, 1 qipc, 2 gzip, 3 snappy; 4 lz4hc, 5 zstd (`write`)  |
   | `blocksize` | the logical block size, a power of two (16 is 64 KB)                           | 12 to 20                                                           |
-  | `level`     | the algorithm's level                                                          | gzip 0--9; qipc and snappy take none (0)                           |
+  | `level`     | the algorithm's level                                                          | gzip 0--9, lz4hc 0--16, zstd -7--22; qipc and snappy none (0)      |
   | `minage`    | whole days a partition must be old before it is compressed                     | 0 or more                                                          |
   | `columns`   | column to `(algo;blocksize;level)`, for the columns that differ from the table | columns of the table                                               |
   | `mode`      | *when* it is compressed: see [Write time or age](#write-time-or-age)           | `age` (the default), `write`, `both`                               |
@@ -83,9 +84,9 @@ no block size or level and resolves to 0 for both.
 
 Declaration refuses, naming the key and the range:
 
-- an algorithm outside 0--3 (lz4hc and zstd by name, see below), a block size
-  outside 12--20, a level the algorithm does not take, a `minage` that is
-  negative or not an integer;
+- an algorithm outside 0--5, or lz4hc or zstd on a policy whose mode is not
+  `write` (by name and mode, see below), a block size outside 12--20, a level
+  the algorithm does not take, a `minage` that is negative or not an integer;
 - a key it does not take (`minage_days`);
 - a column override naming a column the table lacks, or on a table whose columns
   are unknown (only a plant table has a schema to check against);
@@ -179,9 +180,27 @@ ordinary column.
 
 ## lz4hc and zstd
 
-KDB-X has them (algorithms 4 and 5); `.cmp.checkcsv` does not accept them, and
-`.cmp` is the engine. A declaration naming either is refused with a message
-saying so, rather than a file `.cmp` would reject at startup.
+KDB-X has them (algorithms 4 and 5); `.cmp.checkcsv` does not accept them. Only
+a table whose `mode` is `write` may name either, for the table or a column: the
+writer applies it under `.z.zd`, and the age pass never selects that table. The
+row the generated CSV gives it still has to be one `.cmp` loads, so it carries
+`0,0,0` where the algorithm, block size and level would be; with `minage` 36500
+the age pass loads it and applies it to nothing.
+
+```q
+zstd:`algo`blocksize`level`mode!(5;17;3;`write)
+.qetl.compression.declare[`crypto_book;zstd]
+```
+
+Anywhere the age pass would apply the policy, it is refused, naming the mode:
+`age` and `both` tables, and a stack default whose mode is not `write`. A `both`
+table keeps its age rows, so `.cmp` would have to read the algorithm. A table
+that inherits zstd from a `write` default and declares another mode is refused
+too.
+
+Each needs its library on q's loader path, libzstd or liblz4; on macOS,
+Homebrew's `/opt/homebrew/lib` is not on it by default. Without it, the finish
+of a partition fails naming the library, and the partition is not swapped in.
 
 ## The guidance behind the defaults
 
@@ -203,8 +222,8 @@ From the KX compression whitepaper (<https://code.kx.com/q/wp/compress/>):
   is worth the line*.
 - **Algorithm.** gzip compresses most of the three `.cmp` takes and is slowest
   to inflate; snappy inflates fastest at a worse ratio; qipc is cheap and
-  modest. The whitepaper's better trade-offs (lz4hc, zstd) are not available
-  through `.cmp`.
+  modest. The whitepaper's better trade-offs, lz4hc and zstd, are available to a
+  `write` table only, since `.cmp` cannot apply them.
 
 ## This stack's choices
 
