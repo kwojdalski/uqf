@@ -395,6 +395,19 @@ def test_a_listing_is_capped_at_the_limit_and_says_so(deployment):
     assert [e["name"] for e in answer["entries"]] == [f"f{i:02d}" for i in range(10)]
 
 
+def test_a_cut_listing_keeps_directories_first(deployment):
+    """#2478: `limit` keeps the first entries of the order shown - directories
+    first - not the first names alphabetically, sorted afterwards."""
+    d = deployment / "shared" / "mixed"
+    d.mkdir()
+    (d / "a").write_text("")
+    (d / "b").write_text("")
+    (d / "z").mkdir()
+    answer = _list(deployment, "shared/mixed", limit=1)
+    assert [(e["name"], e["kind"]) for e in answer["entries"]] == [("z", "dir")]
+    assert answer["truncated"] is True
+
+
 def test_the_limit_is_held_to_its_maximum(deployment):
     answer = _list(deployment, "", limit=remote_helper.MAX_LIMIT * 10)
     assert answer["ok"] is True
