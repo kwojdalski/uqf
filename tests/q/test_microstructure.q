@@ -61,6 +61,16 @@
     r:.qf.mkt.spread_bps[enlist enlist 1.1000;enlist enlist 1.1002];
     .qt.support.assertApprox[first r;10000*0.0002%1.1001;1e-6;"10000*(ask-bid)/mid"]};
 
+/ #2536: a zero-priced L0 side was read as a price, so a one-sided book gave
+/ a spread of +-20000 bps and a microprice of 0.55 on a 1.1 market.
+.qt.qf.mkt.microstructure.test_a_level_zero_that_is_not_a_price_is_absent:{[t]
+    bids:(enlist 0f;enlist 1.1;enlist 0n;enlist -1.1;enlist 0w;1.1 1.0998);
+    asks:(enlist 1.1;enlist 0f;enlist 1.1;enlist 1.1002;enlist 1.1002;1.1002 1.1004);
+    .qunit.assertEquals[5#.qf.mkt.spread_bps[bids;asks];5#0n;"a zero, null, negative or infinite L0 nulls the spread"];
+    .qunit.assertEquals[5#.qf.mkt.mid_price[bids;asks];5#0n;"and the mid"];
+    .qunit.assertEquals[.qf.mkt.microprice[2#bids;2#enlist enlist 100f;2#asks;2#enlist enlist 100f];0n 0n;"and the microprice, not 0.55"];
+    .qt.support.assertApprox[last .qf.mkt.spread_bps[bids;asks];10000*0.0002%1.1001;1e-6;"a two-sided book is unchanged"]};
+
 / ---- depth_ratio ----
 
 .qt.qf.mkt.microstructure.test_depth_ratio_known_value_and_shallow_row_is_null:{[t]

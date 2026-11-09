@@ -58,15 +58,25 @@
     per_level:.qf.mkt.level_at[sizes;] each til n_levels;
     sum per_level};
 
+/ Private: each row's level-0 price, null where level_ok's price half refuses
+/ it (null, non-positive or infinite): that side is absent, as top_sides
+/ reads it. A zero bid read as a price gave a 20000 bps spread (#2536).
+/ @param prices a vector of vectors, one level-0-first vector per row
+/ @return a vector, one level-0 price per row
+/ @private
+.qf.mkt.l0_price:{[prices]
+    px:.qf.mkt.level_at[prices;0];
+    @[px;where not .qf.mkt.level_ok[px;1f];:;0n]};
+
 / L0 mid price, per row - the natural companion to forwards.q's
 / cross_ref_price_at "mid" concept, for a plain quotes column rather than
 / a swept size.
 / @param bid_prices a vector of vectors, one level-0-first vector per row
 / @param ask_prices a vector of vectors, one level-0-first vector per row
-/ @return a vector, one mid price per row
+/ @return a vector, one mid price per row - null where either L0 is not a price (see l0_price)
 / @eg .qf.mkt.mid_price[enlist 1.1000 1.0998;enlist 1.1002 1.1004]  -> ,1.1001
 .qf.mkt.mid_price:{[bid_prices;ask_prices]
-    0.5*(.qf.mkt.level_at[bid_prices;0])+.qf.mkt.level_at[ask_prices;0]};
+    0.5*(.qf.mkt.l0_price[bid_prices])+.qf.mkt.l0_price[ask_prices]};
 
 / Book pressure at one level: (Vbid-Vask)/(Vbid+Vask), in [-1,1]. Exactly 0
 / when both sizes are 0 at a level that DOES exist for that row - distinct
@@ -99,7 +109,8 @@
     ?[denom=0;0f;(total_bid-total_ask)%denom]};
 
 / Size-weighted L0 microprice: (Vask0*Pbid0+Vbid0*Pask0)/(Vbid0+Vask0),
-/ falling back to mid_price when both L0 sizes are 0.
+/ falling back to mid_price when both L0 sizes are 0. Null where either L0
+/ is not a price (see l0_price).
 / @param bid_prices a vector of vectors, one level-0-first vector per row
 / @param bid_sizes a vector of vectors, one level-0-first vector per row
 / @param ask_prices a vector of vectors, one level-0-first vector per row
@@ -107,8 +118,8 @@
 / @return a vector, one microprice per row
 / @eg .qf.mkt.microprice[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300]  -> ,1.10005
 .qf.mkt.microprice:{[bid_prices;bid_sizes;ask_prices;ask_sizes]
-    bid_px0:.qf.mkt.level_at[bid_prices;0];
-    ask_px0:.qf.mkt.level_at[ask_prices;0];
+    bid_px0:.qf.mkt.l0_price[bid_prices];
+    ask_px0:.qf.mkt.l0_price[ask_prices];
     bid_sz0:.qf.mkt.level_at[bid_sizes;0];
     ask_sz0:.qf.mkt.level_at[ask_sizes;0];
     denom:bid_sz0+ask_sz0;
@@ -133,11 +144,12 @@
 / pip_factor (a JPY cross's spread_bps is still bps, not pips).
 / @param bid_prices a vector of vectors, one level-0-first vector per row
 / @param ask_prices a vector of vectors, one level-0-first vector per row
-/ @return a vector, spread in bps per row
+/ @return a vector, spread in bps per row - null where either L0 is not a price (see l0_price)
 / @eg .qf.mkt.spread_bps[enlist enlist 1.1000;enlist enlist 1.1002]  -> ,1.818017
+/ @eg .qf.mkt.spread_bps[(enlist 0f;enlist 1.1);(enlist 1.1;enlist 0f)]  -> 0n 0n
 .qf.mkt.spread_bps:{[bid_prices;ask_prices]
-    bid_px0:.qf.mkt.level_at[bid_prices;0];
-    ask_px0:.qf.mkt.level_at[ask_prices;0];
+    bid_px0:.qf.mkt.l0_price[bid_prices];
+    ask_px0:.qf.mkt.l0_price[ask_prices];
     mid:.qf.mkt.mid_price[bid_prices;ask_prices];
     10000*(ask_px0-bid_px0)%mid};
 
