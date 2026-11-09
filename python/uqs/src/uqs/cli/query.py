@@ -19,7 +19,6 @@ from typing import Annotated
 import typer
 
 from uqs.cli import completion
-from uqs.cli import query_target as via_target
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.concepts import target_opt
 from uqs.cli.json_out import Verbatim, emit, json_opt
@@ -45,6 +44,7 @@ from uqs.cli.shared import (
     console,
     log,
 )
+from uqs.deploy import query_target as via_target
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import alive, listing, runtime
 from uqs.stack import gateway as stack_gateway

@@ -17,13 +17,14 @@ from typing import Annotated, Any
 import typer
 
 from uqs.cli.external import _PLANT, FeedArg, _feed, connector_app
-from uqs.cli.json_out import emit, json_opt, timestamp
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import follow as log_follow
 from uqs.stack import logs as stack_logs
+from uqs.timefmt import timestamp
 
 
 def _log_path(name: str) -> Path:

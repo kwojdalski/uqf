@@ -1,6 +1,6 @@
 """POST /compare: the Compare view's API (#2033).
 
-The API only delegates: reaching each side is `uqs.cli.data_diff.run`'s, and
+The API only delegates: reaching each side is `uqs.deploy.diff_endpoints.run`'s, and
 every rule is q's (src/etl/core/compare.q). So most cases hand the route a
 stand-in for `run` and hold what it is asked and what comes back; the last
 reaches two FIXTURE TARGETS - real q processes standing in for two gateways -
@@ -25,7 +25,7 @@ from uqf_frontend import queries
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FAKE_CATALOG, FAKE_SCHEMA, FakeGateway
-from uqs.cli import data_diff as uqs_diff
+from uqs.deploy import diff_endpoints as uqs_diff
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsUsageError, default_paths
 from uqs.stack import data_diff as uqs_stack_diff

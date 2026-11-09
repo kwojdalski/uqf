@@ -16,13 +16,14 @@ from dataclasses import dataclass, field
 from rich.table import Table
 from rich.text import Text
 
-from uqs.cli.json_out import snake, timestamp
+from uqs.cli.json_out import snake
 from uqs.cli.shared import _lines, _paths, log
 from uqs.cli.sorting import _sorted_items
 from uqs.cli.summary_graph import attach_graph_columns
 from uqs.paths import UqsError
 from uqs.stack import listing, probe, runtime, stream_health
 from uqs.stack.listing import SUMMARY_GRAPH_COLUMNS
+from uqs.timefmt import timestamp
 
 _STATUS_STYLE = {"up": "bold green", "down": "bold red"}
 

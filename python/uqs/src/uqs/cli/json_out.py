@@ -13,7 +13,7 @@ a list command prints `{<plural>: [...]}`; its values are typed (a port is a
 number, a flag a bool, a set of names a list), taken from the row rather than
 from the text its table cell shows (uqs.cells); a process is `process`
 whatever the row calls it; and a time is ISO-8601 with an explicit offset
-(`timestamp`), whichever of q's, TorQ's or Python's spellings it arrived in.
+(uqs.timefmt.timestamp), whichever of q's, TorQ's or Python's spellings it arrived in.
 
 The contract holds at every depth, not only on a list's records (#2122):
 `emit` spells each key of every nested object as KEYS says, and refuses a
@@ -30,13 +30,14 @@ import json
 import math
 import re
 from collections.abc import Mapping
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 import typer
 
 from uqs.cells import Shown
+from uqs.timefmt import timestamp
 
 #: How every `--json` help begins (#1859): one phrasing, on every command.
 JSON_HELP = "Print one JSON document on stdout instead"
@@ -92,57 +93,6 @@ def snake(key: object) -> str:
     return KEYS.get(word, word)
 
 
-#: A date and a time of day as q, TorQ, Python and ISO-8601 spell them:
-#: 2026.08.22D14:21:10.644413000, 2026-08-22T14:21:10Z, 2026-08-22 14:21:10+02:00.
-_STAMP = re.compile(
-    r"(\d{4})[.-](\d{2})[.-](\d{2})[DT ](\d{2}):(\d{2}):(\d{2})(?:[.,](\d+))?"
-    r"(Z|[+-]\d{2}:?\d{2})?"
-)
-#: A time of day alone - TorQ's summary stamps a row with one.
-_CLOCK = re.compile(r"(\d{2}):(\d{2}):(\d{2})")
-
-
-def _offset(moment: datetime) -> str:
-    """`moment`'s UTC offset as ISO-8601 spells it: +02:00."""
-    text = moment.strftime("%z")
-    return f"{text[:3]}:{text[3:]}"
-
-
-def timestamp(value: Any, naive: Literal["local", "utc"] = "local") -> str | None:
-    """`value` - a datetime, or a time in q's, TorQ's or ISO's text - as ISO-8601
-    with an explicit offset: 2026-08-22T14:21:10.644413000+02:00.
-
-    A value that names no zone is in `naive`'s: this machine's (a q process's
-    `.z.P`, a log line, TorQ's clock) or UTC (`.z.p`, a ledger's bounds). A
-    fraction of a second keeps every digit it had: a nanosecond bound
-    truncated to a datetime's microsecond would be a different bound. A time
-    of day alone is today's. Text that is not a time comes back unchanged, and
-    None stays None."""
-    if value is None or value == "":
-        return None
-    if isinstance(value, datetime):
-        moment = value if value.tzinfo else _naive(value, naive)
-        return moment.isoformat()
-    text = str(value).strip()
-    if m := _CLOCK.fullmatch(text):
-        today = datetime.now().astimezone() if naive == "local" else datetime.now(UTC)
-        moment = today.replace(hour=int(m[1]), minute=int(m[2]), second=int(m[3]), microsecond=0)
-        return moment.isoformat()
-    m = _STAMP.fullmatch(text)
-    if m is None:
-        return text
-    year, month, day, hh, mm, ss, fraction, zone = m.groups()
-    if zone is None:
-        wall = datetime(int(year), int(month), int(day), int(hh), int(mm), int(ss))
-        zone = _offset(_naive(wall, naive))
-    elif zone == "Z":
-        zone = "+00:00"
-    elif ":" not in zone:
-        zone = f"{zone[:3]}:{zone[3:]}"
-    fraction = f".{fraction}" if fraction else ""
-    return f"{year}-{month}-{day}T{hh}:{mm}:{ss}{fraction}{zone}"
-
-
 #: The keys a ledger row or a range carries a UTC time under, q's `.z.p` spelt
 #: with no zone.
 UTC_KEYS = ("range_from", "range_to", "started_at", "ended_at")
@@ -151,10 +101,6 @@ UTC_KEYS = ("range_from", "range_to", "started_at", "ended_at")
 def utc_times(record: Mapping[str, Any], keys: tuple[str, ...] = UTC_KEYS) -> dict[str, Any]:
     """`record` with each of `keys` it has as ISO-8601 in UTC (#1882)."""
     return {k: timestamp(v, naive="utc") if k in keys else v for k, v in record.items()}
-
-
-def _naive(moment: datetime, naive: Literal["local", "utc"]) -> datetime:
-    return moment.astimezone() if naive == "local" else moment.replace(tzinfo=UTC)
 
 
 def plain(value: Any, *, keyed: bool = True) -> Any:

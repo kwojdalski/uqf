@@ -22,10 +22,10 @@ from typer.testing import CliRunner
 from which_support import fake_which
 
 from uqs import runtimes
-from uqs.cli import app, query_target
+from uqs.cli import app
 from uqs.cli import query as query_mod
 from uqs.cli import target as target_cli
-from uqs.deploy import control, targets, tunnel
+from uqs.deploy import control, query_target, targets, tunnel
 from uqs.paths import UqsError
 
 FAKE_SSH = f"""#!{sys.executable}

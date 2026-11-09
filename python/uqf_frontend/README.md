@@ -632,14 +632,14 @@ and a value that cannot be rendered (a comma in a single value, a list for an
 operator other than `in`) is refused before uqs is called (#2223). The response
 echoes the filters as they were sent. `compare.py` checks that a target side is
 registered and hands the rest to `uqs data diff`'s own function
-(`uqs.cli.data_diff.run`): uqs reaches each side's gateway - a target through an
-ssh tunnel - and q decides everything the answer says (src/etl/core/compare.q).
-A target side is held to what `/services/{target}` and a target workspace are
-(#2066): the write token while writes are on (401 `WriteTokenRequired`), an
-allowed Host, `services:read` (403, audited like any refused read), and remote
-operations on - each checked before uqs is called. A comparison of `local` with
-itself needs none of these. Each table carries one outcome -
-`endpoint_unavailable`, `missing_table`, `differs`, `not_comparable`,
+(`uqs.deploy.diff_endpoints.run`): uqs reaches each side's gateway - a target
+through an ssh tunnel - and q decides everything the answer says
+(src/etl/core/compare.q). A target side is held to what `/services/{target}` and
+a target workspace are (#2066): the write token while writes are on (401
+`WriteTokenRequired`), an allowed Host, `services:read` (403, audited like any
+refused read), and remote operations on - each checked before uqs is called. A
+comparison of `local` with itself needs none of these. Each table carries one
+outcome - `endpoint_unavailable`, `missing_table`, `differs`, `not_comparable`,
 `incomplete_coverage` or `equal_in_sample` - and the label q wrote for it, which
 for a sample cut at the row limit says it is not proof the tables are equal.
 Every table must be one this stack's catalog lists - an unknown table is the 422

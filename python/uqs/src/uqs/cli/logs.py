@@ -17,7 +17,7 @@ from typer._click.exceptions import UsageError
 
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.concepts import attach_opt
-from uqs.cli.json_out import emit, json_opt, records, timestamp
+from uqs.cli.json_out import emit, json_opt, records
 from uqs.cli.renames import ATTACHMENT, refused, renamed
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import ProcsArg, _die, _paths, _procs, app, console
@@ -26,6 +26,7 @@ from uqs.stack import attached_logs, log_follow
 from uqs.stack import channel as stack_channel
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
+from uqs.timefmt import timestamp
 
 LogsJson = json_opt(
     '{"lines": [{time, host, process, proctype, level, channel, message}]} - the history '

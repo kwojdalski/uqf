@@ -21,7 +21,7 @@ import typer
 from rich.table import Table
 
 from uqs.cli import completion
-from uqs.cli.json_out import emit, json_opt, timestamp
+from uqs.cli.json_out import emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import (
@@ -37,6 +37,7 @@ from uqs.cli.shared import (
 from uqs.cli.sorting import ReverseOpt, SortOpt, _sorted_items
 from uqs.paths import UqsError
 from uqs.stack import snapshots
+from uqs.timefmt import timestamp
 
 #: What every `data snapshot` command needs: a runtime without it refuses them.
 _STORE = "reads this tree's configuration snapshot store"
