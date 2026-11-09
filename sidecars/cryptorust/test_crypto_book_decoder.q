@@ -124,7 +124,8 @@
     d:`offset xasc .qt.qpipe.job.crypto_book_decoder.rows_of `kafka_dead_letter;
     .qunit.assertEquals[b`offset;enlist 0j;"only the clean record is a book"];
     .qunit.assertEquals[d`offset;1 2 3 4 5j;"each bad one is a dead letter"];
-    .qunit.assertEquals[d`reason;5#`mapping;"refused by the mapping"]};
+    .qunit.assertEquals[d`reason;`malformed`malformed`malformed`mapping`mapping;
+        "a null level by the decoder (#2451), a unit slip by the mapping"]};
 
 .qt.qpipe.job.crypto_book_decoder.test_the_two_book_tables_are_distinct:{[t]
     .qunit.assertTrue[not `crypto_book_snapshot~`crypto_book;"declared apart"];

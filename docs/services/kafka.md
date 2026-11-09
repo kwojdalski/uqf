@@ -193,6 +193,14 @@ q reads every JSON number as a float, a `long` field refuses a number from 2^53
 upwards and accepts the same value sent as a string --- refusing is the point, a
 rounded trade id is worse than a dead-lettered record.
 
+A number must also be finite and present. q's JSON reader turns the non-standard
+`Infinity` and an overflowing `1e400` into `0w`, and `NaN` and `null` into `0n`;
+a `float` field, and every element of an `F` array or array of arrays, refuses
+all of them alike, naming the field and the element (`v: element 1 is null`). A
+payload that names any field twice is refused (`duplicate field(s): px`) rather
+than letting the first copy win: which value the producer meant cannot be told.
+Each goes to `kafka_dead_letter` as `malformed` (#2451).
+
 ## Provenance: what every decoded row says about its record
 
 Four kinds of metadata, four owners. **Kafka metadata** (topic, partition,
@@ -264,12 +272,12 @@ add the column to the table and drop it from the mapping.
 `kafka_flow1` sends a record it cannot map to `kafka_dead_letter`, with its
 coordinates, key and payload as received:
 
-  | `reason`        | when                                                                                                               |
-  | ---             | ---                                                                                                                |
-  | `no_mapping`    | no decoder job owns the topic (`kafka_flow1` dead-letters these)                                                   |
-  | `empty_payload` | the record had no payload (a tombstone, or a producer bug)                                                         |
-  | `malformed`     | not JSON, not an object, a declared field absent, null or mistyped, or a record with no topic, partition or offset |
-  | `mapping`       | decoded, but the mapping refused the row (a non-positive quantity)                                                 |
+  | `reason`        | when                                                                                                                                                |
+  | ---             | ---                                                                                                                                                 |
+  | `no_mapping`    | no decoder job owns the topic (`kafka_flow1` dead-letters these)                                                                                    |
+  | `empty_payload` | the record had no payload (a tombstone, or a producer bug)                                                                                          |
+  | `malformed`     | not JSON, not an object, a field named twice, a declared field absent, null, non-finite or mistyped, or a record with no topic, partition or offset |
+  | `mapping`       | decoded, but the mapping refused the row (a non-positive quantity)                                                                                  |
 
 One refused row does not take its batch with it. The count by `reason` is the
 health of a topic.
@@ -330,8 +338,8 @@ pairs, best first. The table has `sym`, `venue`, `source_time` (exchange),
 `ask_sz0..4` and the record's `broker_time`, `topic`, `partition`, `offset`. A
 side with fewer than five levels, or none, leaves null floats; levels past five
 are cut. Not `crypto_book`, the kdb recorder's vector-shaped book. An unknown
-`schema_version` or `kind`, a level that is not a pair, a missing field or a
-payload that is not JSON goes to `kafka_dead_letter`.
+`schema_version` or `kind`, a level that is not a pair, a null price or size, a
+missing field or a payload that is not JSON goes to `kafka_dead_letter`.
 
 The decoder's typed fields cover this record: `F` is a JSON array of numbers and
 a blank (`" "`) an array of arrays of numbers, so a mapping reads
