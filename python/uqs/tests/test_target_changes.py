@@ -376,6 +376,16 @@ def test_every_change_appends_one_entry_and_log_lists_them(declared):
     assert "+profile" in table and "unset" in table
 
 
+def test_log_limit_takes_the_newest_n_and_refuses_less_than_one(declared):
+    """#2514: `found[-0:]` was every change and `found[--1:]` dropped the oldest."""
+    for dest in ("/srv/a", "/srv/b", "/srv/c"):
+        assert uqs("target", "set", "prod", f"dest={dest}").exit_code == 0
+    r = CliRunner().invoke(app, ["target", "log", "--limit", "2", "--json"])
+    assert [c["number"] for c in json.loads(r.stdout)["changes"]] == [3, 2]
+    for bad in ("0", "-1"):
+        assert CliRunner().invoke(app, ["target", "log", "--limit", bad]).exit_code == 2
+
+
 def test_revert_last_restores_the_previous_block_exactly(declared):
     assert uqs("target", "set", "prod", "dest=/srv/new", "remote_user=efx").exit_code == 0
     r = uqs("target", "revert", "last")
