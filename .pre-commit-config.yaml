@@ -233,6 +233,13 @@ repos:
         pass_filenames: false
         files: '^src/etl/.*\.q$|^scripts/gates/(check|policy/markout_mapped)\.py$'
 
+      - id: variant-gather
+        name: Check the reference-variant gather reads the deduped rids once and nothing else
+        entry: python3 scripts/gates/check.py variant-gather
+        language: system
+        pass_filenames: false
+        files: '^src/etl/.*\.q$|^scripts/gates/(check|policy/variant_gather)\.py$'
+
       - id: registry-enlist
         name: Check every q registry stores its values enlisted
         entry: python3 scripts/gates/check.py registry-enlist

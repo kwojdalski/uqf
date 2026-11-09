@@ -169,13 +169,13 @@
 / binary search over its run's source_time runs in lockstep with all the others - about log2(longest run) rounds of
 / one gather each, reading O(log n) elements per probe and nothing else. tests/q/test_mapped_books.q holds it equal to
 / aj over the whole table.
-/ @param tob a top-of-book table (arranged); rid, when it has one, comes back too
+/ @param tob a top-of-book table (arranged); rid and w (a promoted variant's stored weight, variant_run.q), when it has them, come back too
 / @param probes table sym, source, source_time: the instants to price each (sym; source) at
 / @return the probes with quoted, bid, ask, clock (and rid) of the latest book at or before each; null where none
 / @eg .qetl.mapped.asof[.qetl.mapped.arrange ([] sym:enlist `a; source:enlist `x; source_time:enlist 2026.09.17D10:00:00; bid:enlist 1f; ask:enlist 2f; clock:enlist `venue);([] sym:enlist `a; source:enlist `x; source_time:enlist 2026.09.17D10:00:05)]`bid  ->  enlist 1f
 .qetl.mapped.asof:{[tob;probes]
     n:count probes;
-    carry:`bid`ask`clock,(enlist `rid) inter cols tob;
+    carry:`bid`ask`clock,(`rid`w) inter cols tob;
     none:probes,'flip (`quoted,carry)!(enlist n#0Np),{[tob;n;c] n#first 0#tob c}[tob;n] each carry;
     if[(0=n) or 0=count tob; :none];
     r:.qetl.mapped.runs[tob;distinct probes`sym];

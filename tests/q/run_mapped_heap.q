@@ -17,6 +17,13 @@
 /                                       materialises every column it names, so it grows with the rows - the control that shows the other
 /                                       measurements could have failed
 / .
+/ And one for the reference variants (#2289):
+/   measure_variants <dir> <rows> <executions> <variants> <selects>
+/                                    the batch priced under <variants> declared variants (vwap at a quantity each, three combines) whose
+/                                    SELECTs are <selects> distinct offsets: gathers the books once (.qetl.variant.read), evaluates them all
+/                                    and prints  RESULT|rows|execs|heap after the gather|peak|mapped|slice rows|ladder rows read|variants|
+/                                    SELECT groups|gather ms|evaluate ms|heap after the evaluate
+/ .
 / measure loads that HDB (memory-mapping it), runs the hdb_fx_markouts source's query against it through a stand-in
 / handle and scores the result with the worker's transform, and prints one line:
 /   RESULT|<rows per day>|<executions>|<used bytes the run added>|<peak bytes it added>|<bytes mapped>|<rows scored>
@@ -138,6 +145,32 @@ if[mode=`measure_copy;
     exit 0];
 / the stand-in handle runs each query here, as the HDB would
 h:{value x};
+
+/ <variants> variants over the batch: gather once, evaluate all.
+if[mode=`measure_variants;
+    nv:"J"$args 4;
+    ns:"J"$args 5;
+    probes:([] sym:execs?pairs; time:(`timestamp$day)+43200000000000+execs?3600000000000);
+    reg:{[i;ns]
+        n:`$"v",string i;
+        qty:1e4*1+i div 3;
+        off:`timespan$1000000000*i mod ns;
+        .qetl.reference.register[n;`venues`stale`offset`transform`combine`params!(`all;`spec;off;`vwap;`best`median`wmean i mod 3;enlist[`qty]!enlist qty)];
+        n};
+    names:reg[;ns] each til nv;
+    .Q.gc[];
+    u0:used[];
+    t0:.z.p;
+    r:.qetl.variant.read[h;probes;(`timestamp$day)-1D;1;names;0D01:00:00];
+    gms:(`long$.z.p-t0) div 1000000;
+    .Q.gc[];
+    ug:used[]-u0;
+    t1:.z.p;
+    res:.qetl.variant.evaluate[names;r`slice;0D01:00:00;probes`sym;probes`time;(count probes)#`venue];
+    ems:(`long$.z.p-t1) div 1000000;
+    .Q.gc[];
+    -1 "RESULT|",("|" sv string (rows;execs;ug;peak[]-p0;mapped[];count r`slice;r`reads;nv;r`groups;gms;ems;used[]-u0));
+    exit 0];
 got:.qpipe.source.hdb_fx_markouts.query[h;(`timestamp$day);(`timestamp$day)+1D];
 out:.qetl.transform.apply[`hdb_fx_markouts_long;got];
 m1:mapped[];
