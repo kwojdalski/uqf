@@ -146,6 +146,30 @@
     .qunit.assertEquals[.qetl.tick.publish[`tt_trade;([] sym:`EURUSD`GBPUSD`USDJPY; px:1.085 1.265 149.5)];3;
         "three rows in, three reported"]};
 
+/ #2326: a declared schema was learned but never compared, so a batch of
+/ any shape was logged and sent under a schema that said otherwise.
+.qt.qetl.tick.test_a_batch_that_is_not_its_schema_is_refused_before_delivery:{[t]
+    .qt.qetl.tick.setup[];
+    .qetl.tick.subscribe[`tt_trade;.qt.qetl.tick.recorder];
+    .qunit.assertThrows[.qetl.tick.publish[`tt_trade;];([] wrong:enlist `EURUSD);
+        "*tt_trade does not match its schema - missing sym, px; unexpected wrong;*";
+        "a batch with other columns is refused, naming them"];
+    .qunit.assertThrows[.qetl.tick.publish[`tt_trade;];([] sym:enlist `EURUSD; px:enlist 1);
+        "*px is type 7h, the schema's is 9h;*";"and so is one whose column has another type"];
+    .qunit.assertThrows[.qetl.tick.publish[`tt_trade;];(enlist `EURUSD;enlist 1);
+        "*px is type 7h*";"in the list-of-columns form too"];
+    .qunit.assertEquals[count .qt.qetl.tick.received;0;"nothing reached the subscriber"];
+    .qunit.assertEquals[.qetl.tick.publish[`tt_trade;([] sym:enlist `EURUSD; px:enlist 1.085)];1;
+        "a batch of the schema's shape still publishes"];
+    .qunit.assertEquals[count .qt.qetl.tick.received;1;"and is delivered"]};
+
+.qt.qetl.tick.test_a_learned_schema_refuses_a_later_batch_of_another_shape:{[t]
+    .qetl.tick.reset[];
+    .qetl.tick.publish[`tt_new;([] sym:enlist `EURUSD; px:enlist 1.085)];
+    .qunit.assertThrows[.qetl.tick.publish[`tt_new;];([] sym:enlist `EURUSD);
+        "*tt_new does not match its schema - missing px;*";
+        "the first batch's shape is the schema subscribers were given"]};
+
 / ------------------------------------------------------------------- LOG
 
 / A log directory of this test's own, removed and recreated per test so a
