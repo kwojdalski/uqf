@@ -26,11 +26,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 from uqs.external.kafka_streamer import (
+    ACCEPT_Q,
     KAFKA_RAW_TABLE,
     contract_fields,
+    publish_message,
     rows_from_messages,
 )
+from uqs.paths import UqsError
 
 REPO = Path(__file__).resolve().parents[3]
 
@@ -106,12 +111,20 @@ def test_the_coordinates_come_from_the_broker_not_the_payload() -> None:
 
 
 def test_the_payload_and_key_go_through_as_received() -> None:
-    """Undecoded: invalid UTF-8 and non-JSON are q's to dead-letter, not ours to repair."""
-    raw = b"\xff\x00not json"
+    """Undecoded: non-JSON is q's to dead-letter, not ours to repair."""
+    raw = b"\x00not json \xc3\xa9"
     msg = FakeMessage(raw, 0, 0, 1, _key=b"k1")
     cols = rows_from_messages([msg], contract_fields(str(REPO)))
     assert cols["payload"] == [raw]
     assert cols["msg_key"] == [b"k1"]
+
+
+def test_bytes_that_are_not_utf8_are_refused_not_repaired() -> None:
+    """kola cannot carry them as received (below), so they are refused naming the
+    record - never replaced by other bytes that would then decode."""
+    msg = FakeMessage(b"\xff\x00not json", 0, 0, 1)
+    with pytest.raises(UqsError, match=r"uqf\.client\.flow\[0\]@0: the payload is not valid UTF-8"):
+        rows_from_messages([msg], contract_fields(str(REPO)))
 
 
 def test_a_tombstone_is_an_empty_payload_not_a_dropped_message() -> None:
@@ -164,16 +177,153 @@ def test_a_message_is_sent_as_a_list_of_columns_in_the_contracts_order() -> None
     """#1492: a dict reached the segmented tickerplant as a q dictionary, its update
     chain's `(enlist time),x` answered `type`, and the consumer - whose `sync` still
     returned - committed the offset of a record the plant never stored."""
-    from uqs.external.kafka_streamer import publish_message
-
     fields = contract_fields(str(REPO))
     q = RecordingQ()
     publish_message(q, "kafka_message", a_message(), fields)
     ((func, table, payload),) = q.calls
-    assert (func, table) == (".u.upd", "kafka_message")
+    assert (func, table) == (ACCEPT_Q, "kafka_message")
     assert isinstance(payload, list) and not isinstance(payload, dict)
     assert len(payload) == len(fields)
-    assert all(isinstance(col, list) and len(col) == 1 for col in payload)
+    assert all(len(col) == 1 for col in payload)
     assert payload[fields.index("topic")] == ["uqf.client.flow"]
     by_name = rows_from_messages([a_message()], fields)
     assert [c[0] for c in payload] == [by_name[f][0] for f in fields]
+
+
+def test_the_publish_runs_the_same_acceptance_check_as_qtorq_publish() -> None:
+    """ACCEPT_Q is torq_pipeline.q's `accept_fn`, which `.qtorq.publish` sends (#2192):
+    the same body, so the two consumers judge a refused update the same way."""
+    import re
+
+    src = (REPO / "scripts" / "processes" / "torq_pipeline.q").read_text()
+    start = src.index("accept_fn:{[t;x]")
+    body = src[start + len("accept_fn:") : src.index("\n    r}", start) + len("\n    r}")]
+    assert re.sub(r"\s+", " ", body) == re.sub(r"\s+", " ", ACCEPT_Q)
+
+
+# ------------------------------------------------- through kola into a real q
+#
+# The tests above stop at Python values. What reaches the plant is what kola
+# makes of them, and two of the claims above - "invalid UTF-8 reaches q to be
+# dead-lettered" and "no timestamp is a null" - were never true on the wire.
+# These drive `publish_message` through a real kola handle into a real q whose
+# `.u.upd` is TorQ's segmented tickerplant in its default error mode
+# (lib/torq/code/processes/segmentedtickerplant.q, `errmode:1b`): a failing
+# update is handed to `.stplg.badmsg` and the call RETURNS, which is how a
+# refused record used to look like a stored one (#2192).
+
+_PLANT_Q = """
+.qetl.plant.nested:{[t;d]};
+{PLANT_LINE}
+kafka_message:.qetl.plant.kafka_message;
+badmsgs:();
+.stplg.badmsg:{[e;t;x] `badmsgs set badmsgs,enlist e};
+.stp.upd:{[t;x] t insert (enlist(count first x)#.z.p),x};
+.u.upd:{[t;x] .[.stp.upd;(t;x);{.stplg.badmsg[x;y;z]}[;t;x]]};
+hex:{$[count x;raze string "x"$x;""]};
+stored:{[] .j.j select topic:string topic, partition, offset,
+    msg_key:hex each msg_key, broker_time:"j"$broker_time, payload:hex each payload,
+    payload_is_string:{10h=type x} each payload from kafka_message};
+"""
+
+
+def _plant_line() -> str:
+    """kafka_message's declaration, as plant_tables.q writes it - not a copy."""
+    src = (REPO / "src" / "etl" / "plant_tables.q").read_text().splitlines()
+    (line,) = [s for s in src if s.startswith(".qetl.plant.kafka_message:")]
+    return line
+
+
+@pytest.fixture
+def plant(tmp_path, start_q):
+    import kola
+
+    boot = tmp_path / "plant.q"
+    boot.write_text(_PLANT_Q.replace("{PLANT_LINE}", _plant_line()))
+    with start_q(str(boot)) as port:
+        conn = kola.Q("127.0.0.1", port, user="", passwd="")
+        conn.connect()
+        try:
+            yield conn
+        finally:
+            conn.disconnect()
+
+
+def _stored(conn) -> list[dict]:
+    import json
+
+    return json.loads(conn.sync("stored", None))
+
+
+Q_EPOCH_MS = 946_684_800_000  # 2000.01.01 in Unix milliseconds
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        pytest.param(b'{"sym": "EURUSD", "px": 1.5}', id="json"),
+        pytest.param(b"x", id="one-character"),
+        pytest.param("café €".encode(), id="multibyte-utf8"),
+        pytest.param(None, id="tombstone"),
+    ],
+)
+def test_a_record_reaches_the_plant_byte_for_byte_with_its_coordinates(plant, payload) -> None:
+    """Kafka record -> kola -> `.u.upd` -> kafka_message, and back out as bytes."""
+    fields = contract_fields(str(REPO))
+    ts_ms = 1_760_950_801_750
+    msg = FakeMessage(payload, 1, 7, ts_ms, _topic="example.crypto.trades", _key=b"BTC-USD")
+    publish_message(plant, KAFKA_RAW_TABLE, msg, fields)
+    (row,) = _stored(plant)
+    assert (row["topic"], row["partition"], row["offset"]) == ("example.crypto.trades", 1, 7)
+    assert bytes.fromhex(row["msg_key"]) == b"BTC-USD"
+    assert bytes.fromhex(row["payload"]) == (payload or b"")
+    assert row["payload_is_string"], "a payload is a string even when it is one character"
+    assert row["broker_time"] == (ts_ms - Q_EPOCH_MS) * 1_000_000, "the record's ms, exactly"
+    assert plant.sync("exec t from meta kafka_message") == "psjjCpC"
+
+
+def test_a_record_with_no_broker_timestamp_is_stored_with_a_null_time(plant) -> None:
+    """A null broker_time, not a refused update: `[None]` went over kola as `enlist ::`,
+    which the plant's timestamp column refused - in error mode, silently."""
+    fields = contract_fields(str(REPO))
+    msg = FakeMessage(b"{}", 0, 3, -1, _ts_type=0)
+    publish_message(plant, KAFKA_RAW_TABLE, msg, fields)
+    (row,) = _stored(plant)
+    assert row["offset"] == 3
+    assert plant.sync("exec null broker_time from kafka_message").to_list() == [True]
+    assert plant.sync("count badmsgs") == 0
+
+
+def test_a_payload_that_is_not_utf8_is_refused_naming_the_record(plant) -> None:
+    """kola carries a Python `bytes` to q characters only by decoding it as UTF-8,
+    so these bytes cannot reach kafka_message as received. Refused - the offset is
+    then never committed - rather than crashing inside kola with no coordinates."""
+    fields = contract_fields(str(REPO))
+    msg = FakeMessage(b"\xff\x00not json", 2, 9, 1, _topic="t.raw")
+    with pytest.raises(UqsError, match=r"t\.raw\[2\]@9: the payload is not valid UTF-8"):
+        publish_message(plant, KAFKA_RAW_TABLE, msg, fields)
+    with pytest.raises(UqsError, match=r"t\.raw\[2\]@9: the key is not valid UTF-8"):
+        bad_key = FakeMessage(b"{}", 2, 9, 1, "t.raw", b"\xfe")
+        publish_message(plant, KAFKA_RAW_TABLE, bad_key, fields)
+    assert _stored(plant) == []
+
+
+def test_an_update_the_plant_refuses_is_raised_not_committed(plant) -> None:
+    """The commit must follow a publish the plant STORED. In error mode a refused
+    `.u.upd` answers success, so a bare `.u.upd` let the consumer commit a record
+    that is only in the tickerplant's error log (#2192)."""
+    fields = contract_fields(str(REPO))
+    plant.sync("`kafka_message set update extra:`long$() from kafka_message")
+    with pytest.raises(UqsError, match="the tickerplant refused .* NOT stored"):
+        publish_message(plant, KAFKA_RAW_TABLE, a_message(0, 4), fields)
+    assert plant.sync("count badmsgs") == 1, "still in the error log, as TorQ keeps it"
+
+
+def test_several_records_keep_their_order_and_coordinates_in_the_plant(plant) -> None:
+    fields = contract_fields(str(REPO))
+    msgs = [a_message(0, 5), a_message(1, 0), a_message(0, 6), a_message(1, 0)]
+    for m in msgs:
+        publish_message(plant, KAFKA_RAW_TABLE, m, fields)
+    rows = _stored(plant)
+    assert [(r["partition"], r["offset"]) for r in rows] == [(0, 5), (1, 0), (0, 6), (1, 0)]
+    assert len(rows) == len(msgs), "every delivery, the repeat included: the audit trail"
