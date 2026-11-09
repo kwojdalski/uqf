@@ -70,6 +70,20 @@
     .qt.qetl.io.remote.send[`upsert;update notional:9e6 from .qt.qetl.io.remote.batch[]];
     .qunit.assertEquals[exec notional from rdeals;9e6 9e6;"the keyed write corrects the rows in place"]};
 
+/ #2495: the journal kept every id it ever committed, so a re-send of X after Y
+/ replaced it was answered `duplicate and never written - the destination kept
+/ Y, where a direct write of X, Y, X leaves X.
+.qt.qetl.io.remote.test_a_resend_after_a_later_batch_replaced_it_is_written:{[t]
+    .qt.qetl.io.remote.reset[];
+    .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
+    first_req:.qt.qetl.io.remote.request[`upsert;.qt.qetl.io.remote.batch[]];
+    later_req:.qt.qetl.io.remote.request[`upsert;update notional:9e6 from .qt.qetl.io.remote.batch[]];
+    .qetl.io.remote.accept[first_req;`];
+    .qetl.io.remote.accept[later_req;`];
+    r:.qetl.io.remote.accept[first_req;`];
+    .qunit.assertEquals[(r`status;exec notional from rdeals);(`committed;1e6 2e6);"X is written again, as a direct write would"];
+    .qunit.assertEquals[.qetl.io.remote.accept[first_req;`]`status;`duplicate;"and a retry of the latest batch is still a duplicate"]};
+
 .qt.qetl.io.remote.test_a_restatement_is_a_new_window:{[t]
     .qt.qetl.io.remote.reset[];
     .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
