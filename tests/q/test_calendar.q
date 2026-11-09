@@ -226,3 +226,15 @@
     c[`EURUSD;`weekend]:.qf.px.weekdays;
     .qunit.assertThrows[.qf.px.spot_date[2026.09.17;`EURUSD;.qf.px.mock_calendars;];c;
         "calendar: EURUSD's weekend leaves no business day";"a seven-day weekend is refused, not looped on"]};
+
+/ A misspelt roll settled spot (always rolling following) and a month-end
+/ forward, which even reported the bad roll back (#2556).
+.qt.qf.px.calendar.test_an_unknown_roll_or_a_non_boolean_eom_is_refused:{[t]
+    bad_roll:(enlist `EURUSD)!enlist `spot_lag`roll`eom`weekend!(2;`modfollowing;1b;`sat`sun);
+    .qunit.assertThrows[.qf.px.spot_date[2026.09.18;`EURUSD;.qt.qf.px.calendar.no_holidays[];];bad_roll;
+        "calendar: EURUSD's roll must be one of none, following, preceding, modified_following, got `modfollowing";"spot_date refuses the roll"];
+    .qunit.assertThrows[.qf.px.forward_date[2026.04.30;`1M;`EURUSD;.qt.qf.px.calendar.no_holidays[];];bad_roll;
+        "calendar: EURUSD's roll must be one of*";"so does a month-end forward"];
+    bad_eom:(enlist `EURUSD)!enlist `spot_lag`roll`eom`weekend!(2;`following;`yes;`sat`sun);
+    .qunit.assertThrows[.qf.px.forward_date[2026.04.30;`1M;`EURUSD;.qt.qf.px.calendar.no_holidays[];];bad_eom;
+        "calendar: EURUSD's eom must be a boolean, got `yes";"an eom that is not a boolean is named, not a bare 'type"]};

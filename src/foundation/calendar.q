@@ -191,6 +191,11 @@
     if[count missing:.qf.px.convention_keys where not .qf.px.convention_keys in key c;
         '"calendar: ",string[p],"'s conventions are missing ",", " sv string missing];
     if[not $[-7h=type c`spot_lag; c[`spot_lag] within 0 5; 0b]; '"calendar: ",string[p],"'s spot_lag must be a long from 0 to 5"];
+    / A misspelt roll settled spot and month-end forwards anyway - only adjust
+    / refused it, and those paths do not reach it with c`roll (#2556).
+    if[not $[-11h=type c`roll; c[`roll] in .qf.px.rolls; 0b];
+        '"calendar: ",string[p],"'s roll must be one of ",(", " sv string .qf.px.rolls),", got ",.Q.s1 c`roll];
+    if[not -1h=type c`eom; '"calendar: ",string[p],"'s eom must be a boolean, got ",.Q.s1 c`eom];
     wk:(),c`weekend;
     if[count bad:wk where not wk in .qf.px.weekdays;
         '"calendar: ",string[p],"'s weekend has unknown day(s) ",", " sv string bad];
