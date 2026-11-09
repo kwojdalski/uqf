@@ -124,19 +124,42 @@
     d:f range_from;
     m[`eod_waiting] d+til 0|1+(f range_to-1)-d}
 
+/ Private: the first instant in [lo; hi) that the day calendar f names `day`
+/ or later, or hi when none does. f must never decrease; a bisection, because
+/ a native calendar is a function of an instant with no inverse to ask.
+/ @private
+.qetl.io.first_instant_of:{[f;lo;hi;day]
+    if[day<=f lo; :lo];
+    / f lo < day throughout, and f hi >= day or hi is the bound
+    while[1<"j"$hi-lo;
+        mid:lo+(hi-lo) div 2;
+        $[day<=f mid; hi:mid; lo:mid]];
+    hi}
+
 / Clip a plan's end to the first day end of day has not handed over, as
 / complete_through clips it to what the source can vouch for: the rest stays
 / uncovered, the next run plans it, and the clip is logged at WARN naming the
 / dates, so a plan never silently drops a day.
+/ .
+/ The day starts where the manager's own calendar says it does (#2397): a
+/ native stack that rolls at 17:00 UTC starts day D at D-1 17:00, and a clip at
+/ D's UTC midnight would leave the plan holding rows of D that the write then
+/ refuses, failing the whole window. A partition boundary lies within a day of
+/ its UTC midnight, so the search spans the two days around it.
 / @param worker the worker's name, for the log
 / @param cfg the worker's configuration dictionary
 / @param range_from the inclusive start
 / @param range_to the exclusive end
-/ @return range_to, or the start of the first waiting day when that is earlier
+/ @return range_to, or the first instant of the first waiting day when that is earlier
 / @eg .qetl.io.clip_to_eod[`w;()!();2026.09.10D00:00;2026.09.11D00:00]  ->  2026.09.11D00:00:00.000000000
 .qetl.io.clip_to_eod:{[worker;cfg;range_from;range_to]
     w:.qetl.io.eod_waiting_for[cfg;range_from;range_to];
     if[0=count w; :range_to];
     .qetl.log.ch.warn[`eod;"range clipped to the last day end of day has handed over - the rest stays uncovered for the next run";
         `worker`waiting_for_eod`requested_to!(worker;w;range_to)];
-    range_to&`timestamp$first w}
+    m:.qetl.io.for_cfg cfg;
+    f:$[`days_of in key m; m`days_of; {`date$x}];
+    day:first w;
+    lo:range_from|`timestamp$day-1;
+    hi:range_to&`timestamp$day+1;
+    .qetl.io.first_instant_of[f;lo;hi;day]}

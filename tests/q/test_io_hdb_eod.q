@@ -145,3 +145,26 @@
         .qetl.io.clip_to_eod[`demo_deals_backfill;.qetl.job.bounded.def `demo_deals_backfill;`timestamp$D-1;`timestamp$D+1]}];
     .qunit.assertEquals[(lines[;0];lines[;1]);(enlist `WARNING;enlist `eod);"the handover clip is an eod line"];
     .qunit.assertEquals[((first lines)[3])`worker;`demo_deals_backfill;"and the worker it clipped is a field"]};
+
+/ Under a native calendar that rolls at 17:00 UTC, the waiting day D starts at
+/ D-1 17:00 (#2397). A clip at D's UTC midnight left [D-1 17:00; D) in the plan:
+/ rows of D, which the write refuses, failing the whole window.
+.qt.qetl.io.hdb_eod.test_the_clip_stops_where_the_native_calendar_starts_the_waiting_day:{[t]
+    .qt.qetl.io.hdb_eod.setUp_clean[];
+    s:first system"mktemp -d";
+    root:hsym `$s,"/hdb";
+    D:.z.d-1;
+    system "mkdir -p ",s,"/wdb/",string[D]," ",s,"/wdb/",string .z.d;
+    .qetl.io.watch_eod[root;hsym `$s,"/wdb"];
+    saved:(.qetl.io.scoped_roots;.qetl.io.calendar;.qetl.io.native_day_fn);
+    `.qetl.io.scoped_roots set enlist `$string root;
+    `.qetl.io.calendar set "off=x,adj=y";
+    / a stand-in for attached_calendar.q's .eodtime.getday at a 17:00 UTC roll
+    `.qetl.io.native_day_fn set {[times] `date$times+0D07:00};
+    cfg:enlist[`io]!enlist .qetl.io.hdb[root;`time];
+    r:@[{[cfg;D] .qetl.io.clip_to_eod[`w;cfg;`timestamp$D-1;`timestamp$D+1]}[cfg];D;{[e] e}];
+    `.qetl.io.scoped_roots set saved 0;
+    `.qetl.io.calendar set saved 1;
+    `.qetl.io.native_day_fn set saved 2;
+    .qunit.assertEquals[r;(`timestamp$D-1)+0D17:00;"the plan ends at the first instant the calendar files under D"];
+    .qunit.assertEquals[{[D;r] `date$(r-1)+0D07:00}[D;r];D-1;"so its last planned instant is D-1's, which is handed over"]};
