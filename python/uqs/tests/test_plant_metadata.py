@@ -522,3 +522,15 @@ def test_every_scaffold_and_install_command_regenerates_it_first():
 
     assert _DERIVED[0] == (str(DERIVE_SCRIPT), "plant-schema")
     assert (ROOT / DERIVE_SCRIPT).is_file()
+
+
+def test_a_rewrite_keeps_the_files_mode(tmp_path, monkeypatch):
+    """#2632: mkstemp's 0600 replaced the shared 0644 file, locking out the
+    frontend and a service account's uqs."""
+    path = tmp_path / PLANT_SCHEMA_FILE
+    path.parent.mkdir(parents=True)
+    path.write_text("old\n")
+    path.chmod(0o644)
+    monkeypatch.setattr(plant_metadata_gen, "generate", lambda _root: "new\n")
+    assert plant_metadata_gen.write(tmp_path)
+    assert (path.read_text(), path.stat().st_mode & 0o777) == ("new\n", 0o644)
