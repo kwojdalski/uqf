@@ -218,6 +218,84 @@ def test_a_job_with_its_plant_in_another_process_replays_the_plants_log(tmp_path
             proc.wait(timeout=10)
 
 
+_READ_TWO_JOBS = """h:@[hopen;{port};{{0N}}];
+-1 "BOOK:",$[null h; "unreachable"; .Q.s1 h"exec base_qty from .qpipe.job.fx_positions.positions"];
+-1 "PENDING:",$[null h; "unreachable"; string h"count .qpipe.job.exec_bars.pending"];
+exit 0
+"""
+
+
+def test_every_job_on_a_remote_plant_gets_its_own_batches_once(tmp_path: Path) -> None:
+    """#2491: with -tp, each job's subscribe set root `upd` to its own handler,
+    so only the last job named in -job received anything, and a table two jobs
+    shared was subscribed (and so delivered) twice - to that last job."""
+    import socket
+    import time
+
+    q, env = _kdbx()
+    if identify(Path(q), env) != KDBX:
+        pytest.skip("the multi-process run needs KDB-X")
+    plant_port, job_port = _free_port(), _free_port()
+    publish = tmp_path / "publish.q"
+    publish.write_text(_PUBLISH.format(port=plant_port))
+    read = tmp_path / "read.q"
+    read.write_text(_READ_TWO_JOBS.format(port=job_port))
+
+    def start(*args: str) -> subprocess.Popen[bytes]:
+        return subprocess.Popen(
+            [q, "scripts/processes/run_stream.q", "-q", *args],
+            cwd=UQF_ROOT,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    def run(path: Path) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [q, str(path), "-q"],
+            cwd=UQF_ROOT,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+    procs = [start("-plant", str(plant_port), "-logdir", str(tmp_path / "tplog"))]
+    try:
+        for _ in range(50):
+            with socket.socket() as probe:
+                if probe.connect_ex(("localhost", plant_port)) == 0:
+                    break
+            time.sleep(0.2)
+        procs.append(
+            start("-job", "fx_positions,exec_bars", "-tp", str(plant_port), "-port", str(job_port))
+        )
+        out = ""
+        for _ in range(50):
+            out = run(read).stdout
+            if "unreachable" not in out and "BOOK:" in out:
+                break
+            time.sleep(0.2)
+        # the job process is subscribed once it answers: publish live, after it
+        assert "BOOK:" in out, out
+        done = run(publish)
+        assert done.returncode == 0, done.stdout + done.stderr
+        for _ in range(25):
+            out = run(read).stdout
+            if _value(out, "BOOK") == ",1500000f" and _value(out, "PENDING") == "2":
+                break
+            time.sleep(0.2)
+        assert _value(out, "BOOK") == ",1500000f", out
+        assert _value(out, "PENDING") == "2", out
+    finally:
+        for proc in reversed(procs):
+            proc.kill()
+            proc.wait(timeout=10)
+
+
 _PUBLISHER = """\\l scripts/processes/run_stream.q
 tr:.qproc.standalone.remote_transport {port};
 tr[`connect][];

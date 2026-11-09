@@ -78,6 +78,16 @@
     .qetl.tick.publish[`tt_trade;([] sym:enlist `EURUSD; px:enlist 1.085)];
     .qunit.assertEmpty[.qt.qetl.tick.received;"and nothing arrives afterwards"]};
 
+/ #2491: two jobs in one process subscribe it to a table they share; the
+/ plant kept a row per call, so the process got every batch twice.
+.qt.qetl.tick.test_a_sink_subscribed_twice_to_a_table_receives_each_batch_once:{[t]
+    .qt.qetl.tick.setup[];
+    .qetl.tick.subscribe[`tt_trade;.qt.qetl.tick.recorder];
+    .qetl.tick.subscribe[`tt_trade`tt_quote;.qt.qetl.tick.recorder];
+    .qetl.tick.publish[`tt_trade;([] sym:enlist `EURUSD; px:enlist 1.085)];
+    .qunit.assertEquals[count .qt.qetl.tick.received;1;"one batch, delivered once"];
+    .qunit.assertEquals[asc exec tbl from .qetl.tick.subscribers;`s#`tt_quote`tt_trade;"one row per table it asked for"]};
+
 / ------------------------------------------------------------- PUBLISHING
 
 .qt.qetl.tick.test_the_plant_stamps_time_at_the_front:{[t]
