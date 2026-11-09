@@ -495,8 +495,20 @@
 
 / --- how a query names the tables it reads ---------------------------------
 
+/ Private: does this line define `query` at the left margin - `query:` or a
+/ whole path ending `.query:`? Anything with a space before the colon is not a
+/ definition (a comment, an indented line).
+.qt.qetl.source.defines_query:{[line]
+    lhs:(line?":")#line;
+    if[(count lhs)=count line; :0b];
+    if[" " in lhs; :0b];
+    (lhs~"query") or ".query"~-6#lhs}
+
 / Private: the lines of a source file that belong to its `query` definition -
-/ from `query:` up to the next definition at the left margin.
+/ from `query:` up to the next definition at the left margin. The definition
+/ is found by its last name component, so `.qpipe.source.<s>.query:` - the
+/ whole-path form every source in this tree uses - is read as well as the
+/ `\d` form `query:` (#2490: matching only the latter read nothing at all).
 / .
 / Takes LINES rather than a filename so the reader below can be fed a literal
 / four-line source in a test. An earlier version took a path and the probes
@@ -504,7 +516,7 @@
 / behind on any failure - and the other tests in this section walk exactly
 / that directory.
 .qt.qetl.source.query_block:{[lines]
-    hits:where lines like "query:*";
+    hits:where .qt.qetl.source.defines_query each lines;
     if[0=count hits; :()];
     start:first hits;
     rest:(start+1)_lines;
@@ -564,6 +576,17 @@
     / working after an unrelated edit.
     .qunit.assertEquals[.qt.qetl.source.bare_from_in[.qt.qetl.source.bare_source];enlist `trade;
         "a bare table name in a query block is reported"]};
+
+/ #2490: every source defines its query with the whole path, as this tree's
+/ rule requires, so the reader must find that spelling - the \d form alone
+/ left it scanning nothing in any real source file.
+.qt.qetl.source.test_the_reader_finds_a_bare_name_in_a_full_path_query:{[t]
+    .qunit.assertEquals[.qt.qetl.source.bare_from_in[(".qpipe.source.bad.query:{[h;a;b]";"    h({[f;t] select from trade where time>=f};a;b)}")];enlist `trade;
+        "a full-path query reading a bare table is reported"]};
+
+.qt.qetl.source.test_the_reader_finds_every_source_files_query:{[t]
+    empty:.qt.qetl.source.source_files[] where 0=count each {.qt.qetl.source.query_block read0 ` sv `:src/etl/sources,x} each .qt.qetl.source.source_files[];
+    .qunit.assertEquals[empty;`symbol$();"the scan reads a query block in every source file, not nothing"]};
 
 .qt.qetl.source.test_the_reader_passes_the_backtick_form:{[t]
     .qunit.assertEquals[.qt.qetl.source.bare_from_in[.qt.qetl.source.ok_source];();
