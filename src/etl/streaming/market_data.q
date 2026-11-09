@@ -77,9 +77,8 @@
     .qetl.plant.with_flat select sym, source:venue, market:`crypto, source_time,
         bid_prices, bid_sizes, ask_prices, ask_sizes, clock:`venue from batch}
 
-/ The rows market_data is about to publish, held to the .qf.mkt checks (#944):
-/ a crossed book (bid at or through the ask) and a quote stale against the
-/ newest in its batch. And to what a book must be before ANY consumer reads
+/ The rows market_data is about to publish, held to the .qf.mkt check (#944)
+/ for a crossed book (bid at or through the ask). And to what a book must be before ANY consumer reads
 / it (#1021), judged here once rather than by each: a level 0 that is not a
 / price by .qf.mkt.level_ok (`bad_level), and a source_time further ahead of
 / this host than .qf.mkt.max_clock_lead (`bad_time). A book with an empty side is NOT a failure - the
@@ -87,9 +86,11 @@
 / word for it - and a wide spread is a thin market, not bad data, so neither
 / is withheld.
 / .
-/ Staleness is measured against the batch's own newest source_time, not the
-/ wall clock: a replayed or backfilled batch is old by design and must not
-/ read as a stale feed.
+/ A book's AGE is not judged here (#2456). It was, against the newest row of
+/ its own batch, and so the same book was withheld or published depending on
+/ which other venues' books the plant delivered with it; a series' own history
+/ would be forgotten by a restart instead. How old a book may be is each
+/ consumer's decision, already made by its max_age (.qf.mkt.reference_max_age).
 / @param rows market_data rows (sym, source, source_time, the four ladders, clock)
 / @return failures: check, status, detail, and `row`, the index in rows
 / @throws error when any row's clock is null or neither `venue nor `receipt (#1925): a mapping that did not stamp it is a bug, and the whole batch is withheld
@@ -108,22 +109,7 @@
     graded:.qf.mkt.check_market_data_quality[q;0w];
     bad:select from graded where status=`crossed;
     crossed:([] check:count[bad]#`crossed_book; status:bad`status; detail:.qf.util.full each bad; row:`long$bad`time);
-    / Staleness is per (sym, source), not per sym (#1050): a book replaces
-    / its own source's book only, so one fresh venue on a sym must not let
-    / another's ten-minute-old book through. The check groups by `sym`, so
-    / it is handed the pair as one symbol and the late rows are found by it.
-    pair:`$string[rows`sym],'"|",'string rows`source;
-    real:([] time:rows`source_time; sym:pair; bid_prices:rows`bid_prices;
-        bid_sizes:rows`bid_sizes; ask_prices:rows`ask_prices; ask_sizes:rows`ask_sizes);
-    / The reference is the newest quote that is not itself ahead of the clock
-    / (#1542): a future-dated row is withheld as bad_time below, and measuring
-    / the rest against it made every healthy row read as stale.
     ahead:where rows[`source_time]>.z.p+.qf.mkt.max_clock_lead;
-    sane:rows[`source_time] where not (til count rows) in ahead;
-    stale:.qf.mkt.check_stale_quotes[real;$[count sane;max sane;max rows`source_time];0D00:05];
-    late:where pair in exec sym from stale where status=`stale;
-    stale:([] check:count[late]#`stale_quote; status:count[late]#`stale;
-        detail:count[late]#enlist "older than the batch's newest quote by over 5 minutes"; row:late);
     / An empty ladder is a withdrawal, not a bad level: only a level that is
     / there and is not a price fails.
     off:{[px;sz] $[count px; not .qf.mkt.level_ok["f"$first px;"f"$first sz]; 0b]};
@@ -132,7 +118,7 @@
         detail:count[bad]#enlist "a level-0 price or size that is not positive and finite"; row:bad);
     timed:([] check:count[ahead]#`bad_time; status:count[ahead]#`future;
         detail:count[ahead]#enlist "source_time is further ahead of this host than .qf.mkt.max_clock_lead"; row:ahead);
-    crossed,stale,level,timed}
+    crossed,level,timed}
 
 \d .
 
