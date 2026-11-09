@@ -289,6 +289,16 @@ def test_a_path_that_cannot_be_written_is_a_refusal_not_a_traceback(tmp_path):
         table_export.export_table([{"a": 1}], tmp_path / "missing" / "out.csv")
 
 
+def test_a_list_column_is_written_to_csv_as_its_cell_text(tmp_path):
+    """#2517: CSV holds no nested data, and polars refused the whole file."""
+    target = tmp_path / "out.csv"
+    table_export.export_table([{"id": "s1", "datasets": ["fx_markout", "eq"]}], target)
+    assert target.read_text().splitlines() == ["id,datasets", 's1,"fx_markout, eq"']
+    parquet = tmp_path / "out.parquet"
+    table_export.export_table([{"id": "s1", "datasets": ["fx_markout"]}], parquet)
+    assert pl.read_parquet(parquet).to_dicts() == [{"id": "s1", "datasets": ["fx_markout"]}]
+
+
 # ---------------------------------------------------- schema_view, live meta
 
 

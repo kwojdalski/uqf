@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from uqs.cells import cell
 from uqs.paths import UqsError
 
 
@@ -21,6 +22,9 @@ def export_table(rows: Any, path: Path) -> None:
     needed). Anything else (a q scalar/atom from query(), e.g. `count t`)
     isn't rows, so it's rejected rather than silently wrapped into a bogus
     one-cell table.
+
+    CSV holds no nested value, so a list or struct column is written as the
+    text its table cell shows (#2517); Parquet keeps it nested.
     """
     import polars as pl
 
@@ -40,6 +44,10 @@ def export_table(rows: Any, path: Path) -> None:
     # a missing or unwritable directory is a refusal, not polars' traceback (#2606)
     try:
         if suffix == ".csv":
+            nested = [c for c, t in df.schema.items() if t.is_nested()]
+            df = df.with_columns(
+                pl.Series(c, [cell(v) for v in df[c].to_list()], dtype=pl.String) for c in nested
+            )
             df.write_csv(path)
         else:
             df.write_parquet(path)
