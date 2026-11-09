@@ -187,6 +187,40 @@ def check_passthrough(dataset: str, source: str, columns: Columns, definition: s
         )
 
 
+def check_reused_passthrough(
+    repo_root: Path, dataset: str, source: str, target: list[tuple[str, str]]
+) -> None:
+    """Refuse a passthrough from an existing `source` into `dataset` of another
+    shape (#2501) - #1593's check, for a source that is reused.
+
+    The passthrough declares its input as the dataset's shape (`target`: the
+    plant's definition, or --schema for a new table), `time` included,
+    and its example as the source's fixture, which the source's declared
+    `columns` and `types` describe. A source whose declaration this cannot read
+    is refused too: whether the two agree is then unknown, and a wrong guess
+    stops the whole tree loading."""
+    text = strip_q_comments((repo_root / SOURCE_DIR / f"{source}.q").read_text())
+    ns = re.escape(f".qpipe.source.{source}.")
+    names = re.search(rf"^{ns}columns\s*:\s*((?:`\w+)+)\s*$", text, re.MULTILINE)
+    types = re.search(rf'^{ns}types\s*:\s*(?:enlist\s*)?"([^"]*)"', text, re.MULTILINE)
+    want = _meta(target)
+    cols = names.group(1).strip("`").split("`") if names else []
+    chars = types.group(1) if types else ""
+    if not cols or len(cols) != len(chars):
+        raise UqsError(
+            f"cannot read source {source}'s declared columns and types, so whether a "
+            f"passthrough into {dataset} ({_shown(want)}) fits it is unknown - pass "
+            "--transform derive and map one to the other"
+        )
+    have = list(zip(cols, chars, strict=True))
+    if have != want:
+        raise UqsError(
+            f"source {source}'s columns ({_shown(have)}) are not {dataset}'s ({_shown(want)}), "
+            "so a passthrough cannot publish them - pass --transform derive and map one to "
+            "the other"
+        )
+
+
 def backfill_plan(
     repo_root: Path,
     name: str,
@@ -271,6 +305,16 @@ def backfill_plan(
         and dataset in (definitions or {})
     ):
         check_passthrough(dataset, source or name, shape, (definitions or {})[dataset])
+    if reuse_source and shared is None and (transform or "passthrough") == "passthrough":
+        target = (
+            definition_columns(definitions[dataset])
+            if definitions and dataset in definitions
+            else as_columns(shape)
+            if shape
+            else None
+        )
+        if target is not None:
+            check_reused_passthrough(repo_root, dataset, source or name, target)
     return worker.bounded_worker(
         name,
         dataset,

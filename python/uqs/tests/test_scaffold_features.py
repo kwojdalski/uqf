@@ -557,11 +557,12 @@ def test_a_transform_registered_under_transforms_is_loaded_before_workers():
 def test_a_twin_reuses_an_existing_source_without_columns_it_never_passed():
     """#1582: a twin's columns come from its job's table, not from --schema.
     When its source and table both exist already, nothing is shaped by them,
-    so they are not a reason to refuse the plan."""
+    so they are not a reason to refuse the plan. A derive: hdb_executions'
+    fixture is not executions' shape, so a passthrough is refused (#2501)."""
     plan = create_backfill.backfill_plan(
         UQF_ROOT, "exec_refill", None, None,
         width=None, source="hdb_executions", procname=None, transport=None, partition=None,
-        check=False, transform=None, start_with_all=False, twin_of="executions",
+        check=False, transform="derive", start_with_all=False, twin_of="executions",
         definitions=_plant(),
     )  # fmt: skip
     written = [str(a.path) for a in plan.actions]
@@ -605,3 +606,30 @@ def test_a_passthrough_from_a_new_source_of_the_targets_shape_is_planned():
 def test_a_derivation_between_two_shapes_is_still_planned():
     plan = _backfill_into_audit_t("sym:symbol, qty:long", "derive")
     assert plan.name == "audit_bf_backfill"
+
+
+def _second_worker(name: str, source: str, dataset: str, shape: str | None, transform=None):
+    return create_backfill.backfill_plan(
+        UQF_ROOT, name, dataset, shape,
+        width=None, source=source, procname=None, transport=None, partition="EURUSD",
+        check=False, transform=transform, start_with_all=False, definitions=_plant(),
+    )  # fmt: skip
+
+
+def test_a_passthrough_from_a_reused_source_into_another_shape_is_refused():
+    """#2501: over an existing source the shape check was skipped, and the
+    passthrough declared demo_deals' plant shape - `time` and all - against a
+    fixture with none, so the whole tree stopped loading."""
+    with pytest.raises(UqsError, match=r"source demo_deals's columns .*--transform derive"):
+        _second_worker("deals_eu", "demo_deals", "demo_deals", None)
+
+
+def test_a_passthrough_from_a_reused_source_of_the_targets_shape_is_planned():
+    shape = "sym:symbol, action:symbol, side:long, size:float, price:float, order_id:long, pip_factor:long"  # noqa: E501
+    plan = _second_worker("tape_copy", "demo_events", "tape_copy", shape)
+    assert plan.name == "tape_copy_backfill"
+
+
+def test_a_derivation_from_a_reused_source_is_still_planned():
+    plan = _second_worker("deals_eu", "demo_deals", "demo_deals", None, "derive")
+    assert plan.name == "deals_eu_backfill"
