@@ -652,7 +652,8 @@ scope, time bounds and the basis it rests on:
 Verification is read only, and proves it: the status directory, cursors,
 coverage ledger and the dataset's tables are snapshotted before and after the
 capture and must be equal. An empty window, a producer that cannot be captured
-(a job that subscribes has no page to fetch), one producer only, an unknown
+(a job that subscribes has no page to fetch), a backfill window that failed its
+fetch, readiness, transform or quality check, one producer only, an unknown
 cutoff or a check that did not run is `UNVERIFIED`, never `PASS`. A dataset with
 a single producer verifies without a second.
 

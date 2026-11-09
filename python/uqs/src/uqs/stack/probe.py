@@ -115,18 +115,20 @@ def probe_all(
 def attach_probe_column(
     rows: list[dict[str, str]], timeout: float, deadline: float | None
 ) -> list[str]:
-    """Probe every up process with a reported port, in place, and return the
-    ones that did not answer.
+    """Probe every up process with a port, in place, and return the ones that
+    did not answer.
 
-    Only a REPORTED port is probed: a configured one belongs to a process
-    that is down, which the Status column already says. The probe's timeout
+    A configured port is probed as well as a reported one: when lsof is
+    missing or fails, every up process's port comes from process.csv, and
+    that is still the port it was started on - skipping it would switch the
+    "did not answer" alarm off without a word (#2393). The probe's timeout
     is also capped by what is left of the command's own budget, so it cannot
     push `uqs status` past `--timeout`.
     """
     targets = {
         row["Process"]: int(row["Port"])
         for row in rows
-        if row["Status"] == "up" and row["PortSource"] == "reported" and row["Port"].isdigit()
+        if row["Status"] == "up" and row["Port"].isdigit()
     }
     if deadline is not None:
         timeout = min(timeout, max(0.0, deadline - time.monotonic()))

@@ -69,6 +69,15 @@
         "'2026-09-11 09:00:00'";
         "a q timestamp is rendered as a SQL DATETIME literal"]};
 
+.qt.qetl.io.odbc.test_a_float_keeps_its_value_whatever_the_display_precision:{[t]
+    / string formats with \P (7 digits): 1.23456789 came out 1.234568 (#2438)
+    v:1.23456789 123456789.5 1e-10 -0.1;
+    p:system"P";
+    .qunit.assertEquals[v="F"$.qetl.io.odbc.literal each v;1111b;"every float literal reads back as the float it was"];
+    .qunit.assertEquals[system"P";p;"and the session's precision is put back"];
+    .qunit.assertThrows[.qetl.io.odbc.literal;0n;"literal: a null or infinite float has no SQL rendering*";"a null float is refused"];
+    .qunit.assertThrows[.qetl.io.odbc.literal;-0w;"literal: a null or infinite float has no SQL rendering*";"so is an infinite one"]};
+
 / --- timestamp precision (#954) -------------------------------------------
 
 .qt.qetl.io.odbc.test_a_fractional_timestamp_keeps_its_microseconds:{[t]

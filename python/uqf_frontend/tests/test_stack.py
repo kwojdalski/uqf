@@ -6,6 +6,7 @@ uqs.paths itself rather than by literals that could drift from it.
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -145,10 +146,20 @@ def test_the_base_port_line_is_the_one_bootstrap_writes(tmp_path):
     paths = stack_paths.paths_for_root(root)
     env = build_env(paths, base_port=7123)
     setenv = tmp_path / "setenv.sh"
-    # As bootstrap writes it: one `export K="V"` line per variable.
-    setenv.write_text("\n".join(f'export {k}="{v}"' for k, v in env.items()) + "\n")
+    # As bootstrap writes it: one `export K=<shell-quoted V>` line per variable.
+    setenv.write_text("\n".join(f"export {k}={shlex.quote(v)}" for k, v in env.items()) + "\n")
     assert stack.generated_base_port(setenv) == 7123
     assert stack.generated_base_port(tmp_path / "absent.sh") is None
+
+
+def test_a_setting_is_read_back_unquoted_as_bash_would_read_it(tmp_path):
+    """#2394: setenv.sh shell-quotes each value."""
+    weird = "/data/st$HOME 'a' `x`"
+    setenv = tmp_path / "setenv.sh"
+    setenv.write_text(f"export UQF_STATUS_DIR={shlex.quote(weird)}\nexport QCMD=q\n")
+    assert stack.generated_setting(setenv, "UQF_STATUS_DIR") == weird
+    assert stack.generated_setting(setenv, "QCMD") == "q"
+    assert stack.generated_setting(setenv, "ABSENT") is None
 
 
 # ------------------------------------------- facts as current as their files (#2027)

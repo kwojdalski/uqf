@@ -164,14 +164,21 @@ def needed_hooks(paths: list[str], scopes: Scopes | None = None) -> list[str]:
 ATTEST = "uv run python scripts/dev/attest_kdbx.py"
 
 
-def git(*args: str) -> str:
-    return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout
+def git(*args: str, cwd: Path | None = None) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=cwd, capture_output=True, text=True, check=True
+    ).stdout
 
 
-def changed_paths(base: str, head: str) -> list[str]:
+def changed_paths(base: str, head: str, cwd: Path | None = None) -> list[str]:
     """What `head` changes since its merge base with `base` - the three-dot
-    diff, so a commit on `base` the branch does not have is not counted."""
-    return git("diff", "--name-only", f"{base}...{head}").split()
+    diff, so a commit on `base` the branch does not have is not counted.
+
+    A rename is its deletion and its addition (`--no-renames`), so a judged
+    file moved out of scope still counts; `-z` gives each name as it is,
+    not C-quoted, so a non-ASCII name still matches a scope (#2406)."""
+    out = git("diff", "--name-only", "--no-renames", "-z", f"{base}...{head}", cwd=cwd)
+    return [p for p in out.split("\0") if p]
 
 
 def parse_trailer(line: str, tree: str) -> tuple[set[str], str, str] | None:

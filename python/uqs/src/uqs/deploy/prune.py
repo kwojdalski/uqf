@@ -56,7 +56,9 @@ LIST_PY = r"""
 import json, os, sys
 import re
 root, cur, runtimes, kinds = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4:]
-current = os.path.basename(os.readlink(cur)) if os.path.islink(cur) else ""
+# normpath: a link ending in "/" names its release, as `basename "$(readlink)"`
+# says everywhere else (#2445)
+current = os.path.basename(os.path.normpath(os.readlink(cur))) if os.path.islink(cur) else ""
 named = re.compile(re.escape(runtimes) + r"/((?:" + "|".join(kinds)
                    + r")/[0-9a-f]{64})(?![0-9a-f])")
 out = {"current": current, "releases": [], "runtimes": []}

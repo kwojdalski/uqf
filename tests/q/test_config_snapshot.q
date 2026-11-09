@@ -24,8 +24,37 @@
 
 .qt.qetl.snapshot.test_the_digest_of_a_content_is_a_reference_value:{[t]
     c:.qt.qetl.snapshot.content[];
-    .qunit.assertEquals[.qetl.snapshot.digest[`markout;c];`2e4f42b4125b85e9177f088201ddb006;"the md5 of the kind and the rendered content"];
-    .qunit.assertEquals[.qetl.snapshot.id_of[`markout;c];`markout_2e4f42b4125b85e9;"the id is the kind and the first 16 digits"]};
+    / worked by hand: signed type tags, counted strings, symbols and vectors, keys in order
+    text:"99:{-11:1:a=16:2:0D00:00:10.000000000,0D00:00:01.000000000;-11:1:b=-7:2;",
+        "-11:5:rates=99:{-11:3:JPY=11:2:1:a,6:USDJPY;-11:4:USDT=-9:1}}";
+    .qunit.assertEquals[.qetl.snapshot.render c;text;"the rendering rules"];
+    .qunit.assertEquals[.qetl.snapshot.digest[`markout;c];`c64c37033bca3595990d45702ba19c38;"the md5 of the kind and the rendered content"];
+    .qunit.assertEquals[.qetl.snapshot.id_of[`markout;c];`markout_c64c37033bca3595;"the id is the kind and the first 16 digits"]};
+
+.qt.qetl.snapshot.test_configurations_that_differ_only_in_punctuation_do_not_share_a_digest:{[t]
+    pairs:((`fee`venue!("1";"lmax");enlist[`fee]!enlist "1;venue=10:lmax");
+        (enlist[`datasets]!enlist `fx_markout`fx_quotes;enlist[`datasets]!enlist enlist `$"fx_markout,fx_quotes");
+        (enlist[`venues]!enlist `symbol$();enlist[`venues]!enlist enlist `);
+        (enlist[`n]!enlist 1;enlist[`n]!enlist enlist 1);
+        (enlist[`px]!enlist `float$();enlist[`px]!enlist enlist 0n));
+    same:{[p] .qetl.snapshot.digest[`k;p 0]~.qetl.snapshot.digest[`k;p 1]} each pairs;
+    .qunit.assertEquals[same;00000b;"a string, a symbol list, an empty list, an atom and a null each tell their configuration apart (#2421)"];
+    c:pairs[1;0];
+    d:pairs[1;1];
+    i1:.qetl.snapshot.record[`cost;c;"first config"];
+    i2:.qetl.snapshot.record[`cost;d;"second, different config"];
+    .qunit.assertTrue[not i1~i2;"the second configuration is a new snapshot"];
+    .qunit.assertEquals[.qetl.snapshot.content_of i2;d;"and its content is its own"]};
+
+.qt.qetl.snapshot.test_a_row_recorded_under_the_first_rendering_still_verifies:{[t]
+    c:.qt.qetl.snapshot.content[];
+    / the digest the first rendering gave this content, recorded before #2421
+    row:([] snapshot_id:enlist `markout_2e4f42b4125b85e9; kind:enlist `markout; digest:enlist `2e4f42b4125b85e9177f088201ddb006;
+        content:enlist -8!c; created_at:enlist .z.p; actor:enlist `alice; reason:enlist "before #2421");
+    .qetl.job.bounded.state.durable_set[.qetl.snapshot.path[];row];
+    ![`.;();0b;enlist `etl_config_snapshots];
+    .qunit.assertEquals[.qetl.snapshot.reload[];`etl_config_snapshots;"the store loads"];
+    .qunit.assertEquals[.qetl.snapshot.content_of`markout_2e4f42b4125b85e9;c;"and the old snapshot resolves"]};
 
 .qt.qetl.snapshot.test_key_order_and_console_precision_do_not_change_the_digest:{[t]
     c:.qt.qetl.snapshot.content[];

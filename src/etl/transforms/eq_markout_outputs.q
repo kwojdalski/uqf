@@ -48,8 +48,10 @@
 / calendar_from..calendar_to the declared table is data, but scoring does not stop at its end
 / (#2183): the rule that generated it is applied on demand to the days a batch of fills
 / reaches (available below), so a fill of 2029 or 2035 is in session at the right UTC
-/ instants. The rule has one hard horizon, calendar_horizon, past which scoring refuses
-/ the batch with a named error - a fill is never marked unavailable for want of a calendar.
+/ instants. Before calendar_from it is applied the same way (#2419), so a backfilled fill of
+/ 2025 is in session too. The rule has two hard bounds, calendar_floor (2007, when its
+/ daylight-time dates came in) and calendar_horizon, outside which scoring refuses the batch
+/ with a named error - a fill is never marked unavailable for want of a calendar.
 / Holidays and early closes are still unknown (the paragraph above). A site with another calendar declares its own sessions table in a
 / spec of its own; this one is data, not logic.
 / .
@@ -77,6 +79,11 @@
 / The last date the US session rule is trusted to: scoring a fill past it throws (available).
 .qpipe.transform.eq_markout_outputs.calendar_horizon:2099.12.31
 
+/ The first date the US session rule is trusted from: the daylight-time dates it applies
+/ (second Sunday of March to first Sunday of November) are the Energy Policy Act's, in force
+/ from 2007. Scoring a fill before it throws (available), rather than shift its session by an hour.
+.qpipe.transform.eq_markout_outputs.calendar_floor:2007.01.01
+
 / The US regular session of each weekday in a range, as UTC instants: 09:30 to 16:00
 / New York, which is 14:30 to 21:00 UTC in standard time and 13:30 to 20:00 in daylight
 / time. Daylight time runs from the second Sunday of March to the first Sunday of
@@ -103,12 +110,14 @@
 
 / The domain's availability rule over a calendar that reaches as far as the fills do: the declared
 / sessions, plus regular_sessions for every date between the end of the declared table and the
-/ latest instant the frame reads. The declared table is untouched, so the spec and its snapshot id
-/ are what they were; for frames inside it the result is the domain's own.
+/ latest instant the frame reads, and for every date between the earliest instant it reads and the
+/ start of the declared table (#2419: backfilled history before calendar_from). The declared table
+/ is untouched, so the spec and its snapshot id are what they were; for frames inside it the result
+/ is the domain's own.
 / @param spec the validated spec, at least sessions and halts
 / @param fr the core's frame: t0 and t1 are read
 / @return a boolean per frame row
-/ @throws if a frame instant lies after calendar_horizon
+/ @throws if a frame instant lies after calendar_horizon or before calendar_floor
 / @eg .qpipe.transform.eq_markout_outputs.available[.qpipe.transform.markout_core.validate[.qpipe.transform.eq_domain.domain;.qpipe.transform.eq_markout_outputs.job_spec];([] sym:enlist `AAPL; t0:enlist 2035.03.12D13:30:00; t1:enlist 2035.03.12D13:30:05)]  ->  enlist 1b
 .qpipe.transform.eq_markout_outputs.available:{[spec;fr]
     hi_t:max (fr`t0)|fr`t1;
@@ -116,9 +125,16 @@
     hz:.qpipe.transform.eq_markout_outputs.calendar_horizon;
     if[(not null hi_t) and hi_d>hz;
         '"eq_markout_outputs: a fill at ",string[hi_t]," is past the session calendar horizon ",string[hz],": scoring it would mark it unavailable for want of a calendar"];
+    lo_t:min (fr`t0)&fr`t1;
+    lo_d:`date$lo_t;
+    fl:.qpipe.transform.eq_markout_outputs.calendar_floor;
+    if[(not null lo_t) and lo_d<fl;
+        '"eq_markout_outputs: a fill at ",string[lo_t]," is before the session calendar floor ",string[fl],": scoring it would mark it unavailable for want of a calendar"];
     last_d:.qpipe.transform.eq_markout_outputs.calendar_to;
     ext:$[(null hi_t) or hi_d<=last_d; 0#spec`sessions; .qpipe.transform.eq_markout_outputs.regular_sessions[last_d+1;hi_d]];
-    .qpipe.transform.eq_domain.available[@[spec;`sessions;,;ext];fr]}
+    first_d:.qpipe.transform.eq_markout_outputs.calendar_from;
+    pre:$[(null lo_t) or lo_d>=first_d; 0#spec`sessions; .qpipe.transform.eq_markout_outputs.regular_sessions[lo_d;first_d-1]];
+    .qpipe.transform.eq_domain.available[@[spec;`sessions;,;pre,ext];fr]}
 
 / The equity domain as markout_core.calc takes it for scoring: eq_domain.domain with the
 / calendar-extending availability rule above. Everything else about it is the domain's own.

@@ -1268,6 +1268,23 @@ def test_empty_cells_group_at_one_end_rather_than_sorting_as_empty_string():
     assert [i["v"] for i in sorting._sorted_items(items, "v", reverse=False)] == ["a", "b", ""]
 
 
+def _by(values: list[str]) -> list[str]:
+    return [i["v"] for i in sorting._sorted_items([{"v": v} for v in values], "v", False)]
+
+
+def test_a_mixed_column_sorts_as_text_not_with_text_as_zero():
+    """#2415: numeric order only when every non-empty cell is a finite number."""
+    assert _by(["beta", "10", "alpha", "-5", "2"]) == ["-5", "10", "2", "alpha", "beta"]
+    assert _by(["rdb1", "infinity", "hdb1", "nan"]) == ["hdb1", "infinity", "nan", "rdb1"]
+    assert _by(["3", "", "-1.5", "10"]) == ["-1.5", "3", "10", ""]
+
+
+def test_a_nan_cell_still_gives_one_total_order():
+    rows = ["3", "nan", "1", "2", "0"]
+    once = _by(rows)
+    assert once == _by(list(reversed(rows))) == sorted(rows, key=str.casefold)
+
+
 def test_sorting_is_a_no_op_without_the_option():
     items = _procs()
     assert sorting._sorted_items(items, None, reverse=False) == items

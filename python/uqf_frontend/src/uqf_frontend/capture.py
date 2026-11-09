@@ -55,6 +55,11 @@ class Sink(Protocol):
 
     def append(self, process: str, rows: list[dict[str, Any]]) -> None: ...
 
+    def last_watermark(self, process: str) -> int | None:
+        """The ``time_ns`` of the newest row already appended for `process`,
+        or None - what a new :class:`UsageCapture` resumes from (#2413)."""
+        ...
+
 
 class JsonlSink:
     """Append rows as JSON Lines, one file per process.
@@ -75,6 +80,45 @@ class JsonlSink:
             for row in rows:
                 fh.write(json.dumps(row, default=str) + "\n")
 
+    def last_watermark(self, process: str) -> int | None:
+        """The last complete line's ``time_ns``: ``USAGE_SINCE`` returns rows
+        in time order, so the file's last row is the newest captured. Read
+        from the end, so an archive of any size costs one chunk; a torn last
+        line - a write cut short - is skipped, and its row fetched again."""
+        path = self._dir / f"usage-{process}.jsonl"
+        if not path.is_file():
+            return None
+        with path.open("rb") as fh:
+            end = fh.seek(0, 2)
+            tail = b""
+            pos = end
+            while pos > 0:
+                step = min(_TAIL_CHUNK, pos)
+                pos -= step
+                fh.seek(pos)
+                tail = fh.read(step) + tail
+                lines = tail.split(b"\n")
+                # the first piece may be the end of a line that starts earlier
+                for line in reversed(lines if pos == 0 else lines[1:]):
+                    stamp = _time_ns(line)
+                    if stamp is not None:
+                        return stamp
+                tail = lines[0] if pos > 0 else b""
+        return None
+
+
+#: How much of a JSONL archive's end `last_watermark` reads at a time.
+_TAIL_CHUNK = 64 * 1024
+
+
+def _time_ns(line: bytes) -> int | None:
+    """One archived row's ``time_ns``, or None for a torn or foreign line."""
+    try:
+        stamp = json.loads(line).get("time_ns")
+        return None if stamp is None else int(stamp)
+    except ValueError, TypeError, AttributeError:
+        return None
+
 
 class MemorySink:
     """A :class:`Sink` for tests."""
@@ -87,6 +131,10 @@ class MemorySink:
         if process in self.fail_on:
             raise OSError(f"simulated sink failure for {process}")
         self.rows.setdefault(process, []).extend(rows)
+
+    def last_watermark(self, process: str) -> int | None:
+        stamps = [int(r["time_ns"]) for r in self.rows.get(process, []) if "time_ns" in r]
+        return max(stamps, default=None)
 
 
 @dataclass
@@ -128,7 +176,13 @@ class UsageCapture:
         self._watermarks: dict[str, int] = {}
 
     def watermark(self, process: str) -> int:
-        return self._watermarks.get(process, self.EPOCH)
+        """The newest row captured for `process`: this object's own, or - the
+        first time it is asked, as after an API restart - the sink's, so a
+        restart does not append every row still in memory again (#2413)."""
+        if process not in self._watermarks:
+            recovered = self._sink.last_watermark(process)
+            self._watermarks[process] = self.EPOCH if recovered is None else recovered
+        return self._watermarks[process]
 
     def capture_once(self) -> CaptureResult:
         """One pass over the fleet. Safe to call repeatedly.

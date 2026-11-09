@@ -700,7 +700,9 @@ then evicts it; - `on_timer`, `now` (`.z.p`) and the unwired `publish`.
 Each of `event_time` through `expire_after` (#952) is off until declared, so a
 declaration that names none of them behaves exactly as `crypto_markout` does.
 `define` also installs `completed` (identities scored, while remembered) and
-`expired` (events given up on, with `expired_at` and `reason`).
+`expired` (events given up on, with `expired_at` and `reason`). An event that
+arrives with a null `event_time` has no horizon: `on_batch` never buffers it,
+but moves it to `expired` with reason `no_event_time` and logs it (#2424).
 
 Events are evicted only after a successful publish, so a publish that throws
 leaves them queued for the next tick. On every tick the history is trimmed to
@@ -729,7 +731,7 @@ fixed-width time windows: OHLC, VWAP and volume per interval
   | `events`     | yes                                     | symbol                   | the tickerplant table aggregated                                                                                                                                                                                                                                              | not a symbol                                                                                                                                            |
   | `transform`  | yes                                     | symbol                   | a `.qetl.transform` with ONE input, the events plus a `bar_start` column the kind adds; one row per group per window out, carrying the grouping columns and `bar_start`. A backfill twin applies the same one (cutting the window itself with `.qetl.job.stream.bars.assign`) | not registered or not one input; an input without the `by` columns, `event_time` and `bar_start`, or an output without the `by` columns and `bar_start` |
   | `outputs`    | yes                                     | symbol list of one table | the bar table                                                                                                                                                                                                                                                                 | not a one-table symbol list; `publishes` (retired)                                                                                                      |
-  | `width`      | yes                                     | timespan                 | the window length. Windows are half-open `[bar_start, bar_start+width)` on the event time; a row on a boundary opens the window that starts there. A window with no rows has no bar                                                                                           | not a positive timespan                                                                                                                                 |
+  | `width`      | yes                                     | timespan                 | the window length. Windows are half-open `[bar_start, bar_start+width)` on the event time; a row on a boundary opens the window that starts there. A window with no rows has no bar                                                                                           | not a positive timespan, or one that does not divide a day (a window would straddle midnight, #2422)                                                    |
   | `lateness`   | unless `event_time` is `time` (then 0D) | timespan, `0D` for none  | a window closes, and its bar is published once, when its end plus `lateness` has passed                                                                                                                                                                                       | not a timespan of zero or more                                                                                                                          |
   | `period`     | yes                                     | timespan                 | how often closed windows are looked for                                                                                                                                                                                                                                       | as for a streaming job                                                                                                                                  |
   | `by`         | no                                      | symbols, default `sym`   | the grouping columns                                                                                                                                                                                                                                                          | a column the transform's input or output does not carry                                                                                                 |
@@ -738,11 +740,14 @@ fixed-width time windows: OHLC, VWAP and volume per interval
 Besides these, it accepts the passthrough options (see the streaming job).
 
 A row arriving before its window closes amends it; one arriving after is
-dropped, logged, and kept in `.qpipe.job.<name>.dropped` with its reason. At end
-of day (`on_endofday`, #943) every window of the day that ended is closed,
-whatever its lateness. The job replays its log and restores from its own bars
-(`restore_from`), so a restart rebuilds the open windows and publishes none that
-already went out. Bars are published before the windows are evicted, so a
+dropped, logged, and kept in `.qpipe.job.<name>.dropped` with its reason. On the
+plant's own `time` (the default `event_time`) a row is judged by whether its
+window has closed, which the job remembers for a day, not by the job's clock
+against the window's end (#2423): the plant stamps a row before the job sees it.
+At end of day (`on_endofday`, #943) every window of the day that ended is
+closed, whatever its lateness. The job replays its log and restores from its own
+bars (`restore_from`), so a restart rebuilds the open windows and publishes none
+that already went out. Bars are published before the windows are evicted, so a
 publish that throws is retried on the next tick. `define` installs `pending`,
 `closed`, `dropped`, `publish`, `now`, `on_batch`, `close_ready[now]`,
 `on_timer` and `on_endofday` in `.qpipe.job.<name>`.

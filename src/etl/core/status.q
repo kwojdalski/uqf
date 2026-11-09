@@ -226,7 +226,7 @@
     .qetl.status.require_transition[.qetl.status.previous_state[instance_id];state];
     dir:.qetl.status.status_dir[];
     / mkdir -p is idempotent, and cheaper than checking first.
-    system"mkdir -p ",dir;
+    system"mkdir -p ",.qetl.job.bounded.state.shell_word dir;
     run:@[{.qetl.run.current[]};::;{0Ng}];
     / one value per .qetl.status.fields, in its order
     values_:(worker;instance_id;state;spec`source_version;
@@ -239,7 +239,7 @@
     (hsym `$tmp) 0: enlist .j.j .qetl.status.fields!values_;
     / atomic on the same filesystem, so a polling reader sees the old file or
     / the new one, never a partial write
-    system"mv ",tmp," ",target;
+    system"mv ",.qetl.job.bounded.state.shell_word[tmp]," ",.qetl.job.bounded.state.shell_word target;
     target}
 
 \d .

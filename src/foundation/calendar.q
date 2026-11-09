@@ -75,6 +75,31 @@
     off:.qf.px.holidays_of[ccys;calendars];
     (not (.qf.px.weekday[d]) in weekend) and not d in off}
 
+/ Private: the first date at or after `d`, moving by `step` days, that `good`
+/ accepts - refused by name rather than searched for forever (#2447). The
+/ search stops at ten years: no real calendar goes that long without a
+/ business day, so only a weekend of all seven days or holidays covering
+/ every date reach the limit.
+/ @param fn the calling function's name, for the message
+/ @param d the date to start from, itself a candidate
+/ @param step 1 to search forward, -1 back
+/ @param good a business-day test, date -> boolean
+/ @param ccys the currencies, for the message
+/ @return the business day found
+/ @throws error when none lies within ten years (3660 days)
+/ @private
+.qf.px.seek_business_day:{[fn;d;step;good;ccys]
+    limit:3660;
+    at:d;
+    tried:0;
+    while[(not good at) and tried<limit;
+        at+:step;
+        tried+:1];
+    if[not good at;
+        '"" sv (fn;": no business day in ";", " sv string (),ccys;" within ";string limit;
+            " days of ";string d;" - the weekend and holidays leave none")];
+    at}
+
 / Roll `d` onto a joint business day.
 / .
 / `none` leaves it; `following` moves forward to the next business day;
@@ -86,16 +111,17 @@
 / @param calendars dict currency -> holiday dates
 / @param weekend the weekend days, e.g. `sat`sun
 / @return the adjusted date
-/ @throws error naming an unknown roll
+/ @throws error naming an unknown roll, or the currencies when no business
+/   day lies within ten years (#2447)
 / @eg .qf.px.adjust[2026.05.31;`modified_following;`EUR`USD;`EUR`USD!(();());`sat`sun]  -> 2026.05.29
 .qf.px.adjust:{[d;roll;ccys;calendars;weekend]
     if[not roll in .qf.px.rolls; '"adjust: roll must be one of ",(", " sv string .qf.px.rolls),", got ",string roll];
     if[roll=`none; :d];
     good:.qf.px.is_business_day[;ccys;calendars;weekend];
     step:$[roll=`preceding; -1; 1];
-    moved:{[step;day] day+step}[step]/[{[good;day] not good day}[good];d];
+    moved:.qf.px.seek_business_day["adjust";d;step;good;ccys];
     if[(roll=`modified_following) and not (`month$moved)=`month$d;
-        moved:{[day] day-1}/[{[good;day] not good day}[good];d]];
+        moved:.qf.px.seek_business_day["adjust";d;-1;good;ccys]];
     moved}
 
 / Add `n` joint business days to `d`: each day after `d` that is a business
@@ -106,6 +132,8 @@
 / @param calendars dict currency -> holiday dates
 / @param weekend the weekend days
 / @return the date `n` business days after `d`
+/ @throws error naming the currencies when no business day lies within
+/   ten years (#2447)
 / @eg .qf.px.add_business_days[2026.09.18;2;`EUR`USD;`EUR`USD!(();());`sat`sun]  -> 2026.09.22
 .qf.px.add_business_days:{[d;n;ccys;calendars;weekend]
     if[n<0; '"add_business_days: n must not be negative"];
@@ -113,8 +141,8 @@
     left:n;
     at:d;
     while[left>0;
-        at+:1;
-        if[good at; left-:1]];
+        at:.qf.px.seek_business_day["add_business_days";at+1;1;good;ccys];
+        left-:1];
     at}
 
 / Add `n` months to a date, keeping the day of the month where the target
@@ -145,7 +173,10 @@
 / missing or malformed - and the two calendar sets every date function uses,
 / derived here once so no function decides them for itself (#1024):
 / count_ccys, what the spot lag counts business days on, and settle_ccys,
-/ what a value date must be a business day in.
+/ what a value date must be a business day in. The weekend is taken with
+/ (),: a one-day weekend may be an atom, and indexing one was 'type. One of
+/ every day is refused: it leaves no business day, and adjust and
+/ add_business_days would search for one forever (#2390).
 / @return dict pair, ccys, spot_lag, roll, eom, weekend, settle_via,
 /   count_ccys, settle_ccys
 / @private
@@ -158,10 +189,11 @@
     if[not 99h=type c; '"calendar: ",string[p],"'s conventions must be a dictionary"];
     if[count missing:.qf.px.convention_keys where not .qf.px.convention_keys in key c;
         '"calendar: ",string[p],"'s conventions are missing ",", " sv string missing];
-    if[not -7h=type c`spot_lag; '"calendar: ",string[p],"'s spot_lag must be a long from 0 to 5"];
-    if[not c[`spot_lag] within 0 5; '"calendar: ",string[p],"'s spot_lag must be a long from 0 to 5"];
-    if[count bad:(c`weekend) where not (c`weekend) in .qf.px.weekdays;
+    if[not $[-7h=type c`spot_lag; c[`spot_lag] within 0 5; 0b]; '"calendar: ",string[p],"'s spot_lag must be a long from 0 to 5"];
+    wk:(),c`weekend;
+    if[count bad:wk where not wk in .qf.px.weekdays;
         '"calendar: ",string[p],"'s weekend has unknown day(s) ",", " sv string bad];
+    if[all .qf.px.weekdays in wk; '"calendar: ",string[p],"'s weekend leaves no business day"];
     c:.qf.px.convention_defaults,c;
     via:c`settle_via;
     if[not -11h=type via; '"calendar: ",string[p],"'s settle_via must be a currency symbol, or ` for none"];
@@ -172,7 +204,7 @@
     count_ccys:$[null via; ccys; ccys except via];
     settle_ccys:$[null via; ccys; distinct ccys,via];
     `pair`ccys`spot_lag`roll`eom`weekend`settle_via`count_ccys`settle_ccys!(
-        p;ccys;c`spot_lag;c`roll;c`eom;(),c`weekend;via;count_ccys;settle_ccys)}
+        p;ccys;c`spot_lag;c`roll;c`eom;wk;via;count_ccys;settle_ccys)}
 
 / The spot date a trade date settles on, and why.
 / .

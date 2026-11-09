@@ -15,6 +15,13 @@ def _tables(paths: UqsPaths, root: Path | None) -> dict[str, plant_metadata.Tabl
     return {**meta.vendored(paths.torqapphome / "database.q"), **meta.own()}
 
 
+def plant_shapes(paths: UqsPaths, root: Path | None = None) -> dict[str, plant_metadata.Table]:
+    """{table: what q evaluated it to}, the tree at `root`'s (default: the
+    tree's) and the vendored starter pack's: columns, what each list column
+    holds and the sort rule - what `--schema-from` copies (#2450)."""
+    return _tables(paths, root)
+
+
 def plant_definitions(paths: UqsPaths, root: Path | None = None) -> dict[str, str]:
     """{table: its `name:([]...)` definition}, the tree at `root`'s (default:
     the tree's) and the vendored starter pack's - what a normalizer's sources are read from."""

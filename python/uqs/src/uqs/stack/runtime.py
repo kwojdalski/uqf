@@ -8,6 +8,7 @@ still being correct)."""
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import socket
 import subprocess
@@ -151,8 +152,10 @@ def write_setenv(
 
     # torq.sh unconditionally sources $SETENV (defaulting to lib/torq/setenv.sh,
     # which would overwrite TORQAPPHOME/TORQPROCESSES/etc back to lib/torq's
-    # own defaults) - generate our own and point SETENV at it instead.
-    setenv_lines = [f'export {k}="{v}"' for k, v in env.items()]
+    # own defaults) - generate our own and point SETENV at it instead. Each
+    # value shell-quoted, as deploy.env's are: torq.sh sources this file, and
+    # a `$` or backtick in a path or QCMD must not be expanded or run (#2394).
+    setenv_lines = [f"export {k}={shlex.quote(v)}" for k, v in env.items()]
     generated.write_text(target, "\n".join(setenv_lines) + "\n")
     env["SETENV"] = str(target)
     return env

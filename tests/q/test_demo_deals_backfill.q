@@ -434,6 +434,14 @@
     .qunit.assertTrue[(e like "*missing -version*") and e like "*declares no default source_version*";
         "a restatable source's release is never guessed"]};
 
+/ A -version given with nothing after it (`-version $V`, V unset) is not an absent
+/ one (#2405): it fell through to the declared default and filed coverage under it.
+.qt.qpipe.job.demo_deals_backfill.test_a_command_line_with_an_empty_version_is_refused:{[t]
+    .qunit.assertThrows[.qetl.job.bounded.spec_from_flags;
+        .Q.opt ("-worker";"demo_events_backfill";"-from";"2026.09.11";"-to";"2026.09.12";"-version");
+        "backfill: -version is given with no value*";
+        "refused by name, though the worker declares a default"]};
+
 .qt.qpipe.job.demo_deals_backfill.test_a_command_line_missing_flags_names_every_one:{[t]
     .qunit.assertThrows[.qetl.job.bounded.spec_from_flags;
         enlist[`worker]!enlist enlist "demo_deals_backfill";

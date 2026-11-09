@@ -787,13 +787,18 @@ def test_the_converted_status_and_interval_modules_work(interp, tmp_path, capsys
     out = tmp_path / "portable"
     corpus = nested_corpus()
     root = tmp_path / "nested"
-    for rel in ("src/etl/core/status.q", "src/etl/core/intervals.q"):
+    for rel in (
+        "src/etl/core/status.q",
+        "src/etl/core/intervals.q",
+        "src/etl/core/backfill_state.q",
+    ):
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text(corpus[rel], encoding="utf-8")
     code, report = _run(
         root,
         "src/etl/core/status.q",
         "src/etl/core/intervals.q",
+        "src/etl/core/backfill_state.q",
         "--out",
         str(out),
         "--check",

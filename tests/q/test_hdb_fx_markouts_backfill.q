@@ -161,7 +161,7 @@
 .qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb:{[f]
     had:{[nm] $[nm in key `.; (1b;get nm); (0b;::)]} each `executions`market_data;
     `executions set update date:`date$source_time from .qpipe.source.hdb_fx_markouts.raw_executions[];
-    `market_data set .qt.support.stand_in_market_data .qpipe.source.hdb_fx_markouts.raw_market_data[];
+    `market_data set .qt.support.stand_in_market_data update market:`fx from .qpipe.source.hdb_fx_markouts.raw_market_data[];
     `.qt.qpipe.job.hdb_fx_markouts_backfill.sent set ();
     r:@[f;::;{[e] `threw,e}];
     {[nm;k] $[first k; nm set last k; ![`.;();0b;enlist nm]]}'[`executions`market_data;had];
@@ -314,8 +314,17 @@
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qpipe.source.hdb_fx_markouts.complete_through[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb]};
     .qunit.assertEquals[r;2026.09.17D10:00:25-0D00:00:10;"the last book is at 10:00:25 and the furthest horizon is 10s"]};
 
+.qt.qpipe.job.hdb_fx_markouts_backfill.test_complete_through_reads_only_the_fx_books:{[t]
+    / the FX feed stopped at 10:00:25 while the crypto recorder kept landing until 14:00 (#2416)
+    f:{`market_data set .qt.support.stand_in_market_data ([] source_time:2026.09.17D10:00:25 2026.09.17D14:00:00;
+            sym:(`EURUSD;`$"BTC-USDT"); source:`a`binance; market:`fx`crypto; bid:1.1 62000f; ask:1.1002 62010f; clock:2#`venue);
+        .qpipe.source.hdb_fx_markouts.complete_through[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb]};
+    `.qt.qpipe.job.hdb_fx_markouts_backfill.mixed set f;
+    r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qt.qpipe.job.hdb_fx_markouts_backfill.mixed[]};
+    .qunit.assertEquals[r;2026.09.17D10:00:15;"the newest FX book less the furthest horizon, not the newest crypto one"]};
+
 .qt.qpipe.job.hdb_fx_markouts_backfill.test_an_hdb_without_books_vouches_for_nothing:{[t]
-    f:{`market_data set 0#.qt.support.stand_in_market_data .qpipe.source.hdb_fx_markouts.raw_market_data[];
+    f:{`market_data set 0#.qt.support.stand_in_market_data update market:`fx from .qpipe.source.hdb_fx_markouts.raw_market_data[];
         .qpipe.source.hdb_fx_markouts.complete_through[.qt.qpipe.job.hdb_fx_markouts_backfill.hdb]};
     `.qt.qpipe.job.hdb_fx_markouts_backfill.empty set f;
     r:.qt.qpipe.job.hdb_fx_markouts_backfill.with_hdb {.qt.qpipe.job.hdb_fx_markouts_backfill.empty[]};

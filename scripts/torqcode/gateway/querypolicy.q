@@ -124,6 +124,13 @@ resolvepolicy:{[policies;caps;table;roles]
 / @eg .checkinputs.requestspan[2026.01.01;2026.01.01]  ->  1D00:00:00.000000000
 requestspan:{[s;e] ((`timestamp$e)+$[-14h=type e;1D;0D])-`timestamp$s}
 
+/ Whether a request bound is a real time: not null and not infinite. TorQ's
+/ own checks accept 0Np and -0Wp, and either makes requestspan null or wrap
+/ negative, which no span limit catches - while getdata reads `time within`
+/ such a bound as the table's whole history (#2443).
+/ @eg .checkinputs.finitebound each (2026.01.01D00:00;0Np;-0Wp;0Nd;0Wd)  ->  10000b
+finitebound:{[x] t:`timestamp$x; not (null t)|(abs `long$t)>=0W-1}
+
 / Private: whether one getdata filter pair keeps a column to the values it
 / names - (=;v) or (in;v). A not form, a comparison, within and like do not.
 narrows:{[pair] any (first pair)~/:(=;in)}
@@ -171,8 +178,11 @@ checkrequired:{[required;instcol;dict]
 / @return the request, with timeout and querypolicy set
 checkrequest:{[policy;instcol;dict]
     t:string dict`tablename;
+    if[not all finitebound each dict`starttime`endtime;
+        '"querypolicy: ",t," needs a finite starttime and endtime - a null or infinite bound covers the table's whole history"];
     span:requestspan[dict`starttime;dict`endtime];
-    if[span>policy`maxrange;
+    / within, not >: a null or negative span is never inside the policy (#2443)
+    if[not span within (0D;policy`maxrange);
         '"querypolicy: ",t," allows at most ",string[policy`maxrange]," per request and this one covers ",
             string[span]," - narrow starttime/endtime or split the request"];
     checkrequired[policy`requiredfilters;instcol;dict];

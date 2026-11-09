@@ -15,7 +15,8 @@ lib/VENDORED.toml) at the commit, into a temporary repository, and:
   2. rewrites lib/.vendored/TREE.tsv (every file's mode, blob and path) and
      the tree's `commit`, `upstream_tree`, `files` and `digest` in
      lib/VENDORED.toml;
-  3. deletes lib/.vendored/TREE.drift.tsv: the tree is upstream's again.
+  3. deletes lib/.vendored/TREE.drift.tsv and the table's `drift_digest`:
+     the tree is upstream's again.
 
 Commit the tree, the listing and the record together, in one reviewed
 commit; `python3 scripts/gates/check.py vendored` then passes. To vendor a
@@ -128,6 +129,17 @@ def set_fields(record: str, name: str, fields: dict[str, str | int]) -> str:
     return record[: head.end()] + body + record[end:]
 
 
+def drop_field(record: str, name: str, key: str) -> str:
+    """`record` without `key`'s line in its [tree.NAME] table, if it has one."""
+    head = re.search(rf"^\[tree\.{re.escape(name)}\]\s*$", record, re.M)
+    if not head:
+        raise SystemExit(f"revendor: no [tree.{name}] table in {v.RECORD}")
+    nxt = re.search(r"^\[", record[head.end() :], re.M)
+    end = head.end() + (nxt.start() if nxt else len(record) - head.end())
+    body = re.sub(rf"^{key}\s*=.*\n?", "", record[head.end() : end], count=1, flags=re.M)
+    return record[: head.end()] + body + record[end:]
+
+
 def revendor(root: Path, name: str, commit: str | None, verify: bool) -> int:
     trees = {t.name: t for t in v.load_record(root)}
     if name not in trees:
@@ -191,7 +203,7 @@ def revendor(root: Path, name: str, commit: str | None, verify: bool) -> int:
     record = root / v.RECORD
     record.write_text(
         set_fields(
-            record.read_text(),
+            drop_field(record.read_text(), name, "drift_digest"),
             name,
             {
                 "commit": sha,

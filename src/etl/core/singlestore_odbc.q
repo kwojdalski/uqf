@@ -148,6 +148,21 @@
     frac:6#20_s;
     $["000000"~frac; base; base,".",frac]}
 
+/ Private: a float as SQL text for the same value, whatever the session's \P.
+/ `string` formats with the display precision (7 digits by default), so
+/ 1.23456789 came out "1.234568" - valid SQL for a different value (#2438). 17
+/ significant digits round-trip every double. A null or infinite float has no
+/ SQL number (`string 0n` is "", which leaves `x>= AND ...`), so it is refused.
+/ @private
+.qetl.io.odbc.float_text:{[f]
+    if[any (null f),(abs f)=0w;
+        '"literal: a null or infinite float has no SQL rendering - refusing rather than guessing"];
+    p:system"P";
+    system"P 17";
+    r:string f;
+    system"P ",string p;
+    r}
+
 / A q value as a SQL literal.
 / .
 / Every value reaching a query goes through here - that is the question bank's "one
@@ -166,7 +181,7 @@
       t=12h; "'",.qetl.io.odbc.datetime6[v],"'";
       t=14h; "'",ssr[string v;".";"-"],"'";
       t in 5 6 7h; string v;
-      t=9h; string v;
+      t=9h; .qetl.io.odbc.float_text v;
       t=1h; $[v;"1";"0"];
       '"literal: no SQL rendering for type ",string[t],
        " - refusing rather than guessing, because a wrong rendering is usually still valid SQL"]}

@@ -81,6 +81,11 @@
 .qetl.io.remote.idempotent:`upsert`replace`ignore
 
 / A batch's identity: the md5 of its destination, options and rows.
+/ .
+/ The rows are hashed WITHOUT their columns' attributes: -8! serialises the
+/ attribute byte, and a window sorted with xasc carries s# that the receiver's
+/ raze of its chunks drops, so a sorted window sent in chunks never matched its
+/ own id (#2439). An attribute is how q indexes the rows, not which rows they are.
 / @param attachment the attachment, a symbol
 / @param dataset the dataset, a symbol
 / @param target the target table, a symbol
@@ -89,7 +94,8 @@
 / @return a 32-character hex symbol
 / @eg count string .qetl.io.remote.batch_id[`uat;`deals;`deals;`on_conflict`row_key!(`upsert;`id);([] id:1 2)]  ->  32
 .qetl.io.remote.batch_id:{[attachment;dataset;target;opts;batch]
-    `$raze string md5 "c"$-8!(attachment;dataset;target;opts;batch)}
+    plain:$[98h=type batch; @[batch;cols batch;{[c] `#c}]; batch];
+    `$raze string md5 "c"$-8!(attachment;dataset;target;opts;plain)}
 
 / ------------------------------------------------------------ RECEIVER
 
@@ -119,19 +125,24 @@
     `$string[count a],":",a,"|",string dataset}
 
 / Open the receiver's journal: load what an earlier receiver persisted, so a
-/ restarted receiver still knows which batches it committed.
+/ restarted receiver still knows which batches it committed. Read through
+/ durable_get, so a journal a kill left half-written falls back to its previous
+/ generation (one state change lost) instead of stopping the receiver (#2436).
 / @param path a file symbol, or ` for an in-memory journal
 / @return how many journal rows were loaded
 / @eg .qetl.io.remote.open `  ->  0
 .qetl.io.remote.open:{[path]
     `.qetl.io.remote.journal_file set path;
-    `.qetl.io.remote.journal set $[(not null path) and not ()~key path; get path; .qetl.io.remote.empty_journal[]];
+    `.qetl.io.remote.journal set $[(not null path) and not ()~key path;
+        .qetl.job.bounded.state.durable_get 1_string path; .qetl.io.remote.empty_journal[]];
     count .qetl.io.remote.journal}
 
-/ Private: persist the journal, when it has a file.
+/ Private: persist the journal, when it has a file - through durable_set, as
+/ every ledger is: a `set` in place left a truncated file on a kill (#2436).
 / @private
 .qetl.io.remote.persist:{[]
-    if[not null .qetl.io.remote.journal_file; .qetl.io.remote.journal_file set .qetl.io.remote.journal];
+    if[not null .qetl.io.remote.journal_file;
+        .qetl.job.bounded.state.durable_set[1_string .qetl.io.remote.journal_file;.qetl.io.remote.journal]];
     }
 
 / Grant one (attachment; dataset) to remote writers.

@@ -316,3 +316,29 @@ def test_a_non_positive_interval_is_refused():
 
     with pytest.raises(ValueError, match="positive"):
         CaptureScheduler(UsageCapture(FakeFleet({}), MemorySink()), interval_seconds=0)
+
+
+def test_a_restart_over_the_same_jsonl_sink_does_not_capture_rows_again(tmp_path):
+    """#2413: the watermark is recovered from the sink, so a new UsageCapture -
+    the API restarted - picks up where the last append left off."""
+    rows = [row(10), row(11), row(12, tail_ns=7)]
+
+    def usage_since(since, lim):
+        return [r for r in rows if r["time_ns"] > since]
+
+    sink = JsonlSink(tmp_path)
+    UsageCapture(FakeFleet({"rdb1": usage_since}), sink).capture_once()
+    again = UsageCapture(FakeFleet({"rdb1": usage_since}), JsonlSink(tmp_path))
+    assert again.watermark("rdb1") == rows[-1]["time_ns"]
+    again.capture_once()
+    lines = (tmp_path / "usage-rdb1.jsonl").read_text().splitlines()
+    assert len(lines) == len(rows)
+
+
+def test_a_torn_last_line_is_skipped_when_recovering_the_watermark(tmp_path):
+    sink = JsonlSink(tmp_path)
+    sink.append("rdb1", [row(10), row(11)])
+    with (tmp_path / "usage-rdb1.jsonl").open("a") as fh:
+        fh.write('{"time_ns": 99')
+    assert sink.last_watermark("rdb1") == row(11)["time_ns"]
+    assert sink.last_watermark("never") is None

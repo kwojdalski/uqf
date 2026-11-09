@@ -10,8 +10,8 @@ arguments (nothing for ALL, which is the runner without them).
     uv run python scripts/dev/test_impact.py --base origin/master
     uv run python scripts/dev/test_impact.py src/pricing/forwards.q
     uv run python scripts/dev/test_impact.py --format json --base origin/master
-    python3 scripts/dev/test_impact.py --hook   # the q-tests hook's line
-    python3 scripts/dev/test_impact.py --coverage-hook   # the q-coverage hook's
+    uv run python scripts/dev/test_impact.py --hook   # the q-tests hook's line
+    uv run python scripts/dev/test_impact.py --coverage-hook   # the q-coverage hook's
 
 The q-tests hook and scripts/dev/attest_kdbx.py run what `--hook` (plan())
 decides: the suites `origin/master...HEAD`, plus what is being committed,
@@ -181,7 +181,6 @@ DYNAMIC_REVIEWED: dict[str, tuple[str, str]] = {
     "src/etl/core/horizon.q": ("job-state", "a horizon job's buffers and callbacks"),
     "src/etl/core/io_hdb.q": ("data", "partition files and the tables written to them"),
     "src/etl/core/io_manager.q": ("data", "the in-memory target table a batch is written to"),
-    "src/etl/core/io_remote.q": ("data", "the journal file and table"),
     "src/etl/core/kafka_decoder.q": ("job-state", "a decoder job's marks, held and done"),
     "src/etl/core/normalizer.q": ("job-state", "a normalizer job's on_batch and publish"),
     "src/etl/core/react.q": (

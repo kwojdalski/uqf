@@ -109,6 +109,33 @@
     .qunit.assertThrows[.qf.px.adjust[2026.05.30;;`EUR`USD;.qt.qf.px.calendar.no_holidays[];`sat`sun];`nearest;
         "adjust: roll must be one of*nearest";"named, with the rules it accepts"]};
 
+/ #2447: EUR holidays on every date for ~10 years either side of 2026.09.17.
+/ Finite on purpose, so code without a bounded search still terminates (it
+/ returns a date past the blanket) and these tests fail rather than hang.
+.qt.qf.px.calendar.blanket:{[] `EUR`USD!(2026.09.17+(til 7401)-3700;`date$())}
+
+.qt.qf.px.calendar.test_holidays_on_every_date_are_refused_not_searched_forever:{[t]
+    cal:.qt.qf.px.calendar.blanket[];
+    f:.qf.px.adjust[2026.09.17;;`EUR`USD;cal;`sat`sun];
+    .qunit.assertThrows[f;`following;"adjust: no business day in EUR, USD within 3660 days of 2026.09.17*";"following names the currencies"];
+    .qunit.assertThrows[f;`preceding;"adjust: no business day in EUR, USD within 3660 days of 2026.09.17*";"preceding too"];
+    .qunit.assertThrows[f;`modified_following;"adjust: no business day*";"and modified_following"];
+    .qunit.assertThrows[.qf.px.add_business_days[2026.09.17;;`EUR`USD;cal;`sat`sun];1;
+        "add_business_days: no business day in EUR, USD within 3660 days of 2026.09.18*";"a count names where it got stuck"]};
+
+.qt.qf.px.calendar.test_a_seven_day_weekend_is_refused_not_searched_forever:{[t]
+    / guard: an unbounded search would loop forever on this case, so only
+    / run it once the finite blanket above proves the search is bounded
+    bounded:10h=type @[.qf.px.add_business_days[2026.09.17;1;`EUR`USD;.qt.qf.px.calendar.blanket[];];`sat`sun;{[e] e}];
+    .qunit.assertTrue[bounded;"the business-day search is bounded"];
+    if[not bounded; :()];
+    .qunit.assertThrows[.qf.px.adjust[2026.09.17;`following;`EUR`USD;.qt.qf.px.calendar.no_holidays[];];.qf.px.weekdays;
+        "adjust: no business day in EUR, USD*";"adjust refuses"];
+    .qunit.assertThrows[.qf.px.add_business_days[2026.09.17;2;`EUR`USD;.qt.qf.px.calendar.no_holidays[];];.qf.px.weekdays;
+        "add_business_days: no business day in EUR, USD*";"add_business_days refuses"];
+    .qunit.assertThrows[.qf.px.month_end_business_day[2026.09.17;`EUR`USD;.qt.qf.px.calendar.no_holidays[];];.qf.px.weekdays;
+        "adjust: no business day in EUR, USD*";"month end, through adjust, refuses"]};
+
 .qt.qf.px.calendar.test_add_months_clamps_to_month_end_and_leap_day:{[t]
     .qunit.assertEquals[.qf.px.add_months[2028.01.31;1];2028.02.29;"Jan 31 + 1M in a leap year"];
     .qunit.assertEquals[.qf.px.add_months[2027.01.31;1];2027.02.28;"Jan 31 + 1M otherwise"];
@@ -185,3 +212,13 @@
     biz:.qf.px.spot_date[2026.09.22;`EURUSD;.qt.qf.px.calendar.no_holidays[];.qt.qf.px.calendar.conventions[0]];
     .qunit.assertEquals[(sat`date;hol`date;biz`date);2026.09.21 2026.09.22 2026.09.22;
         "Saturday to Monday, a USD holiday Monday to Tuesday, a business day stays put"]};
+
+/ #2390: a one-day weekend atom indexed an atom ('type), and a weekend of all
+/ seven days was accepted, leaving adjust and add_business_days to loop forever.
+.qt.qf.px.calendar.test_weekend_atom_and_all_days:{[t]
+    c:.qf.px.mock_conventions;
+    c[`EURUSD;`weekend]:`fri;
+    .qunit.assertEquals[.qf.px.spot_date[2026.09.17;`EURUSD;.qf.px.mock_calendars;c]`date;2026.09.20;"a one-day weekend atom is accepted"];
+    c[`EURUSD;`weekend]:.qf.px.weekdays;
+    .qunit.assertThrows[.qf.px.spot_date[2026.09.17;`EURUSD;.qf.px.mock_calendars;];c;
+        "calendar: EURUSD's weekend leaves no business day";"a seven-day weekend is refused, not looped on"]};

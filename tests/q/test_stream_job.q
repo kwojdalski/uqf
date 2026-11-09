@@ -1481,6 +1481,16 @@
     .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"nothing published, clean rows included"];
     .qunit.assertEquals[(.qetl.stream_health.of`sj_check_hold)`failed;1;"counted as failed"]};
 
+/ The withheld-batch log names at most five failures, never more than there
+/ are (#2378): `5#f` on one failure cycled it into five identical rows, and
+/ `300#` cycled the short text it gave.
+.qt.qetl.job.stream.test_the_withheld_log_names_one_failure_once:{[t]
+    pub:.qt.qetl.job.stream.check_probe[`sj_check_one;`sjcheckone1;`hold;.qt.qetl.job.stream.neg_check];
+    lines:.qt.qetl.job.stream.logged[`sj_check_one;{[pub;x] (get pub)[`probe_out;([] v:1 -2 3)]}[pub]];
+    fields:last first lines where "publish check withheld rows"~/:lines[;1];
+    .qunit.assertEquals[fields`failures;.Q.s1 .qt.qetl.job.stream.neg_check[([] v:1 -2 3)];
+        "the one failing row, described once"]};
+
 / A check that accepts the dict and column-list batch shapes a publisher takes.
 .qt.qetl.job.stream.shape_check:{[x] v:$[99h=type x; x`v; 98h=type x; x`v; x 1]; bad:where (),v<0;
     ([] check:count[bad]#`negative; status:count[bad]#`bad; detail:count[bad]#enlist "negative")}
@@ -1576,6 +1586,22 @@
     / lead less a millisecond: timespan arithmetic only, as `%` gives a float on PeachQ
     lead:book[enlist 1.10;enlist 1e6;now+.qf.mkt.max_clock_lead-0D00:00:00.001];
     .qunit.assertEquals[count .qpipe.job.market_data.check lead;0;"a clock within the shared lead passes"]};
+
+/ #2418: a quote that pulls a side (null price, zero size) is a withdrawal, an
+/ empty ladder, and is published with its live side - not a one-level ladder
+/ withheld as bad_level, which left the pulled side live downstream.
+.qt.qetl.job.stream.test_market_data_maps_a_pulled_quote_side_to_a_withdrawal:{[t]
+    t0:.z.p-0D00:00:02;
+    q:([] time:(t0;t0+0D00:00:01); sym:`EURUSD`EURUSD; bid:1.1 0n; ask:1.1002 1.1003; bsize:1000000 0; asize:1000000 1000000; src:`LP_A`LP_A);
+    md:.qpipe.job.market_data.from_quote q;
+    .qunit.assertEquals[md`bid_prices;(enlist 1.1;`float$());"the pulled bid is an empty ladder"];
+    .qunit.assertEquals[md`bid_sizes;(enlist 1e6;`float$());"and so are its sizes"];
+    .qunit.assertEquals[count .qpipe.job.market_data.check md;0;"a withdrawal is not a failure"];
+    `.qt.qetl.job.stream.pulled set ();
+    .qetl.job.stream.checked[`market_data;.qpipe.job.market_data.check;`drop;{[t;x] `.qt.qetl.job.stream.pulled set x;};`market_data;md];
+    .qunit.assertEquals[count .qt.qetl.job.stream.pulled;2;"both quotes are published, the new ask with the withdrawal"];
+    bad:.qpipe.job.market_data.from_quote update bid:-1.1 from q;
+    .qunit.assertEquals[exec row from .qpipe.job.market_data.check bad where check=`bad_level;enlist 0;"a negative price with a size is still not a price; the pulled one stays a withdrawal"]};
 
 / #1542: a future-dated quote is withheld as bad_time but must not set the
 / stale reference, or every healthy row in its batch reads as stale.

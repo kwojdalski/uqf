@@ -14,6 +14,8 @@
 #   upstream_tree  upstream's git tree id at `commit`
 #   files, digest  how many files lib/.vendored/<dir>.tsv lists, and the
 #                  sha256 of that listing
+#   drift_digest   the sha256 of lib/.vendored/<dir>.drift.tsv, for a tree
+#                  that has one; absent, the tree may hold no drift (#2409)
 #
 # `commit`, `upstream_tree`, `files` and `digest`, and the listing itself, are
 # written by scripts/dev/revendor.py and by nothing else; the gate
@@ -31,6 +33,7 @@ renames = { "LICENSE" = "LICENSE-torq" }
 upstream_tree = "626685d3d74d201bdb3fca8967e906b1bce19f50"
 files = 810
 digest = "sha256:52098ecc111ec59427b57cf4b7c0b46668dba4cc1155c67b6a9e04f1fbb17ada"
+drift_digest = "sha256:c0a479a31d0f9082b5da7255d5fda3c97585550d094c8b91b6f7a311cfac0310"
 
 [tree.torq-finance-starter-pack]
 upstream = "https://github.com/DataIntellectTech/TorQ-Finance-Starter-Pack"
@@ -41,6 +44,7 @@ renames = { "LICENSE" = "LICENSE-torq-finance-starter-pack" }
 upstream_tree = "3499202f5859b90540f427962e4d44d4b7b792f4"
 files = 149
 digest = "sha256:7bac6e911c57e12664135522d30d2767fb0469200281553f570e3dd3f58c0ec9"
+drift_digest = "sha256:e48589db271288c971799d1328a3180340760f35d89a30259b0ae783857782a9"
 
 [tree.qAutomatedTrading]
 upstream = "https://github.com/shahrzl/qAutomatedTrading"
@@ -51,6 +55,7 @@ renames = { "LICENSE" = "LICENSE-qAutomatedTrading" }
 upstream_tree = "77db1218002137959e352c2efe4b0d91d769aef4"
 files = 22
 digest = "sha256:7d4d8d9f7226c079e25580759b2822606bb569ffa977a1211ce14d8374c5197d"
+drift_digest = "sha256:465d185f59aca9fcddca2ceb8d2e72a2c8cf589068fc5aae2714c62a97ce2838"
 
 [tree.ml]
 upstream = "https://github.com/KxSystems/ml"
@@ -81,6 +86,7 @@ local = ["NOTICE.md"]
 upstream_tree = "28e68ca3c0a8171eaead33937a6d4aa8af406b9d"
 files = 192
 digest = "sha256:5b4e313023796f1f305418d95f7a6e3bd2977f7b580728f4901a862705eb6b34"
+drift_digest = "sha256:90f35b1a051bdf88640d9e82c31959edfd3027178f0440e165f384f83c7dc1d5"
 
 [tree.kx-dbmaint]
 upstream = "https://github.com/KxSystems/kdb"
@@ -116,3 +122,4 @@ local = ["NOTICE.md"]
 upstream_tree = "a800950c7d18f106a02430eedb32b01857549db3"
 files = 108
 digest = "sha256:7d3969bc0bbd25b571385bca71a9769214d7f7ec6841cd4f48f928c53946a49b"
+drift_digest = "sha256:54d0a9d72abad611c557b1c91192f6cd565b39d81a22ab1ee426e3b3e93fb4ae"

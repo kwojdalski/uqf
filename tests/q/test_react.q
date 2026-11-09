@@ -656,3 +656,27 @@
     st:.j.k first read0 hsym `$(.qetl.status.status_dir[]),"/airflow_status_",string[.qetl.job.bounded.instance w],".txt";
     .qunit.assertEquals[st`state;"failed";"the status file reads failed"];
     .qunit.assertTrue[(st`error) like "*cannot tell which reactions demo_deals_backfill owes*";"and says the reaction ledger is why"]};
+
+/ A replay reads the source again, so its rows pass the gates a published
+/ window passes (#2399). It skipped readiness and the quality check: an owed
+/ reaction was re-fired, and retired, over rows a run would refuse.
+.qt.qetl.reaction.replay_under:{[version;gate]
+    / gate takes one ignored argument: a projection that fills every argument is a call
+    .qt.qetl.reaction.fresh_deals[];
+    .qt.qetl.reaction.run_deals[version;{[ds;f;t] '"downstream is broken"}];
+    w:`demo_deals_backfill;
+    keep:(.qetl.source.sources[`demo_deals;`ready];.qetl.job.bounded.worker_cfg w);
+    gate[::];
+    r:@[.qt.qetl.reaction.run_deals[version;];.qt.qetl.reaction.recorder`bad;{[e] `threw`error!(1b;e)}];
+    .qetl.source.sources[`demo_deals;`ready]:keep 0;
+    .qetl.job.bounded.worker_cfg[w]:keep 1;
+    (r`state;r`reactions_owed;count .qt.qetl.reaction.fired)}
+
+.qt.qetl.reaction.test_a_replayed_window_that_is_not_ready_fires_nothing_and_stays_owed:{[t]
+    r:.qt.qetl.reaction.replay_under[`rx2399a;{[x] .qetl.source.sources[`demo_deals;`ready]:{[b;f;t] enlist "reference data absent"};}];
+    .qunit.assertEquals[r;(`partial;3;0);"no reaction ran over the unready windows, and all three are still owed"]};
+
+.qt.qetl.reaction.test_a_replayed_window_that_fails_its_check_fires_nothing_and_stays_owed:{[t]
+    bad:{[b] ([] check:enlist `bad_rate; status:enlist `fail; detail:enlist "rate")};
+    r:.qt.qetl.reaction.replay_under[`rx2399b;{[bad;x] w:`demo_deals_backfill; .qetl.job.bounded.worker_cfg[w]:@[.qetl.job.bounded.worker_cfg w;`check;:;bad];}[bad]];
+    .qunit.assertEquals[r;(`partial;3;0);"no reaction ran over rows the quality check refuses, and all three are still owed"]};

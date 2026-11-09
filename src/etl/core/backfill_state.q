@@ -384,12 +384,17 @@
         / forever - with an error that named the case it could not handle.
         / Breaking it here turns that into a pause and a log line.
         stale:.qetl.job.bounded.state.lock_is_stale[path];
-        if[stale; .qetl.job.bounded.state.break_stale[path]];
-        if[not stale;
+        broke:$[stale; .qetl.job.bounded.state.break_stale[path]; 0b];
+        / The deadline and the sleep hold on every pass that did not just break
+        / the lock, stale or not: a break that cannot proceed - an ownerless
+        / `.break` left by a breaker killed between its mkdir and its owner
+        / write - otherwise spun here forever at full CPU, ignoring wait (#2434).
+        if[not broke;
             if[.z.p>deadline;
                 '"with_file_lock: could not take the lock at ",path," within ",
                  string[wait]," - held by ",(.qetl.job.bounded.state.owner_desc[path]),
-                 ", which is still running"];
+                 $[stale; ", which is gone, but the lock could not be broken (is ",path,".break left behind?)";
+                     ", which is still running"]];
             system"sleep 0.01"]];
     / Record the holder, so a lock left by a dead process can be broken by
     / the next process to want it rather than waited on.

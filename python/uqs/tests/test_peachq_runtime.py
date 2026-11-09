@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import shlex
 import shutil
 from pathlib import Path
 
@@ -95,7 +96,7 @@ def test_bootstrap_hands_torq_sh_and_setenv_the_peachq_binary(pinned, monkeypatc
     p = stack_paths.paths_for_root(root, "peachq")
     env = runtime.bootstrap(p)
     assert env["QCMD"] == str(pinned)
-    assert f'export QCMD="{pinned}"' in p.generated_setenv.read_text()
+    assert f"export QCMD={shlex.quote(str(pinned))}" in p.generated_setenv.read_text()
     with p.generated_procs.open(newline="") as f:
         assert {r["qcmd"] for r in csv.DictReader(f)} == {str(pinned)}, "every row runs PeachQ"
 

@@ -39,8 +39,7 @@ from uqs.scaffold.columns import (
     Columns,
     as_columns,
     definition_columns,
-    nested_declaration,
-    plant_table_definition,
+    plant_declarations,
 )
 from uqs.scaffold.docs import ANALYTICS, FEEDS, doc_stub_actions
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
@@ -332,12 +331,11 @@ publish:.qetl.job.stream.unwired `{name};
                 "before anything writes to it, or .u.upd discards the rows in silence"
             )
         cols = as_columns(columns)
-        definition = plant_table_definition(new_tables[0], cols)
         actions.append(
             FileAction(
                 TABLES_FILE,
-                f"\n/ {proc}'s output. <one line: what a row means>\n{definition}\n"
-                f"{nested_declaration(new_tables[0], cols)}",
+                f"\n/ {proc}'s output. <one line: what a row means>\n"
+                f"{plant_declarations(new_tables[0], columns)}",
                 mode=WriteMode.APPEND,
             )
         )

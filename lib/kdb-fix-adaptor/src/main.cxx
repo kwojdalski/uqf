@@ -51,10 +51,10 @@ class FixEngineApplication : public FIX::Application
     void onLogout(const FIX::SessionID& sessionID);
     void toAdmin(FIX::Message& message, const FIX::SessionID& sessionID);
     void fromAdmin(const FIX::Message& message, const FIX::SessionID& sessionID)
-        throw (FIX::FieldNotFound, FIX::IncorrectDataFormat, FIX::IncorrectTagValue, FIX::RejectLogon);
-    void toApp(FIX::Message& message, const FIX::SessionID& sessionID) throw (FIX::DoNotSend);
+        EXCEPT(FIX::FieldNotFound, FIX::IncorrectDataFormat, FIX::IncorrectTagValue, FIX::RejectLogon);
+    void toApp(FIX::Message& message, const FIX::SessionID& sessionID) EXCEPT(FIX::DoNotSend);
     void fromApp(const FIX::Message& message, const FIX::SessionID& sessionID)
-        throw (FIX::FieldNotFound, FIX::IncorrectDataFormat, FIX::IncorrectTagValue, FIX::UnsupportedMessageType);
+        EXCEPT(FIX::FieldNotFound, FIX::IncorrectDataFormat, FIX::IncorrectTagValue, FIX::UnsupportedMessageType);
 };
 
 static void FillFromIterators(FIX::FieldMap::Fields::const_iterator begin, FIX::FieldMap::Fields::const_iterator end, K* keys, K* values)
@@ -124,17 +124,17 @@ void FixEngineApplication::toAdmin(FIX::Message& message, const FIX::SessionID& 
 
 }
 
-void FixEngineApplication::toApp(FIX::Message& message, const FIX::SessionID& sessionID) throw (FIX::DoNotSend)
+void FixEngineApplication::toApp(FIX::Message& message, const FIX::SessionID& sessionID) EXCEPT(FIX::DoNotSend)
 {
 
 }
 
-void FixEngineApplication::fromAdmin(const FIX::Message& message, const FIX::SessionID& sessionID) throw (FIX::FieldNotFound, FIX::IncorrectDataFormat, FIX::IncorrectTagValue, FIX::RejectLogon)
+void FixEngineApplication::fromAdmin(const FIX::Message& message, const FIX::SessionID& sessionID) EXCEPT(FIX::FieldNotFound, FIX::IncorrectDataFormat, FIX::IncorrectTagValue, FIX::RejectLogon)
 {
     WriteToSocket(ConvertToDictionary(message));
 }
 
-void FixEngineApplication::fromApp(const FIX::Message& message, const FIX::SessionID& sessionID) throw (FIX::FieldNotFound, FIX::IncorrectDataFormat, FIX::IncorrectTagValue, FIX::UnsupportedMessageType)
+void FixEngineApplication::fromApp(const FIX::Message& message, const FIX::SessionID& sessionID) EXCEPT(FIX::FieldNotFound, FIX::IncorrectDataFormat, FIX::IncorrectTagValue, FIX::UnsupportedMessageType)
 {
     WriteToSocket(ConvertToDictionary(message));
 }
@@ -417,7 +417,7 @@ struct Tm : std::tm {
 	      tm_isdst = isDST;
             }
 
-    template <typename Clock_t = std::chrono::high_resolution_clock> 
+    template <typename Clock_t = std::chrono::system_clock> 
     auto to_time_point() -> typename Clock_t::time_point {
         auto time_c = mktime(this);
         return Clock_t::from_time_t(time_c);
@@ -443,7 +443,7 @@ K strtotemporal(std::string datestring){
         &ms);
 
     auto tp_micro = Tm(year, month, day, hour, minute, second, ms).to_time_point(); 
-    K tp = pu(std::chrono::high_resolution_clock::to_time_t(tp_micro)); // ms from Unix epoch 
+    K tp = pu(std::chrono::system_clock::to_time_t(tp_micro)); // ms from Unix epoch 
     auto time = tp->j + ms*1e6;
 
     return kj(time);

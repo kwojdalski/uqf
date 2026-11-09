@@ -145,3 +145,19 @@ def test_a_failing_ps_does_not_block_a_start(monkeypatch, tmp_path):
     monkeypatch.setattr(alive, "_command_lines", broken)
     monkeypatch.setattr(alive, "_process_rows", lambda _p, _b: [])
     occupancy.refuse_if_taken(stack_paths.paths_for_root(tmp_path, "torq"), None)
+
+
+def test_another_runtime_under_uqs_data_root_is_named_by_its_runtime(monkeypatch, tmp_path):
+    """#2396: a deployed release sets UQS_DATA_ROOT, so each runtime's data is
+    <UQS_DATA_ROOT>/<data_dir>, not <checkout>/output/<data_dir>."""
+    data_root = tmp_path / "dataroot"
+    data_root.mkdir()
+    monkeypatch.setenv("UQS_DATA_ROOT", str(data_root))
+    root = tmp_path / "release"
+    paths = stack_paths.paths_for_root(root, "uqf")
+    other = stack_paths.paths_for_root(root, "torq")
+    what, how = occupancy.describe(
+        paths, occupancy.Holder("rdb1", 1234, 6151, 6150, other.torqdata)
+    )
+    assert what == "the torq runtime's stack (base port 6150)"
+    assert "`uqs --runtime torq stop`" in how

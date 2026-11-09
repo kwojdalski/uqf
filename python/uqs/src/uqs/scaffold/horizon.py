@@ -24,9 +24,10 @@ from uqs.paths import STREAM_DIR, TABLES_FILE, TEST_DIR, UqsError
 from uqs.scaffold.catalog import catalog_actions
 from uqs.scaffold.columns import (
     TIME_COLUMN,
+    Columns,
+    as_columns,
     is_known,
-    nested_declaration,
-    plant_table_definition,
+    plant_declarations,
     sample_value,
 )
 from uqs.scaffold.docs import ANALYTICS, doc_stub_actions
@@ -61,7 +62,7 @@ def _row(cols: list[tuple[str, str]]) -> str:
 def horizon_job(
     name: str,
     subscribe_to: list[str],
-    columns: list[tuple[str, str]] | None,
+    shape: Columns | None,
     source_columns: dict[str, list[tuple[str, str]]],
     horizon: str | None,
     *,
@@ -74,10 +75,11 @@ def horizon_job(
     known_profiles: Iterable[str] | None = None,
 ) -> ScaffoldPlan:
     """Plan a horizon job publishing `name`: `subscribe_to` is the events
-    table then the reference table; `columns` the new output table, `time`
-    included as `parse_columns` reads it; `source_columns` each plant table's
-    columns, read from the tree."""
+    table then the reference table; `shape` the new output table, `time`
+    included as `parse_columns` reads it, or the `Shape` `--schema-from`
+    copies; `source_columns` each plant table's columns, read from the tree."""
     _check_name(name, "horizon job name")
+    columns = as_columns(shape) if shape else None
     proc = procname or f"{name}1"
     _check_name(proc, "procname")
     if len(subscribe_to) != 2:
@@ -89,7 +91,7 @@ def horizon_job(
         raise UqsError("a horizon job needs distinct events and reference tables")
     if publishes:
         raise UqsError("a horizon job publishes its own NAME - drop --outputs")
-    if not columns:
+    if not shape or not columns:
         raise UqsError("--kind horizon needs --schema: the table it publishes")
     if not horizon:
         raise UqsError(
@@ -193,8 +195,7 @@ score:{{[events;reference]
         FileAction(STREAM_DIR / f"{name}.q", body),
         FileAction(
             TABLES_FILE,
-            f"\n/ {proc}'s output. <one line: what a row means>\n"
-            f"{plant_table_definition(name, columns)}\n{nested_declaration(name, columns)}",
+            f"\n/ {proc}'s output. <one line: what a row means>\n{plant_declarations(name, shape)}",
             mode=WriteMode.APPEND,
         ),
         _expected_table_action(name),

@@ -145,6 +145,17 @@
     .qetl.source.define[`t;.qt.qetl.source.decl[]];
     .qunit.assertEquals[.qetl.source.validate[`t;0#([] ts:`timestamp$(); px:`float$())];1b;"an empty window is legal, so its shape must still validate"]};
 
+/ A string column is "C" when it has rows and " " when it has none: meta
+/ cannot type an empty general list (#2400). Every quiet window of a source
+/ declared "C" was refused, though its fixture and a populated window passed.
+.qt.qetl.source.test_an_empty_window_of_a_nested_column_validates:{[t]
+    d:@[@[.qt.qetl.source.decl[];`columns`types;:;(`ts`note;"pC")];`fixture;:;{([] ts:enlist .qt.qetl.source.d 1; note:enlist "buy")}];
+    .qetl.source.define[`t;d];
+    .qunit.assertEquals[.qetl.source.validate[`t;0#(d`fixture)[]];1b;"an empty window passes whenever a populated one would"];
+    .qunit.assertThrows[.qetl.source.validate[`t;];([] ts:enlist .qt.qetl.source.d 1; note:enlist 1 2);
+        "validate: t does not satisfy its contract - type mismatch on note (expected C, got J)";
+        "a populated column of the wrong nested type is still refused"]};
+
 / --- the demo source's own declaration ----------------------------------
 
 / "Validate generated fixtures against that same contract". A fixture

@@ -1,0 +1,30 @@
+# Files in lib/kdb-fix-adaptor whose bytes differ from upstream 11941454f022 (#2448).
+#
+# REVIEWED AND ACCEPTED as patches: the tree as upstream ships it does not
+# configure or compile, and these edits are the least that makes it build
+# against current QuickFIX (master, C++17) and CMake 4, on macOS as well as
+# Linux. Every edit, and why, is in lib/kdb-fix-adaptor/NOTICE.md. kind
+# "edit": a change to content, not whitespace.
+#
+#   CMakeLists.txt  cmake_minimum_required 3.2 -> 3.10 (CMake 4 refuses
+#                   < 3.5, warns < 3.10); configure_file reads
+#                   LICENSE-kdb-fix-adaptor, the name this tree gives
+#                   upstream's LICENSE.md; -std=c++11 -> -std=c++17 (QuickFIX
+#                   master needs it); -Wno-deprecated-declarations (macOS's
+#                   SDK deprecates sprintf, used by bundled pugixml, and
+#                   -Werror made that fatal); on APPLE, link with
+#                   -undefined dynamic_lookup (the k.h symbols come from q).
+#   src/main.cxx    throw(...) specifications -> QuickFIX's EXCEPT(...),
+#                   as its Application interface declares them (C++17 has no
+#                   dynamic exception specifications); high_resolution_clock
+#                   -> system_clock for a wall-clock time (on libc++ the
+#                   former is steady_clock, which has no to_time_t).
+#
+# To revert to upstream: python3 scripts/dev/revendor.py kdb-fix-adaptor
+# (which deletes this file, and the build breaks again). The gate fails if any
+# listed file changes again; a further patch changes this file, its
+# drift_digest in lib/VENDORED.toml and NOTICE.md together.
+#
+# path	upstream blob	local blob	kind
+CMakeLists.txt	fc03f1e3b413b0d79edf02b0815f2bd4fe34a144	141620bd28c67899a1d1fcb03730d3bd5f4d1f1f	edit
+src/main.cxx	465b067db168654126be35e805c4bd970ab86b45	0f3226299e1f26d9d7ab73b9bd9778457e38b9be	edit

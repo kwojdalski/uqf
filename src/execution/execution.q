@@ -52,7 +52,9 @@
 /   synthetic markouts join with uj. Rows are trade-major in the input order of
 /   trades. Any other column of trades (anything beyond `sym`time`side`trade_price`pip_factor,
 /   e.g. a fill_id or book) is carried through AFTER those columns, repeated per
-/   horizon, so a consumer reads it from the row instead of pairing by position
+/   horizon, so a consumer reads it from the row instead of pairing by position.
+/   A keyed trades table (fills keyed on fill_id) is unkeyed first, its key
+/   carried through the same way (#2433)
 / @throws error naming every column missing from trades (`sym`time`side`trade_price`pip_factor)
 /   or quotes (`sym`time`mid) - checked explicitly up front so a malformed/mistyped
 /   table fails loudly here rather than surfacing as a bare `domain error deep inside aj;
@@ -63,6 +65,9 @@
     .qf.exec.require_horizons[`markout_at_horizons;horizons];
     .qf.util.require_cols[`markout_at_horizons;`trades;trades;`sym`time`side`trade_price`pip_factor];
     .qf.util.require_cols[`markout_at_horizons;`quotes;quotes;`sym`time`mid];
+    / require_cols reads a keyed table's key columns too, but indexing one by
+    / row number looks the numbers up as keys: a bare 'length (#2433)
+    trades:0!trades;
     horizon_list:$[0>type horizons; enlist horizons; horizons];
     num_trades:count trades;
     num_horizons:count horizon_list;
@@ -425,16 +430,19 @@
 / WHAT EACH ORDER CONTRIBUTES, per target (`any = any part filled, `full =
 / all of it) and per horizon h:
 / .
-/   fill       the target's fill time is within [submit_time; submit_time+h]
-/   cancelled  not that, and it was cancelled before submit_time+h
-/   failure    neither, and the whole horizon was observed
-/   censored   none of those: observation ended before the horizon did, so
-/              the order might still have filled - it is NOT a failure
+/   fill       the whole horizon was observed, and the target's fill time
+/              is within [submit_time; submit_time+h]
+/   cancelled  observed, not that, and cancelled before submit_time+h
+/   failure    observed, and neither
+/   censored   observation ended before the horizon did - whatever has
+/              happened so far, it is NOT a failure, and not a fill either
 / .
 / The estimate is fill / observed, where observed is fill + failure, plus
 / cancelled under cancel_policy `failure. Counting a censored order as a
 / failure is the classic bias here: every order still resting when the data
-/ stops would pull the probability down.
+/ stops would pull the probability down. Censoring is decided by the
+/ window alone: scoring an open horizon's early fills while censoring its
+/ not-yet-fills would push it up instead (#2429).
 / .
 / AS OF, AND NOTHING LATER. An order counts only if submitted at or before
 / as_of, and an event counts only if it happened at or before
@@ -565,11 +573,13 @@
 / @return a symbol vector, one per row
 / @private
 .qf.exec.fill_outcome:{[event_time;cancel_time;horizon_end;known_by]
-    seen_event:(not null event_time) and event_time<=known_by;
-    filled:seen_event and event_time<=horizon_end;
-    seen_cancel:(not null cancel_time) and cancel_time<=known_by;
-    cancelled:(not filled) and seen_cancel and cancel_time<horizon_end;
-    failed:(not filled) and (not cancelled) and horizon_end<=known_by;
+    / An open horizon is censored whatever it has seen so far (#2429), so
+    / every outcome needs the horizon closed by known_by - and then any event
+    / inside it was seen too.
+    observed:horizon_end<=known_by;
+    filled:observed and (not null event_time) and event_time<=horizon_end;
+    cancelled:observed and (not filled) and (not null cancel_time) and cancel_time<horizon_end;
+    failed:observed and (not filled) and not cancelled;
     ?[filled;`fill;?[cancelled;`cancelled;?[failed;`failure;`censored]]]};
 
 / Private: one target's outcomes as rows to be counted - the grouping
@@ -733,13 +743,20 @@
     c};
 
 / Size-weighted average execution price across a set of fills.
+/ .
+/ A fill with a null price or size drops out of numerator and denominator
+/ together. sum skips a null, so a null price used to leave its size in
+/ the denominator alone and drag the VWAP below every real fill (#2426).
 / @param prices list of fill prices
 / @param sizes list of fill sizes, same length as prices
-/ @return the size-weighted average price
+/ @return the size-weighted average price of the fills with both, null if none has
 / @eg .qf.exec.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000]  -> 1.100625
+/ @eg .qf.exec.vwap[1.1 0n 1.2;1 1 1]  -> 1.15
 .qf.exec.vwap:{[prices;sizes]
-    weighted_sum:sum prices*sizes;
-    total_size:sum sizes;
+    notional:prices*sizes;
+    priced:not null notional;
+    weighted_sum:sum 0f^notional;
+    total_size:sum sizes*priced;
     weighted_sum%total_size};
 
 / Size-weighted average execution price as of each fill, rather than for
@@ -754,11 +771,15 @@
 / judged.
 / @param prices list of fill prices, in execution order
 / @param sizes list of fill sizes, same length as prices, aligned to it
-/ @return a vector the same length as prices - the VWAP as of each fill
+/ @return a vector the same length as prices - the VWAP as of each fill,
+/   skipping a fill with a null price or size as vwap does
 / @eg .qf.exec.vwap_expanding[1.1000 1.1010 1.1005;1000000 2000000 1000000]  -> 1.1 1.100667 1.100625
+/ @eg .qf.exec.vwap_expanding[1.1 0n 1.2;1 1 1]  -> 1.1 1.1 1.15
 .qf.exec.vwap_expanding:{[prices;sizes]
-    weighted_sums:sums prices*sizes;
-    total_sizes:sums sizes;
+    notional:prices*sizes;
+    priced:not null notional;
+    weighted_sums:sums 0f^notional;
+    total_sizes:sums sizes*priced;
     weighted_sums%total_sizes};
 
 \d .

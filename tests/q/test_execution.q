@@ -355,6 +355,13 @@
     sizes:1000000 2000000 1000000f;
     .qt.support.assertApprox[first .qf.exec.vwap_expanding[prices;sizes];first prices;1e-12;"one fill's VWAP is its own price, whatever its size"]};
 
+/ #2426: sum skips a null, so a null price left its size in the denominator
+/ alone and dragged the VWAP to 0.77, below every real fill.
+.qt.qf.exec.execution.test_vwap_skips_an_unpriced_fill_in_both_sums:{[t]
+    .qt.support.assertApprox[.qf.exec.vwap[1.1 0n 1.2;1 1 1];1.15;1e-12;"null price drops out of numerator and denominator"];
+    .qt.support.assertApprox[.qf.exec.vwap_expanding[1.1 0n 1.2;1 1 1];1.1 1.1 1.15;1e-12;"and from the running VWAP"];
+    .qunit.assertTrue[null .qf.exec.vwap[0n 0n;1 1];"no priced fill, no VWAP"]};
+
 .qt.qf.exec.execution.test_vwap_expanding_is_row_aligned:{[t]
     prices:1.1000 1.1010 1.1005 1.1020;
     .qunit.assertEquals[count .qf.exec.vwap_expanding[prices;4#1000000f];count prices;"one VWAP per fill"]};
@@ -515,8 +522,25 @@
     / and it is part-filled (20s in) but not complete.
     r:.qf.exec.fill_probability_by[.qt.qf.exec.execution.mk_fill_orders[];0D00:01:00;`symbol$();2026.01.01D10:05:30.000000000;::];
     .qunit.assertEquals[.qt.qf.exec.execution.fill_row[r;`any]`order_count;6;"orders submitted after as_of are not counted at all"];
-    .qunit.assertEquals[.qt.qf.exec.execution.fill_row[r;`any]`censored_count;0;"order 5's first fill at 10:05:20 was already seen"];
+    / Its first fill at 10:05:20 is already seen, but scoring it while an
+    / unfilled open order is censored biases the estimate up (#2429).
+    .qunit.assertEquals[.qt.qf.exec.execution.fill_row[r;`any]`censored_count;1;"order 5's horizon is open, so it is censored though it has part-filled"];
     .qunit.assertEquals[.qt.qf.exec.execution.fill_row[r;`full]`censored_count;1;"its full fill had not happened yet, and might"]};
+
+/ #2429: 100 recent orders, same 0.3 process, 30 already filled 2s in when
+/ as_of falls 5s into their 10s horizon. Scoring those 30 while censoring
+/ the other 70 read 0.46.
+.qt.qf.exec.execution.test_fill_probability_recent_orders_do_not_bias_it:{[t]
+    mk:{[t0;n] s:t0+0D00:01:00*til n; ([] submit_time:s; observed_until:n#0Np;
+        first_fill_time:s+0D00:00:02*n#1 1 1 0N 0N 0N 0N 0N 0N 0N;
+        full_fill_time:s+0D00:00:02*n#1 1 1 0N 0N 0N 0N 0N 0N 0N; cancel_time:n#0Np)};
+    as_of:2026.01.01D12:00:00.000000000;
+    recent:update submit_time:as_of-0D00:00:05,
+        first_fill_time:?[null first_fill_time;0Np;as_of-0D00:00:03],
+        full_fill_time:?[null full_fill_time;0Np;as_of-0D00:00:03] from mk[2026.01.01D11:00:00.000000000;100];
+    r:.qf.exec.fill_probability_by[mk[2026.01.01D09:00:00.000000000;100],recent;0D00:00:10;`symbol$();as_of;::];
+    .qunit.assertEquals[exec fill_probability from r where target=`any;enlist 0.3;"open horizons are censored whatever happened so far"];
+    .qunit.assertEquals[exec censored_count from r where target=`any;enlist 100;"all 100 recent orders, filled or not"]};
 
 .qt.qf.exec.execution.test_fill_probability_fill_on_the_horizon_counts:{[t]
     o:([] submit_time:enlist 2026.01.01D10:00:00.000000000; observed_until:enlist 0Np;
@@ -697,3 +721,12 @@
     qs:([] sym:enlist `EURUSD; time:enlist 2026.01.01D00:00:00.000000000; mid:enlist 1.1);
     r:.qf.exec.markout_at_horizons[tr;qs;0D00:00:01 0D00:00:10];
     .qunit.assertEquals[(count r;`markout_pips in cols r);(0;1b);"no rows, and the columns a caller selects"]};
+
+/ #2433: a keyed fills table passed the column check, then indexing it by row
+/ number looked the numbers up as keys and threw a bare 'length.
+.qt.qf.exec.execution.test_markout_at_horizons_accepts_keyed_trades:{[t]
+    tr:([] sym:`EURUSD`EURUSD; time:2026.01.02D10:00:00.000000000 2026.01.02D10:00:05.000000000; side:1 -1; trade_price:1.1 1.1001; pip_factor:10000 10000; fill_id:`a`b);
+    qs:([] sym:4#`EURUSD; time:2026.01.02D10:00:00.000000000+1000000000*0 1 5 6; mid:1.1 1.1002 1.1001 1.0999);
+    r:.qf.exec.markout_at_horizons[`fill_id xkey tr;qs;0D00:00:01];
+    .qunit.assertEquals[r`fill_id;`a`b;"keyed fills mark out, carrying the key"];
+    .qunit.assertEquals[r;.qf.exec.markout_at_horizons[tr;qs;0D00:00:01];"the same rows as the unkeyed fills"]};

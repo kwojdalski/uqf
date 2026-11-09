@@ -30,14 +30,25 @@
 
 / Direct top-of-book quotes, with the feed's own source identifier.
 / The shared quote table also carries equities; only canonical FX pairs pass.
+/ A side the quote has pulled - a null price, or a size that is null or not
+/ positive - is an empty ladder, the market_data withdrawal, not a one-level
+/ ladder the publish check would withhold as `bad_level with the row's live
+/ side (#2418). A level that claims a price and is not one (negative or
+/ infinite, with a positive size) is kept, for the check to refuse.
 / @param batch quote rows
 / @return complete single-level market_data snapshots, sizes in base currency
 / @eg count .qpipe.job.market_data.from_quote[.qpipe.job.market_data.quote] -> 0
+/ @eg exec bid_prices from .qpipe.job.market_data.from_quote[([] time:enlist 2026.09.19D10:00:00; sym:enlist `EURUSD; bid:enlist 0n; ask:enlist 1.2; bsize:enlist 0; asize:enlist 1000; src:enlist `LP_A)] -> enlist `float$()
 .qpipe.job.market_data.from_quote:{[batch]
     fx:batch where .qf.px.is_ccy_pair each batch`sym;
-    .qetl.plant.with_flat select sym, source:src, market:`fx, source_time:time,
-        bid_prices:enlist each bid, bid_sizes:enlist each `float$bsize,
-        ask_prices:enlist each ask, ask_sizes:enlist each `float$asize, clock:`receipt from fx}
+    ladder:{[on;v] $[on; enlist v; `float$()]};
+    bsz:`float$fx`bsize;
+    asz:`float$fx`asize;
+    bid_on:(not null fx`bid) & 0<bsz;
+    ask_on:(not null fx`ask) & 0<asz;
+    .qetl.plant.with_flat ([] sym:fx`sym; source:fx`src; market:count[fx]#`fx; source_time:fx`time;
+        bid_prices:ladder'[bid_on;fx`bid]; bid_sizes:ladder'[bid_on;bsz];
+        ask_prices:ladder'[ask_on;fx`ask]; ask_sizes:ladder'[ask_on;asz]; clock:count[fx]#`receipt)}
 
 / The single synthetic depth feed, identified separately from UQFFX.
 / fx_orderbook has no source column: another publisher must use market_data or

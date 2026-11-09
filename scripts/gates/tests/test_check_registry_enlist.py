@@ -50,6 +50,39 @@ def test_a_fully_qualified_write_is_checked_too(tmp_path, no_exemptions):
     assert len(found) == 1
 
 
+def _write(root: Path, rel: str, text: str) -> None:
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+
+
+def test_a_bare_write_from_another_file_or_with_a_bracketed_key_fails(tmp_path, no_exemptions):
+    """#2410: writes are found in every file by the registry's qualified name,
+    and a key holding brackets of its own is still a key."""
+    _write(
+        tmp_path,
+        "src/etl/core/myreg.q",
+        ".qetl.myreg.decls:(`symbol$())!()\n"
+        ".qetl.myreg.define:{[name;decl] .qetl.myreg.decls[name]:enlist decl}\n"
+        ".qetl.myreg.put:{[d;decl] .qetl.myreg.decls[d[`name]]:decl}\n",
+    )
+    _write(tmp_path, "src/etl/sources/mysrc.q", ".qetl.myreg.decls[`fx]:`kind`ttl!(`feed;10)\n")
+    found = gate.problems(tmp_path)
+    assert len(found) == 2, found
+    assert found[0].startswith("src/etl/core/myreg.q:3: decls gets a bare value")
+    assert found[1].startswith("src/etl/sources/mysrc.q:1: decls gets a bare value")
+
+
+def test_a_registry_declared_under_a_d_context_is_found_from_another_file(tmp_path, no_exemptions):
+    _tree(tmp_path, "")
+    _write(tmp_path, "src/etl/other.q", ".qetl.kind.registry[`x]:`a`b!1 2\n")
+    _write(tmp_path, "src/etl/fine.q", ".qetl.kind.registry[`x]:enlist `a`b!1 2\n")
+    _write(tmp_path, "src/etl/unrelated.q", ".qetl.elsewhere.registry[`x]:`a`b!1 2\n")
+    found = gate.problems(tmp_path)
+    assert len(found) == 1, found
+    assert found[0].startswith("src/etl/other.q:1: registry gets a bare value")
+
+
 def test_retentions_original_join_is_caught(tmp_path, no_exemptions):
     """#1028: one enlist is the list of values; the declaration itself still
     joined a table on the second insert."""

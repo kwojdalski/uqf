@@ -25,10 +25,14 @@ no record, and a listing whose digest does not match the record.
 DRIFT. lib/.vendored/<dir>.drift.tsv, where present, lists files whose bytes
 here are known to differ from upstream: `path<TAB>upstream blob<TAB>local
 blob<TAB>kind`. Those files must hold exactly the local blob recorded, so the
-drift is frozen, not allowed to grow. It is never written by a tool: it
-exists because some trees were whitespace-normalised by this repository's own
-hooks when they were vendored, before lib/ was excluded from them, and
-reverting or accepting that is the owner's call. Re-vendoring a tree
+drift is frozen, not allowed to grow: the table's `drift_digest` is the
+sha256 of the drift file, as `digest` is of the listing, and a drift file
+that does not match it - or exists for a tree with no `drift_digest` - is
+refused, so an edit cannot pass by being declared as drift (#2409). It is
+never written by a tool: it exists because some trees were
+whitespace-normalised by this repository's own hooks when they were vendored,
+before lib/ was excluded from them, and reverting or accepting that is the
+owner's call. Re-vendoring a tree
 (scripts/dev/revendor.py) restores upstream's bytes and deletes its drift.
 
     python3 scripts/gates/check.py vendored
@@ -77,6 +81,8 @@ class Tree:
     omit: tuple[str, ...] = ()
     renames: Mapping[str, str] = field(default_factory=dict)
     local: tuple[str, ...] = ()
+    #: sha256 of lib/.vendored/<dir>.drift.tsv; "" when the tree has none.
+    drift_digest: str = ""
 
     @property
     def path(self) -> str:
@@ -137,6 +143,7 @@ def load_record(root: Path) -> list[Tree]:
                 omit=tuple(t.get("omit", ())),
                 renames=dict(t.get("renames", {})),
                 local=tuple(t.get("local", ())),
+                drift_digest=t.get("drift_digest", ""),
             )
         )
     return trees
@@ -248,7 +255,25 @@ def tree_problems(root: Path, tree: Tree) -> list[str]:
         found.append(
             f"{tree.path}: licence file {tree.license_file} is not among the vendored files"
         )
-    drift = read_drift(root, tree)
+    drift_path = root / tree.drift_file
+    drift_text = drift_path.read_text() if drift_path.exists() else None
+    if drift_text is None and tree.drift_digest:
+        found.append(
+            f"{tree.drift_file}: missing, but {RECORD} records drift_digest {tree.drift_digest}"
+        )
+    elif drift_text is not None and not tree.drift_digest:
+        return [
+            *found,
+            f"{tree.drift_file}: {RECORD} records no drift for {tree.name} - recorded drift"
+            " is frozen and cannot be added",
+        ]
+    elif drift_text is not None and digest(drift_text) != tree.drift_digest:
+        return [
+            *found,
+            f"{tree.drift_file}: digest {digest(drift_text)} does not match {RECORD}'s"
+            f" drift_digest {tree.drift_digest} - recorded drift is frozen and cannot grow",
+        ]
+    drift = parse_drift(drift_text or "")
     for p, d in drift.items():
         if p not in expected:
             found.append(f"{tree.drift_file}: {p} is not a vendored file")

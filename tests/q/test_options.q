@@ -216,3 +216,12 @@
 
 .qt.qf.px.options.test_gk_negative_t_refused:{[t]
     .qunit.assertThrows[.qf.px.gk_call[1.10;1.10;0.045;0.02;0.10;];-0.5;"options: t must be >= 0";"negative t refused by name"]};
+
+/ #2385: a null input made Newton's convergence test pass on its first pass
+/ (0n<tol is true in q), returning the 0.20 initial guess as a "vol".
+.qt.qf.px.options.test_implied_vol_null_input_is_null:{[t]
+    .qunit.assertTrue[null .qf.px.implied_vol[0n;1.10;1.12;0.045;0.02;0.75;1b];"null premium has no implied vol"];
+    .qunit.assertTrue[null .qf.px.implied_vol[0.0378;0n;1.12;0.045;0.02;0.75;1b];"null spot has no implied vol"];
+    .qunit.assertTrue[null .qf.px.implied_vol[0.0378;1.10;0n;0.045;0.02;0.75;1b];"null strike has no implied vol"];
+    .qunit.assertTrue[null .qf.px.implied_vol[0.0378;1.10;1.12;0n;0.02;0.75;1b];"null rate has no implied vol"];
+    .qunit.assertTrue[null .qf.px.implied_vol[0.0378;1.10;1.12;0.045;0.02;0n;1b];"null expiry has no implied vol"]};

@@ -82,3 +82,14 @@
     r:.qetl.verify.capture_stream[`vc_rogue;`demo_deals;.qt.qetl.verify.capture.d 1;.qt.qetl.verify.capture.d 4];
     .qunit.assertEquals[(r`windows;count r`rows;(r`rows)`deal_id);(4;3;1 2 3);
         "one row per page, the page past the window's end the last"]};
+
+/ A window whose source says it is not ready is one a run would fail before
+/ publishing it, so the capture fails it too (#2398): without the readiness
+/ stage it captured the rows, and a comparison could PASS on them.
+.qt.qetl.verify.capture.test_a_window_that_is_not_ready_is_a_failure_not_rows:{[t]
+    keep:.qetl.source.sources[`demo_deals;`ready];
+    .qetl.source.sources[`demo_deals;`ready]:{[b;f;t] enlist "absent"};
+    c:@[{.qetl.verify.capture_bounded[`demo_deals_backfill;.qt.qetl.verify.capture.d[1];.qt.qetl.verify.capture.d[4]]};::;{[e] e}];
+    .qetl.source.sources[`demo_deals;`ready]:keep;
+    .qunit.assertEquals[count c`failures;3;"each of the three windows failed its readiness"];
+    .qunit.assertTrue[(::)~c`rows;"and no rows, so nothing can pass on them"]};

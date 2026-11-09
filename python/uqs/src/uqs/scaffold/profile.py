@@ -105,10 +105,14 @@ def membership(
 
 
 def _unprofiled_entry(proc: str, reason: str) -> str:
-    """One UNPROFILED entry, the reason wrapped as the existing ones are."""
+    """One UNPROFILED entry, the reason wrapped as the existing ones are.
+
+    JSON's string syntax is Python's only up to the BMP: an ASCII-escaped
+    character beyond it is a surrogate pair, which Python reads back as two
+    lone surrogates. Written unescaped, every character reads back as given."""
     pieces = textwrap.wrap(reason, width=70, break_on_hyphens=False)
     body = "\n".join(
-        f"        {json.dumps(piece + (' ' if i < len(pieces) - 1 else ''))}"
+        f"        {json.dumps(piece + (' ' if i < len(pieces) - 1 else ''), ensure_ascii=False)}"
         for i, piece in enumerate(pieces)
     )
     return f'    "{proc}": (\n{body}\n    ),\n'

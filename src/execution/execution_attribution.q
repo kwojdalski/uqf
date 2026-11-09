@@ -121,7 +121,8 @@
 /   share sum to 1, the total row is 1). n_unavailable counts trades whose row
 /   was neither `ok nor `reconciled: a missing prescribed book, never rerouted.
 / @throws error if trades lacks a column, horizons is empty or not positive,
-/   trades is empty, or cross_markout_attribution_with throws
+/   trades is empty, a pip_factor dict has no factor for a traded pair, or
+/   cross_markout_attribution_with throws
 / @eg .qf.exec.attribution_review_with[.qf.mkt.attribution_convention;.qt.qf.exec.attribution.review_fixture_quotes[];.qt.qf.exec.attribution.review_fixture_trades[];enlist 0D00:00:01;10000;1]`share
 .qf.exec.attribution_review_with:{[conv;quotes;trades;horizons;pip_factor;ref_size]
     miss:`time`sym`side except cols trades;
@@ -129,6 +130,14 @@
     if[0=count trades; '"attribution_review: no trades"];
     horizons:(),horizons;
     if[(0=count horizons) or any horizons<=0D; '"attribution_review: horizons must be a non-empty list of positive timespans"];
+    / A missing factor is a caller error, not a missing book: unrefused, every
+    / trade in that pair read as n_unavailable (#2432). Keys are normalized as
+    / the trades' pairs are, so `EUR/USD finds EURUSD.
+    if[99h=type pip_factor;
+        pip_factor:(.qf.px.normalize_ccy_pair each key pip_factor)!value pip_factor;
+        traded:distinct .qf.px.normalize_ccy_pair each trades`sym;
+        if[count gone:traded where not traded in key pip_factor;
+            '"attribution_review: no pip factor for ",", " sv string gone]];
     one:{[conv;quotes;pf;rs;trades;i;h]
         tr:trades i;
         pair:.qf.px.normalize_ccy_pair tr`sym;

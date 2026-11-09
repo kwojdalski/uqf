@@ -129,6 +129,20 @@
     r:.qetl.verify.cross_mode[`demo_deals;c];
     .qunit.assertEquals[(r`status;r`reason);(`UNVERIFIED;"capture of vcmp_rogue failed: source unreachable");"nothing can pass on rows that were not read"]};
 
+/ A bounded capture whose window failed its check leaves `rows unset (#2401). It
+/ was read as a producer that returned no rows: FAIL, every reference row
+/ "missing" - deals 1 and 3 included - and the failure itself never named.
+.qt.qetl.verify.compare.test_a_bounded_capture_with_a_failed_window_is_unverified:{[t]
+    w:`demo_deals_backfill;
+    keep:.qetl.job.bounded.worker_cfg w;
+    chk:{[b] $[2 in b`deal_id; ([] check:enlist `bad_rate; status:enlist `fail; detail:enlist "rate"); .qetl.job.bounded.no_failures[]]};
+    .qetl.job.bounded.worker_cfg[w]:@[keep;`check;:;chk];
+    r:@[{c:.qetl.verify.capture[`demo_deals;.qt.qetl.verify.compare.d[1];.qt.qetl.verify.compare.d[4]]; .qetl.verify.cross_mode[`demo_deals;c]};::;{[e] e}];
+    .qetl.job.bounded.worker_cfg[w]:keep;
+    .qunit.assertEquals[(r`status;count r`findings);(`UNVERIFIED;0);"a failed capture is no sample, and no row is missing"];
+    .qunit.assertTrue[(r`reason) like "capture of demo_deals_backfill failed 1 window(s): window failed data quality*";
+        "the reason names the producer and its failed window"]};
+
 .qt.qetl.verify.compare.test_equivalence_refuses_a_word_that_is_not_a_basis:{[t]
     .qunit.assertThrows[{.qetl.plant.equivalence[`demo_deals;`whatever]};::;"equivalence: demo_deals's basis `whatever is none of events, revisions, final_state";"named"]};
 

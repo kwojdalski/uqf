@@ -163,17 +163,17 @@
     deeper:deeper_bid+deeper_ask;
     ?[deeper=0;0n;top%deeper]};
 
-/ Private: vwmp_skew for a single row - volume-weighted mid over the first
-/ n_levels (via execution.q's vwap, concatenating that row's bid and ask
-/ prices/sizes over til n_levels) minus the simple L0 mid, divided by the
-/ L0 spread. Locked/crossed L0 (spread <= 0) is null, not +-0w: a locked spread of 0 divides by zero. This is a division guard, not .qf.mkt.crossed_top's crossed test (a locked book is not crossed, #1176).
+/ Private: vwmp_skew for a single row - execution.q's vwap over the level_ok levels among both sides' first n_levels (a rejected level used to be weighted, #2384)
+/ minus the simple L0 mid, over the L0 spread. Null for a non-level_ok L0, or a locked/crossed L0 (spread <= 0): a division guard, not .qf.mkt.crossed_top's crossed test (a locked book is not crossed, #1176).
 / @private
 .qf.mkt.vwmp_skew_one:{[n_levels;bid_prices;bid_sizes;ask_prices;ask_sizes]
     idx:til n_levels;
-    vw_mid:.qf.exec.vwap[(bid_prices idx),ask_prices idx;(bid_sizes idx),ask_sizes idx];
+    bi:where .qf.mkt.level_ok[bid_prices idx;bid_sizes idx];
+    ai:where .qf.mkt.level_ok[ask_prices idx;ask_sizes idx];
+    vw_mid:.qf.exec.vwap[(bid_prices bi),ask_prices ai;(bid_sizes bi),ask_sizes ai];
     simple_mid:0.5*(bid_prices 0)+ask_prices 0;
     l0_spread:(ask_prices 0)-bid_prices 0;
-    $[l0_spread<=0;0n;(vw_mid-simple_mid)%l0_spread]};
+    $[not (0 in bi) and 0 in ai;0n;l0_spread<=0;0n;(vw_mid-simple_mid)%l0_spread]};
 
 / Volume-weighted mid (over n_levels, via execution.q's vwap) minus the
 / simple L0 mid, divided by the L0 spread - how far deeper-book weighting
@@ -183,7 +183,7 @@
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @param n_levels how many levels (0..n_levels-1) to volume-weight over
-/ @return a vector, skew per row - null for a locked or crossed L0
+/ @return a vector, skew per row - null for a locked, crossed or non-level_ok L0; a level level_ok rejects is skipped
 / @eg .qf.mkt.vwmp_skew[enlist 1.1000 1.0998;enlist 100 100;enlist 1.1002 1.1004;enlist 100 100;2]  -> ,0f
 .qf.mkt.vwmp_skew:{[bid_prices;bid_sizes;ask_prices;ask_sizes;n_levels]
     n:count bid_prices;
@@ -259,11 +259,11 @@
         i+:1];
     result};
 
-/ Private: vamp for a single row - convert notional into a size via each
-/ side's own L0 price, sweep each side at that size (execution.q's
-/ sweep_price), and average the two avg_price results.
+/ Private: vamp for a single row - see vamp. A side with no level_ok L0 (withdrawn) nulls
+/ the row first: its 0n/0w/0 size target made sweep_price throw for the whole vector (#2379).
 / @private
 .qf.mkt.vamp_one:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
+    if[not all {[px;sz] $[count px; .qf.mkt.level_ok["f"$first px;"f"$first sz]; 0b]}'[(bid_prices;ask_prices);(bid_sizes;ask_sizes)]; :0n];
     ask_size_target:notional%first ask_prices;
     bid_size_target:notional%first bid_prices;
     buy_leg:.qf.mkt.sweep_price[ask_prices;ask_sizes;ask_size_target];
@@ -281,7 +281,7 @@
 / @param notional a single atom (broadcast to every row) or a vector
 /   already aligned to rows - same atom-or-vector convention as
 /   execution.q's markout ref_price
-/ @return a vector, VAMP per row
+/ @return a vector, VAMP per row - null for a row with a side lacking a usable L0 (one-sided book)
 / @eg .qf.mkt.vamp[enlist 1.1000 1.0998;enlist 1000000 1000000;enlist 1.1002 1.1004;enlist 1000000 1000000;500000]  -> ,1.1001
 .qf.mkt.vamp:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
     n:count bid_prices;
@@ -465,12 +465,11 @@
     log 1+gap_sec};
 
 / Rolling lag-1 autocorrelation of an OFI series: for each window-sized
-/ trailing slice, correlates the slice's first window-1 values against
-/ its last window-1 values (a lag-1 pairing) with kdb+'s builtin cor, and
-/ writes the result at the index the window ends on. No builtin exists for a rolling correlation,
-/ unlike rolling_ofi/spread_ratio, so this is a genuine loop; every index before the first full window is null (0n).
+/ trailing slice, cor of its first window-1 values against its last window-1
+/ (lag-1 pairs), written at the index the window ends on. No builtin rolls a
+/ correlation, so this loops; every index before the first full window is null (0n).
 / @param ofi_series an OFI vector, e.g. from ofi or ofi_multilevel
-/ @param window the moving-window size, in rows (needs >=4: w rows give w-1 lag pairs, and 1 or 2 pairs give a null or a forced +-1 cor)
+/ @param window the moving-window size, in rows (needs >=4: w rows give w-1 lag pairs; under 3 non-null pairs, as with ofi's warm-up null, is null, #2430)
 / @return a vector, same length as ofi_series, lag-1 autocorrelation per window ending at that index
 / @throws error if window < 4
 / @eg .qf.mkt.ofi_autocorrelation[1 -1 2 0 -3 4;4]
@@ -483,7 +482,8 @@
         segment:ofi_series (i-window)+til window;
         lagged:-1_segment;
         current:1_segment;
-        result[i-1]:cor[lagged;current];
+        ok:not null lagged+current;
+        result[i-1]:$[3>sum ok; 0n; cor[lagged where ok;current where ok]];
         i+:1];
     result};
 
@@ -504,11 +504,10 @@
 / (price, order_id, pip_factor) would refuse a legitimately projected tape.
 .qf.mkt.tape_cols:`time`sym`action`side`size
 
-/ Refuse a tape that is missing a column, carries an unknown action, or is
-/ not sorted by time.
+/ Refuse a tape that is missing a column, carries an unknown action, is not
+/ sorted by time, or holds a trade with a null or negative size.
 / .
-/ ALL THREE are silent failures if unchecked, which is why this is a
-/ precondition rather than defensive normalisation:
+/ ALL are silent failures if unchecked, so this is a precondition:
 / .
 /   - a missing column reads as a null in most q code, so a windowed count
 /     over it returns 0 rather than erroring
@@ -516,10 +515,9 @@
 /     `action=`trade`, so every trade-based ratio silently reports on an
 /     empty set
 /   - an UNSORTED tape makes every rolling window compute over the wrong
-/     rows and return a plausible number. Rejecting beats sorting here for
-/     the same reason cross_book_at rejects unsorted quotes: the tape is
-/     sorted by construction, so sorting on every call pays O(n log n) to
-/     hide a caller's bug.
+/     rows and return a plausible number. Rejecting beats sorting, as in
+/     cross_book_at: sorting a tape sorted by construction hides a bug.
+/   - an unsized trade breaks every volume feature (VPIN read 2, #2428)
 / @param tape an event tape table
 / @return 1b when the tape is usable
 / @throws error naming what is wrong
@@ -535,6 +533,8 @@
     time:exec time from tape;
     if[not time~asc time;
         '"require_tape: tape is not sorted ascending by time - a rolling window over an unsorted tape returns a plausible wrong number rather than erroring (docs/architecture/event-tape.md)"];
+    sizes:exec size from tape where action=`trade;
+    if[n_bad:sum (null sizes) or sizes<0; '"require_tape: ",string[n_bad]," trade(s) with a null or negative size - every volume feature would report a plausible wrong number"];
     1b}
 
 / Signed trade flow: the net direction of aggressive volume (ROADMAP #19).
@@ -973,11 +973,11 @@
 / The configuration a stream runs with, and its defaults.
 .qf.mkt.stream_defaults:`window`window_mode`late!(20;`count;`reject)
 
-/ Private: the population variance of one window of returns. A window of
-/ identical returns is exactly 0 - a two-pass variance over floats that
-/ are all equal can otherwise come out at 1e-34 rather than 0.
+/ Private: population variance of a window of returns; null if one is null
+/ (0n=0n made that 0, #2382), exactly 0 if all equal (not 1e-34).
 / @private
 .qf.mkt.window_variance:{[w]
+    if[any null w; :0n];
     if[all w=first w; :0f];
     centre:avg w;
     gap:w-centre;
@@ -988,7 +988,7 @@
 / return_variance.
 / .
 / Row 0 has no return (no prior mid), so the first full window ends at
-/ row `window`: every row before it is null.
+/ row `window`: every row before it, and a window with a null return, is null.
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute for
 / @param window the number of returns per window (positive)
@@ -1116,10 +1116,10 @@
 
 / Private: split a batch table by sym, apply the late policy against the
 / per-sym state, and run `step` on each sym's accepted rows. Returns
-/ (per-sym state; dropped count; output table with sym and time).
+/ (per-sym state; dropped count; output table with sym and time). tbl
+/ carries `row`, numbered by the caller BEFORE any filter (#2427).
 / @private
 .qf.mkt.stream_side:{[what;tbl;states;state0;cfg;step]
-    tbl:update row:i from tbl;
     syms:distinct tbl`sym;
     acc:(states;0;());
     run_sym:{[what;tbl;state0;cfg;step;acc;s]
@@ -1178,14 +1178,14 @@
     if[`quotes in key batch;
         if[0=count quote_cols; '"stream_update: batch carries quotes but no quote metric was chosen at stream_init"];
         .qf.util.require_depth_quotes[`stream_update;batch`quotes];
-        r:.qf.mkt.stream_side["quote";batch`quotes;state`quotes;.qf.mkt.quote_state0;cfg;.qf.mkt.stream_quotes_one[;;cfg`window]];
+        r:.qf.mkt.stream_side["quote";update row:i from batch`quotes;state`quotes;.qf.mkt.quote_state0;cfg;.qf.mkt.stream_quotes_one[;;cfg`window]];
         state[`quotes]:r 0;
         state[`dropped]+:r 1;
         q_out:$[98h=type r 2; (`row`sym`time,quote_cols)#r 2; r 2]];
     if[`tape in key batch;
         if[not `signed_trade_flow in metrics; '"stream_update: batch carries a tape but signed_trade_flow was not chosen at stream_init"];
         .qf.mkt.require_tape[batch`tape];
-        trades:select from batch`tape where action=`trade;
+        trades:select from (update row:i from batch`tape) where action=`trade;
         r:.qf.mkt.stream_side["trade";trades;state`trades;.qf.mkt.trade_state0;cfg;.qf.mkt.stream_trades_one];
         state[`trades]:r 0;
         state[`dropped]+:r 1;

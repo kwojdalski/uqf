@@ -144,7 +144,7 @@ def test_staged_process_overrides_are_refused(tmp_path, monkeypatch, capsys):
     root = _repo(tmp_path, monkeypatch)
     path = root / gate.OVERRIDES
     path.parent.mkdir(parents=True)
-    path.write_text("procname,field,value\ntap1,extras,-tables quote wide_book\n")
+    path.write_text("procname,field,value\ntap1,extras,-tables quote wide_orderbook\n")
     subprocess.run(["git", "-C", str(root), "add", str(path)], check=True)
     assert gate.main() == 1
     assert "host and bundle overrides" in capsys.readouterr().out

@@ -220,5 +220,5 @@ service needs to stand on its own: subscribe, publish, log, replay. The TorQ
 path still exists and still works --- `scripts/processes/torq_stream.q` runs the
 same jobs, unchanged, and [the stack architecture](../architecture/stack.md)
 describes it. Both plants keep the same [three
-invariants](../architecture/pipeline-architecture-example.md#2-the-tickerplant),
+invariants](../architecture/pipeline-architecture-example.md#2--the-tickerplant),
 so a job behaves identically on either.

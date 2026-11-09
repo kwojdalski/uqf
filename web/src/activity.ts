@@ -344,7 +344,15 @@ export async function flushActivity(): Promise<void> {
     try {
       await transport(batch, dropped);
     } catch {
-      queue = [...batch, ...queue].slice(-MAX_QUEUE);
+      // record() may have refilled the queue while the send was in flight:
+      // what no longer fits is counted, as record() counts it (#2408).
+      const merged = [...batch, ...queue];
+      for (const lost of merged.slice(
+        0,
+        Math.max(0, merged.length - MAX_QUEUE),
+      ))
+        countDrop(KIND_LEVEL[lost.kind], "queue_overflow");
+      queue = merged.slice(-MAX_QUEUE);
       for (const d of dropped) countDrop(d.level, d.reason, d.count);
       return;
     }

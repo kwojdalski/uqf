@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.10)
 
 ###################################################################################
 # CONFIGURATION
@@ -30,10 +30,15 @@ if(BUILD_x86)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
 endif(BUILD_x86)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_LOG_DYN_LINK -Wall -Werror -fno-strict-aliasing -std=c++11 -Os -DKXVER=${KX_VER} -fpic")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_LOG_DYN_LINK -Wall -Werror -Wno-deprecated-declarations -fno-strict-aliasing -std=c++17 -Os -DKXVER=${KX_VER} -fpic")
 
 # Make sure that the build system doesn't add a 'lib' prefix to the shared library
 set_target_properties(${BINARY_NAME} PROPERTIES PREFIX "")
+
+# The k.h C API symbols are provided by the q process that loads the library
+if(APPLE)
+        set_target_properties(${BINARY_NAME} PROPERTIES LINK_FLAGS "-undefined dynamic_lookup")
+endif(APPLE)
 
 execute_process(COMMAND
     "git" describe --match=NeVeRmAtCh --always --abbrev=40 --dirty
@@ -56,7 +61,7 @@ execute_process(COMMAND
 # Generate a configuration file that will contain all of the build variables used by CMake
 configure_file("${CMAKE_SOURCE_DIR}/config.h" "${CMAKE_BINARY_DIR}/include/config.h")
 configure_file("${CMAKE_SOURCE_DIR}/README.md" "${CMAKE_BINARY_DIR}/README.md")
-configure_file("${CMAKE_SOURCE_DIR}/LICENSE.md" "${CMAKE_BINARY_DIR}/LICENSE.md")
+configure_file("${CMAKE_SOURCE_DIR}/LICENSE-kdb-fix-adaptor" "${CMAKE_BINARY_DIR}/LICENSE.md")
 configure_file("${CMAKE_SOURCE_DIR}/src/config/fix.q" "${CMAKE_BINARY_DIR}/fix.q")
 
 file(COPY "${CMAKE_SOURCE_DIR}/src/config/spec" DESTINATION "${CMAKE_BINARY_DIR}")

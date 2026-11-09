@@ -75,24 +75,23 @@
     ") - a dataset derived from this one is stale; the next run re-fires them first"}
 
 / Private: announce one covered window's publication again, from a fresh
-/ fetch and transform. A window that cannot be fetched or transformed is
-/ logged and left owed, for the next run.
+/ fetch. The rows are read again, so they pass the gates a published window
+/ passes - every stage before publish: fetch, readiness, transform and the
+/ quality check (#2399). A window that fails any of them is logged and left
+/ owed, for the next run: a reaction must not rebuild its output from rows a
+/ run would refuse to publish.
 / @return 1 when announced, else 0
 / @private
 .qetl.job.bounded.replay_window:{[worker;w]
     cfg:.qetl.job.bounded.def worker;
-    f:.qetl.job.bounded.own[worker;`fetch][w`range_from;w`range_to];
-    if[`failed~f`state;
-        .qetl.log.ch.err[`coverage;"could not re-fetch a window to re-fire its reactions";
-            (enlist[`worker]!enlist worker),`range_from`range_to`error!(w`range_from;w`range_to;f`error)];
-        :0];
-    out:@[.qetl.job.bounded.transform_window[worker;w;];f`result;{[e] (`transform_failed;e)}];
-    if[(0h=type out) and `transform_failed~first out;
-        .qetl.log.ch.err[`coverage;"could not transform a window to re-fire its reactions";
-            (enlist[`worker]!enlist worker),`range_from`range_to`error!(w`range_from;w`range_to;last out)];
+    s:.qetl.job.bounded.stages_before_publish[worker;cfg;w];
+    if[`failed in key s;
+        f:s`failed;
+        .qetl.log.ch.err[`coverage;"could not re-run a window's stages to re-fire its reactions - ",f`message;
+            (enlist[`worker]!enlist worker),(`range_from`range_to!(w`range_from;w`range_to)),f`fields];
         :0];
     @[{[a] .qetl.reaction.notify_published_for . a};
-      (cfg`dataset;cfg`partition;(.qetl.job.bounded.spec worker)`source_version;w`range_from;w`range_to;out;.qetl.io.for_cfg cfg);
+      (cfg`dataset;cfg`partition;(.qetl.job.bounded.spec worker)`source_version;w`range_from;w`range_to;s`batch;.qetl.io.for_cfg cfg);
       {[e] (::)}];
     1}
 

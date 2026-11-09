@@ -20,7 +20,9 @@ ETL = REPO / "src" / "etl"
 
 # `system "cmd ",x` -- a literal followed by a concatenation.
 _CONCAT = re.compile(r'system\s*"[^"]*"\s*,')
-_SAFE = re.compile(r"shell_word|\.qetl\.io\.sh\[")
+# q's own one-letter commands (`\P`, `\c`, `\l` as `system"P ",...`) run in q,
+# not a shell, so a value spliced into them is no shell word.
+_SAFE = re.compile(r'shell_word|\.qetl\.io\.sh\[|system\s*"[A-Za-z] ')
 
 # Modules that run on an HDB path: no exceptions.
 STRICT = {"core/io_hdb.q", "core/compression.q"}
@@ -30,11 +32,8 @@ STRICT = {"core/io_hdb.q", "core/compression.q"}
 BASELINE = {
     "core/verify_behaviour.q": 1,
     "core/backfill_state.q": 2,
-    "core/uptime.q": 1,
-    "core/stream_health.q": 2,
     "core/react.q": 1,
     "core/worker_runtime.q": 1,
-    "core/status.q": 2,
     "core/tick.q": 1,
     "streaming/kafka_feed.q": 2,
 }
@@ -75,3 +74,13 @@ def test_the_baseline_names_only_modules_that_still_offend():
     found = _offenders()
     stale = {rel: n for rel, n in BASELINE.items() if len(found.get(rel, [])) < n}
     assert not stale, f"lower or remove these baseline entries: {stale}"
+
+
+def test_a_q_command_is_not_a_shell_command():
+    # #2438 restores \P with system"P ",string p: q runs it, no shell does.
+    flagged = [
+        c
+        for c in ('system"P ",string p', 'system"rm -rf ",p', 'system "mv ",a," ",b')
+        if _CONCAT.search(c) and not _SAFE.search(c)
+    ]
+    assert flagged == ['system"rm -rf ",p', 'system "mv ",a," ",b']

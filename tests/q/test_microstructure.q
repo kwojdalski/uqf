@@ -95,6 +95,15 @@
     .qunit.assertTrue[not null r 2;"normal L0 still gives a value"];
     .qunit.assertTrue[0w>abs avg r where not null r;"avg over a series with a locked row stays finite"]};
 
+/ #2384: a level level_ok rejects was weighted (its size stayed in the
+/ denominator), giving skews like -1374.75 or 0w.
+.qt.qf.mkt.microstructure.test_vwmp_skew_skips_a_level_that_is_not_a_price:{[t]
+    ref:.qf.mkt.vwmp_skew[enlist enlist 1.1000;enlist enlist 100f;enlist 1.1002 1.1004;enlist 100 100f;2];
+    bad:.qf.mkt.vwmp_skew[(1.1000 0n;1.1000 0f;1.1000 0w);3#enlist 100 100f;3#enlist 1.1002 1.1004;3#enlist 100 100f;2];
+    .qunit.assertEquals[bad;3#ref;"a null, zero or infinite level is absent, not weighted"];
+    l0:.qf.mkt.vwmp_skew[(0n 1.0998;0 1.0998f);2#enlist 100 100f;2#enlist 1.1002 1.1004;2#enlist 100 100f;2];
+    .qunit.assertTrue[all null l0;"an L0 that is not a price nulls the row"]};
+
 / ---- book_slope ----
 
 .qt.qf.mkt.microstructure.test_book_slope_opposite_signs_for_bid_vs_ask:{[t]
@@ -147,6 +156,15 @@
     r:.qf.mkt.vamp[bid_prices;bid_sizes;ask_prices;ask_sizes;notional];
     .qt.support.assertApprox[r 0;1.1001;1e-9;"row 0 uses notional 500000"];
     .qt.support.assertApprox[r 1;1.2001;1e-9;"row 1 uses its own notional 700000"]};
+
+/ #2379: a withdrawn side used to make vamp throw for the whole vector.
+.qt.qf.mkt.microstructure.test_vamp_nulls_a_one_sided_row:{[t]
+    r:.qf.mkt.vamp[(1.1000 1.0998;1.1000 1.0998);(1e6 1e6;1e6 1e6);(1.1002 1.1004;`float$());(1e6 1e6;`float$());500000];
+    .qunit.assertEquals[count r;2;"one value per row"];
+    .qt.support.assertApprox[first r;1.1001;1e-9;"two-sided row priced"];
+    .qunit.assertTrue[null last r;"one-sided row is null, not an error"];
+    zero_l0:.qf.mkt.vamp[enlist 0 1.0998;enlist 1e6 1e6;enlist 1.1002 1.1004;enlist 1e6 1e6;500000];
+    .qunit.assertTrue[null first zero_l0;"an L0 that is not a price nulls the row"]};
 
 / ---- Tier 2 shared fixture ----
 
@@ -372,6 +390,13 @@
     f:{[w] .qf.mkt.ofi_autocorrelation[1 2 3 5 8 13f;w]};
     .qunit.assertThrows[f;2;pat;"window 2 (one pair, always null) is refused"];
     .qunit.assertThrows[f;3;pat;"window 3 (two pairs, forced +-1) is refused"]};
+
+/ #2430: ofi's index 0 is null, so the first full window held only two lag
+/ pairs and wrote the forced -1 that window>=4 was meant to refuse.
+.qt.qf.mkt.microstructure.test_ofi_autocorrelation_skips_the_warmup_null:{[t]
+    r:.qf.mkt.ofi_autocorrelation[0n 700 800 300 0 -200 300f;4];
+    .qunit.assertTrue[null r 3;"two lag pairs are not a correlation"];
+    .qt.support.assertApprox[r 4;cor[700 800 300f;800 300 0f];1e-9;"the next window has three full pairs"]};
 
 / ---- require_depth_quotes reuse ----
 
@@ -626,12 +651,35 @@
         e[`cum_flow]~ref`cum_flow};
     .qunit.assertEquals[check[tape;r 2;] each `EURUSD`GBPUSD;11b;"cumulative flow per sym, chunked, equals the batch"]};
 
+/ #2427: the tape was filtered to trades before rows were numbered, so `row`
+/ indexed the trade events, not the tape - rows 0 1 here, an add and a trade.
+.qt.qf.mkt.microstructure.test_stream_trade_rows_index_the_tape:{[t]
+    tape:([] time:2026.01.02D10:00:00+1000000000*til 4; sym:4#`EURUSD; action:`add`trade`cancel`trade; side:1 1 -1 -1; size:100 200 300 400f);
+    r:.qf.mkt.stream_update[.qf.mkt.stream_init[`signed_trade_flow;::];(enlist `tape)!enlist tape;::];
+    .qunit.assertEquals[r[`trades;`row];1 3;"row is the trade's index in the tape batch"];
+    .qunit.assertEquals[tape[`size] r[`trades;`row];abs r[`trades;`signed_flow];"so indexing the tape by row finds each flow's trade"]};
+
 .qt.qf.mkt.microstructure.test_stream_constant_returns_have_zero_variance:{[t]
     n:12;
     flat:([] time:2026.01.02D10:00:00+1000000000*til n; sym:n#`EURUSD;
         bid_prices:n#enlist enlist 1.1; bid_sizes:n#enlist enlist 1f; ask_prices:n#enlist enlist 1.1002; ask_sizes:n#enlist enlist 1f);
     o:(.qt.qf.mkt.microstructure.st_run[enlist `return_variance;enlist (enlist `quotes)!enlist flat]) 1;
     .qunit.assertEquals[o`return_variance;(4#0n),(n-4)#0f;"null through warm-up, then exactly 0"]};
+
+/ #2382: while the ask is withdrawn every return is null, and 0n=0n let an
+/ all-null window through the identical-returns test as variance 0. A window
+/ holding a null return is null, batch and stream alike, until `window` real
+/ returns have come back.
+.qt.qf.mkt.microstructure.test_return_variance_is_null_for_a_window_with_no_return:{[t]
+    n:10;
+    asks:(enlist 1.1002;`float$();`float$();`float$();`float$()),enlist each 1.1004 1.1003 1.1006 1.1002 1.1005;
+    q:([] time:2026.01.02D10:00:00+0D00:00:01*til n; sym:n#`EURUSD; bid_prices:n#enlist enlist 1.1; bid_sizes:n#enlist enlist 1e6;
+        ask_prices:asks; ask_sizes:{$[count x;enlist 1e6;`float$()]} each asks);
+    batch:.qf.mkt.rolling_return_variance[q;`EURUSD;3];
+    .qunit.assertEquals[null batch;(8#1b),00b;"no variance until three real returns are back (rows 6 to 8)"];
+    cfg:enlist[`window]!enlist 3;
+    stream:(.qf.mkt.stream_update[.qf.mkt.stream_init[enlist `return_variance;cfg];(enlist `quotes)!enlist q;cfg])[`quotes;`return_variance];
+    .qunit.assertEquals[stream;batch;"the stream gives the same answer"]};
 
 .qt.qf.mkt.microstructure.test_stream_syms_do_not_contaminate_each_other:{[t]
     q:.qt.qf.mkt.microstructure.st_quotes[];

@@ -294,13 +294,15 @@
 / do too (#806). Recompute it from the converted bid and ask.
 / @param quotes table with sym and the columns above
 / @param target_conventions dict source pair -> target pair: itself, or its
-/   inverse (legs swapped)
+/   inverse (legs swapped), each in any spelling normalize_ccy_pair accepts;
+/   a row takes the target's sym as given
 / @param pip_factors dict pair -> pip factor, for every source and target pair
 /   when the table carries fwd_points; (::) when it does not
 / @return the table in target conventions, with source_sym and inverted
 / @throws error for a sym with no target, a target that is neither the pair
 /   nor its inverse, half a size pair, points without spot, a mid column on
-/   an inverted row, or a missing pip factor
+/   an inverted row, a lone bid or ask, sizes without both prices or part of
+/   the four ladder columns on an inverted row, or a missing pip factor
 / @eg raze value exec bid,ask from .qf.px.convert_quotes[([] sym:enlist `EURUSD; bid:enlist 2f; ask:enlist 2.5);(enlist `EURUSD)!enlist `USDEUR;::]  -> 0.4 0.5
 .qf.px.convert_quotes:{[quotes;target_conventions;pip_factors]
     if[not 98h=type quotes; '"convert_quotes: quotes must be an unkeyed table with a sym column"];
@@ -313,7 +315,11 @@
     if[count missing:srcs where not srcs in key target_conventions;
         '"convert_quotes: no target convention for ",", " sv string missing];
     targets:target_conventions srcs;
-    flips:{[s;t] $[s=t; 0b; t=.qf.px.inverse_pair[s]; 1b;
+    / Compared normalised, as leg_inverts is (#1110): raw, EUR/USD was neither
+    / EURUSD nor USD/EUR (#2387). A target that is no pair normalises to a
+    / null, so it reaches the refusal that names it.
+    flips:{[s;t] ns:.qf.px.normalize_ccy_pair s; nt:@[.qf.px.normalize_ccy_pair;t;{[e] `}];
+        $[ns=nt; 0b; nt=.qf.px.inverse_pair[ns]; 1b;
         '"convert_quotes: ",string[t]," is neither ",string[s]," nor its inverse"]}'[srcs;targets];
     if[`fwd_points in c;
         if[not 99h=type pip_factors; '"convert_quotes: fwd_points need pip_factors - a dict of pip factor per pair"];
@@ -322,6 +328,15 @@
             '"convert_quotes: no pip factor for ",", " sv string gone]];
     if[(`mid in c) and any flips;
         '"convert_quotes: mid has no rule for an inverted pair - drop it, or recompute it from the converted bid and ask"];
+    / The price groups below convert only whole, so on an inverted row a part
+    / of one would keep the source pair's price under the target's name, as
+    / mid did (#806, #2386).
+    if[any flips;
+        if[1=sum `bid`ask in c; '"convert_quotes: bid and ask come together on an inverted row - one alone has no inverse"];
+        if[(`bid_size in c) and not all `bid`ask in c; '"convert_quotes: bid_size and ask_size need bid and ask on an inverted row"];
+        ladders:`bid_prices`bid_sizes`ask_prices`ask_sizes;
+        if[(count part:ladders where ladders in c) within 1 3;
+            '"convert_quotes: ladders come as all of ",(", " sv string ladders)," on an inverted row, got ",", " sv string part]];
     flip_of:srcs!flips;
     target_of:srcs!targets;
     out:update source_sym:sym, inverted:flip_of sym from quotes;

@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -174,9 +175,16 @@ def generated_base_port(setenv: Path) -> int | None:
 
 def generated_setting(setenv: Path, name: str) -> str | None:
     """Variable *name* as the last bootstrap wrote it into setenv.sh - one
-    `export NAME="value"` line each - or None before one has, or without it."""
+    `export NAME=<shell-quoted value>` line each (#2394) - or None before one
+    has, or without it."""
     if not setenv.is_file():
         return None
-    line = re.compile(rf'^export {re.escape(name)}="?(.*?)"?\s*$', re.MULTILINE)
+    line = re.compile(rf"^export {re.escape(name)}=(.*?)\s*$", re.MULTILINE)
     match = line.search(setenv.read_text())
-    return match.group(1) if match else None
+    if not match:
+        return None
+    try:
+        words = shlex.split(match.group(1))
+    except ValueError:
+        return None
+    return words[0] if len(words) == 1 else None

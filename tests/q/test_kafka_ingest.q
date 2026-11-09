@@ -172,6 +172,33 @@
     .qunit.assertThrows[f;"{\"v\":[1,\"a\"]}";"v: expected an array of numbers";"a string in a number array"];
     .qunit.assertThrows[f;"{\"v\":\"1\"}";"v: expected an array of numbers";"a string is not an array"]};
 
+.qt.qetl.kafka.test_a_non_finite_number_is_refused_like_a_null:{[t]
+    / #2451: .j.k reads Infinity and an overflowing 1e400 as 0w; a null was
+    / refused but those were accepted.
+    f:.qetl.kafka.decode_json[(enlist `px)!enlist "f";];
+    .qunit.assertThrows[f;"{\"px\":Infinity}";"px: expected a finite number*";"Infinity"];
+    .qunit.assertThrows[f;"{\"px\":-Infinity}";"px: expected a finite number*";"-Infinity"];
+    .qunit.assertThrows[f;"{\"px\":1e400}";"px: expected a finite number*";"an overflow"];
+    .qunit.assertThrows[f;"{\"px\":NaN}";"px: expected a number";"NaN, as before"];
+    .qunit.assertEquals[f "{\"px\":-1.5e300}";enlist -1.5e300;"a large finite number is still read"]};
+
+.qt.qetl.kafka.test_a_null_or_non_finite_element_of_an_array_is_refused:{[t]
+    / #2451: a null inside an F array used to decode as 0n.
+    f:.qetl.kafka.decode_json[(enlist `v)!enlist "F";];
+    .qunit.assertThrows[f;"{\"v\":[1,null,2]}";"v: element 1 is null*";"a null element"];
+    .qunit.assertThrows[f;"{\"v\":[null]}";"v: element 0 is null*";"a lone null"];
+    .qunit.assertThrows[f;"{\"v\":[1,Infinity]}";"v: element 1 is not finite*";"an infinite element"];
+    .qunit.assertThrows[f;"{\"v\":[1e400]}";"v: element 0 is not finite*";"an overflowing element"];
+    m:.qetl.kafka.decode_json[(enlist `m)!enlist " ";];
+    .qunit.assertThrows[m;"{\"m\":[[1,2],[3,null]]}";"m: array 1, element 1 is null*";"a null inside a pair"];
+    .qunit.assertThrows[m;"{\"m\":[[-Infinity,2]]}";"m: array 0, element 0 is not finite*";"an infinite price in a pair"]};
+
+.qt.qetl.kafka.test_a_payload_naming_a_field_twice_is_refused:{[t]
+    / #2451: .j.k keeps both copies of a repeated key and the first used to win silently.
+    f:.qetl.kafka.decode_json[`px`sym!"fs";];
+    .qunit.assertThrows[f;"{\"px\":1.5,\"sym\":\"A\",\"px\":2.5}";"duplicate field(s): px*";"a declared field twice"];
+    .qunit.assertThrows[f;"{\"px\":1.5,\"sym\":\"A\",\"x\":1,\"x\":2}";"duplicate field(s): x*";"an extra field twice is just as ambiguous"]};
+
 .qt.qetl.kafka.test_a_timestamp_with_only_a_date_is_refused:{[t]
     / The shared coercion layer's rule: a date where a timestamp belongs
     / collapses a whole day onto midnight.

@@ -13,6 +13,7 @@ import {
   configureActivity,
   flushActivity,
   outcomeOfError,
+  pendingDrops,
   queuedActivity,
   record,
 } from "./activity";
@@ -264,6 +265,32 @@ it("keeps events the API did not take, and sends them next time", async () => {
   await flushActivity();
   expect(sent.map((e) => e.subject)).toEqual(["Desk"]);
   expect(queuedActivity()).toHaveLength(0);
+});
+
+it("counts what a failed send pushes off a full queue (#2408)", async () => {
+  let release = () => {};
+  configureActivity({
+    flushDelayMs: 1e9,
+    level: "actions",
+    transport: () =>
+      new Promise((_, reject) => {
+        release = () => reject(new Error("down"));
+      }),
+  });
+  for (let i = 0; i < 1000; i++) record("submit", "a" + i);
+  const flushing = flushActivity(); // 100 in flight
+  for (let i = 0; i < 100; i++) record("submit", "b" + i); // the API still down
+  release();
+  await flushing;
+  const counted = pendingDrops().reduce((sum, d) => sum + d.count, 0);
+  expect(queuedActivity().length + counted).toBe(1100);
+  expect(pendingDrops()).toContainEqual(
+    expect.objectContaining({
+      level: "actions",
+      reason: "queue_overflow",
+      count: 100,
+    }),
+  );
 });
 
 it("reads a 4xx as refused and anything else as unknown", () => {
