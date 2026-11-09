@@ -27,14 +27,18 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 
-_PORT_CELL = re.compile(r"^(?:(?P<literal>\d+)|\{(?P<name>\w+)\}(?P<offset>[+-]\d+)?)$")
+_PORT_CELL = re.compile(r"^(?:(?P<literal>[0-9]+)|\{(?P<name>\w+)\}(?P<offset>[+-][0-9]+)?)$")
+_INTEGER = re.compile(r"-?[0-9]+")
+_MAX_PORT = 65535
 
 
 def resolve(raw: str | None, env: Mapping[str, str]) -> int | None:
     """The port a cell names under *env*, or None when it cannot be known.
 
-    None covers an empty cell, text outside the grammar, and a variable that
-    is absent from *env* or not an integer. Never raises: one unreadable row
+    None covers an empty cell, text outside the grammar, a variable that is
+    absent from *env* or not an integer, and a result outside 1..65535: no
+    socket listens on such a number, so naming it would only mislead. Never
+    raises: one unreadable row
     must not take down a whole fleet view, and the caller reports the row as
     undetermined rather than as some other port.
     """
@@ -42,8 +46,10 @@ def resolve(raw: str | None, env: Mapping[str, str]) -> int | None:
     if match is None:
         return None
     if match["literal"] is not None:
-        return int(match["literal"])
-    value = env.get(match["name"], "").strip()
-    if not value.lstrip("-").isdigit():
-        return None
-    return int(value) + int(match["offset"] or 0)
+        port = int(match["literal"])
+    else:
+        value = env.get(match["name"], "").strip()
+        if not _INTEGER.fullmatch(value):
+            return None
+        port = int(value) + int(match["offset"] or 0)
+    return port if 0 < port <= _MAX_PORT else None
