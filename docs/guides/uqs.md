@@ -614,8 +614,8 @@ needed, and with several the command refuses rather than ranking them.
 
 **It empties what it writes.** TorQ's replay defaults are kept whole, so the
 tables being replayed are cleared in the partitions the replay touches before it
-writes them. `--dry-run` prints the resolved plan and the start line and runs
-nothing.
+writes them. Without `--apply` it prints the resolved plan and the start line
+and runs nothing.
 
 ## Checking a dataset's producers
 
