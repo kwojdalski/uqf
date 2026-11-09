@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 LOCAL_HOSTS = ("localhost", "127.0.0.1", "::1")
+#: The Linux mount table (a test replaces it).
+MOUNTS = Path("/proc/mounts")
 
 
 def _tcp_open(host: str, port: int) -> bool:
@@ -125,12 +127,12 @@ def filesystem_of(path: Path) -> str:
     """The type of the filesystem `path` is on, or "unknown" - best effort, from the
     mount table, longest mount point first."""
     try:
-        if Path("/proc/mounts").is_file():
+        if MOUNTS.is_file():
+            # The table writes a space, tab, newline or backslash in a mount point as an
+            # octal escape (\040, \011, \012, \134): decode it to match `path` (#2305).
             rows = [
-                (fields[1], fields[2])
-                for fields in (
-                    line.split() for line in Path("/proc/mounts").read_text().splitlines()
-                )
+                (re.sub(r"\\([0-7]{3})", lambda m: chr(int(m[1], 8)), fields[1]), fields[2])
+                for fields in (line.split() for line in MOUNTS.read_text().splitlines())
                 if len(fields) >= 3
             ]
         else:
