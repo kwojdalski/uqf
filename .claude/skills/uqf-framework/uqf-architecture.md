@@ -108,7 +108,7 @@ second authority for ordering and retries (`pipeline-philosophy.md` §8).
 
   | Fact                   | Authority                                                                                            | Derived into                                                      |
   | ---                    | ---                                                                                                  | ---                                                               |
-  | a plant table's schema | `src/etl/plant_tables.q` (`.qetl.plant`)                                                             | the generated `database.q` the tickerplant loads                  |
+  | a plant table's schema | `src/etl/plant_tables.q` (`.qetl.plant`; its lookups are `src/etl/plant_registry.q`'s)               | the generated `database.q` the tickerplant loads                  |
   | which processes exist  | the q declarations (`procname`), plus `NON_JOB_PIPELINES` in Python for processes with no job        | `process.csv`, `docs/reference/processes.md`                      |
   | a process's port       | `scripts/processes/process_ports.csv`, an append-only offset from the base port                      | `process.csv`                                                     |
   | the job graph          | each declaration's `subscribe_to`/`outputs`                                                          | `.qetl.dag`, `src/etl/generated/pipeline_dag.q`, profile closures |

@@ -34,6 +34,7 @@ VENDORED = "quote:([] sym:`symbol$(); bid:`float$())\n"
 #: arrival order. One book has a withdrawn bid, one a zero-size ask level (no price).
 #: argv[0] is the HDB root.
 BUILD = r"""
+\l src/etl/plant_registry.q
 \l src/etl/plant_tables.q
 root:hsym `$first .z.x;
 d:delete bid, ask, rid from 0#.qetl.plant.market_data;

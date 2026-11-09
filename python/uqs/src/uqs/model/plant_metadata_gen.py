@@ -2,11 +2,12 @@
 
 The reader, the fingerprints and the shapes are uqs.model.plant_metadata's;
 this is the half that needs q. scripts/generate/export_plant_schema.q loads
-plant_tables.q alone - no init.q, no feed, no worker, no port - on KDB-X or
-PeachQ, and prints JSON; this checks it, renders it with the fingerprints of
-the inputs it was made from, and writes it through a temporary file and an
-atomic rename. It refuses when the inputs change while q runs, and a failure
-leaves the previous file in place - which the fingerprint then calls stale.
+plant_tables.q and the plant_registry.q it calls, alone - no init.q, no
+feed, no worker, no port - on KDB-X or PeachQ, and prints JSON; this checks
+it, renders it with the fingerprints of the inputs it was made from, and
+writes it through a temporary file and an atomic rename. It refuses when
+the inputs change while q runs, and a failure leaves the previous file in
+place - which the fingerprint then calls stale.
 derive.py's plant-schema target is the command; a bundle install calls
 ensure() itself.
 
@@ -36,7 +37,7 @@ from uqs.model.plant_metadata import (
     vendored_fingerprint,
     vendored_schema,
 )
-from uqs.paths import TABLES_FILE, TORQAPPHOME_ENV, repo_root
+from uqs.paths import PLANT_REGISTRY_FILE, TABLES_FILE, TORQAPPHOME_ENV, repo_root
 
 
 def export(root: Path, vendored: Path | None = None) -> dict:
@@ -143,7 +144,8 @@ def generate(root: Path | None = None) -> str:
     _check(found)
     if (tree_fingerprint(root), vendored_fingerprint(vendored)) != before:
         raise SchemaMetadataError(
-            f"{root / TABLES_FILE} changed while its schemas were exported - run again"
+            f"{root / TABLES_FILE} (or {PLANT_REGISTRY_FILE.name}) changed while its schemas "
+            "were exported - run again"
         )
     return render(root, found, vendored)
 

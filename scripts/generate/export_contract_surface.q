@@ -119,7 +119,8 @@ materialise_tables:{[]
 / these are empty typed declarations with no side effect beyond existing.
 load_tickerplant_tables:{[]
     f:"src/etl/plant_tables.q";
-    @[{system"l ",x; .qetl.plant.materialise .qetl.plant.own[]};f;{[e] -2 "could not load ",f,": ",e;}];
+    / The .qetl.plant API first: the declarations call it (#2503).
+    @[{system"l src/etl/plant_registry.q"; system"l ",x; .qetl.plant.materialise .qetl.plant.own[]};f;{[e] -2 "could not load ",f,": ",e;}];
     f}
 
 / Table schemas: column names and type characters, for every table this tree

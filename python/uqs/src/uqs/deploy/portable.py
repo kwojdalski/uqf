@@ -28,7 +28,7 @@ from types import ModuleType
 from uqs.deploy.artifact import ReleaseError
 from uqs.deploy.payload import VENDORED_IN_RELEASE
 from uqs.guardrails import Guardrail
-from uqs.paths import TABLES_FILE
+from uqs.paths import PLANT_REGISTRY_FILE, TABLES_FILE
 
 CONVERTER = Path("scripts") / "portable" / "flatten_contexts.py"
 #: The kdb+ versions a release can be converted for. 5.0 needs no conversion.
@@ -111,13 +111,15 @@ def convert(
             f"python3 {CONVERTER} <paths> --out <dir> --dry-run --debug shows every decision.",
         )
     transformed = [r for r in results if r.action == "transformed"]
-    if any(r.path == TABLES_FILE.as_posix() for r in transformed):
-        raise ReleaseError(
-            "portable",
-            f"converting {TABLES_FILE} for kdb+ {q_target} would ship it beside schema metadata "
-            "q made from the unconverted file (#1781) - keep its names qualified (#1411), or "
-            f"leave it out with --q-exclude {TABLES_FILE}",
-        )
+    # Both files the schema metadata is fingerprinted from (#2503).
+    for plant in (TABLES_FILE, PLANT_REGISTRY_FILE):
+        if any(r.path == plant.as_posix() for r in transformed):
+            raise ReleaseError(
+                "portable",
+                f"converting {plant} for kdb+ {q_target} would ship it beside schema metadata "
+                "q made from the unconverted file (#1781) - keep its names qualified (#1411), "
+                f"or leave it out with --q-exclude {plant}",
+            )
     for r in transformed:
         (tree / r.path).write_text(r.output, encoding="utf-8")
     return {

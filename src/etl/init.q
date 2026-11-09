@@ -139,7 +139,9 @@
 \l src/etl/core/verify_behaviour_bounded.q
 \l src/etl/core/verify_report.q
 \l src/etl/core/compare.q
-/ Every plant table's schema, before any job that publishes or reads one.
+/ Every plant table's schema, before any job that publishes or reads one: the
+/ .qetl.plant API first, since the declarations call it (#2503).
+\l src/etl/plant_registry.q
 \l src/etl/plant_tables.q
 
 / How the HDB's tables are compressed, declared against the plant just loaded.

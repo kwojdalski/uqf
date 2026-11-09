@@ -127,7 +127,9 @@ runs to do, and their hooks fail until they are run.
 
 **Always `--dry-run` first** and show the user what it would write. It appends
 to `plant_tables.q` and the table list in `test_stack_tables.q`, which are files
-they may have opinions about.
+they may have opinions about. `plant_tables.q` holds only the declarations; the
+`.qetl.plant` API they call is `plant_registry.q`, which a scaffold never edits
+(#2503).
 
 `kind` is derived for a streaming job --- no `--subscribe-to` means a feed ---
 so do not ask for it. `--outputs` takes a comma list. A table the plant already
