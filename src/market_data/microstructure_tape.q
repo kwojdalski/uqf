@@ -21,7 +21,8 @@
 .qf.mkt.tape_cols:`time`sym`action`side`size
 
 / Refuse a tape that is missing a column, carries an unknown action, is not
-/ sorted by time, or holds a trade with a null or negative size.
+/ sorted by time, or holds a trade with a null or negative size or a side
+/ other than 1 or -1.
 / .
 / ALL are silent failures if unchecked, so this is a precondition:
 / .
@@ -34,6 +35,8 @@
 /     rows and return a plausible number. Rejecting beats sorting, as in
 /     cross_book_at: sorting a tape sorted by construction hides a bug.
 /   - an unsized trade breaks every volume feature (VPIN read 2, #2428)
+/   - an unsided trade is booked as a sell (0N<0) and a side of 2 doubles its
+/     flow, so a null, 0, 2 or non-numeric side is refused, not read (#2531)
 / @param tape an event tape table
 / @return 1b when the tape is usable
 / @throws error naming what is wrong
@@ -51,6 +54,8 @@
         '"require_tape: tape is not sorted ascending by time - a rolling window over an unsorted tape returns a plausible wrong number rather than erroring (docs/architecture/event-tape.md)"];
     sizes:exec size from tape where action=`trade;
     if[n_bad:sum (null sizes) or sizes<0; '"require_tape: ",string[n_bad]," trade(s) with a null or negative size - every volume feature would report a plausible wrong number"];
+    sides:exec side from tape where action=`trade;
+    if[n_bad:sum not $[(type sides) in 5 6 7 8 9h; (sides=1) or sides=-1; (count sides)#0b]; '"require_tape: ",string[n_bad]," trade(s) with a side other than 1 or -1 - signed flow and VPIN would book it to the wrong side"];
     1b}
 
 / Signed trade flow: the net direction of aggressive volume (ROADMAP #19).

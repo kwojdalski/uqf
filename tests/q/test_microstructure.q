@@ -421,7 +421,7 @@
     ([] time:2026.09.11D09:00:00.000000000+0D00:00:01*til 12;
         sym:12#`EURUSD;
         action:(10#`trade),`add`cancel;
-        side:12#`buy;
+        side:12#1;
         / "f"$ on the whole vector, not `100 200f` appended to a long
         / vector: concatenating a long vector with a float one in q yields a
         / MIXED GENERAL LIST (type 0h), not a promoted float vector. The
