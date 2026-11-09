@@ -273,6 +273,9 @@ def get_recent_logs(
     logger, and uqs.mcp's uqs_logs tool returns as-is for
     an MCP client to read directly.
     """
+    if lines < 0:
+        # A negative slice would skip the first lines, not keep the last (#2468).
+        raise UqsUsageError(f"lines must be 0 or more, not {lines}")
     procnames = resolve_procnames(paths, procs)
     min_level_name(min_level)
     chosen = channel_names(channels)

@@ -111,7 +111,8 @@ def logs(
         bool, typer.Option("--follow", "-f", help="Keep streaming new lines (Ctrl-C to stop)")
     ] = False,
     lines: Annotated[
-        int, typer.Option("--lines", "-l", help="Lines per process log to show (history)")
+        int,
+        typer.Option("--lines", "-l", min=0, help="Lines per process log to show (history)"),
     ] = 20,
     level: _LevelOpt = None,
     multitail: Annotated[

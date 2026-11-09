@@ -176,6 +176,24 @@ def test_a_channel_that_is_not_declared_is_refused_naming_them_all(paths):
     assert all(c in str(err.value) for c in q_facts.LOG_CHANNELS)
 
 
+@pytest.mark.parametrize("lines", [-1, -27])
+def test_a_negative_line_count_is_refused_not_read_as_skip_the_first(paths, lines):
+    """`splitlines()[-lines:]` with a negative count skipped the first lines
+    and returned the rest of the log - from the CLI and from MCP (#2468)."""
+    with pytest.raises(UqsUsageError, match="lines"):
+        logs.get_recent_logs(paths, "rdb1", lines)
+
+
+def test_the_cli_refuses_a_negative_lines_as_a_usage_error(paths):
+    from typer.testing import CliRunner
+
+    from uqs import cli
+
+    result = CliRunner().invoke(cli.app, ["logs", "rdb1", "-l", "-1"])
+    assert result.exit_code == 2
+    assert "--lines" in result.output
+
+
 # ----------------------------------------------------------------------- display
 
 
