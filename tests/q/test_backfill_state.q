@@ -198,6 +198,19 @@
     second_try:.qetl.job.bounded.state.break_stale path;
     .qunit.assertEquals[(first_try;second_try);01b;"the dead breaker's marker is cleared, then the lock is broken"]};
 
+/ A breaker killed between its mkdir of `.break` and its owner write leaves a
+/ `.break` nobody can judge stale, so the dead holder's lock cannot be broken.
+/ The waiter must still give up at its wait instead of spinning forever (#2434).
+.qt.qetl.job.bounded.state.test_an_unbreakable_dead_lock_is_refused_within_the_wait:{[t]
+    path:.qt.qetl.job.bounded.state.plant_lock[`brk_noowner;.qt.qetl.job.bounded.state.dead_pid;string .z.h];
+    system"mkdir -p ",path,".break";
+    t0:.z.p;
+    .qunit.assertThrows[.qetl.job.bounded.state.with_lock_at[;0D00:00:01;{x};enlist 1];path;
+        "with_file_lock: could not take the lock*";"the dead holder's lock cannot be broken, so the wait ends in the refusal"];
+    .qunit.assertTrue[(.z.p-t0)<0D00:00:03;"and it gives up at the wait, not never"];
+    system"rm -rf ",path,".break";
+    .qetl.job.bounded.state.release_lock[`brk_noowner]};
+
 .qt.qetl.job.bounded.state.test_with_file_lock_still_takes_a_mutex_a_dead_process_left:{[t]
     path:.qetl.job.bounded.state.file_lock_path `brk_ledger;
     system"rm -rf ",path;

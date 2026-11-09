@@ -22,7 +22,9 @@
 /      it, it returns exactly the table an applied run would act on.
 /   2. NOTHING COVERAGE STILL CLAIMS IS REMOVED, unless the same run also
 /      supersedes the claim (opts`supersede). The check is over the whole
-/      plan BEFORE the first removal, so a refusal removes nothing.
+/      plan BEFORE the first removal, so a refusal removes nothing - and
+/      again per HDB item as it is reached, since a claim recorded while the
+/      run is going counts as much as one the plan saw (#2440).
 /   3. SUPERSEDE FIRST, REMOVE SECOND, per item. An interruption between the
 /      two leaves data that nothing claims - an under-claim, which only costs
 /      a redundant refill. The other order would leave a claim over nothing,
@@ -246,38 +248,77 @@
          " pass `supersede to withdraw the claims in the same run"];
     id:.qetl.run.mint[];
     cutoff:as_of-decl`horizon;
-    $[decl[`kind]=`hdb_partitions; .qetl.retention.apply_hdb[id;decl;p];
+    $[decl[`kind]=`hdb_partitions; .qetl.retention.apply_hdb[id;decl;p;.qetl.retention.flag[opts;`supersede]];
       decl[`kind]=`ledger_rows; .qetl.retention.apply_ledger[id;decl;cutoff;p];
       .qetl.retention.apply_uptime[id;cutoff;p]];
     p}
 
-/ Private: remove the HDB partitions, one at a time: supersede, remove, record.
+/ Private: the reactions of ds whose ok outcome stands for claim c, as
+/ .qetl.reaction.pending judges it: registered, and not owed over c's window.
 / @private
-.qetl.retention.apply_hdb:{[id;decl;p]
-    {[id;decl;r]
-        n:0;
-        if[r[`claims]>0;
-            cl:.qetl.retention.claims_over[decl`dataset;r`range_from;r`range_to];
-            rc:cl where {[ds;c] not .qetl.coverage.outstanding[ds;c`partition;c`source_version]}[decl`dataset] each cl;
-            ready:distinct ([] dataset:(count rc)#decl`dataset; partition:rc`partition; source_version:rc`source_version);
-            / a claim reaching past the removed day is cut, not dropped: its
-            / remainders over days still on disk are staged BEFORE the supersede,
-            / so a kill between them over-claims (harmless) rather than reports
-            / kept data as a gap (#1544, as retire_fixture_claims does)
-            {[ds;r;c]
-                if[c[`range_from]<r`range_from; .qetl.coverage.stage_completion[ds;c`partition;c`source_version;c`range_from;r`range_from;0]];
-                if[(r`range_to)<c`range_to; .qetl.coverage.stage_completion[ds;c`partition;c`source_version;r`range_to;c`range_to;0]]}[decl`dataset;r] each cl;
-            n:sum {[ds;r;c] .qetl.coverage.supersede[ds;c`partition;c`source_version;r`range_from;r`range_to]}[decl`dataset;r] each cl;
-            / the remainders are recorded now, after their key's readiness watermark, so
-            / the days kept would stop being queryable until some worker wrote the key
-            / again (#1660). Re-advance the watermark - but only for a key with nothing
-            / unreleased before the cut, or this would release data the deployment has not
-            / yet made visible.
-            if[count ready; .qetl.coverage.mark_ready[ready;.z.p]]];
+.qetl.retention.reacted:{[ds;c]
+    rs:.qetl.reaction.for_dataset[ds];
+    if[0=count rs; :`symbol$()];
+    owed:.qetl.reaction.pending[ds;c`partition;c`source_version;c`range_from;c`range_to];
+    (rs`name) except exec name from owed where range_from=c`range_from, range_to=c`range_to}
+
+/ Private: withdraw the current claims cl over one removed item r, returning how
+/ many were superseded.
+/ @private
+.qetl.retention.withdraw:{[decl;r;cl]
+    / which reactions are done over each claim, read before its remainders exist
+    done:.qetl.retention.reacted[decl`dataset;] each cl;
+    rc:cl where {[ds;c] not .qetl.coverage.outstanding[ds;c`partition;c`source_version]}[decl`dataset] each cl;
+    ready:distinct ([] dataset:(count rc)#decl`dataset; partition:rc`partition; source_version:rc`source_version);
+    / a claim reaching past the removed day is cut, not dropped: its
+    / remainders over days still on disk are staged BEFORE the supersede,
+    / so a kill between them over-claims (harmless) rather than reports
+    / kept data as a gap (#1544, as retire_fixture_claims does)
+    {[ds;r;c]
+        if[c[`range_from]<r`range_from; .qetl.coverage.stage_completion[ds;c`partition;c`source_version;c`range_from;r`range_from;0]];
+        if[(r`range_to)<c`range_to; .qetl.coverage.stage_completion[ds;c`partition;c`source_version;r`range_to;c`range_to;0]]}[decl`dataset;r] each cl;
+    n:sum {[ds;r;c] .qetl.coverage.supersede[ds;c`partition;c`source_version;r`range_from;r`range_to]}[decl`dataset;r] each cl;
+    / the remainders are recorded now, after their key's readiness watermark, so
+    / the days kept would stop being queryable until some worker wrote the key
+    / again (#1660). Re-advance the watermark - but only for a key with nothing
+    / unreleased before the cut, or this would release data the deployment has not
+    / yet made visible.
+    if[count ready; .qetl.coverage.mark_ready[ready;.z.p]];
+    / a remainder is a new claim no outcome matches, so a reaction that succeeded
+    / over its parent read as owed over it, and the next run re-fetched and re-fired
+    / it over rows retention never touched (#2437). Its ok outcome is carried over,
+    / recorded after the remainder, as readiness is re-advanced above.
+    {[ds;r;c;nms]
+        rest:$[c[`range_from]<r`range_from; enlist (c`range_from;r`range_from); ()],
+            $[(r`range_to)<c`range_to; enlist (r`range_to;c`range_to); ()];
+        {[ds;c;nms;w]
+            item:`dataset`partition`source_version`range_from`range_to`depth!(ds;c`partition;c`source_version;w 0;w 1;0);
+            .qetl.reaction.record[item;;`ok;"retention: carried over from the window it was cut from"] each nms}[ds;c;nms] each rest}[decl`dataset;r]'[cl;done];
+    n}
+
+/ Private: remove the HDB partitions, one at a time: supersede, remove, record.
+/ .
+/ The claims over each item are read again when it is reached, not taken from
+/ the plan: a refill recorded since the plan was read is claimed now, and
+/ removing under it would leave a claim over nothing (#2440). Without sup such
+/ a claim stops the run before that item. One recorded between that re-read
+/ and the retire is withdrawn after it - an under-claim, the safe direction;
+/ holding the coverage lock across a multi-second retire would time writers out.
+/ @private
+.qetl.retention.apply_hdb:{[id;decl;p;sup]
+    {[id;decl;sup;r]
+        cl:.qetl.retention.claims_over[decl`dataset;r`range_from;r`range_to];
+        if[(0<count cl) and not sup;
+            '"retention: ",string[r`name]," stopped before removing ",string[r`item]," of ",string[decl`table],
+             ": etl_coverage has claimed it for ",string[decl`dataset]," since the plan was read -",
+             " pass `supersede to withdraw the claims in the same run"];
+        n:$[count cl; .qetl.retention.withdraw[decl;r;cl]; 0];
         / under the root's write lock, as every writer is (#1083, #2302): unlocked, this could
         / remove a partition mid-write and share a writer's staging path for the swap
         .qetl.io.locked[decl`root;.qetl.io.retire;(decl`root;"D"$string r`item;r`target)];
-        .qetl.retention.record[id;enlist r;n]}[id;decl] each p;
+        late:.qetl.retention.claims_over[decl`dataset;r`range_from;r`range_to];
+        if[count late; n+:.qetl.retention.withdraw[decl;r;late]];
+        .qetl.retention.record[id;enlist r;n]}[id;decl;sup] each p;
     }
 
 / Private: remove the old ledger rows under that ledger's own lock.

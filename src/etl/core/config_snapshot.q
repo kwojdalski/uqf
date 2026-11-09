@@ -91,18 +91,46 @@
     @[system;"P ",string p;::];
     r}
 
-/ Private: one value as text that tells it from every other: a type tag, then its
-/ digits. A dictionary is rendered in key order, so the order a producer built it
-/ in does not change the digest; a general list renders item by item; a float at
-/ full precision. Anything else (a table, a function) is not a configuration value.
+/ Private: text that cannot run into what follows it - its length, a colon, then the
+/ text - so no character inside a string or symbol can pass for the punctuation
+/ around it (#2421).
+/ @private
+.qetl.snapshot.counted:{[s] (string count s),":",s}
+
+/ Private: one value as text that tells it from every other: its signed type tag (an
+/ atom is not its one-item list), a vector's count, then its digits. Strings, symbols
+/ and dictionary keys are length-prefixed and a vector's items are counted, so no two
+/ values render alike (#2421: a raw string could impersonate the dictionary around
+/ it, and `a`b rendered as the one symbol `$"a,b"). A dictionary is rendered in key
+/ order, so the order a producer built it in does not change the digest; a general
+/ list renders item by item; a float at full precision. Anything else (a function)
+/ is not a configuration value.
 / @private
 .qetl.snapshot.render:{[v]
     t:type v;
-    tag:(string abs t),":";
+    tag:(string t),":";
     $[98h=t; tag,.qetl.snapshot.render flip v;
       99h=t; $[98h=type key v; tag,"keyed",.qetl.snapshot.render 0!v;
-          tag,"{",(";" sv {[d;k] (string k),"=",.qetl.snapshot.render d k}[v;] each asc key v),"}"];
+          tag,"{",(";" sv {[d;k] (.qetl.snapshot.render k),"=",.qetl.snapshot.render d k}[v;] each asc key v),"}"];
       0h=t; tag,"(",(";" sv .qetl.snapshot.render each v),")";
+      10h=t; tag,.qetl.snapshot.counted v;
+      -11h=t; tag,.qetl.snapshot.counted string v;
+      11h=t; tag,(string count v),":","," sv .qetl.snapshot.counted each string v;
+      t in -9 9h; tag,$[t<0; ""; (string count v),":"],.qetl.snapshot.float_text v;
+      (t within -19 19h) and t<>0h; $[t<0; tag,string v; tag,(string count v),":","," sv string v];
+      '"render: a snapshot holds atoms, lists, dictionaries and tables, not a value of type ",string t]}
+
+/ Private: the first rendering, before #2421, which let two configurations share
+/ text. Kept ONLY so digest_ok can still verify the rows recorded under it; nothing
+/ new is digested with it.
+/ @private
+.qetl.snapshot.render_v1:{[v]
+    t:type v;
+    tag:(string abs t),":";
+    $[98h=t; tag,.qetl.snapshot.render_v1 flip v;
+      99h=t; $[98h=type key v; tag,"keyed",.qetl.snapshot.render_v1 0!v;
+          tag,"{",(";" sv {[d;k] (string k),"=",.qetl.snapshot.render_v1 d k}[v;] each asc key v),"}"];
+      0h=t; tag,"(",(";" sv .qetl.snapshot.render_v1 each v),")";
       10h=t; tag,v;
       t in -9 9h; tag,.qetl.snapshot.float_text v;
       (t within -19 19h) and t<>0h; $[t<0; tag,string v; tag,"," sv string v];
@@ -154,10 +182,12 @@
     t}
 
 / Private: a boolean per row, whether its stored digest is the digest of its stored
-/ kind and content. A row whose content cannot be rendered is not ok.
+/ kind and content - under today's rendering, or for a row recorded before #2421,
+/ under the first one (render_v1). A row whose content cannot be rendered is not ok.
 / @private
 .qetl.snapshot.digest_ok:{[t]
-    {[k;b;d] d~@[{[k;b] .qetl.snapshot.digest[k;.qetl.snapshot.decode b]}[k;];b;{[e] `}]}'[t`kind;t`content;t`digest]}
+    v1:{[k;c] `$raze string md5 (string k),"|",.qetl.snapshot.render_v1 c};
+    {[v1;k;b;d] d in @[{[v1;k;b] c:.qetl.snapshot.decode b; (.qetl.snapshot.digest[k;c];v1[k;c])}[v1;k;];b;{[e] `symbol$()}]}[v1]'[t`kind;t`content;t`digest]}
 
 / Every snapshot in the file, with a digest_ok column, and no throw over a bad
 / digest: for a reader that must SHOW a damaged store (`uqs data snapshot list`),
