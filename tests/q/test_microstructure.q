@@ -176,6 +176,14 @@
     zero_l0:.qf.mkt.vamp[enlist 0 1.0998;enlist 1e6 1e6;enlist 1.1002 1.1004;enlist 1e6 1e6;500000];
     .qunit.assertTrue[null first zero_l0;"an L0 that is not a price nulls the row"]};
 
+/ #2534: an ask ladder of 200 units cannot fill a 1e6 notional, and its
+/ partial avg_price (1.25) gave a VAMP of 1.175, a deep book's 1.15 moved.
+.qt.qf.mkt.microstructure.test_vamp_nulls_a_row_a_side_cannot_fill:{[t]
+    r:.qf.mkt.vamp[(1.1 1.0;1.1 1.0);(1e9 1e9;1e9 1e9);(1.2 1.3;1.2 1.3);(100 100f;1e9 1e9);1e6];
+    .qunit.assertTrue[null first r;"a thin ask does not price"];
+    .qt.support.assertApprox[last r;1.15;1e-12;"a deep one does"];
+    .qunit.assertTrue[null first .qf.mkt.vamp[enlist 1.1 1.0;enlist 100 100f;enlist 1.2 1.3;enlist 1e9 1e9;1e6];"nor a thin bid"]};
+
 / ---- Tier 2 shared fixture ----
 
 / 4-row EURUSD quotes fixture: time 1s apart, both sides equal to the same

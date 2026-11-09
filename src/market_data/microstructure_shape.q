@@ -112,6 +112,7 @@
 
 / Private: vamp for a single row - see vamp. A side with no level_ok L0 (withdrawn) nulls
 / the row first: its 0n/0w/0 size target made sweep_price throw for the whole vector (#2379).
+/ A leg the book cannot fill nulls it too: its partial avg_price read a thin book as a better mid (#2534).
 / @private
 .qf.mkt.vamp_one:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
     if[not all {[px;sz] $[count px; .qf.mkt.level_ok["f"$first px;"f"$first sz]; 0b]}'[(bid_prices;ask_prices);(bid_sizes;ask_sizes)]; :0n];
@@ -119,6 +120,7 @@
     bid_size_target:notional%first bid_prices;
     buy_leg:.qf.mkt.sweep_price[ask_prices;ask_sizes;ask_size_target];
     sell_leg:.qf.mkt.sweep_price[bid_prices;bid_sizes;bid_size_target];
+    if[not (buy_leg`fully_filled) and sell_leg`fully_filled; :0n];
     0.5*(buy_leg`avg_price)+sell_leg`avg_price};
 
 / VAMP (volume-adjusted mid price): convert notional into a size via each
@@ -132,7 +134,8 @@
 / @param notional a single atom (broadcast to every row) or a vector
 /   already aligned to rows - same atom-or-vector convention as
 /   execution.q's markout ref_price
-/ @return a vector, VAMP per row - null for a row with a side lacking a usable L0 (one-sided book)
+/ @return a vector, VAMP per row - null for a row with a side lacking a usable L0 (one-sided book),
+/   or a side too thin to fill the notional
 / @eg .qf.mkt.vamp[enlist 1.1000 1.0998;enlist 1000000 1000000;enlist 1.1002 1.1004;enlist 1000000 1000000;500000]  -> ,1.1001
 .qf.mkt.vamp:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
     n:count bid_prices;
