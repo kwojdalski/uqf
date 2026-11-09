@@ -26,7 +26,8 @@ wait = QWorkerStatusSensor(
     source_version="v1",
     range_from="{{ data_interval_start }}",
     range_to="{{ data_interval_end }}",
-    not_before="{{ ti.start_date }}",  # only when retrying the same range
+    # only when retrying the same range: when the LAUNCHING task started
+    not_before="{{ dag_run.get_task_instance('launch_deals_backfill').start_date }}",
 )
 ```
 
@@ -36,7 +37,10 @@ file for any other run as **pending**. Without that, a poke landing before the
 new process wrote `starting` would read the previous run's outcome as this
 one's. `not_before` covers the one case the spec cannot: a retry of the same
 range, where the last run's file matches. A file last written before it is
-ignored.
+ignored. Give it when the task that launched the worker started, never
+`{{ ti.start_date }}`: `ti` is the sensor's own task, which starts after the
+launch - a worker that finished first, or a sensor retry after it finished,
+would leave its final file older than `not_before` and pending forever.
 
 A `starting` or `running` file whose process is gone **fails** the task, saying
 so and naming `uqs logs <instance_id>`. The file records the writer's `pid` and
