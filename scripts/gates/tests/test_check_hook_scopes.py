@@ -72,6 +72,33 @@ def test_the_vendored_exclude_alone_leaves_everything_gated(run):
     assert "UNGATED" not in out
 
 
+def test_an_exclude_before_files_or_at_top_level_is_applied(run):
+    """Both spellings dropped python/ from the gates while coverage read 3/3
+    (#2539): a hook's keys count in any order, and a column-0 key is global."""
+    before = (
+        "repos:\n  - repo: local\n    hooks:\n"
+        "      - id: ruff\n        exclude: '^python/'\n        files: '\\.py$'\n"
+    )
+    code, out = run(before)
+    assert code == 1
+    assert "UNGATED (lint)  python/uqs" in out
+    top = "exclude: '^python/'\n" + _config("^lib/") + "      - id: other\n        files: '.'\n"
+    code, out = run(top)
+    assert code == 1
+    assert "1/3 tracked .py file(s) covered by the lint gate" in out
+    assert "UNGATED (type)  python/uqs" in out
+
+
+def test_a_top_level_files_narrows_every_hook():
+    hooks = chs.scoped_hooks(
+        "files: '^python/'\nrepos:\n  - hooks:\n      - id: a\n        files: 'src/'\n"
+    )
+    [(hook, files, exclude)] = hooks
+    assert (hook, exclude) == ("a", None)
+    assert [f for f in FILES if re.search(files, f)] == ["python/uqs/src/uqs/cli.py"]
+    assert not re.search(files, "scripts/src/x.py")
+
+
 def test_the_real_config_gates_all_tracked_python():
     """The repository's own config passes, so the hook is committable."""
     assert chs.main() == 0
