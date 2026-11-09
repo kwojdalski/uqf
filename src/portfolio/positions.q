@@ -215,6 +215,9 @@
 / AUDUSD leg is -1,100,000.
 / @eg .qf.port.ccy_exposure[.qf.port.apply_fill[.qf.port.apply_fill[.qf.port.empty_book[];`EURAUD;1000000;1.6000;1];`AUDUSD;500000;0.6500;1]] -> +`ccy`amount!(`s#`AUD`EUR`USD;-1100000 1000000 -325000f)
 .qf.port.ccy_exposure:{[pos]
+    / A book with no rows razes to an empty general list, which has no ccy
+    / column to group by (#2624): every book starts out like this.
+    if[0=count pos; :([] ccy:`symbol$(); amount:`float$())];
     legs:raze {[row]
         open:.qf.port.ccy_legs[row`sym;row`qty;row`avg_price];
         / ccy_legs gives the base leg, then the quote leg. Parenthesised:
@@ -258,6 +261,7 @@
         pair:.qf.px.ccy_pair_symbol[ccy;reporting_ccy];
         mid:first exec mid from .qf.mkt.cross_book_at[quotes;pair;as_of;enlist abs amount;enlist `mid];
         amount*mid};
-    update reporting_amount:convert_one[quotes;reporting_ccy;as_of]'[ccy;amount] from exposure};
+    / `float$: each over an empty book's no rows gives an untyped empty list.
+    update reporting_amount:`float$convert_one[quotes;reporting_ccy;as_of]'[ccy;amount] from exposure};
 
 \d .

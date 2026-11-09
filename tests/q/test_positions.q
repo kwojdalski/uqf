@@ -249,6 +249,14 @@
     .qt.support.assertApprox[first exec amount from exposure where ccy=`EUR;0f;1e-6;"no EUR left once flat"];
     .qt.support.assertApprox[first exec amount from exposure where ccy=`USD;15000f;1e-6;"the realised 15,000 USD stays an exposure"]};
 
+.qt.qf.port.positions.test_ccy_exposure_of_an_empty_book_is_an_empty_table:{[t]
+    / Every book starts empty; its exposure report threw 'type (#2624).
+    exposure:.qf.port.ccy_exposure .qf.port.empty_book[];
+    .qunit.assertEquals[exposure;([] ccy:`symbol$(); amount:`float$());"no rows, the same columns and types a filled book gives"];
+    quotes:([] time:`timestamp$(); sym:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:());
+    revalued:.qf.port.ccy_exposure_in[.qf.port.empty_book[];quotes;`USD;.z.p];
+    .qunit.assertEquals[revalued;([] ccy:`symbol$(); amount:`float$(); reporting_amount:`float$());"the revalued report of an empty book is empty and float-typed too"]};
+
 .qt.qf.port.positions.test_ccy_exposure_agrees_with_the_desk_book_on_the_same_fills:{[t]
     / Two books, one question: the average-cost book here and .qf.port's netted
     / cash book must report the same exposure per currency for the same fills,

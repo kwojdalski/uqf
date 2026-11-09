@@ -43,6 +43,14 @@
     a:.qf.demo.drift_one each 1000#1.0;
     .qunit.assertTrue[1<count distinct a;"each level gets its own draw"]};
 
+.qt.qf.demo.synthetic_market.test_a_vector_drifts_each_level_on_its_own_draw:{[t]
+    / Called on the vector itself, one `rand 1f` moved every pair by the
+    / same factor (#2627).
+    a:.qf.demo.drift_one 1000#1.0;
+    .qunit.assertEquals[count a;1000;"the same shape"];
+    .qunit.assertTrue[1<count distinct a;"each level gets its own draw"];
+    .qunit.assertTrue[all (a>=1-0.0005) and a<=1+0.0005;"each within 5bp"]};
+
 .qt.qf.demo.synthetic_market.test_a_bid_ladder_descends_from_the_mid:{[t]
     .qunit.assertEquals[.qf.demo.levels_one[1.1;0.0001;-1;3];1.0999 1.0998 1.0997;
         "level 0 is one step from mid, and each level is one step further"]};

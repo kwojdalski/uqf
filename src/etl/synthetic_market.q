@@ -58,7 +58,9 @@
 / @param s the current level, a float atom or vector
 / @return the next level, same shape
 / @eg .qf.demo.drift_one 1.0  ->  a float within 5bp of 1.0
-.qf.demo.drift_one:{[s] s*1+0.0005*-1+2*rand 1f}
+/ A vector takes one draw per level: `rand 1f` is a single draw, which moved
+/ every pair by the same factor (#2627).
+.qf.demo.drift_one:{[s] s*1+0.0005*-1+2*$[0>type s; rand 1f; (count s)?1f]}
 
 / THE SHARED LEVEL (#2562, #2561). The FX feeds run in separate processes,
 / and each used to walk its own copy of `spot`: within minutes UQFFX and

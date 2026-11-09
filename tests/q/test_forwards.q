@@ -196,6 +196,26 @@
     .qunit.assertThrows[.qf.mkt.cross_book_at_sizes[`EURUSD;b;`USDJPY;j;`float$()];enlist `last;
         "cross_book_at_sizes: side must be one of*";"sides are still validated"]};
 
+/ #2558: long sizes kept `size` long, but no sizes typed it float - so the
+/ two results did not join.
+.qt.qf.px.forwards.test_cross_book_at_empty_sizes_keep_the_callers_size_type:{[t]
+    q:`sym`time xasc ([] time:2#2026.01.01D11; sym:`EURUSD`USDJPY; bid_prices:(1.1 1.09;150 149f); bid_sizes:2#enlist 1e6 1e6; ask_prices:(1.1002 1.1004;150.1 150.2); ask_sizes:2#enlist 1e6 1e6);
+    one:.qf.mkt.cross_book_at[q;`EURJPY;2026.01.01D12;1000 2000;`bid`mid];
+    none:.qf.mkt.cross_book_at[q;`EURJPY;2026.01.01D12;`long$();`bid`mid];
+    .qunit.assertEquals[meta none;meta one;"long sizes or none, the same types"];
+    b:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.1 1.09;1e6 1e6;1.1002 1.1004;1e6 1e6);
+    j:`bid_prices`bid_sizes`ask_prices`ask_sizes!(150 149f;1e6 1e6;150.1 150.2;1e6 1e6);
+    .qunit.assertEquals[type (.qf.mkt.cross_book_chain_at_sizes[`EURUSD`USDJPY;(b;j);`long$();`bid])`size;7h;"the chain keeps long too"];
+    .qunit.assertEquals[type (.qf.mkt.cross_book_at_sizes[`EURUSD;b;`USDJPY;j;();`bid])`size;9h;"an untyped () has no type to keep: float"]};
+
+/ #2557: a non-pair sym anywhere in quotes threw for every pair, though no
+/ path needs it.
+.qt.qf.px.forwards.test_cross_book_at_ignores_syms_that_are_not_pairs:{[t]
+    q:`sym`time xasc ([] time:3#2026.01.01D11; sym:`EURUSD`USDJPY`BTCUSDT; bid_prices:(1.1 1.09;150 149f;50000 49990f); bid_sizes:3#enlist 1e6 1e6; ask_prices:(1.1002 1.1004;150.1 150.2;50010 50020f); ask_sizes:3#enlist 1e6 1e6);
+    with:.qf.mkt.cross_book_at[q;`EURJPY;2026.01.01D12;enlist 1000;`bid`ask];
+    without:.qf.mkt.cross_book_at[delete from q where sym=`BTCUSDT;`EURJPY;2026.01.01D12;enlist 1000;`bid`ask];
+    .qunit.assertEquals[with;without;"BTCUSDT is left out of the currency graph"]};
+
 .qt.qf.px.forwards.test_cross_book_at_sizes_matches_cross_book_at_negligible_size:{[t]
     / a size far smaller than any level's depth should reduce to exactly
     / cross_book's top-of-book result - a self-consistency check that

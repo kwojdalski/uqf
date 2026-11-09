@@ -301,7 +301,7 @@
 / library); it must not drift from .qf.util's.
 .qt.qetl.log.test_the_log_renderer_matches_the_librarys:{[t]
     / `samples`, not `vs`: vs is a q builtin.
-    samples:(300#"a";til 500;`a`b!1 2;"tab\there";([] x:til 50));
+    samples:(300#"a";til 500;`a`b!1 2;"tab\there";([] x:til 50);1.23456789 1.23456781;enlist "a");
     .qunit.assertEquals[.qetl.log.value1 each samples;.qf.util.full each samples;"value1 and .qf.util.full agree"]};
 
 
