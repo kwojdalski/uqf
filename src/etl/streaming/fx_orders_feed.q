@@ -65,6 +65,11 @@
 / begins 1e6 per second above an earlier one, which only gains 1 per second.
 .qpipe.job.fx_orders_feed.last_id:.qpipe.job.fx_orders_feed.seed_id[]
 
+/ The level orders price around, per pair: .qf.demo.level, set every tick,
+/ so orders print near the quote feeds' market rather than off the starting
+/ spot they leave behind (#2561).
+.qpipe.job.fx_orders_feed.spot:.qf.demo.spot
+
 / One order's rows, for a given pair index, book, product, side, size,
 / status and slippage in pips.
 / .
@@ -82,13 +87,14 @@
 / @return one order's rows: order_id, sym, book, product, side, size, price, order_status
 / @eg count .qpipe.job.fx_orders_feed.order_rows[1;0;`london;`spot;1;1e6;`filled;0] -> 8
 .qpipe.job.fx_orders_feed.order_rows:{[id;i;bk;pr;side;size;status;slip_pips]
-    price:.qf.demo.spot[i]+slip_pips%.qpipe.job.fx_orders_feed.pip_factor[i];
+    price:.qpipe.job.fx_orders_feed.spot[i]+slip_pips%.qpipe.job.fx_orders_feed.pip_factor[i];
     (enlist id;enlist .qf.demo.pairs i;enlist bk;enlist pr;enlist side;
         enlist size;enlist price;enlist status)}
 
 / Draw one order and publish it. The draws live here so that order_rows
 / stays deterministic and its shape can be asserted.
 .qpipe.job.fx_orders_feed.on_timer:{[]
+    `.qpipe.job.fx_orders_feed.spot set .qf.demo.level .z.p;
     `.qpipe.job.fx_orders_feed.last_id set .qpipe.job.fx_orders_feed.last_id+1;
     i:rand count .qf.demo.pairs;
     / 1 or -1, always an ATOM: indexing `1 -1` with a possibly-empty

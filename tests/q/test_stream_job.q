@@ -302,6 +302,21 @@
         (first .qf.demo.spot)+3%first .qpipe.job.fx_trades_feed.pip_factor;
         "the fill prints its slippage in pips from the pair's own level"]};
 
+/ #2561: fills and orders priced off the fixed starting spot while the
+/ quotes moved; after an hour they printed up to hundreds of pips away.
+.qt.qetl.job.stream.test_fills_and_orders_price_around_the_quoted_market:{[t]
+    .qt.qetl.job.stream.reset[];
+    do[2000;.qpipe.job.fx_feed.on_timer[]];
+    / three pips of slippage, plus the quote feed's quarter pip of jitter
+    near:{[px;s] i:.qf.demo.pairs?first s; (3.25*.qf.demo.pip i)>=abs first[px]-.qpipe.job.fx_feed.spot i};
+    do[50;
+        .qpipe.job.fx_trades_feed.on_timer[];
+        r:.qt.qetl.job.stream.last_rows[];
+        .qunit.assertTrue[near[r 2;r 0];"a fill prints within its slippage of the quoted mid"];
+        .qpipe.job.fx_orders_feed.on_timer[];
+        r:.qt.qetl.job.stream.last_rows[];
+        .qunit.assertTrue[near[r 6;r 1];"and so does an order"]]};
+
 .qt.qetl.job.stream.test_a_fill_is_published_as_one_element_vectors:{[t]
     / .u.upd counts rows from column lengths, so an atom column here is a
     / length error on insert - the vendored feed.q's own convention.
