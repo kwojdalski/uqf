@@ -41,6 +41,9 @@ log = get_logger()
 
 _KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
+#: A value in matching quotes, then nothing but whitespace or a `#` comment.
+_QUOTED = re.compile(r"""(?P<q>['"])(?P<body>.*?)(?P=q)(?:\s*|\s+#.*)""")
+
 #: direnv's own bookkeeping - which file is loaded, and the diff to undo it.
 #: Meaningful to a shell hook, noise to a child process.
 _DIRENV_INTERNAL = "DIRENV_"
@@ -63,8 +66,10 @@ class Loaded:
 def parse_dotenv(text: str) -> dict[str, str]:
     """KEY=VALUE lines, as `.env` holds them.
 
-    Blank lines and `#` comments are skipped, an `export ` prefix is allowed,
-    and a value in matching single or double quotes is taken verbatim. An
+    Blank lines and `#` comments are skipped, an `export` prefix (followed by
+    any whitespace) is allowed, and a value in matching single or double
+    quotes is taken verbatim - what is between the quotes, with only
+    whitespace or a `#` comment allowed after the closing one (#2395). An
     unquoted value ends at ` #`, so a trailing comment is not part of it. A
     line that is not an assignment is skipped rather than refused: this file
     is read on every uqs command, and a stray line must not stop the fleet
@@ -75,14 +80,15 @@ def parse_dotenv(text: str) -> dict[str, str]:
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        line = line.removeprefix("export ").lstrip()
+        line = re.sub(r"^export\s+", "", line)
         name, sep, value = line.partition("=")
         name = name.strip()
         if not sep or not _KEY.fullmatch(name):
             continue
         value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
-            value = value[1:-1]
+        quoted = _QUOTED.fullmatch(value)
+        if quoted:
+            value = quoted.group("body")
         else:
             value = value.split(" #", 1)[0].rstrip()
         values[name] = value

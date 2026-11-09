@@ -54,6 +54,13 @@ not an assignment
     }
 
 
+def test_a_quoted_value_with_a_trailing_comment_is_the_text_between_the_quotes():
+    """#2395: as bash, direnv and python-dotenv read it - and `export` with a
+    tab is the export prefix too."""
+    text = 'A="secret" # c\nB=\'x y\'  # c\nexport\tC=1\nD="a # b"\n'
+    assert parse_dotenv(text) == {"A": "secret", "B": "x y", "C": "1", "D": "a # b"}
+
+
 def test_dotenv_sets_what_the_environment_lacks(tmp_path: Path):
     (tmp_path / ".env").write_text("FROM_FILE=1\n")
     environ: dict[str, str] = {}
