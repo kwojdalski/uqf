@@ -103,10 +103,27 @@
 
 / --- zstd at save (#2295) -------------------------------------------------------------------------
 
+/ Why this q cannot compress with zstd: the loader's message when libzstd is not on its path
+/ (KDB-X opens it by name, and macOS does not look in Homebrew's lib), or "" when it can.
+/ Any other failure of the probe is not a missing library, so it is thrown.
+.qt.qetl.compression.write.zstd_unavailable:{[]
+    d:first system "mktemp -d";
+    f:hsym `$d,"/probe";
+    r:@[{[f] (f;17;5;3) set til 1000; ""};f;{x}];
+    @[hdel;f;::];
+    @[hdel;hsym `$d;::];
+    if[not count r; :""];
+    if[r like "zstd libs required*"; :r];
+    'r}
+
 / zstd, which TorQ's .cmp cannot take, through the writer that does not go through .cmp. It needs
-/ libzstd on q's loader path (docs/reference/environment.md#peachq-and-file-compression): a host
-/ without it fails this case naming the library, rather than passing without having compressed.
+/ libzstd on q's loader path (docs/reference/environment.md#peachq-and-file-compression). Without
+/ it the case is skipped the way this tree skips a case its interpreter cannot run (an early
+/ return), but visibly: it logs SKIPPED with the loader's message, and its result is that
+/ message, so the run's listing shows it. Once zstd loads, a wrong round-trip fails.
 .qt.qetl.compression.write.test_a_write_table_is_compressed_with_zstd_at_save_and_reads_back_equal:{[t]
+    why:.qt.qetl.compression.write.zstd_unavailable[];
+    if[count why; .qunit.lg "SKIPPED -> zstd: ",why; -2 "SKIPPED ",string[.qunit.currentTestBeingTested],": ",why; :"SKIPPED: ",why];
     .qt.qetl.compression.write.sandboxed {[]
         .qetl.compression.declare[`wt_zstd;`algo`blocksize`level`mode!(5;17;3;`write)];
         root:.qt.qetl.compression.write.root[];
