@@ -93,3 +93,9 @@
     / every outcome a loss of exactly 50 -> VaR must be exactly 50 at any confidence
     pnl_series:50#-50;
     .qt.support.assertApprox[.qf.port.var_historical[pnl_series;0.95];50f;1e-9;"uniform -50 loss series gives VaR=50 regardless of confidence"]};
+
+/ #2380: an unknown quantity is not flat - apply_fill read 0n as flat and
+/ closed the whole position on it.
+.qt.qf.port.risk.test_is_flat_is_false_for_null:{[t]
+    .qunit.assertFalse[.qf.port.is_flat 0n;"an unknown quantity is not flat"];
+    .qunit.assertEquals[.qf.port.is_flat 0 0n 1e-12 1f;1010b;"a list keeps nulls out of flat too"]};

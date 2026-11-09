@@ -14,10 +14,14 @@
 / Whether a quantity is flat: within flat_tolerance of zero. Netting
 / fractional sizes rarely lands on an exact 0f (0.1+0.2-0.3 is 5.6e-17),
 / so an exact `=0f` test calls a closed position open.
+/ A null quantity is unknown, not flat: q sorts a null below every number,
+/ so a bare `tol>abs qty` reads 0n as flat and a caller would close a
+/ position on it (#2380).
 / @param qty a signed quantity (atom or list)
-/ @return a boolean, true where abs qty is under flat_tolerance
+/ @return a boolean, true where qty is not null and abs qty is under flat_tolerance
 / @eg .qf.port.is_flat[0.1+0.2-0.3] -> 1b
-.qf.port.is_flat:{[qty] .qf.port.flat_tolerance>abs qty};
+/ @eg .qf.port.is_flat 0n -> 0b
+.qf.port.is_flat:{[qty] (not null qty) and .qf.port.flat_tolerance>abs qty};
 
 / Money value of a 1-pip move on a given base-currency notional, in quote
 / currency.

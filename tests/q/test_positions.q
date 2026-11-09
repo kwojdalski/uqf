@@ -66,6 +66,15 @@
     .qt.support.assertApprox[row`qty;1000000f;1e-9;"zero-size fill leaves qty unchanged"];
     .qt.support.assertApprox[row`avg_price;1.1000;1e-9;"zero-size fill leaves avg_price unchanged"]};
 
+/ #2380: a null size or side nets to a null quantity, which is_flat used to
+/ read as flat, so the whole long closed at this fill's price.
+.qt.qf.port.positions.test_apply_fill_refuses_a_null_size_or_side:{[t]
+    b:.qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;1000000;1.1;1];
+    .qunit.assertThrows[.qf.port.apply_fill[b;`EURUSD;;1.105;-1];0n;"apply_fill: a fill with a null size*";"a null size is refused, not read as a full close"];
+    .qunit.assertThrows[.qf.port.apply_fill[b;`EURUSD;400000;1.105;];0N;"apply_fill: a fill with a null size*";"a null side is refused"];
+    .qunit.assertThrows[.qf.port.apply_fill[b;`EURUSD;400000;;-1];0n;"apply_fill: a fill with a null size*";"a null price is refused"];
+    .qunit.assertThrows[.qf.port.apply_fill[b;`EURUSD;400000;1.105;];2;"apply_fill: side*";"a side outside 1 / -1 is refused"]};
+
 .qt.qf.port.positions.test_apply_fill_tracks_multiple_syms_independently:{[t]
     b:.qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;1000000;1.1000;1];
     b:.qf.port.apply_fill[b;`GBPUSD;500000;1.2500;-1];
