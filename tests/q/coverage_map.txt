@@ -1119,6 +1119,7 @@ src/execution/execution.q	.qf.exec.markout_at_horizons	test_docstring_examples.q
 src/execution/execution.q	.qf.exec.reject_ratio	test_docstring_examples.q,test_every_worker_runs.q,test_execution.q,test_hdb_order_quality_backfill.q,test_job_output_contracts.q,test_order_outcomes.q,test_order_quality.q,test_replay_equivalence.q,test_transform.q
 src/execution/execution.q	.qf.exec.reject_ratio_by	test_docstring_examples.q,test_execution.q,test_limits.q,test_order_quality.q
 src/execution/execution.q	.qf.exec.require_horizons	test_docstring_examples.q,test_enrich.q,test_every_worker_runs.q,test_execution.q,test_forwards.q,test_job_output_contracts.q,test_stream_job.q,test_transform.q,test_twins.q
+src/execution/execution.q	.qf.exec.require_sides	test_attribution.q,test_docstring_examples.q,test_enrich.q,test_every_worker_runs.q,test_execution.q,test_job_output_contracts.q,test_stream_job.q,test_transform.q,test_twins.q
 src/execution/execution.q	.qf.exec.slippage	test_docstring_examples.q,test_execution.q
 src/execution/execution.q	.qf.exec.venue_quality	test_execution.q
 src/execution/execution.q	.qf.exec.venue_quality_config	test_execution.q

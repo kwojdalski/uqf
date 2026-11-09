@@ -52,6 +52,14 @@
     .qt.support.assertApprox[r[`ref_price] 1;1.1005;1e-9;"10s horizon finds the quote at exactly +10s"];
     .qt.support.assertApprox[r[`markout_pips] 1;5f;1e-6;"markout at the 10s horizon"]};
 
+/ #2542: side 0 priced a 0-pip markout against a 100-pip move, side 2
+/ doubled it, and a null side went unchecked.
+.qt.qf.exec.execution.test_markout_at_horizons_refuses_a_side_other_than_one_or_minus_one:{[t]
+    quotes:.qt.qf.exec.execution.mk_mid_quotes[];
+    {[quotes;s] .qunit.assertThrows[.qf.exec.markout_at_horizons[;quotes;0D00:00:01];update side:s from .qt.qf.exec.execution.mk_markout_trades[];
+        "markout_at_horizons: side must be 1 or -1, got 1 other";"side ",-3!s]}[quotes] each 0 2 0N;
+    .qunit.assertEquals[count .qf.exec.markout_at_horizons[update side:-1 from .qt.qf.exec.execution.mk_markout_trades[];quotes;0D00:00:01];1;"a sell still prices"]};
+
 .qt.qf.exec.execution.test_markout_at_horizons_carries_extra_columns_per_trade_with_shuffled_input:{[t]
     / trades deliberately out of time and sym order: rows must stay trade-major in
     / input order, and each row's carried fill_id must be its own trade's

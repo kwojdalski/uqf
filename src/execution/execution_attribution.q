@@ -120,7 +120,7 @@
 /   total_pips over the pair-horizon's total row (leg shares plus the residual
 /   share sum to 1, the total row is 1). n_unavailable counts trades whose row
 /   was neither `ok nor `reconciled: a missing prescribed book, never rerouted.
-/ @throws error if trades lacks a column, horizons is not timespans, is empty or not positive,
+/ @throws error if trades lacks a column or has a side other than 1 or -1, horizons is not timespans, is empty or not positive,
 /   trades is empty, a pip_factor dict has no factor for a traded pair, or
 /   cross_markout_attribution_with throws
 / @eg .qf.exec.attribution_review_with[.qf.mkt.attribution_convention;.qt.qf.exec.attribution.review_fixture_quotes[];.qt.qf.exec.attribution.review_fixture_trades[];enlist 0D00:00:01;10000;1]`share
@@ -131,6 +131,7 @@
     miss:`time`sym`side except cols trades;
     if[count miss; '"attribution_review: trades is missing column ",string first miss];
     if[0=count trades; '"attribution_review: no trades"];
+    .qf.exec.require_sides[`attribution_review;trades`side];
     / A long passed <=0D and read as nanoseconds: 1000 meant as ms, total_pips 0 (#2537).
     .qf.exec.require_horizons[`attribution_review;horizons];
     horizons:(),horizons;

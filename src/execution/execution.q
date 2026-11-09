@@ -59,7 +59,7 @@
 /   or quotes (`sym`time`mid) - checked explicitly up front so a malformed/mistyped
 /   table fails loudly here rather than surfacing as a bare `domain error deep inside aj;
 /   or if horizons is not a timespan or list of timespans (a bare long would be read
-/   as nanoseconds without complaint)
+/   as nanoseconds without complaint), or a side is not 1 or -1
 / @eg .qf.exec.markout_at_horizons[markout_trades;mid_quotes;0D00:00:01 0D00:00:10]
 .qf.exec.markout_at_horizons:{[trades;quotes;horizons]
     .qf.exec.require_horizons[`markout_at_horizons;horizons];
@@ -68,6 +68,7 @@
     / require_cols reads a keyed table's key columns too, but indexing one by
     / row number looks the numbers up as keys: a bare 'length (#2433)
     trades:0!trades;
+    .qf.exec.require_sides[`markout_at_horizons;trades`side];
     horizon_list:$[0>type horizons; enlist horizons; horizons];
     num_trades:count trades;
     num_horizons:count horizon_list;
@@ -105,6 +106,14 @@
     if[not (abs type horizons)=16h;
         '(string fn_name),": horizons must be a timespan or list of timespans, e.g. 0D00:00:01, got type ",string type horizons];
     }
+
+/ Private: refuse a trade side other than 1 or -1 (null too): side 2 doubled
+/ every pip, side 0 priced a 0-pip markout (#2542), as allocate and apply_fill refuse.
+/ @throws error naming the caller and how many sides are bad
+/ @private
+.qf.exec.require_sides:{[fn_name;sides]
+    if[n_bad:sum not $[(type sides) in 5 6 7 8 9h; (sides=1) or sides=-1; (count sides)#0b];
+        '(string fn_name),": side must be 1 or -1, got ",string[n_bad]," other"]};
 
 / Markout at one or more horizons around a single trade on a synthetic
 / cross pair - the cross_book_at-based analogue of execution.q's

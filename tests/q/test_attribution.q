@@ -293,7 +293,10 @@
     .qunit.assertThrows[{.qf.exec.attribution_review[x 0;delete side from x 1;enlist 0D00:00:01;10000;1]};(q;tr);"*missing column side*";"trades without side"];
     .qunit.assertThrows[{.qf.exec.attribution_review[x 0;x 1;`timespan$();10000;1]};(q;tr);"*non-empty list of positive timespans*";"no horizons"];
     / #2537: a long horizon read as nanoseconds, a 1 ns markout of 0 pips
-    .qunit.assertThrows[{.qf.exec.attribution_review[x 0;x 1;1000;10000;1]};(q;tr);"attribution_review: horizons must be a timespan or list of timespans*";"a long horizon"]};
+    .qunit.assertThrows[{.qf.exec.attribution_review[x 0;x 1;1000;10000;1]};(q;tr);"attribution_review: horizons must be a timespan or list of timespans*";"a long horizon"];
+    / #2542: side 2 doubled every pip, side 0 reported a priced 0
+    {[q;tr;s] .qunit.assertThrows[{.qf.exec.attribution_review[x 0;x 1;enlist 0D00:00:01;10000;1]};(q;update side:s from tr where i=0);
+        "attribution_review: side must be 1 or -1, got 1 other";"side ",-3!s]}[q;tr] each 2 0 0N}
 
 / #2541: a keyed trades table (fills keyed on fill_id) threw a bare 'type.
 .qt.qf.exec.attribution.test_review_reads_a_keyed_trades_table:{[t]
