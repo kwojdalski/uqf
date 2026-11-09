@@ -65,6 +65,18 @@ CREATE TABLE trades (
 )
 """
 
+#: The session zone LOCALTIMESTAMP and TUMBLE's `window_end` are read in. Both
+#: are TIMESTAMP without zone, in `table.local-time-zone` - the host's zone by
+#: default - and kola writes a naive datetime into a q timestamp read as UTC,
+#: so on a non-UTC host every window would be off by the offset (#2603).
+LOCAL_TIME_ZONE = "UTC"
+
+
+def configure(env: Any) -> None:
+    """Pin the Flink session to UTC before any SQL runs."""
+    env.get_config().set("table.local-time-zone", LOCAL_TIME_ZONE)
+
+
 #: One row per sym per closed window, in FIELDS order.
 WINDOW_SQL = """
 SELECT
@@ -147,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
     q.connect()
 
     env = TableEnvironment.create(EnvironmentSettings.in_streaming_mode())
+    configure(env)
     env.execute_sql(SOURCE_DDL)
     with env.sql_query(WINDOW_SQL).execute().collect() as rows:
         for batch in batches(rows):

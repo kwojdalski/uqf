@@ -129,6 +129,22 @@ def test_a_reordered_plant_reorders_what_is_sent():
     assert by_name(cols)["volume"] == [3_000_000.0, 1_500_000.0]
 
 
+def test_the_session_runs_in_utc():
+    """LOCALTIMESTAMP is host-local by default; q reads window_end as UTC (#2603)."""
+    settings = {}
+
+    class Config:
+        def set(self, key, value):
+            settings[key] = value
+
+    class Env:
+        def get_config(self):
+            return Config()
+
+    flink_vwap_streamer.configure(Env())
+    assert settings == {"table.local-time-zone": "UTC"}
+
+
 def test_the_window_query_selects_fields_in_order():
     sql = flink_vwap_streamer.WINDOW_SQL
     aliases = re.findall(r"AS (\w+)", sql)
