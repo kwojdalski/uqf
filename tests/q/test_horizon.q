@@ -279,6 +279,18 @@
     .qunit.assertEquals[(count gone;count .qt.qetl.job.stream.horizons.ns[nm;`pending]);1 0;"given up on after expire_after"];
     .qunit.assertEquals[first gone`reason;`$"no reference for b";"and the diagnostic names the leg"]};
 
+/ #2424: an event with no event_time has no horizon. A null compares below every instant,
+/ so it used to be scored on the first tick - published with a null time and reference.
+.qt.qetl.job.stream.horizons.test_an_event_without_an_event_time_is_expired_not_scored:{[t]
+    nm:.qt.qetl.job.stream.horizons.sjob[`hz_s12;enlist[`event_time]!enlist `source_time];
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;update source_time:0Np from .qt.qetl.job.stream.horizons.sev[`a;.qt.qetl.job.stream.horizons.t0;`e1]];
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.sev[`a;.qt.qetl.job.stream.horizons.t0;`e2]];
+    (.qt.qetl.job.stream.horizons.ns[nm;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:00.1;
+    .qunit.assertEquals[count .qt.qetl.job.stream.horizons.sent;0;"nothing published: no horizon has elapsed"];
+    .qunit.assertEquals[exec id from .qt.qetl.job.stream.horizons.ns[nm;`pending];enlist `e2;"only the timed event waits"];
+    gone:.qt.qetl.job.stream.horizons.ns[nm;`expired];
+    .qunit.assertEquals[(gone`id;gone`reason);(enlist `e1;enlist `no_event_time);"the untimed one is expired, with the reason"]};
+
 .qt.qetl.job.stream.horizons.test_a_negative_window_keeps_its_history_and_an_older_anchor:{[t]
     / the window reaches 60s back: quotes at T-60s and T-30s must survive
     nm:.qt.qetl.job.stream.horizons.sjob[`hz_s4;`event_time`ready_on`lookback!(`source_time;`reference;0D00:01)];

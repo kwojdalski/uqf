@@ -296,7 +296,9 @@
 / With identity, an event already scored (and still remembered) is dropped,
 / and a redelivery REPLACES the pending one - the last delivery wins, within
 / a batch too. A batch on any other table is dropped: the plant sends only
-/ what was subscribed to, so that is a hand call or a test.
+/ what was subscribed to, so that is a hand call or a test. An event with no
+/ event_time has no horizon, so it is never buffered: it goes to `expired`
+/ with reason `no_event_time, and is logged, as rolling drops one (#2424).
 / @private
 .qetl.job.stream.horizons.on_batch:{[name;t;x]
     d:.qetl.job.stream.horizons.def[name];
@@ -309,6 +311,8 @@
     ns:.qetl.job.stream.namespace name;
     buffer:` sv ns,which;
     x:(cols get buffer)#x;
+    if[which=`pending; x:.qetl.job.stream.horizons.refuse_untimed[name;d;ns;x]];
+    if[0=count x; :()];
     if[(which=`pending) and `identity in key d;
         ids:.qetl.job.stream.horizons.ids_of[d;x];
         keep:(not ids in (get ` sv ns,`completed)`id) & .qetl.io.last_seen ids;
@@ -318,6 +322,17 @@
         buffer set held where not .qetl.job.stream.horizons.ids_of[d;held] in ids where keep];
     buffer insert x;
     }
+
+/ Private: the events of a batch that carry an event_time; the rest go to `expired`
+/ with reason `no_event_time, logged once for the batch (#2424).
+/ @private
+.qetl.job.stream.horizons.refuse_untimed:{[name;d;ns;x]
+    untimed:null x d`event_time;
+    if[not any untimed; :x];
+    gone:x where untimed;
+    (` sv ns,`expired) insert update expired_at:(get ` sv ns,`now)[], reason:`no_event_time from gone;
+    .qetl.log.ch.warn[`transform;"event dropped - it has no event time, so no horizon";(enlist[`transform]!enlist name),enlist[`rows]!enlist count gone];
+    x where not untimed}
 
 / Private: one symbol per event, from its identity columns - so membership
 / and last-delivery-wins are vector operations on symbols.

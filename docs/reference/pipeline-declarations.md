@@ -700,7 +700,9 @@ then evicts it; - `on_timer`, `now` (`.z.p`) and the unwired `publish`.
 Each of `event_time` through `expire_after` (#952) is off until declared, so a
 declaration that names none of them behaves exactly as `crypto_markout` does.
 `define` also installs `completed` (identities scored, while remembered) and
-`expired` (events given up on, with `expired_at` and `reason`).
+`expired` (events given up on, with `expired_at` and `reason`). An event that
+arrives with a null `event_time` has no horizon: `on_batch` never buffers it,
+but moves it to `expired` with reason `no_event_time` and logs it (#2424).
 
 Events are evicted only after a successful publish, so a publish that throws
 leaves them queued for the next tick. On every tick the history is trimmed to
