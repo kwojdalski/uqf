@@ -490,16 +490,18 @@
 
 / The log clock: the time a stream decision uses for each row of a batch (#994).
 / .
-/ Live, that is the process clock - the row has just arrived, so `now` is when
-/ it met the job. Replaying, the process clock is the restart time and every
-/ logged row looks hours old, so the clock is the plant's receipt stamp `time`,
-/ which the tickerplant wrote on the row when the live process first saw it.
-/ A decision made on this clock comes out the same live and on replay, which is
-/ what makes a restart a pure function of the log. A batch with no `time` has
-/ no log clock: null per row, which no comparison satisfies, so a time-based
-/ rule is simply not applied to it - say so where the rule is documented.
+/ It is the plant's receipt stamp `time`, which the tickerplant wrote on the row
+/ when it first saw it - live and on replay alike, because it is the one fact
+/ the log records (#2459). Live, the job's own clock when it dequeues the row is
+/ later whenever it is behind its queue or the plant publishes on a timer, and
+/ replay cannot know it: judging a row on it dropped rows live that a restart
+/ then accepted. A decision made on this clock comes out the same live and on
+/ replay, which is what makes a restart a pure function of the log. A batch
+/ with no `time` uses the process clock live, and on replay has no log clock:
+/ null per row, which no comparison satisfies, so a time-based rule is simply
+/ not applied to it - say so where the rule is documented.
 / .
-/ Routed through here: the bars kind's lateness. NOT routed, because the log
+/ Routed through here: the bars kind's lateness and the rolling kind's. NOT routed, because the log
 / cannot say what time it was: a timer tick (bars' close_ready, horizon's
 / score_ready, fx_positions' throttle, superbook, alert_sink, cross) - a tick
 / is not a logged row, so its `now` is always the process clock and it never
@@ -508,8 +510,9 @@
 / @param x the batch, a table
 / @return a timestamp per row of x
 / @eg .qetl.job.stream.clock_of[2026.10.09D10:00:00;([] a:1 2)]  ->  2026.10.09D10:00:00 2026.10.09D10:00:00
+/ @eg .qetl.job.stream.clock_of[2026.10.09D10:00:09;([] time:2026.10.09D10:00:01 2026.10.09D10:00:02)]  ->  2026.10.09D10:00:01 2026.10.09D10:00:02
 .qetl.job.stream.clock_of:{[now;x]
-    $[.qetl.job.stream.replaying; $[`time in cols x; x`time; count[x]#0Np]; count[x]#now]}
+    $[`time in cols x; x`time; .qetl.job.stream.replaying; count[x]#0Np; count[x]#now]}
 
 / The log clock with the process clock for `now`.
 / @param x the batch, a table

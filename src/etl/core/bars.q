@@ -21,9 +21,11 @@
 / with no rows has no bar - nothing is published for an empty interval.
 / .
 / LATENESS. A window closes, and its bar is published once, when its end plus
-/ the allowed lateness has passed on the process clock. A row that arrives
-/ before that amends the still-open window; one that arrives after is dropped
-/ and logged (the `dropped` ledger), because the bar it belongs to is out. On
+/ the allowed lateness has passed on the process clock. A row the plant stamped
+/ before that amends the still-open window; one stamped after, or whose bar is
+/ already out when the job reaches it, is dropped and logged (the `dropped`
+/ ledger), because the bar it belongs to is out (#2459: on the stamp, never on
+/ when a job behind its queue got to the row). On
 / the plant's own `time` there is no receipt stamp to judge by, so a row is
 / dropped only when its window has actually closed (#2423), which the job
 / remembers for a day. A
@@ -62,7 +64,7 @@
 .qetl.job.stream.bars.optional_keys:`procname`by`event_time,.qetl.job.stream.passthrough_keys
 
 / What define installs in .qpipe.job.<name>: pending (rows of windows still
-/ open), closed (windows published, until their lateness has passed),
+/ open), closed (windows published, until their lateness has passed on the log clock),
 / dropped (late rows, with the reason), publish (the seam), now (the clock),
 / on_batch, close_ready[now], on_timer and on_endofday[date].
 .qetl.job.stream.bars.installed:`pending`closed`dropped`publish`now`on_batch`close_ready`on_timer`on_endofday
@@ -165,8 +167,8 @@
 / @eg `exec_bars in .qetl.job.stream.bars.defined[]  ->  1b
 .qetl.job.stream.bars.defined:{[] key .qetl.job.stream.bars.registry}
 
-/ Private: how long after its window's end the process clock refuses a row, and so how long a
-/ closed window is remembered: the lateness. On the plant's own `time` the lateness is 0D,
+/ Private: how long after its window's end the log clock refuses a row, and so how long (on
+/ that clock) a closed window is remembered: the lateness. On the plant's own `time` the lateness is 0D,
 / but the plant stamps a row before the job sees it, so the clock passes a window's end
 / before its last rows land (#2423): there a row is refused only when its window is out
 / (in `closed`), which is remembered for a day, the clock refusing only a row a day late.
@@ -189,10 +191,10 @@
     if[(t<>d`events) or 0=count x; :()];
     pq:` sv ns,`pending;
     now:(get ` sv ns,`now)[];
-    / the clock the row met, from the shell's log clock (#994): live, now; in a
-    / replay the plant's receipt stamp `time`, so a row is late exactly when it
-    / was live (#993). Without a distinct stamp (event_time is `time, or no `time`)
-    / only the log's own bars say a window is out.
+    / the clock the row met, from the shell's log clock (#994): the plant's
+    / receipt stamp `time`, live and in a replay, so a row is late exactly when it
+    / was live (#993, #2459). Without a distinct stamp (event_time is `time, or no
+    / `time`) only the log's own bars say a window is out.
     / Read before the projection below, which drops `time` when the job does not keep it.
     rcv:.qetl.job.stream.clock_of[now;x];
     x:.qetl.job.stream.bars.assign[d`width;d`event_time;(cols[get pq] except `bar_start)#x];
@@ -204,6 +206,13 @@
         (` sv ns,`dropped) set -1000 sublist (get ` sv ns,`dropped),update reason:`late from gone;
         .qetl.log.ch.warn[`transform;"late row dropped - its bar is already out";(enlist[`transform]!enlist name),`rows`first_window!(count gone;min gone`bar_start)]];
     pq insert x where not out;
+    / Forget a closed window once the log clock has passed its end plus the
+    / allowance: a row stamped since is refused by `stale` alone. On the log clock,
+    / not the timer's `now`: a job behind its queue still holds rows stamped before
+    / the timer closed their window, and must refuse them, as a replay does (#2459).
+    if[count stamps:rcv where not null rcv;
+        cq:` sv ns,`closed;
+        cq set (get cq) where (((get cq)`bar_start)+(d`width)+.qetl.job.stream.bars.refuse_after[d])>max stamps];
     }
 
 / Private: windows the log or the plant says are published: evict their
@@ -235,18 +244,14 @@
     count out}
 
 / Close and publish every window whose end plus the lateness has passed by
-/ `now`; then forget closed windows whose lateness has passed, since a row for
-/ one is refused by the clock alone.
+/ `now`. The closed windows are forgotten by on_batch, on the log clock (#2459).
 / @param name the job
 / @param now the time to close by
 / @return the number of bars published
 / @eg .qpipe.job.exec_bars.close_ready 2026.10.09D10:01:30
 .qetl.job.stream.bars.close_ready:{[name;now]
     d:.qetl.job.stream.bars.def[name];
-    ns:.qetl.job.stream.namespace name; cq:` sv ns,`closed;
-    n:.qetl.job.stream.bars.close_windows[name;{[w;l;now;p] (p[`bar_start]+w+l)<=now}[d`width;d`lateness;now]];
-    cq set (get cq) where (((get cq)`bar_start)+(d`width)+.qetl.job.stream.bars.refuse_after[d])>now;
-    n}
+    .qetl.job.stream.bars.close_windows[name;{[w;l;now;p] (p[`bar_start]+w+l)<=now}[d`width;d`lateness;now]]}
 
 / Close every window of the day that ended, whatever its lateness (#943).
 / @param name the job

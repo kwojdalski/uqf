@@ -45,8 +45,8 @@
 / is dropped and logged (the `dropped` ledger). A row within it is buffered
 / and is part of the next publication it falls in the window of: it AMENDS
 / the series, since nothing already published is republished. The receipt is
-/ the log clock (.qetl.job.stream.clock_of): the process clock live, the
-/ plant's `time` stamp on replay, so a row is late exactly when it was live.
+/ the log clock (.qetl.job.stream.clock_of): the plant's `time` stamp, live
+/ and on replay, so a row is late exactly when it was live (#2459).
 / When the event time IS the plant's `time` stamp there is no distinct
 / receipt and no row can be late: it is stamped as it arrives. A row with a
 / null event time is dropped too (reason `no_event_time`), since it is in no
