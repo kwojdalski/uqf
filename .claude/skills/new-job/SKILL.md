@@ -75,7 +75,7 @@ uqs job new fill_marks --kind horizon --subscribe-to executions,market_data \
 
 # reaction: recompute each time a bounded worker publishes a window of a dataset.
 # No process of its own - it runs in the worker's. --outputs puts it in the job graph
-uqs job new rebuild_positions --triggered-by demo_deals --outputs positions --dry-run
+uqs job new deal_volume --triggered-by demo_deals --outputs deal_volume --dry-run
 ```
 
 A reaction's DATASET must be one a bounded worker fills: only a worker's window
