@@ -293,13 +293,14 @@
         "remote: a batch of 4 rows is over rdeals's limit of 2";"one message keeps to max_rows"]};
 
 .qt.qetl.io.remote.test_a_chunked_batch_over_the_staging_limit_is_refused:{[t]
-    / the reassembled batch's own limit is max_staged_rows (#2313)
+    / the reassembled batch's own limit is max_staged_rows (#2313); four one-row
+    / chunks can never fit three slots, so the first chunk refuses it whole (#2327)
     .qt.qetl.io.remote.reset[];
     .qt.qetl.io.remote.grant_rows[2];
     .qunit.assertThrows[{[ignored;x] .qt.qetl.io.remote.chunked[{[y]
             `.qetl.io.remote.max_staged_rows set 3;
             .qt.qetl.io.remote.send[`append;.qt.qetl.io.remote.four[]]}]}[::];::;
-        "remote: busy*";"four rows are over a staging limit of three"];
+        "remote: a batch of 4 chunks is over the 3 rows this receiver stages";"four rows are over a staging limit of three"];
     .qunit.assertEquals[`rdeals in tables `.;0b;"nothing written"]};
 
 .qt.qetl.io.remote.test_a_batch_whose_chunks_stop_half_way_writes_nothing:{[t]
