@@ -196,7 +196,7 @@ def core_reach(root: Path = REPO) -> list[str]:
     """Every line of `root`'s src/etl/core/ that names a declaring namespace."""
     declared = declaring_namespaces(root)
     violations: list[str] = []
-    for path in sorted((root / "src" / "etl" / "core").glob("*.q")):
+    for path in sorted((root / "src" / "etl" / "core").rglob("*.q")):
         code = strip_comments_and_strings(path.read_text(encoding="utf-8"))
         for lineno, line in enumerate(code.splitlines(), 1):
             for ns, owner in declared.items():
@@ -397,7 +397,7 @@ def main() -> int:
         return 1
 
     print(
-        f"check_etl_layering: {len(list(CORE.glob('*.q')))} core file(s) depend on none "
+        f"check_etl_layering: {len(list(CORE.rglob('*.q')))} core file(s) depend on none "
         f"of the {len(declared)} declaring namespace(s); nothing under src/etl/ calls "
         f"{ADAPTER_NS}; each of {', '.join(TORQ_OWNERS)} is read only by its owner file "
         f"and no other of TorQ's {len(derived)} namespace(s) is read beyond "
