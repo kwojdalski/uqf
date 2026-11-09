@@ -1,10 +1,12 @@
-"""Regressions for three deploy bugs found together (#1654, #1655, #1656)."""
+"""Regressions for deploy bugs found together (#1654, #1655, #1656, #2580)."""
 
 from __future__ import annotations
 
 import http.server
 import threading
 import urllib.request
+
+import pytest
 
 from uqs.deploy import fetch, prune, verify
 
@@ -81,3 +83,37 @@ def test_a_redirect_to_another_host_carries_no_token():
         server.shutdown()
     assert seen["/kept"] == "Bearer T", "the same host keeps it"
     assert seen["/dropped"] is None, "another host never sees it"
+
+
+@pytest.mark.parametrize(
+    ("url", "sent"),
+    [
+        ("https://api.github.com/repos/o/r/releases/tags/v1", True),
+        ("https://github.com/o/r/releases/download/v1/a.tar.gz", True),
+        ("https://api.github.com.example.net/a.tar.gz", False),
+        ("https://github.com.example.net/a.tar.gz", False),
+        ("http://api.github.com/a.tar.gz", False),
+    ],
+)
+def test_the_token_goes_only_to_github_by_its_exact_host(monkeypatch, url, sent):
+    """#2580: a prefix match on API also matched api.github.com.<other-host>."""
+    seen: list[str | None] = []
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            pass
+
+        def read(self) -> bytes:
+            return b""
+
+    def open_(req: urllib.request.Request, timeout: int) -> _Response:
+        seen.append(req.get_header("Authorization"))
+        return _Response()
+
+    monkeypatch.setenv("GH_TOKEN", "ghp_SECRET")
+    monkeypatch.setattr(fetch._OPENER, "open", open_)
+    fetch.http_get(url)
+    assert seen == (["Bearer ghp_SECRET"] if sent else [None])
