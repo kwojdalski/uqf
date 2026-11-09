@@ -469,6 +469,17 @@
     .qunit.assertEquals[first exec pnl from r`matches; 50000f; "the carried-in lot closes first"];
     .qunit.assertEquals[first exec price from r`residual; 1.12; "the day's buy is left"]};
 
+/ #2532: a carried-in lot with a null or negative qty, or a null price, was
+/ matched as if it were a position.
+.qt.qf.exec.allocation.test_an_opening_lot_needs_a_positive_qty_and_a_price:{[t]
+    tr:([] time:enlist 2026.01.01D09:00:00; sym:enlist `EURUSD; side:enlist -1; size:enlist 1000000f; trade_price:enlist 1.2);
+    op:([] sym:enlist `EURUSD; qty:enlist 1000000f; price:enlist 1.1; side:enlist 1);
+    f:{[tr;op] .qf.exec.run[tr;`method`opening!(`fifo;op)]}[tr];
+    .qunit.assertThrows[f;update qty:0n from op;"allocate: every opening lot needs a positive qty*";"a null qty does not close every sell forever"];
+    .qunit.assertThrows[f;update qty:-1e6 from op;"allocate: every opening lot needs a positive qty*";"a negative qty does not turn a sell into a 2e6 short"];
+    .qunit.assertThrows[f;update price:0n from op;"allocate: every opening lot needs a positive qty*";"a null price books no null P&L"];
+    .qunit.assertEquals[exec first pnl from (f op)`matches;100000f;"a good lot still closes"]};
+
 / #2530: a `by without sym put every sym in one queue, so a USDJPY sell
 / closed a EURUSD buy at 150 and booked 1.489e8.
 .qt.qf.exec.allocation.test_a_by_without_sym_refuses_more_than_one_sym:{[t]

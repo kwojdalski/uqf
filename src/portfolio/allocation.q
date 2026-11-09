@@ -291,6 +291,12 @@
     .qf.util.require_cols[`allocate;`opening;opening;distinct .qf.exec.required_lot_cols,bys];
     if[not all (exec side from opening) in -1 1;
         '"allocate: every opening lot's side must be 1 (long) or -1 (short)"];
+    / A null qty never gets used up (min takes the trade's qty, and a null
+    / is not flat), a negative one grows as it is matched, and a null price
+    / books a null P&L that drops out of every sum (#2532).
+    q:"f"$opening`qty;
+    if[any (null q) or (0>=q) or null opening`price;
+        '"allocate: every opening lot needs a positive qty and a price"];
     / One side per bucket (#588). lot_match_step checks only the FIRST lot's side
     / before closing and lets the method's pick choose any lot, so a long
     / and a short in one bucket let a sell "close" the short and book a
