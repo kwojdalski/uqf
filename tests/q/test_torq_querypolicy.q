@@ -198,6 +198,12 @@
         "querypolicy: trades - maxrange, maxrows, maxbytes and timeout must all be set and positive";
         "a blank limit is not an unlimited one"]};
 
+.qt.qtorq.querypolicy.test_a_blank_line_in_the_policy_file_is_not_a_row:{[t]
+    f:hsym `$"/tmp/qpoltest_policy_",string[.z.i],".csv";
+    f 0:("tablename,role,maxrange,requiredfilters,operations,functions,maxrows,maxbytes,timeout,basis";
+        "trades,,0D01:00:00,,raw,,10,10,0D00:00:30,x";"");
+    .qunit.assertEquals[exec tablename from .checkinputs.readquerypolicy f;enlist`trades;"the one row, the file still loads"]};
+
 .qt.qtorq.querypolicy.test_the_wrapped_checkinputs_holds_an_ordinary_caller_to_the_policy:{[t]
     was:.checkinputs.callerroles;held:.checkinputs.querypolicies;
     .checkinputs.callerroles:{[] `symbol$()};.checkinputs.querypolicies:.qt.qtorq.querypolicy.shipped;

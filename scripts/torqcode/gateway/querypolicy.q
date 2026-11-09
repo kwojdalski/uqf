@@ -76,6 +76,8 @@ policylist:{[s] {x where not null x}`$"|"vs s}
 / @eg .checkinputs.readquerypolicy `:scripts/torqconfig/dataaccess/querypolicy.csv
 readquerypolicy:{[path]
     t:("SSN***JJN*";enlist",")0:path;
+    / A blank line reads as an all-null row, which would refuse the file (#2592).
+    t:select from t where not null tablename;
     / Qualified: inside qSQL a bare name resolves at the root, not in this
     / namespace, so `policylist` alone was 'policylist at load.
     t:update requiredfilters:.checkinputs.policylist each requiredfilters,
