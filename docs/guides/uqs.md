@@ -1771,13 +1771,13 @@ place and identical is left alone; one that differs is replaced only if you
 agree, or with `--overwrite` (`--yes` alone keeps it).
 
 **Every query must be one `--trace` can see.** A polling feed or a backfill
-source that calls its handle directly, as `h(...)`, `h@...` or `h"select ..."`,
-is refused before anything is copied, `--dry-run` included. The refusal names
-each line. Send each query through `.qetl.source.ipc_call` (a polling feed's
-cursor), `.qetl.source.ipc` (a backfill window), `.qetl.source.local` or
-`.qetl.io.odbc.run_sql`. Those log it at TRACE for `uqs job preview --trace` and
-`uqs job backfill --trace`. A line that must stay direct ends with
-`/ untraced: <why>`.
+source that calls its handle directly, as `h(...)`, `h@...`, `h[...]` or
+`h"select ..."`, is refused before anything is copied, `--dry-run` included. The
+refusal names each line. Send each query through `.qetl.source.ipc_call` (a
+polling feed's cursor), `.qetl.source.ipc` (a backfill window),
+`.qetl.source.local` or `.qetl.io.odbc.run_sql`. Those log it at TRACE for
+`uqs job preview --trace` and `uqs job backfill --trace`. A line that must stay
+direct ends with `/ untraced: <why>`.
 
 After installing it regenerates the derived files (`process_ports.csv`,
 `pipeline_dag.q`, `processes.md`, `docs/man.q`) - a declaration the generators

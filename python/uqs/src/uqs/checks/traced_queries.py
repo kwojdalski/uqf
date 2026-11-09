@@ -4,8 +4,8 @@
 every query sent through the traced paths - `.qetl.source.ipc_call` (a
 cursor's query), `.qetl.source.ipc` (a window's), `.qetl.source.local` and
 `.qetl.io.odbc.run_sql`/`window_query` - before it goes and again when it
-returns or fails. A file that applies the handle itself, `h(...)`, `h@...`
-or a raw string `h"select ..."`, still works and is invisible to that
+returns or fails. A file that applies the handle itself, `h(...)`, `h@...`,
+`h[...]` or a raw string `h"select ..."`, still works and is invisible to that
 switch: the trace is missing exactly the query someone turned it on to see,
 and nothing fails.
 
@@ -19,8 +19,9 @@ from __future__ import annotations
 
 import re
 
-#: A handle applied directly: `h(`, `h@` or `h"`, as a word - not `.qetl.source.ipc[h;`.
-DIRECT = re.compile(r"(?<![\w.])h\s*[(@\"]")
+#: A handle applied directly: `h(`, `h@`, `h[` or `h"`, as a word - not
+#: `.qetl.source.ipc[h;`. Bracket application was missed (#2522).
+DIRECT = re.compile(r"(?<![\w.])h\s*[(@\"\[]")
 
 #: The marker that keeps one line direct, on purpose.
 EXEMPT = "/ untraced:"
