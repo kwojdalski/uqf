@@ -31,7 +31,7 @@ from uqs.paths import UqsError
 TOOLS = {t.name: t for t in tools()}
 
 #: A CLI parameter's type as JSON Schema names it.
-_CLICK_TO_JSON = {"int": "integer", "boolean": "boolean"}
+_CLICK_TO_JSON = {"int": "integer", "int range": "integer", "boolean": "boolean"}
 
 
 def _cli_params(tool: str) -> dict[str, object]:
