@@ -93,6 +93,15 @@ def _refuse(
     raise error(reason)
 
 
+def require_feature(request: Request, feature: str, action: str) -> None:
+    """Refuse, audited, a caller the access policy does not grant
+    `feature:action` - the guard's own check, for a route whose input decides
+    a further feature it needs (a chart, #2476)."""
+    who = identity_of(request)
+    if not request.app.state.access.allowed(who, feature, action):
+        _refuse(request, f"{feature}:{action} is not granted to {who.user}", f"{feature}:{action}")
+
+
 def run_policy(request: Request, table: str | None = None) -> None:
     """Run the app's table/path policy (authz.Policy) for this request, as
     the identity identity.py vouches for - never the claimed header."""

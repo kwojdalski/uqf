@@ -9,6 +9,7 @@ default policy changes nothing for a deployment that configures nothing.
 
 from __future__ import annotations
 
+import datetime as dt
 import sqlite3
 import time
 from pathlib import Path
@@ -377,6 +378,58 @@ def test_refused_reads_cannot_evict_the_audit(tmp_path):
     actions = [r["action"] for r in _rows(tmp_path / "activity.sqlite3")]
     assert "process.stop" in actions
     assert actions.count("authz.refused") <= activity.MAX_ATTEMPT_ROWS + activity.PRUNE_EVERY
+
+
+#: Charts granted, and nothing they read: the usage log, the backfill status
+#: files, the desk's tables (#2476).
+CHARTS_ONLY = """\
+p, viewers, charts, read
+p, admins, *, *
+g, bob, viewers
+g, alice, admins
+"""
+
+
+@pytest.mark.parametrize(
+    ("chart", "body", "permission"),
+    [
+        ("ops_latency", {"limit": 100}, "usage:read"),
+        ("backfill_coverage", {}, "backfills:read"),
+        ("markout_curve", {}, "desk:read"),
+        ("mid_spread_fills", {}, "desk:read"),
+    ],
+)
+def test_a_chart_needs_the_feature_of_the_data_it_reads(tmp_path, chart, body, permission):
+    """charts:read alone does not reach the usage log, the backfill status or
+    a table through a chart: the chart is refused as its view is (#2476)."""
+    usage = [
+        {
+            "time": dt.datetime(2026, 11, 9, 10), "id": 1, "timer": 1_500_000,
+            "zcmd": "pg", "status": "c", "a": "10.0.0.7", "u": "trader1", "w": 5,
+            "cmd": "select from trades",
+        }
+    ]  # fmt: skip
+    charts_only = tmp_path / "charts_only.csv"
+    charts_only.write_text(CHARTS_ONLY)
+    settings = _settings(tmp_path, policy_file=charts_only)
+    app = create_app(gateway=FakeGateway(), settings=settings, fleet=FakeFleet({"rdb1": usage}))
+    c = TestClient(app, client=(PROXY, 40000), raise_server_exceptions=False)
+    resp = c.post(f"/charts/{chart}", json=body, headers={HEADER: "bob"})
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == f"{permission} is not granted to bob"
+    (row,) = _rows(tmp_path / "activity.sqlite3")
+    assert row["action"] == "authz.refused"
+    assert f'"permission": "{permission}"' in row["detail"]
+    as_admin = c.post(f"/charts/{chart}", json=body, headers={HEADER: "alice"})
+    assert as_admin.status_code == (200 if chart == "ops_latency" else 422)
+
+
+def test_every_chart_names_a_real_feature_it_requires():
+    from uqf_frontend import charts
+
+    for chart in charts.CHARTS.values():
+        feature, action = chart.requires
+        assert action in access.FEATURES[feature], chart.name
 
 
 def test_a_granted_read_is_allowed_and_not_audited(tmp_path):

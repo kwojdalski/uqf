@@ -54,7 +54,13 @@ from uqf_frontend.routes import health as health_routes
 from uqf_frontend.routes import ops as ops_routes
 from uqf_frontend.routes import query as query_routes
 from uqf_frontend.routes import services as services_routes
-from uqf_frontend.routes.common import _refuse, audit_user, identity_of, identity_source, run_policy
+from uqf_frontend.routes.common import (
+    _refuse,
+    audit_user,
+    identity_source,
+    require_feature,
+    run_policy,
+)
 
 
 def _refused(status_code: int, error: str, detail: str) -> JSONResponse:
@@ -105,9 +111,7 @@ def guard(request: Request) -> None:
         if refused is not None:
             # audited with permission `inspection`, error InspectionMode
             _refuse(request, refused, "inspection", InspectionMode)
-    who = identity_of(request)
-    if not request.app.state.access.allowed(who, feature, action):
-        _refuse(request, f"{feature}:{action} is not granted to {who.user}", f"{feature}:{action}")
+    require_feature(request, feature, action)
     run_policy(request)
 
 

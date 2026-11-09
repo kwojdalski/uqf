@@ -9,7 +9,7 @@ from fastapi import Body, FastAPI, Request
 
 from uqf_frontend import charts
 from uqf_frontend.models.charts import ChartInfo, ChartResponse, ChartsResponse
-from uqf_frontend.routes.common import ScopeOf, run_policy
+from uqf_frontend.routes.common import ScopeOf, require_feature, run_policy
 
 
 def install(app: FastAPI) -> None:
@@ -42,8 +42,11 @@ def install(app: FastAPI) -> None:
     ) -> ChartResponse:
         """One prepared chart's figure. The body is validated against the
         chart's own schema; it reads only through the chart's vetted query
-        (charts.py), and a table it reads is put to the policy like /query's."""
+        (charts.py), and a table it reads is put to the policy like /query's.
+        It needs the feature of the view whose data it reads, as well as
+        charts:read (#2476)."""
         chart = charts.chart(name)
+        require_feature(request, *chart.requires)
         drawn = charts.render(
             chart,
             charts.Sources(
