@@ -358,6 +358,9 @@ def main(argv: list[str] | None = None) -> int:
         lines = env_lines(release, manifest, args.env_file)
         if lines:
             write_env(release, lines)
+        else:
+            # a reinstall must not keep an earlier run's site file (#2444)
+            (release / ENV_FILE).unlink(missing_ok=True)
         (release / INSTALLED).write_text(
             json.dumps(
                 {

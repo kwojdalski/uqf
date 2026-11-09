@@ -13,6 +13,7 @@ import hashlib
 import importlib.util
 import json
 import platform
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -330,6 +331,18 @@ def test_every_release_names_the_tools_preflight_checks(tmp_path):
 
 def test_no_env_file_and_no_kafka_write_no_deploy_env(release):
     assert _install(release) == 0
+    assert not (release / installer.ENV_FILE).exists()
+
+
+def test_a_reinstall_without_an_env_file_drops_the_old_deploy_env(release, tmp_path):
+    """#2444: deploy.env says what THIS install was given, as INSTALLED.json does."""
+    site = tmp_path / "old-site.env"
+    site.write_text("export UQF_SITE=old\n")
+    assert _install(release, "--env-file", str(site)) == 0
+    assert str(site) in (release / installer.ENV_FILE).read_text()
+    shutil.rmtree(release / installer.VENV)  # "remove it to reinstall"
+    assert _install(release) == 0
+    assert json.loads((release / installer.INSTALLED).read_text())["env_file"] is None
     assert not (release / installer.ENV_FILE).exists()
 
 
