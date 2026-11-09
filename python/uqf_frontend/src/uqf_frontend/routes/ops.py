@@ -42,7 +42,7 @@ def _worker_status_out(s: status.WorkerStatus) -> WorkerStatusOut:
     return WorkerStatusOut(
         worker=s.worker,
         instance_id=s.instance_id,
-        # status.read_status_file refuses a state outside STATES, which
+        # status._parse refuses a state outside STATES (#2583), which
         # test_status.py holds equal to RunState - so this is one, as typed.
         state=typing.cast(RunState, s.state),
         source_version=s.source_version,
