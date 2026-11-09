@@ -242,6 +242,14 @@
 
 .qt.qtorq.querypolicy.rolesof:{[u] asc exec role from .pm.userrole where user=u}
 
+.qt.qtorq.querypolicy.test_an_ordinary_user_named_like_a_default_user_gets_only_its_own_role:{[t]
+    .qt.qtorq.querypolicy.pmfresh[];
+    .pm.setupusers[();.qt.qtorq.querypolicy.usersfile("admin,secret,analyst";"feed,secret,browser")];
+    .qunit.assertEquals[.qt.qtorq.querypolicy.rolesof each `admin`feed;(enlist`analyst;enlist`browser);
+        "not default.q's admin or systemuser"];
+    .qunit.assertEquals[exec groupname from .pm.usergroup where user in `admin`feed;`symbol$();"nor its groups"];
+    .qunit.assertFalse[.pm.fchk[`feed;`exit;()];"feed may not stop the gateway"]};
+
 .qt.qtorq.querypolicy.test_a_blank_line_in_the_users_file_is_not_a_user:{[t]
     .qt.qtorq.querypolicy.pmfresh[];
     .pm.setupusers[();.qt.qtorq.querypolicy.usersfile("analyst,analyst,analyst";"";"browser,browser,browser")];

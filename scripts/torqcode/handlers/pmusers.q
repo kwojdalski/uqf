@@ -55,7 +55,15 @@ setupusers:{[logins;policy]
         '"pmusers: no such role - ",", "sv string[bad`user],'" (",/:string[bad`role],\:")"];
     logins:logins where not logins[;0] in policy`user;
     {[u;p] .pm.adduser[u;`local;`md5;md5 p];.pm.assignrole[u;`administrator]}.' logins;
-    {[u;p;r] .pm.adduser[u;`local;`md5;md5 p];.pm.assignrole[u;r]}'[policy`user;policy`password;policy`role];
+    / default.q has already given many names roles and groups of its own -
+    / admin is trusted, feed may call exit - so an ordinary user named like
+    / one is stripped of them first, keeping only the role the file names (#2591).
+    / A delete rather than unassignrole and removefromgroup, whose row drop
+    / PeachQ refuses with 'type.
+    {[u;p;r]
+        delete from `.pm.userrole where user=u;
+        delete from `.pm.usergroup where user=u;
+        .pm.adduser[u;`local;`md5;md5 p];.pm.assignrole[u;r]}'[policy`user;policy`password;policy`role];
     }
 
 / Not where the site authenticates its own way (UQF_SITE_AUTH, #1847): its
