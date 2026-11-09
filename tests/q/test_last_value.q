@@ -127,9 +127,26 @@
     .qunit.assertEquals[own`source;(rows`source) both;"a book's own mid needs both sides"]};
 
 .qt.qpipe.job.last_value.test_a_market_with_no_price_rule_is_refused_by_name:{[t]
-    rows:update market:`equity from .qt.qpipe.job.last_value.agreement_rows[];
-    .qunit.assertThrows[.qf.mkt.venue_tops;rows;"*no pricing rule for market equity*";"not priced by whichever branch a consumer wrote"];
-    .qunit.assertThrows[.qf.mkt.own_book_mids;rows;"*no pricing rule for market equity*";"on either extraction"]};
+    rows:update market:`rates from .qt.qpipe.job.last_value.agreement_rows[];
+    .qunit.assertThrows[.qf.mkt.venue_tops;rows;"*no pricing rule for market rates*";"not priced by whichever branch a consumer wrote"];
+    .qunit.assertThrows[.qf.mkt.own_book_mids;rows;"*no pricing rule for market rates*";"on either extraction"]};
+
+/ #2417: the databento sidecar publishes equity books onto market_data. A batch
+/ holding one used to be refused whole by posbook and last_value, FX books included.
+.qt.qpipe.job.last_value.test_an_equity_book_is_priced_on_its_own_book_by_both_jobs:{[t]
+    .qt.qpipe.job.last_value.reset[];
+    .qetl.job.stream.reset `posbook;
+    md:.qetl.plant.with_flat ([] sym:`EURUSD`AAPL; source:`LP_A`XNAS; market:`fx`equity;
+        source_time:2#.qt.qpipe.job.last_value.d[0];
+        bid_prices:(enlist 1.1;enlist 271.5); bid_sizes:(enlist 1e6;enlist 100f);
+        ask_prices:(enlist 1.1002;enlist 271.6); ask_sizes:(enlist 1e6;enlist 100f); clock:`receipt`venue);
+    .qpipe.job.posbook.on_batch[`market_data;md];
+    .qt.support.assertApprox[.qpipe.job.posbook.fx_marks[.qpipe.job.posbook.mid_history;([] time:2#.qt.qpipe.job.last_value.d[1]; sym:`EURUSD`AAPL)];1.1001 271.55;1e-9;
+        "posbook holds the FX mid and the equity book's own mid"];
+    r:.qpipe.job.last_value.apply[.qpipe.job.last_value.state;.qpipe.job.last_value.tob;md];
+    c:`sym xasc r`changed;
+    .qunit.assertEquals[c`sym`source;(`AAPL`EURUSD;`XNAS`LP_A);"last_value publishes both books"];
+    .qt.support.assertApprox[c`mid;271.55 1.1001;1e-9;"each on its own mid"]};
 
 / #998: posbook marks and last_value publishes by the same rule, so they
 / agree when a venue withdraws a side and another goes stale. last_value
