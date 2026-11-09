@@ -200,6 +200,9 @@
     if[not uses; :txt];
     v:getenv r`secret_env;
     if[0=count v; 'who,": its secret_env, ",(string r`secret_env),", is not set"];
+    / An ODBC secret holding ; { or } goes in as a braced value, } doubled.
+    / Raw, PWD=fake;Encrypt=no became a password and a setting (#2336).
+    if[(`odbc~tr) and any v in ";{}"; v:"{",ssr[v;"}";"}}"],"}"];
     ssr[txt;.qetl.source.secret_placeholder;v]}
 
 / Read a source's credential, or refuse.

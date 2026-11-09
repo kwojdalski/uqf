@@ -337,6 +337,20 @@
     setenv[`SRCTEST_PWD;""];
     .qunit.assertEquals[got;"db1:5010:svc:s3cret";"{secret} is filled from the environment when the source connects"]};
 
+/ #2336: an ODBC secret went into the connection string raw, so a ; in it
+/ ended the password and the rest was read as settings of their own.
+.qt.qetl.source.test_an_odbc_secret_is_inserted_as_one_braced_value:{[t]
+    .qetl.source.define[`t;.qt.qetl.source.decl[],`transport`credential_example!(`odbc;"DSN=x")];
+    .qetl.source.load_settings[.qt.qetl.source.settings_file[enlist "t,odbc,DRIVER=x;PWD={secret},SRCTEST_PWD"];`symbol$()];
+    setenv[`SRCTEST_PWD;"fake;Encrypt=no}{x"];
+    got:.qetl.source.require_credentials `t;
+    setenv[`SRCTEST_PWD;"plain"];
+    plain:.qetl.source.require_credentials `t;
+    setenv[`SRCTEST_PWD;""];
+    .qunit.assertEquals[got;"DRIVER=x;PWD={fake;Encrypt=no}}{x}";"braced, its } doubled"];
+    .qunit.assertEquals[.qetl.livecheck.settings got;`driver`pwd!(enlist "x";"fake;Encrypt=no}{x");"read back, the whole password is one value"];
+    .qunit.assertEquals[plain;"DRIVER=x;PWD=plain";"a secret with nothing to quote goes in as it is"]};
+
 / A configured source is live, so a row that cannot resolve fails the run
 / instead of quietly reading the fixture.
 .qt.qetl.source.test_an_unset_secret_variable_fails_rather_than_selecting_the_fixture:{[t]
