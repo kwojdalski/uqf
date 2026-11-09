@@ -401,7 +401,7 @@
     .qunit.assertThrows[{[q] .qf.mkt.cross_book_at[q;`EURUSD;2026.01.01D10;enlist 1e6;enlist `mid]};q0;
         "cross_book_at: no chain of available pairs in quotes connects EUR and USD";"empty quotes -> named refusal"];
     .qunit.assertThrows[.qf.mkt.cross_ref_price_at[q0;`EURUSD;;1e6];2026.01.01D10;
-        "*no chain of available pairs in quotes connects EUR and USD*";"and cross_ref_price_at names it too"]};
+        "cross_book_at: no chain of available pairs in quotes connects EUR and USD*";"and cross_ref_price_at names it too"]};
 
 .qt.qf.px.forwards.test_cross_decomp_three_leg_chain:{[t]
     .qunit.assertEquals[.qf.mkt.cross_decomp[`AUDUSD`EURUSD`EURPLN;`AUDPLN];`AUDUSD`EURUSD`EURPLN;"AUDPLN decomposes into the 3 legs bridging AUD->USD->EUR->PLN"]};
