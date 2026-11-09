@@ -111,6 +111,20 @@
     .qunit.assertEquals[count rdeals;2;"not a second append"];
     .qetl.io.remote.open `};
 
+.qt.qetl.io.remote.test_a_journal_cut_mid_write_reopens_its_previous_generation:{[t]
+    / a kill part way through persist: the journal file is half its bytes (#2436)
+    .qt.qetl.io.remote.reset[];
+    f:hsym `$(first system"mktemp -d"),"/journal";
+    .qetl.io.remote.open f;
+    .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
+    .qt.qetl.io.remote.send[`append;.qt.qetl.io.remote.batch[]];
+    system"truncate -s ",string[(hcount f) div 2]," ",1_string f;
+    `.qetl.io.remote.journal set .qetl.io.remote.empty_journal[];
+    n:@[.qetl.io.remote.open;f;{[e] "ERR: ",e}];
+    .qunit.assertEquals[n;1;"the receiver reopens the journal it last wrote whole"];
+    .qunit.assertTrue[all (exec state from .qetl.io.remote.journal) in `pending`committed;"with a state it recorded"];
+    .qetl.io.remote.open `};
+
 / --- admission ---------------------------------------------------------------------
 
 .qt.qetl.io.remote.test_an_ungranted_dataset_is_refused:{[t]
