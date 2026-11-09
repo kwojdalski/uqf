@@ -973,11 +973,11 @@
 / The configuration a stream runs with, and its defaults.
 .qf.mkt.stream_defaults:`window`window_mode`late!(20;`count;`reject)
 
-/ Private: the population variance of one window of returns. A window of
-/ identical returns is exactly 0 - a two-pass variance over floats that
-/ are all equal can otherwise come out at 1e-34 rather than 0.
+/ Private: population variance of a window of returns; null if one is null
+/ (0n=0n made that 0, #2382), exactly 0 if all equal (not 1e-34).
 / @private
 .qf.mkt.window_variance:{[w]
+    if[any null w; :0n];
     if[all w=first w; :0f];
     centre:avg w;
     gap:w-centre;
@@ -988,7 +988,7 @@
 / return_variance.
 / .
 / Row 0 has no return (no prior mid), so the first full window ends at
-/ row `window`: every row before it is null.
+/ row `window`: every row before it, and a window with a null return, is null.
 / @param quotes table `time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes
 / @param target_sym the sym to compute for
 / @param window the number of returns per window (positive)

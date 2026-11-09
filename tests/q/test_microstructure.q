@@ -633,6 +633,21 @@
     o:(.qt.qf.mkt.microstructure.st_run[enlist `return_variance;enlist (enlist `quotes)!enlist flat]) 1;
     .qunit.assertEquals[o`return_variance;(4#0n),(n-4)#0f;"null through warm-up, then exactly 0"]};
 
+/ #2382: while the ask is withdrawn every return is null, and 0n=0n let an
+/ all-null window through the identical-returns test as variance 0. A window
+/ holding a null return is null, batch and stream alike, until `window` real
+/ returns have come back.
+.qt.qf.mkt.microstructure.test_return_variance_is_null_for_a_window_with_no_return:{[t]
+    n:10;
+    asks:(enlist 1.1002;`float$();`float$();`float$();`float$()),enlist each 1.1004 1.1003 1.1006 1.1002 1.1005;
+    q:([] time:2026.01.02D10:00:00+0D00:00:01*til n; sym:n#`EURUSD; bid_prices:n#enlist enlist 1.1; bid_sizes:n#enlist enlist 1e6;
+        ask_prices:asks; ask_sizes:{$[count x;enlist 1e6;`float$()]} each asks);
+    batch:.qf.mkt.rolling_return_variance[q;`EURUSD;3];
+    .qunit.assertEquals[null batch;(8#1b),00b;"no variance until three real returns are back (rows 6 to 8)"];
+    cfg:enlist[`window]!enlist 3;
+    stream:(.qf.mkt.stream_update[.qf.mkt.stream_init[enlist `return_variance;cfg];(enlist `quotes)!enlist q;cfg])[`quotes;`return_variance];
+    .qunit.assertEquals[stream;batch;"the stream gives the same answer"]};
+
 .qt.qf.mkt.microstructure.test_stream_syms_do_not_contaminate_each_other:{[t]
     q:.qt.qf.mkt.microstructure.st_quotes[];
     mixed:(.qt.qf.mkt.microstructure.st_run[.qt.qf.mkt.microstructure.st_quote_metrics;enlist (enlist `quotes)!enlist q]) 1;
