@@ -18,7 +18,9 @@
 // CANDIDATES. current: the files as the HDB holds them. policy: what this stack's declared
 // policy gives the table (.qetl.compression.resolve, src/etl/compression_policy.q, column
 // overrides included). none: uncompressed. algo/blocksize/level, the algorithm by number or
-// name: gzip/17/6, 2/17/6, zstd/17/3. A setting -19! refuses here - a block size below the
+// name: gzip/17/6, 2/17/6, zstd/17/3; any of these but current and policy may be followed by
+// column overrides, +column=setting each, to measure a per-column policy before declaring it:
+// gzip/16/6+time=none+sym=gzip/20/6. A setting -19! refuses here - a block size below the
 // page size (2^14 on macOS arm64), snappy/lz4/zstd without its library on the loader's path -
 // is listed as unavailable and the rest still run. On macOS with Homebrew,
 // DYLD_LIBRARY_PATH=/opt/homebrew/lib gives q all three; it is passed on to every child.
@@ -91,6 +93,7 @@ refuse_inside tmp;
 
 / The policy candidate: this stack's declaration, resolved for the table.
 cols_src:get hsym `$(.qdev.cbench.path src),"/.d";
+{[cs;c] if[count bad:(key c`columns) except cs; fail "bench: candidate ",string[c`name],": the table has no column ",", " sv string bad]}[cols_src] each cands;
 unavailable:();
 resolve_policy:{[t]
     system "l src/init.q";
