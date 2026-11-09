@@ -1034,7 +1034,7 @@ derived from the same dependency graph `status`'s **Depends on** column uses:
 ```
 uqs profile list
 uqs start --profile arbitrage
-uqs start --profile depth,crypto
+uqs start --profile depth,arbitrage   # two profiles that fit together
 uqs start --profile essential      # the TorQ stack alone, no uqf jobs
 uqs start --profile essential vectorize1 cross1   # a profile plus named processes
 UQS_LICENCE_CONNECTIONS=32 uqs start --profile all   # on a licence that allows it
