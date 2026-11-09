@@ -144,7 +144,8 @@
 / @param conv a convention dict `version`status`currencies`direct`exceptions
 / @return conv, unchanged, if every rule holds and every supported pair routes
 / @throws error if currencies repeat, a bridge is missing or is not its own
-/   bridge, a direct pair is not canonical, or any pair fails to route
+/   bridge, a direct or exception pair is not canonical, an exception pair
+/   repeats, or any pair fails to route
 / @eg .qf.mkt.attribution_convention_check[.qf.mkt.attribution_convention]`version  -> `proposed_v1
 .qf.mkt.attribution_convention_check:{[conv]
     tbl:conv`currencies;
@@ -152,8 +153,17 @@
     if[not all (tbl`bridge) in tbl`ccy; '"attribution_convention: a bridge currency is not in the table"];
     bridge_of:(tbl`ccy)!tbl`bridge;
     if[not all (bridge_of tbl`bridge)=tbl`bridge; '"attribution_convention: a bridge currency must be its own bridge"];
-    if[not all (conv`direct) in .qf.mkt.attribution_pairs conv; '"attribution_convention: direct pairs must be canonical (base ranks before quote)"];
-    .qf.mkt.attribution_route_with[conv;] each .qf.mkt.attribution_pairs conv;
+    pairs:.qf.mkt.attribution_pairs conv;
+    if[not all (conv`direct) in pairs; '"attribution_convention: direct pairs must be canonical (base ranks before quote)"];
+    / attr_canonical looks an exception up by the canonical pair alone, so one
+    / keyed PLNUSD, or on a pair outside the convention, would never apply,
+    / and of two rows for one pair only the first would (#2553).
+    ex:(),conv[`exceptions]`pair;
+    if[count bad:ex where not ex in pairs;
+        '"attribution_convention: exception pairs must be canonical (base ranks before quote) and in the convention, not ",", " sv string bad];
+    if[count dup:where 1<count each group ex;
+        '"attribution_convention: duplicate exception pair ",", " sv string dup];
+    .qf.mkt.attribution_route_with[conv;] each pairs;
     conv};
 
 / The route of a pair as one readable symbol: the legs in chain order, each
