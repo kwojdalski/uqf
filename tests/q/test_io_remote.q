@@ -310,11 +310,42 @@
 .qt.qetl.io.remote.test_a_receiver_over_its_staging_limit_refuses_as_busy:{[t]
     .qt.qetl.io.remote.reset[];
     .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
+    / two: the first batch's chunk not yet in is held at a row (#2327)
     .qunit.assertThrows[{[ignored;x] .qt.qetl.io.remote.chunked[{[y]
-            `.qetl.io.remote.max_staged_rows set 1;
+            `.qetl.io.remote.max_staged_rows set 2;
             .qetl.io.remote.accept_chunk[.qt.qetl.io.remote.chunk[`append;0;2;.qt.qetl.io.remote.batch[]];`];
             .qetl.io.remote.accept_chunk[.qt.qetl.io.remote.chunk[`upsert;0;2;.qt.qetl.io.remote.batch[]];`]}]}[::];::;
         "remote: busy*";"a second batch's chunk past the limit is refused"]};
+
+.qt.qetl.io.remote.test_announcing_more_chunks_than_the_receiver_stages_is_refused:{[t]
+    / a slot per chunk would be made before any row was charged (#2327)
+    .qt.qetl.io.remote.reset[];
+    .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
+    r:.qt.qetl.io.remote.chunked[{[x]
+        `.qetl.io.remote.max_staged_rows set 10;
+        c:.qt.qetl.io.remote.chunk[`append;0;100000;.qt.qetl.io.remote.batch[]];
+        (.[.qetl.io.remote.accept_chunk;(c;`);{[e] e}];count .qetl.io.remote.staged)}];
+    .qunit.assertEquals[r 0;"remote: a batch of 100000 chunks is over the 10 rows this receiver stages";"refused"];
+    .qunit.assertEquals[r 1;1;"before a slot is made: nothing staged"]};
+
+.qt.qetl.io.remote.test_chunks_not_yet_in_are_charged_against_the_staging_limit:{[t]
+    / three announced chunks hold three rows of four, though one row has come (#2327)
+    .qt.qetl.io.remote.reset[];
+    .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
+    .qunit.assertThrows[{[ignored;x] .qt.qetl.io.remote.chunked[{[y]
+            `.qetl.io.remote.max_staged_rows set 4;
+            .qetl.io.remote.accept_chunk[.qt.qetl.io.remote.chunk[`append;0;3;.qt.qetl.io.remote.batch[]];`];
+            .qetl.io.remote.accept_chunk[.qt.qetl.io.remote.chunk[`upsert;0;2;.qt.qetl.io.remote.batch[]];`]}]}[::];::;
+        "remote: busy - 3 rows are staged, the limit is 4*";"the second batch has no room left"]};
+
+.qt.qetl.io.remote.test_an_empty_chunk_is_refused:{[t]
+    / an empty chunk would hold its slot open without spending a row (#2327)
+    .qt.qetl.io.remote.reset[];
+    .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
+    c:@[.qt.qetl.io.remote.chunk[`append;0;2;.qt.qetl.io.remote.batch[]];`rows;0#];
+    r:.qt.qetl.io.remote.chunked[{[c;x] (.[.qetl.io.remote.accept_chunk;(c;`);{[e] e}];count .qetl.io.remote.staged)}[c]];
+    .qunit.assertEquals[r 0;"remote: a chunk carries at least one row";"refused"];
+    .qunit.assertEquals[r 1;1;"nothing staged"]};
 
 .qt.qetl.io.remote.test_a_stale_staged_batch_is_dropped:{[t]
     .qt.qetl.io.remote.reset[];

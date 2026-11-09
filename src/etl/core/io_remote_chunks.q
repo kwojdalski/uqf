@@ -17,9 +17,11 @@
 /   BACKPRESSURE. Every chunk is a synchronous call, so a client sends the next
 /   only once the receiver has taken the last; and the receiver holds at most
 /   .qetl.io.remote.max_staged_rows rows staged across every batch in flight,
-/   refusing a chunk past it as busy rather than growing without bound. A batch
-/   staged longer than .qetl.io.remote.stage_ttl is dropped - its client gave up
-/   - and the window is sent again whole by the next run.
+/   refusing a chunk past it as busy rather than growing without bound. A chunk
+/   not yet in is held at one row, so announcing chunks spends the budget as
+/   sending rows does (#2327). A batch staged longer than
+/   .qetl.io.remote.stage_ttl is dropped - its client gave up - and the window
+/   is sent again whole by the next run.
 / .
 /   RESENDING IS SAFE. A chunk sent twice replaces itself; a batch already
 /   committed answers `duplicate at its first chunk, before anything is staged.
@@ -47,11 +49,12 @@
 / The keys a chunk carries, exactly.
 .qetl.io.remote.chunk_keys:`attachment`dataset`target`batch_id`opts`seq`of`rows
 
-/ Private: rows staged now, across every batch.
+/ Private: rows staged now, across every batch - a chunk not yet in at one row,
+/ since every chunk carries at least one (#2327).
 / @private
 .qetl.io.remote.staged_rows:{[]
     v:1_value .qetl.io.remote.staged;
-    $[count v; sum {[e] sum count each e`chunks} each v; 0]}
+    $[count v; sum {[e] sum 1|count each e`chunks} each v; 0]}
 
 / Private: drop batches staged longer than the time-to-live.
 / @private
@@ -71,8 +74,28 @@
     if[not (req[`of]>0) and (req[`seq]>=0) and req[`seq]<req`of;
         '"remote: chunk ",string[req`seq]," of ",string[req`of]," is not a chunk of that batch"];
     if[null req`batch_id; '"remote: a chunk names the batch it belongs to"];
+    / one slot is staged per chunk: more than there are rows to stage could never fit (#2327)
+    if[req[`of]>.qetl.io.remote.max_staged_rows;
+        '"remote: a batch of ",string[req`of]," chunks is over the ",string[.qetl.io.remote.max_staged_rows],
+         " rows this receiver stages"];
     / the rest as a whole batch's: its rows stand in for the batch
     .qetl.io.remote.require_request (`seq`of`rows _ req),enlist[`batch]!enlist req`rows;
+    if[0=count req`rows; '"remote: a chunk carries at least one row"];
+    }
+
+/ Private: refuse a chunk the staging budget has no room for, before a slot is
+/ made for it - its batch's other chunks held at a row each until in (#2327).
+/ @private
+.qetl.io.remote.require_room:{[id;req]
+    old:id in key .qetl.io.remote.staged;
+    e:$[old; .qetl.io.remote.staged id; `of`chunks!(req`of;())];
+    if[not (e`of)=req`of;
+        '"remote: batch ",string[id]," was being sent in ",string[e`of]," chunks, not ",string req`of];
+    / its own earlier copy does not count against the room it takes
+    need:.qetl.io.remote.staged_rows[]+count[req`rows]+$[old; neg 1|count e[`chunks] req`seq; req[`of]-1];
+    if[need>.qetl.io.remote.max_staged_rows;
+        '"remote: busy - ",string[.qetl.io.remote.staged_rows[]]," rows are staged, the limit is ",
+         string[.qetl.io.remote.max_staged_rows],"; send again when earlier batches are in"];
     }
 
 / Take one chunk: admit it, stage it, and commit the batch when it is whole.
@@ -89,15 +112,9 @@
     held:exec rows from .qetl.io.remote.journal where batch_id=id, state=`committed;
     if[count held; :`status`batch_id`rows!(`duplicate;id;first held)];
     .qetl.io.remote.expire_staged[.z.p];
+    .qetl.io.remote.require_room[id;req];
     e:$[id in key .qetl.io.remote.staged; .qetl.io.remote.staged id;
         `req`of`chunks`first!(`seq`of`rows _ req;req`of;(req`of)#enlist ();.z.p)];
-    if[not (e`of)=req`of;
-        '"remote: batch ",string[id]," was being sent in ",string[e`of]," chunks, not ",string req`of];
-    / its own earlier copy does not count against the room it takes
-    room:.qetl.io.remote.max_staged_rows-.qetl.io.remote.staged_rows[]-count e[`chunks] req`seq;
-    if[count[req`rows]>room;
-        '"remote: busy - ",string[.qetl.io.remote.staged_rows[]]," rows are staged, the limit is ",
-         string[.qetl.io.remote.max_staged_rows],"; send again when earlier batches are in"];
     e[`chunks]:@[e`chunks;req`seq;:;req`rows];
     if[any 0=count each e`chunks;
         .qetl.io.remote.staged[id]:e;
