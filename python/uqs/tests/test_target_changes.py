@@ -400,7 +400,8 @@ def test_revert_is_refused_when_the_table_changed_since(declared, capfd):
 
 
 def test_rename_keeps_the_deployments_recorded_under_the_old_name(declared):
-    history._write(ROOT, [{"target": "prod", "host": "deploy@prod", "status": "deployed"}])
+    with history._updating(ROOT) as entries:
+        entries.append({"target": "prod", "host": "deploy@prod", "status": "deployed"})
     assert uqs("target", "rename", "prod", "production").exit_code == 0
     assert [e["target"] for e in history.read(ROOT)] == ["production"]
 
