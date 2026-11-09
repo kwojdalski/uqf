@@ -1587,6 +1587,18 @@
     lead:book[enlist 1.10;enlist 1e6;now+.qf.mkt.max_clock_lead-0D00:00:00.001];
     .qunit.assertEquals[count .qpipe.job.market_data.check lead;0;"a clock within the shared lead passes"]};
 
+/ #2564: a book superbook cannot hold - ladders of different lengths, or a
+/ null source - is withheld here, or superbook throws and drops the batch.
+.qt.qetl.job.stream.test_market_data_check_withholds_uneven_ladders_and_null_sources:{[t]
+    now:.z.p;
+    book:{[s;v;b;bs;ts] ([] sym:enlist s; source:enlist v; market:enlist `fx; source_time:enlist ts;
+        bid_prices:enlist b; bid_sizes:enlist bs; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6; clock:enlist `receipt)};
+    rows:raze (book[`GBPUSD;`LP_A;1.25 1.24;1e6 2e6;now];book[`EURUSD;`LP_A;1.1 1.09;enlist 1e6;now];
+        book[`EURUSD;`;enlist 1.1;enlist 1e6;now]);
+    f:select from .qpipe.job.market_data.check rows where check=`malformed_book;
+    .qunit.assertEquals[f`row;1 2;"uneven ladders and a null source are withheld; the good book is not"];
+    .qunit.assertEquals[f`detail;("a price ladder and its size ladder differ in length";"the source is null");"each says why"]};
+
 / #2418: a quote that pulls a side (null price, zero size) is a withdrawal, an
 / empty ladder, and is published with its live side - not a one-level ladder
 / withheld as bad_level, which left the pulled side live downstream.
