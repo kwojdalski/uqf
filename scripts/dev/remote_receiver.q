@@ -26,8 +26,8 @@
 //
 //   -writers     the users an extractor may connect as (.z.u); everyone else is refused per batch
 //   -journal     where the batch journal persists - in the destination's state directory
-//   -max_rows    the most rows one message may carry (default 100000, at least
-//                .qetl.io.remote.chunk_rows); a larger window arrives in chunks of
+//   -max_rows    the most rows one message may carry (default 100000), at least
+//                .qetl.io.remote.chunk_rows; a larger window arrives in chunks of
 //                chunk_rows, staged and committed whole (src/etl/core/io_remote_chunks.q)
 //   -max_staged_rows  the most rows held staged across batches in flight (default 5000000)
 //   the rest     as scripts/dev/attached_backfill.q; the readers' password is $UQF_ATTACH_REACH_PASSWORD
