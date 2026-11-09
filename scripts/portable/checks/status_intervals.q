@@ -24,6 +24,8 @@
 .pc.load:{[path] @[system;"l ",path;{[p;e] .pc.fail p," did not load: ",e}[path]]}
 
 .pc.load["src/etl/core/intervals.q"];
+/ status.q quotes its paths with backfill_state.q's shell_word (#2377)
+.pc.load["src/etl/core/backfill_state.q"];
 .pc.load["src/etl/core/status.q"];
 
 / ------------------------------------------------------------ intervals

@@ -181,7 +181,6 @@ DYNAMIC_REVIEWED: dict[str, tuple[str, str]] = {
     "src/etl/core/horizon.q": ("job-state", "a horizon job's buffers and callbacks"),
     "src/etl/core/io_hdb.q": ("data", "partition files and the tables written to them"),
     "src/etl/core/io_manager.q": ("data", "the in-memory target table a batch is written to"),
-    "src/etl/core/io_remote.q": ("data", "the journal file and table"),
     "src/etl/core/kafka_decoder.q": ("job-state", "a decoder job's marks, held and done"),
     "src/etl/core/normalizer.q": ("job-state", "a normalizer job's on_batch and publish"),
     "src/etl/core/react.q": (
