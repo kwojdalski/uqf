@@ -145,7 +145,10 @@
 / missing or malformed - and the two calendar sets every date function uses,
 / derived here once so no function decides them for itself (#1024):
 / count_ccys, what the spot lag counts business days on, and settle_ccys,
-/ what a value date must be a business day in.
+/ what a value date must be a business day in. The weekend is taken with
+/ (),: a one-day weekend may be an atom, and indexing one was 'type. One of
+/ every day is refused: it leaves no business day, and adjust and
+/ add_business_days would search for one forever (#2390).
 / @return dict pair, ccys, spot_lag, roll, eom, weekend, settle_via,
 /   count_ccys, settle_ccys
 / @private
@@ -158,10 +161,11 @@
     if[not 99h=type c; '"calendar: ",string[p],"'s conventions must be a dictionary"];
     if[count missing:.qf.px.convention_keys where not .qf.px.convention_keys in key c;
         '"calendar: ",string[p],"'s conventions are missing ",", " sv string missing];
-    if[not -7h=type c`spot_lag; '"calendar: ",string[p],"'s spot_lag must be a long from 0 to 5"];
-    if[not c[`spot_lag] within 0 5; '"calendar: ",string[p],"'s spot_lag must be a long from 0 to 5"];
-    if[count bad:(c`weekend) where not (c`weekend) in .qf.px.weekdays;
+    if[not $[-7h=type c`spot_lag; c[`spot_lag] within 0 5; 0b]; '"calendar: ",string[p],"'s spot_lag must be a long from 0 to 5"];
+    wk:(),c`weekend;
+    if[count bad:wk where not wk in .qf.px.weekdays;
         '"calendar: ",string[p],"'s weekend has unknown day(s) ",", " sv string bad];
+    if[all .qf.px.weekdays in wk; '"calendar: ",string[p],"'s weekend leaves no business day"];
     c:.qf.px.convention_defaults,c;
     via:c`settle_via;
     if[not -11h=type via; '"calendar: ",string[p],"'s settle_via must be a currency symbol, or ` for none"];
@@ -172,7 +176,7 @@
     count_ccys:$[null via; ccys; ccys except via];
     settle_ccys:$[null via; ccys; distinct ccys,via];
     `pair`ccys`spot_lag`roll`eom`weekend`settle_via`count_ccys`settle_ccys!(
-        p;ccys;c`spot_lag;c`roll;c`eom;(),c`weekend;via;count_ccys;settle_ccys)}
+        p;ccys;c`spot_lag;c`roll;c`eom;wk;via;count_ccys;settle_ccys)}
 
 / The spot date a trade date settles on, and why.
 / .
