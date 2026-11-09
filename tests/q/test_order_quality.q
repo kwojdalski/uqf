@@ -167,6 +167,46 @@
     .qunit.assertEquals[distinct .qt.qpipe.job.order_quality.published[]`book;enlist `london;"two hours quiet: its rows are evicted and it is no longer a key"];
     .qt.qpipe.job.order_quality.release[]};
 
+/ #2457: run_stream fires a timer at >= period after its last firing, so two
+/ ticks can straddle a grid point. The tick after the gap publishes every grid
+/ point since the last one, as the twin's series cuts them - not only the newest.
+.qt.qpipe.job.order_quality.test_a_tick_after_a_late_timer_publishes_every_grid_point_it_missed:{[t]
+    .qt.qpipe.job.order_quality.job[];
+    t0:.qt.qpipe.job.order_quality.t0;
+    r1:.qt.qpipe.job.order_quality.outcomes_of[t0+0D00:00:01;.qt.qpipe.job.order_quality.order[t0+0D00:00:01;`london;`filled;1e6]];
+    r2:.qt.qpipe.job.order_quality.outcomes_of[t0+0D00:00:06;.qt.qpipe.job.order_quality.order[t0+0D00:00:06;`london;`rejected;1e6]];
+    `.qt.qpipe.job.order_quality.clock set t0+0D00:00:01;
+    .qpipe.job.order_quality.on_batch[`order_outcomes;r1];
+    .qpipe.job.order_quality.evaluate t0+0D00:00:04.9995;
+    `.qt.qpipe.job.order_quality.clock set t0+0D00:00:06;
+    .qpipe.job.order_quality.on_batch[`order_outcomes;r2];
+    .qpipe.job.order_quality.evaluate t0+0D00:00:10.0005;
+    p:.qt.qpipe.job.order_quality.published[];
+    grid:t0+0D00:00:05 0D00:00:10;
+    .qunit.assertEquals[distinct p`as_of;grid;"10:00:05 is published, though no tick landed in its period"];
+    .qunit.assertEquals[p;.qetl.job.stream.rolling.series[`order_quality;r1,r2;grid];"the live series is the twin's"];
+    .qt.qpipe.job.order_quality.release[]};
+
+/ #2457: a batch arriving while grid points are owed must not evict the rows they
+/ still need. Here the timer stalls past the hour: the 10:00:01 order is older
+/ than the hour behind the batch at 11:00:20, but every owed point from 10:00:05
+/ to 11:00:00 holds it in its hour.
+.qt.qpipe.job.order_quality.test_a_batch_does_not_evict_the_rows_of_grid_points_still_owed:{[t]
+    .qt.qpipe.job.order_quality.job[];
+    t0:.qt.qpipe.job.order_quality.t0;
+    r1:.qt.qpipe.job.order_quality.outcomes_of[t0+0D00:00:01;.qt.qpipe.job.order_quality.order[t0+0D00:00:01;`london;`filled;1e6]];
+    r2:.qt.qpipe.job.order_quality.outcomes_of[t0+0D01:00:20;.qt.qpipe.job.order_quality.order[t0+0D01:00:20;`london;`rejected;1e6]];
+    `.qt.qpipe.job.order_quality.clock set t0+0D00:00:01;
+    .qpipe.job.order_quality.on_batch[`order_outcomes;r1];
+    .qpipe.job.order_quality.evaluate t0+0D00:00:04;
+    `.qt.qpipe.job.order_quality.clock set t0+0D01:00:20;
+    .qpipe.job.order_quality.on_batch[`order_outcomes;r2];
+    .qpipe.job.order_quality.evaluate t0+0D01:00:20;
+    grid:t0+0D00:00:05*til 1+`long$0D01:00:20 div 0D00:00:05;
+    .qunit.assertEquals[.qt.qpipe.job.order_quality.published[];.qetl.job.stream.rolling.series[`order_quality;r1,r2;grid];
+        "every grid point of the stall, each with the order still in its hour"];
+    .qt.qpipe.job.order_quality.release[]};
+
 / ------------------------------------------------- THE COUNTING POLICY
 / These drive the statistic through the kind's own compute (the live job's path
 / and a backfill's), on outcome rows built directly in the contract's shape.
