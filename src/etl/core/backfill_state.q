@@ -488,8 +488,11 @@
 .qetl.job.bounded.state.durable_replace:{[path;write]
     tmp:path,".tmp";
     write tmp;
-    if[not ()~key hsym `$path; system"ln -f ",path," ",path,".bak"];
-    system"mv -f ",tmp," ",path;
+    / Each path one shell word: unquoted, a status directory with a space in
+    / it split these, and the write threw 'os with only the .tmp written (#2324).
+    w:.qetl.job.bounded.state.shell_word;
+    if[not ()~key hsym `$path; system"ln -f ",w[path]," ",w path,".bak"];
+    system"mv -f ",w[tmp]," ",w path;
     path}
 
 / Delete a durably written file AND its previous generation.
@@ -500,7 +503,7 @@
 / @param path the file, as a string
 / @return path
 / @eg .qetl.job.bounded.state.durable_remove "/tmp/durable_remove_eg"
-.qetl.job.bounded.state.durable_remove:{[path] system"rm -f ",path," ",path,".bak ",path,".tmp"; path}
+.qetl.job.bounded.state.durable_remove:{[path] system"rm -f "," " sv .qetl.job.bounded.state.shell_word each path,/:("";".bak";".tmp"); path}
 
 / Read a file durable_set wrote, falling back to the previous generation.
 / .
@@ -575,8 +578,7 @@
 /   starts at it, so a row timed exactly at the cursor is the next window's
 / @return the path written
 .qetl.job.bounded.state.save_checkpoint:{[worker;spec;cursor]
-    dir:.qetl.job.bounded.state.lock_dir[];
-    system"mkdir -p ",dir;
+    system"mkdir -p ",.qetl.job.bounded.state.shell_word[.qetl.job.bounded.state.lock_dir[]];
     path:.qetl.job.bounded.state.checkpoint_path[worker];
     payload:`source_version`range_from`range_to`cursor`saved_at!
             (spec`source_version;spec`range_from;spec`range_to;cursor;.z.p);

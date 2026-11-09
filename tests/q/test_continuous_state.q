@@ -24,6 +24,22 @@
     .qetl.job.continuous.clear_cursor `tailer;
     }
 
+/ A cursor saved, and saved again, into a status directory that does not
+/ exist yet and whose path is several shell words (#2324): save_cursor's
+/ `mkdir -p` and the rename behind it each split it, unquoted.
+.qt.qetl.job.continuous.test_a_cursor_round_trips_under_a_path_of_several_shell_words:{[t]
+    root:"build/test-status/odd cursor";
+    system"rm -rf ",.qetl.job.bounded.state.shell_word root;
+    setenv[`UQF_STATUS_DIR;root,"/state with spaces;$HOME"];
+    r:@[{.qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[1]];
+        .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[2]];
+        c:.qetl.job.continuous.load_cursor `tailer;
+        .qetl.job.continuous.clear_cursor `tailer;
+        c};::;{[e] e}];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    system"rm -rf ",.qetl.job.bounded.state.shell_word root;
+    .qunit.assertEquals[r;.qt.qetl.job.continuous.d[2];"the cursor written last is the one read back"]};
+
 / --- a crash mid-write (#633) --------------------------------------
 
 / What 0: onto the cursor file used to leave after a kill mid-write: half a

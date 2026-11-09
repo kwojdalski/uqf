@@ -306,6 +306,32 @@
     .qunit.assertEquals[{()~key hsym `$x} each p,/:("";".bak";".tmp");111b;
         "nothing is left for a later reader to fall back to"]};
 
+/ Durable writes under a status directory whose path is several shell words
+/ with metacharacters in them (#2324). Unquoted, `mkdir -p`, `ln`, `mv` and
+/ `rm -f` split it: the write threw 'os with only the .tmp on disk, and the
+/ rm removed `<root>/state`, the path's first word.
+.qt.qetl.job.bounded.state.test_durable_writes_hold_under_a_path_of_several_shell_words:{[t]
+    root:"build/test-status/odd";
+    system"rm -rf ",.qetl.job.bounded.state.shell_word root;
+    system"mkdir -p ",.qetl.job.bounded.state.shell_word root;
+    (hsym `$root,"/state") 0: enlist "keep";
+    setenv[`UQF_STATUS_DIR;root,"/state with spaces;$HOME 'q'"];
+    w:`odd_paths;
+    r:@[{[w]
+        .qetl.job.bounded.state.save_checkpoint[w;.qt.qetl.job.bounded.state.ckpt_spec;2026.09.02D00:00:00.000000000];
+        .qetl.job.bounded.state.save_checkpoint[w;.qt.qetl.job.bounded.state.ckpt_spec;2026.09.03D00:00:00.000000000];
+        p:.qetl.job.bounded.state.checkpoint_path w;
+        got:.qetl.job.bounded.state.load_checkpoint[w;.qt.qetl.job.bounded.state.ckpt_spec];
+        bak:not ()~key hsym `$p,".bak";
+        .qetl.job.bounded.state.clear_checkpoint w;
+        (got;bak;{()~key hsym `$x} each p,/:("";".bak";".tmp"))};w;{[e] e}];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    kept:@[read0;hsym `$root,"/state";{[e] ()}];
+    system"rm -rf ",.qetl.job.bounded.state.shell_word root;
+    .qunit.assertEquals[r;(2026.09.03D00:00:00.000000000;1b;111b);
+        "saved twice keeping a .bak, read back, then removed with every generation"];
+    .qunit.assertEquals[kept;enlist "keep";"and nothing outside the state directory was touched"]};
+
 / --- checkpoints survive a crash mid-write (#633) -----------------------
 
 .qt.qetl.job.bounded.state.ckpt_spec:`source_version`range_from`range_to!(`v1;2026.09.01D00:00:00.000000000;2026.09.05D00:00:00.000000000)
