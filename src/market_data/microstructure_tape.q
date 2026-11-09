@@ -347,7 +347,8 @@
         '"large_trade_threshold: quantile must be in (0;1], got ",string q];
     sizes:asc exec size from tape where action=`trade;
     if[0=count sizes; :0n];
-    sizes -1+"j"$ceiling -1e-9+q*count sizes};
+    / Rank 1 at least: the -1e-9 slack took a q with q*n <= 1e-9 to rank 0, index -1, 0n (#2545).
+    sizes -1+1|"j"$ceiling -1e-9+q*count sizes};
 
 / Share of trades at or above the quantile threshold, by COUNT.
 / .

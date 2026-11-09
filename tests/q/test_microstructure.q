@@ -483,6 +483,12 @@
     .qt.support.assertApprox[.qf.mkt.large_trade_volume_share[.qt.qf.mkt.microstructure.lt_tape[];0.5];45%55;1e-12;
         "the larger half of trades by count carries far more than half the volume"]};
 
+/ #2545: the -1e-9 slack in the rank took a tiny q to rank 0 and a null,
+/ which large_trade_ratio then read as no trades at all.
+.qt.qf.mkt.microstructure.test_a_tiny_quantile_is_the_smallest_trade:{[t]
+    .qunit.assertEquals[.qf.mkt.large_trade_threshold[.qt.qf.mkt.microstructure.lt_tape[];1e-11];1f;
+        "q just above 0 is the smallest trade, not null"]};
+
 .qt.qf.mkt.microstructure.test_an_empty_tape_is_null_not_zero:{[t]
     / 0n, not 0: no trades means the question has no answer, and a 0 would
     / read as "no large trades" and average into a series as though it were a
