@@ -377,9 +377,14 @@
 / @param rf foreign (base currency) decimal annual rate
 / @param t year fraction to expiry
 / @param is_call 1b for a call, 0b for a put
-/ @return sigma such that gk_price[...;sigma;...;is_call] ~ price
+/ @return sigma such that gk_price[...;sigma;...;is_call] ~ price - null
+/   where none does, including for any null input
 / @eg .qf.px.implied_vol[.qf.px.gk_call[1.10;1.12;0.045;0.02;0.12;0.75];1.10;1.12;0.045;0.02;0.75;1b]  -> 0.12
+/ @eg .qf.px.implied_vol[0n;1.10;1.12;0.045;0.02;0.75;1b]  -> 0n
 .qf.px.implied_vol:{[price;s;k;rd;rf;t;is_call]
+    / A null diff passes the convergence test below (0n<tol is true in q),
+    / which returned the initial guess as a vol for a missing quote (#2385).
+    if[any null (price;s;k;rd;rf;t); :0n];
     sigma:.qf.px.IMPLIED_VOL_INITIAL_SIGMA;
     i:0;
     result:0n;
