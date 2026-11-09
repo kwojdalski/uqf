@@ -277,6 +277,25 @@
     .qunit.assertEquals[count st`pending;0;"nothing left owing once the commit returned"];
     .qunit.assertEquals[st[`stats]`published;3;"counted"]};
 
+/ #2361: one batch carrying a partition's old tail and then its restarted records (#1659). The
+/ commit must resume after the restarted run's top, as the mark does - committing 1 + the old
+/ tail's top told the broker to skip the new run's records it had not yet delivered.
+.qt.qetl.kafka.test_a_batch_that_restarts_commits_after_the_restarted_run_not_the_old_tail:{[t]
+    .qt.qetl.kafka.reset[];
+    / one partition: the old run's 3 4, then the restarted 0 1 - later broker times, so a restart
+    `.qt.qetl.kafka.inbox set enlist .qt.qetl.kafka.msgs[`t;0 0 0 0;3 4 0 1;4#enlist "x"];
+    .qetl.kafka.cycle[.qt.qetl.kafka.transport;.qetl.kafka.state_new[]];
+    .qunit.assertEquals[exec offset from .qt.qetl.kafka.published[];3 4 0 1j;"every record is published, the restarted ones included"];
+    c:last .qt.qetl.kafka.of`commit;
+    .qunit.assertEquals[(c 1;c 2);(`t;(enlist 0i)!enlist 2j);"resume at 2, after the restarted run's 1 - not at 5, past records 2-4 of the new run"]};
+
+.qt.qetl.kafka.test_a_batch_without_a_restart_still_commits_one_past_its_highest:{[t]
+    .qt.qetl.kafka.reset[];
+    `.qt.qetl.kafka.inbox set enlist .qt.qetl.kafka.msgs[`t;0 0 0;3 4 5;3#enlist "x"];
+    .qetl.kafka.cycle[.qt.qetl.kafka.transport;.qetl.kafka.state_new[]];
+    c:last .qt.qetl.kafka.of`commit;
+    .qunit.assertEquals[c 2;(enlist 0i)!enlist 6j;"no restart: one past the highest offset, as before"]};
+
 .qt.qetl.kafka.test_a_publish_that_throws_commits_nothing_and_loses_nothing:{[t]
     .qt.qetl.kafka.reset[];
     `.qt.qetl.kafka.inbox set enlist .qt.qetl.kafka.msgs[`t;0 0;0 1;2#enlist "x"];
