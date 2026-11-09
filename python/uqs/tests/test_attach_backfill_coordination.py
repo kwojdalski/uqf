@@ -354,6 +354,14 @@ def test_a_network_filesystem_is_refused(world, monkeypatch):
         plan_with(world, facts_of())
 
 
+@pytest.mark.parametrize("kind", ["fuse.sshfs", "fuse.rclone", "fuse.s3fs", "fuse.gcsfuse"])
+def test_a_network_fuse_filesystem_is_refused(world, monkeypatch, kind):
+    """#2304: Linux reports a FUSE mount as `fuse.<subtype>`, which matched no entry."""
+    monkeypatch.setattr(coordination, "filesystem_of", lambda path: kind)
+    with pytest.raises(UqsError, match=f"is on a {kind} filesystem: .* local file locking"):
+        plan_with(world, facts_of())
+
+
 def test_the_filesystem_of_a_real_path_is_found(tmp_path):
     assert filesystem_of(tmp_path) not in coordination.NETWORK_FILESYSTEMS
 
