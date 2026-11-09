@@ -22,7 +22,6 @@ from uqs.checks.traced_queries import untraced_lines
 from uqs.cli import install_bundle, safety
 from uqs.cli.create_plant import plant_tables as _plant_tables
 from uqs.cli.regenerate import _DERIVED, _regenerate_derived, derived_command
-from uqs.cli.renames import old_spelling, warn_renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import (
     JOB_AUTHORING_PANEL,
@@ -255,7 +254,6 @@ def install_jobs(
             help="Ask nothing (needs --link or --copy); conflicts are kept unless --overwrite",
         ),
     ] = False,
-    old_mode: Annotated[Mode | None, old_spelling("--link or --copy", "--mode")] = None,
 ) -> None:
     """Install sources, workers and streaming jobs from a folder outside the tree.
 
@@ -279,9 +277,6 @@ def install_jobs(
     `uqs runtime prepare` installs every bundle a runtime declares the same way.
     """
     mode = None if link is None else (Mode.SYMLINK if link else Mode.COPY)
-    if old_mode is not None:
-        warn_renamed(f"--mode {old_mode.value}", "--link" if old_mode is Mode.SYMLINK else "--copy")
-        mode = old_mode if mode is None else mode
     repo_root = _paths().repo_root
     sidecar = sidecar.resolve()
     if bundles.is_bundle(sidecar):

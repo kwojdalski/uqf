@@ -21,7 +21,6 @@ import typer
 from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
 from uqs.cli import completion, start_follow, start_warnings, vocabulary
 from uqs.cli.force_stop import ForceOpt, _force_stop
-from uqs.cli.renames import BASE_PORT, alias_command, renamed
 from uqs.cli.safety import ChangesState, Effect, OverrideOpt, ReasonOpt, dry_run_note, marked
 from uqs.cli.shared import (
     PASS_THROUGH,
@@ -138,10 +137,9 @@ GraceOpt = Annotated[
 
 #: The options `start` and `restart` share, word for word (#1734): the
 #: selection `stop` takes too - PROC..., --profile, --base-port - and what a
-#: launch adds to it. A test holds the two signatures equal. --print, then
-#: --show-command, are --dry-run. `--skip-q-version-check` and
-#: `--skip-profile-budget-check` are generated from the guardrails (#1918).
-_LAUNCH_RENAMES = BASE_PORT | {"--print": "--dry-run", "--show-command": "--dry-run"}
+#: launch adds to it. A test holds the two signatures equal.
+#: `--skip-q-version-check` and `--skip-profile-budget-check` are generated
+#: from the guardrails (#1918).
 
 
 def _launch(
@@ -222,7 +220,7 @@ def _launch_and_confirm(
         _die(UqsError(start_check.describe(failed, grace)))
 
 
-@app.command(cls=renamed(_LAUNCH_RENAMES, ChangesState))
+@app.command(cls=ChangesState)
 def start(
     procs: ProcsArg = None,
     port: BasePortOpt = None,
@@ -254,7 +252,7 @@ def start(
     )  # fmt: skip
 
 
-@app.command(cls=renamed(_LAUNCH_RENAMES, ChangesState))
+@app.command(cls=ChangesState)
 def restart(
     procs: ProcsArg = None,
     port: BasePortOpt = None,
@@ -279,25 +277,6 @@ def restart(
     )  # fmt: skip
 
 
-def _up(
-    procs: ProcsArg = None,
-    port: BasePortOpt = None,
-    profile: ProfileOpt = None,
-    level: LevelOpt = None,
-    override: OverrideOpt = None,
-    reason: ReasonOpt = None,
-) -> None:
-    """`start --follow --stop-on-exit`, under the name it had before #1734:
-    its Ctrl-C stops what it started, as it always did (#1854)."""
-    _launch(
-        "start", procs, port, profile, True, level, False,
-        override, reason, True,
-    )  # fmt: skip
-
-
-alias_command(app, "up", "uqs start --follow --stop-on-exit", _up, cls=renamed(BASE_PORT))
-
-
 def _names_to_stop(procs: list[str] | None, profile: str | None) -> str:
     """What torq.sh is asked to stop: as `_names_to_start`, but with no
     budget - a profile too big to start must still be stoppable."""
@@ -311,7 +290,7 @@ def _names_to_stop(procs: list[str] | None, profile: str | None) -> str:
     return " ".join(members)
 
 
-@app.command(cls=renamed(BASE_PORT | {"--force": "--kill"}, ChangesState))
+@app.command(cls=ChangesState)
 def stop(
     procs: ProcsArg = None,
     port: BasePortOpt = None,
@@ -384,5 +363,4 @@ def _exec(ctx: typer.Context, port: BasePortOpt = None) -> None:
 
 
 _EXEC = marked(Effect.CHANGES_STATE, own_output="passes any verb through to torq.sh")
-app.command("exec", context_settings=PASS_THROUGH, cls=renamed(BASE_PORT, _EXEC))(_exec)
-alias_command(app, "raw", "uqs exec", _exec, context_settings=PASS_THROUGH, cls=renamed(BASE_PORT))
+app.command("exec", context_settings=PASS_THROUGH, cls=_EXEC)(_exec)

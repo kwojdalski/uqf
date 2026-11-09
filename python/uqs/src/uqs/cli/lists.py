@@ -24,7 +24,7 @@ from uqs.cli import completion, safety
 from uqs.cli.attachment import attachment_app
 from uqs.cli.config import config_app
 from uqs.cli.json_out import JSON_HELP, emit, records
-from uqs.cli.renames import BASE_PORT, renamed, warn_renamed
+from uqs.cli.renames import warn_renamed
 from uqs.cli.runtime_diff import runtime_app
 from uqs.cli.shared import (
     JOB_AUTHORING_PANEL,
@@ -42,17 +42,22 @@ from uqs.cli.shared import (
 from uqs.cli.sorting import _sorted_items
 from uqs.cli.target import target_app
 from uqs.deploy import targets
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import housekeeping, listing
 from uqs.stack.env import build_env
 from uqs.stack.procs import get_process_config
 
-#: Kinds of `uqs list` that moved to their noun's own list -> the command now.
-MOVED = {
+#: Kinds of `uqs list` whose one release is over (#2649): refused, naming the
+#: command now, never listed - they are still kinds, which their nouns list.
+REFUSED = {
     "targets": "uqs target list",
     "runtimes": "uqs runtime list",
     "jobs": "uqs job list",
     "attachments": "uqs job attachment list",
+}
+
+#: Kinds of `uqs list` that moved to their noun's own list -> the command now.
+MOVED = {
     # #1858: every kind is its noun's now, and `uqs list` goes with the last
     "processes": "uqs process list",
     "profiles": "uqs profile list",
@@ -277,11 +282,11 @@ override_app.command("list", cls=safety.ReadOnly)(
 
 
 def _kinds() -> list[str]:
-    return sorted(k for k in listing.LISTABLE_KINDS if k not in MOVED)
+    return sorted(k for k in listing.LISTABLE_KINDS if k not in MOVED and k not in REFUSED)
 
 
 #: Every kind is its noun's (#1858): `uqs list` stays one release, hidden.
-@app.command("list", hidden=True, cls=renamed(BASE_PORT, safety.ReadOnly))
+@app.command("list", hidden=True, cls=safety.ReadOnly)
 def list_items(
     kind: Annotated[
         str | None,
@@ -319,6 +324,9 @@ def list_items(
             emit({"kinds": _kinds()})
         else:
             console.print(f"Available kinds: {', '.join(_kinds())}")
+        return
+    if kind in REFUSED:
+        _die(UqsUsageError(f"`uqs list {kind}` is `{REFUSED[kind]}`"))
         return
     if kind in MOVED:
         warn_renamed(f"uqs list {kind}", MOVED[kind])

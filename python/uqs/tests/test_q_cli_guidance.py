@@ -69,16 +69,6 @@ KEPT = {
         "the marker comments written into an attached stack's own files: an "
         "existing attachment is re-applied by finding its block by this text"
     ),
-    ("python/uqs/src/uqs/cli/attach_legacy.py", "job attach"): (
-        "the refusal of a retired stage command, naming the command it refuses"
-    ),
-    ("python/uqs/src/uqs/cli/deploy_component.py", "deploy build-runtime"): (
-        "the hidden command's own notice that it is renamed"
-    ),
-    ("python/uqs/src/uqs/deploy/selection.py", "deploy verify"): (
-        "the fallback for a release from before `deploy check`, which has only "
-        "`deploy verify`: a rollback's target"
-    ),
     ("python/uqs/src/uqs/cli/backfill_receive.py", "job receive"): (
         "`job receive --stop`'s own notice that it is `job receiver stop` now (#1858)"
     ),
@@ -266,12 +256,10 @@ def test_the_scan_finds_the_messages_it_exists_for():
 @pytest.mark.parametrize(
     ("words", "why"),
     [
-        (["remove", "checkpoint", "w"], "old spelling of `uqs job checkpoint remove`"),
-        (["summary"], "old spelling of `uqs status`"),
-        (["data", "hdb-check"], "old spelling of `uqs data check`"),
-        (["job", "runs", "status"], "old spelling of `uqs job runs list`"),
-        (["start", "--port", "6000"], "--port is an old spelling"),
-        (["query", "--proc", "rdb1", "x"], "--proc is an old spelling"),
+        (["job", "receive", "--contract", "c"], "old spelling of `uqs job receiver start`"),
+        (["job", "new", "--procname", "x"], "--procname is an old spelling"),
+        (["deploy", "check", "--deadline", "5"], "--deadline is an old spelling"),
+        (["summary"], "does not parse"),
         (["status", "--no-such-flag"], "does not parse"),
     ],
 )
@@ -329,6 +317,7 @@ def test_every_kept_old_spelling_is_still_named_where_it_is_kept():
     excuse a new reference in the same file."""
     named = {(w, " ".join(words)) for w, _, words, _ in python_findings()}
     named |= {(w, " ".join(words)) for w, words, _ in help_findings()}
+    named |= {(w.rpartition(":")[0], s.removeprefix("uqs ")) for w, s in backticked_unknown(True)}
     unused = [
         key for key in KEPT
         if not any(w == key[0] and (s + " ").startswith(key[1] + " ") for w, s in named)
@@ -344,7 +333,7 @@ def test_the_python_scan_finds_the_messages_it_exists_for():
         for p in (UQF_ROOT / root).rglob("*.py")
         for _, w in python_references(p.read_text(errors="replace"))
     }
-    assert {"--target NAME status", "job checkpoint remove"} <= named
+    assert {"--target NAME status", "job receive --stop"} <= named
     helped = {" ".join(w) for _, text in help_texts() for w in commands_in(text)}
     assert "job runs list" in helped
 
@@ -366,10 +355,10 @@ def test_a_python_string_is_read_and_a_docstring_is_not():
 @pytest.mark.parametrize(
     ("words", "why"),
     [
-        (["--target", "NAME", "summary"], "old spelling of `uqs status`"),
-        (["data", "check", "--fix"], "--fix is a hidden option"),
-        (["job", "backfill", "--debug", "--attachment"], "--debug is an old spelling"),
-        (["deploy", "verify", "NAME"], "old spelling of `uqs deploy check`"),
+        (["--target", "NAME", "list", "processes"], "`uqs list` is hidden"),
+        (["data", "seed", "--overwrite"], "--overwrite is a hidden option"),
+        (["job", "backfill", "--any-writer", "--attachment"], "--any-writer is an old spelling"),
+        (["deploy", "check", "--procs", "NAME"], "--procs is an old spelling"),
     ],
 )
 def test_prose_cut_short_is_judged_by_what_parses(words, why):
@@ -420,7 +409,7 @@ def unknown_word(words: Sequence[str]) -> str | None:
     return None
 
 
-def backticked_unknown() -> list[tuple[str, str]]:
+def backticked_unknown(kept_too: bool = False) -> list[tuple[str, str]]:
     """(where, `uqs ...`) for each command in backticks - in the tree's Python
     strings and in --help - whose path names no command at all. The parse
     tests above catch a hidden one; this catches one that never existed, or
@@ -434,7 +423,7 @@ def backticked_unknown() -> list[tuple[str, str]]:
                 continue
             for line, text in python_strings(path.read_text(errors="replace")):
                 for span in _BACKTICKED.findall(text):
-                    if unknown_word(span.split()):
+                    if unknown_word(span.split()) and (kept_too or not _kept(rel, span.split())):
                         found.append((f"{rel}:{line}", f"uqs{span}"))
     for where, text in help_texts():
         for span in _BACKTICKED.findall(text):
@@ -450,7 +439,8 @@ def test_every_backticked_uqs_command_names_one_that_exists():
 def test_the_backticked_scan_sees_an_unknown_command():
     """Not vacuous: a path that names nothing is caught, a placeholder is not."""
     assert unknown_word("sumary".split()) == "sumary"
-    assert unknown_word("job attach apply".split()) is None, "hidden: the parse tests' case"
+    assert unknown_word("job attach apply".split()) == "attach", "removed (#2649)"
+    assert unknown_word("job receive --stop".split()) is None, "hidden: the parse tests' case"
     assert unknown_word("job runs nosuch".split()) == "nosuch"
     assert unknown_word("--target uat status".split()) is None
     assert unknown_word("<command>".split()) is None

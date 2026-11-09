@@ -19,7 +19,7 @@ from uqs.cli.concepts import job_arg
 from uqs.cli.json_out import Verbatim, emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.renames import DROPPED, renamed
+from uqs.cli.renames import renamed
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
@@ -67,7 +67,7 @@ _JobOpt = job_arg("A polling feed - a streaming job that declares poll", complet
     rich_help_panel=JOB_OPERATIONS_PANEL,
     cls=renamed(
         # --sample: how many records to show is `--limit` (#1857)
-        {"--dry-run": DROPPED, "--sample": "--limit"},
+        {"--sample": "--limit"},
         needs_pipelines("previews this tree's streaming jobs", ReadOnly),
     ),
 )

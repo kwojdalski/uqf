@@ -21,7 +21,7 @@ import pytest
 import typer
 
 from uqs import cli
-from uqs.cli import backfill, config, create_kinds, hdb_alter, lists, seed
+from uqs.cli import backfill, config, create_kinds, hdb_alter, lists
 from uqs.cli.rename_expiry import RENAMED_AFTER
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -76,12 +76,9 @@ def _hidden(*path: str) -> Any:
 #: there - so a row outliving its spelling is caught like any other.
 HAND_KEPT: dict[str, Callable[[], bool]] = {
     **{f"uqs list {kind}": (lambda k=kind: k in lists.MOVED) for kind in lists.MOVED},
-    "uqs data seed --from RUNTIME": lambda: "range_from in RUNTIMES" in inspect.getsource(seed),
     # an old VALUE, which only the command's own code reads (#1856)
     "uqs data alter --rename OLD=NEW": lambda: "def _old_rename" in inspect.getsource(hdb_alter),
     # hidden since #1858, its own old spelling kept with it
-    "uqs list --port": lambda: "--port" in _hidden("list").renames,
-    "uqs job receive --port": lambda: "--port" in _hidden("job", "receive").renames,
     "uqs job receive --attach": lambda: "--attach" in _hidden("job", "receive").renames,
     # old VALUES, which only the command's own code reads (#1858)
     "uqs config set PROC FIELD VALUE": lambda: "the old two-word" in inspect.getsource(config),

@@ -27,7 +27,6 @@ from uqs.cells import cell
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
-from uqs.cli.renames import renamed
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import (
     BasePortOpt,
@@ -153,10 +152,7 @@ def tree_records(trees: list[Node], status: dict[str, str]) -> list[dict]:
 
 
 @app.command(
-    cls=renamed(
-        {"--port": "--base-port"},
-        needs_pipelines("draws this tree's pipeline declarations", ReadOnly),
-    )
+    cls=needs_pipelines("draws this tree's pipeline declarations", ReadOnly),
 )
 def graph(
     proc: Annotated[

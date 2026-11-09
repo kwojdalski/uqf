@@ -2199,62 +2199,11 @@ their unit.
 Each old spelling below still works for one release, hidden from `--help`, and
 logs its new spelling when used (rule 6). The release after removes it.
 
-One meaning per option name (#1729):
-
-  | old                                                                                     | new                                            |
-  | ---                                                                                     | ---                                            |
-  | `--port` on `start` `stop` `restart` `exec` `summary` `graph` `list`                    | `--base-port`                                  |
-  | `--port` on `config get` `data replay` `connector start` `deploy verify` `job backfill` | `--base-port`                                  |
-  | `job receive --port`                                                                    | `--listen-port`                                |
-  | `query --target NAME`                                                                   | `query --tunnel NAME`                          |
-  | `stop --force`                                                                          | `stop --kill`                                  |
-  | `job backfill --force`                                                                  | `job backfill --override any-writer` (#1852)   |
-  | `job remove --force`                                                                    | `job remove --override even-if-edited` (#1852) |
-  | `logs -n N`                                                                             | `logs --lines N` / `-l N`                      |
-  | `start --print`                                                                         | `start --dry-run` (#1732)                      |
-  | `logs --print`                                                                          | `--show-command`                               |
-  | `query --raw`                                                                           | `query --no-gateway`                           |
-  | `config get --raw`                                                                      | `config show --unresolved`                     |
-  | `summary --debug`, `job backfill --debug`                                               | `uqs --debug status`, ...                      |
-  | `--host` on `deploy push` `status` `rollback` `prune`                                   | `--ssh` (#1768)                                |
-  | `deploy rollback --to RELEASE`                                                          | `--release RELEASE` (#1768)                    |
-
-Noun first (#1727):
-
-  | old                            | new                             |
-  | ------------------------------ | ------------------------------- |
-  | `uqs remove output`            | `uqs clean`                     |
-  | `uqs remove checkpoint WORKER` | `uqs job checkpoint remove JOB` |
-
-Every noun owns its list (#1728):
-
-  | old                    | new                       |
-  | ---------------------- | ------------------------- |
-  | `uqs list targets`     | `uqs target list`         |
-  | `uqs list runtimes`    | `uqs runtime list`        |
-  | `uqs list jobs`        | `uqs job list`            |
-  | `uqs list attachments` | `uqs job attachment list` |
-
-The thing acted on is positional (#1730):
-
-  | old                                    | new                                |
-  | ---                                    | ---                                |
-  | `uqs query EXPR --proc rdb1`           | `uqs query rdb1 EXPR`              |
-  | `uqs schema TABLE --proc hdb1`         | `uqs schema hdb1 TABLE`            |
-  | `uqs data replay --proc stp1`          | `uqs data replay stp1`             |
-
 `query` and `schema` take `[PROC] [X]`: a lone word that names a process of this
 stack is PROC, any other is the expression or table, so
 `uqs query 'count quote'` still asks the gateway and `uqs schema 'crypto*'`
 still reads rdb1. A job or worker is JOB in every command (`job backfill JOB`,
 `job attachment contract export JOB`), a process PROC (`config show PROC`).
-
-Fewer, regular top-level commands (#1734):
-
-  | old                   | new                                     |
-  | --------------------- | --------------------------------------- |
-  | `uqs up [PROC...]`    | `uqs start -f --stop-on-exit [PROC...]` |
-  | `uqs raw -- VERB ...` | `uqs exec -- VERB ...`                  |
 
 `start`, `restart` and `stop` take one option set: the processes positionally,
 `--profile` and `--base-port` on all three; `start` and `restart` add the same
@@ -2266,24 +2215,11 @@ a `connector:` prefix: a connector is no torq.sh process, so it takes none of
 `start`'s options and has start options of its own, and rule 1 puts the noun
 first.
 
-One safety vocabulary (#1732):
-
-  | old                                                         | new                                                          |
-  | ---                                                         | ---                                                          |
-  | `start --show-command`                                      | `start --dry-run` / `-n`                                     |
-  | `deploy push --accept-digest REASON`, and so on             | `deploy push --override accept-digest --reason REASON`       |
-  | `job attach --override CODE:COMPONENT --override-reason R`  | `job attach --override CODE:COMPONENT --reason R`            |
-  | `job attach --yes`, `job detach --yes`, `uqs --yes`         | also `-y`                                                    |
-  | `job preview --dry-run`                                     | dropped: a preview never writes                              |
-  | `data migrate` (dry by default)                             | still dry by default; `--apply` writes, after asking (#1854) |
-
 Every command that changes state now takes `--dry-run`/`-n`, among them `stop`,
 `restart`, `config set`, `job receiver start`, `job backfill` (`--dry-run`),
 `job runs upgrade`, `job attachment contract approve`,
 `connector start`/`stop`/`restart`, `setup odbc install`/`rollback`,
-`deploy component build` and `target add`/`remove`. The old
-`--accept-...`/`--skip-...` options each took their own reason; given together,
-their reasons are joined into the one `--reason`.
+`deploy component build` and `target add`/`remove`.
 
 One write model per kind of change (#1854). A command that changes this machine
 writes by default and takes `--dry-run`/`-n`. A command that rewrites data in
@@ -2319,31 +2255,11 @@ says it was given as the old flag, which records no reason.
 `job attachment add --override CODE:COMPONENT` is checked as every other
 command's is.
 
-Group help that matches its commands, and no colliding names (#1737):
-
-  | old                         | new                                    |
-  | --------------------------- | -------------------------------------- |
-  | `uqs job attach NAME`       | `uqs job attachment add NAME`          |
-  | `uqs job detach NAME`       | `uqs job attachment remove NAME`       |
-  | `uqs job contract VERB ...` | `uqs job attachment contract VERB ...` |
-  | `uqs job runs migrate`      | `uqs job runs upgrade`                 |
-
 An attachment is a noun now, with `add`, `remove`, `show` and `list`, and the
 receiver contracts approved for one under it. `job runs upgrade` brings the run
 ledger up to today's columns; it is not `data migrate`, which changes one HDB
 partition's schema. Each group's help names every command in it, held by
 `test_cli_conventions.py`.
-
-A fixed verb vocabulary (#1733):
-
-  | old                   | new                              |
-  | --------------------- | -------------------------------- |
-  | `uqs summary`         | `uqs status`                     |
-  | `uqs data hdb-check`  | `uqs data check`                 |
-  | `uqs data hdb-alter`  | `uqs data alter`                 |
-  | `uqs config get`      | `uqs config show`                |
-  | `uqs deploy verify`   | `uqs deploy check`               |
-  | `uqs job runs status` | `uqs job runs list --unfinished` |
 
 `status` is the state of something running, `check` a probe that exits non-zero
 on a problem, `list` many records and `show` one. A push or rollback asks a
@@ -2416,8 +2332,8 @@ time range (`job runs list` keeps the runs whose window overlaps it);
 pairs of verbs stay apart on purpose: `clean` deletes what the stack wrote where
 `remove` deletes one declared thing, `deploy prune` removes old releases by a
 rule, and `job runs upgrade` changes the ledger's layout where `data migrate`
-changes an HDB partition's schema. None of the hidden aliases has passed its one
-release yet (`cli/rename_expiry.py`), so none is removed.
+changes an HDB partition's schema. Each old spelling above goes after its one
+release (`cli/rename_expiry.py`).
 
 "Partition" is an HDB date partition (#2239), as kdb+ has it; the old spelling
 is refused naming the new one, with no alias:

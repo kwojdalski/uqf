@@ -20,7 +20,6 @@ from uqs.cli import query_target as via_target
 from uqs.cli.concepts import target_opt
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.q_login import DEFAULT_USER, QPasswdOpt, QPasswordEnvOpt, QUserOpt, q_password
-from uqs.cli.renames import renamed
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import (
     ExportOpt,
@@ -48,7 +47,7 @@ SchemaJson = json_opt(
 )
 
 
-@app.command(cls=renamed({"--proc": "PROC"}, ReadOnly))
+@app.command(cls=ReadOnly)
 def schema(
     ctx: typer.Context,
     proc: Annotated[
@@ -113,7 +112,7 @@ def schema(
     with contextlib.ExitStack() as scope:
         paths = stack_paths.default_paths()
         try:
-            proc, table = _proc_first(ctx, proc, table, port is not None)
+            proc, table = _proc_first(proc, table, port is not None)
             passwd = q_password(password_env, passwd)
             proc = proc or DEFAULT_PROC
             if tunnel is not None:

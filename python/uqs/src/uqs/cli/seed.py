@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-from datetime import date, timedelta
 from typing import Annotated
 
 import typer
@@ -25,20 +23,6 @@ from uqs.cli.shared import (
 from uqs.paths import UqsError, UqsUsageError, paths_for_root
 from uqs.runtimes import RUNTIMES
 from uqs.stack import hdb_seed, runtime
-
-_DATES = re.compile(r"^(\d{4}-\d{2}-\d{2})?\.\.(\d{4}-\d{2}-\d{2})?$")
-
-
-def dates_as_range(text: str) -> tuple[str | None, str | None]:
-    """The retired `--dates FIRST..LAST` (inclusive, either side optional) as
-    the --from and --to that replace it - LAST's next day, since --to is
-    excluded. Kept one release for rule 6 of #1738."""
-    m = _DATES.match(text.strip())
-    if not m:
-        raise UqsError(f"--dates {text!r} is not FIRST..LAST, e.g. 2026-09-01..2026-09-30")
-    lo, hi = m.groups()
-    return lo, (date.fromisoformat(hi) + timedelta(days=1)).isoformat() if hi else None
-
 
 #: What `data seed --on-conflict` does with a table already there.
 SEED_CONFLICTS = ("ignore", "replace")
@@ -89,10 +73,6 @@ def seed(
     range_to: DayToOpt = None,
     day: DateOpt = None,
     last: DayLastOpt = None,
-    dates: Annotated[
-        str | None,
-        typer.Option("--dates", hidden=True, help="Renamed: --from FIRST --to LAST+1"),
-    ] = None,
     hdb: HdbOpt = None,
     attach: AttachOpt = None,
     on_conflict: _OnConflictOpt = "ignore",
@@ -125,9 +105,6 @@ def seed(
         on_conflict = "replace"
     try:
         safety.refuse_dry_run("data seed", dry_run)
-        if from_runtime is None and range_from in RUNTIMES:
-            warn_renamed(f"--from {range_from}", f"--from-runtime {range_from}")
-            from_runtime, range_from = range_from, None
         if from_runtime is None:
             raise UqsUsageError(
                 f"name the runtime to copy from: --from-runtime, one of {', '.join(RUNTIMES)}"
@@ -136,14 +113,6 @@ def seed(
             raise UqsUsageError(
                 f"--from-runtime {from_runtime!r} is not a runtime - "
                 f"choose one of: {', '.join(RUNTIMES)}"
-            )
-        if dates is not None:
-            if any(v is not None for v in (range_from, range_to, day, last)):
-                raise UqsError(f"--dates cannot be given with a time range - {timerange.USAGE}")
-            range_from, range_to = dates_as_range(dates)
-            bounds = (("--from", range_from), ("--to", range_to))
-            warn_renamed(
-                f"--dates {dates}", " ".join(f"{f} {v}" for f, v in bounds if v) or "no range"
             )
         if on_conflict not in ("ignore", "replace"):
             raise UqsError(f"--on-conflict {on_conflict!r}: a seed can ignore or replace")

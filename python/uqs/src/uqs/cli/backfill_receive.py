@@ -294,5 +294,5 @@ alias_command(
     "receive",
     "uqs job receiver start",
     receive,
-    cls=renamed({"--port": "--listen-port", **ATTACHMENT}, ChangesState),
+    cls=renamed(ATTACHMENT, ChangesState),
 )
