@@ -175,6 +175,27 @@
     .qt.support.assertApprox[twice 0;prices;1e-6;"inverting twice restores prices"];
     .qt.support.assertApprox[twice 1;sizes;1e-3;"inverting twice restores sizes"]};
 
+/ #2389: an empty sizes list built its rows with `each` into a (), which
+/ 'type'd under want_cols#, instead of giving zero rows.
+.qt.qf.px.forwards.test_cross_book_at_empty_sizes:{[t]
+    q:`sym`time xasc ([] time:2#2026.01.01D11; sym:`EURUSD`USDJPY; bid_prices:(1.1 1.09;150 149f); bid_sizes:2#enlist 1e6 1e6; ask_prices:(1.1002 1.1004;150.1 150.2); ask_sizes:2#enlist 1e6 1e6);
+    want:`size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled;
+    one:.qf.mkt.cross_book_at[q;`EURJPY;2026.01.01D12;enlist 1e6;`bid`ask];
+    r:.qf.mkt.cross_book_at[q;`EURJPY;2026.01.01D12;`float$();`bid`ask];
+    .qunit.assertEquals[count r;0;"no sizes -> no rows"];
+    .qunit.assertEquals[cols r;want;"same columns as a priced size"];
+    .qunit.assertEquals[meta r;meta one;"and the same types"];
+    direct:.qf.mkt.cross_book_at[q;`EURUSD;2026.01.01D12;`float$();enlist `mid];
+    .qunit.assertEquals[(count direct;cols direct);(0;`size`sym`mid);"a directly quoted pair too"];
+    b:`bid_prices`bid_sizes`ask_prices`ask_sizes!(1.1 1.09;1e6 1e6;1.1002 1.1004;1e6 1e6);
+    j:`bid_prices`bid_sizes`ask_prices`ask_sizes!(150 149f;1e6 1e6;150.1 150.2;1e6 1e6);
+    two:.qf.mkt.cross_book_at_sizes[`EURUSD;b;`USDJPY;j;`float$();`bid`ask];
+    .qunit.assertEquals[(count two;cols two);(0;want);"cross_book_at_sizes"];
+    chain:.qf.mkt.cross_book_chain_at_sizes[`EURUSD`USDJPY;(b;j);`float$();`bid`ask];
+    .qunit.assertEquals[(count chain;cols chain);(0;want);"cross_book_chain_at_sizes"];
+    .qunit.assertThrows[.qf.mkt.cross_book_at_sizes[`EURUSD;b;`USDJPY;j;`float$()];enlist `last;
+        "cross_book_at_sizes: side must be one of*";"sides are still validated"]};
+
 .qt.qf.px.forwards.test_cross_book_at_sizes_matches_cross_book_at_negligible_size:{[t]
     / a size far smaller than any level's depth should reduce to exactly
     / cross_book's top-of-book result - a self-consistency check that

@@ -157,6 +157,15 @@
       s=`mid; enlist `mid;
       '"cross_book_at_sizes: side must be one of `bid`ask`mid, got ",string s]};
 
+/ Private: the zero-row result of a *_at_sizes call for an empty sizes list,
+/ with the columns and types one size gives. Their `each sizes` builds a ()
+/ there, not a table, and want_cols# threw 'type on it (#2389).
+/ @private
+.qf.mkt.no_sizes_result:{[sizes;sides]
+    want_cols:`size`sym , raze .qf.mkt.side_cols each sides;
+    all_cols:`size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid;
+    want_cols#flip all_cols!("f"$sizes;`symbol$();`float$();`float$();`boolean$();`float$();`float$();`boolean$();`float$())};
+
 / Depth-aware synthetic cross rate: like cross_book, but walks multi-level
 / order book depth on both legs for each requested size, converting the
 / notional hop-by-hop (leg 2 is swept at the bridge-currency amount leg
@@ -169,13 +178,14 @@
 / @param book2 dict `bid_prices`bid_sizes`ask_prices`ask_sizes for leg 2, each level best-first
 / @param sizes list of sizes to price, e.g. 1000000 2000000 5000000
 / @param sides subset of `bid`ask`mid to include in the result
-/ @return a table, one row per size, columns `size`sym plus whichever of
-/   bid/bid_filled_size/bid_fully_filled, ask/ask_filled_size/ask_fully_filled,
-/   mid were requested via sides
+/ @return a table, one row per size (none for no sizes), columns `size`sym
+/   plus whichever of bid/bid_filled_size/bid_fully_filled,
+/   ask/ask_filled_size/ask_fully_filled, mid were requested via sides
 / @throws error if sym1 and sym2 share no common currency, or sides has
 /   anything other than `bid`ask`mid
 / @eg .qf.mkt.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;1000000 3000000;`bid`ask`mid]
 .qf.mkt.cross_book_at_sizes:{[sym1;book1;sym2;book2;sizes;sides]
+    if[0=count sizes; :.qf.mkt.no_sizes_result[sizes;sides]];
     rows:.qf.mkt.cross_book_at_one_size[sym1;book1;sym2;book2;] each sizes;
     want_cols:`size`sym , raze .qf.mkt.side_cols each sides;
     want_cols#rows};
@@ -293,9 +303,9 @@
 /   one per leg, each level best-first
 / @param sizes list of sizes to price, e.g. 1000000 2000000 5000000
 / @param sides subset of `bid`ask`mid to include in the result
-/ @return a table, one row per size, columns `size`sym plus whichever of
-/   bid/bid_filled_size/bid_fully_filled, ask/ask_filled_size/ask_fully_filled,
-/   mid were requested via sides
+/ @return a table, one row per size (none for no sizes), columns `size`sym
+/   plus whichever of bid/bid_filled_size/bid_fully_filled,
+/   ask/ask_filled_size/ask_fully_filled, mid were requested via sides
 / @throws error if syms has fewer than 2 legs, if syms and books aren't
 /   the same length, if two consecutive legs share no common currency,
 /   or if sides has anything other than `bid`ask`mid
@@ -304,6 +314,7 @@
     syms:syms,();
     books:books,();
     if[(count syms)<>count books; '"cross_book_chain_at_sizes: syms and books must be the same length"];
+    if[0=count sizes; :.qf.mkt.no_sizes_result[sizes;sides]];
     rows:.qf.mkt.cross_book_chain_at_one_size[syms;books;] each sizes;
     want_cols:`size`sym , raze .qf.mkt.side_cols each sides;
     want_cols#rows};
@@ -431,6 +442,7 @@
 / Private: like cross_book_chain_at_sizes, but for exactly one leg.
 / @private
 .qf.mkt.single_leg_at_sizes:{[cross_sym;leg_book;invert;sizes;sides]
+    if[0=count sizes; :.qf.mkt.no_sizes_result[sizes;sides]];
     rows:.qf.mkt.single_leg_at_one_size[cross_sym;leg_book;invert;] each sizes;
     want_cols:`size`sym , raze .qf.mkt.side_cols each sides;
     want_cols#rows};
