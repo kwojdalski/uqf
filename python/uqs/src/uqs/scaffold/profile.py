@@ -34,6 +34,17 @@ DEFAULT_PROFILE = "default"
 UNPROFILED_ANCHOR = "unprofiled"
 _PROFILE_PREFIX = "profile:"
 _LINE_LIMIT = 100
+#: The note membership() leaves when given neither answer; a bundle rewrites it.
+NO_CHOICE = re.compile(r"^add (\S+) to a profile \(--profile NAME\)")
+
+
+def bundle_route(proc: str) -> str:
+    """How a bundle's process joins a stack, where a tree's names a profile:
+    --profile and --unprofiled are refused with --bundle (#2488)."""
+    return (
+        f"{proc} joins a stack through a runtime, never a profile: name the bundle in "
+        "runtime_bundles.json, then `uqs deploy push --jobs`"
+    )
 
 
 def profile_names(known: Iterable[str] | None) -> tuple[str, ...]:

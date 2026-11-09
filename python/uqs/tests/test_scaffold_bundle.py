@@ -101,6 +101,21 @@ def test_a_profile_option_is_refused(tmp_path, monkeypatch, option):
     assert refused and "does not apply with --bundle" in refused[0]
 
 
+def test_a_bundle_job_is_told_how_it_joins_a_stack_not_to_pick_a_profile(
+    tmp_path, monkeypatch, tree_files
+):
+    """--profile and --unprofiled are refused with --bundle, so a note telling
+    the operator to pass one led straight into that refusal (#2488)."""
+    argv = ["mock_q2", "--outputs", "mock_q2", "--schema",
+            "source_time:timestamp, sym:symbol, px:float",
+            "--bundle", str(tmp_path / "mockups"), "--dry-run"]  # fmt: skip
+    out, refused = _job_new(argv, monkeypatch)
+    assert refused == []
+    notes = [line for line in out.splitlines() if "note:" in line]
+    assert not [n for n in notes if "--profile" in n or "--unprofiled" in n], notes
+    assert any("runtime_bundles.json" in n and "uqs deploy push --jobs" in n for n in notes)
+
+
 def test_a_folder_that_cannot_name_a_bundle_is_refused(tmp_path):
     with pytest.raises(UqsError, match="not lower_snake_case"):
         bundle_mod.check_folder(tmp_path / "Mock-Ups")

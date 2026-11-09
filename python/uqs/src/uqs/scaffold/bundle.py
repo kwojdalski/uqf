@@ -43,6 +43,7 @@ from uqs.paths import (
     WORKER_DIR,
     UqsError,
 )
+from uqs.scaffold import profile
 from uqs.scaffold.external import EXTERNAL_DIR, PY_TEST_DIR
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.stack import bundles
@@ -160,6 +161,8 @@ def into_bundle(plan: ScaffoldPlan, bundle_dir: Path) -> ScaffoldPlan:
     for note in plan.notes:
         if any(str(p) in note for p in dropped):
             continue
+        if m := profile.NO_CHOICE.match(note):
+            note = profile.bundle_route(m[1])
         if ".qcat.hidden" in note:
             # The installer refuses a bundle table its catalog.q leaves out.
             note = note.split(" - or,")[0] + " - a bundle describes every table it defines"
