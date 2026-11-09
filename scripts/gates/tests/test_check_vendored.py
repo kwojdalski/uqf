@@ -91,6 +91,33 @@ def test_recorded_drift_is_frozen_not_allowed_to_grow(tmp_path):
     assert found.startswith(f"{tree.path}/mkdocs.yml: differs from its recorded drift")
 
 
+def test_an_edit_declared_as_new_drift_is_still_refused(tmp_path):
+    """#2409: a drift file for a tree recorded with none cannot excuse an edit."""
+    root, tree = _copy_tree(tmp_path, "kx-dbmaint")
+    edited = root / tree.path / "dbmaint.q"
+    up_blob = vendored.parse_listing((root / tree.listing_file).read_text())["dbmaint.q"][1]
+    edited.write_bytes(edited.read_bytes() + b"/ a local fix\n")
+    (root / tree.drift_file).write_text(
+        f"dbmaint.q\t{up_blob}\t{vendored.file_entry(edited)[1]}\twhitespace\n"
+    )
+    found = vendored.tree_problems(root, tree)
+    assert found and any(f.startswith(tree.drift_file) for f in found)
+
+
+def test_a_line_added_to_recorded_drift_is_refused(tmp_path):
+    """#2409: the drift file is pinned by `drift_digest`, so it cannot grow."""
+    root, tree = _copy_tree(tmp_path, "torq-finance-starter-pack")
+    listing = vendored.parse_listing((root / tree.listing_file).read_text())
+    drift = vendored.read_drift(root, tree)
+    p = next(p for p in sorted(listing) if p not in drift and p != tree.license_file)
+    f = root / tree.path / p
+    f.write_bytes(f.read_bytes() + b"\n")
+    with (root / tree.drift_file).open("a") as out:
+        out.write(f"{p}\t{listing[p][1]}\t{vendored.file_entry(f)[1]}\twhitespace\n")
+    found = vendored.tree_problems(root, tree)
+    assert found and any(f.startswith(tree.drift_file) for f in found)
+
+
 # ----------------------------------------------------- a fixture upstream
 
 
@@ -218,13 +245,16 @@ def test_revendor_deletes_recorded_drift(project):
     lib = project / "lib" / "thing"
     (lib / "code" / "a.q").write_bytes(b"a:1\n")
     up_blob = vendored.parse_listing((project / tree.listing_file).read_text())["code/a.q"][1]
-    (project / tree.drift_file).write_text(
-        f"# frozen\ncode/a.q\t{up_blob}\t{vendored.blob_id(b'a:1' + bytes([10]))}\twhitespace\n"
-    )
+    drift = f"# frozen\ncode/a.q\t{up_blob}\t{vendored.blob_id(b'a:1' + bytes([10]))}\twhitespace\n"
+    (project / tree.drift_file).write_text(drift)
+    record = project / vendored.RECORD
+    record.write_text(record.read_text() + f'drift_digest = "{vendored.digest(drift)}"\n')
     assert vendored.problems(project) == []
     assert vendored.summary(project).endswith("(1 files of recorded drift)")
     assert revendor.main(["thing", "--root", str(project)]) == 0
     assert not (project / tree.drift_file).exists()
+    assert "drift_digest" not in record.read_text()
+    assert vendored.problems(project) == []
     assert (lib / "code" / "a.q").read_bytes() == b"a:1  \r\n"
 
 
