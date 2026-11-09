@@ -27,3 +27,14 @@
     row:`time`sym`bid_prices`ask_prices!(2026.01.01D00:00:00.000000000;`EURUSD;1.1003 1.1002 1.1001 1.1000 1.0999;1.1001 1.1002 1.1003 1.1004 1.1005);
     d:.qf.util.full row;
     .qunit.assertTrue[(d like "*1.1005*") and not d like "*..";"the ask prices are there, and nothing is cut"]};
+
+/ At q's default \P 7 two floats that differ past the seventh digit render
+/ the same, so a verify mismatch read `v: 1.234568 -> 1.234568` (#2623).
+.qt.qf.util.render.test_floats_are_rendered_at_full_precision:{[t]
+    .qunit.assertEquals[value .qf.util.full 1.23456789 1.23456781;1.23456789 1.23456781;"the text reads back as the same floats"];
+    .qunit.assertTrue[not (.qf.util.full 1.0000002)~.qf.util.full 1.0000003;"floats that differ only in the 8th digit render differently"]};
+
+.qt.qf.util.render.test_the_float_precision_is_put_back:{[t]
+    p:system"P";
+    .qf.util.full 1.5;
+    .qunit.assertEquals[system"P";p;"rendering leaves \\P as it found it"]};

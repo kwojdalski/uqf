@@ -15,8 +15,12 @@
 \d .
 
 / A value as q text, IN FULL: a string escaped with no length limit, anything
-/ else with the console widened to its 2000-column maximum for the one call
-/ and put back even if rendering throws. Past 2000 columns a non-string still
+/ else with the console widened to its 2000-column maximum and floats shown to
+/ 15 significant digits (\P 15) for the one call, both put back even if
+/ rendering throws. At the default \P 7, 1.23456789 and 1.23456781 both read
+/ 1.234568 (#2623). 15, not \P 0's 17: 15 is the most digits every decimal
+/ written with that many reads back as, so 1.2631 stays 1.2631, where 17 spell
+/ the binary noise - 1.2630999999999999. Past 2000 columns a non-string still
 / ends in "..", which is q's own limit.
 / @param v any value
 / @return its q literal, as .Q.s1 spells it
@@ -24,10 +28,13 @@
 .qf.util.full:{[v]
     if[10h=type v; :.qf.util.quoted[v]];
     c:@[system;"c";{[e] ()}];
-    if[2<>count c; :.Q.s1 v];
-    @[system;"c ",string[c 0]," 2000";::];
+    p:@[system;"P";{[e] ()}];
+    if[(2<>count c) and 1<>count p; :.Q.s1 v];
+    if[2=count c; @[system;"c ",string[c 0]," 2000";::]];
+    if[1=count p; @[system;"P 15";::]];
     r:@[.Q.s1;v;{[e] "'",e}];
-    @[system;"c "," " sv string c;::];
+    if[2=count c; @[system;"c "," " sv string c;::]];
+    if[1=count p; @[system;"P ",string first p;::]];
     r}
 
 / A string as a q string literal: \ " newline, carriage return and tab
