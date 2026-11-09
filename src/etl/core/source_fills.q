@@ -225,10 +225,12 @@
     $[cased; `$/:t; `$/:upper each t]}
 
 / Refuse the first row of a column a predicate flags, naming the field and the data row.
+/ `rows` is each flagged position's data row number: its row in the file for a csv source
+/ (#2403), where a window is only some of the file's rows, and its position for ODBC.
 / @private
-.qetl.source.fills.refuse:{[who;field;flags;what]
+.qetl.source.fills.refuse:{[who;field;flags;rows;what]
     bad:where flags;
-    if[count bad; '"fills: ",who," data row ",string[1+first bad]," ",what," (",string[field],"; ",string[count bad]," row(s) in the window)"];
+    if[count bad; '"fills: ",who," data row ",string[rows first bad]," ",what," (",string[field],"; ",string[count bad]," row(s) in the window)"];
     1b}
 
 / Assemble a window from its typed fields: apply the side encoding, refuse what cannot be read,
@@ -236,21 +238,22 @@
 / @param source a declared fills source
 / @param d a dictionary of the window's columns: source_time (timestamps), venue, fill_id, sym and
 /   fee_ccy (symbols, null for none), side (text), size, price and fee (floats, null for none)
+/ @param rows each row's data row number, for a refusal: its row in the file for a csv source
 / @return the window in the contract's columns, sorted by source_time, venue and fill_id
 / @throws error naming the first data row that has a null time, venue, fill id, symbol, size or price, or a side the encoding does not name
 / @private
-.qetl.source.fills.assemble:{[source;d]
+.qetl.source.fills.assemble:{[source;d;rows]
     who:string source;
     r:.qetl.source.fills.registry source;
     sd:`$/:lower each d`side;
     side:(first r`sides) sd;
-    .qetl.source.fills.refuse[who;`source_time;null d`source_time;"has no readable time"];
-    .qetl.source.fills.refuse[who;`venue;null d`venue;"has an empty venue"];
-    .qetl.source.fills.refuse[who;`fill_id;null d`fill_id;"has an empty fill id"];
-    .qetl.source.fills.refuse[who;`sym;null d`sym;"has an empty symbol"];
-    .qetl.source.fills.refuse[who;`side;null side;"has a side the encoding does not name"];
-    .qetl.source.fills.refuse[who;`size;null d`size;"has a size that is not a number"];
-    .qetl.source.fills.refuse[who;`price;null d`price;"has a price that is not a number"];
+    .qetl.source.fills.refuse[who;`source_time;null d`source_time;rows;"has no readable time"];
+    .qetl.source.fills.refuse[who;`venue;null d`venue;rows;"has an empty venue"];
+    .qetl.source.fills.refuse[who;`fill_id;null d`fill_id;rows;"has an empty fill id"];
+    .qetl.source.fills.refuse[who;`sym;null d`sym;rows;"has an empty symbol"];
+    .qetl.source.fills.refuse[who;`side;null side;rows;"has a side the encoding does not name"];
+    .qetl.source.fills.refuse[who;`size;null d`size;rows;"has a size that is not a number"];
+    .qetl.source.fills.refuse[who;`price;null d`price;rows;"has a price that is not a number"];
     n:count d`source_time;
     t:([] source_time:d`source_time; venue:d`venue; fill_id:d`fill_id; sym:d`sym; side:side;
           size:d`size; price:d`price; fee:d`fee; fee_ccy:d`fee_ccy; clock:n#r`clock);
@@ -270,7 +273,7 @@
     mapped:{[m;f] f in key m}[m];
     fee:$[mapped `fee; .qetl.coerce.to_float each pick `fee; (count keep)#0n];
     if[mapped `fee;
-        .qetl.source.fills.refuse[string source;`fee;(null fee) & 0<count each .qetl.source.fills.texts pick `fee;"has a fee that is not a number"]];
+        .qetl.source.fills.refuse[string source;`fee;(null fee) & 0<count each .qetl.source.fills.texts pick `fee;1+keep;"has a fee that is not a number"]];
     `source_time`venue`fill_id`sym`side`size`price`fee`fee_ccy!(
         ts keep;
         .qetl.source.fills.symbols[1b;pick `venue];
@@ -298,12 +301,13 @@
     if[count absent; '"fills: ",who,"'s file lacks the mapped column(s): ",", " sv string absent];
     tc:raw m`source_time;
     ts:.qetl.coerce.to_timestamp each tc;
-    .qetl.source.fills.refuse[who;`source_time;null ts;"has a time that is empty, date-only or malformed"];
+    .qetl.source.fills.refuse[who;`source_time;null ts;1+til count ts;"has a time that is empty, date-only or malformed"];
     off:last each .qetl.coerce.utc_offset each tc;
-    .qetl.source.fills.refuse[who;`source_time;off<>0D;"carries a UTC offset, but the source is declared UTC"];
+    .qetl.source.fills.refuse[who;`source_time;off<>0D;1+til count ts;"carries a UTC offset, but the source is declared UTC"];
     keep:where (ts>=range_from) & ts<range_to;
     if[0=count keep; :.qetl.source.fills.empty[]];
-    .qetl.source.fills.assemble[source;.qetl.source.fills.csv_fields[source;raw;ts;keep]]}
+    / a refusal names the row by its place in the file, not in the window
+    .qetl.source.fills.assemble[source;.qetl.source.fills.csv_fields[source;raw;ts;keep];1+keep]}
 
 / One window of a fills source, over its own transport: a csv file is sent through the traced
 / .qetl.source.csv, an ODBC handle through .qetl.io.odbc.run_sql.
@@ -343,6 +347,6 @@
         `float$raw`size;`float$raw`price;
         $[`fee in cols raw; `float$raw`fee; n#0n];
         $[`fee_ccy in cols raw; .qetl.source.fills.symbols[0b;raw`fee_ccy]; n#`]);
-    .qetl.source.fills.assemble[source;d]}
+    .qetl.source.fills.assemble[source;d;1+til n]}
 
 \d .

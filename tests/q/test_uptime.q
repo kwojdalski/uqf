@@ -226,3 +226,19 @@
     .qetl.uptime.beat[];
     .qunit.assertEquals[count distinct .qetl.uptime.mine;2;"two renewed sessions, two ids"];
     .qunit.assertTrue[not any .qetl.uptime.mine in (a;b);"neither reuses an old id"]};
+
+/ A status directory that is several shell words (#2377): unquoted, begin's
+/ `mkdir -p` and the health file's `mkdir -p`/`mv` split it, made stray
+/ directories, and left only stream_health_<job>.txt.tmp behind.
+.qt.qetl.uptime.test_a_session_and_its_health_file_hold_under_a_path_of_several_shell_words:{[t]
+    root:.qt.qetl.uptime.dir,"/odd2377";
+    dir:"st dir;$HOME 'q'";
+    setenv[`UQF_STATUS_DIR;root,"/",dir];
+    r:@[{.qetl.uptime.begin `crypto_markout; .qetl.uptime.beat[]};::;{[e] e}];
+    setenv[`UQF_STATUS_DIR;.qt.qetl.uptime.dir];
+    inside:asc @[{key hsym `$x};root,"/",dir;{[e] ()}];
+    made:@[{key hsym `$x};root;{[e] ()}];
+    .qunit.assertEquals[r;1;"one session, beating"];
+    .qunit.assertEquals[inside;`etl_stream_uptime`etl_stream_uptime.bak`stream_health_crypto_markout.txt;
+        "the session table (and its previous generation) and the health file, and no .tmp left behind"];
+    .qunit.assertEquals[made;enlist `$dir;"and no other directory was created"]};

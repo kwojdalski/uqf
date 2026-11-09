@@ -141,6 +141,13 @@
     .qunit.assertThrows[.qetl.source.csv_rows;p;"csv: build/test-fills/w.csv line 3 has 8 fields, the header has 9 (a quoted comma is not supported)";
         "a short row is refused, not read with its fields shifted"]};
 
+/ The line named is the row's line in the file (#2404): a blank line above it was
+/ skipped before counting, and the message named the blank line instead.
+.qt.qetl.source.fills.test_a_bad_row_after_a_blank_line_is_named_by_its_own_line:{[t]
+    p:.qt.qetl.source.fills.file["blank.csv";("a,b";"1,2";"";"3,4,5")];
+    .qunit.assertThrows[.qetl.source.csv_rows;p;"csv: build/test-fills/blank.csv line 4 has 3 fields, the header has 2*";
+        "line 4, not the blank line 3"]};
+
 .qt.qetl.source.fills.test_the_sample_drop_reads_as_the_fixture:{[t]
     r:.qetl.source.fills.read[`eq_fills;`:tests/q/data/eq_fills.csv;.qt.qetl.source.fills.day[0];.qt.qetl.source.fills.day[2]];
     .qunit.assertEquals[r;.qpipe.source.eq_fills.fixture[];"the file the fixture is the parse of, in contract types"]};
@@ -180,6 +187,23 @@
 .qt.qetl.source.fills.test_an_empty_fill_id_refuses_the_window:{[t]
     r:.qt.qetl.source.fills.with_source[`t_fills;enlist "2026-02-25T14:31:00Z,XNAS,,AAPL,B,10,271.7,0.1,USD";{.qt.qetl.source.fills.window[`t_fills;x]}];
     .qunit.assertEquals[r;(`threw;"fills: t_fills data row 1 has an empty fill id (fill_id; 1 row(s) in the window)");"a fill with no id cannot be keyed"]};
+
+/ A refusal names the row by its place in the file, not in the window (#2403): the
+/ window here starts at the file's second data row, so the bad third row was
+/ named "data row 2" - a row that is fine.
+.qt.qetl.source.fills.test_a_refusal_names_the_row_in_the_file_not_in_the_window:{[t]
+    p:.qt.qetl.source.fills.file["rows.csv";(
+        "exec_time,exchange,exec_id,ticker,buy_sell,qty,px,commission,commission_ccy";
+        "2026-02-24T14:30:00.000000Z,XNAS,x0001,AAPL,B,100,271.60,0.35,USD";
+        "2026-02-25T14:30:00.000000Z,XNAS,x0002,META,S,10,643.20,0.10,USD";
+        "2026-02-25T15:30:00.000000Z,XNAS,x0003,MSFT,X,10,400.00,0.10,USD")];
+    .qunit.assertThrows[.qt.qetl.source.fills.window[`eq_fills;];p;
+        "fills: eq_fills data row 3 has a side the encoding does not name*";"the side's row, as the file numbers it"];
+    r:.qt.qetl.source.fills.with_source[`t_fills;(
+        "2026-02-24T14:31:00Z,XNAS,a0,AAPL,B,10,271.7,0.1,USD";
+        .qt.qetl.source.fills.good_row;
+        "2026-02-25T14:31:00Z,XNAS,a2,AAPL,B,10,271.7,abc,USD");{.qt.qetl.source.fills.window[`t_fills;x]}];
+    .qunit.assertEquals[r;(`threw;"fills: t_fills data row 3 has a fee that is not a number (fee; 1 row(s) in the window)");"and so is a fee's"]};
 
 .qt.qetl.source.fills.test_a_malformed_row_outside_the_window_does_not_refuse_it:{[t]
     r:.qt.qetl.source.fills.with_source[`t_fills;(.qt.qetl.source.fills.good_row;"2026-02-26T14:31:00Z,XNAS,a2,AAPL,X,10,n/a,0.1,USD");{.qt.qetl.source.fills.window[`t_fills;x]}];

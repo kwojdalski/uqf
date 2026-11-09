@@ -157,3 +157,22 @@
     .qt.qetl.status.write[`running;""];
     .qt.qetl.status.write[`completed;""];
     .qunit.assertEquals[.qetl.status.previous_state `st1;`completed;"start, two windows, finish"]};
+
+/ --- a status directory that is several shell words (#2377) ----------------
+
+/ Unquoted, `mkdir -p` split the directory and made stray ones, and `mv` got
+/ four arguments and failed: only the .tmp reached disk and write_status threw.
+.qt.qetl.status.test_the_status_file_is_written_under_a_path_of_several_shell_words:{[t]
+    root:"build/test-status/odd2377";
+    system"rm -rf ",.qetl.job.bounded.state.shell_word root;
+    system"mkdir -p ",.qetl.job.bounded.state.shell_word root;
+    dir:"st dir;$HOME 'q'";
+    setenv[`UQF_STATUS_DIR;root,"/",dir];
+    r:@[{.qt.qetl.status.write[`starting;""]; 1b};::;{[e] e}];
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    inside:@[{key hsym `$x};root,"/",dir;{[e] ()}];
+    made:key hsym `$root;
+    system"rm -rf ",.qetl.job.bounded.state.shell_word root;
+    .qunit.assertEquals[r;1b;"the write returns"];
+    .qunit.assertEquals[inside;enlist `airflow_status_st1.txt;"the final file, and no .tmp left behind"];
+    .qunit.assertEquals[made;enlist `$dir;"and no other directory was created"]};

@@ -1,7 +1,7 @@
 / verify_capture.q - what each producer returns for one closed source window, read
 / only (.qetl.verify, #1851).
 / .
-/ Capture runs a producer's own fetch, transform and check over [from; to) and
+/ Capture runs a producer's own fetch, readiness, transform and check over [from; to) and
 / keeps the rows. It does not publish, advance a cursor, write a checkpoint or
 / record coverage - and the proof is a snapshot of all four, taken before and
 / after, held equal (`snapshot`, `capture`).
@@ -10,9 +10,11 @@
 / normalize, next_cursor and advances its timer uses, and the same window
 / judgement `uqs job preview --from/--to` applies (.qetl.job.stream.in_window),
 / from a temporary cursor that exists only here. A bounded worker's window goes
-/ through the worker's own stage_fetch, stage_transform and stage_check - the
-/ stages a run takes before it publishes - and stops there: stage_publish, which
-/ is where publication, coverage and the checkpoint begin, is the one stage not run.
+/ through the worker's own stages before it publishes - fetch, readiness,
+/ transform and check, every one of window_stages but the last
+/ (.qetl.job.bounded.stages_before_publish) - and stops there: stage_publish,
+/ which is where publication, coverage and the checkpoint begin, is the one stage
+/ not run.
 / .
 / A capture that throws or fails a window is a result with its `error`, never a
 / thrown error and never rows: the report then says UNVERIFIED with the reason,
@@ -95,8 +97,7 @@
 /   because a list of same-keyed dictionaries is a table in q
 / @private
 .qetl.verify.bounded_window:{[worker;cfg;w]
-    stages:.qetl.job.bounded.window_stages`fetch`transform`check;
-    s:{[worker;s;stage] $[`failed in key s; s; stage[worker;s]]}[worker]/[(``cfg`window)!(::;cfg;w);stages];
+    s:.qetl.job.bounded.stages_before_publish[worker;cfg;w];
     $[`failed in key s; (0b;s`failed); (1b;s`batch)]}
 
 / Private: the capture's body for one worker, between opening the source and closing it.
@@ -108,12 +109,12 @@
     `rows`failed!(.qetl.verify.joined got[where ok;1];got[where not ok;1])}
 
 / Capture what a bounded worker would publish for [from_ts; to_ts): each window, as the
-/ worker plans it, through its own fetch, transform and quality gate. Publication,
+/ worker plans it, through its own fetch, readiness, transform and quality gate. Publication,
 / coverage and the checkpoint - stage_publish onward - are not run.
 / @param worker the bounded worker
 / @param from_ts the range's first instant, aligned as the worker requires
 / @param to_ts the instant after its last
-/ @return a capture result; a window that failed fetch, transform or check puts its
+/ @return a capture result; a window that failed fetch, readiness, transform or check puts its
 /   message in `failures` and leaves `rows` unset, because a partial capture would pass for a whole one
 / @throws error when the range is reversed, empty or not aligned to the worker's grid
 / @eg .qetl.verify.capture_bounded[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.13D00:00:00.000000000]`windows  ->  2

@@ -33,4 +33,19 @@
         :.qetl.job.bounded.failed_with[s;"window not ready - nothing published or claimed, the next run plans it again";enlist[`unmet]!enlist unmet]];
     s}
 
+/ Private: one window through every stage of window_stages before publish -
+/ what a run would publish, without publishing it. Read from window_stages
+/ rather than listed, so a stage added there is not one these callers skip:
+/ verify capture and the reaction replay each left readiness out once (#2398,
+/ #2399). Here rather than in bounded_worker.q, which is at its line cap;
+/ window_stages is read at call time.
+/ @param worker the worker's name
+/ @param cfg the worker's configuration dictionary
+/ @param w the window, a dict of range_from and range_to
+/ @return the window's state: `batch when every stage passed, `failed (failed_with's dict) when one did not
+/ @private
+.qetl.job.bounded.stages_before_publish:{[worker;cfg;w]
+    stages:value (enlist `publish) _ .qetl.job.bounded.window_stages;
+    {[worker;s;stage] $[`failed in key s; s; stage[worker;s]]}[worker]/[(``cfg`window)!(::;cfg;w);stages]}
+
 \d .

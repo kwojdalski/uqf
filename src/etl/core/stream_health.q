@@ -89,7 +89,7 @@
     h:.qetl.stream_health.of[job];
     dup:.qetl.stream_health.doubts_of[job];
     dir:.qetl.status.status_dir[];
-    system"mkdir -p ",dir;
+    system"mkdir -p ",.qetl.job.bounded.state.shell_word dir;
     payload:`job`process`pid`host`at`ok`failed`failing`last_error`last_failure_at!(
         job;.qetl.run.proc_name[];.z.i;string .z.h;.z.p;h`ok;h`failed;failing;
         string h`last_error;$[null h`last_failure_at; ""; string h`last_failure_at]);
@@ -97,7 +97,7 @@
     target:dir,"/stream_health_",string[job],".txt";
     tmp:target,".tmp";
     (hsym `$tmp) 0: enlist .j.j payload;
-    system"mv ",tmp," ",target;
+    system"mv ",.qetl.job.bounded.state.shell_word[tmp]," ",.qetl.job.bounded.state.shell_word target;
     target}
 
 \d .

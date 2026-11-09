@@ -63,12 +63,15 @@
     all_lines:read0 h;
     c:.qetl.source.csv_names[h;all_lines];
     lines:1_ all_lines;
-    lines:lines where 0<count each trim each lines;
+    / each kept line's number in the file, so a blank line skipped above a bad row
+    / does not shift the line it is named by (#2404)
+    kept:where 0<count each trim each lines;
+    lines:lines kept;
     n:count c;
     width:1+sum each lines="," ;
     bad:where width<>n;
     if[count bad;
-        '"csv: ",(1_string h)," line ",string[2+first bad]," has ",string[width first bad]," fields, the header has ",string[n],
+        '"csv: ",(1_string h)," line ",string[2+kept first bad]," has ",string[width first bad]," fields, the header has ",string[n],
          " (a quoted comma is not supported)"];
     flip c!flip {x except "\r"} each/: "," vs/: lines}
 

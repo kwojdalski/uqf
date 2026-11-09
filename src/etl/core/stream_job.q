@@ -424,7 +424,7 @@
 .qetl.job.stream.withhold:{[job;t;x;msg;f;n]
     .[.qetl.stream_health.record;(job;0b;msg);::];
     .[{.qetl.log.ch.err[`transform;y;(enlist[`job]!enlist x),z]};(job;"publish check withheld rows";
-        `table`rows`withheld`failures!(t;.qetl.job.stream.row_count[t;x];n;$[.Q.qt f;300#.Q.s1 5#f;""]));::];
+        `table`rows`withheld`failures!(t;.qetl.job.stream.row_count[t;x];n;$[.Q.qt f;300 sublist .Q.s1 5 sublist f;""]));::];
     .qetl.job.stream.withheld_n::.qetl.job.stream.withheld_n+1;
     ::}
 

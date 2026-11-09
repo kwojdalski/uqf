@@ -1481,6 +1481,16 @@
     .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"nothing published, clean rows included"];
     .qunit.assertEquals[(.qetl.stream_health.of`sj_check_hold)`failed;1;"counted as failed"]};
 
+/ The withheld-batch log names at most five failures, never more than there
+/ are (#2378): `5#f` on one failure cycled it into five identical rows, and
+/ `300#` cycled the short text it gave.
+.qt.qetl.job.stream.test_the_withheld_log_names_one_failure_once:{[t]
+    pub:.qt.qetl.job.stream.check_probe[`sj_check_one;`sjcheckone1;`hold;.qt.qetl.job.stream.neg_check];
+    lines:.qt.qetl.job.stream.logged[`sj_check_one;{[pub;x] (get pub)[`probe_out;([] v:1 -2 3)]}[pub]];
+    fields:last first lines where "publish check withheld rows"~/:lines[;1];
+    .qunit.assertEquals[fields`failures;.Q.s1 .qt.qetl.job.stream.neg_check[([] v:1 -2 3)];
+        "the one failing row, described once"]};
+
 / A check that accepts the dict and column-list batch shapes a publisher takes.
 .qt.qetl.job.stream.shape_check:{[x] v:$[99h=type x; x`v; 98h=type x; x`v; x 1]; bad:where (),v<0;
     ([] check:count[bad]#`negative; status:count[bad]#`bad; detail:count[bad]#enlist "negative")}

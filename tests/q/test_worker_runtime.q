@@ -302,6 +302,18 @@
     / pass for any message containing the letters h, d and b anywhere.
     .qunit.assertEquals[all err like/: ("*hdb*";"*rdb*");1b;"both missing dependencies are reported, not just the first"]};
 
+/ One process type, as an atom, is a one-element list (#2402). Stored bare, it
+/ made the registry a symbol vector: the worker itself, a worker that declared
+/ nothing and every later declaration then threw 'type.
+.qt.qetl.job.bounded.runtime.test_a_single_dependency_given_as_an_atom_is_a_list_of_one:{[t]
+    .qetl.job.bounded.runtime.declare_dependencies[`w;`hdb];
+    .qetl.job.bounded.runtime.connected_override:enlist `hdb;
+    .qunit.assertEquals[.qetl.job.bounded.runtime.require_dependencies[`w];`w;"the one dependency resolves"];
+    .qunit.assertEquals[.qetl.job.bounded.runtime.require_dependencies[`plain];`plain;"declaring nothing still requires nothing"];
+    .qunit.assertEquals[.qetl.job.bounded.runtime.declare_dependencies[`x;`tickerplant`hdb];`tickerplant`hdb;"and a later worker can declare two"];
+    .qunit.assertThrows[.qetl.job.bounded.runtime.declare_dependencies[`y;];"hdb";
+        "declare_dependencies: y's process types must be a symbol or a symbol list, got type 10";"a string is not a process type"]};
+
 / Distinct from needs_fetch: that asks about this worker's OUTPUT, this asks
 / about its INPUT. Computing markouts over a range whose trades are missing
 / would record coverage asserting the work was done.
