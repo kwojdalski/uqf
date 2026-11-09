@@ -48,7 +48,7 @@
 
 / Private: the ordered source columns for one (prefix;target_col) naming
 / rule - see derive_level_groups.
-/ @throws error if the matched levels aren't a contiguous 0..N-1 run
+/ @throws error if no column matches, or the matched levels aren't a contiguous 0..N-1 run
 / @private
 .qf.mkt.sorted_source_cols_for_prefix:{[col_names;col_strs;prefix_target]
     prefix:prefix_target 0;
@@ -62,6 +62,9 @@
     sort_order:iasc levels;
     sorted_names:matched_names sort_order;
     sorted_levels:levels sort_order;
+    / Zero levels is the degenerate run: a typo'd prefix folded to a 0-row
+    / column and book_from_wide_levels died on a bare 'length (#2546).
+    if[0=count matched_names; '"derive_level_groups: prefix '",prefix,"' matches no column"];
     expected_levels:til count sorted_levels;
     if[not all sorted_levels=expected_levels;
         '"derive_level_groups: prefix '",prefix,"' levels are not contiguous 0..N-1, found ",(", " sv string sorted_levels)];
@@ -81,8 +84,8 @@
 / @param prefix_targets list of (prefix;target_col) pairs, e.g.
 /   (("bid";`bid_prices);("bidSize";`bid_sizes);("ask";`ask_prices);("askSize";`ask_sizes))
 / @return dict target_col!ordered_source_cols, ready for fold_level_columns
-/ @throws error if a group's parsed level indices aren't a contiguous
-/   0..N-1 run, naming the prefix and the levels actually found
+/ @throws error if a prefix matches no column, or a group's parsed level
+/   indices aren't a contiguous 0..N-1 run, naming the prefix and the levels found
 / @eg .qf.mkt.derive_level_groups[`bid0`bid1`bidSize0`bidSize1;enlist ("bid";`bid_prices)]
 / @eg .qf.mkt.derive_level_groups[`bid_px_00`bid_px_01`ask_px_00`ask_px_01;(("bid_px_";`bid_prices);("ask_px_";`ask_prices))]  -> Databento-style zero-padded prefixes, two rules at once
 .qf.mkt.derive_level_groups:{[col_names;prefix_targets]
