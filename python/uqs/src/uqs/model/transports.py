@@ -12,6 +12,7 @@ process to do it.
 from __future__ import annotations
 
 import csv
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -45,7 +46,7 @@ def load(root: Path | None = None) -> tuple[Transport, ...]:
             "`uv run python scripts/generate/derive.py contract-surface`"
         )
     with path.open(newline="", encoding="utf-8") as handle:
-        return tuple(
+        found = tuple(
             Transport(
                 name=row["name"],
                 default=row["default"] == "1",
@@ -55,6 +56,15 @@ def load(root: Path | None = None) -> tuple[Transport, ...]:
             )
             for row in csv.DictReader(handle)
         )
+    # A hand-edited copy of a row would otherwise win here as the first match
+    # while the surface check read the last (#2628).
+    repeated = sorted(name for name, n in Counter(t.name for t in found).items() if n > 1)
+    if repeated:
+        raise UqsError(
+            f"{TRANSPORTS_FILE} repeats {', '.join(repeated)} - regenerate the contract surface "
+            "with `uv run python scripts/generate/derive.py contract-surface`"
+        )
+    return found
 
 
 def names(root: Path | None = None) -> tuple[str, ...]:
@@ -64,8 +74,13 @@ def names(root: Path | None = None) -> tuple[str, ...]:
 
 def default(root: Path | None = None) -> str:
     """The name of the transport a source gets when it declares none."""
-    (found,) = (t.name for t in load(root) if t.default)
-    return found
+    found = [t.name for t in load(root) if t.default]
+    if len(found) != 1:
+        raise UqsError(
+            f"{TRANSPORTS_FILE} marks {len(found)} transports as the default, not one: "
+            f"{', '.join(found) or 'none'}"
+        )
+    return found[0]
 
 
 def get(name: str, root: Path | None = None) -> Transport:

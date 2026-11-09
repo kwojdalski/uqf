@@ -77,7 +77,7 @@ from uqs.external.crypto import (
 )
 from uqs.model import profiles
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
-from uqs.paths import UqsError, UqsPaths
+from uqs.paths import UqsError, UqsPaths, UqsUsageError
 from uqs.stack import (
     alive,
     deployment,
@@ -999,9 +999,35 @@ def test_a_failed_export_reports_rather_than_losing_the_output(monkeypatch, tmp_
     unwritable path must say so, not take the whole command down with a
     traceback."""
     _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
-    _patch(monkeypatch, table_export, "export_table", raises=UqsError("unsupported suffix"))
-    result = runner.invoke(cli.app, ["process", "list", "--export", str(tmp_path / "x.txt")])
+    _patch(monkeypatch, table_export, "export_table", raises=UqsError("cannot write"))
+    result = runner.invoke(cli.app, ["process", "list", "--export", str(tmp_path / "x.csv")])
     assert result.exit_code == 1
+
+
+@pytest.mark.parametrize("name", ["x.docx", "missing/x.csv"])
+def test_an_export_path_that_cannot_be_written_is_refused_before_any_output(
+    monkeypatch, tmp_path, name
+):
+    """#2607, #2606: refused after the listing, it was a second --json
+    document - or, for a missing directory, a polars traceback."""
+    rec = _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
+    argv = ["process", "list", "--json", "--export", str(tmp_path / name)]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 2 and result.stdout == "", result.output
+    assert rec.calls == []
+
+
+def test_a_failed_export_is_the_only_json_document(monkeypatch, tmp_path):
+    from uqs.cli import shared
+
+    monkeypatch.setattr(shared, "json_requested", lambda: True)  # as main() configures it
+    _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
+    _patch(monkeypatch, table_export, "export_table", raises=UqsError("cannot write"))
+    result = runner.invoke(
+        cli.app, ["process", "list", "--json", "--export", str(tmp_path / "x.csv")]
+    )
+    assert result.exit_code == 1
+    assert json.loads(result.stdout)["ok"] is False
 
 
 # ------------------------------------------------------------------ query
@@ -1160,6 +1186,19 @@ def test_config_get_prints_one_field_when_asked(monkeypatch):
     assert "6052" in result.stdout
 
 
+def test_config_show_refuses_a_field_the_row_does_not_have(monkeypatch):
+    """#2608: it printed "" and exited 0, which `$(uqs config show ...)` takes as a value."""
+    from uqs import mcp
+
+    row = {"procname": "rdb1", "port": "6052"}
+    _patch(monkeypatch, stack_procs, "get_process_config", result=row)
+    for argv in (["config", "show", "rdb1", "prot"], ["config", "show", "rdb1", "prot", "--json"]):
+        result = runner.invoke(cli.app, argv)
+        assert result.exit_code == 2 and result.stdout == "", result.output
+    with pytest.raises(UqsUsageError, match="unknown process.csv field: 'prot'"):
+        mcp.uqs_config_show("rdb1", "prot")
+
+
 def test_config_get_resolves_placeholders_unless_raw_is_given(monkeypatch):
     """--raw is the difference between "will listen on 6052" and
     "{KDBBASEPORT}+2". Wiring it backwards would show the wrong one with no
@@ -1261,6 +1300,12 @@ def test_the_column_name_is_matched_case_insensitively():
     assert sorting._sorted_items(_procs(), "PORT", reverse=False)[0]["port"] == "659"
 
 
+def test_a_column_is_matched_by_the_key_json_prints_it_under():
+    """#2523: --json says `process` for procname, and --sort refused it."""
+    order = [i["procname"] for i in sorting._sorted_items(_procs(), "process", reverse=False)]
+    assert order == ["Arbitrage1", "sortworker2", "stp1"]
+
+
 def test_empty_cells_group_at_one_end_rather_than_sorting_as_empty_string():
     """A process with no override set is not "before aaa", it is absent -
     and a blank interleaved among real values reads as data."""
@@ -1303,7 +1348,7 @@ def test_an_unsortable_column_names_the_real_ones(monkeypatch):
     actually produced."""
     _patch(monkeypatch, listing, "list_items", result=_procs())
     result = runner.invoke(cli.app, ["process", "list", "--sort", "bogus"])
-    assert result.exit_code == 1
+    assert result.exit_code == 2, "a command line wrong as given (#1885, #2523)"
 
 
 def test_the_sorted_order_reaches_the_export(monkeypatch):
@@ -1642,6 +1687,11 @@ def test_connector_logs_shows_the_tail_of_the_log_its_status_names(monkeypatch, 
              "message": "a|b"},
         ),
         ("started, pid 42", {"time": None, "level": None, "message": "started, pid 42"}),
+        # a bracketed level leaves no ] in the message (#2636)
+        (
+            "[2026-11-09 10:00:00] [warn] lag",
+            {"time": "2026-11-09T10:00:00+00:00", "level": "WARNING", "message": "lag"},
+        ),
     ],
 )  # fmt: skip
 def test_connector_logs_json_lines_are_records_as_logs_prints_them(
@@ -1704,12 +1754,14 @@ def test_kafka_starts_with_its_own_defaults(monkeypatch):
         "topic": "uqf.client.flow",
         "group": kafka_feed.DEFAULT_GROUP,
         "credential": connection.DEMO_TP_CREDENTIAL,
+        "base_port": None,
     }
 
 
-def test_a_zero_or_empty_feed_option_reaches_the_feed_as_typed(monkeypatch):
+def test_a_zero_feed_option_reaches_the_feed_as_typed(monkeypatch):
     """Defaults fill in what was NOT given. `--interval-ms 0` was given, and
-    used to become 1000 without a word (#505)."""
+    used to become 1000 without a word (#505). An empty `--symbols ""` is not
+    defaulted either: it is refused (#2633, test_core.py)."""
     rec = _patch(monkeypatch, crypto, "start_crypto_recorder", result=1)
     argv = [
         "connector",
@@ -1717,15 +1769,12 @@ def test_a_zero_or_empty_feed_option_reaches_the_feed_as_typed(monkeypatch):
         "crypto",
         "--interval-ms",
         "0",
-        "--symbols",
-        "",
         "--top-n-levels",
         "0",
     ]
     assert runner.invoke(cli.app, argv).exit_code == 0
     assert rec.kwargs["interval_ms"] == 0
     assert rec.kwargs["top_n_levels"] == 0
-    assert rec.kwargs["symbols"] == ()
     assert rec.kwargs["venues"] == CRYPTO_RECORDER_DEFAULT_VENUES, "an option not given defaults"
 
 
@@ -2852,11 +2901,12 @@ def test_summary_refuses_an_unknown_sort_column_before_doing_any_work(monkeypatc
 
     def die(exc):
         # _die logs through loguru, not to the runner's output - record it.
-        said.append(str(exc))
+        said.append(exc)
         raise typer.Exit(code=1)
 
     monkeypatch.setattr(summary_columns, "_die", die)
     result = runner.invoke(cli.app, ["status", "--sort", "nope"])
     assert result.exit_code == 1
-    assert len(said) == 1 and said[0].startswith("cannot sort by 'nope'")
-    assert "Process" in said[0], "the error names the columns that exist"
+    assert len(said) == 1 and str(said[0]).startswith("cannot sort by 'nope'")
+    assert isinstance(said[0], UqsUsageError), "a command line wrong as given (#2523)"
+    assert "Process" in str(said[0]), "the error names the columns that exist"

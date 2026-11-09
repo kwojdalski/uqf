@@ -33,11 +33,6 @@ ALLOWED: dict[str, tuple[int, str]] = {
         "the bounded-worker lifecycle (define, plan, run, retry, cleanup) in one namespace; "
         "the next split after source_contract.q (#970), not yet done",
     ),
-    "src/market_data/microstructure.q": (
-        1224,
-        "one .qf.mkt namespace of independent analytics (spread, depth, impact, flow); "
-        "a split is possible along those lines but nothing is forcing it",
-    ),
 }
 
 #: Directories whose files are written by a generator, not edited.

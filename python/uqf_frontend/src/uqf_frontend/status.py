@@ -183,11 +183,13 @@ def _parse(text: str) -> WorkerStatus:
     warnings: list[str] = []
     state = str(raw["state"])
     if state not in STATES:
-        # Not fatal: an unrecognised state still tells a reader the worker is
-        # alive and reporting. Flag it rather than discarding the row, since
-        # the likeliest cause is a writer newer than this reader.
-        warnings.append(
-            f"unrecognised state {state!r}; known states are {', '.join(sorted(STATES))}"
+        # Refused, so read_dir reports the file as unreadable beside the
+        # others: the API and the browser type a state as one of STATES, and
+        # a row carrying another failed the whole response (#2583). The
+        # likeliest cause is a writer newer than this reader, so say so.
+        raise ValueError(
+            f"unrecognised state {state!r}; known states are {', '.join(sorted(STATES))} "
+            "- likely a status writer newer than this reader"
         )
 
     if state == "failed" and not str(raw.get("error") or "").strip():

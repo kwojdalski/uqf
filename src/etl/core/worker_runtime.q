@@ -104,10 +104,14 @@
     read_one:{[k;fallback]
         v:@[{.qetl.cfg.raw x};k;{""}];
         $[0=count v; fallback; null j:"J"$v; fallback; j]};
-    `max_attempts`base_delay_ms`max_delay_ms!(
+    pol:`max_attempts`base_delay_ms`max_delay_ms!(
         read_one[`retry_max_attempts;  .qetl.job.bounded.runtime.default_policy`max_attempts];
         read_one[`retry_base_delay_ms; .qetl.job.bounded.runtime.default_policy`base_delay_ms];
-        read_one[`retry_max_delay_ms;  .qetl.job.bounded.runtime.default_policy`max_delay_ms])}
+        read_one[`retry_max_delay_ms;  .qetl.job.bounded.runtime.default_policy`max_delay_ms]);
+    / under one attempt no fetch ran, and every window read as a transport outage (#2599)
+    if[pol[`max_attempts]<1; '"retry: ",.qetl.cfg.env_name[`retry_max_attempts]," must be at least 1, not ",string pol`max_attempts];
+    if[any 0>pol`base_delay_ms`max_delay_ms; '"retry: the retry delays must not be negative"];
+    pol}
 
 / Exponential backoff for attempt n (1-based), capped.
 / @eg .qetl.job.bounded.runtime.backoff_ms[.qetl.job.bounded.runtime.default_policy;3]  ->  1000

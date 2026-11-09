@@ -43,6 +43,14 @@
     a:.qf.demo.drift_one each 1000#1.0;
     .qunit.assertTrue[1<count distinct a;"each level gets its own draw"]};
 
+.qt.qf.demo.synthetic_market.test_a_vector_drifts_each_level_on_its_own_draw:{[t]
+    / Called on the vector itself, one `rand 1f` moved every pair by the
+    / same factor (#2627).
+    a:.qf.demo.drift_one 1000#1.0;
+    .qunit.assertEquals[count a;1000;"the same shape"];
+    .qunit.assertTrue[1<count distinct a;"each level gets its own draw"];
+    .qunit.assertTrue[all (a>=1-0.0005) and a<=1+0.0005;"each within 5bp"]};
+
 .qt.qf.demo.synthetic_market.test_a_bid_ladder_descends_from_the_mid:{[t]
     .qunit.assertEquals[.qf.demo.levels_one[1.1;0.0001;-1;3];1.0999 1.0998 1.0997;
         "level 0 is one step from mid, and each level is one step further"]};
@@ -65,3 +73,24 @@
     sizes:.qf.demo.levels_size 3;
     .qunit.assertEquals[(type sizes;first sizes;all 0<1_deltas sizes);(9h;"f"$.qf.demo.size_unit;1b);
         "floats, as fx_orderbook declares: the top of book is one size_unit and every level below is deeper"]};
+
+/ #2562: the feeds share no memory, so the level they agree on is a function
+/ of the clock - the same at the same instant in every process.
+.qt.qf.demo.synthetic_market.test_the_shared_level_is_a_function_of_the_clock:{[t]
+    ts:2026.11.09D10:00:00+0D00:00:01*til 3600;
+    a:.qf.demo.level each ts;
+    .qunit.assertEquals[a;.qf.demo.level each ts;"the same instant gives the same level, in any process"];
+    .qunit.assertTrue[1<count distinct a;"and the level moves with the clock"]};
+
+.qt.qf.demo.synthetic_market.test_the_shared_level_stays_within_its_swing:{[t]
+    / A day at one-minute steps: bounded by construction, never drifting off.
+    a:.qf.demo.level each 2026.11.09D00:00:00+0D00:01*til 1440;
+    .qunit.assertTrue[all {[s;l] all (abs l%s)<=exp .qf.demo.swing}[.qf.demo.spot] each a;
+        "every pair stays within swing of its spot"]};
+
+.qt.qf.demo.synthetic_market.test_two_sources_never_sit_more_than_half_a_pip_apart:{[t]
+    / Inside the two-pip spread every feed quotes: no source's bid reaches
+    / another's ask.
+    now:.z.p;
+    gaps:{[now;i] abs[.qf.demo.source_level[now]-.qf.demo.source_level now]%.qf.demo.pip} [now] each til 1000;
+    .qunit.assertTrue[all 0.5>=raze gaps;"two sources at one instant differ by at most half a pip"]};

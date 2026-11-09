@@ -1558,10 +1558,43 @@ def test_crypto_recorder_config_yaml_contains_overrides():
         interval_ms=1000,
     )
     assert "port: 7000" in content
-    assert "- binance_spot" in content
-    assert "- BTC-USDT" in content
+    assert '- "binance_spot"' in content
+    assert '- "BTC-USDT"' in content
     assert '"feed:pass"' in content
     assert "table: crypto_book" in content
+
+
+def test_crypto_recorder_config_yaml_quotes_every_venue_and_symbol():
+    """#2633: written bare, `#x` became a YAML comment and `a: b` a mapping."""
+    yaml = pytest.importorskip("yaml")
+    content = crypto._crypto_recorder_config_yaml(
+        stp1_port=7000,
+        venues=["a: b"],
+        symbols=["#x", "y"],
+        credential="feed:pass",
+        table="crypto_book",
+        top_n_levels=5,
+        interval_ms=1000,
+    )
+    parsed = yaml.safe_load(content)
+    assert parsed["market_symbol"] == "#x"
+    assert parsed["market_symbols"] == ["#x", "y"]
+    assert parsed["venues"] == ["a: b"]
+
+
+@pytest.mark.parametrize("flag", ["--symbols", "--venues"])
+@pytest.mark.parametrize("value", [",", ""])
+def test_an_empty_symbol_or_venue_list_is_refused_not_a_traceback(flag, value, log_text):
+    """#2633: `--symbols ,` split to nothing, passed the bindings check and the
+    dry run, then crashed the start on symbols[0] with an IndexError."""
+    from typer.testing import CliRunner
+
+    from uqs import cli
+
+    result = CliRunner().invoke(cli.app, ["connector", "start", "crypto", "-n", flag, value])
+    assert result.exit_code != 0
+    assert not isinstance(result.exception, IndexError)
+    assert f"{flag} names no" in log_text()
 
 
 def test_start_crypto_recorder_rejects_non_cryptorust_dir(

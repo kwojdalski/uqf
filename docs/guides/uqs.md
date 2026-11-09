@@ -456,7 +456,7 @@ options, which are not remembered), `status`, and `logs NAME [-f] [-l N]`, which
 shows the one plain log file `status` names:
 
 ```bash
-uqs connector start kafka --topic trades,quotes
+uqs connector start kafka --topics uqf.client.flow
 uqs connector restart kafka --group uqf-replay     # start's options, given again
 uqs connector logs kafka -f
 uqs connector stop kafka
@@ -889,9 +889,13 @@ those pipelines read and write, so their HDBs hold nothing they never write, and
 they fit the licence's connection cap with room to spare:
 
 ```
-uqs --runtime crypto start     # cryptomock1 and crypto_markout1, on 6250
-uqs --runtime crypto list processes
+uqs --runtime crypto start --profile crypto   # cryptomock1, crypto_markout1 and what they read, on 6250
+uqs --runtime crypto process list
 ```
+
+A plain `start` starts only the rows marked `startwithall`, the TorQ core and
+the always-on jobs; the profile's own leaves are not among them, so name the
+profile.
 
 `peachq-etl` is experimental: PeachQ's capture stack with this tree's layers and
 the sidecar bundles declared for it, loaded from a copy of the q tree converted
@@ -1036,7 +1040,7 @@ derived from the same dependency graph `status`'s **Depends on** column uses:
 ```
 uqs profile list
 uqs start --profile arbitrage
-uqs start --profile depth,crypto
+uqs start --profile depth,arbitrage   # two profiles that fit together
 uqs start --profile essential      # the TorQ stack alone, no uqf jobs
 uqs start --profile essential vectorize1 cross1   # a profile plus named processes
 UQS_LICENCE_CONNECTIONS=32 uqs start --profile all   # on a licence that allows it
@@ -1355,7 +1359,7 @@ collected" on a healthy stack.
   counting only types something in the fleet runs as. The fleet is the one the
   start brings up - a profile's resolved set, or the set the last profile start
   recorded - not the `startwithall=1` rows, so `--profile crypto`, whose
-  seventeen processes fit, keeps `feed` and hears `cryptomock1`. On a fully
+  nineteen processes fit, keeps `feed` and hears `cryptomock1`. On a fully
   licensed kdb+/KDB-X, or on PeachQ, nothing is dropped.
 - **uqf's standing ETLs (`metrics`) are monitored too**; `backfill` workers are
   not, because a finished job's heartbeat would age into a false `error`.
@@ -1773,13 +1777,13 @@ place and identical is left alone; one that differs is replaced only if you
 agree, or with `--overwrite` (`--yes` alone keeps it).
 
 **Every query must be one `--trace` can see.** A polling feed or a backfill
-source that calls its handle directly, as `h(...)`, `h@...` or `h"select ..."`,
-is refused before anything is copied, `--dry-run` included. The refusal names
-each line. Send each query through `.qetl.source.ipc_call` (a polling feed's
-cursor), `.qetl.source.ipc` (a backfill window), `.qetl.source.local` or
-`.qetl.io.odbc.run_sql`. Those log it at TRACE for `uqs job preview --trace` and
-`uqs job backfill --trace`. A line that must stay direct ends with
-`/ untraced: <why>`.
+source that calls its handle directly, as `h(...)`, `h@...`, `h[...]` or
+`h"select ..."`, is refused before anything is copied, `--dry-run` included. The
+refusal names each line. Send each query through `.qetl.source.ipc_call` (a
+polling feed's cursor), `.qetl.source.ipc` (a backfill window),
+`.qetl.source.local` or `.qetl.io.odbc.run_sql`. Those log it at TRACE for
+`uqs job preview --trace` and `uqs job backfill --trace`. A line that must stay
+direct ends with `/ untraced: <why>`.
 
 After installing it regenerates the derived files (`process_ports.csv`,
 `pipeline_dag.q`, `processes.md`, `docs/man.q`) - a declaration the generators
@@ -1845,11 +1849,13 @@ program, and what is typed into it never passes through `uqs`. `--servers` names
 other process types. Three things are not wrapped:
 
 - a `.gw.*` call of your own, and a `\` system command, are sent as typed;
-- an in-place `update` or
-  `delete ... from `trade` is **refused** - routed, it would change the RDB's live data. The copy form, `update
-  ... from
-  trade`, is routed like any query; to change a table, name its process first (`uqs
-  query rdb1 ...\`);
+- an in-place change is **refused** wherever it appears outside a string:
+  routed, it would change the RDB's live data. That is an `update` or `delete`
+  from a table named with a backtick, `` `trade upsert ... `` (or `insert`,
+  `set`), and the functional `` ![`trade;...] ``; the copy form,
+  `update ... from trade`, is routed like any query. To change a table, name its
+  process first (`uqs query rdb1 ...`). This guards against a slip, not a
+  determined caller: q can build any expression at run time;
 - with `--no-gateway`, nothing is: the gateway gets exactly what you typed.
 
 ```

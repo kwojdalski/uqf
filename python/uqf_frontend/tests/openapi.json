@@ -853,7 +853,7 @@
     "/compare": {
       "post": {
         "summary": "Post Compare",
-        "description": "One or more tables on two endpoints - this stack (`local`) or a\nregistered target - over an explicit window, as `uqs data diff --json`\ncompares them (compare.py). Each table is put to the policy like\n/query's. A target side is held to what /services/{target}/... is,\nsince only the body names it (#2066): the write token while writes\nare on (the middleware's gates - by path, and `_reaches_target`'s by\nheader on scoped routes, #2067 - cannot see a side named in the body),\nservices:read, and remote operations, as it is reached over ssh with\nthe operator's key. The Host check ran in the middleware already.",
+        "description": "One or more tables on two endpoints - this stack (`local`) or a\nregistered target - over an explicit window, as `uqs data diff --json`\ncompares them (compare.py). Each table must be one this stack's\ncatalog lists, and is put to the policy, like /query's; each side is\nread to at most max_rows. A target side is held to what /services/{target}/... is,\nsince only the body names it (#2066): the write token while writes\nare on (the middleware's gates - by path, and `_reaches_target`'s by\nheader on scoped routes, #2067 - cannot see a side named in the body),\nservices:read, and remote operations, as it is reached over ssh with\nthe operator's key. The Host check ran in the middleware already.",
         "operationId": "post_compare_compare_post",
         "requestBody": {
           "content": {
@@ -1717,7 +1717,7 @@
     "/activity/export": {
       "get": {
         "summary": "Export Activity",
-        "description": "The history as a file: JSON Lines, CSV, or a timeline a person\nreads (activity_export.render) - oldest first, under the same filters as\nGET /activity, at most activity_log.EXPORT_MAX events.",
+        "description": "The history as a file: JSON Lines, CSV, or a timeline a person\nreads (activity_export.render) - oldest first, under the same filters as\nGET /activity, at most activity_log.EXPORT_MAX events. Cut at the\nlimit, it says so: a header line in text, and X-UQF-Truncated.",
         "operationId": "export_activity_activity_export_get",
         "parameters": [
           {

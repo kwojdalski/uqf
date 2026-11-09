@@ -160,3 +160,13 @@
     .qunit.assertEquals[(fx;cr;any_);(2026.09.17D10:00:30;2026.09.17D11:00:00;2026.09.17D11:00:00);"each market's newest, from the newest partition only; ` for any"];
     none:.qt.qetl.mapped.with_market[md;{[m] .qetl.mapped.newest enlist[`market]!enlist m};enlist `equity];
     .qunit.assertEquals[none;-0Wp;"a market with no book there vouches for nothing"]};
+
+/ #2571: a Saturday partition holds crypto alone; FX's newest is Friday's, not -0Wp.
+.qt.qetl.mapped.test_the_newest_book_of_a_market_absent_from_the_newest_partition_is_an_earlier_days:{[t]
+    rows:([] sym:`EURUSD`BTCUSDT; source:`a`x; source_time:2026.11.06D21:59:00 2026.11.07D10:00:00;
+        market:`fx`crypto; bid:2#1f; ask:2#2f; clock:2#`venue);
+    md:.qt.support.stand_in_market_data rows;
+    fx:.qt.qetl.mapped.with_market[md;{[m] .qetl.mapped.newest enlist[`market]!enlist m};enlist `fx];
+    .qunit.assertEquals[fx;2026.11.06D21:59:00;"Friday's FX book, the newest partition holding one"];
+    none:.qt.qetl.mapped.with_market[md;{[m] .qetl.mapped.newest enlist[`market]!enlist m};enlist `equity];
+    .qunit.assertEquals[none;-0Wp;"a market no partition holds vouches for nothing"]};

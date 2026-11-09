@@ -78,10 +78,14 @@
         bid_prices, bid_sizes, ask_prices, ask_sizes, clock:`venue from batch}
 
 / The rows market_data is about to publish, held to the .qf.mkt check (#944)
-/ for a crossed book (bid at or through the ask). And to what a book must be before ANY consumer reads
+/ for a crossed book (bid through the ask; a locked one, bid at the ask,
+/ passes, #1176). And to what a book must be before ANY consumer reads
 / it (#1021), judged here once rather than by each: a level 0 that is not a
 / price by .qf.mkt.level_ok (`bad_level), and a source_time further ahead of
-/ this host than .qf.mkt.max_clock_lead (`bad_time). A book with an empty side is NOT a failure - the
+/ this host than .qf.mkt.max_clock_lead (`bad_time), and a book superbook
+/ could not hold (#2564): a price ladder and its size ladder of different
+/ lengths, or a null source (`malformed) - left in, superbook threw on it
+/ and dropped the whole batch, good books included. A book with an empty side is NOT a failure - the
 / withdrawal is how a venue pulls its book, and `one_sided is the check's
 / word for it - and a wide spread is a thin market, not bad data, so neither
 / is withheld.
@@ -118,7 +122,11 @@
         detail:count[bad]#enlist "a level-0 price or size that is not positive and finite"; row:bad);
     timed:([] check:count[ahead]#`bad_time; status:count[ahead]#`future;
         detail:count[ahead]#enlist "source_time is further ahead of this host than .qf.mkt.max_clock_lead"; row:ahead);
-    crossed,level,timed}
+    uneven:((count each rows`bid_prices)<>count each rows`bid_sizes) or (count each rows`ask_prices)<>count each rows`ask_sizes;
+    bad:where uneven or null rows`source;
+    shape:([] check:count[bad]#`malformed_book; status:count[bad]#`malformed;
+        detail:{[u] $[u; "a price ladder and its size ladder differ in length"; "the source is null"]} each uneven bad; row:bad);
+    crossed,level,timed,shape}
 
 \d .
 

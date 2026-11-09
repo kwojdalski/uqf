@@ -51,9 +51,11 @@ class ExpectedRun:
 
     `not_before` covers the case the spec cannot: a retry of the SAME range,
     where the last run's file matches. A file last written before it is the
-    old run's. Pass when the launch happened - in a DAG, the launching
-    task's start, e.g. `{{ ti.start_date }}` of the sensor's own task when it
-    launches the worker itself.
+    old run's. Pass when the launch happened - in a DAG, the start of the
+    task that launched the worker, e.g.
+    `{{ dag_run.get_task_instance('<launch task>').start_date }}`. Never the
+    sensor's own `{{ ti.start_date }}`: the sensor starts after the launch, so
+    a worker that finished first would be pending until Airflow's timeout.
     """
 
     source_version: str

@@ -21,7 +21,8 @@
 / (the runner) or at a recorder (a test).
 .qpipe.job.wide_orderbook_feed.publish:.qetl.job.stream.unwired `wide_orderbook_feed;
 
-/ This process's own moving mid per pair, aligned with .qf.demo.pairs.
+/ This process's quoted mid per pair, from the shared .qf.demo.source_level
+/ on every tick (#2562), aligned with .qf.demo.pairs.
 .qpipe.job.wide_orderbook_feed.spot:.qf.demo.spot
 
 / Eleven levels a side, which is what wide_orderbook's bids0..bids10 and
@@ -45,9 +46,9 @@
     ask_cols:flip .qf.demo.levels_one[;;1;levels] .' flip (mids;.qf.demo.pip);
     (enlist .qf.demo.pairs),bid_cols,ask_cols}
 
-/ Walk every pair's mid, then publish the tick built from it.
+/ Take this tick's mid, then publish the tick built from it.
 .qpipe.job.wide_orderbook_feed.on_timer:{[]
-    `.qpipe.job.wide_orderbook_feed.spot set .qf.demo.drift_one each .qpipe.job.wide_orderbook_feed.spot;
+    `.qpipe.job.wide_orderbook_feed.spot set .qf.demo.source_level .z.p;
     .qpipe.job.wide_orderbook_feed.publish[`wide_orderbook;.qpipe.job.wide_orderbook_feed.tick_rows[.qpipe.job.wide_orderbook_feed.spot]];
     }
 

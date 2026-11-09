@@ -26,8 +26,9 @@
 //
 //   -writers     the users an extractor may connect as (.z.u); everyone else is refused per batch
 //   -journal     where the batch journal persists - in the destination's state directory
-//   -max_rows    the most rows one message may carry (default 100000); a larger window arrives in
-//                chunks, staged and committed whole (src/etl/core/io_remote_chunks.q)
+//   -max_rows    the most rows one message may carry (default 100000), at least
+//                .qetl.io.remote.chunk_rows; a larger window arrives in chunks of
+//                chunk_rows, staged and committed whole (src/etl/core/io_remote_chunks.q)
 //   -max_staged_rows  the most rows held staged across batches in flight (default 5000000)
 //   the rest     as scripts/dev/attached_backfill.q; the readers' password is $UQF_ATTACH_REACH_PASSWORD
 //
@@ -99,6 +100,11 @@ mgr:.[.qetl.io.hdb_scoped;(root;col;bounds);{[e] -1 "remote_receiver: ",e; exit 
 schema:.qetl.io.remote.contract.schema contract;
 .qdev.attached.shape:.qdev.attached.shape_of schema;
 max_rows:$[`max_rows in key o; "J"$first o`max_rows; 100000];
+/ the extractor chunks at chunk_rows, not at this limit: under it, every window
+/ larger than max_rows would be refused whole or chunk by chunk (#2610)
+if[not max_rows>=.qetl.io.remote.chunk_rows;
+    -1 "remote_receiver: -max_rows ",string[max_rows]," is under ",string[.qetl.io.remote.chunk_rows],
+     ", the rows an extractor puts in one chunk - no window larger than it could be written"; exit 2];
 / a window larger than one message arrives in chunks (io_remote_chunks.q): how many rows may wait
 if[`max_staged_rows in key o; .qetl.io.remote.max_staged_rows:"J"$first o`max_staged_rows];
 .qetl.io.remote.open hsym `$first o`journal;

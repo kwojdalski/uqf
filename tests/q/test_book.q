@@ -42,6 +42,12 @@
     wrapper:{[cn] .qf.mkt.derive_level_groups[cn;enlist ("bid";`bid_prices)]};
     .qunit.assertError[wrapper;bad_cols;"levels 0,2 (missing 1) are rejected as non-contiguous"]};
 
+/ #2546: a typo'd prefix gave an empty group, and book_from_wide_levels then
+/ died on a bare 'length naming neither prefix nor target.
+.qt.qf.mkt.book.test_derive_level_groups_refuses_a_prefix_that_matches_nothing:{[t]
+    .qunit.assertThrows[.qf.mkt.derive_level_groups[`bid_px_00`bid_px_01`ask_px_00`ask_px_01;];(("bid_px_";`bid_prices);("ask_pz_";`ask_prices));
+        "derive_level_groups: prefix 'ask_pz_' matches no column";"the typo is named"]};
+
 .qt.qf.mkt.book.test_symbolize_columns_casts_string_to_symbol:{[t]
     src:([] sym:("EURUSD";"GBPUSD"); side:("buy";"sell"); n:1 2);
     out:.qf.mkt.symbolize_columns[src;`sym`side];

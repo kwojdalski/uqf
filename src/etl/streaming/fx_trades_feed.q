@@ -20,10 +20,12 @@
 / (the runner) or at a recorder (a test).
 .qpipe.job.fx_trades_feed.publish:.qetl.job.stream.unwired `fx_trades_feed;
 
-/ This process's own level per pair, aligned with .qf.demo.pairs. Not walked:
-/ this feed prices around the quote feeds' own starting levels rather than
-/ drifting independently, so a fill and a quote for the same pair stay in
-/ the same neighbourhood.
+/ The level fills price around, per pair, aligned with .qf.demo.pairs. Set
+/ every tick from .qf.demo.level - the clock-driven level the quote feeds
+/ quote around too - so a fill and a quote for the same pair stay in the
+/ same neighbourhood. It used to stay at the starting spot while the quotes
+/ walked away, and after an hour fills printed hundreds of pips off the
+/ market (#2561).
 .qpipe.job.fx_trades_feed.spot:.qf.demo.spot
 
 / Pips per unit, which is the form .qf.exec and the trades schema take - the
@@ -67,6 +69,7 @@
 / Draw one fill and publish it. The draws are here rather than in fill_rows
 / so that the row builder stays deterministic.
 .qpipe.job.fx_trades_feed.on_timer:{[]
+    `.qpipe.job.fx_trades_feed.spot set .qf.demo.level .z.p;
     i:rand count .qf.demo.pairs;
     / 1 or -1, always an atom - indexing `1 -1` with a possibly-empty vector
     / is how this produced a list instead, and .u.upd took it as two rows.

@@ -176,7 +176,7 @@ those claims with what a metatable observed:
 
 ```q
 / Restrict the metatable to the slice that the coverage partition describes.
-eurusd:select from trade_markets where sym=`EURUSD;
+eurusd:select from meta_trade_markets where sym=`EURUSD;
 .qf.util.reconcile[eurusd;2026.09.01 2026.09.02;`trades;`EURUSD;`v1]
 ```
 

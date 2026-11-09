@@ -198,6 +198,31 @@
         "querypolicy: trades - maxrange, maxrows, maxbytes and timeout must all be set and positive";
         "a blank limit is not an unlimited one"]};
 
+.qt.qtorq.querypolicy.test_a_blank_line_in_the_policy_file_is_not_a_row:{[t]
+    f:hsym `$"/tmp/qpoltest_policy_",string[.z.i],".csv";
+    f 0:("tablename,role,maxrange,requiredfilters,operations,functions,maxrows,maxbytes,timeout,basis";
+        "trades,,0D01:00:00,,raw,,10,10,0D00:00:30,x";"");
+    .qunit.assertEquals[exec tablename from .checkinputs.readquerypolicy f;enlist`trades;"the one row, the file still loads"]};
+
+.qt.qtorq.querypolicy.test_a_request_naming_another_instrument_column_is_refused:{[t]
+    / TorQ filters instruments on the table's own column, so a request's
+    / instrumentcolumn must not satisfy a required filter on another (#2593).
+    d:.qt.qtorq.querypolicy.book,enlist[`instrumentcolumn]!enlist`sym;
+    .qunit.assertThrows[.checkinputs.checkcolumns[`book;`time];d;
+        "querypolicy: mkt_orderbook filters instruments on book - drop instrumentcolumn";"not the column TorQ filters"];
+    .qunit.assertEquals[.checkinputs.checkcolumns[`sym;`time;d];d;"the table's own column passes"]};
+
+.qt.qtorq.querypolicy.test_a_request_naming_another_time_column_is_refused:{[t]
+    / maxrange bounds the primary time column: `date reads whole days, so a
+    / 1 ns window would return the pair's entire day (#2589).
+    d:@[.qt.qtorq.querypolicy.book;`endtime;:;2026.01.01D00:00:00.000000001];
+    .qunit.assertThrows[.checkinputs.checkcolumns[`sym;`time];d,enlist[`timecolumn]!enlist`date;
+        "querypolicy: mkt_orderbook bounds starttime/endtime on time - drop timecolumn";"a whole day for a nanosecond"];
+    .qunit.assertThrows[.checkinputs.checkcolumns[`sym;`time];d,enlist[`timecolumn]!enlist`source_time;
+        "querypolicy: mkt_orderbook bounds starttime/endtime on time - drop timecolumn";"a column no policy considered"];
+    e:d,enlist[`timecolumn]!enlist`time;
+    .qunit.assertEquals[.checkinputs.checkcolumns[`sym;`time;e];e;"its own time column passes"]};
+
 .qt.qtorq.querypolicy.test_the_wrapped_checkinputs_holds_an_ordinary_caller_to_the_policy:{[t]
     was:.checkinputs.callerroles;held:.checkinputs.querypolicies;
     .checkinputs.callerroles:{[] `symbol$()};.checkinputs.querypolicies:.qt.qtorq.querypolicy.shipped;
@@ -225,6 +250,43 @@
     u:.pm.policylogins `:scripts/torqconfig/permissions/gateway_users.csv;
     .qunit.assertEquals[exec role from u;`analyst`quant`browser`analyst;"never admin or administrator - rts, the real-time subscriber (#984), is an analyst"]};
 
+
+/ .pm as the gateway has it when pmusers.q runs: TorQ's permissions.q and
+/ default.q, then the gateway's roles. Reloading permissions.q empties its
+/ tables, so each test starts from default.q alone.
+.qt.qtorq.querypolicy.pmfresh:{[]
+    system "l lib/torq/code/handlers/permissions.q";
+    system "l lib/torq/config/permissions/default.q";
+    system "l scripts/torqconfig/permissions/gateway.q"}
+
+/ A users file with these lines, read the way pmusers.q reads it.
+.qt.qtorq.querypolicy.usersfile:{[lines]
+    f:hsym `$"/tmp/qpoltest_users_",string[.z.i],".csv";
+    f 0:enlist["user,password,role"],lines;
+    .pm.policylogins f}
+
+.qt.qtorq.querypolicy.rolesof:{[u] asc exec role from .pm.userrole where user=u}
+
+.qt.qtorq.querypolicy.test_an_ordinary_user_named_like_a_default_user_gets_only_its_own_role:{[t]
+    .qt.qtorq.querypolicy.pmfresh[];
+    .pm.setupusers[();.qt.qtorq.querypolicy.usersfile("admin,secret,analyst";"feed,secret,browser")];
+    .qunit.assertEquals[.qt.qtorq.querypolicy.rolesof each `admin`feed;(enlist`analyst;enlist`browser);
+        "not default.q's admin or systemuser"];
+    .qunit.assertEquals[exec groupname from .pm.usergroup where user in `admin`feed;`symbol$();"nor its groups"];
+    .qunit.assertFalse[.pm.fchk[`feed;`exit;()];"feed may not stop the gateway"]};
+
+.qt.qtorq.querypolicy.test_a_blank_line_in_the_users_file_is_not_a_user:{[t]
+    .qt.qtorq.querypolicy.pmfresh[];
+    .pm.setupusers[();.qt.qtorq.querypolicy.usersfile("analyst,analyst,analyst";"";"browser,browser,browser")];
+    .qunit.assertEquals[.qt.qtorq.querypolicy.rolesof each `analyst`browser;(enlist`analyst;enlist`browser);"both rows"];
+    .qunit.assertTrue[`administrator in .qt.qtorq.querypolicy.rolesof`;"backend replies still pass"]};
+
+.qt.qtorq.querypolicy.test_an_unknown_role_refuses_the_users_file_before_adding_anyone:{[t]
+    .qt.qtorq.querypolicy.pmfresh[];
+    p:.qt.qtorq.querypolicy.usersfile("analyst,analyst,analyst";"quant,quant,quants");
+    .qunit.assertThrows[.pm.setupusers[()];p;"pmusers: no such role - quant (quants)";"naming the row"];
+    .qunit.assertEquals[.qt.qtorq.querypolicy.rolesof`analyst;`symbol$();"nobody is half set up"];
+    .qunit.assertTrue[all `administrator in/: .qt.qtorq.querypolicy.rolesof each (`;.z.u);"backend replies still pass"]};
 
 / --- the browser (#889) ----------------------------------------------------
 

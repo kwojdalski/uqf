@@ -146,6 +146,39 @@ def test_a_groups_header_from_another_address_is_ignored(tmp_path):
     assert (me["user"], me["groups"], me["capabilities"]) == ("anonymous", [], [])
 
 
+@pytest.mark.parametrize("user", ["admins", "viewers", "operators"])
+def test_a_user_named_like_a_group_gets_none_of_its_grants(tmp_path, user):
+    """#2525: a proxy that lets users pick their login must not let one pick
+    a group's. A user name is never the group of that name."""
+    c = _client(_settings(tmp_path))
+    me = c.get("/me/capabilities", headers={HEADER: user}).json()
+    assert (me["user"], me["groups"], me["capabilities"]) == (user, [], [])
+    assert c.get("/settings", headers={HEADER: user}).status_code == 403
+    assert c.get("/settings", headers={HEADER: "alice"}).json()["administrators"] == ["alice"]
+
+
+def test_a_user_named_like_a_member_group_inherits_nothing_through_it(tmp_path):
+    """#2525: `ops` is a group inside `root`; a user named `ops` is not."""
+    text = "p, root, *, *\ng, ops, root\ng, carol, ops\n"
+    c = _client(_settings(tmp_path))
+    _touch_later(tmp_path / "policy.csv", text)
+    assert _granted(c, "ops") == set()
+    assert ("settings", "write") in _granted(c, "carol")
+
+
+def test_a_proxy_group_still_grants_its_rights_to_a_user_of_that_name(tmp_path):
+    """The group's rights come from the groups header, not from the name."""
+    c = _client(_settings(tmp_path, trusted_groups_header=GROUPS))
+    me = c.get("/me/capabilities", headers={HEADER: "admins", GROUPS: "admins"}).json()
+    assert {"feature": "settings", "action": "write"} in me["capabilities"]
+
+
+def test_a_grant_to_a_name_no_membership_makes_a_group_still_reaches_the_user(tmp_path):
+    c = _client(_settings(tmp_path))
+    _touch_later(tmp_path / "policy.csv", "p, dave, desk, read\n")
+    assert _granted(c, "dave") == {("desk", "read")}
+
+
 def test_an_ipv4_mapped_peer_matches_its_ipv4_proxy():
     nets = identity.parse_proxies(["10.0.0.0/24"])
     assert identity.peer_is_trusted("::ffff:10.0.0.7", nets)

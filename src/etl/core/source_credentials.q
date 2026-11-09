@@ -103,7 +103,7 @@
     src_file:1_string p;
     who:"source settings ",src_file;
     if[()~key p; 'who,": no such file"];
-    raw:read0 p;
+    raw:.qetl.source.unbom read0 p;
     / Blank lines are skipped, but every message names the row's line IN THE
     / FILE: numbering what was kept put each row after a blank line one line
     / early, so an error pointed at the blank line itself (#803).

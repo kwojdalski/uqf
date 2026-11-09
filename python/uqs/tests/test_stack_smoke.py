@@ -117,6 +117,18 @@ def test_errors_are_counted_as_a_difference_not_a_total(tmp_path):
     }
 
 
+def test_a_non_utf8_byte_in_an_error_log_is_reported_not_raised(tmp_path):
+    """#2634: read_text() raised UnicodeDecodeError past `except OSError`."""
+    log = tmp_path / "err_rdb1.log"
+    log.write_bytes(b"old error\n")
+    before = stack_smoke.error_log_sizes(tmp_path, {"rdb1"})
+    log.write_bytes(b"old error\nnew \xff\xfe bad\n")
+    assert stack_smoke.error_log_sizes(tmp_path, {"rdb1"}) == {"rdb1": 2}
+    assert stack_smoke.new_error_lines(tmp_path, before, {"rdb1"}) == {
+        "rdb1": ["new \ufffd\ufffd bad"]
+    }
+
+
 def test_a_process_with_no_error_log_yet_is_not_a_failure(tmp_path):
     """A process that has never written one is the healthy case."""
     assert stack_smoke.error_log_sizes(tmp_path, {"never_ran1"}) == {"never_ran1": 0}

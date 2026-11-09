@@ -301,8 +301,12 @@ def _qlinter() -> str | None:
     return shutil.which("qlinter")
 
 
-def _linter_findings(binary: str) -> list[Finding]:
-    """Everything `qlinter` reports over this repository's `.q` files.
+def _linter_findings(binary: str, q_files: list[Path]) -> list[Finding]:
+    """Everything `qlinter` reports over `q_files`, the ones the gate counts.
+
+    The files themselves, not a few roots: `src tests scripts` left the 53
+    under sidecars/, python/uqs/.../attach/q/ and docs/ unlinted while the
+    summary counted them clean (#2538).
 
     `--profile uqf` because two of the rules that moved - the bare-slash
     comment block and the legacy datetime - are this repository's policy
@@ -312,7 +316,7 @@ def _linter_findings(binary: str) -> list[Finding]:
     itself, and passing them twice would be two places to change one list.
     """
     result = subprocess.run(
-        [binary, "src", "tests", "scripts", "--format", "json", "--profile", "uqf"]
+        [binary, *map(str, q_files), "--format", "json", "--profile", "uqf"]
         + ["--extend-select", ",".join(CORRECTNESS_PREFIXES)],
         cwd=REPO,
         capture_output=True,
@@ -451,7 +455,7 @@ def main() -> int:
         print("check_q_traps: no tracked .q files found - refusing to pass vacuously")
         return 1
 
-    findings = _linter_findings(binary)
+    findings = _linter_findings(binary, q_files)
 
     # q does not only live in .q files. The orchestrator and the gateway build
     # q expressions in Python and send them over IPC, and those are invisible

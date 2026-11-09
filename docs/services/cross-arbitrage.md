@@ -134,9 +134,9 @@ synthetic against, and a detector built on that feed set would publish inactive
 rows forever.
 
 `EURJPY` was added to `.qf.demo.pairs` to close the triangle, starting at
-`1.0850 × 149.50`. Each pair then walks **independently**, so the three drift
+`1.0850 × 149.50`. Each pair then wanders **independently**, so the three drift
 apart and the synthetic and direct prices cross from time to time. That is what
 gives the detector something to report --- and it is also why those reports are
-an artefact of three unrelated random walks, not a market. On real feeds the
-same code answers a real question; on this one it is a demonstration that the
-pipeline works.
+an artefact of three unrelated paths, not a market. On real feeds the same code
+answers a real question; on this one it is a demonstration that the pipeline
+works.

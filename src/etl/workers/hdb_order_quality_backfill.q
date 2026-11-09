@@ -86,10 +86,11 @@
 
 / What a run records about its window.
 / @param batch the transformed rows
-/ @return the grid points published, books, and the share of rows with no order in the window
+/ @return the grid points published, books, and the count of rows with no order in the window
 .qpipe.job.hdb_order_quality_backfill.facts:{[batch]
     if[0=count batch; :(enlist `span)!enlist "empty window"];
-    `as_ofs`books`quiet_rows!(count distinct batch`as_of;count distinct batch`book;sum batch[`n_orders]=0)}
+    / a long, not the int sum gives a boolean list: run facts are text, and an int read "2724i" (#2576, #606)
+    `as_ofs`books`quiet_rows!(count distinct batch`as_of;count distinct batch`book;"j"$sum 0=batch`n_orders)}
 
 / The hand-worked example's orders. A window of the 10:00 hour with one order -
 / london, filled at 10:00:00 - and, before it, newyork rejected at 09:58:00.

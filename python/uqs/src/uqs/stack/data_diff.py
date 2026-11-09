@@ -41,6 +41,10 @@ DEFAULT_LIMIT = 1000
 #: The most a side may be read to: a comparison is a sample, not an export.
 MAX_LIMIT = 100_000
 
+#: Seconds the comparison's q may run before it is killed, from the command
+#: line; the frontend passes its own request budget (#2529).
+DEFAULT_TIMEOUT = 600
+
 #: The endpoint naming this machine's own stack, beside the deploy targets.
 LOCAL = "local"
 
@@ -52,6 +56,15 @@ _MARK = "UQS_DIFF "
 #: while each verdict on its own does.
 _TABLE_MARK = "UQS_DIFF_TABLE "
 _TREE = ("src/init.q", "src/etl/init.q")
+
+
+class DiffNotRun(UqsError):
+    """The comparison never produced a report: no q interpreter, or the q
+    run failed. A fault of this machine, not of the request (#2529)."""
+
+
+class DiffTimedOut(UqsError):
+    """The comparison's q ran past its timeout and was killed (#2529)."""
 
 
 @dataclass(frozen=True)
@@ -138,17 +151,18 @@ def compare(
     source_version: str | None = None,
     partition: str | None = None,
     login: str = "",
-    timeout: float = 600,
+    timeout: float = DEFAULT_TIMEOUT,
 ) -> dict:
     """The comparison of `tables` on two endpoints: `.qetl.compare.run`'s report.
 
-    @raise UqsError when there is no q, the q did not run, or q refused the
-    request itself - a filter that is not COLUMN OP VALUE, an empty window. An
-    endpoint that cannot be reached is not a refusal: it is an outcome.
+    @raise DiffNotRun when there is no q or the q did not run; DiffTimedOut
+    when it ran past `timeout`; UqsError when q refused the request itself - a
+    filter that is not COLUMN OP VALUE, an empty window. An endpoint that
+    cannot be reached is not a refusal: it is an outcome.
     """
     q = q_interpreter()
     if q is None:
-        raise UqsError("no q interpreter - set $QCMD, or put q on PATH; the comparison runs in q")
+        raise DiffNotRun("no q interpreter - set $QCMD, or put q on PATH; the comparison runs in q")
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "diff.q"
         # the login in a file only this user reads, beside the script: never on
@@ -171,10 +185,10 @@ def compare(
                 check=False,
             )
         except subprocess.TimeoutExpired:
-            raise UqsError(f"data diff: no result after {timeout:g}s") from None
+            raise DiffTimedOut(f"data diff: no result after {timeout:g}s") from None
     found = [line[len(_MARK) :] for line in result.stdout.splitlines() if line.startswith(_MARK)]
     if result.returncode != 0 or not found:
-        raise UqsError(
+        raise DiffNotRun(
             f"the comparison did not run:\n{(result.stdout + result.stderr).strip()[-1500:]}"
         )
     report = json.loads(found[-1])

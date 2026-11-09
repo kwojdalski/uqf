@@ -48,3 +48,10 @@ def test_seconds_and_whole_seconds():
     assert duration.seconds("1.5m") == 90.0
     assert duration.whole_seconds("500ms") == 1
     assert duration.seconds(-1) == -1.0, "a number passes, for the caller's own range check"
+
+
+@pytest.mark.parametrize("value", [float("inf"), float("-inf"), float("nan")])
+def test_a_number_that_is_not_finite_is_no_span_of_seconds(value):
+    """#2520: TOML reads inf and nan as numbers; whole_seconds then overflowed."""
+    with pytest.raises(duration.DurationError, match=r"a number of seconds, or a number and"):
+        duration.whole_seconds(value)

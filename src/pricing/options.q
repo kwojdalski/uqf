@@ -344,7 +344,12 @@
     lo:.qf.px.BISECT_VOL_LO; hi:.qf.px.BISECT_VOL_HI;
     / A price no volatility in [lo;hi] produces - below intrinsic, or above
     / the price at hi - has no implied vol: null, not the nearer bound.
-    if[(price<.qf.px.gk_price[s;k;rd;rf;lo;t;is_call]) or price>.qf.px.gk_price[s;k;rd;rf;hi;t;is_call]; :0n];
+    p_lo:.qf.px.gk_price[s;k;rd;rf;lo;t;is_call];
+    p_hi:.qf.px.gk_price[s;k;rd;rf;hi;t;is_call];
+    if[(price<p_lo) or price>p_hi; :0n];
+    / Nor does a price every vol in the bracket gives - at expiry, intrinsic
+    / at any vol: that returned the bracket's midpoint walk, 5 (#2555).
+    if[(p_hi-p_lo)<.qf.px.IMPLIED_VOL_PRICE_TOL; :0n];
     i:0;
     while[i<.qf.px.BISECT_VOL_MAX_ITER;
         mid:0.5*(lo+hi);
@@ -385,13 +390,19 @@
     / A null diff passes the convergence test below (0n<tol is true in q),
     / which returned the initial guess as a vol for a missing quote (#2385).
     if[any null (price;s;k;rd;rf;t); :0n];
+    / At or past expiry the premium is intrinsic whatever the vol, so no vol
+    / is implied - the first iteration matched and returned the guess (#2555).
+    if[t<=0; :0n];
+    / Relative below a premium of 1: an absolute 1e-10 accepted the 0.20
+    / guess for a 9e-11 premium that 0.40 prices (#2555).
+    tol:.qf.px.IMPLIED_VOL_PRICE_TOL*1&price;
     sigma:.qf.px.IMPLIED_VOL_INITIAL_SIGMA;
     i:0;
     result:0n;
     while[i<.qf.px.IMPLIED_VOL_MAX_ITER;
         model_price:.qf.px.gk_price[s;k;rd;rf;sigma;t;is_call];
         diff:model_price-price;
-        if[(abs diff)<.qf.px.IMPLIED_VOL_PRICE_TOL; result:sigma; i:.qf.px.IMPLIED_VOL_MAX_ITER];
+        if[(abs diff)<tol; result:sigma; i:.qf.px.IMPLIED_VOL_MAX_ITER];
         if[i<.qf.px.IMPLIED_VOL_MAX_ITER;
             vega_val:.qf.px.gk_vega[s;k;rd;rf;sigma;t];
             $[vega_val<.qf.px.IMPLIED_VOL_VEGA_FLOOR;

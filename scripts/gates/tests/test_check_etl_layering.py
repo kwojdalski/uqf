@@ -117,6 +117,19 @@ def test_core_reaching_into_a_declaration_is_flagged(tmp_path, sub):
     assert f"src/etl/{sub}/job.q" in hit
 
 
+def test_core_reach_scans_core_subdirectories(tmp_path):
+    # #2547: core/variants/ was globbed non-recursively, so it was never checked.
+    root = _tree(
+        tmp_path,
+        {
+            "src/etl/workers/demo.q": ".qpipe.job.demo.facts:{[] 1}\n",
+            "src/etl/core/variants/v.q": "f:{[] .qpipe.job.demo.facts[]}\n",
+        },
+    )
+    (hit,) = layering.core_reach(root)
+    assert hit.startswith("src/etl/core/variants/v.q:1: core reaches into .qpipe.job.demo")
+
+
 def test_every_directory_uqs_scaffolds_into_is_a_declaring_one():
     # The directories `uqs job new` writes a declaration into, from the one
     # place uqs keeps them, read as text so this does not need uqs installed.

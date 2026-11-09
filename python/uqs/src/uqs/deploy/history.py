@@ -26,10 +26,12 @@ a history that could not be written is worth a warning, not an error.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -91,12 +93,26 @@ def _ssh(entry: dict) -> dict:
     return entry
 
 
-def _write(root: Path, entries: list[dict]) -> None:
+@contextmanager
+def _updating(root: Path) -> Iterator[list[dict]]:
+    """The history's entries to change in place, written back on exit.
+
+    Two pushes from one workstation each read, append and write: under one
+    flock, through a temp file of their own, so neither loses the other's
+    entry nor publishes a half-written file (#2578)."""
     path = history_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps({"deployments": entries[-KEEP:]}, indent=2) + "\n")
-    tmp.replace(path)
+    with path.with_name(path.name + ".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            entries = read(root)
+            before = list(entries)
+            yield entries
+            if entries != before:
+                text = json.dumps({"deployments": entries[-KEEP:]}, indent=2) + "\n"
+                target_changes.write_atomically(path, text)
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def server_of(host: str) -> str:
@@ -142,12 +158,10 @@ def _target_for(root: Path, cfg: Config, register: bool, say: Callable[[str], No
 def rename_target(root: Path, old: str, new: str) -> None:
     """The deployments recorded under target `old` recorded under `new`
     (`uqs target rename`), so its history follows it."""
-    entries = read(root)
-    if any(e.get("target") == old for e in entries):
-        for e in entries:
+    with _updating(root) as entries:
+        for i, e in enumerate(entries):
             if e.get("target") == old:
-                e["target"] = new
-        _write(root, entries)
+                entries[i] = {**e, "target": new}
 
 
 def record_adopted(
@@ -160,7 +174,8 @@ def record_adopted(
         "target": name, "ssh": host, "dest": dest, "remote_user": user,
         "release": release, "status": target_changelog.ADOPTED, "stage": None,
     }  # fmt: skip
-    _write(root, [*read(root), entry])
+    with _updating(root) as entries:
+        entries.append(entry)
 
 
 class Reported(Protocol):
@@ -208,7 +223,8 @@ def record(
             # what it ran on: each component's mode, path and observed version
             "components": r.get("components") or {},
         }
-        _write(root, [*read(root), entry])
+        with _updating(root) as entries:
+            entries.append(entry)
     except (OSError, DeployError) as exc:
         log.warning("the deployment was not recorded in this machine's history: {}", exc)
 

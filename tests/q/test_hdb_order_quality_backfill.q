@@ -162,3 +162,8 @@
     e:.qpipe.job.hdb_order_quality_backfill.expected_rows[];
     .qunit.assertEquals[count distinct e`as_of;720;"one grid point every 5s of the hour"];
     .qunit.assertTrue[null first exec fill_ratio from e where book=`newyork, window=0D00:01, as_of=ws;"a ratio over no order is null"]};
+
+/ #2576: sum over a boolean list is an int, and run facts are text - it read "2i".
+.qt.qpipe.job.hdb_order_quality_backfill.test_the_facts_count_quiet_rows_as_a_long:{[t]
+    f:.qpipe.job.hdb_order_quality_backfill.facts ([] as_of:3#2026.10.09D10:00:00; book:`a`b`c; n_orders:0 1 0i);
+    .qunit.assertEquals[f;`as_ofs`books`quiet_rows!1 3 2j;"two rows with no order, counted as a long"]};

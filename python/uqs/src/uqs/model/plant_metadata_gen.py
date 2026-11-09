@@ -159,12 +159,22 @@ def write(root: Path | None = None) -> bool:
     if path.is_file() and path.read_text() == text:
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
+    # the old file's mode, or what the umask gives a new one: mkstemp's 0600
+    # renamed over a shared release's 0644 file locks out every other account
+    # (#2632)
+    if path.is_file():
+        mode = path.stat().st_mode & 0o777
+    else:
+        mask = os.umask(0)
+        os.umask(mask)
+        mode = 0o666 & ~mask
     fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
         with os.fdopen(fd, "w") as fh:
             fh.write(text)
             fh.flush()
             os.fsync(fh.fileno())
+        os.chmod(tmp, mode)
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)

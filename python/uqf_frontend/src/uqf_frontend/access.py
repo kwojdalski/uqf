@@ -51,7 +51,16 @@ from pathlib import Path
 import casbin
 from casbin.model import Model
 
-from uqf_frontend.identity import ANONYMOUS, EVERYONE, Identity, is_name, is_user
+from uqf_frontend.identity import (
+    ANONYMOUS,
+    EVERYONE,
+    GROUP_PREFIX,
+    Identity,
+    group_subject,
+    is_name,
+    is_user,
+    user_subject,
+)
 
 log = logging.getLogger(__name__)
 
@@ -292,15 +301,34 @@ def default_policy() -> AccessPolicy:
     return parse(_resource("default_policy.csv"), "default_policy.csv")
 
 
+def _namespaced(name: str, groups: set[str]) -> tuple[str, ...]:
+    """*name*, as written in a policy, in the enforcer's subject spaces (#2525).
+
+    A policy spells users and groups alike. A name some membership makes a
+    group is only that group, so a user the proxy names after it matches
+    nothing of the group's; any other name may be a user or a group the
+    proxy supplies, so it is both. `*` stays the matcher's own word."""
+    if name == EVERYONE:
+        return (name,)
+    if name in groups:
+        return (group_subject(name),)
+    return (user_subject(name), group_subject(name))
+
+
 def enforcer(policy: AccessPolicy) -> casbin.Enforcer:
-    """A Casbin enforcer over *policy*, holding no file and logging nothing."""
+    """A Casbin enforcer over *policy*, holding no file and logging nothing.
+    Its subjects are namespaced - see `_namespaced`; ask it with
+    Identity.subjects."""
     model = Model()
     model.load_model_from_text(model_text())
     e = casbin.Enforcer(model, enable_log=False)
+    groups = {m.group for m in policy.memberships}
     for grant in policy.grants:
-        e.add_policy(grant.subject, grant.feature, grant.action)
+        for subject in _namespaced(grant.subject, groups):
+            e.add_policy(subject, grant.feature, grant.action)
     for member in policy.memberships:
-        e.add_grouping_policy(member.member, member.group)
+        for subject in _namespaced(member.member, groups):
+            e.add_grouping_policy(subject, group_subject(member.group))
     return e
 
 
@@ -310,7 +338,7 @@ def _allowed(e: casbin.Enforcer, subjects: Iterable[str], feature: str, action: 
 
 #: A subject no policy can name (`*` is not a name character), so only a grant
 #: to everyone reaches it.
-_NOBODY = "*nobody*"
+_NOBODY = user_subject("*nobody*")
 
 
 def admins(
@@ -342,19 +370,25 @@ def admins(
     feature, action = ADMIN
     if e.enforce(_NOBODY, feature, action):
         return {EVERYONE}
-    found = {ANONYMOUS} if e.enforce(ANONYMOUS, feature, action) else set()
+    found = {ANONYMOUS} if e.enforce(user_subject(ANONYMOUS), feature, action) else set()
     if not identity_header:
         return found
     groups = {m.group for m in policy.memberships} | set(known_groups)
     names = {g.subject for g in policy.grants} | {m.member for m in policy.memberships}
     names -= {EVERYONE, ANONYMOUS}
 
-    def reachable(name: str) -> bool:
-        if groups_header:
-            return is_name(name)
-        return name not in groups and is_user(name)
+    def subjects(name: str) -> list[str]:
+        """The subjects a caller could reach *name* as: the user, when the
+        identity layer can produce that user, and the group, when the proxy
+        supplies groups."""
+        reach = [user_subject(name)] if name not in groups and is_user(name) else []
+        if groups_header and is_name(name):
+            reach.append(group_subject(name))
+        return reach
 
-    return found | {name for name in names if reachable(name) and e.enforce(name, feature, action)}
+    return found | {
+        name for name in names if any(e.enforce(s, feature, action) for s in subjects(name))
+    }
 
 
 # ------------------------------------------------------------------ the store
@@ -465,6 +499,7 @@ class PolicyStore:
         found = list(who.groups)
         for subject in who.subjects:
             for role in e.get_implicit_roles_for_user(subject):
+                role = role.removeprefix(GROUP_PREFIX)
                 if role not in found:
                     found.append(role)
         return found

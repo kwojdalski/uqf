@@ -206,6 +206,27 @@ def test_a_retry_of_the_same_range_ignores_a_file_written_before_it(tmp_path):
     assert poke_worker_status(tmp_path, WORKER, INSTANCE, retry) is PokeOutcome.SUCCESS
 
 
+def test_a_worker_that_finished_before_the_sensor_started_is_success(tmp_path):
+    """not_before is the LAUNCH time: the sensor's own start is later than a
+    fast worker's final write, which would then read as pending forever."""
+    write_status(tmp_path, state="completed", updated_at="2026-09-14T09:00:02.000000000")
+    launched = ExpectedRun(
+        source_version="v1",
+        range_from=EXPECT.range_from,
+        range_to=EXPECT.range_to,
+        not_before=datetime(2026, 9, 14, 9, 0, 0, tzinfo=UTC),
+    )
+    assert poke_worker_status(tmp_path, WORKER, INSTANCE, launched) is PokeOutcome.SUCCESS
+
+
+def test_the_documented_not_before_is_the_launching_tasks_start_not_the_sensors():
+    """`ti` in the sensor's template is the sensor's own task instance (#2602)."""
+    readme = (Path(__file__).parents[1] / "README.md").read_text()
+    example = readme.split("```python", 1)[1].split("```", 1)[0]
+    assert "ti.start_date" not in example
+    assert 'not_before="{{ dag_run.get_task_instance(' in example
+
+
 def test_the_range_matches_however_the_dag_spells_it(tmp_path):
     """q writes nanoseconds and no offset; a DAG passes an offset or Z."""
     write_status(tmp_path, state="completed")

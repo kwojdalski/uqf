@@ -47,10 +47,11 @@
 .qf.px.convention_defaults:enlist[`settle_via]!enlist `USD
 
 / The weekday of a date, as a symbol.
-/ @param d a date, or a list of dates
+/ @param d a date, or a list of dates - a timestamp or datetime counts as its
+/   date: cast first, since `long$ of a timestamp is nanoseconds (#2559)
 / @return `sat`sun`mon`tue`wed`thu`fri - one per date for a list
 / @eg .qf.px.weekday 2026.09.18  -> `fri
-.qf.px.weekday:{[d] .qf.px.weekdays (`long$d) mod 7}
+.qf.px.weekday:{[d] .qf.px.weekdays (`long$`date$d) mod 7}
 
 / Private: the holidays of `ccys`, refusing a currency the calendars lack.
 / @param ccys the currencies, a symbol list
@@ -190,6 +191,11 @@
     if[count missing:.qf.px.convention_keys where not .qf.px.convention_keys in key c;
         '"calendar: ",string[p],"'s conventions are missing ",", " sv string missing];
     if[not $[-7h=type c`spot_lag; c[`spot_lag] within 0 5; 0b]; '"calendar: ",string[p],"'s spot_lag must be a long from 0 to 5"];
+    / A misspelt roll settled spot and month-end forwards anyway - only adjust
+    / refused it, and those paths do not reach it with c`roll (#2556).
+    if[not $[-11h=type c`roll; c[`roll] in .qf.px.rolls; 0b];
+        '"calendar: ",string[p],"'s roll must be one of ",(", " sv string .qf.px.rolls),", got ",.Q.s1 c`roll];
+    if[not -1h=type c`eom; '"calendar: ",string[p],"'s eom must be a boolean, got ",.Q.s1 c`eom];
     wk:(),c`weekend;
     if[count bad:wk where not wk in .qf.px.weekdays;
         '"calendar: ",string[p],"'s weekend has unknown day(s) ",", " sv string bad];
@@ -220,7 +226,9 @@
 / @param calendars dict currency -> holiday dates; both currencies, and settle_via's, required
 / @param conventions dict pair -> `spot_lag`roll`eom`weekend!(...), optionally `settle_via
 / @return dict date, trade_date, pair, spot_lag, calendars, skipped - the
-/   non-business days passed over between the trade date and spot
+/   days passed over between the trade date and spot: non-business days on
+/   the counted currencies while counting the lag, then days that are not
+/   business days on `calendars` which spot rolled past
 / @throws error naming a missing calendar, pair or convention
 / @eg (.qf.px.spot_date[2026.09.18;`EURUSD;.qf.px.mock_calendars;.qf.px.mock_conventions])`date  -> 2026.09.22
 .qf.px.spot_date:{[trade_date;pair;calendars;conventions]
@@ -232,8 +240,14 @@
     / T+0, where nothing is counted and a weekend or holiday trade date would
     / be its own spot. Never back - spot does not settle before the trade.
     settle:.qf.px.adjust[counted;`following;settle_ccys;calendars;c`weekend];
-    between:trade_date+1+til 0|settle-trade_date;
-    skipped:between where not .qf.px.is_business_day[between;settle_ccys;calendars;c`weekend];
+    / What was skipped is judged on the calendars that decided it (#2554):
+    / while counting the lag, count_ccys - a USD holiday on T+1 of EURUSD
+    / was counted as a business day, so it was not skipped; from the counted
+    / date to spot, settle_ccys, the days spot rolled past.
+    counting:trade_date+1+til 0|counted-trade_date;
+    rolling:(counted+til 0|settle-counted) except trade_date;
+    skipped:(counting where not .qf.px.is_business_day[counting;c`count_ccys;calendars;c`weekend]),
+        rolling where not .qf.px.is_business_day[rolling;settle_ccys;calendars;c`weekend];
     `date`trade_date`pair`spot_lag`calendars`skipped!(settle;trade_date;c`pair;c`spot_lag;settle_ccys;skipped)}
 
 / Private: a tenor symbol such as `3D`1W`2M`1Y as (count;unit).

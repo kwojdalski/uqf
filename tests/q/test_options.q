@@ -225,3 +225,17 @@
     .qunit.assertTrue[null .qf.px.implied_vol[0.0378;1.10;0n;0.045;0.02;0.75;1b];"null strike has no implied vol"];
     .qunit.assertTrue[null .qf.px.implied_vol[0.0378;1.10;1.12;0n;0.02;0.75;1b];"null rate has no implied vol"];
     .qunit.assertTrue[null .qf.px.implied_vol[0.0378;1.10;1.12;0.045;0.02;0n;1b];"null expiry has no implied vol"]};
+
+/ #2555: an option no vol prices - expired, so intrinsic at any vol - came
+/ back as the 0.20 initial guess, and bisect_vol as its bracket top 5.
+.qt.qf.px.options.test_implied_vol_at_expiry_is_null:{[t]
+    .qunit.assertTrue[null .qf.px.implied_vol[0.02;1.12;1.10;0;0;0f;1b];"expired in the money, at intrinsic: no vol"];
+    .qunit.assertTrue[null .qf.px.implied_vol[0.0;1.10;1.12;0;0;0f;1b];"expired out of the money, worth 0: no vol"];
+    .qunit.assertTrue[null .qf.px.bisect_vol[0.02;1.12;1.10;0;0;0f;1b];"bisection does not return its bracket top"]};
+
+/ #2555: a premium under the absolute 1e-10 tolerance matched the initial
+/ guess on the first iteration.
+.qt.qf.px.options.test_implied_vol_of_a_tiny_premium_is_its_own_vol:{[t]
+    p:.qf.px.gk_price[1.0;1.25;0.045;0.02;0.40;0.01;1b];
+    .qunit.assertTrue[p<1e-10;"the premium is below the absolute tolerance"];
+    .qt.support.assertApprox[.qf.px.implied_vol[p;1.0;1.25;0.045;0.02;0.01;1b];0.40;1e-6;"0.40 prices it, not the 0.20 guess"]};

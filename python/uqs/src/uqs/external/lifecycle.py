@@ -42,6 +42,7 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,6 +55,11 @@ log = get_logger()
 #: Bound at import, so a test that stubs `subprocess.run` for a cargo build
 #: does not also stub the ps that identifies the process it spawned.
 _run = subprocess.run
+
+#: How long `stop` waits for a SIGTERMed process to exit. A Kafka consumer
+#: leaving its group takes a poll interval and a round trip; a restart that
+#: started the next one sooner would race the old one for the partitions.
+STOP_GRACE_SECONDS = 15.0
 
 #: The locale and timezone every identity is read in, whoever asks (#1055).
 _PS_ENV = {"LC_ALL": "C", "TZ": "UTC0"}
@@ -101,6 +107,17 @@ def _boot_ticks(pid: int) -> str | None:
     return f"boot+{fields[19]}" if len(fields) > 19 else None
 
 
+def _proc_state(pid: int) -> str | None:
+    """`pid`'s state letter as Linux reports it (field 3 of /proc/<pid>/stat,
+    "Z" for a zombie), or None where there is no /proc."""
+    try:
+        stat = (_PROC / str(pid) / "stat").read_text()
+    except OSError:
+        return None
+    fields = stat[stat.rfind(")") + 1 :].split()
+    return fields[0] if fields else None
+
+
 def process_identity(pid: int) -> str | None:
     """`pid`'s start time and argv, whitespace-normalised, or None when it
     has no such process. The start time plus the command line is what tells
@@ -109,12 +126,17 @@ def process_identity(pid: int) -> str | None:
     On Linux the start time is the kernel's own (`boot+<ticks>`), since ps's
     lstart there is recomputed from the wall clock on every call (#1167).
     Elsewhere it is ps's lstart, which macOS reads from a stored timestamp,
-    read in the C locale and UTC so it does not depend on who asks (#1055)."""
+    read in the C locale and UTC so it does not depend on who asks (#1055).
+
+    On Linux the ticks alone are an identity (DetachedProcess._ours compares
+    nothing else), so a missing argv - no `ps` in a slim container, or an
+    empty answer - leaves the ticks rather than nothing: a pid file with no
+    identity can never be stopped (#2515)."""
     ticks = _boot_ticks(pid)
     if ticks is None:
         return _ps(pid, "lstart", "args")
     args = _ps(pid, "args")
-    return f"{ticks} {args}" if args else None
+    return f"{ticks} {args}" if args else ticks
 
 
 @dataclass(frozen=True)
@@ -144,12 +166,25 @@ class DetachedProcess:
     def _alive(self, pid: int) -> bool:
         """Signal 0 asks the kernel about the process without touching it. A
         pid owned by another user (PermissionError) is not ours to report on,
-        so it reads as not running - what every copy of this did."""
+        so it reads as not running - what every copy of this did.
+
+        A zombie answers signal 0 too, and a connector started by a long-lived
+        uqs (uqs-mcp) stays one after it exits until that process reaps it -
+        so it read as running, and a start was refused (#2630). It is reaped
+        here when it is this process's child, and otherwise read as dead from
+        its /proc state."""
+        if pid <= 0:
+            return False  # 0 and -N name process groups to kill and waitpid
+        try:
+            if os.waitpid(pid, os.WNOHANG)[0]:
+                return False
+        except ChildProcessError:
+            pass  # not this process's child: nothing to reap
         try:
             os.kill(pid, 0)
         except OSError:
             return False
-        return True
+        return _proc_state(pid) != "Z"
 
     def _ours(self) -> bool:
         """Whether the recorded pid is alive AND still the process we started."""
@@ -231,8 +266,21 @@ class DetachedProcess:
                 env=env,
                 start_new_session=new_session,
             )
+        identity = process_identity(process.pid)
+        if identity is None and process.poll() is None:
+            # Alive but unidentifiable (no /proc and no answer from ps): a pid
+            # file without an identity is never signalled, so recording it
+            # would leave a process nothing can stop and the next start would
+            # run a second one beside it (#2515).
+            process.terminate()
+            process.wait()
+            raise UqsError(
+                f"{self.label}: started pid {process.pid} but could not read its start "
+                "time (no /proc, and `ps` gave no answer) - stopped it rather than "
+                "leave a process `stop` cannot recognise. Is `ps` installed?"
+            )
         self.pid_path.parent.mkdir(parents=True, exist_ok=True)
-        self.pid_path.write_text(f"{process.pid}\n{process_identity(process.pid) or ''}\n")
+        self.pid_path.write_text(f"{process.pid}\n{identity or ''}\n")
         return process.pid
 
     def stop(self, *, missing_ok: bool = True) -> int | None:
@@ -240,7 +288,9 @@ class DetachedProcess:
 
         SIGTERM, not SIGKILL, so a streamer's `finally` runs - a Kafka
         consumer leaves its group cleanly instead of holding its partitions
-        until the broker's session timeout.
+        until the broker's session timeout. It waits for the process to exit
+        (STOP_GRACE_SECONDS), so a restart does not start the next consumer
+        while the old one is still leaving (#2629).
         """
         pid = self.pid()
         if pid is None:
@@ -276,6 +326,17 @@ class DetachedProcess:
         except ProcessLookupError:
             pass
         self.pid_path.unlink(missing_ok=True)
+        deadline = time.monotonic() + STOP_GRACE_SECONDS
+        while self._alive(pid):
+            if time.monotonic() >= deadline:
+                log.warning(
+                    "{}: pid {} is still exiting {:g}s after SIGTERM",
+                    self.label,
+                    pid,
+                    STOP_GRACE_SECONDS,
+                )
+                break
+            time.sleep(0.05)
         return pid
 
     def status(self, **extra: str) -> dict[str, str]:

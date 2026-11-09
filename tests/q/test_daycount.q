@@ -20,3 +20,10 @@
 .qt.qf.px.daycount.test_year_frac_rejects_unknown_convention:{[t]
     wrapper:{[dates] .qf.px.year_frac[`bogus;dates 0;dates 1]};
     .qunit.assertError[wrapper;(2024.01.01;2025.01.01);"unknown convention symbol should error"]};
+
+/ Timestamps subtracted to nanoseconds: a half year read as 4.344e+13 (#2559).
+.qt.qf.px.daycount.test_timestamps_count_as_their_dates:{[t]
+    .qunit.assertEquals[.qf.px.dcf_act_360[2026.01.01D00:00;2026.07.01D00:00];.qf.px.dcf_act_360[2026.01.01;2026.07.01];"act/360 of timestamps is act/360 of their dates"];
+    .qunit.assertEquals[.qf.px.dcf_act_365[2026.01.01D12:00;2026.07.01D06:00];.qf.px.dcf_act_365[2026.01.01;2026.07.01];"act/365 counts whole days"];
+    .qunit.assertEquals[.qf.px.dcf_30e_360[2026.01.15D00:00;2026.02.15D00:00];.qf.px.dcf_30e_360[2026.01.15;2026.02.15];"30E/360 of timestamps"];
+    .qunit.assertEquals[.qf.px.year_frac[`act360;2026.01.01D00:00;2026.07.01D00:00];181%360.0;"year_frac too"]};

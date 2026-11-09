@@ -228,6 +228,54 @@ def test_the_bundle_connectors_present_the_resolved_credential(tmp_path, monkeyp
     assert [_credential_in(c) for c in spawned] == ["env:pw", "given:pw"]
 
 
+@pytest.fixture
+def stp1_ports(monkeypatch) -> list[int | None]:
+    """The base port each tickerplant_port lookup was asked for."""
+    asked: list[int | None] = []
+
+    def config(paths, name, base_port=None):
+        asked.append(base_port)
+        return {"port": str((base_port or 6050) + 1)}
+
+    monkeypatch.setattr(connection, "get_process_config", config)
+    return asked
+
+
+def test_every_connector_reaches_a_stack_on_another_base_port(
+    tmp_path, monkeypatch, spawned, stp1_ports
+):
+    """#2631: only crypto took --base-port; kafka, databento, flink and every
+    scaffolded connector published to the runtime's default stp1 port."""
+    monkeypatch.setattr(kafka_feed.kafka_extra, "require", lambda: None)
+    kafka_feed.FEED.start(_paths(tmp_path), kafka_feed.FEED.start_options({"base_port": 7000}))
+    flink = _bundle_feed(BUNDLE_CONNECTORS[1])
+    flink.start(_paths(tmp_path), flink.start_options({"base_port": 7000}))
+    databento = _bundle_feed(BUNDLE_CONNECTORS[0])
+    databento.start(_paths(tmp_path), databento.start_options({"api_key": "k", "base_port": 7000}))
+    assert stp1_ports == [7000, 7000, 7000]
+    assert all(cmd[cmd.index("--port") + 1] == "7001" for cmd, _ in spawned)
+
+
+def test_every_connector_declares_the_shared_base_port_option():
+    declared = [kafka_feed.FEED, *(_bundle_feed(p) for p in BUNDLE_CONNECTORS)]
+    declared += [f for f in feeds.discover().values() if f.name.startswith("crypto")]
+    assert all(connection.BASE_PORT in f.options for f in declared), [
+        f.name for f in declared if connection.BASE_PORT not in f.options
+    ]
+    template = scaffold_external._feed("demo", "demo_raw", "demo")
+    assert "connection.BASE_PORT" in template
+    assert 'tickerplant_port(paths, options["base_port"])' in template
+
+
+def test_connector_start_kafka_takes_base_port(monkeypatch):
+    seen: dict[str, Any] = {}
+    monkeypatch.setattr(kafka_feed, "start_kafka_feed", lambda paths, **kw: seen.update(kw) or 7)
+    argv = ["connector", "start", "kafka", "--topics", "uqf.client.flow", "--base-port", "7000"]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 0, result.output
+    assert seen["base_port"] == 7000
+
+
 def test_the_crypto_recorder_config_holds_the_credential_owner_only(tmp_path, monkeypatch):
     root = tmp_path / "cryptorust"
     root.mkdir()

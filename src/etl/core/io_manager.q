@@ -177,25 +177,27 @@
     if[(`fail=strategy) and any clash;
         '"on_conflict fail: ",string[sum clash]," row(s) of ",string[opts`target],
          " already there by ",", " sv string kc];
-    kept:existing where not (kc#existing) in kc#fresh;
-    if[`replace=strategy;
-        / A replace clears a WINDOW, judged by the rows' own time column. With
-        / none to judge by, the only thing left is the key, which reaches rows
-        / outside the window (#2197) - so refuse rather than guess.
-        tcol:$[`time_column in key opts; opts`time_column; `];
-        if[(null tcol) or not tcol in cols existing;
-            '"on_conflict replace: ",string[opts`target]," has no time column to bound the window by (time_column ",
-             $[null tcol; "unset"; string tcol]," is not one of ",(" " sv string cols existing),
-             ") - replace clears a window, never a key across the table"];
-        t:kept opts`time_column;
-        inside:(t>=opts`range_from) and t<opts`range_to;
-        / A partitioned worker clears its own rows only: the window holds its
-        / siblings' rows too, and they are not this batch's to withdraw (#1476).
-        / Absent for a dataset one worker fills, where the window is all its own.
-        if[(`partition_column in key opts) and not null opts`partition_column;
-            inside:inside and (kept opts`partition_column)=opts`partition];
-        kept:kept where not inside];
-    kept,fresh}
+    hit:(kc#existing) in kc#fresh;
+    if[not `replace=strategy; :(existing where not hit),fresh];
+    / A replace clears a WINDOW, judged by the rows' own time column. With
+    / none to judge by, the only thing left is the key, which reaches rows
+    / outside the window (#2197) - so refuse rather than guess.
+    tcol:$[`time_column in key opts; opts`time_column; `];
+    if[(null tcol) or not tcol in cols existing;
+        '"on_conflict replace: ",string[opts`target]," has no time column to bound the window by (time_column ",
+         $[null tcol; "unset"; string tcol]," is not one of ",(" " sv string cols existing),
+         ") - replace clears a window, never a key across the table"];
+    t:existing tcol;
+    inside:(t>=opts`range_from) and t<opts`range_to;
+    / A key match outside the window is another window's row, kept: by key
+    / alone a key without time took the earlier windows' rows with it (#2595).
+    hit:hit and inside;
+    / A partitioned worker clears its own rows only: the window holds its
+    / siblings' rows too, and they are not this batch's to withdraw (#1476).
+    / Absent for a dataset one worker fills, where the window is all its own.
+    if[(`partition_column in key opts) and not null opts`partition_column;
+        inside:inside and (existing opts`partition_column)=opts`partition];
+    (existing where not hit or inside),fresh}
 
 / ------------------------------------------------------------- MANAGERS
 

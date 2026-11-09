@@ -152,17 +152,21 @@
 / lambda was logged cut off at 79 characters - the one place the whole
 / query was meant to be visible. A string is escaped here, with no limit;
 / anything else is rendered with the console widened to its 2000-column
-/ maximum for the one call, and put back even if rendering throws.
+/ maximum and floats at 15 significant digits (\P 15, #2623; .qf.util.full
+/ says why 15) for the one call, both put back even if rendering throws.
 / @param v any value
 / @return its q literal, as .Q.s1 spells it
 / @private
 .qetl.log.value1:{[v]
     if[10h=type v; :.qetl.log.quoted[v]];
     c:@[system;"c";{[e] ()}];
-    if[2<>count c; :.Q.s1 v];
-    @[system;"c ",string[c 0]," 2000";::];
+    p:@[system;"P";{[e] ()}];
+    if[(2<>count c) and 1<>count p; :.Q.s1 v];
+    if[2=count c; @[system;"c ",string[c 0]," 2000";::]];
+    if[1=count p; @[system;"P 15";::]];
     r:@[.Q.s1;v;{[e] "'",e}];
-    @[system;"c "," " sv string c;::];
+    if[2=count c; @[system;"c "," " sv string c;::]];
+    if[1=count p; @[system;"P ",string first p;::]];
     r}
 
 / Private: a string as a q string literal - quoted, with \ " newline,
@@ -180,7 +184,9 @@
           ch="\t"; "\\t";
           (i<32) or i>126; "\\",raze string 8 8 8 vs i;
           enlist ch]};
-    "\"",(raze esc each s),"\""}
+    / -3! keeps a one-character string's leading "," - without it the
+    / literal reads as a char atom (#2626).
+    $[1=count s; ",";""],"\"",(raze esc each s),"\""}
 
 / Private: is TorQ's logging loaded?
 / .

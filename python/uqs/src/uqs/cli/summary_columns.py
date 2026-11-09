@@ -9,8 +9,9 @@ ones, before any slow step runs.
 from __future__ import annotations
 
 from uqs.cli.choices import alternatives
+from uqs.cli.json_out import snake
 from uqs.cli.shared import _die
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.listing import (
     SUMMARY_ALL_COLUMNS,
     SUMMARY_BATCH_COLUMNS,
@@ -86,10 +87,13 @@ def resolve_sort_column(requested: str | None) -> str | None:
     """
     if not requested:
         return None
-    match = {c.lower(): c for c in SUMMARY_ALL_COLUMNS}.get(requested.strip().lower())
+    # by its title or by its --json key (#2523); a title wins where they collide
+    known = {snake(c).casefold(): c for c in SUMMARY_ALL_COLUMNS}
+    known |= {c.casefold(): c for c in SUMMARY_ALL_COLUMNS}
+    match = known.get(requested.strip().casefold())
     if match is None:
         _die(
-            UqsError(
+            UqsUsageError(
                 f"cannot sort by {requested!r}: no such summary column. "
                 f"Available: {', '.join(sorted(SUMMARY_ALL_COLUMNS))}"
             )

@@ -235,12 +235,39 @@
     .qunit.assertEquals[all 1e-12>abs (rows[2]-rows[1])-2*.qf.demo.pip;1b;
         "ask minus bid is two pips, pair by pair"]};
 
-.qt.qetl.job.stream.test_the_fx_feed_walks_its_level:{[t]
+.qt.qetl.job.stream.test_the_fx_feed_moves_its_level:{[t]
     .qt.qetl.job.stream.reset[];
+    .qpipe.job.fx_feed.on_timer[];
     before:.qpipe.job.fx_feed.spot;
     .qpipe.job.fx_feed.on_timer[];
     .qunit.assertTrue[not before~.qpipe.job.fx_feed.spot;
         "each tick moves the level rather than republishing the same one"]};
+
+/ #2562: the feeds run in separate processes, and each walking its own copy
+/ of spot put UQFFX and UQFDEPTH hundreds of bps apart within minutes - a
+/ permanent fake arbitrage. They now read one clock-driven level.
+.qt.qetl.job.stream.test_the_quote_and_depth_feeds_agree_on_the_mid:{[t]
+    .qt.qetl.job.stream.reset[];
+    do[1200;.qpipe.job.fx_feed.on_timer[];.qpipe.job.fx_orderbook_feed.on_timer[];.qpipe.job.wide_orderbook_feed.on_timer[]];
+    gap:{[a;b] max abs[a-b]%.qf.demo.pip};
+    .qunit.assertTrue[0.5>=gap[.qpipe.job.fx_feed.spot;.qpipe.job.fx_orderbook_feed.spot];
+        "quote and depth mids are within half a pip after 1200 ticks"];
+    .qunit.assertTrue[0.5>=gap[.qpipe.job.fx_feed.spot;.qpipe.job.wide_orderbook_feed.spot];
+        "and so is the wide book's"]};
+
+.qt.qetl.job.stream.test_crypto_venues_quote_one_market_per_sym:{[t]
+    / #2562: each (venue; sym) walked alone; after 600 ticks BTC-USDC was
+    / 61641 on one venue and 62888 on the other, and the combined top of
+    / book was crossed.
+    .qt.qetl.job.stream.reset[];
+    do[600;.qpipe.job.crypto_mock.on_timer[]];
+    m:.qpipe.job.crypto_mock.market;
+    spread:exec (max[mid]-min mid)%avg mid by sym from m;
+    .qunit.assertTrue[all (3*.qpipe.job.crypto_mock.venue_jitter)>=value spread;
+        "the venues' mids for a sym sit within the jitter band of each other"];
+    touch:.qpipe.job.crypto_mock.touch each m`mid;
+    best:select bid:max first each touch, ask:min last each touch by sym from update touch from m;
+    .qunit.assertTrue[all exec bid<ask from best;"no venue's bid is at or above another venue's ask"]};
 
 .qt.qetl.job.stream.test_the_depth_feed_quotes_three_levels_a_side:{[t]
     rows:.qpipe.job.fx_orderbook_feed.tick_rows .qf.demo.spot;
@@ -274,6 +301,26 @@
     .qunit.assertEquals[first rows 2;
         (first .qf.demo.spot)+3%first .qpipe.job.fx_trades_feed.pip_factor;
         "the fill prints its slippage in pips from the pair's own level"]};
+
+/ #2561: fills and orders priced off the fixed starting spot while the
+/ quotes moved; after an hour they printed up to hundreds of pips away.
+.qt.qetl.job.stream.test_fills_and_orders_price_around_the_quoted_market:{[t]
+    .qt.qetl.job.stream.reset[];
+    do[2000;.qpipe.job.fx_feed.on_timer[]];
+    / three pips of slippage, plus the quote feed's quarter pip of jitter, and a
+    / little for the level moving with the clock between the quote and the fill:
+    / each fill is compared with a quote taken just before it, not with the last
+    / of the 2000, which a slow interpreter may have quoted many seconds earlier.
+    near:{[px;s] i:.qf.demo.pairs?first s; (3.5*.qf.demo.pip i)>=abs first[px]-.qpipe.job.fx_feed.spot i};
+    do[50;
+        .qpipe.job.fx_feed.on_timer[];
+        .qpipe.job.fx_trades_feed.on_timer[];
+        r:.qt.qetl.job.stream.last_rows[];
+        .qunit.assertTrue[near[r 2;r 0];"a fill prints within its slippage of the quoted mid"];
+        .qpipe.job.fx_feed.on_timer[];
+        .qpipe.job.fx_orders_feed.on_timer[];
+        r:.qt.qetl.job.stream.last_rows[];
+        .qunit.assertTrue[near[r 6;r 1];"and so does an order"]]};
 
 .qt.qetl.job.stream.test_a_fill_is_published_as_one_element_vectors:{[t]
     / .u.upd counts rows from column lengths, so an atom column here is a
@@ -542,6 +589,19 @@
     .qunit.assertEquals[count .qt.qetl.job.stream.last_rows[];2;
         "every fill in the batch produces a position row"]};
 
+/ #2565: one unapplicable fill threw out the whole batch, good fills too.
+.qt.qetl.job.stream.test_posbook_drops_a_bad_fill_and_keeps_the_rest:{[t]
+    .qt.qetl.job.stream.reset[];
+    saved:.qetl.log.ch.warn;
+    `.qetl.log.ch.warn set {[channel;text;fields] `.qt.qetl.job.stream.pb_warned set (channel;text;fields);};
+    ex:.qt.qetl.job.stream.an_execution;
+    b:ex[.qt.qetl.job.stream.d 0;`EURUSD;1;1.1;1e6],ex[.qt.qetl.job.stream.d 1;`EURUSD;1;0n;1e6],ex[.qt.qetl.job.stream.d 2;`GBPUSD;-1;1.27;1e6];
+    r:@[{.qpipe.job.posbook.on_batch[`executions;x]; 1b};b;{[saved;e] `.qetl.log.ch.warn set saved; 'e}[saved]];
+    `.qetl.log.ch.warn set saved;
+    .qunit.assertEquals[r;1b;"a null-priced fill does not throw the batch away"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.pb_warned 2)`fills;1j;"it is dropped and counted"];
+    .qunit.assertEquals[exec qty from 0!.qpipe.job.posbook.book;1e6 -1e6;"and both good fills are in the book"]};
+
 .qt.qetl.job.stream.test_posbook_publishes_nothing_for_a_book:{[t]
     .qt.qetl.job.stream.reset[];
     .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.a_book[`EURUSD;1.1001]];
@@ -792,9 +852,17 @@
 
 .qt.qetl.job.stream.test_fill_ids_are_unique_per_venue:{[t]
     .qt.qetl.job.stream.reset[];
+    keep:.qpipe.job.crypto_mock.run_id;
+    .qpipe.job.crypto_mock.run_id:111;
     ids:.qpipe.job.crypto_mock.next_id each 3#`binance_spot;
-    .qunit.assertEquals[ids;`$("binance_spot-1";"binance_spot-2";"binance_spot-3");
-        "monotonic within a venue, the way an exchange's own ids are"]};
+    / #2566: a restarted mock counts from zero again, under a new run.
+    .qetl.job.stream.reset `crypto_mock;
+    .qpipe.job.crypto_mock.run_id:222;
+    again:.qpipe.job.crypto_mock.next_id `binance_spot;
+    .qpipe.job.crypto_mock.run_id:keep;
+    .qunit.assertEquals[ids;`$("binance_spot-111-1";"binance_spot-111-2";"binance_spot-111-3");
+        "monotonic within a venue, the way an exchange's own ids are"];
+    .qunit.assertEquals[again;`$"binance_spot-222-1";"and a restart cannot reissue the last run's ids"]};
 
 .qt.qetl.job.stream.test_fx_fill_ids_are_unique_and_survive_a_restart:{[t]
     / #1080: two fills of one pair at one instant must differ by id. The run
@@ -1081,6 +1149,17 @@
         "and the unpriced 400k sale is in neither leg of london's book"];
     .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`quote_qty;-1085000f;1e-6;
         "the priced buy keeps both"]};
+
+/ #2533: apply_desk_fills now refuses a negative size, so net_fills drops
+/ it as it drops a null rather than losing the whole batch.
+.qt.qetl.job.stream.test_positions_drop_a_negative_size_fill:{[t]
+    saved:.qetl.log.ch.warn;
+    `.qetl.log.ch.warn set {[channel;text;fields] `.qt.qetl.job.stream.fx_warned set (channel;text;fields);};
+    b:([] sym:2#`EURUSD; book:2#`london; product:2#`spot; side:1 1; size:1000000 -400000f; price:1.085 1.086);
+    r:@[.qpipe.job.fx_positions.net_fills[.qpipe.job.fx_positions.desk_book];b;{[saved;e] `.qetl.log.ch.warn set saved; 'e}[saved]];
+    `.qetl.log.ch.warn set saved;
+    .qunit.assertEquals[(.qt.qetl.job.stream.fx_warned 2)`fills;1j;"the negative-size fill is dropped and counted"];
+    .qt.support.assertApprox[first r`base_qty;1000000f;1e-9;"and the good buy is still netted"]};
 
 .qt.qetl.job.stream.test_positions_keep_the_books_apart:{[t]
     .qt.qetl.job.stream.reset[];
@@ -1601,6 +1680,18 @@
     / lead less a millisecond: timespan arithmetic only, as `%` gives a float on PeachQ
     lead:book[enlist 1.10;enlist 1e6;now+.qf.mkt.max_clock_lead-0D00:00:00.001];
     .qunit.assertEquals[count .qpipe.job.market_data.check lead;0;"a clock within the shared lead passes"]};
+
+/ #2564: a book superbook cannot hold - ladders of different lengths, or a
+/ null source - is withheld here, or superbook throws and drops the batch.
+.qt.qetl.job.stream.test_market_data_check_withholds_uneven_ladders_and_null_sources:{[t]
+    now:.z.p;
+    book:{[s;v;b;bs;ts] ([] sym:enlist s; source:enlist v; market:enlist `fx; source_time:enlist ts;
+        bid_prices:enlist b; bid_sizes:enlist bs; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6; clock:enlist `receipt)};
+    rows:raze (book[`GBPUSD;`LP_A;1.25 1.24;1e6 2e6;now];book[`EURUSD;`LP_A;1.1 1.09;enlist 1e6;now];
+        book[`EURUSD;`;enlist 1.1;enlist 1e6;now]);
+    f:select from .qpipe.job.market_data.check rows where check=`malformed_book;
+    .qunit.assertEquals[f`row;1 2;"uneven ladders and a null source are withheld; the good book is not"];
+    .qunit.assertEquals[f`detail;("a price ladder and its size ladder differ in length";"the source is null");"each says why"]};
 
 / #2418: a quote that pulls a side (null price, zero size) is a withdrawal, an
 / empty ladder, and is published with its live side - not a one-level ladder

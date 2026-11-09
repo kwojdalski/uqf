@@ -10,15 +10,15 @@ the uqf stack](../guides/uqs.md).
 
 ```
 uqs connector start kafka                                      # $UQF_KAFKA_BROKERS or localhost:9092, every declared topic
-uqs connector start kafka --brokers broker:9092 --topic uqf.client.flow --group uqf-kafka-flow
+uqs connector start kafka --brokers broker:9092 --topics uqf.client.flow --group uqf-kafka-flow
 uqs connector status kafka
 uqs connector stop kafka
 ```
 
 The Python consumer reads the same two variables as `kafka_feed1` below, so one
 cluster is configured once: `--brokers`, else `UQF_KAFKA_BROKERS`, else the demo
-default `localhost:9092`; `--topic`, else `UQF_KAFKA_TOPICS`, else **every topic
-a decoder job declares** (`.qetl.kafka.topic.define`) --- `kafka_feed1`'s
+default `localhost:9092`; `--topics`, else `UQF_KAFKA_TOPICS`, else **every
+topic a decoder job declares** (`.qetl.kafka.topic.define`) --- `kafka_feed1`'s
 default, read from the same q declarations rather than kept as a second list. A
 topic no decoder declares is refused before anything starts, as `kafka_feed1`
 refuses it, naming the declared ones: its records would only be dead-lettered.

@@ -454,6 +454,7 @@ def test_the_browser_holds_the_same_upload_limit_and_destination():
     assert eval(expr) == remote_helper.MAX_UPLOAD  # noqa: S307 - digits and * only
     assert json.loads(_ts_const("UPLOAD_ROOT")) == "/".join(remote_helper.UPLOAD_ROOT)
     assert json.loads(_ts_const("UPLOAD_TEMP_PREFIX")) == remote_helper.TEMP_PREFIX
+    assert json.loads(_ts_const("UPLOAD_HISTORY_DIR")) == remote_helper.HISTORY_DIR
     assert int(_ts_const("UPLOAD_MAX_DEPTH")) == remote_helper.MAX_UPLOAD_DEPTH
     assert int(_ts_const("UPLOAD_MAX_PATH")) == remote_helper.MAX_PATH
 

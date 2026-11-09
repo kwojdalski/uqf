@@ -100,6 +100,22 @@
     bad2[`direct]:enlist `USDEUR;
     .qunit.assertThrows[.qf.mkt.attribution_convention_check;bad2;"*must be canonical*";"a non-canonical direct pair is refused"]};
 
+/ #2553: an exception keyed by a non-canonical pair passed the check and then
+/ never applied for either spelling; so did a pair outside the convention, and
+/ of two rows for one pair only the first ever did.
+.qt.qf.exec.attribution.test_convention_check_refuses_exceptions_that_would_never_apply:{[t]
+    c:.qt.qf.exec.attribution.conv;
+    f:{[c;ex] c[`exceptions]:ex; .qf.mkt.attribution_convention_check c}[c];
+    .qunit.assertThrows[f;([] pair:enlist `PLNUSD; legs:enlist `USDPLN);
+        "attribution_convention: exception pairs must be canonical (base ranks before quote) and in the convention, not PLNUSD";
+        "an exception keyed PLNUSD is refused"];
+    .qunit.assertThrows[f;([] pair:enlist `EURRUB; legs:enlist `EURRUB);
+        "attribution_convention: exception pairs must be canonical*";"so is one on a pair outside the convention"];
+    .qunit.assertThrows[f;([] pair:`USDPLN`USDPLN; legs:(enlist `USDPLN;`EURUSD`EURPLN));
+        "attribution_convention: duplicate exception pair USDPLN";"and a pair listed twice"];
+    ok:f ([] pair:enlist `USDPLN; legs:enlist enlist `USDPLN);
+    .qunit.assertEquals[.qf.mkt.attribution_route_with[ok;`USDPLN]`leg;enlist `USDPLN;"a canonical exception still passes and applies"]};
+
 / Walk a route currency by currency: returns (start;end;ccy list, no repeats?).
 .qt.qf.exec.attribution.walk:{[r]
     ends:{[leg;flipped] l:.qf.px.ccy_pair_legs leg; $[flipped;reverse l`base`quote;l`base`quote]}'[r`leg;r`invert];
@@ -291,7 +307,18 @@
     q:.qt.qf.exec.attribution.review_fixture_quotes[];
     tr:.qt.qf.exec.attribution.review_fixture_trades[];
     .qunit.assertThrows[{.qf.exec.attribution_review[x 0;delete side from x 1;enlist 0D00:00:01;10000;1]};(q;tr);"*missing column side*";"trades without side"];
-    .qunit.assertThrows[{.qf.exec.attribution_review[x 0;x 1;`timespan$();10000;1]};(q;tr);"*non-empty list of positive timespans*";"no horizons"]};
+    .qunit.assertThrows[{.qf.exec.attribution_review[x 0;x 1;`timespan$();10000;1]};(q;tr);"*non-empty list of positive timespans*";"no horizons"];
+    / #2537: a long horizon read as nanoseconds, a 1 ns markout of 0 pips
+    .qunit.assertThrows[{.qf.exec.attribution_review[x 0;x 1;1000;10000;1]};(q;tr);"attribution_review: horizons must be a timespan or list of timespans*";"a long horizon"];
+    / #2542: side 2 doubled every pip, side 0 reported a priced 0
+    {[q;tr;s] .qunit.assertThrows[{.qf.exec.attribution_review[x 0;x 1;enlist 0D00:00:01;10000;1]};(q;update side:s from tr where i=0);
+        "attribution_review: side must be 1 or -1, got 1 other";"side ",-3!s]}[q;tr] each 2 0 0N}
+
+/ #2541: a keyed trades table (fills keyed on fill_id) threw a bare 'type.
+.qt.qf.exec.attribution.test_review_reads_a_keyed_trades_table:{[t]
+    q:.qt.qf.exec.attribution.review_fixture_quotes[];
+    tr:update fill_id:`$string 100+i from .qt.qf.exec.attribution.review_fixture_trades[];
+    .qunit.assertEquals[.qf.exec.attribution_review[q;`fill_id xkey tr;enlist 0D00:00:01;10000;1];.qf.exec.attribution_review[q;tr;enlist 0D00:00:01;10000;1];"keyed or not, the same review"]};
 
 / #2432: a pair missing from the pip_factor dict got a null factor, so every
 / trade in it read as n_unavailable - the signal for a missing book.

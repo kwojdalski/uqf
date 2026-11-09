@@ -149,11 +149,18 @@
 
 / Private: the current coverage claims over [from_ts;to_ts) for a dataset, with
 / the whole range each claims - a claim may reach past [from_ts;to_ts).
+/ .
+/ Read from the persisted ledger, as claims_at reads it, not from this process's
+/ copy: a backfill in another process records its claim on disk only, and the
+/ in-memory ledger missed it, so its day was retired under a claim left current
+/ (#2596). durable_set renames a whole file into place, so no lock is needed.
 / @private
 .qetl.retention.claims_over:{[ds;from_ts;to_ts]
     .qetl.coverage.init_ledger[];
+    t:$[()~key hsym `$.qetl.coverage.ledger_path[]; .qetl.coverage.ledger[];
+        .qetl.job.bounded.state.durable_get .qetl.coverage.ledger_path[]];
     cur:.qetl.coverage.still_current;
-    select partition, source_version, range_from, range_to from .qetl.coverage.ledger[]
+    select partition, source_version, range_from, range_to from t
         where dataset=ds, superseded_at=cur, range_from<to_ts, from_ts<range_to}
 
 / Private: the rows in one partition's table, without mapping the table.

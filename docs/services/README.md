@@ -30,7 +30,7 @@ the tree is uqf's own; a vendored table it reads or writes is marked **(TorQ)**.
 These invent or replay data, so the rest of the stack has something to work on.
 
 **`fxfeed1` · synthetic FX quotes** --- top-of-book quotes for EURUSD, GBPUSD,
-USDJPY and AUDUSD: a small random walk around a fixed spot, one pip wide.
+USDJPY and AUDUSD: a level wandering around a fixed spot, one pip wide.
 Publishes `quote`. [Details](synthetic-feeds.md)
 
 **`fxorderbookfeed1` · synthetic FX books** --- depth-aware FX quotes, three
@@ -45,8 +45,8 @@ become a fill: the input to position limits. Publishes `orders`.
 [Details](fx-positions.md)
 
 **`widefeed1` · a wide order book** --- a book with one column per level
-(`bid_px_00`, `bid_px_01` and so on), the shape a vendor CSV usually has.
-Publishes `wide_orderbook`, and runs as a pair with `vectorize1`. Profile
+(`bids0` to `bids10` and `asks0` to `asks10`), the shape a vendor CSV usually
+has. Publishes `wide_orderbook`, and runs as a pair with `vectorize1`. Profile
 `depth`.
 
 **`cryptomock1` · crypto books and fills** --- a stand-in for cryptorust's two

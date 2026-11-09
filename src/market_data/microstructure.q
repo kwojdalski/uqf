@@ -1,5 +1,6 @@
 / microstructure.q - order-book / liquidity microstructure signals: what
-/ the book looks like (imbalance, microprice, depth, slope, convexity) and
+/ the book looks like (imbalance, microprice, depth; the ladder's shape is
+/ microstructure_shape.q, the event tape's features microstructure_tape.q) and
 / how it's moving (order flow imbalance, velocity/acceleration, queue
 / depletion) - built on top of execution.q's sweep_price/vwap and
 / forwards.q's require_depth_quotes/quotes table shape.
@@ -57,15 +58,25 @@
     per_level:.qf.mkt.level_at[sizes;] each til n_levels;
     sum per_level};
 
+/ Private: each row's level-0 price, null where level_ok's price half refuses
+/ it (null, non-positive or infinite): that side is absent, as top_sides
+/ reads it. A zero bid read as a price gave a 20000 bps spread (#2536).
+/ @param prices a vector of vectors, one level-0-first vector per row
+/ @return a vector, one level-0 price per row
+/ @private
+.qf.mkt.l0_price:{[prices]
+    px:.qf.mkt.level_at[prices;0];
+    @[px;where not .qf.mkt.level_ok[px;1f];:;0n]};
+
 / L0 mid price, per row - the natural companion to forwards.q's
 / cross_ref_price_at "mid" concept, for a plain quotes column rather than
 / a swept size.
 / @param bid_prices a vector of vectors, one level-0-first vector per row
 / @param ask_prices a vector of vectors, one level-0-first vector per row
-/ @return a vector, one mid price per row
+/ @return a vector, one mid price per row - null where either L0 is not a price (see l0_price)
 / @eg .qf.mkt.mid_price[enlist 1.1000 1.0998;enlist 1.1002 1.1004]  -> ,1.1001
 .qf.mkt.mid_price:{[bid_prices;ask_prices]
-    0.5*(.qf.mkt.level_at[bid_prices;0])+.qf.mkt.level_at[ask_prices;0]};
+    0.5*(.qf.mkt.l0_price[bid_prices])+.qf.mkt.l0_price[ask_prices]};
 
 / Book pressure at one level: (Vbid-Vask)/(Vbid+Vask), in [-1,1]. Exactly 0
 / when both sizes are 0 at a level that DOES exist for that row - distinct
@@ -98,7 +109,8 @@
     ?[denom=0;0f;(total_bid-total_ask)%denom]};
 
 / Size-weighted L0 microprice: (Vask0*Pbid0+Vbid0*Pask0)/(Vbid0+Vask0),
-/ falling back to mid_price when both L0 sizes are 0.
+/ falling back to mid_price when both L0 sizes are 0. Null where either L0
+/ is not a price (see l0_price).
 / @param bid_prices a vector of vectors, one level-0-first vector per row
 / @param bid_sizes a vector of vectors, one level-0-first vector per row
 / @param ask_prices a vector of vectors, one level-0-first vector per row
@@ -106,8 +118,8 @@
 / @return a vector, one microprice per row
 / @eg .qf.mkt.microprice[enlist enlist 1.1000;enlist enlist 100;enlist enlist 1.1002;enlist enlist 300]  -> ,1.10005
 .qf.mkt.microprice:{[bid_prices;bid_sizes;ask_prices;ask_sizes]
-    bid_px0:.qf.mkt.level_at[bid_prices;0];
-    ask_px0:.qf.mkt.level_at[ask_prices;0];
+    bid_px0:.qf.mkt.l0_price[bid_prices];
+    ask_px0:.qf.mkt.l0_price[ask_prices];
     bid_sz0:.qf.mkt.level_at[bid_sizes;0];
     ask_sz0:.qf.mkt.level_at[ask_sizes;0];
     denom:bid_sz0+ask_sz0;
@@ -132,11 +144,12 @@
 / pip_factor (a JPY cross's spread_bps is still bps, not pips).
 / @param bid_prices a vector of vectors, one level-0-first vector per row
 / @param ask_prices a vector of vectors, one level-0-first vector per row
-/ @return a vector, spread in bps per row
+/ @return a vector, spread in bps per row - null where either L0 is not a price (see l0_price)
 / @eg .qf.mkt.spread_bps[enlist enlist 1.1000;enlist enlist 1.1002]  -> ,1.818017
+/ @eg .qf.mkt.spread_bps[(enlist 0f;enlist 1.1);(enlist 1.1;enlist 0f)]  -> 0n 0n
 .qf.mkt.spread_bps:{[bid_prices;ask_prices]
-    bid_px0:.qf.mkt.level_at[bid_prices;0];
-    ask_px0:.qf.mkt.level_at[ask_prices;0];
+    bid_px0:.qf.mkt.l0_price[bid_prices];
+    ask_px0:.qf.mkt.l0_price[ask_prices];
     mid:.qf.mkt.mid_price[bid_prices;ask_prices];
     10000*(ask_px0-bid_px0)%mid};
 
@@ -162,136 +175,6 @@
     deeper_ask:sum .qf.mkt.level_at[ask_sizes;] each 1 2 3 4;
     deeper:deeper_bid+deeper_ask;
     ?[deeper=0;0n;top%deeper]};
-
-/ Private: vwmp_skew for a single row - execution.q's vwap over the level_ok levels among both sides' first n_levels (a rejected level used to be weighted, #2384)
-/ minus the simple L0 mid, over the L0 spread. Null for a non-level_ok L0, or a locked/crossed L0 (spread <= 0): a division guard, not .qf.mkt.crossed_top's crossed test (a locked book is not crossed, #1176).
-/ @private
-.qf.mkt.vwmp_skew_one:{[n_levels;bid_prices;bid_sizes;ask_prices;ask_sizes]
-    idx:til n_levels;
-    bi:where .qf.mkt.level_ok[bid_prices idx;bid_sizes idx];
-    ai:where .qf.mkt.level_ok[ask_prices idx;ask_sizes idx];
-    vw_mid:.qf.exec.vwap[(bid_prices bi),ask_prices ai;(bid_sizes bi),ask_sizes ai];
-    simple_mid:0.5*(bid_prices 0)+ask_prices 0;
-    l0_spread:(ask_prices 0)-bid_prices 0;
-    $[not (0 in bi) and 0 in ai;0n;l0_spread<=0;0n;(vw_mid-simple_mid)%l0_spread]};
-
-/ Volume-weighted mid (over n_levels, via execution.q's vwap) minus the
-/ simple L0 mid, divided by the L0 spread - how far deeper-book weighting
-/ skews the mid relative to the quoted spread.
-/ @param bid_prices a vector of vectors, one level-0-first vector per row
-/ @param bid_sizes a vector of vectors, one level-0-first vector per row
-/ @param ask_prices a vector of vectors, one level-0-first vector per row
-/ @param ask_sizes a vector of vectors, one level-0-first vector per row
-/ @param n_levels how many levels (0..n_levels-1) to volume-weight over
-/ @return a vector, skew per row - null for a locked, crossed or non-level_ok L0; a level level_ok rejects is skipped
-/ @eg .qf.mkt.vwmp_skew[enlist 1.1000 1.0998;enlist 100 100;enlist 1.1002 1.1004;enlist 100 100;2]  -> ,0f
-.qf.mkt.vwmp_skew:{[bid_prices;bid_sizes;ask_prices;ask_sizes;n_levels]
-    n:count bid_prices;
-    result:n#0n;
-    i:0;
-    while[i<n;
-        result[i]:.qf.mkt.vwmp_skew_one[n_levels;bid_prices i;bid_sizes i;ask_prices i;ask_sizes i];
-        i+:1];
-    result};
-
-/ Private: book_slope for a single row - (P0-P_last)/sum(sizes).
-/ .
-/ A row with no size at all - every level zero, which is what a withdrawn
-/ book looks like - is null rather than 0w. See depth_ratio above: infinity
-/ is not null, so it survives a null filter and poisons any aggregate over
-/ the series.
-/ @private
-.qf.mkt.book_slope_one:{[prices;sizes]
-    total:sum sizes;
-    $[total=0;0n;(first[prices]-last prices)%total]};
-
-/ Book slope: (P0-P_last)/sum(sizes), called once per side - pass
-/ bid_prices/bid_sizes for the bid-side slope, ask_prices/ask_sizes for
-/ the ask-side slope. Argument shape deliberately mirrors execution.q's
-/ sweep_price (prices;sizes) - there is no target_size here to validate,
-/ so sweep_price's own validation isn't reused, just its argument order.
-/ @param prices a vector of vectors, one level-0-first vector per row
-/ @param sizes a vector of vectors, one level-0-first vector per row
-/ @return a vector, slope per row - null for a row carrying no size
-/ @eg .qf.mkt.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100]  -> ,1.333333e-06
-/ @eg .qf.mkt.book_slope[enlist 1.1000 1.0998;enlist 0 0f]  -> ,0n
-.qf.mkt.book_slope:{[prices;sizes]
-    n:count prices;
-    result:n#0n;
-    i:0;
-    while[i<n;
-        result[i]:.qf.mkt.book_slope_one[prices i;sizes i];
-        i+:1];
-    result};
-
-/ Private: book_convexity for a single row - (P0-P1)-(P1-P2), negated for
-/ side=`ask. Nulls out a row with fewer than 3 levels rather than
-/ indexing out of bounds.
-/ @private
-.qf.mkt.book_convexity_one:{[prices;book_side]
-    $[3>count prices;
-        0n;
-        [raw:(prices[0]-prices[1])-(prices[1]-prices[2]);
-         $[book_side=`ask; neg raw; raw]]]};
-
-/ Book convexity: (P0-P1)-(P1-P2), measuring curvature of the price
-/ ladder away from the touch. Negated when book_side=`ask - bid prices
-/ decrease level-by-level while ask prices increase, so mirroring the
-/ ask-side sign keeps convexity comparably signed across both sides
-/ (a "cheaper to go deeper than the first step implies" book reads the
-/ same sign whichever side it's on). Needs >=3 levels; a shorter row is
-/ nulled, not an error.
-/ @param prices a vector of vectors, one level-0-first vector per row
-/ @param book_side `bid or `ask - which side prices belongs to
-/ @return a vector, convexity per row
-/ @throws error if book_side isn't `bid or `ask - checked once here, because
-/   book_convexity_one's `$[book_side=`ask; ...]` reads anything else as the bid
-/   side and returns a plausible number with the wrong sign (#415)
-/ @eg .qf.mkt.book_convexity[enlist 1.1000 1.0998 1.0995;`bid]  -> ,-0.0001
-.qf.mkt.book_convexity:{[prices;book_side]
-    if[not $[-11h=type book_side; book_side in `bid`ask; 0b];
-        '"book_convexity: book_side must be `bid or `ask, got ",.Q.s1 book_side];
-    n:count prices;
-    result:n#0n;
-    i:0;
-    while[i<n;
-        result[i]:.qf.mkt.book_convexity_one[prices i;book_side];
-        i+:1];
-    result};
-
-/ Private: vamp for a single row - see vamp. A side with no level_ok L0 (withdrawn) nulls
-/ the row first: its 0n/0w/0 size target made sweep_price throw for the whole vector (#2379).
-/ @private
-.qf.mkt.vamp_one:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
-    if[not all {[px;sz] $[count px; .qf.mkt.level_ok["f"$first px;"f"$first sz]; 0b]}'[(bid_prices;ask_prices);(bid_sizes;ask_sizes)]; :0n];
-    ask_size_target:notional%first ask_prices;
-    bid_size_target:notional%first bid_prices;
-    buy_leg:.qf.mkt.sweep_price[ask_prices;ask_sizes;ask_size_target];
-    sell_leg:.qf.mkt.sweep_price[bid_prices;bid_sizes;bid_size_target];
-    0.5*(buy_leg`avg_price)+sell_leg`avg_price};
-
-/ VAMP (volume-adjusted mid price): convert notional into a size via each
-/ side's own L0 price, then sweep each side to that size with execution.q's
-/ sweep_price directly and average the two resulting avg_price legs - not
-/ a fresh notional-walking algorithm, exactly sweep_price reused twice.
-/ @param bid_prices a vector of vectors, one level-0-first vector per row
-/ @param bid_sizes a vector of vectors, one level-0-first vector per row
-/ @param ask_prices a vector of vectors, one level-0-first vector per row
-/ @param ask_sizes a vector of vectors, one level-0-first vector per row
-/ @param notional a single atom (broadcast to every row) or a vector
-/   already aligned to rows - same atom-or-vector convention as
-/   execution.q's markout ref_price
-/ @return a vector, VAMP per row - null for a row with a side lacking a usable L0 (one-sided book)
-/ @eg .qf.mkt.vamp[enlist 1.1000 1.0998;enlist 1000000 1000000;enlist 1.1002 1.1004;enlist 1000000 1000000;500000]  -> ,1.1001
-.qf.mkt.vamp:{[bid_prices;bid_sizes;ask_prices;ask_sizes;notional]
-    n:count bid_prices;
-    notional:$[0>type notional; n#notional; notional];
-    result:n#0n;
-    i:0;
-    while[i<n;
-        result[i]:.qf.mkt.vamp_one[bid_prices i;bid_sizes i;ask_prices i;ask_sizes i;notional i];
-        i+:1];
-    result};
 
 / Private: rows of quotes for one sym, sorted `time xasc, validated to have
 / every column require_depth_quotes checks - the shared setup every Tier 2
@@ -486,448 +369,6 @@
         result[i-1]:$[3>sum ok; 0n; cor[lagged where ok;current where ok]];
         i+:1];
     result};
-
-/ ======================================================= EVENT TAPE
-/ .
-/ Features over the order/trade event tape (issue #46). Shape and the
-/ decision behind it: docs/architecture/event-tape.md. Unlike the Tier 1 functions
-/ above, which take whole COLUMNS from a quotes snapshot table, these take
-/ the tape TABLE - because every one of them filters on `action`, and a
-/ caller splitting the table into columns first would have to do that
-/ filtering itself and keep the columns aligned while doing it.
-
-/ The actions an event tape may carry.
-.qf.mkt.tape_actions:`add`cancel`trade
-
-/ Required columns for any tape function. A subset of the full shape: these
-/ are what the counting and flow features read, and demanding the rest
-/ (price, order_id, pip_factor) would refuse a legitimately projected tape.
-.qf.mkt.tape_cols:`time`sym`action`side`size
-
-/ Refuse a tape that is missing a column, carries an unknown action, is not
-/ sorted by time, or holds a trade with a null or negative size.
-/ .
-/ ALL are silent failures if unchecked, so this is a precondition:
-/ .
-/   - a missing column reads as a null in most q code, so a windowed count
-/     over it returns 0 rather than erroring
-/   - an unknown action (a typo'd `trades`, say) is simply never matched by
-/     `action=`trade`, so every trade-based ratio silently reports on an
-/     empty set
-/   - an UNSORTED tape makes every rolling window compute over the wrong
-/     rows and return a plausible number. Rejecting beats sorting, as in
-/     cross_book_at: sorting a tape sorted by construction hides a bug.
-/   - an unsized trade breaks every volume feature (VPIN read 2, #2428)
-/ @param tape an event tape table
-/ @return 1b when the tape is usable
-/ @throws error naming what is wrong
-/ @eg .qf.mkt.require_tape[tape]
-.qf.mkt.require_tape:{[tape]
-    if[not .Q.qt tape; '"require_tape: expected a table"];
-    .qf.util.require_cols[`require_tape;`tape;tape;.qf.mkt.tape_cols];
-    unknown:distinct (exec action from tape) except .qf.mkt.tape_actions;
-    if[count unknown;
-        '"require_tape: unknown action(s) ",(", " sv string unknown),
-         " - expected one of ",(", " sv string .qf.mkt.tape_actions),
-         ". An unmatched action makes every trade-based ratio report on an empty set rather than erroring"];
-    time:exec time from tape;
-    if[not time~asc time;
-        '"require_tape: tape is not sorted ascending by time - a rolling window over an unsorted tape returns a plausible wrong number rather than erroring (docs/architecture/event-tape.md)"];
-    sizes:exec size from tape where action=`trade;
-    if[n_bad:sum (null sizes) or sizes<0; '"require_tape: ",string[n_bad]," trade(s) with a null or negative size - every volume feature would report a plausible wrong number"];
-    1b}
-
-/ Signed trade flow: the net direction of aggressive volume (ROADMAP #19).
-/ .
-/ Only `trade` events count - an add or a cancel moves no volume. `side` on
-/ a trade is the AGGRESSOR's side (1 buy, -1 sell), which is what makes the
-/ result mean "buying pressure": summing the resting side instead would be
-/ the same number negated, and summing "one party was a buyer" would be the
-/ trade count.
-/ .
-/ `size` is unsigned in the tape and signed here by multiplying, per the
-/ shape contract - a signed size column would make `sum size` meaningless.
-/ @param tape an event tape table
-/ @return the net signed volume: positive when buyers were the aggressors
-/ @eg .qf.mkt.signed_trade_flow[tape]  ->  -500000f
-.qf.mkt.signed_trade_flow:{[tape]
-    .qf.mkt.require_tape tape;
-    sum exec side*size from tape where action=`trade}
-
-/ Cumulative signed trade flow, one running total per trade event.
-/ .
-/ The per-event series vpin and the flow-toxicity family build on, rather
-/ than the single scalar above. Returned aligned to the TRADE events only,
-/ with their times, because a cumulative delta indexed against add and
-/ cancel rows would repeat values at every non-trade row and invite a
-/ reader to treat those repeats as observations.
-/ @return a table of time and cum_flow, one row per trade event
-.qf.mkt.cumulative_trade_flow:{[tape]
-    .qf.mkt.require_tape tape;
-    trades:select time, signed:side*size from tape where action=`trade;
-    select time, cum_flow:sums signed from trades}
-
-/ Cancel-to-trade ratio: cancels per trade (ROADMAP #23).
-/ .
-/ A standard flow-toxicity proxy - a venue where orders are posted and
-/ pulled without trading has a high ratio, and a sharp rise in it is a
-/ classic quote-stuffing signature.
-/ .
-/ Returns 0n when there are no trades, NOT infinity and not zero. Zero
-/ would read as "no cancelling happening", which is the opposite of the
-/ truth when the real situation is cancels with nothing trading; and 0w
-/ propagates into any average a caller takes. A null says "undefined here",
-/ which is what a ratio with an empty denominator is.
-/ @param tape an event tape table
-/ @return cancels divided by trades, or 0n when no trade occurred
-/ @eg .qf.mkt.cancel_to_trade_ratio[tape]  ->  1.5
-.qf.mkt.cancel_to_trade_ratio:{[tape]
-    .qf.mkt.require_tape tape;
-    n_trades:count select from tape where action=`trade;
-    n_cancels:count select from tape where action=`cancel;
-    $[0=n_trades; 0n; n_cancels%n_trades]}
-
-/ Cancel-to-trade ratio per time bucket and grouping.
-/ .
-/ Mirrors hit_ratio_by's windowed-groupby shape, which is what the ROADMAP
-/ asks these features to look like: xbar the time into buckets, group by
-/ those plus whatever columns the caller names, and report the ratio per
-/ group. A null bucket_size disables time-bucketing entirely.
-/ .
-/ Buckets with no trade get 0n, for the reason cancel_to_trade_ratio does -
-/ and that matters more here, because a quiet bucket is common and a 0 in
-/ one would drag any average over buckets toward zero.
-/ @param tape an event tape table
-/ @param bucket_size a timespan to floor time into, or 0Nn for no bucketing
-/ @param group_cols extra columns to group by, e.g. enlist `sym
-/ @eg .qf.mkt.cancel_to_trade_ratio_by[tape;0D01:00:00;enlist `sym]
-/ Private: a zero denominator becomes a null, so a ratio over a group with
-/ nothing in the denominator is undefined rather than infinite.
-/ .
-/ Exists because q's `%` gives 0w for n%0, and 0w propagates: one quiet
-/ bucket poisons every average a caller takes over buckets. The scalar
-/ ratios in this file guard with a plain $[0=n; 0n; ...]; a grouped one
-/ cannot, because the division happens inside a functional select where
-/ the denominator is a parse tree rather than a value. This is that guard,
-/ in a form a parse tree can hold.
-/ @param n a count, per group
-/ @return n, or 0n when n is zero
-/ @eg .qf.mkt.undefined_if_zero 0  ->  0n
-/ @private
-.qf.mkt.undefined_if_zero:{[n] ?[0=n;0n;n]}
-
-.qf.mkt.cancel_to_trade_ratio_by:{[tape;bucket_size;group_cols]
-    .qf.mkt.require_tape tape;
-    / The group columns are carried through: selecting time, sym and action
-    / alone made grouping by anything else (venue) throw.
-    t:(distinct `time`sym`action,(),group_cols)#select from tape where action in `cancel`trade;
-    by_cols:$[null bucket_size;
-        (),group_cols;
-        (`time,(),group_cols)];
-    t:$[null bucket_size; t; update time:bucket_size xbar time from t];
-    if[0=count by_cols;
-        :([] ratio:enlist .qf.mkt.cancel_to_trade_ratio tape)];
-    / The denominator is guarded, exactly as the scalar form guards it - a
-    / group with cancels and no trade is undefined, not infinite. Without
-    / this the two forms disagree on the same events: 0n from
-    / cancel_to_trade_ratio, 0w from here.
-    ?[t;();by_cols!by_cols;
-      (enlist `ratio)!enlist
-        (%;(sum;(=;`action;enlist `cancel));
-           (.qf.mkt.undefined_if_zero;(sum;(=;`action;enlist `trade))))]}
-
-/ Split the trades in a tape into equal-VOLUME buckets (ROADMAP #25).
-/ .
-/ The primitive vpin is built on, exposed separately because it is the
-/ interesting intermediate: a reader who distrusts a VPIN number wants to see
-/ the buckets it came from, and it is far easier to test on its own.
-/ .
-/ WHY VOLUME BUCKETS AND NOT TIME BUCKETS
-/ .
-/ This is the "volume-synchronized" in VPIN. Informed trading shows up as an
-/ imbalance per unit VOLUME, not per unit time: an hour with four trades and
-/ an hour with four thousand are not comparable observations, but two buckets
-/ of 10,000 lots each are. Time-bucketing a flow-toxicity metric makes it a
-/ measure of how busy the market was.
-/ .
-/ A TRADE THAT STRADDLES A BOUNDARY IS SPLIT
-/ .
-/ Its volume goes partly in one bucket and partly in the next, proportionally.
-/ That is not a nicety: VPIN divides by (n * bucket_volume), so every bucket
-/ must hold exactly bucket_volume or the denominator is wrong. Assigning whole
-/ trades to whichever bucket they end in would leave buckets of unequal
-/ volume and a VPIN that is systematically off by however lumpy the tape is.
-/ .
-/ THE LAST, INCOMPLETE BUCKET IS DISCARDED
-/ .
-/ A bucket holding less than bucket_volume has a smaller denominator, so its
-/ imbalance is not comparable with the others - and including it makes VPIN
-/ jump around as the final partial bucket fills. Only complete buckets are
-/ returned, which means a tape with less volume than one bucket returns none.
-/ @param tape an event tape table
-/ @param bucket_volume the volume each bucket holds
-/ @return a table of bucket, end_time, buy_volume, sell_volume, imbalance
-/   (the absolute difference) - one row per COMPLETE bucket
-/ @throws error when bucket_volume is not positive
-/ @eg .qf.mkt.volume_buckets[tape;1000000f]
-.qf.mkt.volume_buckets:{[tape;bucket_volume]
-    .qf.mkt.require_tape tape;
-    if[not bucket_volume>0;
-        '"volume_buckets: bucket_volume must be positive, got ",.Q.s1 bucket_volume];
-    trades:select time, side, size from tape where action=`trade;
-    if[0=count trades; :.qf.mkt.empty_buckets[]];
-    cum:sums trades`size;
-    starts:cum-trades`size;
-    total:last cum;
-    n:"j"$floor (total%bucket_volume)*1f+1e-9;  / relative: rounding grows with the tape (#1262)
-    if[0=n; :.qf.mkt.empty_buckets[]];
-    / For bucket b spanning [lo;hi), each trade contributes the overlap of
-    / its own [start;end) with that span - which is what splits a straddling
-    / trade proportionally without special-casing it.
-    slice:{[trades;starts;cum;bucket_volume;b]
-        lo:bucket_volume*b;
-        hi:lo+bucket_volume;
-        overlap:0f|(hi&cum)-lo|starts;
-        buys:sum overlap where 0<trades`side;
-        sells:sum overlap where 0>trades`side;
-        / end_time is the time of the trade that FILLED the bucket - the
-        / instant the observation completed, which is what a series of VPIN
-        / values should be indexed by.
-        filled:(count[cum]-1)&first where cum>=hi*1f-1e-9;
-        (b;trades[`time] filled;buys;sells;abs buys-sells)};
-    rows:slice[trades;starts;cum;bucket_volume] each til n;
-    flip `bucket`end_time`buy_volume`sell_volume`imbalance!flip rows}
-
-.qf.mkt.empty_buckets:{[] ([] bucket:`long$(); end_time:`timestamp$();
-    buy_volume:`float$(); sell_volume:`float$(); imbalance:`float$())}
-
-/ VPIN - volume-synchronized probability of informed trading (ROADMAP #25).
-/ .
-/ Easley, Lopez de Prado and O'Hara (2012). Over a trailing window of
-/ n_buckets equal-volume buckets:
-/ .
-/     VPIN = sum |buy_volume - sell_volume| / (n_buckets * bucket_volume)
-/ .
-/ which is the mean absolute order imbalance per bucket, normalised to a
-/ 0..1 fraction of bucket volume. 0 means every bucket was perfectly
-/ balanced; 1 means every bucket was entirely one-sided.
-/ .
-/ ONE SIMPLIFICATION THIS TAPE PERMITS, AND IT IS WORTH KNOWING
-/ .
-/ The paper classifies volume with BULK VOLUME CLASSIFICATION - a normal CDF
-/ over price changes - because most tapes do not say who was the aggressor,
-/ so buy and sell volume has to be INFERRED. This tape carries the aggressor
-/ side (docs/architecture/event-tape.md), so the classification is exact and BVC is not
-/ needed. That makes these numbers cleaner than a BVC-based VPIN, not
-/ comparable-but-different: same definition, better inputs.
-/ .
-/ If a future source cannot supply the aggressor side, BVC is the thing to
-/ add, and it belongs here rather than in the tape - the tape should not
-/ invent a side it does not know.
-/ .
-/ Returns one value per bucket, NULL until n_buckets have accumulated, which
-/ is ofi_autocorrelation's convention in this file: a window that has not
-/ filled yet has no answer, and 0 would be a wrong one.
-/ @param tape an event tape table
-/ @param bucket_volume the volume each bucket holds
-/ @param n_buckets how many trailing buckets each value averages over
-/ @return a table of bucket, end_time and vpin
-/ @throws error when n_buckets is not positive
-/ @eg .qf.mkt.vpin[tape;1000000f;50]
-.qf.mkt.vpin:{[tape;bucket_volume;n_buckets]
-    if[not n_buckets>0;
-        '"vpin: n_buckets must be positive, got ",.Q.s1 n_buckets];
-    buckets:.qf.mkt.volume_buckets[tape;bucket_volume];
-    if[0=count buckets; :select bucket, end_time, vpin:`float$() from buckets];
-    imb:buckets`imbalance;
-    n:count imb;
-    / A trailing mean of the absolute imbalance, normalised by bucket volume.
-    / `msum` gives the trailing sums, but its first n_buckets-1 entries are
-    / sums over a PARTLY EMPTY window - a smaller numerator over the same
-    / denominator, which would read as an unusually balanced market rather
-    / than as "not enough data yet". Those are nulled.
-    / .
-    / Named vpin_series, not `values`: `value` is a q builtin and this file
-    / has no business getting that close to it.
-    vpin_series:n#0n;
-    if[n>=n_buckets;
-        defined:(n_buckets-1)+til 1+n-n_buckets;
-        vpin_series[defined]:(n_buckets msum imb)[defined]%n_buckets*bucket_volume];
-    ([] bucket:buckets`bucket; end_time:buckets`end_time; vpin:vpin_series)}
-
-/ Trade arrival rate: trades per second over the tape's span (ROADMAP #26).
-/ .
-/ Only `trade` events count - an add or a cancel is not an arrival in the
-/ sense this measures, which is how fast executions are happening.
-/ .
-/ Returns 0n when the span is zero, NOT infinity: one trade, or several at
-/ the same instant, gives no information about a rate. 0w would propagate
-/ into any average a caller takes, and 0 would read as "no trading", the
-/ opposite of the truth.
-/ @param tape an event tape table
-/ @return trades per second, or 0n when the span is zero
-/ @eg .qf.mkt.trade_arrival_rate[tape]  ->  0.2
-.qf.mkt.trade_arrival_rate:{[tape]
-    .qf.mkt.require_tape tape;
-    time:exec time from tape where action=`trade;
-    if[2>count time; :0n];
-    span:`float$(last[time]-first time)%1000000000;
-    $[span<=0; 0n; (count[time]-1)%span]}
-
-/ Trade arrival rate per time bucket and grouping.
-/ .
-/ Mirrors cancel_to_trade_ratio_by and hit_ratio_by. Here the rate is trades
-/ per bucket rather than per second, because the bucket IS the unit the
-/ caller chose - dividing again by the bucket's length would throw away the
-/ thing that makes buckets comparable.
-/ @param tape an event tape table
-/ @param bucket_size a timespan to floor time into, or 0Nn for no bucketing
-/ @param group_cols extra columns to group by, e.g. enlist `sym
-/ @eg .qf.mkt.trade_arrival_rate_by[tape;0D01:00:00;enlist `sym]
-.qf.mkt.trade_arrival_rate_by:{[tape;bucket_size;group_cols]
-    .qf.mkt.require_tape tape;
-    t:(distinct `time`sym,(),group_cols)#select from tape where action=`trade;
-    by_cols:$[null bucket_size; (),group_cols; (`time,(),group_cols)];
-    t:$[null bucket_size; t; update time:bucket_size xbar time from t];
-    if[0=count by_cols;
-        :([] trades:enlist count t)];
-    ?[t;();by_cols!by_cols;(enlist `trades)!enlist (#:;`i)]}
-
-
-/ ------------------------------------------------------- LARGE TRADES
-
-/ The size at or above which a trade counts as "large", taken from the tape's
-/ OWN distribution at the given quantile.
-/ .
-/ The catalogue parked large_trade_ratio (#27) on the grounds that "large" is
-/ relative to a venue's typical clip and picking a number here would be
-/ inventing a market convention. That is right about the number and wrong
-/ about the blocker: the threshold does not have to be a constant. Asking for
-/ a QUANTILE makes it derived rather than invented, and "relative to the
-/ venue's typical clip" is exactly what a quantile of that venue's own trades
-/ computes.
-/ .
-/ Quantile rather than a multiple of the mean, because trade sizes are
-/ heavy-tailed: a handful of very large clips drag a mean upward until
-/ "twice the mean" excludes trades that every desk would call large. A
-/ quantile is unmoved by how extreme the extremes are.
-/ .
-/ Nearest-rank, and the rank is taken on the SORTED sizes with `ceiling` - so
-/ q=1.0 is the largest trade and q just above 0 is the smallest, with no
-/ interpolation inventing a size that never traded.
-/ @param tape an event tape table
-/ @param q the quantile in (0;1], e.g. 0.9 for the top decile
-/ @return the size at that quantile, or 0n when the tape holds no trades
-/ @throws error when the tape is malformed, or q is outside (0;1]
-/ @eg .qf.mkt.large_trade_threshold[tape;0.9]
-.qf.mkt.large_trade_threshold:{[tape;q]
-    .qf.mkt.require_tape tape;
-    if[(not q>0) or q>1;
-        '"large_trade_threshold: quantile must be in (0;1], got ",string q];
-    sizes:asc exec size from tape where action=`trade;
-    if[0=count sizes; :0n];
-    sizes -1+"j"$ceiling -1e-9+q*count sizes};
-
-/ Share of trades at or above the quantile threshold, by COUNT.
-/ .
-/ Note what this is not: it is not the share of VOLUME those trades carry.
-/ The count share is pinned near 1-q by construction, so the count form
-/ mostly restates the quantile it was given. The volume form below is the one
-/ that says something, and both are here so the distinction is explicit
-/ rather than left to a caller who assumed one and got the other.
-/ .
-/ Near 1-q, not equal to it: the comparison is >=, and the nearest-rank
-/ threshold is itself a size that traded, so that trade counts as large. On
-/ ten trades of sizes 1..10 at q=0.9 the threshold is 9 and the ratio is 0.2,
-/ not 0.1. Using > instead would exclude a trade of exactly the
-/ ninetieth-percentile size, which is the wrong answer to "how much trades at
-/ or above this size".
-/ @param tape an event tape table
-/ @param q the quantile in (0;1]
-/ @return the fraction of trades at or above the threshold, 0n with no trades
-/ @eg .qf.mkt.large_trade_ratio[tape;0.9]
-.qf.mkt.large_trade_ratio:{[tape;q]
-    threshold:.qf.mkt.large_trade_threshold[tape;q];
-    if[null threshold; :0n];
-    sizes:exec size from tape where action=`trade;
-    (count sizes where sizes>=threshold)%count sizes};
-
-/ Share of traded VOLUME carried by trades at or above the threshold.
-/ .
-/ This is the one that carries information. If the top decile of trades by
-/ count moves half the volume, that is a market where a few clips dominate -
-/ and a desk reads that very differently from one where volume is spread
-/ evenly, even though the COUNT ratio is 0.1 in both.
-/ @param tape an event tape table
-/ @param q the quantile in (0;1]
-/ @return the fraction of traded volume in large trades, 0n with no trades
-/ @eg .qf.mkt.large_trade_volume_share[tape;0.9]
-.qf.mkt.large_trade_volume_share:{[tape;q]
-    threshold:.qf.mkt.large_trade_threshold[tape;q];
-    if[null threshold; :0n];
-    sizes:exec size from tape where action=`trade;
-    total:sum sizes;
-    if[0=total; :0n];
-    (sum sizes where sizes>=threshold)%total};
-
-/ --- odd lots (#360) --------------------------------------------------------
-/ .
-/ An odd lot is a trade STRICTLY BELOW a size threshold; a trade of exactly
-/ the threshold is a round lot. In equities that threshold is a market
-/ convention (100 shares). FX has no round-lot convention at all - clip
-/ sizes vary by venue, pair and counterparty tier - so the threshold is an
-/ ARGUMENT the caller chooses, not a declared per-instrument constant, and
-/ nothing here pretends to know it. Pass the size below which a trade is
-/ "small" for the question being asked, e.g. 1e6 for sub-million EURUSD.
-/ .
-/ A size cutoff rather than large_trade_threshold's quantile, on purpose: a
-/ quantile moves with the tape, so "below the 10th percentile" is always
-/ about a tenth of trades, while a fixed size lets the share itself move.
-
-/ Private: refuse a threshold that is not a positive number.
-/ .
-/ A null or non-positive threshold makes `size<threshold` false for every
-/ trade, so both functions would report "no odd lots" rather than erroring.
-/ @private
-.qf.mkt.require_odd_lot_threshold:{[fn_name;threshold]
-    if[not (type threshold) in -5 -6 -7 -8 -9h;
-        '(string fn_name),": threshold must be a numeric atom, got type ",string type threshold];
-    if[not threshold>0;
-        '(string fn_name),": threshold must be positive, got ",string threshold];
-    1b}
-
-/ Share of trades, by COUNT, whose size is strictly below threshold.
-/ @param tape an event tape table
-/ @param threshold the size below which a trade is an odd lot, e.g. 1e6
-/ @return the fraction of trades that are odd lots, 0n with no trades
-/ @throws error when the tape is malformed, or threshold is not a positive number
-/ @eg .qf.mkt.odd_lot_trade_ratio[tape;1e6]
-.qf.mkt.odd_lot_trade_ratio:{[tape;threshold]
-    .qf.mkt.require_odd_lot_threshold[`odd_lot_trade_ratio;threshold];
-    .qf.mkt.require_tape[tape];
-    sizes:exec size from tape where action=`trade;
-    if[0=count sizes; :0n];
-    (sum sizes<threshold)%count sizes};
-
-/ Signed imbalance of odd-lot trades: their net aggressor volume over their
-/ total volume, in [-1;1].
-/ .
-/ Volume-weighted, like signed_trade_flow, so +1 means every odd-lot unit
-/ was bought by an aggressor and -1 every one sold. 0n, not 0, when no odd
-/ lot traded: 0 would read as "balanced" and average into a series as
-/ though it were a measurement.
-/ @param tape an event tape table
-/ @param threshold the size below which a trade is an odd lot, e.g. 1e6
-/ @return (buy volume - sell volume) % total volume over odd lots, 0n with none
-/ @throws error when the tape is malformed, or threshold is not a positive number
-/ @eg .qf.mkt.odd_lot_imbalance[tape;1e6]
-.qf.mkt.odd_lot_imbalance:{[tape;threshold]
-    .qf.mkt.require_odd_lot_threshold[`odd_lot_imbalance;threshold];
-    .qf.mkt.require_tape[tape];
-    odd:select side, size from tape where action=`trade, size<threshold;
-    total:sum odd`size;
-    if[0=total; :0n];
-    (sum odd[`side]*odd`size)%total};
 
 / =================================================== STREAMING ANALYTICS
 / .

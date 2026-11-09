@@ -679,6 +679,18 @@
     r:.qetl.coverage.release_dates[.qt.qetl.coverage.rdy[`rel_a];.z.p];
     .qunit.assertEquals[r`date;2026.09.10 2026.09.11 2026.09.12;"a window ending at midnight does not claim the next day"]};
 
+/ #2549: on a stack rolling at 22:00 UTC the day's claim also writes the next partition.
+.qt.qetl.coverage.test_release_dates_follow_the_roll_calendar:{[t]
+    .qt.support.reset_coverage_ledger[];
+    saved:(.qetl.io.calendar;.qetl.io.native_day_fn);
+    `.qetl.io.calendar set "off=7200000000000,adj=0";
+    `.qetl.io.native_day_fn set {[times] `date$times+0D02:00};
+    .qetl.coverage.stage_completion[`rel_cal;`;`v1;2026.03.02D00:00;2026.03.03D00:00;10];
+    r:@[.qetl.coverage.release_dates[.qt.qetl.coverage.rdy[`rel_cal];];.z.p;{[e] e}];
+    `.qetl.io.calendar set saved 0;
+    `.qetl.io.native_day_fn set saved 1;
+    .qunit.assertEquals[r`date;2026.03.02 2026.03.03;"the partitions the writer files the claim's rows under"]};
+
 .qt.qetl.coverage.test_release_dates_skip_a_claim_that_published_nothing:{[t]
     .qt.support.reset_coverage_ledger[];
     .qetl.coverage.stage_completion[`rel_b;`;`v1;2026.09.10D00:00;2026.09.11D00:00;0];

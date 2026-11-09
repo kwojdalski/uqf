@@ -919,9 +919,11 @@ class ActivityStore:
             return select(self._db, q, max_limit=MAX_LIMIT + 1)
 
     def export(self, q: Query) -> list[dict[str, Any]]:
-        """Events matching *q*, newest first, up to activity_log.EXPORT_MAX."""
+        """Events matching *q*, newest first, up to one past
+        activity_log.EXPORT_MAX - so an export at the maximum can still tell
+        that older events matched (#2527)."""
         with self._lock:
-            return select(self._db, q, max_limit=EXPORT_MAX)
+            return select(self._db, q, max_limit=EXPORT_MAX + 1)
 
     def drops(self) -> list[dict[str, Any]]:
         """What is not in the history, by level and reason."""

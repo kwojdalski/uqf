@@ -49,7 +49,7 @@ LogsJson = json_opt(
 _LINE = re.compile(
     r"\s*\[?(?P<time>\d{4}[.-]\d{2}[.-]\d{2}[DT ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?"
     r"(?:Z|[+-]\d{2}:?\d{2})?)\]?[\s|:\-]*"
-    r"(?:\[?(?P<level>[A-Za-z]+)\]?\b[\s|:\-]*)?(?P<message>.*)"
+    r"(?:\[?(?P<level>[A-Za-z]+)\b\]?[\s|:\-]*)?(?P<message>.*)"
 )
 #: The level words a connector writes, as the five a TorQ line uses.
 _LEVELS = {**stack_logs.LEGACY_LEVEL, "WARN": "WARNING", "CRITICAL": "ERROR", "FATAL": "ERROR"}

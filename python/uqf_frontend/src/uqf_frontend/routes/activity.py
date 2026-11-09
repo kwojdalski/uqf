@@ -189,20 +189,25 @@ def install(
     ) -> Response:
         """The history as a file: JSON Lines, CSV, or a timeline a person
         reads (activity_export.render) - oldest first, under the same filters as
-        GET /activity, at most activity_log.EXPORT_MAX events."""
+        GET /activity, at most activity_log.EXPORT_MAX events. Cut at the
+        limit, it says so: a header line in text, and X-UQF-Truncated."""
         filters = dict(locals())
-        q = _activity_query(filters, level, limit)
+        # One event past the limit says whether older ones matched (#2527),
+        # as on GET /activity.
+        q = _activity_query(filters, level, limit + 1)
+        rows = history.export(q)
+        truncated = len(rows) > limit
         now = dt.datetime.now(dt.UTC)
         body = activity_export.render(
-            history.export(q),
+            rows[:limit],
             format,
             exported_at=now,
             filters=q.described(),
             drops=history.drops(),
+            truncated=truncated,
         )
         name = f"uqf-activity-{now:%Y%m%dT%H%M%SZ}.{activity_log.EXTENSIONS[format]}"
-        return Response(
-            content=body,
-            media_type=activity_log.MEDIA_TYPES[format],
-            headers={"Content-Disposition": f'attachment; filename="{name}"'},
-        )
+        headers = {"Content-Disposition": f'attachment; filename="{name}"'}
+        if truncated:
+            headers[activity_export.TRUNCATED_HEADER] = "true"
+        return Response(content=body, media_type=activity_log.MEDIA_TYPES[format], headers=headers)

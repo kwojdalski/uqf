@@ -67,7 +67,8 @@ def test_a_checkout_or_a_release_as_written_records_no_conversion(tmp_path):
     assert converted.recognise(_release(tmp_path, q=None, portable_q=None), "4.0", {}) is None
 
 
-@pytest.mark.parametrize("server", ["4.0", "4.1"])
+# kdb+ 4.0 prints its .z.K, 4f, as "4" (#2577).
+@pytest.mark.parametrize("server", ["4", "4.0", "4.1"])
 def test_a_converted_release_is_recognised_on_a_q_at_least_its_target(tmp_path, server):
     evidence = converted.recognise(_release(tmp_path), server, {})
     assert evidence == converted.Evidence("20261009T000000Z-abc", "4.0", 2)

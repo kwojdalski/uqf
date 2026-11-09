@@ -88,14 +88,8 @@ def check(
 
     remote_files.target(settings, name)
     pairs = _choices(local)
-    # this API's own credential when it has one; else run()'s, uqs's default
-    login = (
-        {"user": settings.user, "passwd": settings.passwd}
-        if settings.user and settings.passwd
-        else {}
-    )
     return tunnel_check.run(
         name, services.root(settings), processes, pairs,
         tunnel_plan.LOCAL_OFFSET if offset is None else offset,
-        runner=runner, **login,
+        runner=runner, **settings.uqs_login,
     )  # fmt: skip

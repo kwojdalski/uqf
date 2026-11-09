@@ -75,6 +75,13 @@
     .qunit.assertThrows[.qf.port.apply_fill[b;`EURUSD;400000;;-1];0n;"apply_fill: a fill with a null size*";"a null price is refused"];
     .qunit.assertThrows[.qf.port.apply_fill[b;`EURUSD;400000;1.105;];2;"apply_fill: side*";"a side outside 1 / -1 is refused"]};
 
+/ #2533: a negative size netted as the opposite direction, while allocate
+/ dropped the same trade - the two engines disagreed.
+.qt.qf.port.positions.test_apply_fill_refuses_a_negative_size:{[t]
+    .qunit.assertThrows[.qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;;1.1;1];-1000000;"apply_fill: size must not be negative*";"a buy of -1e6 does not open a short"];
+    tr:([] time:2026.01.01D09:00 2026.01.01D10:00; sym:`EURUSD`EURUSD; size:-1e6 -1e6; trade_price:1.0 1.2; side:1 -1);
+    .qunit.assertThrows[.qf.port.apply_fills[.qf.port.empty_book[];];tr;"apply_fill: size must not be negative*";"nor do apply_fills book -200000"]};
+
 .qt.qf.port.positions.test_apply_fill_tracks_multiple_syms_independently:{[t]
     b:.qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;1000000;1.1000;1];
     b:.qf.port.apply_fill[b;`GBPUSD;500000;1.2500;-1];
@@ -164,6 +171,14 @@
     .qunit.assertTrue[row`avg_price_break;"avg_price disagrees beyond price_tol while both sides are open -> break"];
     .qunit.assertEquals[row`status;`break;"an avg_price break alone still marks the row `break"]};
 
+/ #2621: avg_price was compared only on positions larger than qty_tol, so a
+/ 1.10 vs 1.30 break on two 5000-unit longs read `match under qty_tol 10000.
+.qt.qf.port.positions.test_reconcile_trades_compares_avg_price_below_qty_tol:{[t]
+    ref:`sym xkey ([] sym:enlist `EURUSD; qty:enlist 5000f; avg_price:enlist 1.30; realized_pnl:enlist 0f);
+    tr:([] time:enlist 2026.01.01D09:00; sym:enlist `EURUSD; size:enlist 5000f; trade_price:enlist 1.10; side:enlist 1);
+    .qunit.assertEquals[exec first status from .qf.port.reconcile_trades[ref;tr;10000f;1e-6];`break;
+        "a small open position is still open: its avg_price break is a break"]};
+
 .qt.qf.port.positions.test_reconcile_trades_does_not_flag_avg_price_when_one_side_is_flat:{[t]
     / trades fully close the EURUSD position (flat, avg_price resets to 0
     / by convention) but the broker's reference book still shows it open -
@@ -233,6 +248,14 @@
     exposure:.qf.port.ccy_exposure[b];
     .qt.support.assertApprox[first exec amount from exposure where ccy=`EUR;0f;1e-6;"no EUR left once flat"];
     .qt.support.assertApprox[first exec amount from exposure where ccy=`USD;15000f;1e-6;"the realised 15,000 USD stays an exposure"]};
+
+.qt.qf.port.positions.test_ccy_exposure_of_an_empty_book_is_an_empty_table:{[t]
+    / Every book starts empty; its exposure report threw 'type (#2624).
+    exposure:.qf.port.ccy_exposure .qf.port.empty_book[];
+    .qunit.assertEquals[exposure;([] ccy:`symbol$(); amount:`float$());"no rows, the same columns and types a filled book gives"];
+    quotes:([] time:`timestamp$(); sym:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:());
+    revalued:.qf.port.ccy_exposure_in[.qf.port.empty_book[];quotes;`USD;.z.p];
+    .qunit.assertEquals[revalued;([] ccy:`symbol$(); amount:`float$(); reporting_amount:`float$());"the revalued report of an empty book is empty and float-typed too"]};
 
 .qt.qf.port.positions.test_ccy_exposure_agrees_with_the_desk_book_on_the_same_fills:{[t]
     / Two books, one question: the average-cost book here and .qf.port's netted

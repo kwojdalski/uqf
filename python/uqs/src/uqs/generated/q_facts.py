@@ -286,6 +286,9 @@ FIXTURE_TAG: str = "~fixture"
 #: what precedes a worker's output revision in a release - .qetl.job.bounded.runtime.revision_tag
 REVISION_TAG: str = "@r"
 
+#: the least a grant's max_rows may be - .qetl.io.remote.chunk_rows
+REMOTE_CHUNK_ROWS: int = 50000
+
 #: q's type characters (`meta`'s `t`) -> the names a cast takes (#1785)
 Q_TYPE_NAMES: dict[str, str] = {
     "b": "boolean",

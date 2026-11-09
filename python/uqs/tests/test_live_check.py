@@ -144,6 +144,16 @@ def test_a_diagnostic_is_redacted_again_on_the_way_out():
         # every key sources.csv refuses inline is masked, KEY and ACCESSKEY too (#2334)
         ("login failed: KEY=fake;UID=me", (), "login failed: KEY=<redacted>"),
         ("login failed: ACCESSKEY=fake;UID=me", (), "login failed: ACCESSKEY=<redacted>"),
+        # a prefixed snake_case key, a JSON key and a quoted value (#2516)
+        ("db_password=hunter2", (), "db_password=<redacted>"),
+        ("UQF_FRONTEND_DATA_PASSWORD=hunter2", (), "UQF_FRONTEND_DATA_PASSWORD=<redacted>"),
+        ("export AWS_SECRET_ACCESS_KEY=abc123", (), "export AWS_SECRET_ACCESS_KEY=<redacted>"),
+        ("SECRET_KEY=abc", (), "SECRET_KEY=<redacted>"),
+        ('{"password": "hunter2"}', (), '{"password"=<redacted>}'),
+        ('password = "hunter 2" then', (), "password=<redacted> then"),
+        ("password='hunter 2' then", (), "password=<redacted> then"),
+        # a key inside a longer word is not one
+        ("monkey=1 keyboard=2", (), "monkey=1 keyboard=2"),
     ],
 )
 def test_redaction_masks_every_shape_of_secret(text, secrets, want):

@@ -46,9 +46,10 @@ this file would be wrong.
   named files, and `exclude` skips whole directories. A bare `qlinter <path>`
   run from the repository root already applies all of this.
 - **`scripts/gates/check_q_traps.py`.** This is the pre-commit `q-traps` hook.
-  It runs `qlinter src tests scripts --format json --profile uqf`. It fails a
-  commit only on codes that start with `CORRECTNESS_PREFIXES` or appear in
-  `EXTRA_CODES`, minus `OPTED_OUT`, and skips `TEST_EXEMPT_CODES` under
+  It runs
+  `qlinter <every tracked .q file outside lib/> --format json --profile uqf`. It
+  fails a commit only on codes that start with `CORRECTNESS_PREFIXES` or appear
+  in `EXTRA_CODES`, minus `OPTED_OUT`, and skips `TEST_EXEMPT_CODES` under
   `tests/`. Read those constants out of the file.
 
 ## Run

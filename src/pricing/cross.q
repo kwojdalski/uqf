@@ -159,12 +159,14 @@
 
 / Private: the zero-row result of a *_at_sizes call for an empty sizes list,
 / with the columns and types one size gives. Their `each sizes` builds a ()
-/ there, not a table, and want_cols# threw 'type on it (#2389).
+/ there, not a table, and want_cols# threw 'type on it (#2389). `size` keeps
+/ the caller's type, as each size does in a row; only an untyped () has none
+/ to keep, and is float (#2558).
 / @private
 .qf.mkt.no_sizes_result:{[sizes;sides]
     want_cols:`size`sym , raze .qf.mkt.side_cols each sides;
     all_cols:`size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid;
-    want_cols#flip all_cols!("f"$sizes;`symbol$();`float$();`float$();`boolean$();`float$();`float$();`boolean$();`float$())};
+    want_cols#flip all_cols!($[0h=type sizes; `float$(); sizes];`symbol$();`float$();`float$();`boolean$();`float$();`float$();`boolean$();`float$())};
 
 / Depth-aware synthetic cross rate: like cross_book, but walks multi-level
 / order book depth on both legs for each requested size, converting the
@@ -323,11 +325,14 @@
 / available quoted pair - e.g. `EURUSD contributes both EUR->USD and
 / USD->EUR, both tagged with the symbol `EURUSD (the direction it needs
 / inverting, if any, is worked out later by ccy_orient_chain, not here).
-/ @param avail_syms currency pair symbols known to be quotable
+/ @param avail_syms currency pair symbols known to be quotable; one that is
+/   not a currency pair (BTCUSDT) is left out of the graph - it threw in
+/   ccy_pair_legs, failing every pair priced off quotes that held it (#2557)
 / @return table `src`dst`via, one row per direction per pair - empty, typed,
 /   for no pairs: `each` over none gives a () that 'type'd when indexed (#2388)
 / @private
 .qf.mkt.ccy_graph_edges:{[avail_syms]
+    avail_syms:avail_syms where {[s] @[{[s] .qf.px.normalize_ccy_pair s; 1b};s;{[e] 0b}]} each avail_syms;
     if[0=count avail_syms; :([] src:`symbol$(); dst:`symbol$(); via:`symbol$())];
     legs:.qf.px.ccy_pair_legs each avail_syms;
     src_ccy:legs[`base],legs[`quote];

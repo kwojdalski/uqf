@@ -59,9 +59,12 @@ def nanoseconds(value: str | float) -> int:
 
 
 def seconds(value: str | float) -> float:
-    """DURATION -> seconds. A number passes through as given, a negative one
-    too, for the caller's own range check to refuse by name."""
+    """DURATION -> seconds. A finite number passes through as given, a negative
+    one too, for the caller's own range check to refuse by name; inf and nan,
+    which TOML reads as numbers, are no duration (#2520)."""
     if isinstance(value, int | float) and not isinstance(value, bool):
+        if not math.isfinite(value):
+            raise DurationError(f"{value!r}: a duration is {FORMS}")
         return float(value)
     return nanoseconds(value) / 10**9
 

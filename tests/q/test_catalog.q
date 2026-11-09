@@ -241,4 +241,8 @@
     .qunit.assertEquals[(key u) except exec table from .qcat.surface[];`symbol$();
         ".qcat.unbounded names only browsable tables"];
     .qunit.assertEquals[(key u) where 0=count each value u;`symbol$();
-        "each unbounded table says why"]};
+        "each unbounded table says why"];
+    / A reason assigned with enlist is a one-string list, which the browser's
+    / policy basis then joins into a mangled general list (#2594).
+    .qunit.assertEquals[(key u) where 10h<>type each value u;`symbol$();
+        "each reason is one string"]};

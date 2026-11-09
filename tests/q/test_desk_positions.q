@@ -195,6 +195,18 @@
     .qunit.assertThrows[.qf.port.apply_desk_fills[b];update side:0N from f;"*null side, size or price*";
         "and so is a null side"]};
 
+/ #2622: a side of 2 doubled both legs and a side of 0 still counted a fill.
+.qt.qf.port.desk_positions.test_apply_fills_refuses_a_side_outside_plus_minus_one:{[t]
+    f:([] sym:2#`EURUSD; side:2 0; size:1000000 1000000f; price:1.1 1.1);
+    .qunit.assertThrows[.qf.port.apply_desk_fills[.qf.port.empty_desk_book[`sym]];f;"apply_desk_fills: side must be 1 (buy) or -1 (sell), got 2 0*";
+        "sides 2 and 0 are refused, not netted as 2e6 and a fill of nothing"]};
+
+/ #2533: a negative size netted as the opposite side.
+.qt.qf.port.desk_positions.test_apply_fills_refuses_a_negative_size:{[t]
+    f:([] sym:2#`EURUSD; side:1 1; size:1000000 -1000000f; price:1.085 1.086);
+    .qunit.assertThrows[.qf.port.apply_desk_fills[.qf.port.empty_desk_book[`sym]];f;"apply_desk_fills: 1 fill(s) have a negative size*";
+        "a buy of -1e6 is refused, not booked as base -1e6"]};
+
 .qt.qf.port.desk_positions.test_rolling_up_to_every_dimension_changes_nothing:{[t]
     b:.qf.port.apply_desk_fills[.qf.port.empty_desk_book[`sym`book`product];.qt.qf.port.desk_positions.mk_fills[]];
     .qunit.assertEquals[.qf.port.rollup[b;`sym`book`product];b;

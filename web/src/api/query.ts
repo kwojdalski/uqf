@@ -100,7 +100,7 @@ export function filterValue(
         throw new Error("Enter a number.");
       const span =
         column.type === "timespan" ? qTimespan(String(value)) : undefined;
-      const number = span ?? Number(value);
+      const number = span ?? decimal(value as number | string);
       // A timespan is a whole number of nanoseconds (#1329): a fraction has
       // nowhere to go, and past 2^53 a JavaScript number is not the one typed.
       if (
@@ -139,6 +139,15 @@ export function filterValue(
     throw new Error('Use a non-empty JSON list, e.g. ["EURUSD", "GBPUSD"].');
   return values.map(scalar);
 }
+/** A decimal number as typed, or NaN. Not Number(): it reads `0x1F`,
+ *  `0b101` and `0o17` as 31, 5 and 15, which q and the server would refuse
+ *  as typed (#2587). */
+function decimal(value: number | string): number {
+  if (typeof value === "number") return value;
+  return /^\s*-?\d+(\.\d+)?([eE][+-]?\d+)?\s*$/.test(value)
+    ? Number(value)
+    : Number.NaN;
+}
 /** A q timespan literal - 0D00:00:00.000001234, as the Desk shows one - as
  *  nanoseconds, or undefined when `value` is not one (a plain number of
  *  nanoseconds is read by the caller). Exact: summed as a BigInt. */
@@ -148,6 +157,9 @@ export function qTimespan(value: string): number | undefined {
   );
   if (!parts) return undefined;
   const [, sign, days, hours, minutes, seconds, fraction] = parts;
+  // q refuses 0D00:61:00 with 'parse; never read it as 61 minutes (#2587)
+  if (Number(hours) > 23 || Number(minutes) > 59 || Number(seconds) > 59)
+    return undefined;
   const ns =
     ((BigInt(days) * 24n + BigInt(hours)) * 60n + BigInt(minutes)) * 60n +
     BigInt(seconds);

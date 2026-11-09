@@ -185,6 +185,13 @@
     .qunit.assertEquals[got;`s`str`n`b!("v1";"hello";"42";"0b");
         "a symbol loses its backtick, a string is unquoted, and everything is text"]};
 
+/ #2598: a one-character string is a char atom, and was quoted.
+.qt.qetl.run.test_a_char_atom_fact_is_stored_unquoted:{[t]
+    .qetl.run.begin[`w1;()!()];
+    .qetl.run.record[`ds1;.qt.qetl.run.d[1];.qt.qetl.run.d[2];`side`venue!("B";"LMAX")];
+    got:exec label!text from .qetl.run.facts_of[.qetl.run.current[]];
+    .qunit.assertEquals[got;`side`venue!(enlist "B";"LMAX");"B as B, beside LMAX"]};
+
 .qt.qetl.run.test_facts_about_spans_runs:{[t]
     / The cross-run comparison run identity was added to make askable: one
     / window materialised twice, both sets of facts side by side.

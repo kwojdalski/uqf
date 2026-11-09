@@ -53,7 +53,7 @@ def log_(
             autocompletion=completion.targets,
         ),
     ] = None,
-    limit: Annotated[int, typer.Option("--limit", help="The most recent N changes")] = 20,
+    limit: Annotated[int, typer.Option("--limit", min=1, help="The most recent N changes")] = 20,
     export: ExportOpt = None,
     sort: SortOpt = None,
     reverse: ReverseOpt = False,
@@ -95,7 +95,7 @@ def log_(
             "diff": e.get("diff"),
             "hash": e.get("hash"),
         }
-        for n, e in found[-limit:][::-1]
+        for n, e in found[len(found) - limit :][::-1]
     ]
     try:
         changes = _sorted_items(changes, sort, reverse)

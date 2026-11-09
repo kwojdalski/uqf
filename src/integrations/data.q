@@ -10,20 +10,59 @@
 
 \d .qdata
 
-/ Parse a .env-style file (KEY=VALUE lines; blank lines and lines starting
-/ with `#` are ignored) into a dict. Missing file -> empty dict, so this is
+/ Parse a .env-style file into a dict, by the rules uqs's own reader
+/ (uqs.stack.envfiles.parse_dotenv, #2395) applies, so a q started directly
+/ and one started under uqs read the same values (#2544): blank lines and `#`
+/ comments are skipped, an `export` prefix is allowed, the key and value are
+/ stripped, a value in matching quotes is what is between them, an unquoted
+/ value ends at ` #`, and a line that is not an assignment is skipped. A key
+/ written twice keeps its last value. Missing file -> empty dict, so this is
 / safe to call unconditionally at load time.
 / @param file the .env file to parse, e.g. `:.env`
 / @return a symbol!string dict of the parsed key/value pairs
 / @eg .qdata.parseEnv[`:.env]
 parseEnv:{[file]
     if[()~key file; :()!()];
-    lines:read0 file;
-    lines:lines where not lines like "#*";
-    lines:lines where 0<count each lines;
-    lines:lines where lines like "*=*";
-    kvs:{[l] i:first l ss "="; (`$i#l;(i+1)_l)} each lines;
-    (first each kvs)!(last each kvs)};
+    kvs:{x where 0<count each x} parseEnvLine each read0 file;
+    if[0=count kvs; :()!()];
+    k:first each kvs;
+    (distinct k)#(reverse k)!reverse last each kvs};
+
+/ Whitespace stripped from both ends; q's trim strips spaces only.
+/ @param s a string
+/ @return s without leading or trailing spaces, tabs, CRs or newlines
+/ @eg .qdata.envStrip["\t a \r"]
+envStrip:{[s]
+    keep:not s in " \t\r\n";
+    $[any keep; (first where keep)_(1+last where keep)#s; ""]};
+
+/ One .env line as (key;value), or () when it is not an assignment.
+/ @param line a line of a .env file
+/ @return a (symbol;string) pair, or () for a blank, comment or non-assignment
+/ @eg .qdata.parseEnvLine["export KEY = 'v' # note"]
+parseEnvLine:{[line]
+    line:envStrip[line];
+    if[(0=count line) or "#"=first line; :()];
+    if[("export"~6#line) and (6<count line) and line[6] in " \t"; line:envStrip[6_line]];
+    i:line?"=";
+    if[i=count line; :()];
+    k:envStrip[i#line];
+    if[(0=count k) or (first[k] in .Q.n) or not all k in .Q.an; :()];
+    (`$k;parseEnvValue[envStrip[(i+1)_line]])};
+
+/ A stripped .env value: the text between matching quotes when only
+/ whitespace or a ` #` comment follows the closing one, else the text
+/ before ` #`.
+/ @param v the value as written, already stripped
+/ @return the value as uqs reads it
+/ @eg .qdata.parseEnvValue["\"/data/x\" # note"]
+parseEnvValue:{[v]
+    if[(1<count v) and first[v] in "\"'";
+        rests:{[v;e] (e+1)_v}[v] each ends:1+where first[v]=1_v;
+        ok:{[r] s:envStrip[r]; (0=count s) or ("#"=first s) and r[0] in " \t\r\n"} each rests;
+        if[any ok; :1_(ends first where ok)#v]];
+    comment:v ss " #";
+    envStrip[$[count comment; first[comment]#v; v]]};
 
 / Parsed contents of the repo-root .env file, if present - see parseEnv.
 env:parseEnv[`:.env];

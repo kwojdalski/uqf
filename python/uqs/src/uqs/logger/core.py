@@ -83,7 +83,10 @@ def _make_kv_format(fmt: str | Callable[[dict], str]) -> Any:
         )
         # Escape bare braces so format_map doesn't misinterpret message content.
         safe = highlighted.replace("{", "{{").replace("}", "}}")
-        return template.replace("{message}", safe, 1) + "\n"
+        # loguru appends a record's traceback only to a template format, never
+        # to a callable's: name it here, or log.exception prints none (#2635)
+        tail = "\n{exception}" if record.get("exception") is not None else "\n"
+        return template.replace("{message}", safe, 1) + tail
 
     return _format
 

@@ -24,6 +24,7 @@ POLL = (
         ("h({[c] select from t where time>c};cursor)", True),
         ("h@({[c] c};cursor)", True),
         ('h"select from t"', True),
+        ('h["select from t"]', True),
         (".qetl.source.ipc_call[h;{[c] select from t where time>c};enlist cursor]", False),
         ("h({[c] c};cursor)  / untraced: the source logs its own queries", False),
     ],
