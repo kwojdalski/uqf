@@ -55,10 +55,12 @@
 / .
 / A RECORD THIS MAPPING CANNOT STAND BEHIND is refused, by name, and goes to
 / kafka_dead_letter with reason `mapping`: a schema_version other than 1, a kind
-/ other than book_snapshot, a level that is not a [price,size] pair (a null
-/ price or size is not a number: serde_json writes a NaN or infinite f64 as
-/ null), a timestamp outside [2000.01.01; 2100.01.01) as epoch milliseconds
-/ (microseconds overflow past it, seconds land in 1970). Its neighbours in the batch publish normally. The
+/ other than book_snapshot, a level that is not a [price,size] pair, a
+/ timestamp outside [2000.01.01; 2100.01.01) as epoch milliseconds
+/ (microseconds overflow past it, seconds land in 1970). A null price or size
+/ (serde_json writes a NaN or infinite f64 as null) is refused earlier, by the
+/ decoder, with reason `malformed` (#2451); the mapping's own null check stays
+/ as a guard. Its neighbours in the batch publish normally. The
 / topic is DECLARED below, beside its job.
 
 

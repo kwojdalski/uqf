@@ -71,6 +71,13 @@
 / field therefore refuses a number past 2^53 and accepts the same value sent
 / as a string, which is read exactly. Refusing is the point: a corrupted
 / trade id is worse than a dead-lettered record.
+/ .
+/ A NUMBER IS FINITE AND PRESENT, AND A FIELD IS NAMED ONCE (#2451). .j.k reads
+/ the non-standard Infinity and an overflowing 1e400 as 0w, NaN and null as 0n,
+/ and keeps every copy of a repeated key. A float field, and every element of a
+/ number array or array of arrays, refuses all of them alike - a non-finite
+/ price is no more a price than a null one - and a payload naming a field twice
+/ is refused, since which value the producer meant cannot be told.
 
 \d .
 
@@ -115,7 +122,9 @@
     / `and` over a string would be a list: test the type first, in a $[].
     num:$[-9h=type v; not null v; 0b];
     if[t="f";
-        if[num; :v];
+        if[num;
+            if[0w>abs v; :v];
+            'who,"expected a finite number - Infinity and out-of-range numbers are refused"];
         'who,"expected a number"];
     if[t="j";
         if[num;
@@ -138,27 +147,46 @@
         'who,"expected true or false"];
     if[t="F";
         / .j.k reads [] as the empty general list and [1,2] as a float vector.
-        if[(9h=type v) or (0h=type v) and 0=count v; :"f"$v];
+        if[(9h=type v) or (0h=type v) and 0=count v; :.qetl.kafka.finite[who;"";v]];
         'who,"expected an array of numbers"];
     if[t=" ";
-        if[(0h=type v) and all {(9h=type x) or 0=count x} each v; :{"f"$x} each v];
+        if[(0h=type v) and all {(9h=type x) or 0=count x} each v;
+            :{[who;i;x] .qetl.kafka.finite[who;"array ",string[i],", ";x]}[who]'[til count v;v]];
         'who,"expected an array of arrays of numbers"];
     'who,"has the undecodable declared type ",string t}
+
+/ Private: one JSON array of numbers as a float list, refused when an element is null or not finite.
+/ @param who the field's message prefix
+/ @param at where the array sits in its parent ("array 2, "), "" for a top-level array
+/ @param v the array .j.k produced
+/ @return the float list
+/ @throws error naming the field and the first null or non-finite element
+/ @private
+.qetl.kafka.finite:{[who;at;v]
+    v:"f"$v;
+    if[count i:where null v;
+        'who,at,"element ",string[first i]," is null - an array of numbers holds numbers only"];
+    if[count i:where 0w=abs v;
+        'who,at,"element ",string[first i]," is not finite - Infinity and out-of-range numbers are refused"];
+    v}
 
 / Decode a JSON object payload into the declared fields.
 / .
 / Extra fields in the payload are ignored - a producer adding one must not
 / dead-letter every record - and the raw payload is on kafka_message anyway.
-/ A declared field that is absent, null or the wrong type is an error.
+/ A declared field that is absent, null, non-finite or the wrong type is an
+/ error, as is a payload naming any field twice.
 / @param schema dict field -> meta type (f j s p b), in the mapping's order
 / @param payload the payload as a string
 / @return the field values, in the schema's order
-/ @throws error saying what was wrong: empty, not JSON, not an object, a missing field, a mistyped field
+/ @throws error saying what was wrong: empty, not JSON, not an object, a duplicate field, a missing field, a mistyped or non-finite field
 / @eg .qetl.kafka.decode_json[`px`sym!"fs"; "{\"px\":1.5,\"sym\":\"EURUSD\"}"]  ->  (1.5;`EURUSD)
 .qetl.kafka.decode_json:{[schema;payload]
     if[0=count payload; '"empty payload"];
     j:@[.j.k;payload;{'"not valid JSON: ",x}];
     if[not 99h=type j; '"the payload is not a JSON object"];
+    if[count dup:where 1<count each group key j;
+        '"duplicate field(s): ",(", " sv string dup)," - a JSON object names each field once"];
     names:key schema;
     if[count miss:names except key j; '"missing field(s): ",", " sv string miss];
     .qetl.kafka.field'[names;value schema;j names]}
