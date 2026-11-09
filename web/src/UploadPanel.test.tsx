@@ -408,6 +408,13 @@ it("checks paths as the server does", () => {
   expect(uploadPathProblem(`shared/config/${"d/".repeat(17)}x`)).toMatch(
     /more than 16/,
   );
+  // #2586: the push history, in any letter case, as remote_helper folds it
+  for (const path of [
+    "shared/config/.uqf-history/x.csv",
+    "shared/config/.UQF-History/x",
+  ])
+    expect(uploadPathProblem(path)).toMatch(/config push history/);
+  expect(uploadPathProblem("shared/config/a/.uqf-history/x")).toBeNull();
 });
 
 it("encodes the target, path, overwrite and push in the URL", () => {
