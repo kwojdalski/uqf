@@ -126,6 +126,28 @@ TORQ_REMOTE_CALLS = {
 }
 
 
+#: A read of a TorQ environment variable: getenv`TORQDATA, getenv[`TORQAPPHOME].
+#: TorQ's own contract, so src/ either takes the value from its own UQF_*
+#: variable or is listed in TORQ_ENV_READS (#2653).
+TORQ_ENV_RE = re.compile(r"getenv\s*\[?\s*`(TORQ\w*)")
+
+#: TorQ environment reads src/ makes on purpose: (file, variable) -> why. An
+#: entry nothing uses any more is reported, as with TORQ_REMOTE_CALLS.
+TORQ_ENV_READS = {
+    ("src/etl/core/status.q", "TORQDATA"): (
+        "the status directory's documented fallback when UQF_STATUS_DIR is unset, "
+        "so a job under TorQ keeps its files beside TorQ's other state; with neither "
+        "set it refuses by name rather than writing to the filesystem root"
+    ),
+    ("src/etl/plant_registry.q", "TORQAPPHOME"): (
+        "read once at load to find the starter pack's database.q, which uqs sets for "
+        "every process and a deployment points at an install the release does not ship "
+        "(#773); the table set must be known at load, before any adapter could inject it, "
+        "and the vendored path is the fallback when it is unset"
+    ),
+}
+
+
 def torq_namespaces(torq: Path = TORQ) -> frozenset[str]:
     """Every namespace TorQ defines under `torq`'s code/ and torq.q, less NOT_TORQ.
 
@@ -273,6 +295,31 @@ def torq_reach(root: Path) -> list[str]:
     return hits
 
 
+def _torq_env_reads(root: Path) -> Iterator[tuple[str, int, str]]:
+    """(file, line number, variable) for every getenv of a TORQ* name in `root`'s src/."""
+    for path in sorted((root / "src").rglob("*.q")):
+        rel = path.relative_to(root).as_posix()
+        code = strip_comments_and_strings(path.read_text(encoding="utf-8"))
+        for lineno, line in enumerate(code.splitlines(), 1):
+            for match in TORQ_ENV_RE.finditer(line):
+                yield rel, lineno, match.group(1)
+
+
+def torq_env_reach(root: Path) -> list[str]:
+    """Every getenv of a TorQ variable in `root`'s src/ that TORQ_ENV_READS does not allow."""
+    return [
+        f"{rel}:{lineno}: reads ${var}, TorQ's environment - src/ takes a UQF_* variable"
+        for rel, lineno, var in _torq_env_reads(root)
+        if (rel, var) not in TORQ_ENV_READS
+    ]
+
+
+def unused_env_reads(root: Path) -> list[str]:
+    """Every TORQ_ENV_READS entry `root`'s src/ no longer makes."""
+    made = {(rel, var) for rel, _, var in _torq_env_reads(root)}
+    return [f"{rel}: {var}" for rel, var in sorted(TORQ_ENV_READS) if (rel, var) not in made]
+
+
 def unused_remote_calls(root: Path) -> list[str]:
     """Every TORQ_REMOTE_CALLS entry `root`'s src/ no longer makes."""
     made = {(rel, ns) for rel, _, ns in _torq_reads(root)}
@@ -364,6 +411,20 @@ def main() -> int:
             "for connected services, .qetl.run.proc_name for this process's name.\n"
             "#2156: any other TorQ namespace stays out of src/ - TorQ's own machinery\n"
             "(.cmp, .hk, .wdb, ...) is driven from scripts/ and the TorQ config overlay.",
+            file=sys.stderr,
+        )
+        return 1
+
+    env_hits = torq_env_reach(REPO)
+    stale_env = unused_env_reads(REPO)
+    if env_hits or stale_env:
+        print("src/ reads TorQ's environment contract (#2653):", file=sys.stderr)
+        for v in env_hits:
+            print(f"  {v}", file=sys.stderr)
+        for v in stale_env:
+            print(f"  TORQ_ENV_READS entry no longer used: {v}", file=sys.stderr)
+        print(
+            "\nTake the value from a UQF_* variable, or add a reasoned TORQ_ENV_READS entry.",
             file=sys.stderr,
         )
         return 1

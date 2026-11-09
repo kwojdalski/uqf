@@ -165,10 +165,17 @@
 
 / Where status files go. Overridden by UQF_STATUS_DIR so the demo and a real
 / deployment can differ without a code change; defaults under TORQDATA
-/ alongside the other generated state.
+/ alongside the other generated state. With neither set it refuses: the
+/ old fallback was "/status", the filesystem root (#2653).
+/ @return the directory, as a string
+/ @throws "status_dir: set UQF_STATUS_DIR (or TORQDATA)..." when neither is set
+/ @eg .qetl.status.status_dir[]  ->  "output/uqs/status"
 .qetl.status.status_dir:{[]
     d:getenv`UQF_STATUS_DIR;
-    $[0<count d; d; (getenv[`TORQDATA]),"/status"]}
+    if[0<count d; :d];
+    t:getenv`TORQDATA;
+    if[0=count t; '"status_dir: set UQF_STATUS_DIR (or TORQDATA) - neither is set, and the status files would go to the filesystem root"];
+    t,"/status"}
 
 / Publish one worker's status as a JSON object, for a reader outside q.
 / .

@@ -75,6 +75,47 @@ def test_a_name_that_only_contains_one_is_not_a_read(tmp_path):
     assert layering.torq_reach(root) == []
 
 
+@pytest.mark.parametrize("call", ["getenv`TORQDATA", "getenv[`TORQAPPHOME]", "getenv `TORQHOME"])
+def test_reading_a_torq_environment_variable_is_flagged(tmp_path, call):
+    root = _tree(tmp_path, {"src/etl/core/other.q": f"d:{call}\n"})
+    (hit,) = layering.torq_env_reach(root)
+    assert "src/etl/core/other.q:1" in hit and "UQF_*" in hit
+
+
+def test_an_allow_listed_torq_variable_is_allowed_only_in_its_file(tmp_path):
+    root = _tree(
+        tmp_path,
+        {
+            "src/etl/plant_registry.q": "p:getenv`TORQAPPHOME\n",
+            "src/etl/core/other.q": "p:getenv`TORQAPPHOME\n",
+        },
+    )
+    (hit,) = layering.torq_env_reach(root)
+    assert hit.startswith("src/etl/core/other.q:1")
+
+
+def test_a_uqf_variable_a_comment_or_a_string_is_not_a_torq_read(tmp_path):
+    root = _tree(
+        tmp_path,
+        {
+            "src/etl/core/other.q": (
+                'a:getenv`UQF_STATUS_DIR\n/ getenv`TORQDATA\ns:"getenv`TORQDATA"\n'
+            )
+        },
+    )
+    assert layering.torq_env_reach(root) == []
+
+
+def test_an_env_allowance_nothing_uses_is_reported(tmp_path):
+    root = _tree(tmp_path, {"src/etl/core/other.q": "x:1\n"})
+    assert len(layering.unused_env_reads(root)) == len(layering.TORQ_ENV_READS)
+
+
+def test_the_real_tree_reads_only_the_listed_torq_variables():
+    assert layering.torq_env_reach(layering.REPO) == []
+    assert layering.unused_env_reads(layering.REPO) == []
+
+
 def test_the_real_tree_is_clean(monkeypatch):
     assert layering.torq_reach(layering.REPO) == []
     monkeypatch.setattr(sys, "argv", ["check_etl_layering.py", "--check"])
