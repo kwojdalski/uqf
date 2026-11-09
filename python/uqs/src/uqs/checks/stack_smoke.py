@@ -124,13 +124,15 @@ def error_log_sizes(logs_dir: Path, procnames: set[str]) -> dict[str, int]:
     """{procname: lines in its error log}, missing files counted as zero.
 
     Lines rather than bytes: a partially written line would make a byte
-    count wobble on its own, and the thing being counted is errors.
+    count wobble on its own, and the thing being counted is errors. Read
+    with errors="replace": an error log can hold any byte a q error carried,
+    and a decode error would end the smoke run in a traceback (#2634).
     """
     sizes: dict[str, int] = {}
     for procname in sorted(procnames):
         path = error_log_path(logs_dir, procname)
         try:
-            sizes[procname] = len(path.read_text().splitlines())
+            sizes[procname] = len(path.read_text(encoding="utf-8", errors="replace").splitlines())
         except OSError:
             sizes[procname] = 0
     return sizes
@@ -150,7 +152,7 @@ def new_error_lines(
     for procname in sorted(procnames):
         path = error_log_path(logs_dir, procname)
         try:
-            lines = path.read_text().splitlines()
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:
             continue
         added = lines[before.get(procname, 0) :]
