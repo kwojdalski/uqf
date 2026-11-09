@@ -214,6 +214,38 @@ def test_an_exemption_is_written_with_its_reason():
     assert "a diagnostic started by hand" in text
 
 
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "a diagnostic started by hand",
+        'quotes " and a backslash \\ survive',
+        "café ≥ one",
+        # Outside the BMP: json.dumps escaped it as a surrogate pair, which
+        # Python source reads back as two lone surrogates, not the character.
+        "vol \U0001d70e by hand \U0001f600",
+        "a reason long enough that the scaffold wraps it over several lines the way "
+        "the existing exemptions in profiles.py are wrapped, every word kept",
+    ],
+)
+def test_an_exemption_reads_back_as_the_reason_given(reason):
+    """--unprofiled REASON -> profiles.py -> UNPROFILED: the reason the module
+    holds is the one given, not an escaped near-copy of it."""
+    import ast
+
+    actions, _ = profile.membership(
+        "tapx1", profile=None, unprofiled=reason, start_with_all=False, known_profiles=KNOWN
+    )
+    tree = ast.parse(_applied(actions))
+    (unprofiled,) = [
+        node.value
+        for node in tree.body
+        if isinstance(node, ast.AnnAssign)
+        and getattr(node.target, "id", None) == "UNPROFILED"
+        and node.value is not None
+    ]
+    assert ast.literal_eval(unprofiled)["tapx1"] == reason
+
+
 def test_no_choice_leaves_a_note_and_writes_nothing():
     actions, notes = profile.membership(
         "p1", profile=None, unprofiled=None, start_with_all=False, known_profiles=KNOWN
