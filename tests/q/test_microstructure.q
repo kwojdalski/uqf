@@ -148,6 +148,15 @@
     .qt.support.assertApprox[r 0;1.1001;1e-9;"row 0 uses notional 500000"];
     .qt.support.assertApprox[r 1;1.2001;1e-9;"row 1 uses its own notional 700000"]};
 
+/ #2379: a withdrawn side used to make vamp throw for the whole vector.
+.qt.qf.mkt.microstructure.test_vamp_nulls_a_one_sided_row:{[t]
+    r:.qf.mkt.vamp[(1.1000 1.0998;1.1000 1.0998);(1e6 1e6;1e6 1e6);(1.1002 1.1004;`float$());(1e6 1e6;`float$());500000];
+    .qunit.assertEquals[count r;2;"one value per row"];
+    .qt.support.assertApprox[first r;1.1001;1e-9;"two-sided row priced"];
+    .qunit.assertTrue[null last r;"one-sided row is null, not an error"];
+    zero_l0:.qf.mkt.vamp[enlist 0 1.0998;enlist 1e6 1e6;enlist 1.1002 1.1004;enlist 1e6 1e6;500000];
+    .qunit.assertTrue[null first zero_l0;"an L0 that is not a price nulls the row"]};
+
 / ---- Tier 2 shared fixture ----
 
 / 4-row EURUSD quotes fixture: time 1s apart, both sides equal to the same
