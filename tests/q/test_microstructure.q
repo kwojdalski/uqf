@@ -95,6 +95,15 @@
     .qunit.assertTrue[not null r 2;"normal L0 still gives a value"];
     .qunit.assertTrue[0w>abs avg r where not null r;"avg over a series with a locked row stays finite"]};
 
+/ #2384: a level level_ok rejects was weighted (its size stayed in the
+/ denominator), giving skews like -1374.75 or 0w.
+.qt.qf.mkt.microstructure.test_vwmp_skew_skips_a_level_that_is_not_a_price:{[t]
+    ref:.qf.mkt.vwmp_skew[enlist enlist 1.1000;enlist enlist 100f;enlist 1.1002 1.1004;enlist 100 100f;2];
+    bad:.qf.mkt.vwmp_skew[(1.1000 0n;1.1000 0f;1.1000 0w);3#enlist 100 100f;3#enlist 1.1002 1.1004;3#enlist 100 100f;2];
+    .qunit.assertEquals[bad;3#ref;"a null, zero or infinite level is absent, not weighted"];
+    l0:.qf.mkt.vwmp_skew[(0n 1.0998;0 1.0998f);2#enlist 100 100f;2#enlist 1.1002 1.1004;2#enlist 100 100f;2];
+    .qunit.assertTrue[all null l0;"an L0 that is not a price nulls the row"]};
+
 / ---- book_slope ----
 
 .qt.qf.mkt.microstructure.test_book_slope_opposite_signs_for_bid_vs_ask:{[t]
@@ -147,6 +156,15 @@
     r:.qf.mkt.vamp[bid_prices;bid_sizes;ask_prices;ask_sizes;notional];
     .qt.support.assertApprox[r 0;1.1001;1e-9;"row 0 uses notional 500000"];
     .qt.support.assertApprox[r 1;1.2001;1e-9;"row 1 uses its own notional 700000"]};
+
+/ #2379: a withdrawn side used to make vamp throw for the whole vector.
+.qt.qf.mkt.microstructure.test_vamp_nulls_a_one_sided_row:{[t]
+    r:.qf.mkt.vamp[(1.1000 1.0998;1.1000 1.0998);(1e6 1e6;1e6 1e6);(1.1002 1.1004;`float$());(1e6 1e6;`float$());500000];
+    .qunit.assertEquals[count r;2;"one value per row"];
+    .qt.support.assertApprox[first r;1.1001;1e-9;"two-sided row priced"];
+    .qunit.assertTrue[null last r;"one-sided row is null, not an error"];
+    zero_l0:.qf.mkt.vamp[enlist 0 1.0998;enlist 1e6 1e6;enlist 1.1002 1.1004;enlist 1e6 1e6;500000];
+    .qunit.assertTrue[null first zero_l0;"an L0 that is not a price nulls the row"]};
 
 / ---- Tier 2 shared fixture ----
 

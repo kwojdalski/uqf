@@ -210,3 +210,13 @@
     / It came back unkeyed and without the group columns.
     e:.qf.port.desk_ccy_exposure[.qf.port.empty_desk_book enlist `desk;`desk];
     .qunit.assertEquals[(keys e;cols e);(`desk`ccy;`desk`ccy`amount);"keyed on the group columns plus ccy"]};
+
+/ #2383: sym in group_cols put sym twice in the long form's select - 'dup on
+/ PeachQ, a duplicate-column table on KDB-X - so per-pair exposure failed.
+.qt.qf.port.desk_positions.test_ccy_exposure_can_be_reported_per_sym:{[t]
+    bk:.qf.port.apply_desk_fills[.qf.port.empty_desk_book[`sym`book];([] sym:`EURUSD`EURGBP; book:`a`a; side:1 -1; size:1e6 4e5; price:1.085 0.85)];
+    e:.qf.port.desk_ccy_exposure[bk;`sym];
+    .qunit.assertEquals[keys e;`sym`ccy;"keyed on sym and ccy"];
+    .qunit.assertEquals[exec amount from 0!e where sym=`EURUSD;1e6 -1085000f;"EURUSD's two legs"];
+    both:.qf.port.desk_ccy_exposure[bk;`sym`book];
+    .qunit.assertEquals[exec amount from 0!both where sym=`EURGBP;-4e5 3.4e5;"EURGBP's two legs, per book too"]};

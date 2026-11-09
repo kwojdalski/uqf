@@ -182,8 +182,11 @@
     legs:.qf.px.ccy_pair_legs each rows`sym;
     / Two rows out of every one in - the base leg and the quote leg - so
     / the group columns are taken twice, in the same order the amounts are.
-    long_form:?[rows;();0b;(g,`sym)!g,`sym] ,' ([] ccy:legs`base; amount:rows`base_qty);
-    long_form:long_form,?[rows;();0b;(g,`sym)!g,`sym] ,' ([] ccy:legs`quote; amount:rows`quote_qty);
+    / distinct: group_cols may already hold sym, and a select naming it twice
+    / is 'dup on PeachQ and a duplicate-column table on KDB-X (#2383).
+    dims:{x!x} distinct g,`sym;
+    long_form:?[rows;();0b;dims] ,' ([] ccy:legs`base; amount:rows`base_qty);
+    long_form:long_form,?[rows;();0b;dims] ,' ([] ccy:legs`quote; amount:rows`quote_qty);
     ?[long_form; (); {x!x} g,`ccy; enlist[`amount]!enlist (sum;`amount)]}
 
 / Roll a book up onto fewer dimensions.

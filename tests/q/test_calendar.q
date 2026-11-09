@@ -185,3 +185,13 @@
     biz:.qf.px.spot_date[2026.09.22;`EURUSD;.qt.qf.px.calendar.no_holidays[];.qt.qf.px.calendar.conventions[0]];
     .qunit.assertEquals[(sat`date;hol`date;biz`date);2026.09.21 2026.09.22 2026.09.22;
         "Saturday to Monday, a USD holiday Monday to Tuesday, a business day stays put"]};
+
+/ #2390: a one-day weekend atom indexed an atom ('type), and a weekend of all
+/ seven days was accepted, leaving adjust and add_business_days to loop forever.
+.qt.qf.px.calendar.test_weekend_atom_and_all_days:{[t]
+    c:.qf.px.mock_conventions;
+    c[`EURUSD;`weekend]:`fri;
+    .qunit.assertEquals[.qf.px.spot_date[2026.09.17;`EURUSD;.qf.px.mock_calendars;c]`date;2026.09.20;"a one-day weekend atom is accepted"];
+    c[`EURUSD;`weekend]:.qf.px.weekdays;
+    .qunit.assertThrows[.qf.px.spot_date[2026.09.17;`EURUSD;.qf.px.mock_calendars;];c;
+        "calendar: EURUSD's weekend leaves no business day";"a seven-day weekend is refused, not looped on"]};

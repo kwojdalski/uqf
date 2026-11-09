@@ -157,6 +157,15 @@
       s=`mid; enlist `mid;
       '"cross_book_at_sizes: side must be one of `bid`ask`mid, got ",string s]};
 
+/ Private: the zero-row result of a *_at_sizes call for an empty sizes list,
+/ with the columns and types one size gives. Their `each sizes` builds a ()
+/ there, not a table, and want_cols# threw 'type on it (#2389).
+/ @private
+.qf.mkt.no_sizes_result:{[sizes;sides]
+    want_cols:`size`sym , raze .qf.mkt.side_cols each sides;
+    all_cols:`size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid;
+    want_cols#flip all_cols!("f"$sizes;`symbol$();`float$();`float$();`boolean$();`float$();`float$();`boolean$();`float$())};
+
 / Depth-aware synthetic cross rate: like cross_book, but walks multi-level
 / order book depth on both legs for each requested size, converting the
 / notional hop-by-hop (leg 2 is swept at the bridge-currency amount leg
@@ -169,13 +178,14 @@
 / @param book2 dict `bid_prices`bid_sizes`ask_prices`ask_sizes for leg 2, each level best-first
 / @param sizes list of sizes to price, e.g. 1000000 2000000 5000000
 / @param sides subset of `bid`ask`mid to include in the result
-/ @return a table, one row per size, columns `size`sym plus whichever of
-/   bid/bid_filled_size/bid_fully_filled, ask/ask_filled_size/ask_fully_filled,
-/   mid were requested via sides
+/ @return a table, one row per size (none for no sizes), columns `size`sym
+/   plus whichever of bid/bid_filled_size/bid_fully_filled,
+/   ask/ask_filled_size/ask_fully_filled, mid were requested via sides
 / @throws error if sym1 and sym2 share no common currency, or sides has
 /   anything other than `bid`ask`mid
 / @eg .qf.mkt.cross_book_at_sizes[`EURUSD;eurusd_book;`USDJPY;usdjpy_book;1000000 3000000;`bid`ask`mid]
 .qf.mkt.cross_book_at_sizes:{[sym1;book1;sym2;book2;sizes;sides]
+    if[0=count sizes; :.qf.mkt.no_sizes_result[sizes;sides]];
     rows:.qf.mkt.cross_book_at_one_size[sym1;book1;sym2;book2;] each sizes;
     want_cols:`size`sym , raze .qf.mkt.side_cols each sides;
     want_cols#rows};
@@ -293,9 +303,9 @@
 /   one per leg, each level best-first
 / @param sizes list of sizes to price, e.g. 1000000 2000000 5000000
 / @param sides subset of `bid`ask`mid to include in the result
-/ @return a table, one row per size, columns `size`sym plus whichever of
-/   bid/bid_filled_size/bid_fully_filled, ask/ask_filled_size/ask_fully_filled,
-/   mid were requested via sides
+/ @return a table, one row per size (none for no sizes), columns `size`sym
+/   plus whichever of bid/bid_filled_size/bid_fully_filled,
+/   ask/ask_filled_size/ask_fully_filled, mid were requested via sides
 / @throws error if syms has fewer than 2 legs, if syms and books aren't
 /   the same length, if two consecutive legs share no common currency,
 /   or if sides has anything other than `bid`ask`mid
@@ -304,6 +314,7 @@
     syms:syms,();
     books:books,();
     if[(count syms)<>count books; '"cross_book_chain_at_sizes: syms and books must be the same length"];
+    if[0=count sizes; :.qf.mkt.no_sizes_result[sizes;sides]];
     rows:.qf.mkt.cross_book_chain_at_one_size[syms;books;] each sizes;
     want_cols:`size`sym , raze .qf.mkt.side_cols each sides;
     want_cols#rows};
@@ -313,9 +324,11 @@
 / USD->EUR, both tagged with the symbol `EURUSD (the direction it needs
 / inverting, if any, is worked out later by ccy_orient_chain, not here).
 / @param avail_syms currency pair symbols known to be quotable
-/ @return table `src`dst`via, one row per direction per pair
+/ @return table `src`dst`via, one row per direction per pair - empty, typed,
+/   for no pairs: `each` over none gives a () that 'type'd when indexed (#2388)
 / @private
 .qf.mkt.ccy_graph_edges:{[avail_syms]
+    if[0=count avail_syms; :([] src:`symbol$(); dst:`symbol$(); via:`symbol$())];
     legs:.qf.px.ccy_pair_legs each avail_syms;
     src_ccy:legs[`base],legs[`quote];
     dst_ccy:legs[`quote],legs[`base];
@@ -396,11 +409,12 @@
 / @throws error if quotes has no row for target_sym at or before as_of
 .qf.mkt.leg_book_as_of:{[quotes;as_of;target_sym]
     lookup:([] sym:enlist target_sym; time:enlist as_of);
-    joined:aj[`sym`time;lookup;quotes];
-    / no match is an empty ladder on KDB-X but a null atom on PeachQ (#1034)
-    if[$[0>type b:first joined`bid_prices; 1b; 0=count b];
-        '"leg_book_as_of: no quote for ",(string target_sym)," at or before ",string as_of];
-    `bid_prices`bid_sizes`ask_prices`ask_sizes!(first joined`bid_prices;first joined`bid_sizes;first joined`ask_prices;first joined`ask_sizes)};
+    / aj a row index, not the ladders: "no row" was told by an empty bid
+    / ladder (KDB-X fills a miss with one, PeachQ with a null, #1034), which
+    / called an offers-only book no quote (#2391). Either side may be empty.
+    row:first aj[`sym`time;lookup;([] sym:quotes`sym; time:quotes`time; row:til count quotes)]`row;
+    if[null row; '"leg_book_as_of: no quote for ",(string target_sym)," at or before ",string as_of];
+    `bid_prices`bid_sizes`ask_prices`ask_sizes#quotes row};
 
 / Bid, ask and mid for a single already-available leg at one
 / size - the 1-leg-chain analogue of cross_book_at_one_size, used by
@@ -429,6 +443,7 @@
 / Private: like cross_book_chain_at_sizes, but for exactly one leg.
 / @private
 .qf.mkt.single_leg_at_sizes:{[cross_sym;leg_book;invert;sizes;sides]
+    if[0=count sizes; :.qf.mkt.no_sizes_result[sizes;sides]];
     rows:.qf.mkt.single_leg_at_one_size[cross_sym;leg_book;invert;] each sizes;
     want_cols:`size`sym , raze .qf.mkt.side_cols each sides;
     want_cols#rows};
