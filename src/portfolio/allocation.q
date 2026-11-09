@@ -262,6 +262,14 @@
 .qf.exec.prepared:{[trades;bys]
     if[not 98h=type trades; '"allocate: trades must be a table"];
     .qf.util.require_cols[`allocate;`trades;trades;distinct .qf.exec.required_cols,bys];
+    / The same check prepared_opening makes of a lot (#588), here before any
+    / universe filter so the refusal does not depend on it. lot_match_step
+    / reads any side unequal to the queue's as "the other side", so a side of
+    / 2 or null would close long lots as a sell and book P&L (#2381).
+    n_side:sum not (trades`side) in -1 1;
+    if[n_side; '"allocate: ",string[n_side]," trade(s) have a side that is not 1 (buy) or -1 (sell)"];
+    n_null:sum (null trades`size) or null trades`trade_price;
+    if[n_null; '"allocate: ",string[n_null]," trade(s) have a null size or trade_price"];
     $[`trade_id in cols trades; trades; update trade_id:i from trades]}
 
 / The columns a carried-in lot table must carry, on top of the bucket
@@ -412,7 +420,8 @@
 / @param trades a table with time, sym, side (+1/-1), size (unsigned), trade_price, and optionally trade_id
 / @param opts an options dict (see default_opts), or a bare method name
 / @return a dict with `matches (the ledger, plus a pnl column) and `residual (unmatched open lots)
-/ @throws error on a missing column, an unknown option, or an unregistered method
+/ @throws error on a missing column, an unknown option, an unregistered method,
+/   a trade side that is not 1 or -1, or a null size or trade_price (#2381)
 / @eg count .qf.exec.run[([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo]`matches -> 1
 .qf.exec.run:{[trades;opts]
     o:.qf.exec.normalised_opts[opts];
