@@ -18,8 +18,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from uqs.model.declarations import strip_q_comments, symbols
+from uqs.model.declarations import symbols
 from uqs.model.pipeline import FROM_DECLARATION, STREAM_RUNNER_SCRIPT, PipelineKind
+from uqs.model.q_source import strip_q_comments
 
 # `repo_root` is aliased because several functions here take a repo root as
 # a PARAMETER of that name, which would shadow the finder.

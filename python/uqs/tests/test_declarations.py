@@ -17,9 +17,10 @@ from uqs.model.declarations import (
     dictionary_fields,
     read_declarations,
     read_file_text,
-    split_top_level,
+    symbols,
 )
 from uqs.model.pipeline import PipelineKind
+from uqs.model.q_source import split_top_level, strip_q_comments
 from uqs.model.registry import PIPELINES
 from uqs.paths import PROCESS_PORTS_FILE, STREAM_DIR, TABLES_FILE, WORKER_DIR, UqsError
 
@@ -130,6 +131,53 @@ def test_a_commented_out_declaration_is_not_a_process():
     assert (
         read_file_text("/ .qetl.job.bounded.define[`w;`source!(enlist `s)];\n", Path("x.q")) == []
     )
+
+
+_JOB = (
+    ".qetl.job.stream.define[`j;`procname`subscribe_to`outputs!(\n"
+    "    `j1;\n"
+    "    {subscribe}\n"
+    "    {publishes})];\n"
+)
+
+
+def test_a_trailing_comment_with_an_open_bracket_is_not_code():
+    """#2605: `/ the raw tape (fills` read as code left the call unterminated,
+    and every uqs command failed at import."""
+    d = _one(_JOB.format(subscribe="enlist `trades;   / the raw tape (fills", publishes="`out"))
+    assert (d.subscribe_to, d.publishes) == (("trades",), ("out",))
+
+
+def test_a_trailing_comment_with_a_semicolon_does_not_shift_the_values():
+    """#2605: `/ one process; see #285` split into two more values."""
+    d = _one(_JOB.format(subscribe="`trades;   / one process; see #285", publishes="enlist `out"))
+    assert (d.subscribe_to, d.publishes) == (("trades",), ("out",))
+
+
+def test_a_slash_that_is_not_after_whitespace_is_code_and_one_in_a_string_too():
+    assert strip_q_comments('x:+/[1 2];  y:"a / b" / note') == 'x:+/[1 2];  y:"a / b"'
+    assert strip_q_comments("f:`:dir/file") == "f:`:dir/file"
+
+
+def test_a_declaration_in_a_block_comment_is_not_a_process():
+    source = "/\n" + _JOB.format(subscribe="`a;", publishes="`b") + "\\\n"
+    assert read_file_text(source, Path("x.q")) == []
+
+
+def test_nothing_after_a_lone_backslash_loads():
+    source = "x:1\n\\\n" + _JOB.format(subscribe="`a;", publishes="`b")
+    assert read_file_text(source, Path("x.q")) == []
+
+
+def test_after_a_block_comment_closes_declarations_count_again():
+    source = "/\nignored (\n\\\n" + _JOB.format(subscribe="`a;", publishes="`b")
+    assert [d.name for d in read_file_text(source, Path("x.q"))] == ["j"]
+
+
+def test_the_empty_list_join_idiom_is_a_list_of_one():
+    """#2605: `(),`trades` read as a phantom table `(),`."""
+    assert symbols("(),`trades") == ("trades",)
+    assert symbols("(), `a`b") == ("a", "b")
 
 
 # ------------------------------------------------------------------- ports

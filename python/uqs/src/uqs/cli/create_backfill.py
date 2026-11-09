@@ -16,10 +16,10 @@ from uqs.model.declarations import (
     declaration_calls,
     declared_outputs,
     read_declarations,
-    strip_q_comments,
     symbols,
 )
 from uqs.model.pipeline import PipelineKind
+from uqs.model.q_source import strip_q_comments
 from uqs.paths import ETL_DIR, SOURCE_DIR, WORKER_DIR, UqsError, UqsUsageError
 from uqs.scaffold import worker
 from uqs.scaffold.columns import Columns, as_columns, definition_columns, type_char

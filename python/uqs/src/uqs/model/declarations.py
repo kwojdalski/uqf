@@ -32,14 +32,13 @@ from pathlib import Path
 
 from uqs.model.kinds import DECLARATION_VERBS
 from uqs.model.pipeline import PipelineKind
+from uqs.model.q_source import call_body, split_top_level, strip_q_comments
 from uqs.paths import STREAM_DIR, WORKER_DIR, UqsError
 
 #: The calls a job or worker declares itself with (model/kinds.py), and the start of one.
 _CALL_RE = re.compile(
     r"\.(" + "|".join(re.escape(v) for v in DECLARATION_VERBS) + r")\[\s*`([a-zA-Z_][a-zA-Z0-9_]*)"
 )
-_OPEN = "([{"
-_CLOSE = ")]}"
 
 
 @dataclass(frozen=True)
@@ -72,68 +71,6 @@ class Declaration:
         return self.name if self.kind is PipelineKind.BACKFILL else None
 
 
-def strip_q_comments(source: str) -> str:
-    """Drop q line comments: a line whose first non-blank character is `/`.
-
-    q treats `/` as a comment only at line start or after whitespace, and
-    every declaration value sits inside an expression where no bare `/`
-    precedes it - which is what makes a line rule sufficient.
-    """
-    return "\n".join(line for line in source.splitlines() if not line.lstrip().startswith("/"))
-
-
-def split_top_level(text: str, sep: str = ";") -> list[str]:
-    """`text` split on `sep` where it is outside every string and bracket."""
-    parts: list[str] = []
-    depth = 0
-    in_string = False
-    start = 0
-    i = 0
-    while i < len(text):
-        c = text[i]
-        if in_string:
-            if c == "\\":
-                i += 1
-            elif c == '"':
-                in_string = False
-        elif c == '"':
-            in_string = True
-        elif c in _OPEN:
-            depth += 1
-        elif c in _CLOSE:
-            depth -= 1
-        elif c == sep and depth == 0:
-            parts.append(text[start:i].strip())
-            start = i + 1
-        i += 1
-    parts.append(text[start:].strip())
-    return parts
-
-
-def _call_body(source: str, open_at: int) -> str:
-    """The text between the `[` at `open_at` and its matching `]`."""
-    depth = 0
-    in_string = False
-    i = open_at
-    while i < len(source):
-        c = source[i]
-        if in_string:
-            if c == "\\":
-                i += 1
-            elif c == '"':
-                in_string = False
-        elif c == '"':
-            in_string = True
-        elif c in _OPEN:
-            depth += 1
-        elif c in _CLOSE:
-            depth -= 1
-            if depth == 0:
-                return source[open_at + 1 : i]
-        i += 1
-    raise UqsError("unterminated declaration call")
-
-
 def dictionary_fields(expr: str) -> dict[str, str]:
     """A q `` `k`k!(v; v) `` literal as {key: value text}, in declared order.
 
@@ -152,14 +89,17 @@ def dictionary_fields(expr: str) -> dict[str, str]:
 
 
 def symbols(value: str) -> tuple[str, ...]:
-    """A symbol value: `` `a`b ``, `` enlist `a ``, `` (enlist `a) ``, or an empty
-    `` `symbol$() ``.
+    """A symbol value: `` `a`b ``, `` enlist `a ``, `` (enlist `a) ``, `` (),`a ``,
+    or an empty `` `symbol$() ``.
 
     The parenthesised form is the one a single-source normalizer's
     `(enlist `a)!enlist `xf` puts before its `!`; read without stripping them
     it came back as `(enlist` and `a)`.
     """
     value = value.strip()
+    if value.startswith("()"):
+        # `(),`a` - the empty list joined to an atom, an idiom for a list of one.
+        value = value[2:].strip().removeprefix(",").strip()
     if value.startswith("(") and value.endswith(")"):
         value = value[1:-1].strip()
     if value.startswith("enlist"):
@@ -308,7 +248,7 @@ def declaration_calls(source: str) -> list[tuple[str, str, dict[str, str]]]:
     source = strip_q_comments(source)
     found = []
     for match in _CALL_RE.finditer(source):
-        body = _call_body(source, source.index("[", match.start()))
+        body = call_body(source, source.index("[", match.start()))
         parts = split_top_level(body)
         fields = dictionary_fields(parts[1]) if len(parts) > 1 else {}
         found.append((match.group(1), match.group(2), fields))
@@ -340,7 +280,7 @@ def reaction_calls(source: str) -> list[Reaction]:
     source = strip_q_comments(source)
     found = []
     for match in _REACTION_RE.finditer(source):
-        parts = split_top_level(_call_body(source, match.end() - 1))
+        parts = split_top_level(call_body(source, match.end() - 1))
         if len(parts) < 3:
             continue
         dataset, name = symbols(parts[0]), symbols(parts[1])

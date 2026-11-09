@@ -57,9 +57,9 @@ from uqs.model.declarations import (
     declared_outputs,
     reaction_calls,
     read_file_text,
-    strip_q_comments,
     symbols,
 )
+from uqs.model.q_source import strip_q_comments
 from uqs.paths import UqsError
 
 #: init.q's directory order, which is load-bearing (see its header).

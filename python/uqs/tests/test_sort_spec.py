@@ -27,7 +27,8 @@ import io
 
 import pytest
 
-from uqs.model.declarations import reaction_calls, read_declarations, strip_q_comments
+from uqs.model.declarations import reaction_calls, read_declarations
+from uqs.model.q_source import strip_q_comments
 from uqs.paths import repo_root
 
 ROOT = repo_root()
