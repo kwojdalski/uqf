@@ -95,6 +95,15 @@
     .qunit.assertTrue[not null r 2;"normal L0 still gives a value"];
     .qunit.assertTrue[0w>abs avg r where not null r;"avg over a series with a locked row stays finite"]};
 
+/ #2384: a level level_ok rejects was weighted (its size stayed in the
+/ denominator), giving skews like -1374.75 or 0w.
+.qt.qf.mkt.microstructure.test_vwmp_skew_skips_a_level_that_is_not_a_price:{[t]
+    ref:.qf.mkt.vwmp_skew[enlist enlist 1.1000;enlist enlist 100f;enlist 1.1002 1.1004;enlist 100 100f;2];
+    bad:.qf.mkt.vwmp_skew[(1.1000 0n;1.1000 0f;1.1000 0w);3#enlist 100 100f;3#enlist 1.1002 1.1004;3#enlist 100 100f;2];
+    .qunit.assertEquals[bad;3#ref;"a null, zero or infinite level is absent, not weighted"];
+    l0:.qf.mkt.vwmp_skew[(0n 1.0998;0 1.0998f);2#enlist 100 100f;2#enlist 1.1002 1.1004;2#enlist 100 100f;2];
+    .qunit.assertTrue[all null l0;"an L0 that is not a price nulls the row"]};
+
 / ---- book_slope ----
 
 .qt.qf.mkt.microstructure.test_book_slope_opposite_signs_for_bid_vs_ask:{[t]

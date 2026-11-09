@@ -163,17 +163,17 @@
     deeper:deeper_bid+deeper_ask;
     ?[deeper=0;0n;top%deeper]};
 
-/ Private: vwmp_skew for a single row - volume-weighted mid over the first
-/ n_levels (via execution.q's vwap, concatenating that row's bid and ask
-/ prices/sizes over til n_levels) minus the simple L0 mid, divided by the
-/ L0 spread. Locked/crossed L0 (spread <= 0) is null, not +-0w: a locked spread of 0 divides by zero. This is a division guard, not .qf.mkt.crossed_top's crossed test (a locked book is not crossed, #1176).
+/ Private: vwmp_skew for a single row - execution.q's vwap over the level_ok levels among both sides' first n_levels (a rejected level used to be weighted, #2384)
+/ minus the simple L0 mid, over the L0 spread. Null for a non-level_ok L0, or a locked/crossed L0 (spread <= 0): a division guard, not .qf.mkt.crossed_top's crossed test (a locked book is not crossed, #1176).
 / @private
 .qf.mkt.vwmp_skew_one:{[n_levels;bid_prices;bid_sizes;ask_prices;ask_sizes]
     idx:til n_levels;
-    vw_mid:.qf.exec.vwap[(bid_prices idx),ask_prices idx;(bid_sizes idx),ask_sizes idx];
+    bi:where .qf.mkt.level_ok[bid_prices idx;bid_sizes idx];
+    ai:where .qf.mkt.level_ok[ask_prices idx;ask_sizes idx];
+    vw_mid:.qf.exec.vwap[(bid_prices bi),ask_prices ai;(bid_sizes bi),ask_sizes ai];
     simple_mid:0.5*(bid_prices 0)+ask_prices 0;
     l0_spread:(ask_prices 0)-bid_prices 0;
-    $[l0_spread<=0;0n;(vw_mid-simple_mid)%l0_spread]};
+    $[not (0 in bi) and 0 in ai;0n;l0_spread<=0;0n;(vw_mid-simple_mid)%l0_spread]};
 
 / Volume-weighted mid (over n_levels, via execution.q's vwap) minus the
 / simple L0 mid, divided by the L0 spread - how far deeper-book weighting
@@ -183,7 +183,7 @@
 / @param ask_prices a vector of vectors, one level-0-first vector per row
 / @param ask_sizes a vector of vectors, one level-0-first vector per row
 / @param n_levels how many levels (0..n_levels-1) to volume-weight over
-/ @return a vector, skew per row - null for a locked or crossed L0
+/ @return a vector, skew per row - null for a locked, crossed or non-level_ok L0; a level level_ok rejects is skipped
 / @eg .qf.mkt.vwmp_skew[enlist 1.1000 1.0998;enlist 100 100;enlist 1.1002 1.1004;enlist 100 100;2]  -> ,0f
 .qf.mkt.vwmp_skew:{[bid_prices;bid_sizes;ask_prices;ask_sizes;n_levels]
     n:count bid_prices;
