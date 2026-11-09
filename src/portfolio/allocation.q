@@ -270,6 +270,10 @@
     if[n_side; '"allocate: ",string[n_side]," trade(s) have a side that is not 1 (buy) or -1 (sell)"];
     n_null:sum (null trades`size) or null trades`trade_price;
     if[n_null; '"allocate: ",string[n_null]," trade(s) have a null size or trade_price"];
+    / size is unsigned and side carries the direction: a negative size
+    / matched nothing and opened nothing, so the trade vanished (#2533).
+    n_size:sum 0>trades`size;
+    if[n_size; '"allocate: ",string[n_size]," trade(s) have a negative size - size is unsigned, side carries the direction"];
     $[`trade_id in cols trades; trades; update trade_id:i from trades]}
 
 / The columns a carried-in lot table must carry, on top of the bucket
@@ -287,6 +291,12 @@
     .qf.util.require_cols[`allocate;`opening;opening;distinct .qf.exec.required_lot_cols,bys];
     if[not all (exec side from opening) in -1 1;
         '"allocate: every opening lot's side must be 1 (long) or -1 (short)"];
+    / A null qty never gets used up (min takes the trade's qty, and a null
+    / is not flat), a negative one grows as it is matched, and a null price
+    / books a null P&L that drops out of every sum (#2532).
+    q:"f"$opening`qty;
+    if[any (null q) or (0>=q) or null opening`price;
+        '"allocate: every opening lot needs a positive qty and a price"];
     / One side per bucket (#588). lot_match_step checks only the FIRST lot's side
     / before closing and lets the method's pick choose any lot, so a long
     / and a short in one bucket let a sell "close" the short and book a
@@ -421,7 +431,8 @@
 / @param opts an options dict (see default_opts), or a bare method name
 / @return a dict with `matches (the ledger, plus a pnl column) and `residual (unmatched open lots)
 / @throws error on a missing column, an unknown option, an unregistered method,
-/   a trade side that is not 1 or -1, or a null size or trade_price (#2381)
+/   a trade side that is not 1 or -1, a null size or trade_price (#2381), or a
+/   negative size (#2533)
 / @eg count .qf.exec.run[([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo]`matches -> 1
 .qf.exec.run:{[trades;opts]
     o:.qf.exec.normalised_opts[opts];
@@ -430,6 +441,15 @@
     trades:.qf.exec.prepared[trades;bys];
     opening:.qf.exec.prepared_opening[o`opening;bys];
     trades:(o`universe) trades;
+    / A queue never crosses syms (#2530): a `by without sym buckets on
+    / something else, so a USDJPY sell would close a EURUSD lot and book
+    / the price gap as P&L. Checked after universe, so a book filtered
+    / down to one sym is still allowed to match under any `by.
+    if[not `sym in bys;
+        syms:distinct (trades`sym),$[98h=type opening; $[`sym in cols opening; opening`sym; ()]; ()];
+        if[1<count syms;
+            '"allocate: a `by without sym would match ",(", " sv string syms),
+             " against each other - add sym to `by"]];
     / as_of AFTER universe, so the two compose the way they read: pick the
     / trades that count, then stop the clock.
     if[not (::)~o`as_of; trades:?[trades;enlist (<=;`time;o`as_of);0b;()]];

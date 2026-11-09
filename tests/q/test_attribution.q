@@ -100,6 +100,22 @@
     bad2[`direct]:enlist `USDEUR;
     .qunit.assertThrows[.qf.mkt.attribution_convention_check;bad2;"*must be canonical*";"a non-canonical direct pair is refused"]};
 
+/ #2553: an exception keyed by a non-canonical pair passed the check and then
+/ never applied for either spelling; so did a pair outside the convention, and
+/ of two rows for one pair only the first ever did.
+.qt.qf.exec.attribution.test_convention_check_refuses_exceptions_that_would_never_apply:{[t]
+    c:.qt.qf.exec.attribution.conv;
+    f:{[c;ex] c[`exceptions]:ex; .qf.mkt.attribution_convention_check c}[c];
+    .qunit.assertThrows[f;([] pair:enlist `PLNUSD; legs:enlist `USDPLN);
+        "attribution_convention: exception pairs must be canonical (base ranks before quote) and in the convention, not PLNUSD";
+        "an exception keyed PLNUSD is refused"];
+    .qunit.assertThrows[f;([] pair:enlist `EURRUB; legs:enlist `EURRUB);
+        "attribution_convention: exception pairs must be canonical*";"so is one on a pair outside the convention"];
+    .qunit.assertThrows[f;([] pair:`USDPLN`USDPLN; legs:(enlist `USDPLN;`EURUSD`EURPLN));
+        "attribution_convention: duplicate exception pair USDPLN";"and a pair listed twice"];
+    ok:f ([] pair:enlist `USDPLN; legs:enlist enlist `USDPLN);
+    .qunit.assertEquals[.qf.mkt.attribution_route_with[ok;`USDPLN]`leg;enlist `USDPLN;"a canonical exception still passes and applies"]};
+
 / Walk a route currency by currency: returns (start;end;ccy list, no repeats?).
 .qt.qf.exec.attribution.walk:{[r]
     ends:{[leg;flipped] l:.qf.px.ccy_pair_legs leg; $[flipped;reverse l`base`quote;l`base`quote]}'[r`leg;r`invert];

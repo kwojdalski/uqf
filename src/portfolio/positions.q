@@ -41,8 +41,9 @@
 / @param price the fill price
 / @param side 1 for a buy, -1 for a sell
 / @return pos with sym's row updated (or added, if new)
-/ @throws error if qty, price or side is null, or side is not 1 or -1 - a
-/   fill of unknown size or direction cannot be applied (#2380)
+/ @throws error if qty, price or side is null, side is not 1 or -1, or qty
+/   is negative - a fill of unknown size or direction cannot be applied
+/   (#2380, #2533)
 / @eg .qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;1000000;1.1000;1] -> qty 1000000, avg_price 1.1, realized_pnl 0
 / @eg .qf.port.apply_fill[.qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;1000000;1.1000;1];`EURUSD;400000;1.1050;-1] -> qty 600000, avg_price 1.1 (unchanged), realized_pnl 2000 (400000 closed at a 50-pip gain)
 .qf.port.apply_fill:{[pos;sym;qty;price;side]
@@ -55,6 +56,9 @@
     / refuses the same fill (#1309).
     if[any null (qty;price;side); '"apply_fill: a fill with a null size, side or price cannot be applied"];
     if[not side in -1 1; '"apply_fill: side must be 1 (buy) or -1 (sell)"];
+    / A negative size would net as the opposite direction (#2533): size is
+    / unsigned, and allocate and apply_desk_fills refuse the same fill.
+    if[qty<0; '"apply_fill: size must not be negative - side carries the direction"];
     old:$[sym in exec sym from pos; pos sym; `qty`avg_price`realized_pnl!0 0 0f];
     old_qty:old`qty;
     old_avg:old`avg_price;
@@ -146,7 +150,9 @@
         computed_qty:comp_qty; reference_qty:ref_qty; qty_diff:comp_qty-ref_qty;
         computed_avg_price:comp_avg; reference_avg_price:ref_avg; avg_price_diff:comp_avg-ref_avg);
     result:update qty_break:qty_tol<abs qty_diff from result;
-    result:update avg_price_break:(qty_tol<abs computed_qty) and (qty_tol<abs reference_qty) and price_tol<abs avg_price_diff from result;
+    / Gated on flatness, not on qty_tol (#2621): a position no bigger than
+    / the qty tolerance is still open, and its avg_price still has to agree.
+    result:update avg_price_break:(not .qf.port.is_flat computed_qty) and (not .qf.port.is_flat reference_qty) and price_tol<abs avg_price_diff from result;
     result:update status:`match`break qty_break or avg_price_break from result;
     `status xasc result};
 

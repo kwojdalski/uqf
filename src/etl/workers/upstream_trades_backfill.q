@@ -19,20 +19,29 @@
 
 \d .
 
-/ Refuse a batch that cannot be a trade: a non-positive price or size.
-/ Shaped correctly and still wrong is what a check is for.
+/ The upstream's side vocabulary, as the 1/-1 every function in src/ takes.
+/ `side is the upstream's own second value (see the transform's note); a
+/ side outside this map maps to a null, which quality_check refuses rather
+/ than letting it import as a sell (#2573).
+.qpipe.job.upstream_trades_backfill.side_sign:`buy`sell`side!1 -1 -1
+
+/ Refuse a batch that cannot be a trade: a non-positive price or size, or a
+/ side the transform could not map. Shaped correctly and still wrong is what
+/ a check is for.
 / @param batch the transformed rows, before publication
 / @return a table check/status/detail, one row per failing condition; empty
 /   means the batch passed
 / @eg .qpipe.job.upstream_trades_backfill.quality_check[([] time:enlist .z.p; sym:enlist `AAPL; venue:enlist `N; price:enlist 28.73; size:enlist 41; side:enlist 1)]  ->  an empty table
 .qpipe.job.upstream_trades_backfill.quality_check:{[batch]
     if[0=count batch; :.qetl.job.bounded.no_failures[]];
-    bad:select from batch where (not price>0) or not size>0;
-    $[0=count bad;
-      .qetl.job.bounded.no_failures[];
-      ([] check:enlist `positive_price_and_size;
-          status:enlist `fail;
-          detail:enlist string[count bad]," row(s) with a non-positive price or size")]}
+    n_ps:sum (not batch[`price]>0) or not batch[`size]>0;
+    n_side:sum null batch`side;
+    out:.qetl.job.bounded.no_failures[];
+    if[n_ps; out,:([] check:enlist `positive_price_and_size; status:enlist `fail;
+        detail:enlist string[n_ps]," row(s) with a non-positive price or size")];
+    if[n_side; out,:([] check:enlist `known_side; status:enlist `fail;
+        detail:enlist string[n_side]," row(s) with a side that is not buy, sell or side")];
+    out}
 
 / What each window materialised, beyond the row count the framework records
 / itself: the span it covered and how many symbols traded. The batch that
@@ -51,9 +60,11 @@
 
 / The upstream's shape in, ours out - and one class of row dropped.
 / .
-/ `side` maps `buy -> 1 and everything else -> -1: the upstream's other
-/ value is `side, whose meaning its owner never wrote down, and the mapping
-/ says so rather than guessing a third state.
+/ `side` maps through side_sign: `buy -> 1, `sell and the upstream's other
+/ value `side -> -1 (`side's meaning its owner never wrote down, and the
+/ mapping says so rather than guessing a third state). Anything else - a
+/ null, `SELL - maps to a null side that quality_check refuses, rather than
+/ importing as a sell (#2573).
 / .
 / ZERO-SIZE ROWS ARE DROPPED HERE, deliberately and visibly. About 1% of
 / the starter pack's trades carry size=0 - it is synthetic data drawing
@@ -77,15 +88,18 @@
     / refused the output as mismatched. `string` over a char column already
     / gives one string per row, so the each-right was doing nothing on real
     / data and the wrong thing on none.
+    / sg a local, not the global by name: inside qSQL KDB-X resolves a bare
+    / global at the ROOT, where no side_sign exists.
     {[batch]
+        sg:.qpipe.job.upstream_trades_backfill.side_sign;
         select time, sym, venue:`$string ex, price, size:`long$size,
-               side:?[side=`buy;1;-1] from batch where size>0};
+               side:sg side from batch where size>0};
     enlist `inputs`expected!(
         enlist[`batch]!enlist .qpipe.source.upstream_trades.fixture[],
             ([] time:enlist 2015.01.07D00:00:09.000000000; sym:enlist `MSFT; ex:enlist "N";
                 price:enlist 20.33; size:enlist 0i; side:enlist `buy);
         select time, sym, venue:`$string ex, price, size:`long$size,
-               side:?[side=`buy;1;-1] from .qpipe.source.upstream_trades.fixture[]))];
+               side:(`buy`side!1 -1) side from .qpipe.source.upstream_trades.fixture[]))];
 
 / One-hour windows: the sample data spans about eleven hours a day, so a
 / day is a dozen windows and a partial run leaves something visible to
