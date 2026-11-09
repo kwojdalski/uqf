@@ -85,6 +85,18 @@ def test_current_its_rollback_target_and_a_running_push_survive_any_keep(dest, k
     assert kept[R1] == "its report says a push is still running"
 
 
+def test_a_current_link_with_a_trailing_slash_still_protects_current(dest):
+    """#2445: `ln -sfn /srv/uqf/releases/<id>/ current` names <id>, as the
+    shell's basename (every other reader) says."""
+    (dest / "current").unlink()
+    (dest / "current").symlink_to(f"{dest / 'releases' / R4}/")
+    code, result, _ = _prune(dest, 0)
+    assert code == 0
+    kept = {k["release"]: k["why"] for k in result["kept"]}
+    assert kept[R4] == "current" and kept[R2] == "a rollback would return to it"
+    assert R4 not in result["removed"] and R2 not in result["removed"]
+
+
 def test_the_oldest_beyond_keep_go_and_the_space_they_held_is_counted(dest):
     _, result, _ = _prune(dest, 1)
     assert result["removed"] == [R3] and _left(dest) == [R1, R2, R4, R5]
