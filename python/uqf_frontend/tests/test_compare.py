@@ -321,6 +321,47 @@ def test_q_reads_each_rendered_filter_back_as_the_operator_sent(tmp_path):
     assert read == {op: op for op in compare.TEXT_OPS}, out
 
 
+@pytest.mark.skipif(q_interpreter() is None, reason="no q interpreter")
+def test_q_types_a_compare_filter_as_query_coerces_it(tmp_path):
+    """#2472: the same Filter is the same predicate on /compare as on /query -
+    a timespan of 1234 is 1234 ns, and a timestamp's offset is applied."""
+    from uqf_frontend import compare, queries
+    from uqf_frontend.catalog import QType
+    from uqf_frontend.models.query import Filter
+
+    sent = [
+        Filter(column="skew", op="eq", value=1234),
+        Filter(column="time", op="ge", value="2026-09-13T06:00:00+02:00"),
+        Filter(column="time", op="lt", value="2026-09-13T06:00:00.000000001Z"),
+    ]
+    span = queries.coerce(1234, QType.TIMESPAN, "skew", as_list=False)
+    stamps = [queries.coerce(f.value, QType.TIMESTAMP, "time", as_list=False) for f in sent[1:]]
+    texts = compare.filter_texts(sent)
+    script = tmp_path / "typed.q"
+    script.write_text(
+        "\\l src/init.q\n\\l src/etl/init.q\n"
+        'm:([] c:`skew`time; t:"np");\n'
+        "fs:.qetl.compare.parse_filter each (" + ";".join(f'"{t}"' for t in texts) + ");\n"
+        "v:last .qetl.compare.browse_filters[m;fs];\n"
+        '-1 string "j"$v 0;\n'
+        '-1 string "j"$v 1;\n'
+        '-1 string "j"$v 2;\n'
+        "exit 0\n"
+    )
+    out = subprocess.run(
+        [str(q_interpreter()), str(script), "-q"],
+        cwd=default_paths().repo_root,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        stdin=subprocess.DEVNULL,
+    ).stdout.split()
+    # q counts a timestamp's nanoseconds from 2000; polars from 1970
+    epoch_2000 = 946_684_800 * 10**9
+    assert int(out[0]) == span.dt.total_nanoseconds().item(), out
+    assert [int(n) + epoch_2000 for n in out[1:]] == [s.cast(int).item() for s in stamps], out
+
+
 # --------------------------------------------- the coverage slice (#2221)
 
 
