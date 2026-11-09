@@ -291,7 +291,9 @@
     q:.qt.qf.exec.attribution.review_fixture_quotes[];
     tr:.qt.qf.exec.attribution.review_fixture_trades[];
     .qunit.assertThrows[{.qf.exec.attribution_review[x 0;delete side from x 1;enlist 0D00:00:01;10000;1]};(q;tr);"*missing column side*";"trades without side"];
-    .qunit.assertThrows[{.qf.exec.attribution_review[x 0;x 1;`timespan$();10000;1]};(q;tr);"*non-empty list of positive timespans*";"no horizons"]};
+    .qunit.assertThrows[{.qf.exec.attribution_review[x 0;x 1;`timespan$();10000;1]};(q;tr);"*non-empty list of positive timespans*";"no horizons"];
+    / #2537: a long horizon read as nanoseconds, a 1 ns markout of 0 pips
+    .qunit.assertThrows[{.qf.exec.attribution_review[x 0;x 1;1000;10000;1]};(q;tr);"attribution_review: horizons must be a timespan or list of timespans*";"a long horizon"]};
 
 / #2432: a pair missing from the pip_factor dict got a null factor, so every
 / trade in it read as n_unavailable - the signal for a missing book.
