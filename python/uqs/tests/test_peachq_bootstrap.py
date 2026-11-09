@@ -211,6 +211,19 @@ def test_a_commit_override_builds_that_commit_and_records_it(tmp_path):
     assert fake.resolve(tmp_path) != built
 
 
+def test_an_entry_first_built_by_override_is_the_pin_once_the_pin_moves_to_it(tmp_path):
+    """#2411: try a commit with the override, then move the pin to it - the
+    reused entry's `unpinned` record says how it was asked for, not what it is."""
+    fake = Fake()
+    built = fake.resolve(tmp_path, {peachq.COMMIT_ENV: OTHER})
+    (tmp_path / "moved").mkdir()
+    pin_other = _pin(tmp_path / "moved", OTHER)
+    again = fake.resolve(tmp_path, pin_path=pin_other)
+    assert again == built and fake.builds == 1
+    assert peachq.is_pinned(again, pin_other)
+    assert peachq.unpinned_warning(again, pin_other) is None
+
+
 @pytest.mark.parametrize(
     ("commit", "expected"),
     [
