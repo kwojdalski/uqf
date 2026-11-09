@@ -470,6 +470,7 @@ qetl.job.stream,next_position,function,1,job
 qetl.job.stream,normalize,function,2,name decl
 qetl.job.stream,normalizer,dict,,
 qetl.job.stream,optional_declarations,value,,
+qetl.job.stream,optional_defaults,dict,,
 qetl.job.stream,passthrough,function,1,decl
 qetl.job.stream,passthrough_keys,value,,
 qetl.job.stream,plant_today,function,1,tr
@@ -499,6 +500,7 @@ qetl.job.stream,trapping,value,,
 qetl.job.stream,unwired,function,1,job
 qetl.job.stream,watch_subscription,function,2,job tr
 qetl.job.stream,wire,function,2,job publisher
+qetl.job.stream,with_defaults,function,1,decl
 qetl.job.stream,withheld_n,value,,
 qetl.job.stream.bars,assign,function,3,width tc x
 qetl.job.stream.bars,close_ready,function,2,name now

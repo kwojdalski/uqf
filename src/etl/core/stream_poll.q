@@ -215,7 +215,7 @@
     / snapshot found (#1307): saving now would skip rows never published. Under
     / `hold the cursor and the marker stay and the page is fetched again; what
     / `drop withholds is the job's declared loss (#2312).
-    if[(n0<>.qetl.job.stream.withheld_n) and $[`on_fail in key d; `hold~d`on_fail; 0b];
+    if[(n0<>.qetl.job.stream.withheld_n) and `hold~d`on_fail;
         '"tick: ",string[job],"'s page was held by its publish check - the cursor stays at ",(-3!current),
          " and the page is fetched again"];
     ops[`save][name;proposed];

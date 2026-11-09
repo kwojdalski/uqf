@@ -99,7 +99,7 @@
         p:$[`poll in key d; d`poll; ()!()];
         src:$[`source in key p; p`source; `];
         `producer`mode`source`key_cols`declared!(j;`stream;src;.qetl.verify.key_of[$[`row_key in key p; p`row_key; `symbol$()];src];
-            $[`transform in key d; .qetl.transform.output_schema d`transform; (::)])};
+            $[null d`transform; (::); .qetl.transform.output_schema d`transform])};
     brow:{[w]
         c:.qetl.job.bounded.def w;
         `producer`mode`source`key_cols`declared!(w;`bounded;c`source;.qetl.verify.key_of[c`target_key;c`source];

@@ -185,7 +185,6 @@
         / declared ephemeral with the reason losing it is acceptable. Neither
         / was the default - a markout's pending fills, a superbook's books -
         / and nothing asked a new job to choose.
-        replays:$[`replay in key decl; decl`replay; 0b];
         if[$[`ephemeral in key decl; not (10h=type decl`ephemeral) and 0<count decl`ephemeral; 0b];
             '"define: ",string[job],"'s ephemeral must be a string: why losing its state on a restart is acceptable"];
         if[replays and `ephemeral in key decl;
@@ -258,6 +257,7 @@
             '"define: ",string[job],"'s on_timer must be a niladic function"]];
     .qetl.job.stream.check_optional[job;decl];
     .qetl.job.stream.check_replay[job;decl]; .qetl.twin.check_live[job;decl];
+    decl:.qetl.job.stream.with_defaults decl;  / after the checks above, which tell declared from absent (#2657)
     .qetl.job.stream.jobs[job]:enlist decl;
     .qetl.job.stream.procnames[decl`procname]:job;
     .[{.qetl.log.ch.dbg[`config;y;(enlist[`job]!enlist x),z]};(job;"streaming job registered";
@@ -547,7 +547,7 @@
 / @return the tables, as a symbol list
 .qetl.job.stream.subscriptions:{[job]
     d:.qetl.job.stream.def[job];
-    distinct (),(d`subscribe_to),$[`restore_from in key d; d`restore_from; `symbol$()],
+    distinct (),(d`subscribe_to),(d`restore_from),
         $[`carry in key d; enlist d[`carry]`table; `symbol$()]}
 
 / Private: the job's on_batch, counting every batch in .qetl.stream_health
@@ -593,7 +593,7 @@
     missing:.qetl.job.stream.transport_keys where not .qetl.job.stream.transport_keys in key tr;
     if[count missing; '"start: the transport is missing ",", " sv string missing];
     d:.qetl.job.stream.def[job];
-    replay:$[`replay in key d; d`replay; 0b];
+    replay:d`replay;
     tbls:.qetl.job.stream.subscriptions[job];
     .[{.qetl.log.ch.info[x;y;z]};(`lifecycle;"starting streaming job";
         `job`subscribe_to`outputs`replay`timer!(job;tbls;d`outputs;replay;

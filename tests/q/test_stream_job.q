@@ -1523,6 +1523,16 @@
     .qunit.assertThrows[.qetl.job.stream.define[`sj_restore_probe;];base,enlist[`replay]!enlist 1;
         "*replay must be a boolean*";"and replay is 1b or 0b"]};
 
+/ #2657: define stores the declaration normalised, so a reader indexes the key. Keys whose
+/ absence is not a value (carry, check) stay absent.
+.qt.qetl.job.stream.test_define_stores_the_optional_defaults:{[t]
+    .qt.support.save_stream_jobs[`.qt.qetl.job.stream];
+    .qetl.job.stream.define[`sj_defaults_probe;`procname`subscribe_to`outputs`on_batch!(`sjdefaultsprobe1;enlist `quote;`symbol$();{[t;x]})];
+    d:.qetl.job.stream.def `sj_defaults_probe;
+    .qt.support.restore_stream_jobs[`.qt.qetl.job.stream];
+    .qunit.assertEquals[d[`replay`restore_from`on_fail`transform];(0b;`symbol$();`;`);"every defaulted key is present with its default"];
+    .qunit.assertFalse[any `carry`check in key d;"a key whose absence means 'none' is not given a value"]};
+
 / --- a publish check (#944) -----------------------------------------------
 
 / A job whose rows are positive numbers; its check names the row index of
