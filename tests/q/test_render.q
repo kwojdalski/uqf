@@ -21,6 +21,12 @@
     strs:{"a",x,"b"} each `char$til 256;
     .qunit.assertEquals[.qf.util.quoted each strs;-3!'strs;"escaped exactly as -3! escapes them"]};
 
+/ A one-character string lost -3!'s leading "," and read as a char atom (#2626).
+.qt.qf.util.render.test_a_one_character_string_keeps_its_comma:{[t]
+    strs:(enlist "a";enlist "\n";"";"ab");
+    .qunit.assertEquals[.qf.util.quoted each strs;-3!'strs;"spelt as -3! spells them"];
+    .qunit.assertEquals[.qf.util.full enlist "a";",\"a\"";"and so is a full rendering"]};
+
 / The data-quality detail a crossed book produces - the case that lost its
 / values (#605).
 .qt.qf.util.render.test_a_dq_failure_detail_carries_its_values:{[t]

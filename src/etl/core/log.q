@@ -184,7 +184,9 @@
           ch="\t"; "\\t";
           (i<32) or i>126; "\\",raze string 8 8 8 vs i;
           enlist ch]};
-    "\"",(raze esc each s),"\""}
+    / -3! keeps a one-character string's leading "," - without it the
+    / literal reads as a char atom (#2626).
+    $[1=count s; ",";""],"\"",(raze esc each s),"\""}
 
 / Private: is TorQ's logging loaded?
 / .
