@@ -92,6 +92,12 @@
     .qetl.verify.require_isolated[];
     .[.qetl.verify.in_sandbox;(body;enlist arg);.qetl.verify.did_not_complete]}
 
+/ Private: is there no saved cursor? A timestamp cursor is null when unset; a
+/ compound one (a feed's own load, e.g. load_cursor_value) is (::) - a dictionary
+/ is never "null" as a whole, which `null` would answer field by field.
+/ @private
+.qetl.verify.no_cursor:{[c] $[(::)~c; 1b; 99h=type c; 0b; null c]}
+
 / A streaming producer's cursor progression: one tick publishes the page and moves the
 / cursor past it, and the next tick finds nothing new and publishes nothing again.
 / @param job the polling job
@@ -108,7 +114,7 @@
         ev:"tick 1: ",string[a`state]," ",string[a`rows]," row(s); cursor ",(-3!c),"; tick 2: ",string[b`state]," ",string[b`rows]," row(s); recorder saw ",string sum .qetl.verify.sent`n;
         $[0=a`rows; `status`reason`evidence!(`UNVERIFIED;"empty sample - the first tick found nothing to publish";ev);
           not (a`state)~`published; `status`reason`evidence!(`FAIL;"the first tick did not publish";ev);
-          null c; `status`reason`evidence!(`FAIL;"the cursor did not move after a publish - the page would be fetched again";ev);
+          .qetl.verify.no_cursor[c]; `status`reason`evidence!(`FAIL;"the cursor did not move after a publish - the page would be fetched again";ev);
           not (b`state)~`idle; `status`reason`evidence!(`FAIL;"the second tick did not find the page acknowledged";ev);
           (sum .qetl.verify.sent`n)<>a`rows; `status`reason`evidence!(`FAIL;"rows published differ from the page";ev);
           `status`reason`evidence!(`PASS;"";ev)]};
@@ -135,9 +141,9 @@
         c2:ops[`load] name;
         ev:"publish refused: ",string[refused],"; cursor after the failure ",(-3!held),"; retry published ",string[sum .qetl.verify.sent`n]," of ",string[want]," row(s); cursor ",-3!c2;
         $[not refused; `status`reason`evidence!(`UNVERIFIED;"the injected publish failure did not surface from the tick";ev);
-          not null held; `status`reason`evidence!(`FAIL;"the cursor moved although the publish failed - a re-run would skip the page";ev);
+          not .qetl.verify.no_cursor[held]; `status`reason`evidence!(`FAIL;"the cursor moved although the publish failed - a re-run would skip the page";ev);
           (sum .qetl.verify.sent`n)<>want; `status`reason`evidence!(`FAIL;"the page was not delivered in full after the retry";ev);
-          null c2; `status`reason`evidence!(`FAIL;"the cursor did not move after the page was delivered";ev);
+          .qetl.verify.no_cursor[c2]; `status`reason`evidence!(`FAIL;"the cursor did not move after the page was delivered";ev);
           `status`reason`evidence!(`PASS;"";ev)]};
     why:.qetl.verify.not_exercisable[job;`stream];
     if[count why; :`status`reason`evidence!(`UNVERIFIED;why;"")];

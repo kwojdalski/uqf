@@ -34,8 +34,12 @@
 /                  -> the saved cursor; save[name;cursor] after a publish;
 /                  advances[current;proposed] -> 1b when proposed is
 /                  strictly ahead. Absent, the cursor is a timestamp, kept
-/                  by .qetl.job.continuous.load_cursor/save_cursor. For a
-/                  compound cursor - (time, securityId, priceBookType) - the
+/                  by .qetl.job.continuous.load_cursor/save_cursor - correct
+/                  only for a source whose timestamps strictly increase in
+/                  commit order: a row committed later at the cursor's own
+/                  time is never fetched (#2458). For a compound cursor -
+/                  (time, securityId, priceBookType), or demo_deals_feed's
+/                  (deal_time, deal_id) - the
 /                  stock answer is .qetl.job.continuous.load_cursor_value,
 /                  save_cursor_value and lexically_after[fields]
 /     start_cursor optional [instant] -> the cursor positioned just before

@@ -69,7 +69,7 @@ book onto the canonical `market_data` table as it publishes `eq_orderbook`:
 declared as `.qpipe.job.eq_orderbook.market_source`) and `source_time` is the
 book's `ts_event`, never its receipt `time`. It lives in the bundle because the
 table it reads exists only with the bundle, so the core `marketdata1` cannot
-subscribe to it; `market_data.from_quote` still passes FX only. Crossed or stale
+subscribe to it; `market_data.from_quote` still passes FX only. Crossed
 snapshots are dropped by `market_data`'s own gate before they publish, and the
 `eq_orderbook` rows are never withheld by it. The historical backfill writes
 `eq_orderbook` only. The equity domain of the markout core is

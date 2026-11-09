@@ -1531,6 +1531,7 @@ qpipe.job.demo_deals_feed,handle,value,,
 qpipe.job.demo_deals_feed,next_cursor,function,1,page
 qpipe.job.demo_deals_feed,normalize,function,1,page
 qpipe.job.demo_deals_feed,publish,value,,
+qpipe.job.demo_deals_feed,start_cursor,function,1,instant
 qpipe.job.demo_events_backfill,checkpoint,function,1,cursor
 qpipe.job.demo_events_backfill,cleanup,function,1,
 qpipe.job.demo_events_backfill,facts,function,1,batch

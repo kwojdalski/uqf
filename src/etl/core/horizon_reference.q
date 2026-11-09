@@ -35,9 +35,13 @@
 /     the lookback leave the earlier, negative horizons unavailable, as the
 /     backfill does, instead of dropping the whole event; an anchor at or
 /     before event_time itself is still required
-/   - every series of a key that has a book within max_age of the horizon must
-/     have advanced to it (#1523), not just the best of them: a fast source
-/     passing the horizon says nothing of a slower one still in flight
+/   - every series of a key must have advanced to the horizon (#1523), not just
+/     the best of them: a fast source passing the horizon says nothing of a
+/     slower one still in flight. Every series held, not only those whose newest
+/     book is within max_age of the horizon (#2455): a feed running further
+/     behind than max_age still has books stamped inside it in flight. A source
+/     that has stopped is held only until the grace, and only while retain keeps
+/     a book of it
 / @private
 .qetl.job.stream.horizons.not_ready:{[d;r;et;legs;now]
     lo:r`lo; hi:r`hi; ser:r`ser;
@@ -51,10 +55,7 @@
         if[count early; :"no ",string[d`reference_time]," at or before ",string[need]," for ",", " sv string early];
         short:ks where hi[ks]<t+d`horizon;
         if[count short; :"reference has not reached ",string[t+d`horizon]," for ",", " sv string short];
-        / 0Wn is "however old": every series counts, and t+h-0Wn would be the 1734 floor
-        aged:$[`max_age in key d; d[`max_age]<0Wn; 0b];
-        oldest:$[aged; t+d[`horizon]-d`max_age; -0Wn];
-        behind:$[grace; `symbol$(); ks where {[o;h;s] any (s>=o) and s<h}[oldest;t+d`horizon] each ser ks];
+        behind:$[grace; `symbol$(); ks where {[h;s] any s<h}[t+d`horizon] each ser ks];
         if[count behind; :"a source has not reached ",string[t+d`horizon]," for ",", " sv string behind];
         ""}[d;lo;hi;ser;now]'[et;legs]}
 

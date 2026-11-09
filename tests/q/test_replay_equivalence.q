@@ -38,7 +38,9 @@
 .qt.qpipe.replay_equivalence.ev:{[at;t;x] (at;t;x)}
 
 / exec_bars: in-time fills, the first minute closing, a late row for a minute
-/ that has a bar, a late row for a minute that never will, and a second minute.
+/ that has a bar, a late row for a minute that never will, a second minute, and
+/ a fill the plant stamped inside the lateness but the job handled after it, as
+/ a job behind its queue does (#2459: judged on the stamp, live and on replay).
 .qt.qpipe.replay_equivalence.bars_script:{[]
     (.qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:10;`executions;.qt.qpipe.replay_equivalence.fill[.qt.qpipe.replay_equivalence.t0+0D00:00:10;.qt.qpipe.replay_equivalence.t0+0D00:00:10;`EURUSD;1.10]];
      .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:00:40;`executions;.qt.qpipe.replay_equivalence.fill[.qt.qpipe.replay_equivalence.t0+0D00:00:35;.qt.qpipe.replay_equivalence.t0+0D00:00:40;`EURUSD;1.20]];
@@ -47,6 +49,7 @@
      .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:00;`executions;.qt.qpipe.replay_equivalence.fill[.qt.qpipe.replay_equivalence.t0+0D00:03:30;.qt.qpipe.replay_equivalence.t0+0D00:05:00;`USDJPY;150f]];
      .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:10;`executions;.qt.qpipe.replay_equivalence.fill[.qt.qpipe.replay_equivalence.t0+0D00:05:10;.qt.qpipe.replay_equivalence.t0+0D00:05:10;`EURUSD;1.15]];
      .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:50;`executions;.qt.qpipe.replay_equivalence.fill[.qt.qpipe.replay_equivalence.t0+0D00:05:20;.qt.qpipe.replay_equivalence.t0+0D00:05:50;`EURUSD;1.16]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:06:06;`executions;.qt.qpipe.replay_equivalence.fill[.qt.qpipe.replay_equivalence.t0+0D00:05:59;.qt.qpipe.replay_equivalence.t0+0D00:06:04;`EURUSD;1.17]];
      .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:06:10;`tick;()];
      .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:07:00;`tick;()])}
 
@@ -118,7 +121,8 @@
 / The scripted jobs: name -> the script and what to do on a tick.
 / order_quality: orders over a few minutes, ticks between, and a book that goes
 / quiet - a restart must publish the same rolling series, the quiet book's
-/ identity rows and its disappearance included (#1224).
+/ identity rows and its disappearance included (#1224) - and an outcome the plant
+/ stamped inside the lateness but the job handled after it (#2459).
 .qt.qpipe.replay_equivalence.order:{[tm;bk;status] ([] time:enlist tm; source_time:enlist tm; source:enlist `orders; request_id:enlist `$string tm;
     source_status:enlist status; outcome:enlist status; book:enlist bk; product:enlist `spot; venue:enlist `)}
 
@@ -138,6 +142,7 @@
      .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:04:50;`order_outcomes;.qt.qpipe.replay_equivalence.order[.qt.qpipe.replay_equivalence.t0+0D00:04:50;`london;`filled]];
      .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:00;`tick;()];
      .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:30;`order_outcomes;.qt.qpipe.replay_equivalence.order[.qt.qpipe.replay_equivalence.t0+0D00:05:30;`london;`cancelled]];
+     .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:05:46;`order_outcomes;update time:.qt.qpipe.replay_equivalence.t0+0D00:05:44 from .qt.qpipe.replay_equivalence.order[.qt.qpipe.replay_equivalence.t0+0D00:05:40;`london;`filled]];
      .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:06:10;`tick;()];
      .qt.qpipe.replay_equivalence.ev[.qt.qpipe.replay_equivalence.t0+0D00:07:00;`tick;()])}
 
@@ -265,11 +270,13 @@
     .qunit.assertTrue[not 10h=type r;"the run completed rather than erroring"];
     .qunit.assertTrue[0<count last r;"a restart that republished a late row differs"]};
 
-/ The log clock: the process clock live, the receipt stamp on replay.
-.qt.qpipe.replay_equivalence.test_the_log_clock_is_the_process_clock_live_and_the_receipt_stamp_on_replay:{[t]
+/ The log clock: the receipt stamp, live and on replay (#2459); without one, the
+/ process clock live and nothing on replay.
+.qt.qpipe.replay_equivalence.test_the_log_clock_is_the_receipt_stamp_live_and_on_replay:{[t]
     rows:([] time:.qt.qpipe.replay_equivalence.t0+0D00:00:01 0D00:00:02; a:1 2);
     now:.qt.qpipe.replay_equivalence.t0+1D;
-    .qunit.assertEquals[.qetl.job.stream.clock_of[now;rows];2#now;"live: now, for every row"];
+    .qunit.assertEquals[.qetl.job.stream.clock_of[now;rows];rows`time;"live: each row's own stamp, not when the job got to it"];
+    .qunit.assertEquals[.qetl.job.stream.clock_of[now;([] a:1 2)];2#now;"live without a stamp: now"];
     `.qetl.job.stream.replaying set 1b;
     r:.qetl.job.stream.clock_of[now;rows];
     n:.qetl.job.stream.clock_of[now;([] a:1 2)];

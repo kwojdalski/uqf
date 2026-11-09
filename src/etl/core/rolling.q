@@ -35,7 +35,9 @@
 / PUBLICATION. Every `period`, at as_of = the clock floored to a multiple of
 / the period - a grid, so a restart and a backfill twin cut the same instants.
 / A tick whose grid point was already published (a second tick in the same
-/ period, or a restart that finds it in the log) publishes nothing. A key is
+/ period, or a restart that finds it in the log) publishes nothing; a tick that
+/ finds several grid points unpublished since the last (a late or delayed
+/ timer) publishes each of them, and eviction keeps their rows (#2457). A key is
 / published only if it had a row within the LONGEST window, so the key set is
 / bounded by the buffer and never grows with the days the process has run.
 / .
@@ -43,8 +45,8 @@
 / is dropped and logged (the `dropped` ledger). A row within it is buffered
 / and is part of the next publication it falls in the window of: it AMENDS
 / the series, since nothing already published is republished. The receipt is
-/ the log clock (.qetl.job.stream.clock_of): the process clock live, the
-/ plant's `time` stamp on replay, so a row is late exactly when it was live.
+/ the log clock (.qetl.job.stream.clock_of): the plant's `time` stamp, live
+/ and on replay, so a row is late exactly when it was live (#2459).
 / When the event time IS the plant's `time` stamp there is no distinct
 / receipt and no row can be late: it is stamped as it arrives. A row with a
 / null event time is dropped too (reason `no_event_time`), since it is in no
@@ -307,8 +309,11 @@
         span:(last d`windows)+d`lateness;
         / anchored on the grid point the next publication cuts at, as evaluate is:
         / a batch landing after a boundary but before the timer must not evict
-        / rows that publication's window still holds (#1302)
-        keep_from:((d`period) xbar max stamps)-span;
+        / rows that publication's window still holds (#1302) - nor those of an
+        / earlier grid point not yet published, which the next tick catches up (#2457)
+        anchor:(d`period) xbar max stamps;
+        owed:(get ` sv ns,`last_as_of)+d`period;
+        keep_from:$[null owed; anchor; anchor&owed]-span;
         .qetl.job.stream.evict[pq;((get pq) tc)<=keep_from]];
     }
 
@@ -350,8 +355,11 @@
     lq set (get lq)|max x`as_of;
     }
 
-/ Publish the statistic as of the latest grid point, if it has not been, and
-/ then drop the rows no future window can hold.
+/ Publish the statistic as of every grid point since the last one published, up
+/ to the latest, and then drop the rows no future window can hold. A timer that
+/ fires late (run_stream's fires at >= period, from a 250ms wakeup) can straddle
+/ a grid point; it is published by the next tick, as the twin's series cuts it
+/ (#2457). Before anything is published only the latest point is.
 / @param name the job
 / @param now the time to evaluate at
 / @return the number of rows published
@@ -361,17 +369,22 @@
     ns:.qetl.job.stream.namespace name;
     pq:` sv ns,`pending; lq:` sv ns,`last_as_of;
     as_of:(d`period) xbar now;
-    if[$[null get lq; 0b; as_of<=get lq]; :0];
+    last_pub:get lq;
+    if[$[null last_pub; 0b; as_of<=last_pub]; :0];
     .qetl.job.stream.rolling.mark_covered[name;ns;now];
     cf:get ` sv ns,`covered_from;
-    .qetl.job.stream.rolling.note_withheld[name;ns;as_of;cf];
-    out:.qetl.job.stream.rolling.compute[name;get pq;as_of;cf];
-    if[count out; (get ` sv ns,`publish)[first d`outputs;out]];
-    lq set as_of;
+    owed:$[null last_pub; enlist as_of; last_pub+(d`period)*1+til "j"$(as_of-last_pub) div d`period];
+    / one point at a time, publish before advance, so a throw resumes at the next
+    n:{[name;ns;d;cf;pt]
+        .qetl.job.stream.rolling.note_withheld[name;ns;pt;cf];
+        out:.qetl.job.stream.rolling.compute[name;get ` sv ns,`pending;pt;cf];
+        if[count out; (get ` sv ns,`publish)[first d`outputs;out]];
+        (` sv ns,`last_as_of) set pt;
+        count out}[name;ns;d;cf] each owed;
     span:(last d`windows)+d`lateness;
     keep_from:as_of-span;
     .qetl.job.stream.evict[pq;((get pq) d`event_time)<=keep_from];
-    count out}
+    sum n}
 
 / Private: log when the set of window lengths withheld for want of coverage
 / changes, so a restart's gap is said once and its end too.

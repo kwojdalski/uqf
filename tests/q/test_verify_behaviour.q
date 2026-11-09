@@ -48,13 +48,13 @@
 .qt.qetl.verify.behaviour.test_the_feed_advances_its_cursor_and_does_not_republish:{[t]
     r:.qetl.verify.check_cursor `demo_deals_feed;
     .qunit.assertEquals[r`status;`PASS;"published once, cursor moved, second tick idle"];
-    .qunit.assertEquals[r`evidence;"tick 1: published 5 row(s); cursor 2026.09.15D09:00:00.000000000; tick 2: idle 0 row(s); recorder saw 5";"the evidence"];
-    .qunit.assertTrue[null .qetl.job.continuous.load_cursor `demo_deals_feed;"and the real cursor was never touched: the sandbox's was"]};
+    .qunit.assertEquals[r`evidence;"tick 1: published 5 row(s); cursor `deal_time`deal_id!(2026.09.15D09:00:00.000000000;5); tick 2: idle 0 row(s); recorder saw 5";"the evidence"];
+    .qunit.assertTrue[(::)~.qetl.job.continuous.load_cursor_value `demo_deals_feed;"and the real cursor was never touched: the sandbox's was"]};
 
 .qt.qetl.verify.behaviour.test_a_failed_publish_leaves_the_cursor_and_the_retry_delivers_the_page:{[t]
     r:.qetl.verify.check_publish_recovery `demo_deals_feed;
     .qunit.assertEquals[r`status;`PASS;"no over-claim, and the page arrives after the retry"];
-    .qunit.assertEquals[r`evidence;"publish refused: 1; cursor after the failure 0Np; retry published 5 of 5 row(s); cursor 2026.09.15D09:00:00.000000000";"the evidence"]};
+    .qunit.assertEquals[r`evidence;"publish refused: 1; cursor after the failure ::; retry published 5 of 5 row(s); cursor `deal_time`deal_id!(2026.09.15D09:00:00.000000000;5)";"the evidence"]};
 
 .qt.qetl.verify.behaviour.test_the_publish_seam_is_put_back:{[t]
     before:get `.qpipe.job.demo_deals_feed.publish;

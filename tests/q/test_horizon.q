@@ -644,12 +644,16 @@
     h:([] sym:count[rows]#`a; source:rows[;0]; time:.qt.qetl.job.stream.horizons.t0+`timespan$1e9*rows[;1]);
     first .qetl.job.stream.horizons.not_ready[d;.qetl.job.stream.horizons.reach[d;h];enlist .qt.qetl.job.stream.horizons.t0;enlist enlist `a;.qt.qetl.job.stream.horizons.t0+`timespan$1e9*now]}
 
-.qt.qetl.job.stream.horizons.test_readiness_needs_every_source_with_a_book_inside_max_age_of_the_horizon:{[t]
+.qt.qetl.job.stream.horizons.test_readiness_needs_every_source_to_reach_the_horizon:{[t]
     / a at T+11 has passed the horizon; b's last book, T+8, is inside max_age of it and has not
     rows:((`a;-3);(`b;-3);(`a;11);(`b;8));
     .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[rows;12];"a source has not reached 2026.10.09D10:00:10.000000000 for a";"b is behind, whatever a has reached"];
     .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[rows,enlist (`b;10);12];"";"ready once b has reached the horizon too"];
-    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[((`a;-3);(`b;-3);(`a;11);(`b;4));12];"";"a source whose last book is older than max_age at the horizon sets nothing"]};
+    / #2455: b's last book, T+4, is older than max_age at the horizon - but a feed lagging that far
+    / still has its books from T+5 on in flight, so it is waited for too, until the grace
+    lag:((`a;-3);(`b;-3);(`a;11);(`b;4));
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[lag;12];"a source has not reached 2026.10.09D10:00:10.000000000 for a";"a source further behind than max_age is waited for"];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.why[lag;40];"";"and only until horizon + lateness"]};
 
 .qt.qetl.job.stream.horizons.test_the_grace_after_lateness_waives_a_silent_source_and_the_lookback_reach:{[t]
     behind:((`a;-3);(`b;-3);(`a;11);(`b;8));
