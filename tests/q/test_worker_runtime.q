@@ -176,8 +176,8 @@
     .qunit.assertEquals[first d;0b;"and so is every gated effect: is_dry_run throws rather than answering run"]};
 
 .qt.qetl.job.bounded.runtime.test_every_documented_dry_run_spelling_keeps_its_meaning:{[t]
-    on:{[v] setenv[`UQF_DRY_RUN;v]; .qetl.job.bounded.runtime.mode[]} each ("1";"true";"YES";"on");
-    off:{[v] setenv[`UQF_DRY_RUN;v]; .qetl.job.bounded.runtime.mode[]} each ("0";"false";"No";"off";"");
+    on:{[v] setenv[`UQF_DRY_RUN;v]; .qetl.job.bounded.runtime.mode[]} each (enlist "1";"true";"YES";"on");
+    off:{[v] setenv[`UQF_DRY_RUN;v]; .qetl.job.bounded.runtime.mode[]} each (enlist "0";"false";"No";"off";"");
     setenv[`UQF_DRY_RUN;""];
     .qunit.assertEquals[on;4#`dry_run;"each truthy spelling is a dry run, case-insensitively"];
     .qunit.assertEquals[off;5#`run;"each falsy spelling, and none at all, is a real run"]};
