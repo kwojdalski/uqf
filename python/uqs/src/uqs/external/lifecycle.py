@@ -109,12 +109,17 @@ def process_identity(pid: int) -> str | None:
     On Linux the start time is the kernel's own (`boot+<ticks>`), since ps's
     lstart there is recomputed from the wall clock on every call (#1167).
     Elsewhere it is ps's lstart, which macOS reads from a stored timestamp,
-    read in the C locale and UTC so it does not depend on who asks (#1055)."""
+    read in the C locale and UTC so it does not depend on who asks (#1055).
+
+    On Linux the ticks alone are an identity (DetachedProcess._ours compares
+    nothing else), so a missing argv - no `ps` in a slim container, or an
+    empty answer - leaves the ticks rather than nothing: a pid file with no
+    identity can never be stopped (#2515)."""
     ticks = _boot_ticks(pid)
     if ticks is None:
         return _ps(pid, "lstart", "args")
     args = _ps(pid, "args")
-    return f"{ticks} {args}" if args else None
+    return f"{ticks} {args}" if args else ticks
 
 
 @dataclass(frozen=True)
@@ -231,8 +236,21 @@ class DetachedProcess:
                 env=env,
                 start_new_session=new_session,
             )
+        identity = process_identity(process.pid)
+        if identity is None and process.poll() is None:
+            # Alive but unidentifiable (no /proc and no answer from ps): a pid
+            # file without an identity is never signalled, so recording it
+            # would leave a process nothing can stop and the next start would
+            # run a second one beside it (#2515).
+            process.terminate()
+            process.wait()
+            raise UqsError(
+                f"{self.label}: started pid {process.pid} but could not read its start "
+                "time (no /proc, and `ps` gave no answer) - stopped it rather than "
+                "leave a process `stop` cannot recognise. Is `ps` installed?"
+            )
         self.pid_path.parent.mkdir(parents=True, exist_ok=True)
-        self.pid_path.write_text(f"{process.pid}\n{process_identity(process.pid) or ''}\n")
+        self.pid_path.write_text(f"{process.pid}\n{identity or ''}\n")
         return process.pid
 
     def stop(self, *, missing_ok: bool = True) -> int | None:

@@ -271,3 +271,34 @@ def test_a_launcher_that_execs_its_real_program_is_still_ours(proc):
     )
     assert proc.running(), "the exec'd launcher is the process start() spawned"
     assert proc.stop(missing_ok=False) == pid
+
+
+def test_on_linux_with_no_ps_the_ticks_alone_are_recorded_and_stop_works(proc, monkeypatch):
+    """#2515: with no `ps` (a slim container) the identity was None, the pid
+    file recorded none, and stop() called the feed "another process", deleted
+    the pid file and never signalled it. The ticks alone are the identity."""
+    monkeypatch.setattr(lifecycle, "_ps", lambda pid, *fields, fixed=True: None)
+    monkeypatch.setattr(lifecycle, "_boot_ticks", lambda pid: "boot+4242")
+    pid = proc.start(SLEEP, cwd=proc.pid_path.parent)
+    assert proc.pid_path.read_text() == f"{pid}\nboot+4242\n"
+    assert proc.running()
+    assert proc.stop(missing_ok=False) == pid
+    try:
+        _, status = os.waitpid(pid, 0)
+    except ChildProcessError:  # already reaped: it exited
+        return
+    assert os.WIFSIGNALED(status), "signalled, not orphaned"
+
+
+def test_a_start_that_cannot_identify_its_process_stops_it_and_refuses(proc, monkeypatch):
+    """#2515, elsewhere: no /proc and no answer from ps leaves nothing to
+    identify the process by, so it is stopped and the start refused rather
+    than recorded where stop() can never reach it."""
+    monkeypatch.setattr(lifecycle, "_ps", lambda pid, *fields, fixed=True: None)
+    monkeypatch.setattr(lifecycle, "_boot_ticks", lambda pid: None)
+    with pytest.raises(UqsError, match=r"started pid (\d+) but could not read") as refused:
+        proc.start(SLEEP, cwd=proc.pid_path.parent)
+    assert not proc.pid_path.exists()
+    pid = int(str(refused.value).split("started pid ")[1].split()[0])
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)
