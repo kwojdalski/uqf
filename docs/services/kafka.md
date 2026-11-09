@@ -35,6 +35,11 @@ decoder in a sidecar bundle and a verifier that queries the RDB - is
 
 Needs a reachable broker and `confluent-kafka`, the optional `kafka` extra of
 `uqs` (`uv sync --extra kafka`); `uqs connector start kafka` refuses without it.
+It commits a record's offset only once the tickerplant has *stored* the row (the
+same acceptance check as `.qtorq.publish`, so the tickerplant's error mode
+cannot turn a refusal into a success), and it stops, naming the record and
+committing nothing, on a key or payload that is not valid UTF-8: kola can carry
+those bytes to q only by decoding them. `kafka_feed1` carries any bytes.
 **Neither is installed by default**. That follows the rule
 [`singlestore_odbc.q`](../../src/etl/core/singlestore_odbc.q) states for the
 ODBC driver --- a public single-host demo cannot require infrastructure nobody

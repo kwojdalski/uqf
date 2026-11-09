@@ -63,6 +63,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from uqs.external.plant_contract import PLANT_TABLES_Q, plant_table_fields
+from uqs.paths import UqsError
 
 #: The plant's declaration of the raw table, read at runtime for rule 3.
 #: `plant_tables.q` rather than a `.qetl.source` source contract, because this feed has
@@ -83,6 +84,29 @@ def contract_fields(repo_root: str) -> list[str]:
     return plant_table_fields(repo_root, KAFKA_RAW_TABLE)
 
 
+def _carried(msg: Any, what: str, raw: bytes | None) -> bytes:
+    """`raw` as it will cross to q, or a refusal naming the record.
+
+    kola serializes a Python ``bytes`` as a q string by decoding it as UTF-8
+    first, and has no other type that arrives as one (a ``UInt8`` series is a
+    byte vector), so bytes that are not UTF-8 cannot be carried as received.
+    Inside kola that was a bare ``UnicodeDecodeError`` with no coordinates;
+    here it says which record, and the offset is not committed. The native
+    q feed (kafka_feed1) carries any bytes.
+    """
+    raw = raw or b""
+    try:
+        raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise UqsError(
+            f"{msg.topic()}[{msg.partition()}]@{msg.offset()}: the {what} is not valid "
+            f"UTF-8 (byte {exc.start}) - the Python consumer cannot carry it to q as "
+            "received, and does not commit it; consume this topic with kafka_feed1, "
+            "which carries any bytes"
+        ) from None
+    return raw
+
+
 def rows_from_messages(messages: list[Any], fields: list[str]) -> dict[str, list]:
     """Kafka messages as one list per column, in the contract's order.
 
@@ -91,10 +115,13 @@ def rows_from_messages(messages: list[Any], fields: list[str]) -> dict[str, list
     no broker and no tickerplant. That is the whole of the logic here; `main`
     is plumbing.
 
-    Nothing is decoded. The key and payload go as the bytes received (q reads
-    ``bytes`` as a string, byte for byte), so a payload that is not valid
-    UTF-8, empty, or absent (a tombstone) reaches q to be dead-lettered there
-    rather than being lost or repaired here.
+    Nothing is decoded. The key and payload go as the bytes received, which
+    kola delivers to q as a string byte for byte, so an empty or absent payload
+    (a tombstone) or one that is not JSON reaches q to be dead-lettered there
+    rather than being lost or repaired here. The one exception is bytes that
+    are not valid UTF-8: kola makes q characters of a ``bytes`` only by
+    decoding it as UTF-8, so those cannot reach q as received, and are refused
+    here naming the record (`_carried`) - never repaired into other bytes.
 
     The coordinates do NOT come from the payload. `topic`, `partition` and
     `offset` are the broker's, read off the message, and a producer cannot
@@ -111,9 +138,9 @@ def rows_from_messages(messages: list[Any], fields: list[str]) -> dict[str, list
             elif f == "offset":
                 out[f].append(msg.offset())
             elif f == "msg_key":
-                out[f].append(msg.key() or b"")
+                out[f].append(_carried(msg, "key", msg.key()))
             elif f == "payload":
-                out[f].append(msg.value() or b"")
+                out[f].append(_carried(msg, "payload", msg.value()))
             elif f == "broker_time":
                 # A datetime, not the raw millisecond int: the q column is a
                 # timestamp, and handing .u.upd a long would either throw on
@@ -128,6 +155,38 @@ def rows_from_messages(messages: list[Any], fields: list[str]) -> dict[str, list
     return out
 
 
+#: Run ON the tickerplant in place of a bare `.u.upd`: `accept_fn` of
+#: scripts/processes/torq_pipeline.q, which `.qtorq.publish` sends (#2192).
+#: TorQ's segmented tickerplant runs in error mode by default (errmode:1b): its
+#: `.u.upd` hands a failing update to `.stplg.badmsg` - the STP's error log - and
+#: RETURNS, so a bare `.u.upd` answered success for a record the plant did not
+#: store, and the consumer committed it. This keeps the error log exactly as TorQ
+#: writes it and answers 1b, or the error text.
+ACCEPT_Q = (
+    "{[t;x] if[not `upd in key `.stp; .u.upd[t;x]; :1b];"
+    ' r:.[{[t;x] .stp.upd[t;x]; 1b};(t;x);{[e] $[10h=type e; e; "refused"]}];'
+    " if[10h=type r; .stplg.badmsg[r;t;x]]; r}"
+)
+
+
+def _wire(cols: dict[str, list], fields: list[str]) -> list:
+    """The columns as kola must send them for q to read the declared types.
+
+    `broker_time` goes as a timestamp series: a Python ``None`` in a list goes
+    over kola as a generic null (``enlist ::``), which the plant's timestamp
+    column refuses - a record without a broker timestamp was never stored.
+    """
+    import polars as pl  # kola's own dependency
+
+    out = []
+    for f in fields:
+        col = cols[f]
+        if f == "broker_time":
+            col = pl.Series(f, col, dtype=pl.Datetime("ns", "UTC"))
+        out.append(col)
+    return out
+
+
 def publish_message(q: Any, table: str, msg: Any, fields: list[str]) -> None:
     """Send one message to the tickerplant as `.u.upd` takes it: a LIST of columns.
 
@@ -137,9 +196,18 @@ def publish_message(q: Any, table: str, msg: Any, fields: list[str]) -> None:
     answered `type` for every record while the consumer, whose `sync` returned,
     carried on and committed (#1492). The column order is the contract's -
     `.u.upd` places columns by position (invariant 3).
+
+    Raises unless the plant STORED the record (`ACCEPT_Q`), so the caller's
+    commit follows only a record the plant has.
     """
     cols = rows_from_messages([msg], fields)
-    q.sync(".u.upd", table, [cols[f] for f in fields])
+    answer = q.sync(ACCEPT_Q, table, _wire(cols, fields))
+    if isinstance(answer, str):
+        raise UqsError(
+            f"{msg.topic()}[{msg.partition()}]@{msg.offset()}: the tickerplant refused the "
+            f"{table} row - it is in the tickerplant's error log and was NOT stored, so its "
+            f"offset is not committed: {answer}"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
