@@ -327,3 +327,46 @@ def test_several_records_keep_their_order_and_coordinates_in_the_plant(plant) ->
     rows = _stored(plant)
     assert [(r["partition"], r["offset"]) for r in rows] == [(0, 5), (1, 0), (0, 6), (1, 0)]
     assert len(rows) == len(msgs), "every delivery, the repeat included: the audit trail"
+
+
+_NATIVE_Q = """
+\\l src/init.q
+\\l src/etl/init.q
+/ What kafka_feed1 publishes for the same record: its kfk message, through
+/ .qetl.kafka.from_messages (kfk hands the key and payload as bytes).
+native:{[tp;p;o;k;ts;v] .qetl.kafka.from_messages flip
+    `mtype`topic`partition`offset`msgtime`data`key!(
+    enlist `;enlist tp;enlist `int$p;enlist o;enlist ts;enlist "x"$v;enlist "x"$k)};
+"""
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [b'{"sym": "EURUSD"}', b"x", b"", "é".encode()],
+    ids=["json", "one-character", "empty", "multibyte"],
+)
+def test_both_consumers_publish_the_same_envelope(tmp_path, start_q, payload) -> None:
+    """kafka_flow1 must not be able to tell the consumers apart: the row the Python
+    consumer stores equals what kafka_feed1 builds for the same record."""
+    import kola
+
+    boot = tmp_path / "plant.q"
+    boot.write_text(_NATIVE_Q + _PLANT_Q.replace("{PLANT_LINE}", _plant_line()))
+    fields = contract_fields(str(REPO))
+    ts_ms = 1_760_950_801_750
+    msg = FakeMessage(payload, 1, 7, ts_ms, _topic="example.crypto.trades", _key=b"BTC-USD")
+    with start_q(str(boot), startup_seconds=60) as port:
+        conn = kola.Q("127.0.0.1", port, user="", passwd="")
+        conn.connect()
+        try:
+            publish_message(conn, KAFKA_RAW_TABLE, msg, fields)
+            # `g# on topic is the plant table's attribute, not the envelope's.
+            same = conn.sync(
+                '{[v] n:native[`example.crypto.trades;1;7;"BTC-USD";'
+                "2025.10.20D09:00:01.750;v]; p:update `#topic from delete time from kafka_message;"
+                " (n~p; (meta n)~meta p)}",
+                payload,
+            )
+        finally:
+            conn.disconnect()
+    assert list(same) == [True, True]
