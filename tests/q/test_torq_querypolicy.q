@@ -61,6 +61,15 @@
         "querypolicy: mkt_orderbook allows at most 0D01:00:00.000000000 per request and this one covers 0D02:00:00.000000000*";
         "two hours against one"]};
 
+.qt.qtorq.querypolicy.test_a_null_or_infinite_bound_is_refused:{[t]
+    / TorQ's own checks pass these, and getdata reads them as the whole history (#2443)
+    {[d] .qunit.assertThrows[.checkinputs.checkrequest[.qt.qtorq.querypolicy.policy`mkt_orderbook;`sym;];d;
+        "querypolicy: mkt_orderbook needs a finite starttime and endtime*";"an unbounded request is past any maxrange"]} each
+        (@[.qt.qtorq.querypolicy.book;`starttime;:;0Np];
+         @[.qt.qtorq.querypolicy.book;`starttime;:;-0Wp];
+         .qt.qtorq.querypolicy.book,`starttime`endtime!(0Nd;2026.01.02);
+         .qt.qtorq.querypolicy.book,`starttime`endtime!(2026.01.02;0Wd));}
+
 .qt.qtorq.querypolicy.test_a_date_end_counts_the_whole_day:{[t]
     .qunit.assertEquals[.checkinputs.requestspan[2026.01.01;2026.01.01];1D;"one date is one day, not none"];
     .qunit.assertThrows[.checkinputs.checkrequest[.qt.qtorq.querypolicy.policy`mkt_orderbook;`sym;];.qt.qtorq.querypolicy.book,`starttime`endtime!2#2026.01.01;
