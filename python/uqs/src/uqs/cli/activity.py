@@ -167,7 +167,14 @@ def list_(
     recorded_by: RecordedByOpt = None,
     level: LevelOpt = None,
     limit: Annotated[
-        int, typer.Option("--limit", help="The most recent N events")
+        int,
+        typer.Option(
+            "--limit",
+            min=1,
+            max=activity_log.MAX_LIMIT,  # refused, never clamped in silence (#2469)
+            help=f"The most recent N events, at most {activity_log.MAX_LIMIT} - "
+            "`uqs activity export` takes more",
+        ),
     ] = activity_log.DEFAULT_LIMIT,
     db: DbOpt = None,
     export: ExportOpt = None,
@@ -251,7 +258,13 @@ def export_(
     recorded_by: RecordedByOpt = None,
     level: LevelOpt = None,
     limit: Annotated[
-        int, typer.Option("--limit", help="At most N events, the most recent")
+        int,
+        typer.Option(
+            "--limit",
+            min=1,
+            max=activity_log.EXPORT_MAX,
+            help=f"At most N events, the most recent - up to {activity_log.EXPORT_MAX}",
+        ),
     ] = activity_log.EXPORT_DEFAULT,
     db: DbOpt = None,
     output: Annotated[
