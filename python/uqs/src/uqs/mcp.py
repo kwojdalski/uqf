@@ -58,7 +58,7 @@ from uqs.mcp_server import (
 )
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import clean as stack_clean
-from uqs.stack import listing, runtime, start_policy
+from uqs.stack import listing, runtime, site_fields, start_policy
 from uqs.stack import logs as stack_logs
 from uqs.stack import procs as stack_procs
 from uqs.stack.envfiles import load_repo_env_files
@@ -191,7 +191,7 @@ def uqs_config_show(
         _paths(), proc, base_port=base_port, resolve=not unresolved
     )
     if field is not None:
-        return {"process": proc, "field": field, "value": row.get(field, "")}
+        return {"process": proc, "field": field, "value": site_fields.field_value(row, field)}
     return {"process": proc, "fields": [{"field": k, "value": v} for k, v in row.items()]}
 
 

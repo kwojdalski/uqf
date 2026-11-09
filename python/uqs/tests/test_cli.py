@@ -77,7 +77,7 @@ from uqs.external.crypto import (
 )
 from uqs.model import profiles
 from uqs.model.pipeline_edges import LICENCE_CONNECTION_LIMIT
-from uqs.paths import UqsError, UqsPaths
+from uqs.paths import UqsError, UqsPaths, UqsUsageError
 from uqs.stack import (
     alive,
     deployment,
@@ -1158,6 +1158,19 @@ def test_config_get_prints_one_field_when_asked(monkeypatch):
     result = runner.invoke(cli.app, ["config", "show", "rdb1", "port"])
     assert result.exit_code == 0
     assert "6052" in result.stdout
+
+
+def test_config_show_refuses_a_field_the_row_does_not_have(monkeypatch):
+    """#2608: it printed "" and exited 0, which `$(uqs config show ...)` takes as a value."""
+    from uqs import mcp
+
+    row = {"procname": "rdb1", "port": "6052"}
+    _patch(monkeypatch, stack_procs, "get_process_config", result=row)
+    for argv in (["config", "show", "rdb1", "prot"], ["config", "show", "rdb1", "prot", "--json"]):
+        result = runner.invoke(cli.app, argv)
+        assert result.exit_code == 2 and result.stdout == "", result.output
+    with pytest.raises(UqsUsageError, match="unknown process.csv field: 'prot'"):
+        mcp.uqs_config_show("rdb1", "prot")
 
 
 def test_config_get_resolves_placeholders_unless_raw_is_given(monkeypatch):
