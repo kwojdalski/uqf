@@ -9,11 +9,20 @@
 / worker -> the TorQ process types it needs a connection to.
 .qetl.job.bounded.runtime.declared_dependencies:(`symbol$())!();
 
-/ Declare what a worker needs before it can run.
+/ Declare what a worker needs before it can run. One process type may be given
+/ as an atom: it is stored as a one-element list, because an atom stored first
+/ would make the registry's values a symbol vector, and every later read and
+/ declaration a 'type (#2402).
+/ @param worker the worker's name
+/ @param procs the TorQ process types it needs, a symbol or a symbol list
+/ @return the process types, as a list
+/ @throws error when procs is not a symbol or a symbol list
 / @eg .qetl.job.bounded.runtime.declare_dependencies[`markout_backfill;`tickerplant`hdb]
 .qetl.job.bounded.runtime.declare_dependencies:{[worker;procs]
-    .qetl.job.bounded.runtime.declared_dependencies[worker]:procs;
-    procs}
+    if[not 11h=abs type procs;
+        '"declare_dependencies: ",string[worker],"'s process types must be a symbol or a symbol list, got type ",string type procs];
+    .qetl.job.bounded.runtime.declared_dependencies[worker]:(),procs;
+    (),procs}
 
 / Private: which process types currently have a live connection.
 / .
@@ -47,6 +56,8 @@
 / dependency at once, for the same reason require_contract does.
 / @throws error naming every unavailable dependency
 .qetl.job.bounded.runtime.require_dependencies:{[worker]
+    / undeclared is checked first: indexing a missing worker reads the dictionary's prototype
+    if[not worker in key .qetl.job.bounded.runtime.declared_dependencies; :worker];
     needed:.qetl.job.bounded.runtime.declared_dependencies[worker];
     if[0=count needed; :worker];
     live:.qetl.job.bounded.runtime.connected[];
