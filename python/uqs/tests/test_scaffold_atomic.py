@@ -90,6 +90,25 @@ def test_a_partial_write_rolls_back_the_failing_target(tmp_path, monkeypatch, ex
         assert not target.parent.exists()
 
 
+def test_a_filename_the_filesystem_refuses_rolls_back_without_a_second_error(tmp_path, monkeypatch):
+    """#2507: the rollback unlinked the over-long path it never created, which
+    raised again and skipped removing the folders made for the plan. The plan
+    refuses such a name up front now, so that check is bypassed to reach the
+    rollback, which must still hold for any path the filesystem refuses."""
+    monkeypatch.setattr(write, "_check_filenames", lambda plan: None, raising=False)
+    plan = ScaffoldPlan(
+        "audit",
+        [
+            FileAction(Path("docs/audit/notes.md"), "notes\n"),
+            FileAction(Path("tests") / ("x" * 300 + ".q"), "body\n"),
+        ],
+    )
+    with pytest.raises(OSError) as raised:
+        write.apply_plan(plan, tmp_path)
+    assert raised.value.__context__ is None, "the rollback raised a second error"
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_a_plan_that_applies_writes_every_file(tmp_path):
     tree = _tree(tmp_path, expected_line=True)
     assert write.apply_plan(_plan(), tree) == [Path("docs/audit/notes.md"), STACK_TABLES_TEST]

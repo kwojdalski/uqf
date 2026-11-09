@@ -157,6 +157,15 @@ def test_a_bad_name_is_refused_before_anything_is_planned():
             jobs.streaming_job(name, [], None, None)
 
 
+def test_a_name_too_long_for_a_filename_is_refused_before_anything_is_written(tmp_path):
+    """#2507: a 251-character name passed the pattern and then crashed the
+    write on the filesystem's 255-byte filename limit."""
+    plan = jobs.streaming_job("a" + "b" * 250, ["trades"], None, None, unprofiled="x")
+    with pytest.raises(UqsError, match=f"over the {write.MAX_FILENAME}"):
+        write.apply_plan(plan, tmp_path)
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_a_plan_refuses_wholesale_rather_than_half_writing(tmp_path: Path):
     """A scaffold that created three files and then refused the fourth would
     leave a tree that neither loads nor reverts cleanly - and the half that
