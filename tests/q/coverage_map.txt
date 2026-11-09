@@ -602,6 +602,7 @@ src/etl/core/run.q	.qetl.run.under_lock	test_complete_through.q,test_demo_deals_
 src/etl/core/run.q	.qetl.run.unfinished	test_run.q
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.available	test_etl_lifecycle.q,test_singlestore_odbc.q
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.build_connection_string	test_singlestore_odbc.q
+src/etl/core/singlestore_odbc.q	.qetl.io.odbc.close	test_singlestore_odbc.q
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.datetime6	test_singlestore_odbc.q
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.duckdb_timestamp	test_docstring_examples.q,test_duckdb_deals_backfill.q
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.escape_text	test_docstring_examples.q,test_singlestore_odbc.q
@@ -610,6 +611,7 @@ src/etl/core/singlestore_odbc.q	.qetl.io.odbc.loaded	test_etl_lifecycle.q,test_s
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.open	test_singlestore_odbc.q
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.require_available	test_etl_lifecycle.q,test_singlestore_odbc.q
 src/etl/core/singlestore_odbc.q	.qetl.io.odbc.run_sql	test_singlestore_odbc.q
+src/etl/core/singlestore_odbc.q	.qetl.io.odbc.with_connection	test_singlestore_odbc.q
 src/etl/core/source_credentials.q	.qetl.source.clear_settings	test_source_contract.q,test_torq_pipeline.q
 src/etl/core/source_credentials.q	.qetl.source.configured	test_complete_through.q,test_demo_deals_backfill.q,test_docstring_examples.q,test_duckdb_deals_backfill.q,test_event_tape.q,test_every_worker_runs.q,test_hdb_crypto_book_backfill.q,test_hdb_exec_bars_backfill.q,test_hdb_fx_markout_wide_backfill.q,test_hdb_fx_markouts_backfill.q,test_hdb_order_quality_backfill.q,test_io_hdb_scoped.q,test_live_check.q,test_local_source.q,test_partition_replace.q,test_react.q,test_rebuild_positions.q,test_source_contract.q,test_torq_pipeline.q
 src/etl/core/source_credentials.q	.qetl.source.credential_example	test_complete_through.q,test_demo_deals_backfill.q,test_docstring_examples.q,test_duckdb_deals_backfill.q,test_event_tape.q,test_every_worker_runs.q,test_hdb_crypto_book_backfill.q,test_hdb_exec_bars_backfill.q,test_hdb_fx_markout_wide_backfill.q,test_hdb_fx_markouts_backfill.q,test_hdb_order_quality_backfill.q,test_io_hdb_scoped.q,test_local_source.q,test_react.q,test_rebuild_positions.q,test_source_contract.q,test_transports.q
