@@ -151,6 +151,27 @@
         '"publish: ",string[t]," has a column that is an ATOM - the row count comes from column length, so a one-row batch of atoms reads as a one-column batch"];
     1b}
 
+/ Private: refuse a batch whose columns or types are not its table's
+/ registered schema - declared, or learned from the first batch - naming
+/ each column that differs. Without it a batch of any shape was logged and
+/ sent while the schema subscribers were given said otherwise (#2326). A
+/ general (0h) column on either side matches any type: it is what an empty
+/ or nested column is, and it carries no type to compare.
+/ @private
+.qetl.tick.require_schema:{[t;batch]
+    if[not t in key .qetl.tick.schemas; :1b];
+    want:{(cols x)!type each value flip x} .qetl.tick.schemas t;
+    got:{(cols x)!type each value flip x} batch;
+    missing:(key want) except key got;
+    extra:(key got) except key want;
+    both:(key want) inter key got;
+    bad:both where not {[w;g] (w=g) or 0h in w,g}'[want both;got both];
+    if[0=count[missing]+count[extra]+count bad; :1b];
+    '"publish: ",string[t]," does not match its schema -",
+        $[count missing; " missing ",(", " sv string missing),";"; ""],
+        $[count extra; " unexpected ",(", " sv string extra),";"; ""],
+        raze {[w;g;c] " ",string[c]," is type ",string[g],"h, the schema's is ",string[w],"h;"}'[want bad;got bad;bad]}
+
 / Publish a batch: stamp it, log it, and fan it out to whoever wants it.
 / .
 / The equivalent of .u.upd, and named `publish` rather than `upd` because
@@ -197,6 +218,7 @@
     / the wire, so a subscriber's live path and its recovery path receive
     / different shapes. Everything works until the day something restarts.
     batch:$[98h=type stamped; stamped; .qetl.tick.learn[t;stamped]];
+    .qetl.tick.require_schema[t;batch];
     .qetl.tick.record[(`upd;t;batch)];
     .qetl.tick.fan_out[t;batch];
     count batch}
