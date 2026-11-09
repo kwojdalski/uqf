@@ -89,7 +89,7 @@
             where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts
       }[skew];range_from;range_to];
     / not the equity venues' fills (#2574): rows would drop them, and their books are not fetched for nothing
-    deals:select from deals where not venue in .qpipe.transform.eq_markout_outputs.venues;
+    deals:deals where not deals[`venue] in .qpipe.transform.eq_markout_outputs.venues;
     if[0=count deals; :`executions`market_data!(deals;0#.qpipe.source.hdb_crypto_markouts.supporting`market_data)];
     spec:.qpipe.transform.crypto_markout_outputs.job_spec;
     early:.qpipe.transform.crypto_markout_outputs.lookback[];
