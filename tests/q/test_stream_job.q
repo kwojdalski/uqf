@@ -1577,6 +1577,22 @@
     lead:book[enlist 1.10;enlist 1e6;now+.qf.mkt.max_clock_lead-0D00:00:00.001];
     .qunit.assertEquals[count .qpipe.job.market_data.check lead;0;"a clock within the shared lead passes"]};
 
+/ #2418: a quote that pulls a side (null price, zero size) is a withdrawal, an
+/ empty ladder, and is published with its live side - not a one-level ladder
+/ withheld as bad_level, which left the pulled side live downstream.
+.qt.qetl.job.stream.test_market_data_maps_a_pulled_quote_side_to_a_withdrawal:{[t]
+    t0:.z.p-0D00:00:02;
+    q:([] time:(t0;t0+0D00:00:01); sym:`EURUSD`EURUSD; bid:1.1 0n; ask:1.1002 1.1003; bsize:1000000 0; asize:1000000 1000000; src:`LP_A`LP_A);
+    md:.qpipe.job.market_data.from_quote q;
+    .qunit.assertEquals[md`bid_prices;(enlist 1.1;`float$());"the pulled bid is an empty ladder"];
+    .qunit.assertEquals[md`bid_sizes;(enlist 1e6;`float$());"and so are its sizes"];
+    .qunit.assertEquals[count .qpipe.job.market_data.check md;0;"a withdrawal is not a failure"];
+    `.qt.qetl.job.stream.pulled set ();
+    .qetl.job.stream.checked[`market_data;.qpipe.job.market_data.check;`drop;{[t;x] `.qt.qetl.job.stream.pulled set x;};`market_data;md];
+    .qunit.assertEquals[count .qt.qetl.job.stream.pulled;2;"both quotes are published, the new ask with the withdrawal"];
+    bad:.qpipe.job.market_data.from_quote update bid:-1.1 from q;
+    .qunit.assertEquals[exec row from .qpipe.job.market_data.check bad where check=`bad_level;enlist 0;"a negative price with a size is still not a price; the pulled one stays a withdrawal"]};
+
 / #1542: a future-dated quote is withheld as bad_time but must not set the
 / stale reference, or every healthy row in its batch reads as stale.
 .qt.qetl.job.stream.test_market_data_check_stale_reference_ignores_future_rows:{[t]
