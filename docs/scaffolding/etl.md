@@ -85,7 +85,7 @@ When the job only forwards or reshapes one table, the scaffold can write the
 handler too:
 
 ```
-uqs job new trades_echo --subscribe-to trades --outputs trades_copy \
+uqs job new trades_echo --subscribe-to trades --outputs trades_echo \
     --schema-from trades --transform passthrough
 uqs job new trades_notional --subscribe-to trades --outputs notional \
     --schema "sym:symbol, notional:float" --transform derive
