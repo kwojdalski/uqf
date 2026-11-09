@@ -249,6 +249,16 @@
         '"define: ",string[source],"'s query must be a function (parameterised, never concatenated)"];
     if[not .qetl.declared.callable decl`fixture;
         '"define: ",string[source],"'s fixture must be a niladic function (the path must be exercisable with no driver)"];
+    / Arity where q can read it (a lambda), now rather than at the first live
+    / window's bare 'rank (#2484). A bracketless `{...}` reports the implicit
+    / x it is called with, (::), so it counts as niladic like `{[] ...}`.
+    if[(.qetl.declared.lambda decl`query) and 3<>count (value decl`query) 1;
+        '"define: ",string[source],"'s query must take 3 arguments (h; range_from; range_to)"];
+    if[.qetl.declared.lambda decl`fixture;
+        fx_params:(value decl`fixture) 1;
+        fx_implicit:((enlist `x)~fx_params) and not "{["~2#string decl`fixture;
+        if[not ((enlist `)~fx_params) or fx_implicit;
+            '"define: ",string[source],"'s fixture must take no arguments, {[] ...}"]];
     if[not -11h=type decl`tz;
         '"define: ",string[source],"'s tz must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\""];
     / The window is taken on time_column, so time_column must be a field this

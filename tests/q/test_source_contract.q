@@ -76,6 +76,21 @@
     bad:@[.qt.qetl.source.decl[];`fixture;:;()];
     .qunit.assertError[{.qetl.source.define[`t;x]};bad;"without a fixture the whole backfill path is undemonstrable"]};
 
+/ #2484: a lambda's parameter list is readable, so a query or fixture of the
+/ wrong arity is refused at define - not by a bare 'rank at the first live window.
+.qt.qetl.source.test_a_query_of_the_wrong_arity_is_refused:{[t]
+    bad:@[.qt.qetl.source.decl[];`query;:;{[h] ()}];
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};bad;"define: t's query must take 3*";"the query is called with (h; range_from; range_to)"]};
+
+.qt.qetl.source.test_a_fixture_taking_an_argument_is_refused:{[t]
+    bad:@[.qt.qetl.source.decl[];`fixture;:;{[x] ()}];
+    .qunit.assertThrows[{.qetl.source.define[`t;x]};bad;"define: t's fixture must take no*";"the fixture is called with nothing"]};
+
+/ A bracketless lambda is called with (::) for its implicit x, so it is niladic.
+.qt.qetl.source.test_a_bracketless_or_empty_fixture_is_niladic:{[t]
+    ok:{.qetl.source.define[`t;@[.qt.qetl.source.decl[];`fixture;:;x]]} each ({[] ()};{()});
+    .qunit.assertEquals[ok;`t`t;"{[] ...} and {...} both register"]};
+
 / The zone is a required declaration with no default. A defaulted zone
 / reads as a decision downstream while nobody ever made one, and the failure
 / is silent - every consumer assumes UTC while the source hands over local
