@@ -204,6 +204,14 @@
         "trades,,0D01:00:00,,raw,,10,10,0D00:00:30,x";"");
     .qunit.assertEquals[exec tablename from .checkinputs.readquerypolicy f;enlist`trades;"the one row, the file still loads"]};
 
+.qt.qtorq.querypolicy.test_a_request_naming_another_instrument_column_is_refused:{[t]
+    / TorQ filters instruments on the table's own column, so a request's
+    / instrumentcolumn must not satisfy a required filter on another (#2593).
+    d:.qt.qtorq.querypolicy.book,enlist[`instrumentcolumn]!enlist`sym;
+    .qunit.assertThrows[.checkinputs.checkcolumns[`book];d;
+        "querypolicy: mkt_orderbook filters instruments on book - drop instrumentcolumn";"not the column TorQ filters"];
+    .qunit.assertEquals[.checkinputs.checkcolumns[`sym;d];d;"the table's own column passes"]};
+
 .qt.qtorq.querypolicy.test_the_wrapped_checkinputs_holds_an_ordinary_caller_to_the_policy:{[t]
     was:.checkinputs.callerroles;held:.checkinputs.querypolicies;
     .checkinputs.callerroles:{[] `symbol$()};.checkinputs.querypolicies:.qt.qtorq.querypolicy.shipped;

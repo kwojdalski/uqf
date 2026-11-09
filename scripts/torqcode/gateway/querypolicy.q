@@ -210,10 +210,20 @@ checkprohibited:{[dict]
 / gateway's own console.
 callerroles:{[] $[0=.z.w;trustedroles;@[{exec role from .pm.userrole where user=x};.z.u;`symbol$()]]}
 
-/ The instrument column for a table, from TorQ's table properties.
-policyinstcol:{[dict]
-    $[`instrumentcolumn in key dict;dict`instrumentcolumn;
-        @[{first exec instrumentcolumn from .checkinputs.tablepropertiesconfig where tablename=x};dict`tablename;`sym]]}
+/ The instrument column for a table, from TorQ's table properties: the one
+/ TorQ filters `instruments` on, whatever a request names.
+policyinstcol:{[table]
+    @[{first exec instrumentcolumn from .checkinputs.tablepropertiesconfig where tablename=x};table;`sym]}
+
+/ Refuse a request that names its own instrument column. TorQ ignores it and
+/ filters instruments on the table's, so trusting it would let instruments
+/ satisfy a required filter on a column that is never filtered (#2593).
+/ @param instcol the table's instrument column
+/ @param dict the request
+checkcolumns:{[instcol;dict]
+    if[(`instrumentcolumn in key dict)&not instcol~dict`instrumentcolumn;
+        '"querypolicy: ",string[dict`tablename]," filters instruments on ",string[instcol]," - drop instrumentcolumn"];
+    dict}
 
 / The policies this gateway enforces. Read once, as it loads; a missing or
 / malformed file leaves none, which refuses every ordinary request rather
@@ -257,8 +267,9 @@ if[(not ()~key`.checkinputs.checkinputs)&not`querypolicywrapped in key`.checkinp
         if[99h<>type dict;:f dict];
         r:callerroles[];
         if[any r in trustedroles;:f dict];
-        dict:f checkprohibited dict;
-        checkrequest[resolvepolicy[allpolicies[];policyceiling;dict`tablename;r];policyinstcol[dict];dict]}[checkinputs];
+        c:policyinstcol dict`tablename;
+        dict:f checkprohibited checkcolumns[c] dict;
+        checkrequest[resolvepolicy[allpolicies[];policyceiling;dict`tablename;r];c;dict]}[checkinputs];
     querypolicywrapped:1b]
 
 \d .dataaccess
