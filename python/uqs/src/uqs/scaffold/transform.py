@@ -70,13 +70,18 @@ def worker_transform(
         return "", after, name
     check_mode(mode)
     if mode == "passthrough":
+        # The source's own worker (NAME_backfill on source NAME) names it after
+        # the source; any other worker - a second slice or target over a
+        # source already declared - after itself, or it would register the
+        # name the source's own worker already holds (#2499).
+        xf = f"{src}_passthrough" if worker == f"{src}_backfill" else f"{worker}_passthrough"
         after = f"""/ Pass-through until a real transform is needed: the batch is published as
 / fetched. Its shape is {dataset}'s, `time` kept (the fixture carries it), taken
 / from the plant rather than copied from the fixture (#1360); the example is
 / what .qetl.transform checks it against.
-.qetl.transform.passthrough[`{src}_passthrough;`batch;.qetl.plant.shape `{dataset};.qpipe.source.{src}.fixture[]];
+.qetl.transform.passthrough[`{xf};`batch;.qetl.plant.shape `{dataset};.qpipe.source.{src}.fixture[]];
 """  # noqa: E501
-        return "", after, f"{src}_passthrough"
+        return "", after, xf
     name = f"{worker}_transform"
     inside = f"""
 / SCAFFOLDED. One fetched batch, as the source delivers it, into rows of
