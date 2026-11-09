@@ -166,6 +166,14 @@ def test_preflight_refuses_a_glibc_below_the_floor():
     assert artifact.compatible(target, {**facts, "glibc": "2.28"}) == []
 
 
+def test_a_kdb_4_0_server_printing_its_version_as_4_runs_a_release_converted_for_4_0():
+    # .z.K on kdb+ 4.0 is 4f, and `string 4f` is "4" (#2577).
+    target = {"os": "linux", "arch": "x86_64", "python": "3.14", "q": "4.0"}
+    facts = {"os": "Linux", "arch": "x86_64", "python": "3.14", "qversion": "4"}
+    assert artifact.compatible(target, facts) == []
+    assert "older than the kdb+ 4.1" in " ".join(artifact.compatible({**target, "q": "4.1"}, facts))
+
+
 # --- a release that carries one --------------------------------------------------------
 
 

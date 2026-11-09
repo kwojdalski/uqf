@@ -264,6 +264,8 @@ def _older(version: str, than: str) -> bool:
     a, b = (v.strip().split(".")[:2] for v in (version, than))
     if not all(p.isdigit() for p in a + b):
         return False
+    # kdb+ 4.0 prints its .z.K as "4": pad to equal width, as meets() does (#2577).
+    a, b = a + ["0"] * (2 - len(a)), b + ["0"] * (2 - len(b))
     return tuple(map(int, a)) < tuple(map(int, b))
 
 

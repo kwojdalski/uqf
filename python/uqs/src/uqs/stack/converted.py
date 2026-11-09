@@ -83,9 +83,11 @@ def _manifest(root: Path) -> dict | None:
         raise UqsError(f"{path} is not JSON - this release's record of itself is damaged") from None
 
 
-def _version(text: str) -> tuple[int, ...] | None:
-    parts = text.strip().split(".")[:2]
-    return tuple(int(p) for p in parts) if all(p.isdigit() for p in parts) else None
+def _version(text: str) -> tuple[int, int] | None:
+    # kdb+ 4.0 reports .z.K as 4f, which prints "4": pad it to (4, 0) so it
+    # compares equal to the "4.0" a release was converted for (#2577).
+    parts = (text.strip().split(".") + ["0"])[:2]
+    return (int(parts[0]), int(parts[1])) if all(p.isdigit() for p in parts) else None
 
 
 def _sha256(path: Path) -> str:
