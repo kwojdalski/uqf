@@ -238,3 +238,14 @@
     bad_eom:(enlist `EURUSD)!enlist `spot_lag`roll`eom`weekend!(2;`following;`yes;`sat`sun);
     .qunit.assertThrows[.qf.px.forward_date[2026.04.30;`1M;`EURUSD;.qt.qf.px.calendar.no_holidays[];];bad_eom;
         "calendar: EURUSD's eom must be a boolean, got `yes";"an eom that is not a boolean is named, not a bare 'type"]};
+
+/ EURUSD counts its lag on EUR, so Labor Day (USD, Mon 2026.09.07) was T+1
+/ for a Friday trade - counted, not skipped - yet `skipped` named it (#2554).
+.qt.qf.px.calendar.test_skipped_names_only_days_the_count_or_the_roll_passed_over:{[t]
+    r:.qf.px.spot_date[2026.09.04;`EURUSD;.qf.px.mock_calendars;.qf.px.mock_conventions];
+    .qunit.assertEquals[r`date;2026.09.08;"T+1 is Labor Day, counted on EUR; T+2 is Tuesday"];
+    .qunit.assertEquals[r`skipped;2026.09.05 2026.09.06;"only the weekend: Labor Day was T+1"];
+    / Thu 2026.09.03: the counted T+2 is Labor Day, and spot rolls past it
+    r:.qf.px.spot_date[2026.09.03;`EURUSD;.qf.px.mock_calendars;.qf.px.mock_conventions];
+    .qunit.assertEquals[r`date;2026.09.08;"Labor Day is no spot date"];
+    .qunit.assertEquals[r`skipped;2026.09.05 2026.09.06 2026.09.07;"the weekend, then the spot date rolled past"]};

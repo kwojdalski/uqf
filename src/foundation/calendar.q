@@ -226,7 +226,9 @@
 / @param calendars dict currency -> holiday dates; both currencies, and settle_via's, required
 / @param conventions dict pair -> `spot_lag`roll`eom`weekend!(...), optionally `settle_via
 / @return dict date, trade_date, pair, spot_lag, calendars, skipped - the
-/   non-business days passed over between the trade date and spot
+/   days passed over between the trade date and spot: non-business days on
+/   the counted currencies while counting the lag, then days that are not
+/   business days on `calendars` which spot rolled past
 / @throws error naming a missing calendar, pair or convention
 / @eg (.qf.px.spot_date[2026.09.18;`EURUSD;.qf.px.mock_calendars;.qf.px.mock_conventions])`date  -> 2026.09.22
 .qf.px.spot_date:{[trade_date;pair;calendars;conventions]
@@ -238,8 +240,14 @@
     / T+0, where nothing is counted and a weekend or holiday trade date would
     / be its own spot. Never back - spot does not settle before the trade.
     settle:.qf.px.adjust[counted;`following;settle_ccys;calendars;c`weekend];
-    between:trade_date+1+til 0|settle-trade_date;
-    skipped:between where not .qf.px.is_business_day[between;settle_ccys;calendars;c`weekend];
+    / What was skipped is judged on the calendars that decided it (#2554):
+    / while counting the lag, count_ccys - a USD holiday on T+1 of EURUSD
+    / was counted as a business day, so it was not skipped; from the counted
+    / date to spot, settle_ccys, the days spot rolled past.
+    counting:trade_date+1+til 0|counted-trade_date;
+    rolling:(counted+til 0|settle-counted) except trade_date;
+    skipped:(counting where not .qf.px.is_business_day[counting;c`count_ccys;calendars;c`weekend]),
+        rolling where not .qf.px.is_business_day[rolling;settle_ccys;calendars;c`weekend];
     `date`trade_date`pair`spot_lag`calendars`skipped!(settle;trade_date;c`pair;c`spot_lag;settle_ccys;skipped)}
 
 / Private: a tenor symbol such as `3D`1W`2M`1Y as (count;unit).
