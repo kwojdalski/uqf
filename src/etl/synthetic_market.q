@@ -58,7 +58,9 @@
 / @param s the current level, a float atom or vector
 / @return the next level, same shape
 / @eg .qf.demo.drift_one 1.0  ->  a float within 5bp of 1.0
-.qf.demo.drift_one:{[s] s*1+0.0005*-1+2*rand 1f}
+/ A vector takes one draw per level: `rand 1f` is a single draw, which moved
+/ every pair by the same factor (#2627).
+.qf.demo.drift_one:{[s] s*1+0.0005*-1+2*$[0>type s; rand 1f; (count s)?1f]}
 
 / A level-0-first price ladder for one pair: `levels` prices, `step` apart,
 / starting one step away from mid, so level 0 is never exactly mid.
