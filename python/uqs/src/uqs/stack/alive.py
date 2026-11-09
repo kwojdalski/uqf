@@ -40,15 +40,36 @@ log = get_logger()
 HEADER = "TIME | PROCESS | STATUS | PID | PORT"
 
 
+#: What torq.sh asks `hostname` for to decide a host is this machine
+#: (lib/torq/torq.sh's start: `hostname -i`, `hostname -I`, `hostname -A`):
+#: an address, every address, every name.
+_HOSTNAME_FLAGS = ("-i", "-I", "-A")
+
+
+def _hostname_words(flag: str) -> set[str]:
+    """`hostname <flag>`'s words, or none where it fails - BSD hostname (macOS)
+    knows none of these flags, and a missing binary is no reason to fail."""
+    try:
+        result = subprocess.run(
+            ["hostname", flag], capture_output=True, text=True, check=False, timeout=5
+        )
+    except OSError, subprocess.SubprocessError:
+        return set()
+    return set(result.stdout.split()) if result.returncode == 0 else set()
+
+
 def _local_hosts() -> set[str]:
-    """Names a process.csv `host` may use for this machine. torq.sh prints no
-    row at all for a process configured on another host, and neither does
-    this."""
+    """Names a process.csv `host` may use for this machine: what torq.sh
+    starts locally, so a process it started on this machine's LAN address is
+    one this sees (#2579). torq.sh prints no row at all for a process
+    configured on another host, and neither does this."""
     names = {"localhost", "127.0.0.1", "::1"}
     try:
         names |= {socket.gethostname(), socket.getfqdn()}
     except OSError:  # pragma: no cover - a machine with no hostname
         pass
+    for flag in _HOSTNAME_FLAGS:
+        names |= _hostname_words(flag)
     return names
 
 
