@@ -40,15 +40,22 @@ policylogins:{[path] ("S*S";enlist",")0:path}
 / @param logins (user;password) pairs from the access list
 / @param policy user, password and role, from <proctype>_users.csv
 setupusers:{[logins;policy]
-    logins:logins where not logins[;0] in policy`user;
-    {[u;p] .pm.adduser[u;`local;`md5;md5 p];.pm.assignrole[u;`administrator]}.' logins;
-    {[u;p;r] .pm.adduser[u;`local;`md5;md5 p];.pm.assignrole[u;r]}'[policy`user;policy`password;policy`role];
     / Messages arriving on handles this process opened - a backend's
     / .gw.addserverresult - never pass .z.pw, and arrive as the blank user or
     / this process's own. Neither can log in: neither is in the access list.
+    / First, so a refused users file still leaves backend replies working.
     .pm.assignrole[`;`administrator];
     if[not .z.u in key .pm.user;.pm.adduser[.z.u;`local;`md5;md5 string first -1?0Ng]];
     .pm.assignrole[.z.u;`administrator];
+    / A blank line reads as an all-null row, not a user (#2590).
+    policy:select from policy where not null user;
+    / Before anyone is added: assignrole throwing partway would leave every
+    / user after the bad row out.
+    if[count bad:select from policy where not role in exec name from .pm.roleinfo;
+        '"pmusers: no such role - ",", "sv string[bad`user],'" (",/:string[bad`role],\:")"];
+    logins:logins where not logins[;0] in policy`user;
+    {[u;p] .pm.adduser[u;`local;`md5;md5 p];.pm.assignrole[u;`administrator]}.' logins;
+    {[u;p;r] .pm.adduser[u;`local;`md5;md5 p];.pm.assignrole[u;r]}'[policy`user;policy`password;policy`role];
     }
 
 / Not where the site authenticates its own way (UQF_SITE_AUTH, #1847): its

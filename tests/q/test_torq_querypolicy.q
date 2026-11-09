@@ -226,6 +226,35 @@
     .qunit.assertEquals[exec role from u;`analyst`quant`browser`analyst;"never admin or administrator - rts, the real-time subscriber (#984), is an analyst"]};
 
 
+/ .pm as the gateway has it when pmusers.q runs: TorQ's permissions.q and
+/ default.q, then the gateway's roles. Reloading permissions.q empties its
+/ tables, so each test starts from default.q alone.
+.qt.qtorq.querypolicy.pmfresh:{[]
+    system "l lib/torq/code/handlers/permissions.q";
+    system "l lib/torq/config/permissions/default.q";
+    system "l scripts/torqconfig/permissions/gateway.q"}
+
+/ A users file with these lines, read the way pmusers.q reads it.
+.qt.qtorq.querypolicy.usersfile:{[lines]
+    f:hsym `$"/tmp/qpoltest_users_",string[.z.i],".csv";
+    f 0:enlist["user,password,role"],lines;
+    .pm.policylogins f}
+
+.qt.qtorq.querypolicy.rolesof:{[u] asc exec role from .pm.userrole where user=u}
+
+.qt.qtorq.querypolicy.test_a_blank_line_in_the_users_file_is_not_a_user:{[t]
+    .qt.qtorq.querypolicy.pmfresh[];
+    .pm.setupusers[();.qt.qtorq.querypolicy.usersfile("analyst,analyst,analyst";"";"browser,browser,browser")];
+    .qunit.assertEquals[.qt.qtorq.querypolicy.rolesof each `analyst`browser;(enlist`analyst;enlist`browser);"both rows"];
+    .qunit.assertTrue[`administrator in .qt.qtorq.querypolicy.rolesof`;"backend replies still pass"]};
+
+.qt.qtorq.querypolicy.test_an_unknown_role_refuses_the_users_file_before_adding_anyone:{[t]
+    .qt.qtorq.querypolicy.pmfresh[];
+    p:.qt.qtorq.querypolicy.usersfile("analyst,analyst,analyst";"quant,quant,quants");
+    .qunit.assertThrows[.pm.setupusers[()];p;"pmusers: no such role - quant (quants)";"naming the row"];
+    .qunit.assertEquals[.qt.qtorq.querypolicy.rolesof`analyst;`symbol$();"nobody is half set up"];
+    .qunit.assertTrue[all `administrator in/: .qt.qtorq.querypolicy.rolesof each (`;.z.u);"backend replies still pass"]};
+
 / --- the browser (#889) ----------------------------------------------------
 
 / A catalog with one unbounded table and one that has a policy row too.
