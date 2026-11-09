@@ -253,10 +253,21 @@
       .qetl.retention.apply_uptime[id;cutoff;p]];
     p}
 
+/ Private: the reactions of ds whose ok outcome stands for claim c, as
+/ .qetl.reaction.pending judges it: registered, and not owed over c's window.
+/ @private
+.qetl.retention.reacted:{[ds;c]
+    rs:.qetl.reaction.for_dataset[ds];
+    if[0=count rs; :`symbol$()];
+    owed:.qetl.reaction.pending[ds;c`partition;c`source_version;c`range_from;c`range_to];
+    (rs`name) except exec name from owed where range_from=c`range_from, range_to=c`range_to}
+
 / Private: withdraw the current claims cl over one removed item r, returning how
 / many were superseded.
 / @private
 .qetl.retention.withdraw:{[decl;r;cl]
+    / which reactions are done over each claim, read before its remainders exist
+    done:.qetl.retention.reacted[decl`dataset;] each cl;
     rc:cl where {[ds;c] not .qetl.coverage.outstanding[ds;c`partition;c`source_version]}[decl`dataset] each cl;
     ready:distinct ([] dataset:(count rc)#decl`dataset; partition:rc`partition; source_version:rc`source_version);
     / a claim reaching past the removed day is cut, not dropped: its
@@ -273,6 +284,16 @@
     / unreleased before the cut, or this would release data the deployment has not
     / yet made visible.
     if[count ready; .qetl.coverage.mark_ready[ready;.z.p]];
+    / a remainder is a new claim no outcome matches, so a reaction that succeeded
+    / over its parent read as owed over it, and the next run re-fetched and re-fired
+    / it over rows retention never touched (#2437). Its ok outcome is carried over,
+    / recorded after the remainder, as readiness is re-advanced above.
+    {[ds;r;c;nms]
+        rest:$[c[`range_from]<r`range_from; enlist (c`range_from;r`range_from); ()],
+            $[(r`range_to)<c`range_to; enlist (r`range_to;c`range_to); ()];
+        {[ds;c;nms;w]
+            item:`dataset`partition`source_version`range_from`range_to`depth!(ds;c`partition;c`source_version;w 0;w 1;0);
+            .qetl.reaction.record[item;;`ok;"retention: carried over from the window it was cut from"] each nms}[ds;c;nms] each rest}[decl`dataset;r]'[cl;done];
     n}
 
 / Private: remove the HDB partitions, one at a time: supersede, remove, record.

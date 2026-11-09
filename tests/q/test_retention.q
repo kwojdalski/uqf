@@ -227,6 +227,27 @@
     .qunit.assertEquals[.qetl.coverage.is_covered[`rtdeals_ds;`;.qt.qetl.retention.v;.z.p;`timestamp$2026.01.03;`timestamp$2026.01.04];0b;
         "and the claim that landed meanwhile is withdrawn"]};
 
+/ #2437: the remainder of a cut claim is a new claim no reaction outcome matches;
+/ the reaction that succeeded over its parent must not read as owed over it.
+.qt.qetl.retention.test_a_cut_claims_remainder_keeps_its_reactions_done:{[t]
+    root:.qt.qetl.retention.hdb[];
+    .qt.qetl.retention.declare[`rt_react;root];
+    fillable:.qetl.reaction.fillable;
+    .qetl.reaction.fillable:{[] enlist `rtdeals_ds};
+    owed:@[{[x]
+        .qetl.reaction.on[`rtdeals_ds;`derive_rt;{[d;f;t] }];
+        .qt.qetl.retention.claim["2026.01.02";"2026.01.04"];
+        w:`dataset`partition`source_version`range_from`range_to`depth!(`rtdeals_ds;`;.qt.qetl.retention.v;`timestamp$2026.01.02;`timestamp$2026.01.04;0);
+        .qetl.reaction.record[w;`derive_rt;`ok;""];
+        / 30 days before 02-02: only 01-02 lies wholly before the horizon
+        .qetl.retention.run[`rt_react;2026.02.02D00:00:00.000000000;`apply`supersede!11b];
+        .qetl.reaction.pending[`rtdeals_ds;`;.qt.qetl.retention.v;`timestamp$2026.01.01;`timestamp$2026.01.10]};::;{[e] e}];
+    .qetl.reaction.off[`rtdeals_ds;`derive_rt];
+    .qetl.reaction.fillable:fillable;
+    .qunit.assertEquals[.qt.qetl.retention.held[root];2026.01.03 2026.02.20;"01-02 is removed"];
+    .qunit.assertEquals[owed;([] name:`symbol$(); range_from:`timestamp$(); range_to:`timestamp$());
+        "and the reaction over the kept 01-03 is not owed again"]};
+
 .qt.qetl.retention.test_a_claim_crossing_into_a_kept_day_keeps_the_kept_part:{[t]
     root:.qt.qetl.retention.hdb[];
     .qt.qetl.retention.declare[`rt_cross;root];
