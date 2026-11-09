@@ -6,9 +6,10 @@
 / editing this file:
 /     uv run python scripts/generate/derive.py compression-config
 / .
-/ WITHIN WHAT TORQ'S .cmp TAKES: algorithms 0-3, because .cmp is the engine
+/ WITHIN WHAT TORQ'S .cmp TAKES: algorithms 0-3 for the age pass, because .cmp is the engine
 / (#2146) and this is the file it reads. lz4hc and zstd are refused at
-/ declaration, naming that.
+/ declaration, naming that, except on a table whose mode is `write: the writer
+/ compresses it and the age pass never applies its row (#2295).
 / .
 / MODE (#2151) says WHEN a table is compressed: `age (the default, and every
 / declaration below), `write or `both. Nothing here changes it, so every table

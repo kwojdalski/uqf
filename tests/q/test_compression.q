@@ -52,25 +52,66 @@
         r:.qetl.compression.resolve `reference_data;
         .qunit.assertEquals[(r`algo;r`blocksize;r`level);0 0 0j;"left uncompressed, block and level are not applicable"]}};
 
-.qt.qetl.compression.test_the_algorithm_must_be_one_torqs_cmp_takes_0_to_3:{[t]
+.qt.qetl.compression.test_the_algorithm_must_be_one_kdbx_has_0_to_5:{[t]
     .qt.qetl.compression.sandbox {[]
         f:{[a] .qetl.compression.set_default .qt.qetl.compression.full[a;16;0;7]};
-        .qunit.assertThrows[f;6;"*algo 6 is not 0-3*";"past KDB-X's own range"];
-        .qunit.assertThrows[f;-1;"*algo -1 is not 0-3*";"negative"];
+        .qunit.assertThrows[f;6;"*algo 6 is not 0-5*";"past KDB-X's own range"];
+        .qunit.assertThrows[f;-1;"*algo -1 is not 0-5*";"negative"];
         .qunit.assertThrows[f;`gzip;"*algo must be an integer*";"a name is not a number"];
         .qunit.assertEquals[(f 3)`algo;3j;"snappy is accepted"]}};
 
-.qt.qetl.compression.test_lz4hc_and_zstd_are_refused_saying_torqs_cmp_does_not_take_them:{[t]
+.qt.qetl.compression.test_lz4hc_and_zstd_are_refused_where_torqs_age_pass_would_read_them:{[t]
+    / #2295: .cmp takes 0-3, and it is the age pass, so 4 and 5 are refused on
+    / every policy whose mode lets the age pass apply it, naming the mode.
     .qt.qetl.compression.sandbox {[]
         f:{[a] .qetl.compression.set_default .qt.qetl.compression.full[a;16;1;7]};
-        .qunit.assertThrows[f;4;"*algo 4 (lz4hc) is not supported by TorQ's .cmp*";"lz4hc"];
-        .qunit.assertThrows[f;5;"*algo 5 (zstd) is not supported by TorQ's .cmp*";"zstd"]};
+        .qunit.assertThrows[f;4;"*algo 4 (lz4hc) needs mode `write: TorQ's .cmp, which compresses a mode `age table by age, takes 0-3*";"lz4hc, an age default"];
+        .qunit.assertThrows[f;5;"*algo 5 (zstd) needs mode `write*";"zstd, an age default"]};
     .qt.qetl.compression.sandbox {[]
         .qt.qetl.compression.gz[];
-        .qunit.assertThrows[{[s] .qetl.compression.declare[`orders;s]};(enlist `algo)!enlist 5;
-            "*algo 5 (zstd) is not supported*";"a table, too"];
+        .qunit.assertThrows[{[s] .qetl.compression.declare[`orders;s]};`algo`level!(5;3);
+            "compression: orders: algo 5 (zstd) needs mode `write: TorQ's .cmp, which compresses a mode `age table by age, takes 0-3*";"a table compressed by age"];
+        .qunit.assertThrows[{[s] .qetl.compression.declare[`orders;s]};`algo`level`mode!(5;3;`both);
+            "*algo 5 (zstd) needs mode `write: TorQ's .cmp, which compresses a mode `both table by age*";"both keeps its age rows, so it is refused too"];
         .qunit.assertThrows[{[s] .qetl.compression.declare[`fx_markout;s]};`minage`columns!(14;(enlist `invert)!enlist 4 16 9);
-            "*fx_markout column invert: algo 4 (lz4hc)*";"and a column"]}};
+            "*fx_markout: algo 4 (lz4hc) needs mode `write*";"and a column"]}};
+
+.qt.qetl.compression.test_lz4hc_and_zstd_are_accepted_for_a_write_table:{[t]
+    .qt.qetl.compression.sandbox {[]
+        .qt.qetl.compression.gz[];
+        .qetl.compression.declare[`orders;`algo`blocksize`level`mode!(5;17;3;`write)];
+        .qetl.compression.declare[`fx_markout;`mode`columns!(`write;(enlist `invert)!enlist 4 16 9)];
+        .qunit.assertEquals[(.qetl.compression.resolve `orders)`algo`blocksize`level;5 17 3j;"zstd, as declared"];
+        .qunit.assertEquals[(.qetl.compression.resolve `fx_markout)[`columns]`invert;4 16 9j;"lz4hc on a column of a write table"]};
+    .qt.qetl.compression.sandbox {[]
+        / A write default may name zstd; a table that inherits it and is not write is refused.
+        .qetl.compression.set_default `algo`blocksize`level`minage`mode!(5;17;3;7;`write);
+        .qunit.assertThrows[{[s] .qetl.compression.declare[`orders;s]};(enlist `mode)!enlist `age;
+            "*algo 5 (zstd) needs mode `write*";"the inherited algorithm, judged against the table's own mode"]}};
+
+.qt.qetl.compression.test_lz4hc_and_zstd_take_their_own_levels:{[t]
+    .qt.qetl.compression.sandbox {[]
+        .qt.qetl.compression.gz[];
+        f:{[s] .qetl.compression.declare[`orders;s]};
+        .qunit.assertThrows[f;`algo`level`mode!(5;23;`write);"*level 23 does not fit zstd - its levels are -7-22*";"zstd above"];
+        .qunit.assertThrows[f;`algo`level`mode!(5;-8;`write);"*level -8 does not fit zstd*";"zstd below"];
+        .qunit.assertThrows[f;`algo`level`mode!(4;17;`write);"*level 17 does not fit lz4hc - its levels are 0-16*";"lz4hc above"];
+        .qunit.assertEquals[f `algo`level`mode!(5;-7;`write);`orders;"zstd's fastest level is accepted"]}};
+
+.qt.qetl.compression.test_a_zstd_write_table_renders_a_row_torqs_cmp_loads:{[t]
+    / The CSV must still pass .cmp.checkcsv: the write table's row, held out of
+    / the age pass by its minage, carries 0 0 0 where zstd and lz4hc would be.
+    .qt.qetl.compression.sandbox {[]
+        .qt.qetl.compression.gz[];
+        tbl:first .qetl.plant.names[];
+        .qetl.compression.declare[tbl;`algo`blocksize`level`mode!(5;17;3;`write)];
+        r:select from .qetl.compression.rows[] where table=tbl;
+        .qunit.assertEquals[r;([] table:enlist tbl; minage:enlist .qetl.compression.never; column:enlist `default; calgo:enlist 0j; cblocksize:enlist 0j; clevel:enlist 0j);
+            "never selected, and nothing .cmp refuses"];
+        .qt.fixture.torq_cmp.load[];
+        ok:@[{.cmp.checkcsv ("SISIII";enlist ",") 0: x; 1b};.qetl.compression.csv[];{x}];
+        .qt.fixture.torq_cmp.unload[];
+        .qunit.assertEquals[ok;1b;"TorQ's own checkcsv takes the whole file"]}};
 
 .qt.qetl.compression.test_the_block_size_must_be_12_to_20:{[t]
     .qt.qetl.compression.sandbox {[]
@@ -159,7 +200,7 @@
     .qt.qetl.compression.sandbox {[]
         .qt.qetl.compression.gz[];
         .qunit.assertThrows[{[s] .qetl.compression.declare[`fx_markout;s]};`minage`columns!(14;(enlist `invert)!enlist 9 16 9);
-            "*fx_markout column invert: algo 9 is not 0-3*";"names the table and the column"];
+            "*fx_markout column invert: algo 9 is not 0-5*";"names the table and the column"];
         .qunit.assertThrows[{[s] .qetl.compression.declare[`fx_markout;s]};`minage`columns!(14;(enlist `invert)!enlist 2 16);
             "*must be (algo;blocksize;level)*";"a triple"]}};
 

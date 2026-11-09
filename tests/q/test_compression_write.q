@@ -101,6 +101,45 @@
         .qunit.assertEquals[t3;(2 17 6i;2 17 6i;2 17 6i;2 17 9i);"flag at level 9, the rest at the table's level 6"];
         .qunit.assertEquals[get .qt.qetl.compression.write.file[root;`wt_cols;`flag];20000#0b;"and flag still reads back"]}};
 
+/ --- zstd at save (#2295) -------------------------------------------------------------------------
+
+/ Why this q cannot compress with zstd: the loader's message when libzstd is not on its path
+/ (KDB-X opens it by name, and macOS does not look in Homebrew's lib), or "" when it can.
+/ Any other failure of the probe is not a missing library, so it is thrown.
+.qt.qetl.compression.write.zstd_unavailable:{[]
+    d:first system "mktemp -d";
+    f:hsym `$d,"/probe";
+    r:@[{[f] (f;17;5;3) set til 1000; ""};f;{x}];
+    @[hdel;f;::];
+    @[hdel;hsym `$d;::];
+    if[not count r; :""];
+    if[r like "zstd libs required*"; :r];
+    'r}
+
+/ zstd, which TorQ's .cmp cannot take, through the writer that does not go through .cmp. It needs
+/ libzstd on q's loader path (docs/reference/environment.md#peachq-and-file-compression). Without
+/ it the case is skipped the way this tree skips a case its interpreter cannot run (an early
+/ return), but visibly: it logs SKIPPED with the loader's message, and its result is that
+/ message, so the run's listing shows it. Once zstd loads, a wrong round-trip fails.
+.qt.qetl.compression.write.test_a_write_table_is_compressed_with_zstd_at_save_and_reads_back_equal:{[t]
+    why:.qt.qetl.compression.write.zstd_unavailable[];
+    if[count why; .qunit.lg "SKIPPED -> zstd: ",why; -2 "SKIPPED ",string[.qunit.currentTestBeingTested],": ",why; :"SKIPPED: ",why];
+    .qt.qetl.compression.write.sandboxed {[]
+        .qetl.compression.declare[`wt_zstd;`algo`blocksize`level`mode!(5;17;3;`write)];
+        root:.qt.qetl.compression.write.root[];
+        mgr:.qetl.io.hdb[root;`time];
+        b:.qt.qetl.compression.write.batch[20000];
+        .qetl.io.write[mgr;`wt_zstd;b];
+        .qetl.io.finish mgr;
+        st:.qt.qetl.compression.write.state[root;`wt_zstd];
+        .qunit.assertEquals[.qt.qetl.compression.write.triple each value st;4#enlist 5 17 3i;
+            "-21! reports zstd (algorithm 5), block 17, level 3 on time, sym, px and flag"];
+        cs:`time`sym`px`flag;
+        got:flip cs!{[root;c] get .qt.qetl.compression.write.file[root;`wt_zstd;c]}[root] each cs;
+        got:update sym:(get ` sv root,`sym) `long$sym from got;
+        .qunit.assertEquals[got;`sym`time xasc b;"every column reads back equal to what was written, in the finish's order"];
+        .qunit.assertTrue[not `zd in key `.z;".z.zd is not left at zstd after the write"]}};
+
 / --- .z.zd is the process's, so nothing may leak ------------------------------------------------
 
 .qt.qetl.compression.write.test_zd_is_unset_again_after_a_write_that_found_it_unset:{[t]
