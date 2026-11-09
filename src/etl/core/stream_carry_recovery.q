@@ -90,11 +90,13 @@
 / missed, because each log continues the one before it. Needs the transport's
 / optional `earlier_days`[tables; first day; last day], to the day BEFORE the
 / plant's own (`plant_day`), so the days replayed here and the log `subscribe`
-/ replays never overlap (#1190). When the log of the first missed day was
+/ replays never overlap (#1190). When the log of every missed day was
 / replayed (`has_log`), the job is marked `caught_up`: with no snapshot
 / anywhere, that state is a book that was flat at the marker plus every later
-/ fill, and is complete (#1189). One without earlier_days leaves
-/ missed_end_of_day to say what is lost.
+/ fill, and is complete (#1189). A missed day with no log is logged as an
+/ ERROR naming it - earlier_days skips it, and a snapshot restored from the
+/ first day's log would keep missed_end_of_day quiet (#2323). One without
+/ earlier_days leaves missed_end_of_day to say what is lost.
 / @param job the job's name
 / @param tr the transport
 / @param tbls the tables subscribed to
@@ -108,7 +110,13 @@
     if[(null last_eod) or last_eod>=today-1; :0];
     if[not `earlier_days in key tr; :0];
     msgs:tr[`earlier_days][tbls;last_eod+1;today-1];
-    if[`has_log in key tr; .qetl.job.stream.caught_up[job]:tr[`has_log][last_eod+1]];
+    if[`has_log in key tr;
+        days:(last_eod+1)+til today-1+last_eod;
+        missing:days where not tr[`has_log] each days;
+        .qetl.job.stream.caught_up[job]:0=count missing;
+        if[count missing;
+            .qetl.log.ch.err[`eod;"no log for some of the days it was down across - the state it carried lacks their fills";
+                (enlist[`job]!enlist job),`last_end_of_day`through`missing!(last_eod;today-1;missing)]]];
     {[h;m] h . m}[h] each msgs;
     .qetl.log.ch.info[`eod;"replayed the logs of the days it was down across, to rebuild the state it carried";
         (enlist[`job]!enlist job),`last_end_of_day`through`messages!(last_eod;today-1;count msgs)];
@@ -121,7 +129,7 @@
 / from before is missing. A first start (no marker) and a flat book at the
 / last end of day (marker for yesterday, nothing to snapshot) are not that,
 / and pass quietly. After catch_up has replayed the earlier days a snapshot
-/ is found and this is quiet; so is a catch_up that read the log of the day
+/ is found and this is quiet; so is a catch_up that read every log from the day
 / after the marker, snapshot or not (#1189: the book was flat at the marker).
 / It speaks when that log could not be read (a transport without earlier_days
 / or has_log, or logs since cleared), and when the marker itself cannot be
