@@ -307,12 +307,17 @@
 .qt.qetl.job.stream.test_fills_and_orders_price_around_the_quoted_market:{[t]
     .qt.qetl.job.stream.reset[];
     do[2000;.qpipe.job.fx_feed.on_timer[]];
-    / three pips of slippage, plus the quote feed's quarter pip of jitter
-    near:{[px;s] i:.qf.demo.pairs?first s; (3.25*.qf.demo.pip i)>=abs first[px]-.qpipe.job.fx_feed.spot i};
+    / three pips of slippage, plus the quote feed's quarter pip of jitter, and a
+    / little for the level moving with the clock between the quote and the fill:
+    / each fill is compared with a quote taken just before it, not with the last
+    / of the 2000, which a slow interpreter may have quoted many seconds earlier.
+    near:{[px;s] i:.qf.demo.pairs?first s; (3.5*.qf.demo.pip i)>=abs first[px]-.qpipe.job.fx_feed.spot i};
     do[50;
+        .qpipe.job.fx_feed.on_timer[];
         .qpipe.job.fx_trades_feed.on_timer[];
         r:.qt.qetl.job.stream.last_rows[];
         .qunit.assertTrue[near[r 2;r 0];"a fill prints within its slippage of the quoted mid"];
+        .qpipe.job.fx_feed.on_timer[];
         .qpipe.job.fx_orders_feed.on_timer[];
         r:.qt.qetl.job.stream.last_rows[];
         .qunit.assertTrue[near[r 6;r 1];"and so does an order"]]};
