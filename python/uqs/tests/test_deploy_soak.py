@@ -20,15 +20,17 @@ FEED, ETL, WORKER = "fxfeed1", "cross1", "deals_backfill1"
 SINCE = 1_800_000_000  # 2027-01-15, the soak's start on the server's clock
 
 
-def _at(epoch: float) -> str:
-    """A record's `at`, as q's .z.p prints it."""
-    return datetime.fromtimestamp(epoch, UTC).strftime("%Y.%m.%dD%H:%M:%S.%f") + "123"
+def _at(epoch: float, sep: str = "T") -> str:
+    """A record's `at`, as .j.j writes .z.p: dashes, `T` on KDB-X, `D` on PeachQ."""
+    return datetime.fromtimestamp(epoch, UTC).strftime(f"%Y-%m-%d{sep}%H:%M:%S.%f") + "123"
 
 
-def _record(tmp_path, proc: str, at: float, failing: bool = False, failed: int = 0) -> None:
+def _record(
+    tmp_path, proc: str, at: float, failing: bool = False, failed: int = 0, sep: str = "T"
+) -> None:
     status = tmp_path / "uqs" / "status"
     status.mkdir(parents=True, exist_ok=True)
-    body = {"job": proc, "process": proc, "pid": 1, "at": _at(at), "ok": 7, "failed": failed,
+    body = {"job": proc, "process": proc, "pid": 1, "at": _at(at, sep), "ok": 7, "failed": failed,
             "failing": failing, "last_error": "type" if failed else ""}  # fmt: skip
     (status / f"stream_health_{proc}.txt").write_text(json.dumps(body))
 
@@ -44,6 +46,12 @@ def _soak(tmp_path, *processes: str) -> dict:
 
 def test_a_job_that_beat_during_the_soak_with_no_failure_is_ok(tmp_path):
     _record(tmp_path, FEED, SINCE + 5)
+    assert _soak(tmp_path, FEED)[FEED]["verdict"] == "ok"
+
+
+def test_a_peachq_record_with_a_d_separator_is_read_too(tmp_path):
+    """#2392: PeachQ's .j.j writes `D` between date and time, KDB-X's `T`."""
+    _record(tmp_path, FEED, SINCE + 5, sep="D")
     assert _soak(tmp_path, FEED)[FEED]["verdict"] == "ok"
 
 

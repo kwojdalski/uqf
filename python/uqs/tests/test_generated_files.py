@@ -86,7 +86,7 @@ def test_setenv_sh_is_replaced_whole(tmp_path, monkeypatch):
     )
     runtime.write_setenv(paths, 7000)
     assert replaced == [paths.generated_setenv]
-    assert 'export KDBBASEPORT="7000"' in paths.generated_setenv.read_text()
+    assert "export KDBBASEPORT=7000" in paths.generated_setenv.read_text()
 
 
 def _held_elsewhere(paths: UqsPaths):

@@ -111,6 +111,11 @@ def test_coerce_the_new_types(qtype, value, expected):
     ("qtype", "value", "message"),
     [
         (QType.INT, 2**31, "outside"),
+        # 0Wi and -0Wi, 0Wh and -0Wh are q's infinities (#2414)
+        (QType.INT, 2**31 - 1, "outside"),
+        (QType.INT, -(2**31 - 1), "outside"),
+        (QType.SHORT, 2**15 - 1, "outside"),
+        (QType.SHORT, -(2**15 - 1), "outside"),
         (QType.INT, 1.5, "expected an integer"),
         (QType.INT, True, "expected an integer"),
         (QType.SHORT, 40000, "outside"),

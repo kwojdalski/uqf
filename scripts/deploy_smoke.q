@@ -23,13 +23,16 @@
 
 \d .qdeploysmoke
 
-/ One check: within 1e-6 of the expected value, or say which and how far off.
+/ One check: a numeric atom within 1e-6 of the expected value, or say which
+/ and what it gave. A null is refused explicitly: it compares below every
+/ number, so `1e-6>abs 0n-want` is 1b (#2441). A list or a non-number is
+/ refused too, with this message rather than a 'type.
 / @param name what is checked
 / @param got the library's value
 / @param want the expected value
 / @return 1b when it matches
 expect:{[name;got;want]
-    ok:1e-6>abs got-want;
+    ok:$[(type got) within -9 -5h; $[null got; 0b; 1e-6>abs got-want]; 0b];
     if[not ok; -2 "DEPLOY_SMOKE_FAILED: ",name," gave ",(.Q.s1 got),", expected ",.Q.s1 want];
     ok}
 

@@ -7,6 +7,7 @@ its refusals; this is the part only the listing commands use.
 
 from __future__ import annotations
 
+import math
 from typing import Annotated
 
 import typer
@@ -25,20 +26,36 @@ ReverseOpt = Annotated[
 ]
 
 
-def _sort_key(value: object):
-    """Sort key for one cell, numeric where the whole column is numeric.
-
-    Returned as a tuple so empties group together at one end rather than
-    sorting as the empty string among real values - a process with no
-    override set is not "before aaa", it is absent.
-    """
-    text = cell(value).strip()
-    if not text:
-        return (1, 0.0, "")
+def _finite(text: str) -> float | None:
+    """`text` as a finite number, or None - `nan`, `inf` and words are not."""
     try:
-        return (0, float(text), "")
+        number = float(text)
     except ValueError:
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _column_key(values: list[object]):
+    """The sort key for a column: numeric when every non-empty cell is a
+    finite number, else case-insensitive text for the whole column (#2415) -
+    decided once per column, so the order is always a total one.
+
+    Empties group together at one end rather than sorting as the empty
+    string among real values - a process with no override set is not
+    "before aaa", it is absent.
+    """
+    texts = [cell(v).strip() for v in values]
+    numeric = all(_finite(t) is not None for t in texts if t)
+
+    def key(value: object):
+        text = cell(value).strip()
+        if not text:
+            return (1, 0.0, "")
+        if numeric:
+            return (0, _finite(text), "")
         return (0, 0.0, text.casefold())
+
+    return key
 
 
 def _sorted_items[Row: dict](items: list[Row], sort: str | None, reverse: bool) -> list[Row]:
@@ -66,4 +83,5 @@ def _sorted_items[Row: dict](items: list[Row], sort: str | None, reverse: bool) 
             )
         )
         return items
-    return sorted(items, key=lambda item: _sort_key(item.get(column, "")), reverse=reverse)
+    key = _column_key([item.get(column, "") for item in items])
+    return sorted(items, key=lambda item: key(item.get(column, "")), reverse=reverse)

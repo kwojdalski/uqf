@@ -85,6 +85,24 @@ def test_a_projection_is_not_reported(scan):
     assert problems == []
 
 
+@pytest.mark.parametrize(
+    "inside",
+    ["`limits;(`max_rows;10000)", '`EURUSD;"2026.01.01;2026.01.02"', 'a;"say \\"x;y\\"";b'],
+)
+def test_a_semicolon_inside_a_list_or_a_string_separates_no_argument(inside):
+    """#2412: only a top-level `;` separates arguments."""
+    want = 3 if inside.startswith("a;") else 2
+    assert cdr._arg_count(inside) == want
+
+
+def test_a_call_passing_a_general_list_is_not_reported(scan):
+    problems, _ = scan(
+        "```q\n.qetl.coverage.stage_completion[ds;(`a;`b);from;to;rows]\n"
+        '.qetl.coverage.require_interval["a;b";(1;2)]\n```\n'
+    )
+    assert problems == []
+
+
 def test_a_niladic_call_is_not_reported(scan):
     # `f[]` passes zero arguments, not one empty argument. Counting the empty
     # body as an argument would flag every niladic call in the docs.

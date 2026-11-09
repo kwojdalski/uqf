@@ -122,13 +122,35 @@ def test_setenv_sh_records_the_status_dir_the_workers_are_started_with(
     fake_paths.torqdata.mkdir(parents=True)
     runtime.write_setenv(fake_paths, 7000)
     default = fake_paths.torqdata / "status"
-    assert f'export UQF_STATUS_DIR="{default}"' in fake_paths.generated_setenv.read_text()
+    assert f"export UQF_STATUS_DIR={shlex.quote(str(default))}" in (
+        fake_paths.generated_setenv.read_text()
+    )
     monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path / "elsewhere"))
     env = runtime.write_setenv(fake_paths, 7000)
     assert env["UQF_STATUS_DIR"] == str(tmp_path / "elsewhere")
-    assert f'export UQF_STATUS_DIR="{tmp_path / "elsewhere"}"' in (
+    assert f"export UQF_STATUS_DIR={shlex.quote(str(tmp_path / 'elsewhere'))}" in (
         fake_paths.generated_setenv.read_text()
     )
+
+
+def test_setenv_sh_gives_bash_exactly_the_values_uqs_computed(
+    fake_paths: UqsPaths, monkeypatch, tmp_path
+):
+    """#2394: torq.sh sources setenv.sh, so a `$`, a backtick, a quote or a
+    backslash in a value must reach its processes as written, and run nothing."""
+    qcmd = '/x/`echo hi`$HOME"q\\'
+    monkeypatch.setenv("QCMD", qcmd)
+    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path / "st$HOME 'a'"))
+    fake_paths.torqdata.mkdir(parents=True)
+    env = runtime.write_setenv(fake_paths, 7000)
+    r = subprocess.run(
+        ["bash", "-c", 'source "$0"; printf "%s\\n%s" "$QCMD" "$UQF_STATUS_DIR"',
+         str(fake_paths.generated_setenv)],
+        capture_output=True, text=True, check=True,
+    )  # fmt: skip
+    assert r.stderr == ""
+    assert r.stdout == f"{env['QCMD']}\n{env['UQF_STATUS_DIR']}"
+    assert env["UQF_STATUS_DIR"] == str(tmp_path / "st$HOME 'a'")
 
 
 def test_bootstrap_is_idempotent(fake_paths: UqsPaths, monkeypatch):

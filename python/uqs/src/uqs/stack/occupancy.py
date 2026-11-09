@@ -130,9 +130,13 @@ def squatters(
 
 
 def describe(paths: UqsPaths, holder: Holder) -> tuple[str, str]:
-    """(what the other stack is, how to stop it)."""
+    """(what the other stack is, how to stop it).
+
+    A runtime of this checkout or release keeps its data beside this one's,
+    under the same data root - `UQS_DATA_ROOT` when it is set, as in every
+    deployed release, else output/ (#2396)."""
     for runtime in RUNTIMES.values():
-        if holder.data_dir == paths.repo_root / "output" / runtime.data_dir:
+        if holder.data_dir == paths.torqdata.parent / runtime.data_dir:
             flag = "" if runtime.name == DEFAULT_RUNTIME else f" --runtime {runtime.name}"
             port = "" if holder.stackid == runtime.base_port else f" --base-port {holder.stackid}"
             return (

@@ -36,7 +36,8 @@ log = get_logger()
 #: argv[1] (epoch seconds, the server's clock): a verdict for each streaming
 #: process among argv[2] (comma-separated), from the release's own
 #: stream_health reader and pipeline registry. .z.p, which each record's `at`
-#: is, is UTC.
+#: is, is UTC; .j.j writes it `2026-11-09T11:35:54.823627317` on KDB-X and
+#: with a `D` for the `T` on PeachQ, and fromisoformat takes either (#2392).
 SOAK_PY = r"""
 import json, sys
 from datetime import UTC, datetime
@@ -52,7 +53,8 @@ out = {}
 def verdict(r):
     if r is None:
         return "no beat", "it wrote no stream_health record"
-    at = datetime.strptime(str(r.get("at", ""))[:26], "%Y.%m.%dD%H:%M:%S.%f")
+    stamp, _, fraction = str(r.get("at", "")).partition(".")
+    at = datetime.fromisoformat(f"{stamp}.{(fraction or '0')[:6].ljust(6, '0')}")
     if at.replace(tzinfo=UTC).timestamp() < since:
         return "no beat", f"its last record is from {r['at']}, before the soak"
     if r.get("failing"):
@@ -113,8 +115,17 @@ class Deployment(Server):
         return remote_archive
 
     def transfer(self, pkg: Artifact, rid: str) -> str:
+        """Upload the archive, check it and extract it into releases/<rid>.
+
+        Whole or not at all, as runtime_install does for a runtime (#2442):
+        tar writes into a hidden releases/.<rid>.partial - cleared first, in
+        case an interrupted attempt left one, and removed by a trap if this
+        one fails - and only a complete tree is renamed into place. A failed
+        extraction so leaves no releases/<rid>, and the push can be retried.
+        """
         staging = f"{self.cfg.dest}/staging/{rid}"
         release = f"{self.releases}/{rid}"
+        partial = f"{self.releases}/.{rid}.partial"
         self.run(
             "transfer",
             "creating the staging directory",
@@ -130,8 +141,11 @@ class Deployment(Server):
             f"  rm -rf {q(staging)}; exit 1",
             "fi",
             f"test ! -e {q(release)} || {{ echo 'release {rid} already exists' >&2; exit 1; }}",
-            f"mkdir {q(release)}",
-            f"tar -xzf {q(remote_archive)} -C {q(release)}",
+            f"rm -rf {q(partial)}",
+            f"trap {q(f'rm -rf {q(partial)}')} EXIT",
+            f"mkdir {q(partial)}",
+            f"tar -xzf {q(remote_archive)} -C {q(partial)}",
+            f"mv {q(partial)} {q(release)}",
             f"rm -rf {q(staging)}",
         )
         return release

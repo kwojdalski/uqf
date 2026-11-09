@@ -285,12 +285,31 @@ def _arg_count(inside: str) -> int:
     """How many arguments a bracketed q argument list passes.
 
     `[]` is a niladic call, not one empty argument - so an empty or
-    whitespace-only body counts as zero rather than one.
+    whitespace-only body counts as zero rather than one. Only a top-level `;`
+    separates arguments: one inside `(...)` separates list items, and one
+    inside a `"..."` string is a character (#2412).
     """
     body = inside.strip()
     if not body:
         return 0
-    return len(body.split(";"))
+    count, depth, in_string, escaped = 1, 0, False, False
+    for ch in body:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth = max(0, depth - 1)
+        elif ch == ";" and depth == 0:
+            count += 1
+    return count
 
 
 def check() -> tuple[list[str], dict[str, int]]:

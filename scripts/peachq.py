@@ -225,9 +225,12 @@ def _commit_override(env: Mapping[str, str], pinned: str) -> str | None:
 def is_pinned(binary: Path | str, pin_path: Path = PIN_FILE) -> bool:
     """Is `binary` the pinned build? Told by the manifest beside it: a cache
     entry's manifest.json (published here), or a deployed q runtime's
-    RUNTIME_MANIFEST.json (deploy/q_runtime.py), recording the pinned commit
-    and no commit override. A binary with neither has no recorded origin, so
-    it is not the pin, whatever it was built from."""
+    RUNTIME_MANIFEST.json (deploy/q_runtime.py), recording the pinned commit.
+    The commit alone decides: an `unpinned` record says the entry was first
+    asked for by a commit override, which is stale once the pin moves to that
+    commit - the entry is then the pinned build, reused as such (#2411). A
+    binary with neither manifest has no recorded origin, so it is not the
+    pin, whatever it was built from."""
     pinned = load_pin(pin_path)["commit"]
     home = Path(binary).resolve().parent
     for name in ("manifest.json", "RUNTIME_MANIFEST.json"):
@@ -236,7 +239,7 @@ def is_pinned(binary: Path | str, pin_path: Path = PIN_FILE) -> bool:
         except _UNREADABLE:
             continue
         if isinstance(recorded, dict) and recorded.get("commit") == pinned:
-            return not recorded.get(UNPINNED_KEY)
+            return True
     return False
 
 

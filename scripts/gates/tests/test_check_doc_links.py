@@ -57,6 +57,43 @@ def test_an_absolute_url_is_not_ours_to_check(tmp_path):
     assert links.broken_anchors(docs) == []
 
 
+@pytest.mark.parametrize(
+    ("heading", "anchor"),
+    [
+        # Each space is a hyphen: punctuation between two spaces leaves two (#2407).
+        ("2 · The tickerplant", "2--the-tickerplant"),
+        ("A & B", "a--b"),
+        # `_` inside inline code is kept, as GitHub keeps it.
+        ("The `snake_case_name` field", "the-snake_case_name-field"),
+        (
+            "`crypto_trades.source_time`: history has no venue time (#1936)",
+            "crypto_tradessource_time-history-has-no-venue-time-1936",
+        ),
+        ("Plain snake_case words", "plain-snake_case-words"),
+        ("An *emphasised* and _underlined_ word", "an-emphasised-and-underlined-word"),
+    ],
+)
+def test_the_slug_is_githubs(heading, anchor):
+    assert links.slug(heading) == anchor
+
+
+def test_a_repeated_heading_is_numbered_as_github_numbers_it(tmp_path):
+    page = tmp_path / "page.md"
+    page.write_text("## Overview\n\n## Overview\n\n## Overview\n")
+    assert {"overview", "overview-1", "overview-2"} <= links.anchors_in(page)
+
+
+def test_a_link_github_would_not_resolve_is_reported(tmp_path):
+    docs = _docs(
+        tmp_path,
+        {
+            "page.md": "[bad](t.md#2-the-tickerplant) [ok](t.md#2--the-tickerplant)\n",
+            "t.md": "## 2 · The tickerplant\n",
+        },
+    )
+    assert links.broken_anchors(docs) == [("page.md", "t.md#2-the-tickerplant")]
+
+
 def test_the_real_docs_resolve():
     assert links.broken_anchors() == []
 

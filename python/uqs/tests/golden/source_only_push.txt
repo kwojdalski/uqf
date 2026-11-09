@@ -149,8 +149,11 @@ if [ "$got" != <sha256> ]; then
   rm -rf /opt/uqf/staging/20261007T000000Z-0123456789ab; exit 1
 fi
 test ! -e /opt/uqf/releases/20261007T000000Z-0123456789ab || { echo 'release 20261007T000000Z-0123456789ab already exists' >&2; exit 1; }
-mkdir /opt/uqf/releases/20261007T000000Z-0123456789ab
-tar -xzf /opt/uqf/staging/20261007T000000Z-0123456789ab/uqf-20261007T000000Z-0123456789ab.tar.gz -C /opt/uqf/releases/20261007T000000Z-0123456789ab
+rm -rf /opt/uqf/releases/.20261007T000000Z-0123456789ab.partial
+trap 'rm -rf /opt/uqf/releases/.20261007T000000Z-0123456789ab.partial' EXIT
+mkdir /opt/uqf/releases/.20261007T000000Z-0123456789ab.partial
+tar -xzf /opt/uqf/staging/20261007T000000Z-0123456789ab/uqf-20261007T000000Z-0123456789ab.tar.gz -C /opt/uqf/releases/.20261007T000000Z-0123456789ab.partial
+mv /opt/uqf/releases/.20261007T000000Z-0123456789ab.partial /opt/uqf/releases/20261007T000000Z-0123456789ab
 rm -rf /opt/uqf/staging/20261007T000000Z-0123456789ab
 
 =====
