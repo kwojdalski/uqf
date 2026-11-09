@@ -177,6 +177,22 @@
     .qetl.io.write[m;`iodeals;.qt.qetl.io.deals[]];
     .qunit.assertEquals[count .qt.qetl.io.part[root;2026.01.02;`iodeals];4;"windows accumulate in the partition"]};
 
+/ #2329: an append whose column types are not the partition's own threw
+/ part-way and left columns of different lengths (on PeachQ, which rewrites
+/ the partition whole, it retyped the rows already there). Every date is
+/ checked first, so the batch's new date is not written either.
+.qt.qetl.io.test_an_append_of_another_type_is_refused_before_any_column_is_written:{[t]
+    root:.qt.qetl.io.hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write[m;`iodeals;.qt.qetl.io.deals[]];
+    b:([] deal_time:2026.01.01D10:00:00.000000000 2026.01.02D11:00:00.000000000; sym:`AUDUSD`AUDUSD; notional:("5e6";"6e6"));
+    .qunit.assertThrows[.qetl.io.write[m;`iodeals];b;"*notional: partition f, batch C*";"refused, naming the column and both types"];
+    base:.qetl.io.part_path[root;2026.01.02;`iodeals];
+    .qunit.assertEquals[{[base;c] count get hsym `$base,"/",string c}[base] each `time`deal_time`sym`notional;4#2;
+        "every column still ends at the partition's own two rows"];
+    .qunit.assertEquals[type .qt.qetl.io.part[root;2026.01.02;`iodeals]`notional;9h;"and the rows already there keep their type"];
+    .qunit.assertTrue[()~key hsym `$.qetl.io.part_path[root;2026.01.01;`iodeals];"the batch's other date is not written either"]};
+
 .qt.qetl.io.test_hdb_refuses_today:{[t]
     root:.qt.qetl.io.hdb_dir[];
     b:([] deal_time:enlist .z.p; sym:enlist `EURUSD; notional:enlist 1e6);

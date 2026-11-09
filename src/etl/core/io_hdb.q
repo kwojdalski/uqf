@@ -147,8 +147,13 @@
 / @private
 .qetl.io.write_hdb:{[root;partition_col;target;batch]
     if[0=count batch; :0];
-    data:.Q.en[root;.qetl.io.hdb_rows[root;partition_col;target;batch]];
+    data:.qetl.io.hdb_rows[root;partition_col;target;batch];
     days:.qetl.io.days_of[root;data`time];
+    / Every date's types are checked before any is touched, and before .Q.en
+    / extends the sym file (#2329).
+    {[root;target;data;days;d] .qetl.io.require_part_types[hsym `$(string .Q.par[root;d;target]),"/";data where days=d]
+        }[root;target;data;days] each distinct days;
+    data:.Q.en[root;data];
     {[root;target;data;days;d]
         part:hsym `$(string .Q.par[root;d;target]),"/";
         rows:data where days=d;
@@ -160,7 +165,7 @@
         / append the same way, so every column of the rule loses its own.
         if[not .qetl.io.on_peachq;
             {[part;existing;col] if[col in existing; @[part;col;`#]]}[part;existing] each
-                $[count r:.qetl.io.declared_rule target; key r; `sym]];
+                $[count r:.qetl.io.declared_rule[target]; key r; `sym]];
         / PeachQ cannot upsert onto a splayed table on disk ('type), so there
         / the partition is read back and written again whole.
         / The FIRST write of a table into a date is staged and swapped in like a
@@ -173,6 +178,26 @@
         `.qetl.io.touched upsert (root;d;target);
         }[root;target;data;days] each distinct days;
     count batch}
+
+/ Private: refuse rows whose column types are not their partition's own (#2329).
+/ .
+/ upsert onto a splayed table appends column by column, so a batch with one
+/ column of another type threw part-way and left the partition's columns of
+/ different lengths; on PeachQ, whose append rewrites the partition whole,
+/ it retyped the rows already there. scripts/dev/attached_forced.q makes the
+/ same check for its writer (#2208). Every column the partition has must be
+/ in the batch with its type; a general-list column on disk takes anything.
+/ Read through read_part on PeachQ, which cannot take `meta` of a directory.
+/ @private
+.qetl.io.require_part_types:{[part;rows]
+    if[()~key part; :1b];
+    native:exec c!t from meta $[.qetl.io.on_peachq; .qetl.io.read_part[part]; part];
+    batch:exec c!t from meta rows;
+    k:key native;
+    bad:k where not (" "=native k) or native[k]=batch k;
+    if[0=count bad; :1b];
+    '"hdb: the batch does not match the partition ",(1_string part)," - nothing was written; ",
+        "; " sv {[n;b;c] string[c],": partition ",n[c],", batch ",$[not c in key b; "(absent)"; " "=b c; "a general list"; b c]}[native;batch] each bad}
 
 / Private: write a table, already run through .Q.en against root, as a splayed table at dir.
 / .
@@ -547,7 +572,7 @@
 / @return a dictionary of sort column to attribute, in sort order
 / @private
 .qetl.io.sort_rule:{[tbl;c]
-    if[count r:.qetl.io.declared_rule tbl; :r];
+    if[count r:.qetl.io.declared_rule[tbl]; :r];
     order:`sym`time inter c;
     order!{$[x=`sym;`p;`]} each order}
 
@@ -668,7 +693,7 @@
     c:get hsym `$base,"/.d";
     / A declared rule is judged by its own attributes, or by its order where
     / it declares none (and always on PeachQ, which keeps none).
-    if[count r:.qetl.io.declared_rule t;
+    if[count r:.qetl.io.declared_rule[t];
         / `#`, not `r where`: indexing a dictionary by its keys gives a list of
         / values, whose key is no column name (#1891)
         have:(where not null r)#r;
