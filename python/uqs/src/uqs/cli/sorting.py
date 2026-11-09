@@ -13,8 +13,9 @@ from typing import Annotated
 import typer
 
 from uqs.cells import cell
+from uqs.cli.json_out import snake
 from uqs.cli.shared import _die
-from uqs.paths import UqsError
+from uqs.paths import UqsUsageError
 
 #: The sort and its direction, the same on every listing (#1728, #1858).
 SortOpt = Annotated[
@@ -74,11 +75,14 @@ def _sorted_items[Row: dict](items: list[Row], sort: str | None, reverse: bool) 
     """
     if not sort or not items:
         return items
-    known = {column.casefold(): column for column in items[0]}
+    # a column by its title, or by the key --json prints it under (`process`
+    # for procname, #2523); a title wins where the two collide
+    known = {snake(column).casefold(): column for column in items[0]}
+    known |= {column.casefold(): column for column in items[0]}
     column = known.get(sort.strip().casefold())
     if column is None:
         _die(
-            UqsError(
+            UqsUsageError(
                 f"cannot sort by {sort!r}: no such column. Available: {', '.join(sorted(items[0]))}"
             )
         )

@@ -1300,6 +1300,12 @@ def test_the_column_name_is_matched_case_insensitively():
     assert sorting._sorted_items(_procs(), "PORT", reverse=False)[0]["port"] == "659"
 
 
+def test_a_column_is_matched_by_the_key_json_prints_it_under():
+    """#2523: --json says `process` for procname, and --sort refused it."""
+    order = [i["procname"] for i in sorting._sorted_items(_procs(), "process", reverse=False)]
+    assert order == ["Arbitrage1", "sortworker2", "stp1"]
+
+
 def test_empty_cells_group_at_one_end_rather_than_sorting_as_empty_string():
     """A process with no override set is not "before aaa", it is absent -
     and a blank interleaved among real values reads as data."""
@@ -1342,7 +1348,7 @@ def test_an_unsortable_column_names_the_real_ones(monkeypatch):
     actually produced."""
     _patch(monkeypatch, listing, "list_items", result=_procs())
     result = runner.invoke(cli.app, ["process", "list", "--sort", "bogus"])
-    assert result.exit_code == 1
+    assert result.exit_code == 2, "a command line wrong as given (#1885, #2523)"
 
 
 def test_the_sorted_order_reaches_the_export(monkeypatch):
@@ -2891,11 +2897,12 @@ def test_summary_refuses_an_unknown_sort_column_before_doing_any_work(monkeypatc
 
     def die(exc):
         # _die logs through loguru, not to the runner's output - record it.
-        said.append(str(exc))
+        said.append(exc)
         raise typer.Exit(code=1)
 
     monkeypatch.setattr(summary_columns, "_die", die)
     result = runner.invoke(cli.app, ["status", "--sort", "nope"])
     assert result.exit_code == 1
-    assert len(said) == 1 and said[0].startswith("cannot sort by 'nope'")
-    assert "Process" in said[0], "the error names the columns that exist"
+    assert len(said) == 1 and str(said[0]).startswith("cannot sort by 'nope'")
+    assert isinstance(said[0], UqsUsageError), "a command line wrong as given (#2523)"
+    assert "Process" in str(said[0]), "the error names the columns that exist"
