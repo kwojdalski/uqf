@@ -271,6 +271,19 @@
     .qunit.assertEquals[.qetl.livecheck.redact["access denied for h:5010:me:s3cret (s3cret)";"h:5010:me:s3cret"];
         "access denied for h:5010:me:<redacted> (<redacted>)";"host:port:user:password keeps its password last"]};
 
+/ #2330: q accepts a password holding colons, and only the last colon-separated part was masked,
+/ so the start of the password stayed in the message.
+.qt.qetl.livecheck.test_redaction_masks_an_ipc_password_that_holds_colons_whole:{[t]
+    cred:"host:1234:svc:fake:colon:password";
+    got:.qetl.livecheck.redact["login rejected fake:colon:password for svc";cred];
+    .qunit.assertEquals[got;"login rejected <redacted> for svc";"every part of the password, and the user name stays"];
+    .qunit.assertEquals[any {[got;w] 0<count got ss w}[got] each ("fake";"colon";"password");0b;"no piece of it is left"]};
+
+.qt.qetl.livecheck.test_an_odbc_string_holding_colons_is_not_read_as_an_ipc_credential:{[t]
+    cred:"DRIVER=x;SERVER=tcp:db.example:1433;UID=me;PWD=p@ss";
+    .qunit.assertEquals[.qetl.livecheck.redact["cannot reach tcp:db.example:1433 as me (PWD=p@ss)";cred];
+        "cannot reach tcp:db.example:1433 as me (PWD=<redacted>)";"the host and port stay - they are what makes the message actionable"]};
+
 / #1270: ssr reads [ ? * in its search string as a pattern, so a secret
 / carrying one never matched its own text and was left in the message.
 .qt.qetl.livecheck.test_redaction_masks_a_password_with_pattern_characters:{[t]
