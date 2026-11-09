@@ -134,4 +134,11 @@
         (enlist[`job]!enlist job),`last_end_of_day`today`table!(last_eod;today;.qetl.job.stream.def[job][`carry]`table)];
     1b}
 
+/ The replay of a job's log is over: forget what its carry recorded and
+/ whether it caught up.
+/ @param job the job's name
+/ @return the job's name
+/ @eg .qetl.job.stream.replayed[`fx_positions]  ->  `fx_positions
+.qetl.job.stream.replayed:{[job] .qetl.job.stream.carry_log::(enlist job) _ .qetl.job.stream.carry_log; .qetl.job.stream.caught_up::(enlist job) _ .qetl.job.stream.caught_up; job}
+
 \d .

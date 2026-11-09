@@ -241,6 +241,21 @@
     .qetl.job.stream.snapshot `fx_positions;
     .qunit.assertEquals[exec carried_to from .qt.qetl.job.stream.endofday.sent_on `fx_position_open;enlist .qt.qetl.job.stream.endofday.t1;"the day-1 fill's plant time"]};
 
+/ #2337: a restore takes the snapshot's boundary as its own, so a snapshot
+/ taken again with no new fill still says how far the state had got.
+.qt.qetl.job.stream.endofday.test_a_restore_keeps_the_snapshot_boundary_for_the_next_one:{[t]
+    .qt.qetl.job.stream.endofday.record[`fx_positions];
+    (.qetl.job.stream.handler `fx_positions)[`executions;.qt.qetl.job.stream.endofday.fill[`EURUSD;1;1e6;1.1;`london;`spot]];
+    .qetl.job.stream.snapshot `fx_positions;
+    opening:.qt.qetl.job.stream.endofday.sent_on[`fx_position_open];
+    .qetl.job.stream.reset `fx_positions;
+    .qt.qetl.job.stream.endofday.replay[`fx_positions;enlist (`fx_position_open;opening)];
+    .qunit.assertEquals[.qetl.job.stream.carried_to`fx_positions;.qt.qetl.job.stream.endofday.t1;"the restored state applied through the snapshot's boundary"];
+    .qt.qetl.job.stream.endofday.record[`fx_positions];
+    .qetl.job.stream.snapshot `fx_positions;
+    .qunit.assertEquals[exec carried_to from .qt.qetl.job.stream.endofday.sent_on `fx_position_open;enlist .qt.qetl.job.stream.endofday.t1;
+        "and the snapshot taken again says so, not 0Np"]};
+
 .qt.qetl.job.stream.endofday.late_snapshot_replay:{[]
     .qt.qetl.job.stream.endofday.record[`fx_positions];
     h:.qetl.job.stream.handler `fx_positions;

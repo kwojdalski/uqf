@@ -764,15 +764,12 @@
     cur:get v;
     rows:(cols 0!cur)#x;
     v set $[99h=type cur; (keys cur) xkey rows; rows];
+    / The state now holds what the snapshot applied, so the next snapshot says
+    / so too (#2337). Neither null nor -0Wp (max over nulls) is a boundary.
+    if[hwm>-0Wp; .qetl.job.stream.carried_to[job]:max (.qetl.job.stream.carried_to job;hwm)];
     .qetl.job.stream.carry_log[job]:(`restored;0;();0Np);
     {[h;hwm;b] rs:b 1; if[(not null hwm) and `time in cols rs; rs:select from rs where time>hwm]; if[count rs; h[b 0;rs]]}[h;hwm] each r 2;
     }
-
-/ The replay of a job's log is over: forget what its carry recorded.
-/ @param job the job's name
-/ @return the job's name
-/ @eg .qetl.job.stream.replayed[`fx_positions]  ->  `fx_positions
-.qetl.job.stream.replayed:{[job] .qetl.job.stream.carry_log::(enlist job) _ .qetl.job.stream.carry_log; .qetl.job.stream.caught_up::(enlist job) _ .qetl.job.stream.caught_up; job}
 
 / Publish a job's carried state onto its snapshot table - what end_of_day
 / does for each running job that carries one - each row stamped with the
