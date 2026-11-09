@@ -52,6 +52,7 @@ def install(app: FastAPI) -> None:
                 fleet=scope.fleet,
                 settings=scope.settings,
                 authorize=lambda table: run_policy(request, table=table),
+                target=scope.target,
             ),
             body,
         )

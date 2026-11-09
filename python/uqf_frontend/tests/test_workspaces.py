@@ -372,6 +372,17 @@ def test_a_route_that_is_not_scoped_refuses_a_target(declared, targets, local_gw
         assert "workspace prod-a" in resp.json()["detail"]
 
 
+def test_the_backfill_chart_in_a_target_workspace_is_not_scoped(declared, targets, local_gw):
+    """#2585: the chart reads this server's status files, as /ops/backfill
+    does - 409 TargetNotScoped, never a 422 asking for a variable the
+    server already has."""
+    c = _client(_app(targets, local_gw))
+    resp = c.post("/charts/backfill_coverage", json={"days": 4}, headers={HEADER: "prod-a"})
+    assert resp.status_code == 409, resp.text
+    assert resp.json()["error"] == "TargetNotScoped"
+    assert "workspace prod-a" in resp.json()["detail"]
+
+
 def test_neutral_routes_ignore_the_target(declared, targets, local_gw):
     c = _client(_app(targets, local_gw))
     for path in ("/services", "/workspaces", "/health", "/me/capabilities"):
