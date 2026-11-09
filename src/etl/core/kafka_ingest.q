@@ -469,16 +469,22 @@
     t:0!keyed;
     k xkey t where not .qetl.kafka.pair_key[t`topic;t`partition] in .qetl.kafka.pair_key[pairs`topic;pairs`partition]}
 
-/ Private: forget the mark of a partition whose offsets have restarted (see restarted).
+/ Private: forget the mark and the pending commit of a partition whose offsets have restarted (see restarted).
+/ .
+/ The pending commit goes too: it is a position in the OLD generation, and
+/ plan_commit keeps the higher of it and the new one, so an earlier commit that
+/ failed and was kept would commit the new generation past records never read
+/ (#2321).
 / @param st the state
 / @param b the backlog (envelope rows)
-/ @return the state, with those partitions' marks dropped
+/ @return the state, with those partitions' marks and pending commits dropped
 / @private
 .qetl.kafka.reset_restarted:{[st;b]
     back:.qetl.kafka.restarted[st`marks;b];
     if[0=count back; :st];
     .qetl.log.ch.warn[`source;"partition offsets went backwards - its mark is reset and the new records are published";enlist[`partitions]!enlist count back];
     st[`marks]:.qetl.kafka.forget[st`marks;back];
+    st[`pending]:.qetl.kafka.forget[st`pending;back];
     st}
 
 / Private: publish the backlog onto kafka_message; on success raise the marks

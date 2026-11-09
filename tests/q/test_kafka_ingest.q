@@ -347,6 +347,19 @@
     .qunit.assertEquals[st[`stats]`duplicates;0;"none counted as duplicates"];
     .qunit.assertEquals[(last .qt.qetl.kafka.log) 2;(enlist 0i)!enlist 3j;"and the commit follows the new log"]};
 
+/ #2321: an old commit to 5 failed and was kept; the partition then restarts at 0, and the flush committed 5 - past new records 1-4 never read.
+.qt.qetl.kafka.test_a_restart_drops_the_old_generations_pending_commit:{[t]
+    .qt.qetl.kafka.reset[];
+    `.qt.qetl.kafka.inbox set enlist .qt.qetl.kafka.msgs[`t;5#0;til 5;5#enlist "old"];
+    `.qt.qetl.kafka.failing set enlist `commit;
+    st:.qetl.kafka.cycle[.qt.qetl.kafka.transport;.qetl.kafka.state_new[]];
+    .qunit.assertEquals[exec resume from st`pending;enlist 5j;"the old generation's commit is owed"];
+    `.qt.qetl.kafka.failing set `symbol$();
+    `.qt.qetl.kafka.inbox set enlist update msgtime:msgtime+0D01:00:00 from .qt.qetl.kafka.msgs[`t;enlist 0;enlist 0;enlist "new"];
+    st:.qetl.kafka.cycle[.qt.qetl.kafka.transport;st];
+    .qunit.assertEquals[(last .qt.qetl.kafka.log) 2;(enlist 0i)!enlist 1j;"only the new generation's processed position is committed"];
+    .qunit.assertEquals[count st`pending;0;"and nothing of the old one is left owing"]};
+
 / A rebalance re-reads batches wholly below the mark; their records are not newer than the mark's, so they are a redelivery, not a restart (#1519).
 .qt.qetl.kafka.test_a_redelivery_wholly_below_the_mark_is_not_a_restart:{[t]
     .qt.qetl.kafka.reset[];
