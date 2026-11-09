@@ -197,6 +197,14 @@
     .qunit.assertEquals[r;(`threw;"fills: t_fills data row 1 carries a UTC offset, but the source is declared UTC (source_time; 2 row(s) in the file)");
         "two rows of the file, neither of them in the window"]};
 
+/ #2550: a byte order mark on the header made its first column read as absent.
+.qt.qetl.source.fills.test_a_file_opening_with_a_byte_order_mark_is_read:{[t]
+    p:.qt.qetl.source.fills.file["bom.csv";(("\357\273\277",.qt.qetl.source.fills.header);.qt.qetl.source.fills.good_row)];
+    .qetl.source.fills.declare[`t_fills;.qt.qetl.source.fills.decl[]];
+    r:@[.qt.qetl.source.fills.window[`t_fills;];p;{(`threw;x)}];
+    ![`.qetl.source.fills.registry;enlist (in;`name;enlist `t_fills);0b;`symbol$()];
+    .qunit.assertEquals[r`fill_id;enlist `a1;"the time column, first in the file, is found"]};
+
 .qt.qetl.source.fills.test_an_empty_fill_id_refuses_the_window:{[t]
     r:.qt.qetl.source.fills.with_source[`t_fills;enlist "2026-02-25T14:31:00Z,XNAS,,AAPL,B,10,271.7,0.1,USD";{.qt.qetl.source.fills.window[`t_fills;x]}];
     .qunit.assertEquals[r;(`threw;"fills: t_fills data row 1 has an empty fill id (fill_id; 1 row(s) in the window)");"a fill with no id cannot be keyed"]};

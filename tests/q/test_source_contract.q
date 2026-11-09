@@ -408,6 +408,13 @@
     f 0: (.qt.qetl.source.settings_header;"demo_deals,ipc,localhost:5010,";"";"";"hdb_x,bogus,somewhere,");
     .qunit.assertThrows[.qetl.source.read_settings;f;"*line 5's transport bogus is not one of*";"the row's own line"]};
 
+/ #2550: Excel's "CSV UTF-8" opens the file with a byte order mark, which was read
+/ as part of the first column's name.
+.qt.qetl.source.test_a_settings_file_opening_with_a_byte_order_mark_is_read:{[t]
+    f:hsym `$(first system"mktemp -d"),"/sources.csv";
+    f 0: (("\357\273\277",.qt.qetl.source.settings_header);"demo_deals,ipc,localhost:5010,");
+    .qunit.assertEquals[exec source from .qetl.source.read_settings f;enlist `demo_deals;"the header is source, transport, setting, secret_env"]};
+
 .qt.qetl.source.test_a_secret_column_is_refused:{[t]
     f:hsym `$(first system"mktemp -d"),"/sources.csv";
     f 0: ("source,transport,setting,secret_env,password";"demo_deals,ipc,h:1,,x");

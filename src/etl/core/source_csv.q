@@ -40,7 +40,16 @@
 / @private
 .qetl.source.csv_names:{[h;lines]
     if[0=count lines; '"csv: ",(1_string h)," is empty - a csv source needs a header line"];
-    `$trim each "," vs (first lines) except "\r"}
+    `$trim each "," vs (first .qetl.source.unbom lines) except "\r"}
+
+/ A file's lines without the UTF-8 byte order mark Excel's "CSV UTF-8" opens with:
+/ left on, it is part of the first column's name, and that column reads as absent (#2550).
+/ @param lines a file's lines, as read0 returns them
+/ @return the lines, the first without a leading BOM
+/ @eg .qetl.source.unbom ("\357\273\277a,b";"1,2")  ->  ("a,b";"1,2")
+.qetl.source.unbom:{[lines]
+    if[0=count lines; :lines];
+    $["\357\273\277"~3#first lines; @[lines;0;3_]; lines]}
 
 / The first line of a file, split into its column names.
 / @param h the file, as a file symbol
