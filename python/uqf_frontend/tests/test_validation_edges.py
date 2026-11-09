@@ -64,7 +64,7 @@ def test_a_timespan_is_read_as_nanoseconds():
     assert _ns(queries.coerce(1_500_000_000, QType.TIMESPAN, "h", as_list=False)) == [1_500_000_000]
 
 
-@pytest.mark.parametrize("ns", [1, 999, 1234, 1500, 2500, 1_000_000_001, -1234, 2**63 - 1])
+@pytest.mark.parametrize("ns", [1, 999, 1234, 1500, 2500, 1_000_000_001, -1234, 2**63 - 2])
 def test_a_timespan_keeps_its_nanoseconds(ns):
     """A timedelta stops at the microsecond and rounds to the nearest one,
     half to even: 1234 ns went to q as 1 us and `skew eq 1234` matched

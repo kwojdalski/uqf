@@ -98,6 +98,8 @@ def test_column_info_type_is_exactly_the_qtype_words():
     [
         (QType.INT, 5, 5),
         (QType.SHORT, -7, -7),
+        (QType.LONG, 2**63 - 2, 2**63 - 2),
+        (QType.LONG, -(2**63 - 2), -(2**63 - 2)),
         (QType.DATE, "2026-09-16", dt.date(2026, 9, 16)),
         (QType.TIME, "14:30:00", dt.time(14, 30)),
         (QType.TIME, "14:30:00.25", dt.time(14, 30, 0, 250000)),
@@ -119,6 +121,15 @@ def test_coerce_the_new_types(qtype, value, expected):
         (QType.INT, 1.5, "expected an integer"),
         (QType.INT, True, "expected an integer"),
         (QType.SHORT, 40000, "outside"),
+        # 0Nj, 0Wj and -0Wj, and past int64 (#2475)
+        (QType.LONG, -(2**63), "outside"),
+        (QType.LONG, 2**63 - 1, "outside"),
+        (QType.LONG, -(2**63 - 1), "outside"),
+        (QType.LONG, 2**63, "outside"),
+        (QType.LONG, 2**70, "outside"),
+        # 0Wn and -0Wn (#2475)
+        (QType.TIMESPAN, 2**63 - 1, "past what q can hold"),
+        (QType.TIMESPAN, -(2**63 - 1), "past what q can hold"),
         (QType.DATE, "2026-13-01", "not one"),
         (QType.DATE, "20260101", "YYYY-MM-DD"),
         (QType.TIME, "14:30", "HH:MM:SS"),
