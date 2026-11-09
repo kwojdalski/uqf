@@ -20,18 +20,23 @@ with rows. The comments in scaffold/templates.py record both.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
 
 from uqs.model.declarations import Declaration, read_file_text
+from uqs.model.load_plan import LoadPlan, read_facts
 from uqs.model.pipeline import PipelineKind
 from uqs.model.schemas import _DEFINITION
-from uqs.paths import UqsError
-from uqs.scaffold import jobs, write
+from uqs.paths import STACK_TABLES_TEST, UqsError
+from uqs.scaffold import horizon, jobs, normalizer, profile, write
 from uqs.scaffold import worker as backfill
 from uqs.scaffold.columns import parse_columns
+from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE
 from uqs.scaffold.plan import WriteMode
+
+UQF_ROOT = Path(__file__).resolve().parents[3]
 
 
 def _body(plan: jobs.ScaffoldPlan, suffix: str) -> str:
@@ -190,6 +195,145 @@ def test_a_process_another_job_runs_is_refused_before_anything_is_written(tmp_pa
     with pytest.raises(UqsError, match="posbook1.*posbook"):
         write.apply_plan(plan, tmp_path)
     assert sorted(p.name for p in streaming.iterdir()) == ["posbook.q"], "nothing was written"
+
+
+_COLS = [("sym", "`symbol$()"), ("px", "`float$()")]
+
+
+def _copy_of_the_tree(root: Path) -> None:
+    """src/ and every file a scaffold appends to: without them a plan is
+    refused for a missing file, which would hide the refusal under test."""
+    shutil.copytree(UQF_ROOT / "src", root / "src")
+    shutil.copytree(UQF_ROOT / "scripts" / "processes", root / "scripts" / "processes")
+    for rel in (STACK_TABLES_TEST, STACK_PAGE, SHOWCASE_PAGE, profile.PROFILES_FILE):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(UQF_ROOT / rel, root / rel)
+
+
+_DEFS = {
+    t: f".qetl.plant.{t}:([]time:`timestamp$(); sym:`symbol$(); px:`float$())"
+    for t in ("trades", "dev_out")
+}
+
+
+@pytest.mark.parametrize(
+    ("plan", "existing"),
+    [
+        # a horizon job registers a transform named like itself
+        (
+            lambda: horizon.horizon_job(
+                "cross_quotes",
+                ["trades", "quote"],
+                parse_columns("sym:symbol, px:float"),
+                {"trades": _COLS, "quote": _COLS},
+                "5s",
+                known_tables={"trades", "quote"},
+                unprofiled="x",
+            ),
+            "cross_quotes",
+        ),
+        # a normalizer registers <name>_from_<src>
+        (
+            lambda: normalizer.normalizer(
+                "liquidity_book",
+                ["market_data"],
+                parse_columns("sym:symbol, px:float"),
+                {"market_data": _COLS},
+                known_tables={"market_data"},
+                unprofiled="x",
+            ),
+            "liquidity_book_from_market_data",
+        ),
+        # a streaming --transform registers <name>_<mode>
+        (
+            lambda: jobs.streaming_job(
+                "demo_events",
+                ["trades"],
+                "dev_out",
+                None,
+                transform="passthrough",
+                definitions=_DEFS,
+                known_tables={"trades", "dev_out"},
+                unprofiled="x",
+            ),
+            "demo_events_passthrough",
+        ),
+    ],
+)
+def test_a_transform_the_tree_registers_is_refused_before_anything_is_written(
+    tmp_path: Path, plan, existing: str
+):
+    """#2499: each shape names its transforms after the job or source, and
+    .qetl.transform.define upserts - so a scaffold silently replaced an
+    existing job's transform in every process, and exited 0."""
+    _copy_of_the_tree(tmp_path)
+    before = sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*"))
+    with pytest.raises(UqsError, match=rf"transform {existing}, which src/etl/\S+ already"):
+        write.apply_plan(plan(), tmp_path)
+    assert sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*")) == before
+
+
+def test_a_second_worker_on_a_source_registers_its_own_passthrough(tmp_path: Path):
+    """#2499: a second worker over a source someone already declared wrote
+    `<src>_passthrough` again - the name the source's own worker holds. It is
+    named after the worker instead, so both load and neither replaces the other."""
+    _copy_of_the_tree(tmp_path)
+    write.apply_plan(backfill.bounded_worker("ledger", "ledger", "sym:symbol, amt:float"), tmp_path)
+    second = backfill.bounded_worker(
+        "ledger_eur",
+        "ledger",
+        None,
+        source="ledger",
+        reuse_source=True,
+        define_table=False,
+        partition="EURUSD",
+    )
+    write.apply_plan(second, tmp_path)
+    registered = [(f.path, k) for f in read_facts(tmp_path) for k in f.registers if "ledger" in k]
+    assert sorted(registered) == [
+        ("src/etl/sources/ledger.q", "source:ledger"),
+        ("src/etl/workers/ledger_backfill.q", "transform:ledger_passthrough"),
+        ("src/etl/workers/ledger_eur_backfill.q", "transform:ledger_eur_backfill_passthrough"),
+    ]
+    LoadPlan(read_facts(tmp_path))  # refuses a transform two files register
+
+
+@pytest.mark.parametrize(
+    "plan",
+    [
+        lambda: jobs.streaming_job(
+            "demo_events_backfill", [], "zz_de", "sym:symbol, px:float", unprofiled="t"
+        ),
+        lambda: normalizer.normalizer(
+            "demo_events_backfill",
+            ["trades"],
+            parse_columns("sym:symbol, px:float"),
+            {"trades": _COLS},
+            known_tables={"trades"},
+            unprofiled="t",
+        ),
+        lambda: horizon.horizon_job(
+            "demo_events_backfill",
+            ["trades", "quote"],
+            parse_columns("sym:symbol, px:float"),
+            {"trades": _COLS, "quote": _COLS},
+            "5s",
+            known_tables={"trades", "quote"},
+            unprofiled="t",
+        ),
+    ],
+)
+def test_a_name_a_job_of_another_kind_has_is_refused_before_anything_is_written(
+    tmp_path: Path, plan
+):
+    """#2500: a streaming job, normalizer or horizon job named like a bounded
+    worker had no file of its name to clash with, so it was written - and
+    `.qetl.job.*.define` then refused it, and the whole tree stopped loading."""
+    _copy_of_the_tree(tmp_path)
+    before = sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*"))
+    with pytest.raises(UqsError, match="'demo_events_backfill' already exists.*backfill"):
+        write.apply_plan(plan(), tmp_path)
+    assert sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*")) == before
 
 
 def test_appending_to_a_missing_file_is_refused(tmp_path: Path):

@@ -16,8 +16,16 @@ from pathlib import Path
 
 from uqs import paths
 from uqs.model.declarations import read_declarations, read_file_text
+from uqs.model.load_plan import facts, read_facts
 from uqs.model.registry import NON_JOB_PIPELINES
-from uqs.paths import STACK_TABLES_LIST, STACK_TABLES_TEST, STREAM_DIR, WORKER_DIR, UqsError
+from uqs.paths import (
+    ETL_DIR,
+    STACK_TABLES_LIST,
+    STACK_TABLES_TEST,
+    STREAM_DIR,
+    WORKER_DIR,
+    UqsError,
+)
 from uqs.scaffold import profile
 from uqs.scaffold.docs import SHOWCASE_PAGE, with_card
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
@@ -77,6 +85,7 @@ def apply_plan(plan: ScaffoldPlan, repo_root: Path) -> list[Path]:
     """
     _check_filenames(plan)
     _check_processes(plan, repo_root)
+    _check_transforms(plan, repo_root)
     contents: dict[Path, str] = {}
     created: set[Path] = set()
     for action in plan.actions:
@@ -159,11 +168,15 @@ def _check_filenames(plan: ScaffoldPlan) -> None:
 
 
 def _check_processes(plan: ScaffoldPlan, repo_root: Path) -> None:
-    """Refuse a job whose process another job already runs (#1572).
+    """Refuse a job whose process another job already runs (#1572), or whose
+    name another job already has (#2500).
 
     One process runs one job: the tree refuses to load with two claiming the
     same procname, so the clash is caught here, before any file is written,
-    rather than by the load or the registry after it.
+    rather than by the load or the registry after it. Job names share one
+    namespace, `.qpipe.job.<name>`, across kinds: a streaming job named like a
+    bounded worker has no file of its name to clash with, and `.qetl.job.*.define`
+    refuses it only when the tree next loads.
     """
     new = [
         d
@@ -175,14 +188,54 @@ def _check_processes(plan: ScaffoldPlan, repo_root: Path) -> None:
     ]
     if not new:
         return
+    existing = read_declarations(repo_root)
+    names = {d.name: d.kind.value for d in existing}
     taken = {p.procname: p.procname for p in NON_JOB_PIPELINES}
-    taken |= {d.procname: d.name for d in read_declarations(repo_root)}
+    taken |= {d.procname: d.name for d in existing}
     for d in new:
+        if d.name in names:
+            raise UqsError(
+                f"a job called {d.name!r} already exists (a {names[d.name]} job), and every job "
+                f"shares one namespace (.qpipe.job.{d.name}) - pick another name"
+            )
         if d.procname in taken:
             raise UqsError(
                 f"{d.name} would run as {d.procname}, which {taken[d.procname]} already runs - "
                 "one process runs one job: pick another --proc"
             )
+
+
+def _check_transforms(plan: ScaffoldPlan, repo_root: Path) -> None:
+    """Refuse a plan registering a transform the tree already registers (#2499).
+
+    A scaffold derives its transforms' names from the job's or the source's
+    (`<job>_passthrough`, `<job>_from_<src>`, `<src>_passthrough`), and
+    `.qetl.transform.define` upserts: the new file would silently replace an
+    existing job's transform in every process. Read with the load plan's own
+    scan, which refuses the same duplicate once it is on disk.
+    """
+    new = {
+        a.path.as_posix(): a.body
+        for a in plan.actions
+        if a.mode is WriteMode.CREATE and a.path.suffix == ".q" and a.path.parent.parent == ETL_DIR
+    }
+    if not new:
+        return
+    registered: dict[str, str] = {}
+    for f in read_facts(repo_root):
+        for key in f.registers:
+            registered.setdefault(key, f.path)
+    for rel, body in new.items():
+        for key in sorted(k for k in facts(rel, body).registers if k.startswith("transform:")):
+            if key in registered:
+                name = key.split(":", 1)[1]
+                raise UqsError(
+                    f"{rel} would register transform {name}, which {registered[key]} already "
+                    "registers - q keeps one silently, so the existing job would run the new "
+                    "one. Pick another name (the transform's is derived from the job's, or "
+                    "from a reused source's)"
+                )
+            registered[key] = rel
 
 
 def _appended(existing: str, action: FileAction) -> str:
