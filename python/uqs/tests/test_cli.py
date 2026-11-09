@@ -1707,9 +1707,10 @@ def test_kafka_starts_with_its_own_defaults(monkeypatch):
     }
 
 
-def test_a_zero_or_empty_feed_option_reaches_the_feed_as_typed(monkeypatch):
+def test_a_zero_feed_option_reaches_the_feed_as_typed(monkeypatch):
     """Defaults fill in what was NOT given. `--interval-ms 0` was given, and
-    used to become 1000 without a word (#505)."""
+    used to become 1000 without a word (#505). An empty `--symbols ""` is not
+    defaulted either: it is refused (#2633, test_core.py)."""
     rec = _patch(monkeypatch, crypto, "start_crypto_recorder", result=1)
     argv = [
         "connector",
@@ -1717,15 +1718,12 @@ def test_a_zero_or_empty_feed_option_reaches_the_feed_as_typed(monkeypatch):
         "crypto",
         "--interval-ms",
         "0",
-        "--symbols",
-        "",
         "--top-n-levels",
         "0",
     ]
     assert runner.invoke(cli.app, argv).exit_code == 0
     assert rec.kwargs["interval_ms"] == 0
     assert rec.kwargs["top_n_levels"] == 0
-    assert rec.kwargs["symbols"] == ()
     assert rec.kwargs["venues"] == CRYPTO_RECORDER_DEFAULT_VENUES, "an option not given defaults"
 
 

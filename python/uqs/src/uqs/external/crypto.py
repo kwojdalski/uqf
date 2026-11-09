@@ -68,10 +68,12 @@ def _crypto_recorder_config_yaml(
     appear here - no PyYAML dependency needed for a handful of flat/list
     fields like this.
     """
-    venues_yaml = "\n".join(f"  - {v}" for v in venues)
-    symbols_yaml = "\n".join(f"  - {s}" for s in symbols)
+    # Each item a JSON string - a YAML double-quoted scalar - so `#x` is not
+    # a comment nor `a: b` a mapping (#2633).
+    venues_yaml = "\n".join(f"  - {json.dumps(v)}" for v in venues)
+    symbols_yaml = "\n".join(f"  - {json.dumps(s)}" for s in symbols)
     return (
-        f"market_symbol: {symbols[0]}\n"
+        f"market_symbol: {json.dumps(symbols[0])}\n"
         f"market_symbols:\n{symbols_yaml}\n"
         f"venues:\n{venues_yaml}\n"
         "kdb_market_data_recorder:\n"

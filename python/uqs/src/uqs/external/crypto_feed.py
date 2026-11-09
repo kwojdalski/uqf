@@ -25,7 +25,7 @@ from uqs.external.crypto import (
     DEFAULT_OMS_SOCKET_PATH,
 )
 from uqs.external.feeds import ExternalFeed, FeedOption
-from uqs.paths import UqsPaths
+from uqs.paths import UqsError, UqsPaths
 
 #: The stack's base port, which both recorders take to find stp1.
 BASE_PORT = FeedOption(
@@ -34,6 +34,18 @@ BASE_PORT = FeedOption(
     type=int,
     aliases=("--port",),  # #1729's rename
 )
+
+
+def _at_least_one(what: str) -> Any:
+    """A `validate` refusing an empty list: `--symbols ,` split to nothing, and
+    the recorder's config then had no first symbol to name (#2633)."""
+
+    def check(value: Any, origin: str) -> None:
+        if not value:
+            raise UqsError(f"{origin} names no {what} - give at least one, comma-separated")
+
+    return check
+
 
 #: What crypto_book and crypto_trades are fed by, besides the in-stack mock.
 RECORDER = "cryptorust's kdb recorder, which cryptomock1 stands in for"
@@ -74,12 +86,14 @@ FEEDS = (
                 "Comma-separated symbols",
                 default=CRYPTO_RECORDER_DEFAULT_SYMBOLS,
                 many=True,
+                validate=_at_least_one("symbol"),
             ),
             FeedOption(
                 "venues",
                 "Comma-separated cryptorust venue names",
                 default=CRYPTO_RECORDER_DEFAULT_VENUES,
                 many=True,
+                validate=_at_least_one("venue"),
             ),
             FeedOption(
                 "top_n_levels",
