@@ -175,6 +175,10 @@
             'who,": ${",(string nm),"} is not a path it may use - only ",", " sv string .qetl.source.settings_path_vars];
         v:getenv nm;
         if[0=count v; 'who,": ${",(string nm),"} is not set in this process"];
+        / Each pass rescans from the start, so a value holding ${ - itself, or
+        / a variable naming it back - never finished (#2306). Refused instead:
+        / every ${ expanded removes one and adds none, so the loop ends.
+        if[0<count v ss "${"; 'who,": ${",(string nm),"}'s value holds a ${ of its own - a path variable must be a path, not name another"];
         txt:(b#txt),v,(e+1)_txt];
     txt}
 
