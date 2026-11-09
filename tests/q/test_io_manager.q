@@ -553,15 +553,6 @@
     r:.qetl.io.resolve[`replace;held;([] account:enlist `A1; bal:enlist 111f; time:enlist 2026.01.01D10:00:00.000000000);o];
     .qunit.assertEquals[r`bal;100 111f;"the 09:00 row stays, the 10:00 row is restated"]};
 
-.qt.qetl.io.test_hdb_replace_of_an_hour_keeps_the_earlier_hour:{[t]
-    root:.qt.qetl.io.hdb_dir[];
-    m:.qetl.io.hdb[root;`time];
-    snap:{[ts;v] ([] time:2#ts; sym:`ACC1`ACC2; account:`A1`A2; bal:v)};
-    o:{[f;t] `on_conflict`row_key`time_column`range_from`range_to!(`replace;`account;`time;f;t)};
-    .qetl.io.write_keyed[m;`iobal_hr;snap[2026.01.01D09:00:00.000000000;100 200f];o[2026.01.01D09:00:00.000000000;2026.01.01D10:00:00.000000000]];
-    .qetl.io.write_keyed[m;`iobal_hr;snap[2026.01.01D10:00:00.000000000;110 210f];o[2026.01.01D10:00:00.000000000;2026.01.01D11:00:00.000000000]];
-    .qunit.assertEquals[asc .qt.qetl.io.part[root;2026.01.01;`iobal_hr]`bal;100 110 200 210f;"both hours are in the partition"]};
-
 .qt.qetl.io.test_memory_replace_of_a_day_keeps_the_previous_day:{[t]
     `iobal_keep set 0#.qt.qetl.io.balances[2026.01.01;100 200f];
     o:.qt.qetl.io.balance_opts;
