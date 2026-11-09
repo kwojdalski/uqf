@@ -510,6 +510,30 @@
     .qunit.assertEquals[r 1;enlist 3e5;"no snapshot anywhere: the three days' fills are the whole book"];
     .qunit.assertEquals[count r 0;0;"and nothing is reported lost (#1189)"]};
 
+/ #2323: a missed day whose log is gone is a gap, not a completeness claim -
+/ whether the first day's log carried a snapshot or the book was flat. Restart
+/ fx_positions down since .z.D-3 with the .z.D-1 log removed; the errors.
+.qt.qetl.job.stream.endofday.restart_with_gap:{[seeded]
+    .qt.qetl.job.stream.endofday.missed_logs_to[.z.D-3;seeded;.z.D];
+    system "rm -f ",1_string .qetl.tick.day_log .z.D-1;
+    .qetl.job.stream.reset `fx_positions;
+    e:.qt.qetl.job.stream.endofday.errors[.qt.support.captured_log[0b] {.qetl.job.stream.start[`fx_positions;.qt.qetl.job.stream.endofday.gap_transport[]]}];
+    system "rm -f ",.qetl.job.stream.carry_marker_path `fx_positions;
+    .qetl.tick.reset[];
+    e}
+
+.qt.qetl.job.stream.endofday.test_a_missing_middle_log_is_reported_not_caught_up:{[t]
+    e:.qt.qetl.job.stream.endofday.restart_with_gap[0b];
+    gap:e where e[;2] like "no log for some of the days*";
+    .qunit.assertEquals[count gap;1;"the missing day is reported"];
+    .qunit.assertEquals[(first gap)[3]`missing;enlist .z.D-1;"by date"];
+    .qunit.assertEquals[count e;2;"and the job is not caught up, so missed_end_of_day reports the lost state too"]};
+
+.qt.qetl.job.stream.endofday.test_a_missing_middle_log_is_reported_after_a_restored_snapshot:{[t]
+    e:.qt.qetl.job.stream.endofday.restart_with_gap[1b];
+    .qunit.assertEquals[count e;1;"the first day's snapshot is restored, so only catch_up can say a later day is gone"];
+    .qunit.assertEquals[e[0;3]`missing;enlist .z.D-1;"and it names the day"]};
+
 .qt.qetl.job.stream.endofday.test_a_restart_before_the_plant_rolls_replays_each_log_once:{[t]
     / the job's clock is on .z.D but the plant is still on yesterday's log
     / flat at the marker: no snapshot at the head of the log to mask a double replay
@@ -548,8 +572,9 @@
     / the job's clock says the marker (yesterday) is current; the plant, a day on, says it missed a day
     r:.qt.qetl.job.stream.endofday.plant_on[.z.D-1;.z.D+1];
     .qunit.assertEquals[r 1;(.z.D;.z.D);"catch_up replays the plant's yesterday, which is the job's today"];
-    .qunit.assertEquals[count r 0;1;"missed_end_of_day judges it against the plant's day and reports the lost state"];
-    .qunit.assertEquals[r[0;0;3]`today;.z.D+1;"naming the plant's day"]};
+    .qunit.assertEquals[r[0;0;3]`missing;enlist .z.D;"catch_up names the plant's yesterday as having no log (#2323)"];
+    .qunit.assertEquals[count r 0;2;"missed_end_of_day judges it against the plant's day and reports the lost state"];
+    .qunit.assertEquals[r[0;1;3]`today;.z.D+1;"naming the plant's day"]};
 
 .qt.qetl.job.stream.endofday.test_a_plant_a_day_behind_the_job_replays_nothing_and_reports_nothing:{[t]
     / the job's clock would call the marker two days stale; the plant, a day back, has seen it through yesterday
