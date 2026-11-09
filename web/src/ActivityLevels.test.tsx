@@ -321,6 +321,31 @@ it("counts what overflows the queue while the API is down, and reports it later"
   ]);
 });
 
+it("re-sends an unacknowledged drop report as it was, under its own id (#2480)", async () => {
+  // The server stored the first send and the answer was lost: the retry
+  // must carry the same id and the same counts, so it is counted once -
+  // and what was counted since waits for a report of its own.
+  const sends: { drops: BrowserDrop[]; id: string | null }[] = [];
+  let down = true;
+  configureActivity({
+    level: "debug",
+    transport: async (_events, dropped, batchId) => {
+      sends.push({ drops: dropped, id: batchId });
+      if (down) throw new Error("answer lost");
+    },
+  });
+  for (let i = 0; i < 40; i++) noteResource("poll", "/ops/queue");
+  await flushActivity();
+  for (let i = 0; i < 40; i++) noteResource("poll", "/ops/queue");
+  down = false;
+  await flushActivity();
+  const [first, retry, next] = sends.filter((s) => s.drops.length);
+  expect(first.id).toBeTruthy();
+  expect(retry).toEqual(first);
+  expect(next.id).not.toBe(first.id);
+  expect(pendingDrops()).toEqual([]);
+});
+
 it("batches interactions: 500 clicks cost 5 requests and little time", async () => {
   // timers only: the clock stays real, so the cost of a click is measured
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });

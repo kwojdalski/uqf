@@ -69,6 +69,9 @@ export interface BrowserDrop {
 export interface ActivityBatch {
   events?: BrowserEvent[];
   drops?: BrowserDrop[];
+  /** The drop report's id, required with `drops`: a retry sends the same
+   *  one, and the server counts its drops once (#2480). */
+  batch_id?: string | null;
 }
 export interface ActivityBatchResult {
   stored: number;

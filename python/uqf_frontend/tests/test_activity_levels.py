@@ -385,7 +385,11 @@ def test_the_export_says_what_is_not_in_the_history(tmp_path):
     c = _client(tmp_path)
     c.post(
         "/activity/events",
-        json={"events": [], "drops": [{"level": "debug", "reason": "sampled", "count": 7}]},
+        json={
+            "events": [],
+            "drops": [{"level": "debug", "reason": "sampled", "count": 7}],
+            "batch_id": activity.new_id(),
+        },
     )
     text = c.get("/activity/export", params={"format": "text"}).text
     assert "# not in the history (counted, not shown): debug sampled 7" in text
@@ -461,6 +465,7 @@ def test_what_the_browser_did_not_send_is_counted_and_reported(tmp_path):
                     {"level": "debug", "reason": "sampled", "count": 40},
                     {"level": "interactions", "reason": "queue_overflow", "count": 3},
                 ],
+                "batch_id": activity.new_id(),
             },
         )
     drops = {(d["level"], d["reason"]): d["count"] for d in c.get("/activity").json()["drops"]}
@@ -470,7 +475,10 @@ def test_what_the_browser_did_not_send_is_counted_and_reported(tmp_path):
 def test_a_browser_may_not_report_a_server_reason(tmp_path):
     r = _client(tmp_path).post(
         "/activity/events",
-        json={"drops": [{"level": "debug", "reason": "row_cap", "count": 1}]},
+        json={
+            "drops": [{"level": "debug", "reason": "row_cap", "count": 1}],
+            "batch_id": activity.new_id(),
+        },
     )
     assert r.status_code == 422
 

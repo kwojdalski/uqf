@@ -735,6 +735,56 @@ def test_unauthenticated_browser_events_are_rate_limited(tmp_path, monkeypatch):
     )
 
 
+#: Six counters a million apiece: what one drop-only batch can claim (#2480).
+_BIG_DROPS = [
+    {"level": level, "reason": reason, "count": 1_000_000}
+    for level in ("actions", "interactions", "debug")
+    for reason in ("sampled", "queue_overflow")
+]
+
+
+def test_drop_reports_without_the_token_are_rate_limited_too(tmp_path, monkeypatch):
+    """#2480: a batch's drops are charged to the no-token bucket as its events
+    are, so once it is empty a drop-only batch is 429 and counts nothing."""
+    monkeypatch.setattr(activity, "BROWSER_EVENT_BURST", 100)
+    monkeypatch.setattr(activity, "BROWSER_EVENTS_PER_SECOND", 0.0)
+    c = TestClient(create_app(gateway=FakeGateway(), settings=_settings(tmp_path)))
+    assert (
+        c.post("/activity/events", json={"events": [_event() for _ in range(100)]}).status_code
+        == 200
+    )
+    before = c.get("/activity").json()["drops"]
+    r = c.post(
+        "/activity/events",
+        json={"events": [], "drops": _BIG_DROPS, "batch_id": activity.new_id()},
+    )
+    assert r.status_code == 429, r.text
+    assert c.get("/activity").json()["drops"] == before
+
+
+def test_a_retried_drop_report_is_counted_once(tmp_path):
+    """#2480: the browser resends a report whose answer it lost with the same
+    batch_id, and the server counts its drops once - as it stores an event
+    once by its event_id."""
+    c = _client(_settings(tmp_path))
+    report = {"events": [], "drops": _BIG_DROPS[:1], "batch_id": activity.new_id()}
+    assert c.post("/activity/events", json=report).status_code == 200
+    assert c.post("/activity/events", json=report).status_code == 200
+    (drop,) = [d for d in c.get("/activity").json()["drops"] if d["reason"] == "sampled"]
+    assert drop["count"] == 1_000_000
+    again = {**report, "batch_id": activity.new_id()}
+    assert c.post("/activity/events", json=again).status_code == 200
+    (drop,) = [d for d in c.get("/activity").json()["drops"] if d["reason"] == "sampled"]
+    assert drop["count"] == 2_000_000
+
+
+def test_a_drop_report_without_a_batch_id_is_refused(tmp_path):
+    c = _client(_settings(tmp_path))
+    r = c.post("/activity/events", json={"events": [], "drops": _BIG_DROPS[:1]})
+    assert r.status_code == 422, r.text
+    assert "batch_id" in r.text
+
+
 def test_a_browser_batch_over_the_size_limit_is_refused_before_it_is_read(tmp_path):
     c = TestClient(create_app(gateway=FakeGateway(), settings=_settings(tmp_path)))
     padding = "x" * (activity.MAX_BATCH_BYTES + 1)

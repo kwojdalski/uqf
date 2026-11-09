@@ -610,6 +610,22 @@ _MIGRATIONS: tuple[tuple[str, ...], ...] = (
         "DROP INDEX IF EXISTS activity_ts",
         "CREATE INDEX IF NOT EXISTS activity_time ON activity (time)",
     ),
+    # 5 (#2480): the browser drop reports already counted, by the batch_id
+    # each carried, so a retried report is not counted twice.
+    (
+        "CREATE TABLE IF NOT EXISTS activity_drop_reports ("
+        "batch_id TEXT PRIMARY KEY, recorded_at TEXT NOT NULL)",
+    ),
+)
+
+#: The drop reports whose ids are remembered: a retry follows its first send
+#: within seconds, so the newest this many are plenty (#2480).
+MAX_DROP_REPORTS = 10_000
+
+_DROP_UPSERT = (
+    "INSERT INTO activity_drops (level, reason, count, last_at) VALUES (?, ?, ?, ?) "
+    "ON CONFLICT (level, reason) DO UPDATE SET "
+    "count = count + excluded.count, last_at = excluded.last_at"
 )
 
 
@@ -793,12 +809,38 @@ class ActivityStore:
         """Count events that are not in the history, so a reader is told."""
         if level not in EVENT_LEVELS or reason not in DROP_REASONS or count <= 0:
             return
-        self._write(
-            "INSERT INTO activity_drops (level, reason, count, last_at) VALUES (?, ?, ?, ?) "
-            "ON CONFLICT (level, reason) DO UPDATE SET "
-            "count = count + excluded.count, last_at = excluded.last_at",
-            (level, reason, count, stamp(self._clock())),
-        )
+        self._write(_DROP_UPSERT, (level, reason, count, stamp(self._clock())))
+
+    def note_reported_drops(self, batch_id: str, drops: Iterable[tuple[str, str, int]]) -> bool:
+        """Count a browser's drop report once: the first time its `batch_id`
+        is seen, in one transaction with remembering it; a retry of the same
+        report changes nothing (#2480). Whether it was counted."""
+        now = stamp(self._clock())
+        counted = [
+            (level, reason, count, now)
+            for level, reason, count in drops
+            if level in EVENT_LEVELS and reason in DROP_REASONS and count > 0
+        ]
+        try:
+            with self._lock:
+                self._db.execute("BEGIN")
+                try:
+                    new = self._db.execute(
+                        "INSERT OR IGNORE INTO activity_drop_reports (batch_id, recorded_at) "
+                        "VALUES (?, ?)",
+                        (batch_id, now),
+                    ).rowcount
+                    if new:
+                        for row in counted:
+                            self._db.execute(_DROP_UPSERT, row)
+                    self._db.execute("COMMIT")
+                except sqlite3.Error:
+                    self._db.execute("ROLLBACK")
+                    raise
+        except sqlite3.Error as exc:
+            self._failed(exc)
+            return False
+        return bool(new)
 
     def update(self, event_id: str, **fields: Any) -> bool:
         """Change a stored event's settleable fields."""
@@ -862,6 +904,11 @@ class ActivityStore:
                 )
             self.note_dropped(level, "retention", aged or 0)
             self.note_dropped(level, "row_cap", capped)
+        self._write(
+            "DELETE FROM activity_drop_reports WHERE rowid <= (SELECT rowid FROM "
+            "activity_drop_reports ORDER BY rowid DESC LIMIT 1 OFFSET ?)",
+            (MAX_DROP_REPORTS,),
+        )
 
     # -- reading --------------------------------------------------------------
 

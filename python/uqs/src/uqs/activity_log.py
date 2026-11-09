@@ -238,7 +238,7 @@ def drops(db: sqlite3.Connection) -> list[dict[str, Any]]:
 #: The `PRAGMA user_version` a history file this release reads has: the
 #: frontend API brings an older file up to it when it opens it
 #: (uqf_frontend/activity.py `_MIGRATIONS`), and a read-only reader cannot.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def open_readonly(path: Path) -> sqlite3.Connection:

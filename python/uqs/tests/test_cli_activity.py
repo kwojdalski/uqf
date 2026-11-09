@@ -62,6 +62,7 @@ def history(tmp_path) -> tuple[Path, TestClient]:
                        subject="GET /ops/queue", outcome="succeeded", duration_ms=3.0),
             ],
             "drops": [{"level": "debug", "reason": "sampled", "count": 5}],
+            "batch_id": activity.new_id(),
         },
     )  # fmt: skip
     store: activity.ActivityStore = client.app.state.activity  # ty: ignore[unresolved-attribute]

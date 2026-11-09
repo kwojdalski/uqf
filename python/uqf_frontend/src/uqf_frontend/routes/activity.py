@@ -69,9 +69,10 @@ def install(
         """What an operator did in the UI. Intent, as the browser reports it -
         the server's own rows are the authority on what happened. Written in
         one transaction, and with it the count of what the browser could not
-        send. Without the write token, rate-limited (#2019)."""
+        send. Without the write token, rate-limited (#2019) - its drops as
+        well as its events, so a drop-only batch is not free (#2480)."""
         if not _carries_token(settings, request) and not request.app.state.activity_rate.take(
-            len(batch.events)
+            len(batch.events) + len(batch.drops)
         ):
             raise TooManyRequests(
                 "too many activity events without the write token - the batch is accepted "
@@ -98,8 +99,10 @@ def install(
             }
             for event in batch.events
         )
-        for lost in batch.drops:
-            history.note_dropped(lost.level, lost.reason, lost.count)
+        if batch.batch_id is not None and batch.drops:
+            history.note_reported_drops(
+                batch.batch_id, ((lost.level, lost.reason, lost.count) for lost in batch.drops)
+            )
         return ActivityBatchResponse(
             stored=stored,
             not_stored=not_stored,

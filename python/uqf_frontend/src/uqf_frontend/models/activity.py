@@ -133,6 +133,11 @@ class ActivityBatchRequest(BaseModel):
     #: Events this browser did not send, by level and reason - the same
     #: records GET /activity answers as `drops` (#2242).
     drops: list[BrowserDropIn] = Field(default_factory=list, max_length=16)
+    #: The id of this batch's drop report, required with `drops`. A browser
+    #: that sends a report again - its answer was lost - sends the same id,
+    #: and its drops are counted once, as an event is stored once by its
+    #: event_id (#2480).
+    batch_id: str | None = Field(default=None, pattern=_ACTIVITY_ID)
 
     @model_validator(mode="before")
     @classmethod
@@ -140,6 +145,12 @@ class ActivityBatchRequest(BaseModel):
         if isinstance(data, dict) and "dropped" in data:
             raise ValueError("`dropped` is `drops`: the events this browser did not send (#2242)")
         return data
+
+    @model_validator(mode="after")
+    def _drops_have_an_id(self) -> ActivityBatchRequest:
+        if self.drops and self.batch_id is None:
+            raise ValueError("a batch with `drops` needs a batch_id, so a retry counts them once")
+        return self
 
 
 class ActivityBatchResponse(BaseModel):
