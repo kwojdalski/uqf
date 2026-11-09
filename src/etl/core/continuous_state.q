@@ -78,10 +78,20 @@
 .qetl.job.continuous.load_cursor:{[worker]
     path:.qetl.job.continuous.cursor_path[worker];
     if[()~key hsym `$path; :0Np];
-    saved:.qetl.job.bounded.state.durable_read["load_cursor";path;.qetl.job.bounded.state.read_json_dict];
-    if[not `cursor in key saved;
-        '"load_cursor: ",path," holds no cursor field - ",(-3!saved)];
-    "P"$saved`cursor}
+    .qetl.job.bounded.state.durable_read["load_cursor";path;.qetl.job.continuous.read_cursor_file]}
+
+/ Private: one generation of a cursor file as its timestamp, throwing unless
+/ it holds a `cursor` that parses to one. A durable_read reader: checked only
+/ after the read, {"cursor":"not-a-time"} came back as 0Np - a first start -
+/ and a primary with no `cursor` threw, each without trying the .bak (#2314).
+/ advance never saves a null, so a null here is always a bad file.
+/ @private
+.qetl.job.continuous.read_cursor_file:{[path]
+    saved:.qetl.job.bounded.state.read_json_dict path;
+    if[not `cursor in key saved; '"no cursor field - ",-3!saved];
+    c:@[{"P"$x};saved`cursor;{[e] 0Np}];
+    if[null c; '"cursor ",(-3!saved`cursor)," is not a timestamp"];
+    c}
 
 / Persist the cursor AFTER the page it acknowledges has been published
 /.

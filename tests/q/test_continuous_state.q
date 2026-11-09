@@ -44,6 +44,29 @@
     .qunit.assertThrows[.qetl.job.continuous.load_cursor;`tailer;"*and so is its .bak*";
         "refused, never a null a feed would read as its first run"]};
 
+/ #2314: valid JSON with a bad value was accepted as the primary, so the .bak
+/ was never tried - an invalid timestamp read as 0Np, a first start, and a
+/ missing field threw.
+.qt.qetl.job.continuous.test_a_cursor_that_is_not_a_timestamp_falls_back_to_the_previous_one:{[t]
+    p:.qetl.job.continuous.cursor_path `tailer;
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[1]];
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[2]];
+    (hsym `$p) 0: enlist "{\"cursor\":\"not-a-time\"}";
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.qt.qetl.job.continuous.d[1];
+        "an invalid timestamp is a bad file, not a first start"];
+    (hsym `$p) 0: enlist "{\"saved_at\":\"2026-09-11T00:00:00.000000000\"}";
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.qt.qetl.job.continuous.d[1];
+        "and so is one with no cursor field"]};
+
+.qt.qetl.job.continuous.test_two_cursor_files_that_are_not_timestamps_are_refused:{[t]
+    p:.qetl.job.continuous.cursor_path `tailer;
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[1]];
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[2]];
+    {(hsym `$x) 0: enlist "{\"cursor\":\"not-a-time\"}"} each (p;p,".bak");
+    e:.qunit.assertThrows[.qetl.job.continuous.load_cursor;`tailer;"*and so is its .bak*";
+        "unreadable state, never a valid first start"];
+    .qunit.assertTrue[e like "*is not a timestamp*";"and it says what is wrong with the file"]};
+
 / Clearing only the cursor file would leave its .bak behind, and a later
 / unreadable write would then fall back to the cursor from BEFORE the clear.
 .qt.qetl.job.continuous.test_a_cleared_cursor_does_not_come_back_through_its_previous_generation:{[t]
