@@ -124,7 +124,7 @@ def _row(name: str, status: str, port: str, source: str) -> dict[str, str]:
     return {"Process": name, "Status": status, "Port": port, "PortSource": source}
 
 
-def test_only_up_processes_on_a_reported_port_are_probed(monkeypatch):
+def test_only_up_processes_with_a_port_are_probed(monkeypatch):
     asked: list[dict[str, int]] = []
 
     def fake(targets, timeout, **_kw):
@@ -140,6 +140,15 @@ def test_only_up_processes_on_a_reported_port_are_probed(monkeypatch):
     assert probe.attach_probe_column(rows, 0.5, None) == []
     assert asked == [{"rdb1": 6052}]
     assert [r["Responds"] for r in rows] == ["3ms", "-", "-"]
+
+
+def test_an_up_process_on_its_configured_port_is_probed_too():
+    """#2393: without lsof every up process's port is `configured`; a hung
+    one must still raise the alarm, not be skipped."""
+    with _server(_hangs) as port:
+        rows = [_row("rdb1", "up", str(port), "configured")]
+        assert probe.attach_probe_column(rows, 0.3, None) == ["rdb1"]
+    assert rows[0]["Responds"] == "timeout"
 
 
 def test_the_silent_processes_are_returned_for_the_warning_line(monkeypatch):
