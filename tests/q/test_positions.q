@@ -171,6 +171,14 @@
     .qunit.assertTrue[row`avg_price_break;"avg_price disagrees beyond price_tol while both sides are open -> break"];
     .qunit.assertEquals[row`status;`break;"an avg_price break alone still marks the row `break"]};
 
+/ #2621: avg_price was compared only on positions larger than qty_tol, so a
+/ 1.10 vs 1.30 break on two 5000-unit longs read `match under qty_tol 10000.
+.qt.qf.port.positions.test_reconcile_trades_compares_avg_price_below_qty_tol:{[t]
+    ref:`sym xkey ([] sym:enlist `EURUSD; qty:enlist 5000f; avg_price:enlist 1.30; realized_pnl:enlist 0f);
+    tr:([] time:enlist 2026.01.01D09:00; sym:enlist `EURUSD; size:enlist 5000f; trade_price:enlist 1.10; side:enlist 1);
+    .qunit.assertEquals[exec first status from .qf.port.reconcile_trades[ref;tr;10000f;1e-6];`break;
+        "a small open position is still open: its avg_price break is a break"]};
+
 .qt.qf.port.positions.test_reconcile_trades_does_not_flag_avg_price_when_one_side_is_flat:{[t]
     / trades fully close the EURUSD position (flat, avg_price resets to 0
     / by convention) but the broker's reference book still shows it open -

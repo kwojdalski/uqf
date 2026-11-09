@@ -150,7 +150,9 @@
         computed_qty:comp_qty; reference_qty:ref_qty; qty_diff:comp_qty-ref_qty;
         computed_avg_price:comp_avg; reference_avg_price:ref_avg; avg_price_diff:comp_avg-ref_avg);
     result:update qty_break:qty_tol<abs qty_diff from result;
-    result:update avg_price_break:(qty_tol<abs computed_qty) and (qty_tol<abs reference_qty) and price_tol<abs avg_price_diff from result;
+    / Gated on flatness, not on qty_tol (#2621): a position no bigger than
+    / the qty tolerance is still open, and its avg_price still has to agree.
+    result:update avg_price_break:(not .qf.port.is_flat computed_qty) and (not .qf.port.is_flat reference_qty) and price_tol<abs avg_price_diff from result;
     result:update status:`match`break qty_break or avg_price_break from result;
     `status xasc result};
 
