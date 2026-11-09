@@ -300,7 +300,8 @@
 / @return the table in target conventions, with source_sym and inverted
 / @throws error for a sym with no target, a target that is neither the pair
 /   nor its inverse, half a size pair, points without spot, a mid column on
-/   an inverted row, or a missing pip factor
+/   an inverted row, a lone bid or ask, sizes without both prices or part of
+/   the four ladder columns on an inverted row, or a missing pip factor
 / @eg raze value exec bid,ask from .qf.px.convert_quotes[([] sym:enlist `EURUSD; bid:enlist 2f; ask:enlist 2.5);(enlist `EURUSD)!enlist `USDEUR;::]  -> 0.4 0.5
 .qf.px.convert_quotes:{[quotes;target_conventions;pip_factors]
     if[not 98h=type quotes; '"convert_quotes: quotes must be an unkeyed table with a sym column"];
@@ -322,6 +323,15 @@
             '"convert_quotes: no pip factor for ",", " sv string gone]];
     if[(`mid in c) and any flips;
         '"convert_quotes: mid has no rule for an inverted pair - drop it, or recompute it from the converted bid and ask"];
+    / The price groups below convert only whole, so on an inverted row a part
+    / of one would keep the source pair's price under the target's name, as
+    / mid did (#806, #2386).
+    if[any flips;
+        if[1=sum `bid`ask in c; '"convert_quotes: bid and ask come together on an inverted row - one alone has no inverse"];
+        if[(`bid_size in c) and not all `bid`ask in c; '"convert_quotes: bid_size and ask_size need bid and ask on an inverted row"];
+        ladders:`bid_prices`bid_sizes`ask_prices`ask_sizes;
+        if[(count part:ladders where ladders in c) within 1 3;
+            '"convert_quotes: ladders come as all of ",(", " sv string ladders)," on an inverted row, got ",", " sv string part]];
     flip_of:srcs!flips;
     target_of:srcs!targets;
     out:update source_sym:sym, inverted:flip_of sym from quotes;

@@ -911,6 +911,21 @@
     .qunit.assertThrows[.qf.px.convert_quotes[;(enlist `EURUSD)!enlist `USDEUR;::];update fwd_points:1f from q;
         "convert_quotes: fwd_points need a spot column*";"points without spot"]};
 
+/ #2386: an inverted row whose price columns could not all convert was
+/ relabelled USDEUR and kept EURUSD's prices.
+.qt.qf.px.forwards.test_convert_quotes_refuses_half_price_columns:{[t]
+    m:(enlist `EURUSD)!enlist `USDEUR;
+    .qunit.assertThrows[.qf.px.convert_quotes[;m;::];([] sym:enlist `EURUSD; bid:enlist 1.10);
+        "convert_quotes: bid and ask come together*";"bid without ask is refused on an inverted row"];
+    .qunit.assertThrows[.qf.px.convert_quotes[;m;::];([] sym:enlist `EURUSD; bid:enlist 1.10; bid_size:enlist 1e6; ask_size:enlist 2e6);
+        "convert_quotes: bid and ask come together*";"sizes beside a lone bid are refused"];
+    .qunit.assertThrows[.qf.px.convert_quotes[;m;::];([] sym:enlist `EURUSD; bid_size:enlist 1e6; ask_size:enlist 2e6);
+        "convert_quotes: bid_size and ask_size need bid and ask*";"sizes without prices are refused"];
+    .qunit.assertThrows[.qf.px.convert_quotes[;m;::];([] sym:enlist `EURUSD; bid_prices:enlist 1.10 1.09; ask_prices:enlist 1.11 1.12);
+        "convert_quotes: ladders come as all of bid_prices, bid_sizes, ask_prices, ask_sizes*";"price ladders without size ladders are refused"];
+    r:.qf.px.convert_quotes[([] sym:enlist `EURUSD; bid:enlist 1.10);(enlist `EURUSD)!enlist `EURUSD;::];
+    .qunit.assertEquals[r`bid;enlist 1.10;"a row that does not invert keeps a lone bid"]};
+
 .qt.qf.px.forwards.test_inverse_pair_swaps_legs:{[t]
     .qunit.assertEquals[.qf.px.inverse_pair each `EURUSD`USDJPY;`USDEUR`JPYUSD;"legs swapped"]};
 
