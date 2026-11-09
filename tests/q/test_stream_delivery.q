@@ -197,6 +197,39 @@
     r:.qetl.job.stream.tick `sdt_feed;
     .qunit.assertEquals[r`state;`published;"behaviour unchanged when ack is not declared"]};
 
+/ --- a page the publish check holds (#2312) ---------------------------------
+
+/ Whether the feed's check fails every row - the switch a test flips to mend it.
+.qt.qetl.job.stream.delivery.holding:1b
+
+.qt.qetl.job.stream.delivery.hold_check:{[x]
+    n:$[.qt.qetl.job.stream.delivery.holding; 1; 0];
+    ([] check:n#`held; status:n#`bad; detail:n#enlist "held")}
+
+/ The feed, with a check under `hold, wired the way the runner wires it.
+.qt.qetl.job.stream.delivery.declare_held:{[]
+    .qetl.job.stream.define[`sdt_feed;`procname`subscribe_to`outputs`period`poll`check`on_fail!(
+        `sdt_feed1;`symbol$();enlist `sdt_out;0D00:00:01;
+        `fetch`normalize`next_cursor!(.qt.qetl.job.stream.delivery.after;{[page] select ts, id, v from page};{[page] last page`ts});
+        .qt.qetl.job.stream.delivery.hold_check;`hold)];
+    .qetl.job.stream.wire[`sdt_feed;.qt.qetl.job.stream.delivery.record];
+    `sdt_feed}
+
+/ A held batch returns normally, so only the tick can keep the cursor from
+/ moving past rows that never reached the plant.
+.qt.qetl.job.stream.delivery.test_a_page_the_check_holds_keeps_its_cursor_and_marker:{[t]
+    `.qt.qetl.job.stream.delivery.holding set 1b;
+    .qt.qetl.job.stream.delivery.declare_held[];
+    .qunit.assertThrows[{.qetl.job.stream.tick `sdt_feed};::;"tick: sdt_feed's page was held by its publish check*";
+        "a hold is a failed tick, not a published one"];
+    .qunit.assertEquals[(count .qt.qetl.job.stream.delivery.sent;null .qetl.job.continuous.load_cursor`sdt_feed;
+        (.qetl.job.stream.delivery.marker`sdt_feed)`to);(0;1b;.qt.qetl.job.stream.delivery.d[3]);
+        "nothing sent, the cursor where it was, the page still marked"];
+    `.qt.qetl.job.stream.delivery.holding set 0b;
+    .qetl.job.stream.tick `sdt_feed;
+    .qunit.assertEquals[(exec id from .qt.qetl.job.stream.delivery.sent;.qetl.job.continuous.load_cursor`sdt_feed);
+        (`a`b`c;.qt.qetl.job.stream.delivery.d[3]);"once the check passes, the held page is published and the cursor moves"]};
+
 / --- what define and wire refuse -------------------------------------------
 
 .qt.qetl.job.stream.delivery.test_define_refuses_a_row_key_with_time:{[t]
