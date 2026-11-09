@@ -127,29 +127,46 @@ EXPLICIT_ID = re.compile(r"\{#([^}\s]+)[^}]*\}\s*$")
 
 
 def slug(heading: str) -> str:
-    """GitHub's anchor for a heading.
+    """GitHub's anchor for a heading, as github-slugger makes it (#2407).
 
-    Lowercase, drop everything that is not a word character, a space or a
-    hyphen, then spaces to hyphens. Inline code and emphasis markers go
-    first, so `` `.qetl.job.bounded` and the plant `` and ".qetl.job.bounded and the plant" agree.
+    The heading's text as rendered - inline-code backticks, emphasis markers
+    and link syntax gone, but a `_` inside code kept - lowercased, everything
+    that is not a word character, a space or a hyphen dropped, then EACH space
+    to a hyphen: `2 · The tickerplant` is `2--the-tickerplant`, not
+    `2-the-tickerplant`. A repeated heading's number is `anchors_in`'s.
     """
-    text = re.sub(r"`([^`]*)`", r"\1", heading)
-    text = re.sub(r"[*_]{1,2}([^*_]+)[*_]{1,2}", r"\1", text)
-    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
-    text = text.lower()
-    text = re.sub(r"[^\w\s-]", "", text)
-    return re.sub(r"\s+", "-", text.strip())
+    parts = re.split(r"(`[^`]*`)", heading)
+    text = ""
+    for i, part in enumerate(parts):
+        if i % 2:
+            text += part[1:-1]
+            continue
+        part = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", part)
+        # `*` is punctuation and goes below anyway; `_` is a word character,
+        # so only an emphasis `_` - one at a word's edge - is dropped here.
+        text += re.sub(r"(?<!\w)_{1,2}([^_]+?)_{1,2}(?!\w)", r"\1", part)
+    text = re.sub(r"[^\w\s-]", "", text.strip().lower())
+    return text.replace(" ", "-")
 
 
 def anchors_in(path: Path) -> set[str]:
+    """Every anchor a page's headings give it: an explicit `{#id}`, and the
+    GitHub slug - numbered `-1`, `-2` for a repeat, in document order."""
     body = FENCE.sub("", path.read_text(encoding="utf-8"))
     found: set[str] = set()
+    slugs: set[str] = set()
     for raw in HEADING.findall(body):
         explicit = EXPLICIT_ID.search(raw)
         if explicit:
             found.add(explicit.group(1))
             raw = EXPLICIT_ID.sub("", raw).strip()
-        found.add(slug(raw))
+        base = anchor = slug(raw)
+        n = 0
+        while anchor in slugs:
+            n += 1
+            anchor = f"{base}-{n}"
+        slugs.add(anchor)
+        found.add(anchor)
     return found
 
 
