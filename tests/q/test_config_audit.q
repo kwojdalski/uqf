@@ -220,6 +220,22 @@ test_an_atom_then_a_list_does_not_break_the_memory:{[t]
     .qunit.assertEquals[first .qt.qetl.cfg.audit.sent;`config_change;"the change is published"];
     .qunit.assertEquals[(first last .qt.qetl.cfg.audit.sent)`new;"99";"with the new value"]};
 
+/ #2322: poll marks a change seen as it builds the row, so a send that threw
+/ used to lose the row for good - the next poll found nothing new.
+.qt.qetl.cfg.audit.test_a_change_whose_send_threw_is_published_by_the_next_call:{[t]
+    .qt.qetl.cfg.audit.reset[];
+    .qetl.cfg.audit.watch[`cross_arbitrage;`.qt.qetl.cfg.audit.a_number];
+    `.qetl.cfg.audit.owner_here set `cross_arbitrage;
+    .qetl.job.stream.wire[`cross_arbitrage;{[t;x] '"tickerplant down"}];
+    .qunit.assertThrows[.qetl.cfg.audit.poll_and_publish;::;"tickerplant down";
+        "the failed send still reaches the timer's handler"];
+    `.qt.qetl.cfg.audit.sent set ();
+    .qetl.job.stream.wire[`cross_arbitrage;{[t;x] `.qt.qetl.cfg.audit.sent set (t;x)}];
+    .qetl.cfg.audit.poll_and_publish[];
+    .qunit.assertEquals[first .qt.qetl.cfg.audit.sent;`config_change;"the next call publishes it"];
+    .qunit.assertEquals[(last .qt.qetl.cfg.audit.sent)`name;enlist `.qt.qetl.cfg.audit.a_number;
+        "the observation the failed send lost"]};
+
 / --- what the jobs actually declare ---------------------------------------
 
 .qt.qetl.cfg.audit.test_the_watched_names_exist:{[t]
