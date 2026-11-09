@@ -97,6 +97,8 @@ NAMESPACE_ONLY_FILES = ("src/namespaces.q", "src/etl/synthetic_market.q")
 GROUPS = {
     "attribution_routes": "cross",
     "execution_attribution": "execution",
+    "microstructure_shape": "microstructure",
+    "microstructure_tape": "microstructure",
     "microstructure_venues": "microstructure",
 }
 

@@ -4,8 +4,8 @@
 //   .qf.px    theoretical pricing and the conventions it rests on -
 //             ccy.q daycount.q calendar.q rates.q forwards.q options.q
 //   .qf.mkt   analytics over observed market data - book.q cross.q
-//             attribution_routes.q microstructure.q microstructure_venues.q
-//             dqchecks.q asof.q
+//             attribution_routes.q microstructure.q microstructure_shape.q
+//             microstructure_tape.q microstructure_venues.q dqchecks.q asof.q
 //   .qf.exec  execution quality and allocation - execution.q
 //             execution_attribution.q allocation.q
 //   .qf.port  positions, desk exposure, risk and limits - positions.q
@@ -75,6 +75,8 @@
 \l src/execution/execution.q
 \l src/execution/execution_attribution.q
 \l src/market_data/microstructure.q
+\l src/market_data/microstructure_shape.q
+\l src/market_data/microstructure_tape.q
 \l src/market_data/microstructure_venues.q
 \l src/market_data/dqchecks.q
 \l src/examples/example_defaults.q
