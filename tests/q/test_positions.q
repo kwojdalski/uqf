@@ -75,6 +75,13 @@
     .qunit.assertThrows[.qf.port.apply_fill[b;`EURUSD;400000;;-1];0n;"apply_fill: a fill with a null size*";"a null price is refused"];
     .qunit.assertThrows[.qf.port.apply_fill[b;`EURUSD;400000;1.105;];2;"apply_fill: side*";"a side outside 1 / -1 is refused"]};
 
+/ #2533: a negative size netted as the opposite direction, while allocate
+/ dropped the same trade - the two engines disagreed.
+.qt.qf.port.positions.test_apply_fill_refuses_a_negative_size:{[t]
+    .qunit.assertThrows[.qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;;1.1;1];-1000000;"apply_fill: size must not be negative*";"a buy of -1e6 does not open a short"];
+    tr:([] time:2026.01.01D09:00 2026.01.01D10:00; sym:`EURUSD`EURUSD; size:-1e6 -1e6; trade_price:1.0 1.2; side:1 -1);
+    .qunit.assertThrows[.qf.port.apply_fills[.qf.port.empty_book[];];tr;"apply_fill: size must not be negative*";"nor do apply_fills book -200000"]};
+
 .qt.qf.port.positions.test_apply_fill_tracks_multiple_syms_independently:{[t]
     b:.qf.port.apply_fill[.qf.port.empty_book[];`EURUSD;1000000;1.1000;1];
     b:.qf.port.apply_fill[b;`GBPUSD;500000;1.2500;-1];

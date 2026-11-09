@@ -500,3 +500,9 @@
     tr:([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:1000000 400000f; trade_price:1.10 1.15);
     .qunit.assertThrows[.qf.exec.allocate[;`fifo];update size:1e6 0n from tr;"allocate: 1 trade(s) have a null size*";"a null size is not silently dropped"];
     .qunit.assertThrows[.qf.exec.allocate[;`fifo];update trade_price:1.1 0n from tr;"allocate: 1 trade(s) have a null size*";"a null price books no null P&L"]};
+
+/ #2533: a negative size closed nothing and opened nothing, so both trades
+/ vanished from ledger and residual.
+.qt.qf.exec.allocation.test_a_trade_with_a_negative_size_is_refused:{[t]
+    tr:([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:2#-1000000f; trade_price:1.0 1.2);
+    .qunit.assertThrows[.qf.exec.run[;`fifo];tr;"allocate: 2 trade(s) have a negative size*";"a negative size is refused, not dropped"]};

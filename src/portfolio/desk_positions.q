@@ -95,7 +95,7 @@
 / @param batch the fills: a table with sym, side, size, price and every
 /   dimension (`batch`, because `fills` is a q builtin)
 / @return the updated book
-/ @throws error naming any missing column, or counting fills with a null side, size or price
+/ @throws error naming any missing column, or counting fills with a null side, size or price, or a negative size
 / @eg exec base_qty from .qf.port.apply_desk_fills[.qf.port.empty_desk_book[`sym];([] sym:`EURUSD`EURUSD; side:1 -1; size:1000000 400000f; price:1.085 1.086)] -> enlist 600000f
 .qf.port.apply_desk_fills:{[book;batch]
     dims:.qf.port.dimensions[book];
@@ -108,6 +108,10 @@
     n_bad:sum (null batch`side) or (null batch`size) or null batch`price;
     if[n_bad;
         '"apply_desk_fills: ",string[n_bad]," fill(s) have a null side, size or price - a fill that cannot be netted must not be netted on one side only"];
+    / size is unsigned: a negative one would net as the opposite side (#2533).
+    n_size:sum 0>batch`size;
+    if[n_size;
+        '"apply_desk_fills: ",string[n_size]," fill(s) have a negative size - size is unsigned, side carries the direction"];
     netted:?[batch; (); {x!x} dims;
         `base_qty`quote_qty`fill_count!(
             (sum;(*;`side;`size));

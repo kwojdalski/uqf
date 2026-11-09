@@ -1082,6 +1082,17 @@
     .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`quote_qty;-1085000f;1e-6;
         "the priced buy keeps both"]};
 
+/ #2533: apply_desk_fills now refuses a negative size, so net_fills drops
+/ it as it drops a null rather than losing the whole batch.
+.qt.qetl.job.stream.test_positions_drop_a_negative_size_fill:{[t]
+    saved:.qetl.log.ch.warn;
+    `.qetl.log.ch.warn set {[channel;text;fields] `.qt.qetl.job.stream.fx_warned set (channel;text;fields);};
+    b:([] sym:2#`EURUSD; book:2#`london; product:2#`spot; side:1 1; size:1000000 -400000f; price:1.085 1.086);
+    r:@[.qpipe.job.fx_positions.net_fills[.qpipe.job.fx_positions.desk_book];b;{[saved;e] `.qetl.log.ch.warn set saved; 'e}[saved]];
+    `.qetl.log.ch.warn set saved;
+    .qunit.assertEquals[(.qt.qetl.job.stream.fx_warned 2)`fills;1j;"the negative-size fill is dropped and counted"];
+    .qt.support.assertApprox[first r`base_qty;1000000f;1e-9;"and the good buy is still netted"]};
+
 .qt.qetl.job.stream.test_positions_keep_the_books_apart:{[t]
     .qt.qetl.job.stream.reset[];
     .qt.qetl.job.stream.to_fx_positions[.qt.qetl.job.stream.orders_batch[]];

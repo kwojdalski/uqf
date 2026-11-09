@@ -270,6 +270,10 @@
     if[n_side; '"allocate: ",string[n_side]," trade(s) have a side that is not 1 (buy) or -1 (sell)"];
     n_null:sum (null trades`size) or null trades`trade_price;
     if[n_null; '"allocate: ",string[n_null]," trade(s) have a null size or trade_price"];
+    / size is unsigned and side carries the direction: a negative size
+    / matched nothing and opened nothing, so the trade vanished (#2533).
+    n_size:sum 0>trades`size;
+    if[n_size; '"allocate: ",string[n_size]," trade(s) have a negative size - size is unsigned, side carries the direction"];
     $[`trade_id in cols trades; trades; update trade_id:i from trades]}
 
 / The columns a carried-in lot table must carry, on top of the bucket
@@ -421,7 +425,8 @@
 / @param opts an options dict (see default_opts), or a bare method name
 / @return a dict with `matches (the ledger, plus a pnl column) and `residual (unmatched open lots)
 / @throws error on a missing column, an unknown option, an unregistered method,
-/   a trade side that is not 1 or -1, or a null size or trade_price (#2381)
+/   a trade side that is not 1 or -1, a null size or trade_price (#2381), or a
+/   negative size (#2533)
 / @eg count .qf.exec.run[([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:2#1000000f; trade_price:1.0 2.0);`fifo]`matches -> 1
 .qf.exec.run:{[trades;opts]
     o:.qf.exec.normalised_opts[opts];
