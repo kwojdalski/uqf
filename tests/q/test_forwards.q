@@ -371,6 +371,17 @@
 .qt.qf.px.forwards.test_ccy_shortest_path_empty_for_same_currency:{[t]
     .qunit.assertEquals[.qf.mkt.ccy_shortest_path[`AUDUSD`EURUSD`EURPLN;`USD;`USD];`symbol$();"start and goal the same currency needs no legs at all"]};
 
+/ #2388: no pairs at all built the edges with `each` over an empty list, a
+/ () that 'type'd when indexed, instead of answering "no path".
+.qt.qf.px.forwards.test_shortest_path_no_pairs:{[t]
+    .qunit.assertEquals[.qf.mkt.ccy_shortest_path[`symbol$();`EUR;`USD];`symbol$();"no pairs -> no path"];
+    .qunit.assertEquals[.qf.mkt.cross_decomp[`symbol$();`EURUSD];`symbol$();"no pairs -> no decomposition"];
+    q0:([] time:`timestamp$(); sym:`symbol$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:());
+    .qunit.assertThrows[{[q] .qf.mkt.cross_book_at[q;`EURUSD;2026.01.01D10;enlist 1e6;enlist `mid]};q0;
+        "cross_book_at: no chain of available pairs in quotes connects EUR and USD";"empty quotes -> named refusal"];
+    .qunit.assertThrows[.qf.mkt.cross_ref_price_at[q0;`EURUSD;;1e6];2026.01.01D10;
+        "*no chain of available pairs in quotes connects EUR and USD*";"and cross_ref_price_at names it too"]};
+
 .qt.qf.px.forwards.test_cross_decomp_three_leg_chain:{[t]
     .qunit.assertEquals[.qf.mkt.cross_decomp[`AUDUSD`EURUSD`EURPLN;`AUDPLN];`AUDUSD`EURUSD`EURPLN;"AUDPLN decomposes into the 3 legs bridging AUD->USD->EUR->PLN"]};
 

@@ -313,9 +313,11 @@
 / USD->EUR, both tagged with the symbol `EURUSD (the direction it needs
 / inverting, if any, is worked out later by ccy_orient_chain, not here).
 / @param avail_syms currency pair symbols known to be quotable
-/ @return table `src`dst`via, one row per direction per pair
+/ @return table `src`dst`via, one row per direction per pair - empty, typed,
+/   for no pairs: `each` over none gives a () that 'type'd when indexed (#2388)
 / @private
 .qf.mkt.ccy_graph_edges:{[avail_syms]
+    if[0=count avail_syms; :([] src:`symbol$(); dst:`symbol$(); via:`symbol$())];
     legs:.qf.px.ccy_pair_legs each avail_syms;
     src_ccy:legs[`base],legs[`quote];
     dst_ccy:legs[`quote],legs[`base];
