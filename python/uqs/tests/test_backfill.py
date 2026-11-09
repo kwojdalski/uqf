@@ -122,10 +122,8 @@ def test_the_command_reaches_start_with_parsed_bounds(monkeypatch):
     }
 
 
-@pytest.mark.parametrize("argv_debug", [["--debug"], []])
-def test_debug_starts_the_process_verbose(monkeypatch, argv_debug):
-    """Both spellings: the global --debug, and the command's own - its old
-    spelling, kept for one release (#1729)."""
+def test_debug_starts_the_process_verbose(monkeypatch):
+    """The global --debug starts the backfill verbose."""
     seen = {}
 
     def fake(
@@ -149,9 +147,8 @@ def test_debug_starts_the_process_verbose(monkeypatch, argv_debug):
     # leak DEBUG output into every later test's captured stdout.
     monkeypatch.setattr(shared, "configure_logging", lambda **kw: None)
     argv = ["job", "backfill", "demo_deals_backfill", "--source-version", "v1"]
-    argv += ["--from", "2026-09-13", "--to", "2026-09-15", *argv_debug]
-    prefix = [] if argv_debug else ["--debug"]
-    result = runner.invoke(cli.app, [*prefix, *argv])
+    argv += ["--from", "2026-09-13", "--to", "2026-09-15"]
+    result = runner.invoke(cli.app, ["--debug", *argv])
     assert result.exit_code == 0, result.output
     assert seen["verbose"] is True
 
@@ -731,8 +728,7 @@ def test_a_dry_run_names_the_checkpoint_and_deletes_nothing(status):
     assert path is not None and path.exists()
 
 
-@pytest.mark.parametrize("option", ["--source-version", "--version"])
-def test_version_is_the_old_spelling_of_source_version(monkeypatch, option):
+def test_the_source_release_is_source_version(monkeypatch):
     """#1739: `uqs --version` prints uqs's version, so the source release a
     backfill records coverage under is --source-version."""
     said = rename_support.said(monkeypatch)
@@ -743,9 +739,16 @@ def test_version_is_the_old_spelling_of_source_version(monkeypatch, option):
         return type("Completed", (), {"returncode": 0})()
 
     monkeypatch.setattr(backfill, "start", fake)
-    argv = ["job", "backfill", "demo_deals_backfill", option, "v7", "--date", "2026-09-13"]
+    argv = [
+        "job",
+        "backfill",
+        "demo_deals_backfill",
+        "--source-version",
+        "v7",
+        "--date",
+        "2026-09-13",
+    ]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
     assert seen["version"] == "v7"
-    renames = [rename_support.renamed("--version", "--source-version")]
-    assert said == (renames if option == "--version" else [])
+    assert said == []

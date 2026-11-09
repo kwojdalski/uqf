@@ -374,13 +374,11 @@ def test_a_backfill_into_a_vendored_table_does_not_redefine_it():
     [
         (["--schema", "a:float"], ("a:float", None), []),
         (["--schema-from", "quote"], (None, "quote"), []),
-        (["--columns", "a:float"], ("a:float", None), [("--columns", "--schema")]),
-        (["--columns-from", "quote"], (None, "quote"), [("--columns-from", "--schema-from")]),
     ],
 )
-def test_columns_is_the_old_spelling_of_schema(monkeypatch, argv, given, renames):
-    """#1739: --columns is which columns of a table to show (`summary`), so a
-    new table's shape is --schema; the old spellings still work, and say so."""
+def test_a_new_tables_shape_is_schema(monkeypatch, argv, given, renames):
+    """#1739: --columns is which columns of a table to show (`status`), so a
+    new table's shape is --schema."""
     said = rename_support.said(monkeypatch)
     seen = []
 

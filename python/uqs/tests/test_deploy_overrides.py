@@ -79,13 +79,6 @@ def test_each_override_needs_a_reason(name, needs):
     assert getattr(cfg, name.replace("-", "_")) == "because"
 
 
-def test_the_old_spelling_still_gives_the_override_and_its_reason():
-    """`--accept-digest REASON` is `--override accept-digest --reason REASON`
-    for one release (#1732)."""
-    cfg = parse_args(_args(Path("a.tar.gz"), "--expected-sha256", OTHER, "--accept-digest", "ok"))
-    assert cfg.accept_digest == "ok"
-
-
 @pytest.mark.parametrize(
     ("args", "said"),
     [
