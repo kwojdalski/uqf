@@ -325,11 +325,14 @@
 / available quoted pair - e.g. `EURUSD contributes both EUR->USD and
 / USD->EUR, both tagged with the symbol `EURUSD (the direction it needs
 / inverting, if any, is worked out later by ccy_orient_chain, not here).
-/ @param avail_syms currency pair symbols known to be quotable
+/ @param avail_syms currency pair symbols known to be quotable; one that is
+/   not a currency pair (BTCUSDT) is left out of the graph - it threw in
+/   ccy_pair_legs, failing every pair priced off quotes that held it (#2557)
 / @return table `src`dst`via, one row per direction per pair - empty, typed,
 /   for no pairs: `each` over none gives a () that 'type'd when indexed (#2388)
 / @private
 .qf.mkt.ccy_graph_edges:{[avail_syms]
+    avail_syms:avail_syms where {[s] @[{[s] .qf.px.normalize_ccy_pair s; 1b};s;{[e] 0b}]} each avail_syms;
     if[0=count avail_syms; :([] src:`symbol$(); dst:`symbol$(); via:`symbol$())];
     legs:.qf.px.ccy_pair_legs each avail_syms;
     src_ccy:legs[`base],legs[`quote];
