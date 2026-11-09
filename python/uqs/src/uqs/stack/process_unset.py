@@ -19,7 +19,8 @@ def unset_process_config(
     so process.csv's own values apply again (`uqs config unset`, #1858).
     Refused, naming them, when a field has no override to remove."""
     overrides = override_files.read_file(paths.overrides_path)
-    have = overrides.get(procname, {})
+    key = override_files.row_key(override_files.effective(paths), procname)
+    have = overrides.get(key, {})
     missing = [f for f in fields if f not in have]
     if missing:
         set_now = ", ".join(sorted(have)) or "none"
@@ -31,6 +32,6 @@ def unset_process_config(
     for field in fields:
         del have[field]
     if not have:
-        overrides.pop(procname, None)
+        overrides.pop(key, None)
     _write_overrides(paths, overrides)
     log.info("unset {}.{}", procname, ",".join(fields))

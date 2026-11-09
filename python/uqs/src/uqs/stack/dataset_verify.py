@@ -26,7 +26,7 @@ from uqs.timerange import TimeRange
 
 #: A dataset or column as q declares it - checked before it is spliced into q.
 _NAME = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
-#: A scope value: a symbol or an integer.
+#: A scope value's text, which q types by its column (.qetl.verify.typed_scope).
 _VALUE = re.compile(r"[A-Za-z0-9_.]+")
 _ENDPOINT = re.compile(r"[A-Za-z0-9_.-]+:\d+")
 
@@ -52,11 +52,14 @@ def parse_scope(items: list[str]) -> dict[str, str]:
 
 
 def _q_scope(scope: dict[str, str]) -> str:
-    """The scope as a q dictionary: an integer value is a long, anything else a symbol."""
+    """The scope as a q dictionary of text values, which q types by each column's
+    declared type: guessed here from the text, `sym=0005` was the long 5 and
+    `day=2026.09.13` a symbol, and each matched no row (#2473). _VALUE keeps the
+    text free of anything a q string literal would read otherwise."""
     if not scope:
         return "(`symbol$())!()"
     keys = "".join(f"`{k}" for k in scope)
-    vals = [f"{v}j" if v.isdigit() else f"`{v}" for v in scope.values()]
+    vals = [f'"{v}"' for v in scope.values()]
     return f"enlist[{keys}]!enlist {vals[0]}" if len(vals) == 1 else f"{keys}!({';'.join(vals)})"
 
 

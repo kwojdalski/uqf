@@ -40,6 +40,12 @@
     .qunit.assertTrue[all 0<count each c`basis;"every result states what it rests on"];
     .qunit.assertTrue[(first exec basis from c where category=`completeness) like "demo_deals, fixture, complete through*";"the source and its cutoff"]};
 
+.qt.qetl.verify.report.test_a_text_scope_passes_and_is_shown_as_given:{[t]
+    / `uqs job check --scope sym=EURUSD` sends the text; q types it by its column (#2473)
+    r:.qetl.verify.run[`demo_deals;enlist[`sym]!enlist "EURUSD";.qt.qetl.verify.report.from;.qt.qetl.verify.report.to;.qt.qetl.verify.report.reader;0b];
+    .qunit.assertEquals[.qt.qetl.verify.report.status[r;`completeness];`PASS;"the text found the symbol's rows"];
+    .qunit.assertEquals[first exec scope from r[`checks] where category=`completeness;"sym=EURUSD";"as the operator wrote it"]};
+
 .qt.qetl.verify.report.test_behaviours_not_run_are_unverified_not_passed:{[t]
     r:.qetl.verify.run[`demo_deals;.qt.qetl.verify.report.sc[];.qt.qetl.verify.report.from;.qt.qetl.verify.report.to;.qt.qetl.verify.report.reader;0b];
     .qunit.assertEquals[(.qt.qetl.verify.report.status[r;`behaviour];first exec reason from r[`checks] where category=`behaviour);

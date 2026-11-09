@@ -73,3 +73,26 @@
     .qunit.assertEquals[.qt.qetl.verify.complete.asked 1;`tablename`starttime`endtime!(`demo_deals;.qt.qetl.verify.complete.from;.qt.qetl.verify.complete.to+1D);
         "the table and the window, widened by the pad past its end"];
     .qunit.assertEquals[count got;5;"the rows it returned"]};
+
+/ #2473: `uqs job check --scope col=value` sends each value as text, typed here by its
+/ column - a numeric-looking symbol, a date or a float used to arrive as a long or a
+/ symbol, match no row on either side, and read UNVERIFIED as an "empty sample".
+.qt.qetl.verify.complete.test_a_text_scope_is_typed_by_its_column_and_passes:{[t]
+    r:.qetl.verify.completeness[`demo_deals;enlist[`sym]!enlist "EURUSD";.qt.qetl.verify.complete.from;.qt.qetl.verify.complete.to;{[d;f;t] .qpipe.source.demo_deals.fixture[]}];
+    .qunit.assertEquals[(r`status;r`counts);(`PASS;3 3);"\"EURUSD\" is the symbol on a symbol column"];
+    r2:.qetl.verify.completeness[`demo_deals;enlist[`rate]!enlist "1.0847";.qt.qetl.verify.complete.from;.qt.qetl.verify.complete.to;{[d;f;t] .qpipe.source.demo_deals.fixture[]}];
+    .qunit.assertEquals[(r2`status;r2`counts);(`PASS;1 1);"\"1.0847\" is the float on a float column"]};
+
+.qt.qetl.verify.complete.test_a_text_scope_keeps_leading_zeros_and_reads_dates_and_ints:{[t]
+    rows:([] time:2026.09.13D01:00 2026.09.13D02:00; sym:`0005`0006; venue:7 8i; day:2026.09.13 2026.09.14);
+    f:{[rows;s] count .qetl.verify.in_scope[rows;.qetl.verify.typed_scope[meta rows;s];`time;2026.09.13D00:00;2026.09.14D00:00]}[rows];
+    .qunit.assertEquals[f enlist[`sym]!enlist "0005";1;"`0005, not the long 5"];
+    .qunit.assertEquals[f enlist[`day]!enlist "2026.09.13";1;"a date on a date column"];
+    .qunit.assertEquals[f enlist[`venue]!enlist "7";1;"an int on an int column"];
+    .qunit.assertEquals[f enlist[`sym]!enlist `0005;1;"a value already typed is left as it is"]};
+
+.qt.qetl.verify.complete.test_a_text_scope_its_column_cannot_hold_is_refused:{[t]
+    a:(`demo_deals;enlist[`deal_id]!enlist "abc";.qt.qetl.verify.complete.from;.qt.qetl.verify.complete.to;{[d;f;t] .qpipe.source.demo_deals.fixture[]});
+    / the whole message, trapped: KDB-X's like refuses a pattern with an inner *
+    .qunit.assertEquals[@[{(`ok;.qetl.verify.completeness . x)};a;{[e] e}];"scope deal_id: \"abc\" is not a long (j)";
+        "refused, naming the column"]};

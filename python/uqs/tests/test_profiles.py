@@ -24,6 +24,7 @@ from uqs.model import dependencies, profiles
 from uqs.model import infra as infra_sets
 from uqs.model.pipeline import PipelineKind
 from uqs.model.registry import PIPELINES
+from uqs.model.unprofiled import UNPROFILED
 from uqs.paths import UqsError, paths_for_root, repo_root
 from uqs.runtimes import RUNTIMES
 from uqs.stack import procs
@@ -312,7 +313,7 @@ def test_every_standing_process_is_reachable_or_exempt_with_a_reason():
     reached: set[str] = set()
     for name in NAMES:
         reached |= set(profiles.resolve([name]))
-    orphans = standing - reached - set(profiles.UNPROFILED)
+    orphans = standing - reached - set(UNPROFILED)
     assert not orphans, (
         f"{sorted(orphans)} are in no profile. Add each to one in "
         f"profiles.PROFILES, or to UNPROFILED with the reason it belongs to no "
@@ -327,7 +328,7 @@ def test_no_exemption_is_stale():
     reached: set[str] = set()
     for name in NAMES:
         reached |= set(profiles.resolve([name]))
-    for procname, reason in profiles.UNPROFILED.items():
+    for procname, reason in UNPROFILED.items():
         assert procname in procnames, f"{procname} is exempted and does not exist"
         assert procname not in reached, f"{procname} is exempted and a profile reaches it"
         assert reason.strip(), f"{procname} is exempted with no reason"

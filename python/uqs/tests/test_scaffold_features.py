@@ -25,6 +25,7 @@ from uqs.scaffold.normalizer import normalizer
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 PROFILES_TEXT = (UQF_ROOT / profile.PROFILES_FILE).read_text()
+UNPROFILED_TEXT = (UQF_ROOT / profile.UNPROFILED_FILE).read_text()
 KNOWN = ("default", "fx", "crypto", "essential")
 
 runner = PlainRunner()  # CI renders usage errors in colour
@@ -174,12 +175,39 @@ def test_a_second_worker_needs_another_partition(tmp_path):
 # ------------------------------------------------------------------ profiles
 
 
-def _applied(actions) -> str:
-    text = PROFILES_TEXT
+def _edited(actions) -> dict:
+    """Each file the actions edit, as they leave it, each still compiling."""
+    texts = {profile.PROFILES_FILE: PROFILES_TEXT, profile.UNPROFILED_FILE: UNPROFILED_TEXT}
     for action in actions:
-        text = profile.apply(text, action)
-    compile(text, str(profile.PROFILES_FILE), "exec")
-    return text
+        texts[action.path] = profile.apply(texts[action.path], action)
+    for path, text in texts.items():
+        compile(text, str(path), "exec")
+    return texts
+
+
+def _applied(actions) -> str:
+    return "".join(_edited(actions).values())
+
+
+def test_neither_answer_takes_a_module_past_its_line_budget():
+    """profiles.py sat at the package's 400-line budget, so writing the three
+    lines of an exemption into it failed test_no_module_is_still_oversized on
+    the first `--unprofiled` scaffold; a member edits its profile's one line
+    (#2462)."""
+    for kwargs in ({"unprofiled": "a diagnostic started by hand"}, {"profile": "fx"}):
+        kwargs = {"profile": None, "unprofiled": None, **kwargs}
+        actions, _ = profile.membership(
+            "tapx1", start_with_all=False, known_profiles=KNOWN, **kwargs
+        )
+        assert actions
+        for path, text in _edited(actions).items():
+            assert len(text.splitlines()) <= 400, (path, kwargs)
+    actions, _ = profile.membership(
+        "tapx1", profile="fx", unprofiled=None, start_with_all=False, known_profiles=KNOWN
+    )
+    assert len(_edited(actions)[profile.PROFILES_FILE].splitlines()) == len(
+        PROFILES_TEXT.splitlines()
+    )
 
 
 def test_a_profile_takes_the_process_and_the_module_still_compiles():
@@ -228,14 +256,14 @@ def test_an_exemption_is_written_with_its_reason():
     ],
 )
 def test_an_exemption_reads_back_as_the_reason_given(reason):
-    """--unprofiled REASON -> profiles.py -> UNPROFILED: the reason the module
+    """--unprofiled REASON -> unprofiled.py -> UNPROFILED: the reason the module
     holds is the one given, not an escaped near-copy of it."""
     import ast
 
     actions, _ = profile.membership(
         "tapx1", profile=None, unprofiled=reason, start_with_all=False, known_profiles=KNOWN
     )
-    tree = ast.parse(_applied(actions))
+    tree = ast.parse(_edited(actions)[profile.UNPROFILED_FILE])
     (unprofiled,) = [
         node.value
         for node in tree.body

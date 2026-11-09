@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
+from uqs.model.jobs import job_rows
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import runs
 
@@ -40,6 +41,7 @@ def gaps(
     """
     if not _JOB.fullmatch(job):
         raise UqsError(f"{job!r} is not a streaming job name")
+    _refuse_unless_streaming(paths, job)
     if range_from >= range_to:
         raise UqsError(
             f"the range is empty: from {range_from.isoformat()} "
@@ -65,3 +67,18 @@ def gaps(
     )
     grains = {str(t["worker"]): t["align"] for t in twins}
     return holes, grains, int(seen[0]["n"])
+
+
+def _refuse_unless_streaming(paths: UqsPaths, job: str) -> None:
+    """A name that is no streaming job is a lookup miss, answered from the
+    declarations before any q starts - q's own refusal is a backtrace calling
+    it a wiring bug (#2466). A bounded worker is named as one: its coverage
+    is in the run ledger, not in uptime."""
+    kinds = {r["job"]: r["kind"] for r in job_rows(paths.repo_root)}
+    if kinds.get(job) == "backfill":
+        raise UqsError(
+            f"{job} is a bounded worker: gaps reads a streaming job's uptime, and a "
+            "worker's coverage is in `uqs job runs list`"
+        )
+    if job not in kinds or kinds[job] == "reaction":
+        raise UqsError(f"no streaming job {job!r} - `uqs job list` names them")

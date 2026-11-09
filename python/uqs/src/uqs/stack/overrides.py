@@ -6,7 +6,7 @@ import csv
 import io
 from pathlib import Path
 
-from uqs.paths import PACKAGE_DIR, UqsPaths
+from uqs.paths import PACKAGE_DIR, UqsError, UqsPaths
 from uqs.stack.bundle_blocks import BundleError
 
 HOST_FILE = PACKAGE_DIR / "process_overrides.csv"
@@ -29,6 +29,28 @@ def effective(paths: UqsPaths) -> dict[str, dict[str, str]]:
     for procname, fields in read_file(paths.overrides_path).items():
         overrides.setdefault(procname, {}).update(fields)
     return overrides
+
+
+def row_key(overrides: dict[str, dict[str, str]], procname: str) -> str:
+    """The process.csv row *procname* names, which keys its overrides (#2464).
+
+    Overrides apply by the row's own procname, so a process renamed through
+    one is still keyed by the name it had: a field set under the new name
+    must be written under the old one, or it is reported set and never read.
+    """
+    renamed = {f["procname"]: row for row, f in overrides.items() if "procname" in f}
+    return renamed.get(procname, procname)
+
+
+def refuse_taken_name(names: list[str], procname: str, field: str, value: str) -> None:
+    """Refuse renaming *procname* onto another process's name: process names
+    are the stack's identity - discovery, ports, logs, pid files - and two
+    rows sharing one leave every listing showing only one of them (#2464)."""
+    if field == "procname" and value != procname and value in names:
+        raise UqsError(
+            f"{procname}.procname cannot be {value}: {value} is another process's name, "
+            "and a process name is what discovery, ports, logs and pid files find it by"
+        )
 
 
 def _rows(path: Path) -> dict[tuple[str, str], str]:

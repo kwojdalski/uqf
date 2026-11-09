@@ -28,7 +28,7 @@ from uqs.model.pipelines import PIPELINE_OFFSETS, PROCESS_CSV_FIELDS
 from uqs.model.registry import PIPELINES
 from uqs.paths import UqsError, UqsPaths, repo_root
 from uqs.stack import clean as stack_clean
-from uqs.stack import deployment, hdb_types, listing, monitor_budget, runtime
+from uqs.stack import deployment, hdb_types, listing, monitor_budget, process_unset, runtime
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
@@ -291,6 +291,28 @@ def test_set_process_config_unknown_field_raises(fake_paths: UqsPaths):
         stack_procs.set_process_config(fake_paths, "discovery1", "not_a_field", "x")
 
 
+def test_set_process_config_refuses_a_rename_onto_another_process(fake_paths: UqsPaths):
+    """Process names are the stack's identity - discovery, ports, logs, pid
+    files - so two rows may not share one (#2464)."""
+    with pytest.raises(UqsError, match="stp1"):
+        stack_procs.set_process_config(fake_paths, "discovery1", "procname", "stp1")
+    names = stack_procs.list_process_names(fake_paths)
+    assert names.count("stp1") == 1 and "discovery1" in names
+
+
+def test_a_renamed_process_is_set_under_its_new_name(fake_paths: UqsPaths):
+    """An override is keyed by the row's own procname, so one set through the
+    new name must land there, or it is reported as set and never applied
+    (#2464). The old name is still refused, as a process that is gone."""
+    stack_procs.set_process_config(fake_paths, "discovery1", "procname", "discovery9")
+    stack_procs.set_process_config(fake_paths, "discovery9", "g", "1")
+    assert stack_procs.get_process_config(fake_paths, "discovery9", resolve=False)["g"] == "1"
+    with pytest.raises(UqsError, match="no process discovery1"):
+        stack_procs.set_process_config(fake_paths, "discovery1", "g", "0")
+    process_unset.unset_process_config(fake_paths, "discovery9", ["g"])
+    assert stack_procs.get_process_config(fake_paths, "discovery9", resolve=False)["g"] == "0"
+
+
 def test_set_process_config_persists_and_is_read_back(fake_paths: UqsPaths):
     stack_procs.set_process_config(fake_paths, "discovery1", "port", "9999")
 
@@ -300,6 +322,51 @@ def test_set_process_config_persists_and_is_read_back(fake_paths: UqsPaths):
     # vendored file itself is never touched
     vendored = (fake_paths.torqapphome / "appconfig" / "process.csv").read_text()
     assert "9999" not in vendored
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("port", "99999"),
+        ("port", "0"),
+        ("port", "abc"),
+        ("port", "{KDBBASEPORT}+x"),
+        ("T", "abc"),
+        ("w", "-1"),
+        ("g", "1.5"),
+        ("localtime", "yes"),
+        ("startwithall", "2"),
+        ("startwithall", "yes"),
+    ],
+)
+def test_set_process_config_refuses_a_value_its_field_cannot_hold(
+    fake_paths: UqsPaths, field, value
+):
+    """A port above 65535, a non-numeric timeout and a startwithall other
+    than 0/1 were saved and reached torq.sh's start line (#2465)."""
+    with pytest.raises(UqsError, match=rf"discovery1\.{field} value {re.escape(repr(value))}"):
+        stack_procs.set_process_config(fake_paths, "discovery1", field, value)
+    assert not fake_paths.overrides_path.exists(), "nothing written"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("port", "6061"), ("port", "{KDBBASEPORT}"), ("T", "60"), ("T", ""), ("w", "4096"),
+     ("g", "1"), ("localtime", "0"), ("startwithall", "1")],
+)  # fmt: skip
+def test_set_process_config_accepts_a_value_in_its_fields_domain(
+    fake_paths: UqsPaths, field, value
+):
+    stack_procs.set_process_config(fake_paths, "discovery1", field, value)
+    assert stack_procs.get_process_config(fake_paths, "discovery1", resolve=False)[field] == value
+
+
+def test_a_hand_written_override_out_of_its_domain_is_refused_at_bootstrap(fake_paths: UqsPaths):
+    """_checked_overrides holds a row written by hand to the same domain (#2465)."""
+    fake_paths.overrides_path.parent.mkdir(parents=True, exist_ok=True)
+    fake_paths.overrides_path.write_text("procname,field,value\ndiscovery1,port,99999\n")
+    with pytest.raises(UqsError, match=r"discovery1\.port value '99999'"):
+        stack_procs.effective_process_rows(fake_paths)
 
 
 @pytest.mark.parametrize("value", ["-pairs EURUSD,USDJPY", 'say "hi"', "a\nb", "a\rb"])

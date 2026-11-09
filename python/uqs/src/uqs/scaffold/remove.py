@@ -58,7 +58,7 @@ from uqs.paths import (
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE, without_stubs
 from uqs.scaffold.example import GENERATED_BY, example_path
 from uqs.scaffold.external import external_files
-from uqs.scaffold.profile import PROFILES_FILE
+from uqs.scaffold.profile import PROFILES_FILE, UNPROFILED_FILE
 from uqs.scaffold.references import Reference, stale_references
 
 MARKER = "SCAFFOLDED"
@@ -188,8 +188,9 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
         )
         _edit(removal, repo_root, CATALOG_FILE, lambda t, tb=table: _drop_catalog(t, tb))
 
-    if (repo_root / PROFILES_FILE).is_file():
-        _edit(removal, repo_root, PROFILES_FILE, lambda t: _drop_from_profiles(t, proc))
+    for rel in (PROFILES_FILE, UNPROFILED_FILE):
+        if (repo_root / rel).is_file():
+            _edit(removal, repo_root, rel, lambda t: _drop_from_profiles(t, proc))
     removal.notes.append(
         f"{proc}'s port offset stays in scripts/processes/process_ports.csv, which is append-only "
         "so an offset is never handed to another process"
@@ -348,9 +349,10 @@ def _drop_definition(text: str, table: str) -> str:
 
 
 def _drop_catalog(text: str, table: str) -> str:
-    """`text` without `table`'s `.qcat.describe` and `.qcat.hidden` entries and
-    their continuation lines."""
-    for head in (f".qcat.describe[`{table}]:", f".qcat.hidden[`{table}]:"):
+    """`text` without `table`'s `.qcat.describe`, `.qcat.hidden` and
+    `.qcat.unbounded` entries and their continuation lines."""
+    heads = ("describe", "hidden", "unbounded")
+    for head in (f".qcat.{h}[`{table}]:" for h in heads):
         lines = text.splitlines(keepends=True)
         for i, line in enumerate(lines):
             if line.startswith(head):
@@ -363,7 +365,7 @@ def _drop_catalog(text: str, table: str) -> str:
 
 
 def _drop_from_profiles(text: str, proc: str) -> str:
-    """profiles.py without `proc` in any one-line profile, or its exemption.
+    """profiles.py without `proc` in any one-line profile; unprofiled.py without its exemption.
 
     Each edit is confined to its own dict: a process may share its name with
     a profile, and PROFILES["default"] is keyed exactly as an exemption for a

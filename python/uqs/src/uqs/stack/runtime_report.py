@@ -73,13 +73,19 @@ def list_runtimes(paths: UqsPaths, base_port: int | None = None) -> list[dict[st
                 "processes": len(procs),
                 "tables": len(tables(p)),
                 "layers": list(layers(p)),
-                "data_dir": f"output/{runtime.data_dir}",
+                "data_dir": _shown(p.torqdata, paths.repo_root),
                 "data": p.torqdata.is_dir(),
                 "base_port": runtime.base_port,
                 "running": len(up),
             }
         )
     return rows
+
+
+def _shown(directory: Path, root: Path) -> str:
+    """The data directory a runtime uses - under UQS_DATA_ROOT when that is
+    set (#2467) - relative to the repository when it lies inside it."""
+    return str(directory.relative_to(root)) if directory.is_relative_to(root) else str(directory)
 
 
 #: What `runtime diff` compares, by section, and how each is read.

@@ -20,7 +20,7 @@ from uqs.paths import CATALOG_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
 from uqs.scaffold import write
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE
 from uqs.scaffold.external import external_feed, external_files
-from uqs.scaffold.profile import PROFILES_FILE
+from uqs.scaffold.profile import PROFILES_FILE, UNPROFILED_FILE
 from uqs.scaffold.remove import plan_removal
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
@@ -139,6 +139,7 @@ def tree(tmp_path: Path) -> Path:
     for rel in (
         STACK_TABLES_TEST,
         PROFILES_FILE,
+        UNPROFILED_FILE,
         STACK_PAGE,
         SHOWCASE_PAGE,
     ):

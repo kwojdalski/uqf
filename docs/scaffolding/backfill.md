@@ -98,7 +98,7 @@ scaffold fxprobe_backfill:
   note: optional: a quality check that fails a window on bad rows - rerun with --check, or see quality_check in src/etl/workers/demo_deals_backfill.q
   note: see it run: q scripts/examples/fxprobe_example.q - on the fixture, no stack
   note: describe fxprobe_backfill1: replace its SCAFFOLDED card in docs/services/README.md and its SCAFFOLDED comment in docs/architecture/stack.md
-  note: describe fx_probe: replace its SCAFFOLDED line in scripts/processes/uqs_catalog.q - or, if the desk should not see it, delete that line and add the table to .qcat.hidden with the reason
+  note: describe fx_probe: replace its two SCAFFOLDED lines in scripts/processes/uqs_catalog.q - the description, and the .qcat.unbounded reason (or swap that for a querypolicy.csv row) - or, if the desk should not see it, delete both and add the table to .qcat.hidden with the reason
 ```
 
 **Two q files, not one**, and the process is named for the worker

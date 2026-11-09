@@ -1,6 +1,6 @@
 """What a process.csv field may hold, given how torq.sh reads and runs it.
 
-Two separate hazards, refused separately so each message says which:
+Three separate hazards, refused separately so each message says which:
 
   uncarriable   torq.sh splits lines with `awk -F,`, so a comma starts a new
                 field however csv quoted it, the quote stays literal, and a
@@ -18,6 +18,11 @@ Two separate hazards, refused separately so each message says which:
                 torq.sh's own, expanded by envsubst before the eval, which the
                 vendored rows depend on; and `{NAME}`, the port column's, which
                 bash leaves alone (brace expansion needs a comma or `..`).
+  out of domain a value the field cannot mean: a port past 65535, a query
+                timeout that is not a number, a startwithall other than 0/1 -
+                torq.sh passes each through as given, so the process fails to
+                start, listens nowhere or runs with no timeout (#2465). Empty
+                is always allowed: it is process.csv's own "not set".
 """
 
 from __future__ import annotations
@@ -57,10 +62,35 @@ def refuse_shell_unsafe(procname: str, field: str, value: str) -> None:
         )
 
 
+_WHOLE = re.compile(r"\d+")
+#: A port: a number, or the column's own `{NAME}` placeholder plus an offset.
+_PORT_EXPR = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}(\+\d+)?")
+
+#: Each field with a domain: (whether a value is in it, what the domain is).
+DOMAINS = {
+    "port": (
+        lambda v: bool(_PORT_EXPR.fullmatch(v)) or (v.isdecimal() and 1 <= int(v) <= 65535),
+        "a TCP port 1-65535 or a {KDBBASEPORT}+N expression",
+    ),
+    "startwithall": (lambda v: v in ("0", "1"), "0 or 1"),
+    **{
+        field: (lambda v: bool(_WHOLE.fullmatch(v)), "a whole number")
+        for field in ("T", "w", "g", "localtime")
+    },
+}
+
+
+def refuse_out_of_domain(procname: str, field: str, value: str) -> None:
+    if value and field in DOMAINS and not DOMAINS[field][0](value):
+        raise UqsError(f"{procname}.{field} value {value!r} must be {DOMAINS[field][1]}")
+
+
 def refuse_unsafe_override(procname: str, field: str, value: str) -> None:
-    """Refuse an override torq.sh would misread or run, naming the field."""
+    """Refuse an override torq.sh would misread or run, or one its field
+    cannot hold, naming the field."""
     refuse_uncarriable(procname, field, value)
     refuse_shell_unsafe(procname, field, value)
+    refuse_out_of_domain(procname, field, value)
 
 
 def check_carriable(rows: list[dict[str, str]]) -> None:
