@@ -66,13 +66,13 @@
 / @return the new desk book, unkeyed
 .qpipe.job.fx_positions.net_fills:{[book;batch]
     rows:select sym, book, product, side, size, price from batch;
-    / A fill with a null side, size or price, or a negative size, cannot be
-    / netted (apply_desk_fills refuses it, #1309, #2533); one bad row must
-    / not crash the stream job or take the batch with it, so it is dropped
-    / and said out loud.
-    bad:(null rows`side) or (null rows`size) or (null rows`price) or 0>rows`size;
+    / A fill with a null size or price, a side that is not 1 or -1, or a
+    / negative size cannot be netted (apply_desk_fills refuses it, #1309,
+    / #2533, #2622); one bad row must not crash the stream job or take the
+    / batch with it, so it is dropped and said out loud.
+    bad:(not (rows`side) in -1 1) or (null rows`size) or (null rows`price) or 0>rows`size;
     if[any bad;
-        .qetl.log.ch.warn[`transform;"dropped fills with a null side, size or price, or a negative size - they cannot be netted";
+        .qetl.log.ch.warn[`transform;"dropped fills with a null size or price, a side that is not 1 or -1, or a negative size - they cannot be netted";
             (enlist[`job]!enlist `fx_positions),enlist[`fills]!enlist `long$sum bad]];
     updated:.qf.port.apply_desk_fills[
         .qpipe.job.fx_positions.dimensions xkey book;
