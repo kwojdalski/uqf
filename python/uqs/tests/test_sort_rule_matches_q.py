@@ -3,7 +3,7 @@
 `attach/schema.py` (`parse_sorting`, `check_sorting`) and `attach/jobs.py` read a
 table's `sorting[...]` declaration as TEXT, with no q, because a bundle is read
 before anything is installed and a bad rule should be refused then, not at end of
-day. That restates the refusals of `.qetl.plant.sorting` in `src/etl/plant_tables.q`:
+day. That restates the refusals of `.qetl.plant.sorting` in `src/etl/plant_registry.q`:
 an unknown column, a list column, a column named twice, an attribute TorQ does not
 take, `p` or `s` anywhere but the first column, and a table declared twice.
 

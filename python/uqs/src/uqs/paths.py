@@ -44,6 +44,11 @@ STACK_TABLES_LIST = ".qt.qetl.plant.tables.expected"
 
 PROCESS_SCRIPTS_DIR = Path("scripts/processes")
 TABLES_FILE = ETL_DIR / "plant_tables.q"
+#: The .qetl.plant API TABLES_FILE's declarations call (schema, nested, sorting,
+#: ...), loaded just before it. Split out so the declarations - which every
+#: table-defining `uqs job new` appends to - have room under the q-module-size
+#: cap (#2503).
+PLANT_REGISTRY_FILE = ETL_DIR / "plant_registry.q"
 #: What each installed sidecar bundle put in the tree, and which runtimes it
 #: is in (stack/bundles.py writes it; model/runtime_members.py reads it).
 BUNDLE_LEDGER = ETL_DIR / "installed_bundles.json"

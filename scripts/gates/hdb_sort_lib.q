@@ -32,7 +32,7 @@ top_chunk:1000000
 / @param etl the src/etl directory, as a string ending in "/"
 load_etl:{[etl]
     if[`order_partition in key `.qetl.io; :(::)];
-    needed:etl,/:("core/status.q";"core/backfill_state.q";"core/log.q";"core/io_hdb.q";"plant_tables.q");
+    needed:etl,/:("core/status.q";"core/backfill_state.q";"core/log.q";"core/io_hdb.q";"plant_registry.q";"plant_tables.q");
     if[any ()~/:key each hsym each `$needed; '"hdb_sort_lib: no src/etl at ",etl];
     system each "l ",/:needed;}
 

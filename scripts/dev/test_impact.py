@@ -197,7 +197,10 @@ DYNAMIC_REVIEWED: dict[str, tuple[str, str]] = {
     ),
     "src/etl/core/stream_job.q": ("job-state", "a stream job's state, publish and buffer tables"),
     "src/etl/core/tick.q": ("data", "the tick log file"),
-    "src/etl/plant_tables.q": ("own", "the plant's table schemas under .qetl.plant"),
+    "src/etl/plant_registry.q": (
+        "own",
+        "the .qetl.plant registries (elements, sort_rules, equivalence_of) and vendored tables",
+    ),
     "src/namespaces.q": ("reflective", "walks every live namespace to list what is defined"),
     "scripts/dev/attached_calendar.q": (
         "data",

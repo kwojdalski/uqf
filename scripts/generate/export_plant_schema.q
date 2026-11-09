@@ -7,8 +7,9 @@
 / evaluates the definitions and reports what it holds; uqs.model.plant_metadata
 / runs this, writes src/etl/generated/plant_schema.json from it and reads that.
 / .
-/ It loads src/etl/plant_tables.q and nothing else: no init.q, no feed, no
-/ worker, no port. That file, in turn, reads the vendored starter pack's
+/ It loads src/etl/plant_tables.q, after the .qetl.plant API it calls
+/ (src/etl/plant_registry.q, #2503), and nothing else: no init.q, no feed, no
+/ worker, no port. The registry, in turn, reads the vendored starter pack's
 / database.q ($TORQAPPHOME's when set) - trusted tree code, both of them.
 / A bundle's tables.q is evaluated here only once it is INSTALLED into
 / plant_tables.q; one being inspected before install is never run (see
@@ -16,6 +17,7 @@
 / .
 / Run from the tree's root: q <this file> -q
 
+\l src/etl/plant_registry.q
 \l src/etl/plant_tables.q
 
 / The plant's own keyed registries, which are not tables a process holds.
@@ -51,7 +53,7 @@ if[count k:.qschema.keyed[];
     -2 "export_plant_schema: keyed table(s) ",(", " sv string k)," in .qetl.plant - a plant table is unkeyed; the schema metadata does not carry keyed tables";
     exit 1];
 
-/ Every other name plant_tables.q binds in .qetl.plant - its API and its
+/ Every other name bound in .qetl.plant - plant_registry.q's API and its
 / registries - which a table may not take (#1597): `uqs job new` refuses them.
 .qschema.bindings:{[] string asc ((key `.qetl.plant) except `) except .qetl.plant.names[]}
 
