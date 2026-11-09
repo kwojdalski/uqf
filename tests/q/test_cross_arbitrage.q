@@ -267,3 +267,22 @@
     .qpipe.job.cross_arbitrage.on_batch[`quote;([] sym:enlist `EURUSD)];
     .qunit.assertEquals[count .qpipe.job.cross_arbitrage.books;0;
         "only superbook rows update the state"]};
+
+/ #2325: a pair that loses its route, or a leg its quotes, is not evaluated
+/ at all - so an opportunity published active had no row saying it ended,
+/ and the last value a consumer held still showed it tradable.
+.qt.qpipe.job.cross_arbitrage.test_an_active_pair_that_loses_its_route_is_published_cleared:{[t]
+    .qt.qpipe.job.cross_arbitrage.drive_ready[];
+    `.qt.qpipe.job.cross_arbitrage.sent set 0#.qpipe.job.cross_arbitrage.cross_arbitrage;
+    .qetl.job.stream.wire[`cross_arbitrage;{[t;x] `.qt.qpipe.job.cross_arbitrage.sent upsert x; count x}];
+    .qpipe.job.cross_arbitrage.on_batch[`superbook;0!.qt.qpipe.job.cross_arbitrage.with_direct[164.80;164.90]];
+    .qunit.assertTrue[exec any active from .qt.qpipe.job.cross_arbitrage.sent where sym=`EURJPY;
+        "EURJPY's direct ask below the synthetic bid is published active"];
+    oneway:.qt.qpipe.job.cross_arbitrage.row[`EURUSD;0n;0n;0n;.qt.qpipe.job.cross_arbitrage.t0];
+    oneway[`bid_prices`bid_sizes`ask_prices`ask_sizes]:4#enlist `float$();
+    oneway[`bid_sources`ask_sources]:2#enlist `symbol$();
+    oneway[`bid_times`ask_times]:2#enlist `timestamp$();
+    .qpipe.job.cross_arbitrage.on_batch[`superbook;enlist oneway];
+    last_value:select by sym from .qt.qpipe.job.cross_arbitrage.sent;
+    .qunit.assertEquals[exec sym from last_value where active;`symbol$();
+        "with EURUSD unquoted no route survives, and none is left active"]};
