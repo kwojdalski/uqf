@@ -844,7 +844,7 @@ def test_list_processes_includes_vendored_and_fxfeed1_resolved(fake_paths: UqsPa
     assert by_name["tap1"]["port"] == 7000 + PIPELINE_OFFSETS["tap1"]
     assert by_name["tap1"]["startwithall"] is False
     assert stack_procs.get_process_config(fake_paths, "tap1")["extras"] == (
-        "-tables quote wide_book"
+        "-tables quote wide_orderbook"
     )
     assert by_name["fxtradesfeed1"]["port"] == 7000 + PIPELINE_OFFSETS["fxtradesfeed1"]
     assert by_name["posbook1"]["port"] == 7000 + PIPELINE_OFFSETS["posbook1"]
