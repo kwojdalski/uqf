@@ -88,17 +88,23 @@
 / root left it relative; uqs data migrate takes this lock through q
 / (scripts/gates/hdb_lock.q) with the root made absolute, so a writer given
 / either spelling held a different lock than the migration and neither
-/ excluded the other. Lexical only: symlinks are not resolved, so a root
-/ reached through two different links is still two locks.
+/ excluded the other. Nor did `.`, `..` or `//` inside it (#2311): `:/data/hdb/.
+/ and `:./hdb each took a lock of their own. So the path is made absolute and
+/ then normalised: empty and `.` parts dropped, each `..` taking off the part
+/ before it. Lexical only: symlinks are not resolved, so a root reached
+/ through two different links is still two locks.
 / @param root the HDB root, a file symbol
 / @return the lock directory's path, absolute
 / @eg .qetl.io.hdb_lock `:/data/hdb  ->  "/data/hdb.write.lock"
 / @eg .qetl.io.hdb_lock `:/data/hdb/  ->  "/data/hdb.write.lock"
+/ @eg .qetl.io.hdb_lock `:/data/x/..//hdb/.  ->  "/data/hdb.write.lock"
 .qetl.io.hdb_lock:{[root]
     p:1_string root;
-    p:(neg sum mins reverse "/"=p)_p;
     if[not "/"=first p; p:(system"cd"),"/",p];
-    p,".write.lock"}
+    s:"/" vs p;
+    s:s where not (s~\:"") or s~\:enlist ".";
+    s:{[kept;part] $[part~".."; -1_kept; kept,enlist part]}/[();s];
+    "/",("/" sv s),".write.lock"}
 
 / Private: run f . args holding root's write lock.
 / @private
@@ -160,7 +166,7 @@
         / append the same way, so every column of the rule loses its own.
         if[not .qetl.io.on_peachq;
             {[part;existing;col] if[col in existing; @[part;col;`#]]}[part;existing] each
-                $[count r:.qetl.io.declared_rule target; key r; `sym]];
+                $[count r:.qetl.io.declared_rule[target]; key r; `sym]];
         / PeachQ cannot upsert onto a splayed table on disk ('type), so there
         / the partition is read back and written again whole.
         / The FIRST write of a table into a date is staged and swapped in like a
@@ -547,7 +553,7 @@
 / @return a dictionary of sort column to attribute, in sort order
 / @private
 .qetl.io.sort_rule:{[tbl;c]
-    if[count r:.qetl.io.declared_rule tbl; :r];
+    if[count r:.qetl.io.declared_rule[tbl]; :r];
     order:`sym`time inter c;
     order!{$[x=`sym;`p;`]} each order}
 
@@ -668,7 +674,7 @@
     c:get hsym `$base,"/.d";
     / A declared rule is judged by its own attributes, or by its order where
     / it declares none (and always on PeachQ, which keeps none).
-    if[count r:.qetl.io.declared_rule t;
+    if[count r:.qetl.io.declared_rule[t];
         / `#`, not `r where`: indexing a dictionary by its keys gives a list of
         / values, whose key is no column name (#1891)
         have:(where not null r)#r;
