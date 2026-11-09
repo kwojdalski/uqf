@@ -302,3 +302,32 @@ def test_a_start_that_cannot_identify_its_process_stops_it_and_refuses(proc, mon
     pid = int(str(refused.value).split("started pid ")[1].split()[0])
     with pytest.raises(ProcessLookupError):
         os.kill(pid, 0)
+
+
+def test_a_child_that_exited_is_not_running_though_nothing_reaped_it(proc, monkeypatch):
+    """#2630: uqs-mcp starts a connector as its own child and keeps no Popen,
+    so a crashed connector stays a zombie, which answers kill(pid, 0) - status
+    said running and a start was refused as "already running". Linux's start
+    ticks, which a zombie keeps, are what made it look like the feed."""
+    monkeypatch.setattr(lifecycle, "_boot_ticks", lambda pid: "boot+4242")
+    proc.start([sys.executable, "-c", "import sys; sys.exit(1)"], cwd=proc.pid_path.parent)
+    deadline = time.monotonic() + 10
+    while proc.running():
+        assert time.monotonic() < deadline, "an exited child still reads as running"
+        time.sleep(0.05)
+    assert proc.status()["running"] == "False"
+    proc.start(SLEEP, cwd=proc.pid_path.parent)  # not refused
+
+
+def test_a_zombie_someone_else_has_not_reaped_reads_as_dead(proc, stranger, monkeypatch, tmp_path):
+    """Not this process's child, so nothing to reap: /proc's state says it is gone."""
+    _fake_proc_stat(tmp_path, stranger.pid, "python", 4242)
+    stat = tmp_path / str(stranger.pid) / "stat"
+    stat.write_text(stat.read_text().replace(") S ", ") Z ", 1))
+    monkeypatch.setattr(lifecycle, "_PROC", tmp_path)
+    assert not proc._alive(stranger.pid)
+
+
+def test_a_pid_file_naming_a_process_group_is_never_alive(proc):
+    proc.pid_path.write_text("0\n\n")
+    assert not proc.running() and not proc._alive(0) and not proc._alive(-1)

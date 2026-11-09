@@ -101,6 +101,17 @@ def _boot_ticks(pid: int) -> str | None:
     return f"boot+{fields[19]}" if len(fields) > 19 else None
 
 
+def _proc_state(pid: int) -> str | None:
+    """`pid`'s state letter as Linux reports it (field 3 of /proc/<pid>/stat,
+    "Z" for a zombie), or None where there is no /proc."""
+    try:
+        stat = (_PROC / str(pid) / "stat").read_text()
+    except OSError:
+        return None
+    fields = stat[stat.rfind(")") + 1 :].split()
+    return fields[0] if fields else None
+
+
 def process_identity(pid: int) -> str | None:
     """`pid`'s start time and argv, whitespace-normalised, or None when it
     has no such process. The start time plus the command line is what tells
@@ -149,12 +160,25 @@ class DetachedProcess:
     def _alive(self, pid: int) -> bool:
         """Signal 0 asks the kernel about the process without touching it. A
         pid owned by another user (PermissionError) is not ours to report on,
-        so it reads as not running - what every copy of this did."""
+        so it reads as not running - what every copy of this did.
+
+        A zombie answers signal 0 too, and a connector started by a long-lived
+        uqs (uqs-mcp) stays one after it exits until that process reaps it -
+        so it read as running, and a start was refused (#2630). It is reaped
+        here when it is this process's child, and otherwise read as dead from
+        its /proc state."""
+        if pid <= 0:
+            return False  # 0 and -N name process groups to kill and waitpid
+        try:
+            if os.waitpid(pid, os.WNOHANG)[0]:
+                return False
+        except ChildProcessError:
+            pass  # not this process's child: nothing to reap
         try:
             os.kill(pid, 0)
         except OSError:
             return False
-        return True
+        return _proc_state(pid) != "Z"
 
     def _ours(self) -> bool:
         """Whether the recorded pid is alive AND still the process we started."""
