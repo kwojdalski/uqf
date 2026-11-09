@@ -1,7 +1,7 @@
 / fx_feed.q - the whole of the top-of-book FX quote feed (.qpipe.job.fx_feed).
 / .
 / Subscribes to nothing and publishes `quote` twice a second: one row per
-/ pair, bid and ask one pip either side of a level that walks on every tick.
+/ pair, bid and ask one pip either side of a level that moves on every tick.
 / It stands in for a venue's top-of-book feed in this demo; the market
 / it invents is .qf.demo's, shared with every other feed here.
 / .
@@ -23,7 +23,9 @@
 / (the runner) or at a recorder (a test).
 .qpipe.job.fx_feed.publish:.qetl.job.stream.unwired `fx_feed;
 
-/ This process's own moving level per pair, walked on every tick. Plain
+/ This process's quoted level per pair, reset on every tick from the shared
+/ .qf.demo.source_level - never walked alone, or it drifts off the other
+/ feeds' (#2562). Plain
 / parallel VECTORS, aligned with .qf.demo.pairs: a dict here would silently
 / turn bid/ask into dicts too, which .u.upd rejects with a length error when
 / inserting into the plain quote table (learned the hard way - see this
@@ -45,9 +47,9 @@
     (.qf.demo.pairs;levels-.qf.demo.pip;levels+.qf.demo.pip;
         n#.qf.demo.size_unit;n#.qf.demo.size_unit;n#" ";n#"N";n#`UQFFX)}
 
-/ Walk every pair's level, then publish the tick built from it.
+/ Take this tick's level, then publish the tick built from it.
 .qpipe.job.fx_feed.on_timer:{[]
-    `.qpipe.job.fx_feed.spot set .qf.demo.drift_one each .qpipe.job.fx_feed.spot;
+    `.qpipe.job.fx_feed.spot set .qf.demo.source_level .z.p;
     .qpipe.job.fx_feed.publish[`quote;.qpipe.job.fx_feed.tick_rows[.qpipe.job.fx_feed.spot]];
     }
 

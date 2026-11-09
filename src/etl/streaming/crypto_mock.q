@@ -29,7 +29,7 @@
 / collapse into one; this file does not publish the one that would tempt it.
 / .
 / It is a SIMULATION, and crude where cruder is clearer: a symmetric random
-/ walk for each mid, a fixed ladder, a toxicity that drifts rather than
+/ walk for each sym's mid, a fixed ladder, a toxicity that drifts rather than
 / being derived from flow. Nothing here is a market model.
 / .
 / Loaded by src/etl/init.q in any q process: nothing here touches TorQ.
@@ -86,8 +86,19 @@
 
 / ---------------------------------------------------------------- STATE
 
-/ The current mid per (venue; sym), walked every tick. One row per pair of
-/ them, because the two venues drift apart the way real ones do.
+/ The one walked mid per sym, shared by every venue (#2562). Each venue
+/ walking its own drifted them hundreds of bps apart within minutes, and
+/ last_value then published a crossed BTC-USDC reference - bid on one venue
+/ above ask on the other - that crypto_markout scored fills against.
+.qpipe.job.crypto_mock.sym_mid:.qpipe.job.crypto_mock.mid0
+
+/ How far a venue's mid may sit from the shared one, as a fraction of mid: a
+/ quarter of half_spread, so two venues' mids are never more than half a
+/ half-spread apart and their books never cross each other.
+.qpipe.job.crypto_mock.venue_jitter:0.25*.qpipe.job.crypto_mock.half_spread
+
+/ The current mid per (venue; sym): the shared sym mid, jittered per venue
+/ every tick. One row per pair of them.
 .qpipe.job.crypto_mock.n_market:(count .qpipe.job.crypto_mock.venues)*count .qpipe.job.crypto_mock.syms
 .qpipe.job.crypto_mock.market:([] venue:raze (count .qpipe.job.crypto_mock.syms)#/:.qpipe.job.crypto_mock.venues; sym:.qpipe.job.crypto_mock.n_market#.qpipe.job.crypto_mock.syms; mid:.qpipe.job.crypto_mock.n_market#.qpipe.job.crypto_mock.mid0; toxicity:.qpipe.job.crypto_mock.n_market#0f)
 
@@ -129,6 +140,16 @@
 .qpipe.job.crypto_mock.skewed:{[p;tox]
     f:.qpipe.job.crypto_mock.toxicity_factor;
     1&0|(p*1+f*0|neg tox; p*1+f*0|tox)}
+
+/ Each market row's mid this tick: its sym's shared mid, moved by at most
+/ venue_jitter either way.
+/ @param mkt the market table
+/ @param mids the shared mid per sym, in syms order
+/ @return one mid per market row
+/ @eg count .qpipe.job.crypto_mock.venue_mids[.qpipe.job.crypto_mock.market;.qpipe.job.crypto_mock.mid0] -> 6
+.qpipe.job.crypto_mock.venue_mids:{[mkt;mids]
+    m:mids .qpipe.job.crypto_mock.syms?mkt`sym;
+    m*1+.qpipe.job.crypto_mock.venue_jitter*-1+2*(count m)?1f}
 
 / Walk one mid: the same symmetric random walk .qf.demo uses for FX, +/-5bp.
 / @param m the current mid
@@ -267,7 +288,8 @@
 / The book goes out first: a fill at a price the book has not yet shown is
 / a fill nobody can explain from the tape.
 .qpipe.job.crypto_mock.on_timer:{[]
-    `.qpipe.job.crypto_mock.market set update mid:.qpipe.job.crypto_mock.walk each mid,
+    `.qpipe.job.crypto_mock.sym_mid set .qpipe.job.crypto_mock.walk each .qpipe.job.crypto_mock.sym_mid;
+    `.qpipe.job.crypto_mock.market set update mid:.qpipe.job.crypto_mock.venue_mids[.qpipe.job.crypto_mock.market;.qpipe.job.crypto_mock.sym_mid],
         toxicity:.qpipe.job.crypto_mock.drift_toxicity each toxicity from .qpipe.job.crypto_mock.market;
     .qpipe.job.crypto_mock.publish[`crypto_book;.qpipe.job.crypto_mock.book_rows[.qpipe.job.crypto_mock.market]];
     .qpipe.job.crypto_mock.publish_fills[.qpipe.job.crypto_mock.tick_seconds] each .qpipe.job.crypto_mock.market;

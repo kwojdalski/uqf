@@ -20,7 +20,8 @@
 / (the runner) or at a recorder (a test).
 .qpipe.job.fx_orderbook_feed.publish:.qetl.job.stream.unwired `fx_orderbook_feed;
 
-/ This process's own moving mid per pair. Parallel plain VECTORS, aligned
+/ This process's quoted mid per pair, from the shared .qf.demo.source_level
+/ on every tick (#2562). Parallel plain VECTORS, aligned
 / with .qf.demo.pairs, for the reason fx_feed.q gives: a dict here turns the
 / level columns into dicts too, and .u.upd rejects those.
 .qpipe.job.fx_orderbook_feed.spot:.qf.demo.spot
@@ -45,9 +46,9 @@
         .qf.demo.levels_one[;;1;.qpipe.job.fx_orderbook_feed.n_levels] .' flip (mids;.qf.demo.pip);
         n#enlist sizes)}
 
-/ Walk every pair's mid, then publish the tick built from it.
+/ Take this tick's mid, then publish the tick built from it.
 .qpipe.job.fx_orderbook_feed.on_timer:{[]
-    `.qpipe.job.fx_orderbook_feed.spot set .qf.demo.drift_one each .qpipe.job.fx_orderbook_feed.spot;
+    `.qpipe.job.fx_orderbook_feed.spot set .qf.demo.source_level .z.p;
     .qpipe.job.fx_orderbook_feed.publish[`fx_orderbook;.qpipe.job.fx_orderbook_feed.tick_rows[.qpipe.job.fx_orderbook_feed.spot]];
     }
 

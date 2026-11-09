@@ -30,7 +30,7 @@ the tree is uqf's own; a vendored table it reads or writes is marked **(TorQ)**.
 These invent or replay data, so the rest of the stack has something to work on.
 
 **`fxfeed1` · synthetic FX quotes** --- top-of-book quotes for EURUSD, GBPUSD,
-USDJPY and AUDUSD: a small random walk around a fixed spot, one pip wide.
+USDJPY and AUDUSD: a level wandering around a fixed spot, one pip wide.
 Publishes `quote`. [Details](synthetic-feeds.md)
 
 **`fxorderbookfeed1` · synthetic FX books** --- depth-aware FX quotes, three

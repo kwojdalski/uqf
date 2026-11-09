@@ -235,12 +235,39 @@
     .qunit.assertEquals[all 1e-12>abs (rows[2]-rows[1])-2*.qf.demo.pip;1b;
         "ask minus bid is two pips, pair by pair"]};
 
-.qt.qetl.job.stream.test_the_fx_feed_walks_its_level:{[t]
+.qt.qetl.job.stream.test_the_fx_feed_moves_its_level:{[t]
     .qt.qetl.job.stream.reset[];
+    .qpipe.job.fx_feed.on_timer[];
     before:.qpipe.job.fx_feed.spot;
     .qpipe.job.fx_feed.on_timer[];
     .qunit.assertTrue[not before~.qpipe.job.fx_feed.spot;
         "each tick moves the level rather than republishing the same one"]};
+
+/ #2562: the feeds run in separate processes, and each walking its own copy
+/ of spot put UQFFX and UQFDEPTH hundreds of bps apart within minutes - a
+/ permanent fake arbitrage. They now read one clock-driven level.
+.qt.qetl.job.stream.test_the_quote_and_depth_feeds_agree_on_the_mid:{[t]
+    .qt.qetl.job.stream.reset[];
+    do[1200;.qpipe.job.fx_feed.on_timer[];.qpipe.job.fx_orderbook_feed.on_timer[];.qpipe.job.wide_orderbook_feed.on_timer[]];
+    gap:{[a;b] max abs[a-b]%.qf.demo.pip};
+    .qunit.assertTrue[0.5>=gap[.qpipe.job.fx_feed.spot;.qpipe.job.fx_orderbook_feed.spot];
+        "quote and depth mids are within half a pip after 1200 ticks"];
+    .qunit.assertTrue[0.5>=gap[.qpipe.job.fx_feed.spot;.qpipe.job.wide_orderbook_feed.spot];
+        "and so is the wide book's"]};
+
+.qt.qetl.job.stream.test_crypto_venues_quote_one_market_per_sym:{[t]
+    / #2562: each (venue; sym) walked alone; after 600 ticks BTC-USDC was
+    / 61641 on one venue and 62888 on the other, and the combined top of
+    / book was crossed.
+    .qt.qetl.job.stream.reset[];
+    do[600;.qpipe.job.crypto_mock.on_timer[]];
+    m:.qpipe.job.crypto_mock.market;
+    spread:exec (max[mid]-min mid)%avg mid by sym from m;
+    .qunit.assertTrue[all (3*.qpipe.job.crypto_mock.venue_jitter)>=value spread;
+        "the venues' mids for a sym sit within the jitter band of each other"];
+    touch:.qpipe.job.crypto_mock.touch each m`mid;
+    best:select bid:max first each touch, ask:min last each touch by sym from update touch from m;
+    .qunit.assertTrue[all exec bid<ask from best;"no venue's bid is at or above another venue's ask"]};
 
 .qt.qetl.job.stream.test_the_depth_feed_quotes_three_levels_a_side:{[t]
     rows:.qpipe.job.fx_orderbook_feed.tick_rows .qf.demo.spot;
