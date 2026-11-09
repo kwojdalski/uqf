@@ -33,6 +33,7 @@ from typer.testing import CliRunner
 from uqs import cli
 from uqs.attach import backfill_coordination as coordination
 from uqs.attach import backfill_plan as planning
+from uqs.attach import facts
 from uqs.attach.facts import Host, filesystem_of
 from uqs.attach.remote import Endpoint, KolaIpc, source
 from uqs.interpreter import PEACHQ, q_impl, q_interpreter
@@ -356,6 +357,25 @@ def test_a_network_filesystem_is_refused(world, monkeypatch):
 
 def test_the_filesystem_of_a_real_path_is_found(tmp_path):
     assert filesystem_of(tmp_path) not in coordination.NETWORK_FILESYSTEMS
+
+
+@pytest.mark.parametrize(
+    ("name", "escaped"),
+    [
+        ("audit mount", r"audit\040mount"),
+        ("a\tb", r"a\011b"),
+        ("a\nb", r"a\012b"),
+        ("a\\b", r"a\134b"),
+    ],
+)
+def test_a_mount_point_with_an_escaped_character_is_found(tmp_path, monkeypatch, name, escaped):
+    """#2305: the mount table escapes a space, tab, newline or backslash in a mount point
+    as octal, so the raw text never matched the path and the parent's type won."""
+    root = tmp_path.resolve()
+    table = tmp_path / "mounts"
+    table.write_text(f"/dev/sda1 / ext4 rw 0 0\nsrv:/x {root}/{escaped} nfs4 rw 0 0\n")
+    monkeypatch.setattr(facts, "MOUNTS", table)
+    assert filesystem_of(root / name / "hdb") == "nfs4"
 
 
 def test_the_plan_prints_how_the_run_is_coordinated(world, monkeypatch):
