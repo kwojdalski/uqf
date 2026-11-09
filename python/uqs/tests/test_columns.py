@@ -21,16 +21,21 @@ from pathlib import Path
 import pytest
 
 from uqs.interpreter import q_interpreter
+from uqs.model import plant_metadata
 from uqs.model.schemas import _DEFINITION
 from uqs.paths import TABLES_FILE, UqsError
 from uqs.scaffold.columns import (
     TYPES,
+    Shape,
+    as_columns,
     columns_spec,
     definition_columns,
     nested_declaration,
     parse_columns,
     parse_raw_columns,
+    plant_declarations,
     resolve_shape,
+    sorting_declaration,
     table_columns,
     table_definition,
 )
@@ -142,9 +147,29 @@ def test_an_ungrouped_sym_has_no_spelling_and_says_so():
         columns_spec(packets)
 
 
+def _metadata() -> dict[str, plant_metadata.Table]:
+    meta = plant_metadata.load(UQF_ROOT)
+    return {**meta.vendored(VENDORED), **meta.own()}
+
+
 def test_columns_from_copies_a_table_exactly_even_one_the_spec_cannot_say():
-    assert resolve_shape(None, "packets", EVERY) == table_columns(EVERY["packets"])
-    assert resolve_shape(None, "fx_orderbook", EVERY) == table_columns(EVERY["fx_orderbook"])
+    tables = _metadata()
+    for name in ("packets", "fx_orderbook"):
+        shape = resolve_shape(None, name, tables)
+        assert isinstance(shape, Shape)
+        assert as_columns(shape) == table_columns(EVERY[name])
+
+
+def test_columns_from_copies_what_each_list_column_holds_and_the_sort_rule():
+    """#2450: market_data's sort rule and kafka_message's string columns
+    were dropped - the copy was sorted by nothing and held floats."""
+    tables = _metadata()
+    market_data = resolve_shape(None, "market_data", tables)
+    assert isinstance(market_data, Shape)
+    assert market_data.sorting == (("sym", "p"), ("source", ""), ("source_time", ""))
+    kafka = resolve_shape(None, "kafka_message", tables)
+    assert isinstance(kafka, Shape)
+    assert dict(kafka.nested) == {"msg_key": "C", "payload": "C"}
 
 
 @pytest.mark.parametrize(
@@ -156,11 +181,11 @@ def test_columns_from_copies_a_table_exactly_even_one_the_spec_cannot_say():
 )
 def test_columns_from_refuses(columns, columns_from, message):
     with pytest.raises(UqsError, match=message):
-        resolve_shape(columns, columns_from, EVERY)
+        resolve_shape(columns, columns_from, _metadata())
 
 
 def test_without_columns_from_the_spec_passes_through():
-    assert resolve_shape("px:float", None, EVERY) == "px:float"
+    assert resolve_shape("px:float", None, _metadata()) == "px:float"
 
 
 def test_a_type_no_one_describes_is_refused_strictly_but_read_leniently():
@@ -216,6 +241,39 @@ def test_one_list_column_is_declared_with_enlist():
     # `bids!"F"` would be an atom dictionary, which .qetl.plant.nested refuses.
     line = nested_declaration("book", parse_columns("bids:list"))
     assert line.startswith('.qetl.plant.nested[`book;(enlist `bids)!enlist "F"];')
+
+
+_BOOK = tuple(parse_columns("sym:symbol, src:symbol, bids:list, venues:list"))
+
+
+def test_a_copied_shape_declares_its_element_types_exactly_and_unmarked():
+    """A `--schema-from` copy knows what each list column holds, so there
+    is nothing for the user to fill in - and nothing marked SCAFFOLDED."""
+    line = nested_declaration("book", Shape(_BOOK, (("bids", "F"), ("venues", "S"))))
+    assert line == '.qetl.plant.nested[`book;`bids`venues!"FS"];\n'
+
+
+def test_a_list_column_the_source_left_undeclared_is_still_guessed_and_marked():
+    line = nested_declaration("book", Shape(_BOOK, (("venues", "S"),)))
+    assert line.startswith('.qetl.plant.nested[`book;`bids`venues!"FS"];')
+    assert "SCAFFOLDED" in line
+
+
+@pytest.mark.parametrize(
+    ("rule", "line"),
+    [
+        ((("sym", "p"), ("src", "")), ".qetl.plant.sorting[`book;`sym`src!`p`];\n"),
+        ((("sym", "p"),), ".qetl.plant.sorting[`book;(enlist `sym)!enlist `p];\n"),
+        ((("src", ""),), ".qetl.plant.sorting[`book;(enlist `src)!enlist `];\n"),
+    ],
+)
+def test_a_copied_sort_rule_is_declared_beside_the_table(rule, line):
+    assert sorting_declaration("book", Shape(_BOOK, sorting=rule)) == line
+
+
+def test_a_spec_has_no_sort_rule_to_declare():
+    assert sorting_declaration("book", "sym:symbol, px:float") == ""
+    assert "sorting" not in plant_declarations("book", "sym:symbol, px:float")
 
 
 def test_every_plant_table_with_list_columns_is_declared_beside_it():

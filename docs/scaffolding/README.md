@@ -105,9 +105,11 @@ When the new table is shaped like one the plant already has, copy it instead:
 uqs job new spread2 --subscribe-to quote --outputs spread2 --schema-from fx_orderbook
 ```
 
-`--schema-from TABLE` takes that table's columns exactly, attributes included,
-from `plant_tables.q` or the vendored `database.q`, and is refused alongside
-`--schema`.
+`--schema-from TABLE` takes that table's shape exactly, from `plant_tables.q` or
+the vendored `database.q`: its columns with their attributes, what each list
+column holds (its `.qetl.plant.nested` line) and its sort rule (its
+`.qetl.plant.sorting` line). Only a list column the source leaves undeclared is
+guessed as floats and marked SCAFFOLDED. It is refused alongside `--schema`.
 
 ## Before you run it
 

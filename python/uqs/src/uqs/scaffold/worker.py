@@ -13,7 +13,7 @@ import re
 from uqs.model import transports
 from uqs.paths import SOURCE_DIR, TABLES_FILE, TEST_DIR, WORKER_DIR, UqsError
 from uqs.scaffold.catalog import catalog_actions
-from uqs.scaffold.columns import Columns, as_columns, nested_declaration, plant_table_definition
+from uqs.scaffold.columns import Columns, as_columns, plant_declarations
 from uqs.scaffold.docs import BACKFILLS, doc_stub_actions
 from uqs.scaffold.example import example_body, example_path
 from uqs.scaffold.jobs import (
@@ -224,7 +224,7 @@ def bounded_worker(
             FileAction(
                 TABLES_FILE,
                 f"\n/ {proc}'s target. <one line: what a row means>\n"
-                f"{plant_table_definition(dataset, cols)}\n{nested_declaration(dataset, cols)}",
+                f"{plant_declarations(dataset, columns or cols)}",
                 mode=WriteMode.APPEND,
             ),
             _expected_table_action(dataset),

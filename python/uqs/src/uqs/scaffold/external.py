@@ -36,7 +36,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from uqs.paths import CATALOG_FILE, TABLES_FILE, UqsError
-from uqs.scaffold.columns import Columns, as_columns, nested_declaration, plant_table_definition
+from uqs.scaffold.columns import Columns, as_columns, plant_declarations
 from uqs.scaffold.docs import EXTERNAL
 from uqs.scaffold.jobs import _check_name, _expected_table_action, streaming_job
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
@@ -104,7 +104,7 @@ def external_feed(
         FileAction(
             TABLES_FILE,
             f"\n/ {name}'s raw records, as {name}_streamer.py publishes them from outside q.\n"
-            f"{plant_table_definition(raw_table, cols)}\n{nested_declaration(raw_table, cols)}",
+            f"{plant_declarations(raw_table, columns)}",
             mode=WriteMode.APPEND,
         ),
         _expected_table_action(raw_table),

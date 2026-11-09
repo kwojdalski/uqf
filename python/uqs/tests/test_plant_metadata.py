@@ -202,9 +202,8 @@ def test_a_scaffolded_schema_survives_two_cycles_through_q(tmp_path, q_binary, p
     blocks = [_scaffold_tables(root, _SPECS)]
     for gen in (1, 2):
         own = plant_metadata.load(root).own()
-        definitions = {name: t.definition() for name, t in own.items()}
         prev = {f"{t}_c{gen - 1}" if gen > 1 else t: t for t in _SPECS}
-        shapes = {f"{t}_c{gen}": resolve_shape(None, name, definitions) for name, t in prev.items()}
+        shapes = {f"{t}_c{gen}": resolve_shape(None, name, own) for name, t in prev.items()}
         blocks.append(_scaffold_tables(root, shapes))
 
     meta = plant_metadata.load(root)
@@ -220,9 +219,74 @@ def test_a_scaffolded_schema_survives_two_cycles_through_q(tmp_path, q_binary, p
         for t in evaluated:
             assert table_columns(t.definition()) == cols0, t.name
             assert columns_spec(table_columns(t.definition())) == columns_spec(cols0), t.name
-        # the generator is stable: each generation writes the same block
-        for gen, name in ((1, names[1]), (2, names[2])):
-            assert blocks[gen][name].replace(name, table) == blocks[0][table], name
+        # the generator is stable: each copy writes the same block, and the
+        # same as spec0's but for the marker on a list column spec0 had to
+        # guess - a copy knows what it holds (#2450)
+        assert blocks[2][names[2]].replace(names[2], table) == blocks[1][names[1]].replace(
+            names[1], table
+        ), table
+        guessed = re.sub(r"  / SCAFFOLDED: [^\n]*", "", blocks[0][table])
+        assert blocks[1][names[1]].replace(names[1], table) == guessed, table
+
+
+#: Copied with `--schema-from` in the round trip below, each for what it holds
+#: beyond plain columns: market_data a three-column sort rule and float
+#: ladders, kafka_message string ("C") columns, superbook symbol and timestamp
+#: ladders, config_change general (" ") columns, trades a one-column sort rule
+#: (added for the test - written with enlist). Not the vendored packets: its
+#: list columns declare no element type, so its copy is guessed and marked.
+_COPIED = ("market_data", "kafka_message", "superbook", "config_change", "trades")
+
+
+def _copy(root: Path, sources: dict[str, plant_metadata.Table], copies: dict[str, str]) -> str:
+    """For each `source: copy` in `copies`, scaffold a streaming job publishing
+    `copy` with `--schema-from source`; append the plant_tables.q block each
+    plan writes to `root`'s, and return those blocks."""
+    from uqs.scaffold import jobs
+    from uqs.scaffold.columns import resolve_shape
+
+    blocks = ""
+    for source, copy in copies.items():
+        shape = resolve_shape(None, source, sources)
+        plan = jobs.streaming_job(copy, [], copy, shape, known_tables=set(sources))
+        blocks += "".join(a.body for a in plan.actions if a.path == TABLES_FILE)
+    with (root / TABLES_FILE).open("a") as f:
+        f.write(blocks)
+    return blocks
+
+
+def test_a_copied_table_keeps_its_whole_shape_through_two_cycles(tmp_path, q_binary, pack):
+    """#2450: `--schema-from` copies a table's whole shape - columns and
+    attributes, what each list column holds and its sort rule - so the copy
+    q evaluates is the source again, and a copy of that copy is too. It kept
+    only the columns: market_data's copy lost `sym p#, source, source_time`
+    and kafka_message's "CC" came back "FF", marked for the user to fix."""
+    one_column_sort = ".qetl.plant.sorting[`trades;(enlist `sym)!enlist `p];\n"
+    root = _tree(tmp_path, (ROOT / TABLES_FILE).read_text() + one_column_sort, metadata=False)
+    plant_metadata_gen.write(root)
+    meta = plant_metadata.load(root)
+    sources = {**meta.vendored(), **meta.own()}
+
+    def shape(t: plant_metadata.Table) -> tuple:
+        return t.columns, t.nested, t.sorting
+
+    first = _copy(root, sources, {t: f"c1_{t}" for t in _COPIED})
+    plant_metadata_gen.write(root)
+    once = plant_metadata.load(root).own()
+    second = _copy(root, once, {f"c1_{t}": f"c2_{t}" for t in _COPIED})
+    plant_metadata_gen.write(root)
+    twice = plant_metadata.load(root).own()
+    for table in _COPIED:
+        want = shape(sources[table])
+        assert shape(once[f"c1_{table}"]) == want, table
+        assert shape(twice[f"c2_{table}"]) == want, table
+    # What the sources hold, so the comparison above is not of two empties.
+    assert sources["market_data"].sorting == (("sym", "p"), ("source", ""), ("source_time", ""))
+    assert sources["trades"].sorting == (("sym", "p"),)
+    assert sources["kafka_message"].nested == {"msg_key": "C", "payload": "C"}
+    assert sources["config_change"].nested == {"old": " ", "new": " "}
+    # Nothing was guessed, so nothing is left for the user to fill in.
+    assert "SCAFFOLDED" not in first + second, first + second
 
 
 def test_a_keyed_plant_table_is_refused_not_dropped(tmp_path, q_binary, pack):

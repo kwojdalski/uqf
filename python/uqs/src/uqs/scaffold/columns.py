@@ -17,6 +17,7 @@ and the vendored database.q to a round trip through these functions.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from uqs.generated.q_facts import Q_TYPE_CHARS
@@ -220,36 +221,66 @@ def raw_contract(table: str, columns: list[tuple[str, str]]) -> str:
     return f"enlist[`{table}]!enlist ([] {body})"
 
 
-#: What a scaffold takes as a table's shape: the `--schema` string, or
-#: columns already parsed - which is what `--schema-from` hands over, since
-#: the string cannot say every shape (see `columns_spec`).
-Columns = str | list[tuple[str, str]]
+@dataclass(frozen=True)
+class Shape:
+    """A plant table's whole shape, as `--schema-from` copies it (#2450).
+
+    The columns are not the whole of it: plant_tables.q also declares, beside
+    the table, what each list column holds (`.qetl.plant.nested`) and how the
+    table is sorted on disk (`.qetl.plant.sorting`). A copy that kept only the
+    columns came back with every element type guessed as "F" and no sort rule,
+    so it was a different table from the one it was copied from.
+    """
+
+    columns: tuple[tuple[str, str], ...]
+    #: (list column, element type character), for each list column the source
+    #: declares; one it leaves undeclared is guessed and marked SCAFFOLDED.
+    nested: tuple[tuple[str, str], ...] = ()
+    #: (column, attribute) in sort order, "" for none: `.qetl.plant.sorting`'s.
+    sorting: tuple[tuple[str, str], ...] = ()
+
+
+#: What a scaffold takes as a table's shape: the `--schema` string, columns
+#: already parsed, or a whole `Shape` - which is what `--schema-from` hands
+#: over, since the string cannot say every shape (see `columns_spec`) nor
+#: carry the declarations beside the table.
+Columns = str | list[tuple[str, str]] | Shape
 
 
 def as_columns(value: Columns) -> list[tuple[str, str]]:
     """`value` as [(name, literal)], parsing it when it is a `--schema` string."""
+    if isinstance(value, Shape):
+        return list(value.columns)
     return parse_columns(value) if isinstance(value, str) else list(value)
 
 
 def resolve_shape(
-    columns: str | None, columns_from: str | None, definitions: dict[str, str]
+    columns: str | None,
+    columns_from: str | None,
+    tables: Mapping[str, plant_metadata.Table],
 ) -> Columns | None:
     """The shape `--schema` or `--schema-from` gives, never both.
 
-    `--schema-from TABLE` copies a plant table's columns exactly, attributes
-    included, from `definitions` ({table: its q line}) - most new jobs publish
-    something shaped like something already there.
+    `--schema-from TABLE` copies a plant table's shape exactly from `tables`
+    (as q evaluated them): its columns with their attributes, what each list
+    column holds and its sort rule - most new jobs publish something shaped
+    like something already there.
     """
     if columns_from is None:
         return columns
     if columns is not None:
         raise UqsError("--schema and --schema-from both give the table's shape - pick one")
-    if columns_from not in definitions:
+    if columns_from not in tables:
         raise UqsError(
             f"--schema-from {columns_from!r} is not a plant table - "
-            f"one of {', '.join(sorted(definitions))}"
+            f"one of {', '.join(sorted(tables))}"
         )
-    return table_columns(definitions[columns_from])
+    source = tables[columns_from]
+    return Shape(
+        tuple(table_columns(source.definition())),
+        tuple(source.nested.items()),
+        tuple(source.sorting),
+    )
 
 
 def columns_spec(columns: list[tuple[str, str]]) -> str:
@@ -328,26 +359,61 @@ def plant_table_definition(table: str, columns: list[tuple[str, str]]) -> str:
     return f".qetl.plant.{table_definition(table, columns)}"
 
 
-def nested_declaration(table: str, columns: list[tuple[str, str]]) -> str:
+def nested_declaration(table: str, shape: Columns) -> str:
     """The `.qetl.plant.nested` line a table with list columns needs, or "".
 
     An empty `()` column has no element type, so plant_tables.q declares what
     each one holds beside the table - without it, a preview or poll of a page
-    for this table is refused, and test_plant_tables.q's gate fails. Each list
-    column is declared "F", float vectors - what the scaffold's own sample
-    (`1 2 3f`) holds - and marked SCAFFOLDED, since a column copied with
-    `--schema-from` may hold strings ("C") or symbols ("S") instead.
+    for this table is refused, and test_plant_tables.q's gate fails.
+
+    A `Shape` copied with `--schema-from` carries its source's element types,
+    and they are written as they are. Any list column without one - every one
+    given by `--schema` - is declared "F", float vectors (what the scaffold's
+    own sample `1 2 3f` holds), and only then is the line marked SCAFFOLDED:
+    it may hold strings ("C") or symbols ("S") instead.
     """
-    nested = [col for col, literal in columns if literal == _BY_NAME["list"].literal]
+    known = dict(shape.nested) if isinstance(shape, Shape) else {}
+    nested = [col for col, literal in as_columns(shape) if literal == _BY_NAME["list"].literal]
     if not nested:
         return ""
-    chars = "F" * len(nested)
+    chars = "".join(known.get(col, "F") for col in nested)
     pairs = (
         f'(enlist `{nested[0]})!enlist "{chars}"'
         if len(nested) == 1
         else "`" + "`".join(nested) + f'!"{chars}"'
     )
+    guessed = any(col not in known for col in nested)
+    marker = (
+        '  / SCAFFOLDED: what each list column holds - "F" floats, "C" strings, "S" symbols'
+        if guessed
+        else ""
+    )
+    return f".qetl.plant.nested[`{table};{pairs}];{marker}\n"
+
+
+def sorting_declaration(table: str, shape: Columns) -> str:
+    """The `.qetl.plant.sorting` line a copied table's sort rule needs, or "".
+
+    Only a `Shape` carries one - `--schema` has no spelling for a sort rule,
+    and a table without one takes its stack's default rows, as before.
+    """
+    rule = shape.sorting if isinstance(shape, Shape) else ()
+    if not rule:
+        return ""
+    cols = [c for c, _ in rule]
+    atts = [f"`{a}" for _, a in rule]
+    pairs = (
+        f"(enlist `{cols[0]})!enlist {atts[0]}"
+        if len(rule) == 1
+        else "`" + "`".join(cols) + "!" + "".join(atts)
+    )
+    return f".qetl.plant.sorting[`{table};{pairs}];\n"
+
+
+def plant_declarations(table: str, shape: Columns) -> str:
+    """Everything plant_tables.q needs for a new table: its definition line,
+    then what its list columns hold and its sort rule, each when it has one."""
     return (
-        f".qetl.plant.nested[`{table};{pairs}];"
-        '  / SCAFFOLDED: what each list column holds - "F" floats, "C" strings, "S" symbols\n'
+        f"{plant_table_definition(table, as_columns(shape))}\n"
+        f"{nested_declaration(table, shape)}{sorting_declaration(table, shape)}"
     )
