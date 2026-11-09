@@ -10,8 +10,8 @@ arguments (nothing for ALL, which is the runner without them).
     uv run python scripts/dev/test_impact.py --base origin/master
     uv run python scripts/dev/test_impact.py src/pricing/forwards.q
     uv run python scripts/dev/test_impact.py --format json --base origin/master
-    python3 scripts/dev/test_impact.py --hook   # the q-tests hook's line
-    python3 scripts/dev/test_impact.py --coverage-hook   # the q-coverage hook's
+    uv run python scripts/dev/test_impact.py --hook   # the q-tests hook's line
+    uv run python scripts/dev/test_impact.py --coverage-hook   # the q-coverage hook's
 
 The q-tests hook and scripts/dev/attest_kdbx.py run what `--hook` (plan())
 decides: the suites `origin/master...HEAD`, plus what is being committed,
