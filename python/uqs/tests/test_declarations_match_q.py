@@ -118,18 +118,22 @@ def differences(parser: dict, q: dict) -> list[str]:
     return out
 
 
-def _q_view() -> dict:
+def _q_view(root: Path = UQF_ROOT) -> dict:
+    """q's view of every job the tree at `root` declares, as `_DUMP` prints it."""
     q = q_interpreter(os.environ)
     if q is None:
         pytest.skip("no q interpreter - set $QCMD, or put q on PATH")
     env = {**os.environ, "QHOME": os.environ.get("QHOME", str(Path.home() / ".kx"))}
+    if root != UQF_ROOT:
+        # a scaffolded copy's poll cursors land in the copy
+        env["UQF_STATUS_DIR"] = str(root / "status")
     # A script FILE, not stdin: q continues a multi-line lambda only in a file.
     with tempfile.TemporaryDirectory() as tmp:
         script = Path(tmp) / "dump.q"
         script.write_text(_DUMP)
         result = subprocess.run(
             [str(q), str(script), "-q"],
-            cwd=UQF_ROOT,
+            cwd=root,
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
