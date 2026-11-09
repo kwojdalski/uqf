@@ -216,6 +216,35 @@ From the KX compression whitepaper (<https://code.kx.com/q/wp/compress/>):
   | `fx_markout` (`invert`), `fx_markout_wide` (`leg1_invert`, `leg2_invert`, `leg3_invert`)                                                                           | as above, 14 days; the booleans at gzip level 9     | one byte of two values: the best candidates there are, and the top level costs nothing worth counting      |
   | `reference_data`, `economic_calendar`, `connections`, `config_change`, `ccy_exposure`, `order_routing`                                                             | algorithm 0                                         | a few rows a day: nothing to save, and every read would inflate                                            |
 
+## Measuring a setting on this HDB
+
+Before changing a declaration, measure it on the table's own data. Run from the
+repository root, on KDB-X:
+
+```bash
+q scripts/dev/bench_compression.q -hdb output/uqs/hdb -table quote -partition 2026.10.07
+q scripts/dev/bench_compression.q -hdb output/uqs/hdb -table quote -partition 2026.10.07 \
+    -candidates current,policy,gzip/16/6,gzip/18/6,zstd/17/3 -reps 5
+```
+
+It copies the one partition into a temporary directory once per setting and
+never writes to the HDB. It prints, per setting and query shape (whole-day
+sweep, `aj` against the mapped day, a contiguous range, point lookups), the
+bytes on disk, the ratio, the fastest time and, where a tracer can count them,
+the read syscalls; then each column's ratio. `current` is the partition as the
+HDB holds it and `policy` is what this page's declaration gives the table. The
+script's header lists the other flags.
+
+- Times are from a warm page cache: compare the rows of one run, not runs on
+  different machines.
+- Reads need `strace` on Linux, or `dtruss` run as root on macOS. Without
+  either, that column is empty.
+- snappy, lz4hc and zstd need their libraries on the loader's path
+  (`DYLD_LIBRARY_PATH=/opt/homebrew/lib` with Homebrew). A setting q cannot
+  write is listed as unavailable, as is a block size below the page size (2^14
+  on macOS arm64). lz4hc and zstd are measured but cannot be declared (see
+  [lz4hc and zstd](#lz4hc-and-zstd)).
+
 ## Adding a table
 
 Name it in `src/etl/compression_policy.q` only if it differs from the default,
