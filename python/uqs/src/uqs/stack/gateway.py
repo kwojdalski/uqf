@@ -29,11 +29,23 @@ _PROCTYPE = re.compile(r"^[a-z][a-z0-9_]*$")
 #: as typed.
 _AS_TYPED = re.compile(r"^\s*(\.gw\.|\\)")
 
-#: An update or delete that names its table with a backtick changes that
-#: table in place. Routed, it would change the RDB's live data on every
-#: server it reached, which a default must never do; the copy form - `update
-#: ... from trade` - returns a changed copy and is routed like any query.
-_IN_PLACE = re.compile(r"^\s*(update|delete)\b.*\bfrom\s+`", re.DOTALL)
+#: A change that names its table with a backtick changes that table in
+#: place: an update or delete `from `t`, `` `t upsert/insert/set ...``, the
+#: functional `![`t;...]` and the amends `@[`t;...]` and `.[`t;...]`. Routed,
+#: it would change the RDB's live data on every server it reached, which a
+#: default must never do; the copy form - `update ... from trade` - returns a
+#: changed copy and is routed like any query. Searched for anywhere in the
+#: expression outside its strings - `(update ...)`, `r:update ...`,
+#: `0N!delete ...` - not only at its start (#2611). A guard against slips,
+#: not a sandbox: q can build any of these at run time (`value "..."`).
+_IN_PLACE = re.compile(
+    r"(?<![\w.])(?:update|delete)\b[^;]*?\bfrom\s*`"
+    r"|`[\w.]+\s*(?:upsert|insert|set)\b"
+    r"|(?<![\w.])(?:upsert|insert|set)\s*\[\s*`"
+    r"|(?:!|@|(?<![\w.])\.)\[\s*`",
+)
+#: A q string literal, \-escapes and all: what the in-place search skips.
+_STRING = re.compile(r'"(?:[^"\\]|\\.)*"?')
 
 
 def expression(
@@ -42,8 +54,8 @@ def expression(
     """`expr` as the gateway should run it.
 
     Wrapped in `.gw.syncexec`, unless it is already a `.gw.*` call or a
-    system command, which the gateway runs as typed. An in-place update or
-    delete is refused: to change a table, name its process: `uqs query rdb1 ...`.
+    system command, which the gateway runs as typed. An in-place change is
+    refused: to change a table, name its process: `uqs query rdb1 ...`.
 
     With `render`, a (rows, columns) console size, what comes back is the
     text q's console would print rather than the data. Not by wrapping the
@@ -57,10 +69,11 @@ def expression(
     """
     if _AS_TYPED.match(expr):
         return expr if render is None else stack_render.wrap(expr, render)
-    if _IN_PLACE.match(expr):
+    if _IN_PLACE.search(_STRING.sub('""', expr)):
         raise UqsError(
-            "an update or delete `from `table` changes that table in place - routed through "
-            "the gateway it would change live data; name the process first: `uqs query rdb1 ...`"
+            "this changes a table in place (update or delete `from `table`, `table upsert, "
+            "![`table;...]) - routed through the gateway it would change live data; name the "
+            "process first: `uqs query rdb1 ...`"
         )
     types = servers.split()
     bad = [t for t in types if not _PROCTYPE.match(t)]
