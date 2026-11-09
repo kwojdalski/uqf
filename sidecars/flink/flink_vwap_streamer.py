@@ -34,7 +34,9 @@ import sys
 from collections.abc import Iterable, Iterator
 from typing import Any
 
+from uqs.external.kafka_streamer import ACCEPT_Q
 from uqs.external.plant_contract import plant_table_fields
+from uqs.paths import UqsError
 
 #: The raw table this pushes onto.
 RAW_TABLE = "flink_vwap_raw"
@@ -87,10 +89,33 @@ def batches(rows: Iterable[Any]) -> Iterator[list[dict[str, Any]]]:
         yield [dict(zip(FIELDS, tuple(row), strict=True))]
 
 
-def to_columns(records: list[dict[str, Any]], plant_order: list[str]) -> dict[str, list[Any]]:
-    """Records as .u.upd wants them: one list per column, in the plant's order
-    (`plant_table_fields`) - .u.upd places columns by position, not by name."""
-    return {field: [record[field] for record in records] for field in plant_order}
+def to_columns(records: list[dict[str, Any]], plant_order: list[str]) -> list[Any]:
+    """Records as .u.upd wants them: a LIST of typed columns in the plant's
+    order (`plant_table_fields`) - .u.upd places columns by position, not by
+    name. Not a dict: over IPC a dict arrives as a q dictionary, which the
+    segmented tickerplant's time-stamping refuses with 'type (#2601, as #1492)."""
+    import polars as pl  # kola's own dependency
+
+    dtypes = {
+        "sym": pl.Categorical,
+        "window_end": pl.Datetime("ns"),
+        "vwap": pl.Float64,
+        "volume": pl.Float64,
+        "n": pl.Int64,
+    }
+    return [
+        pl.Series(field, [record[field] for record in records], dtype=dtypes[field])
+        for field in plant_order
+    ]
+
+
+def publish(q: Any, table: str, records: list[dict[str, Any]], plant_order: list[str]) -> None:
+    """Send `records` through `ACCEPT_Q`, raising unless the plant STORED them:
+    a bare `.u.upd` answers success for a row the tickerplant sent to its
+    error log (#2192), so a refused window would vanish with nothing said."""
+    answer = q.sync(ACCEPT_Q, table, to_columns(records, plant_order))
+    if isinstance(answer, str):
+        raise UqsError(f"the tickerplant refused the {table} window - NOT stored: {answer}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -125,8 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     env.execute_sql(SOURCE_DDL)
     with env.sql_query(WINDOW_SQL).execute().collect() as rows:
         for batch in batches(rows):
-            # `sync`: the call returns once the plant has the rows.
-            q.sync(".u.upd", args.table, to_columns(batch, plant_order))
+            publish(q, args.table, batch, plant_order)
     return 0
 
 
