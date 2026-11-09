@@ -30,7 +30,7 @@ from uqs.scaffold.external import external_feed
 from uqs.scaffold.horizon import horizon_job
 from uqs.scaffold.normalizer import normalizer
 from uqs.scaffold.plan import ScaffoldPlan
-from uqs.scaffold.profile import PROFILES_FILE
+from uqs.scaffold.profile import PROFILES_FILE, UNPROFILED_FILE
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 
@@ -78,7 +78,7 @@ def _copy_of_the_tree(root: Path) -> Path:
     and pages it appends to."""
     shutil.copytree(UQF_ROOT / "src", root / "src")
     shutil.copytree(UQF_ROOT / "scripts" / "processes", root / "scripts" / "processes")
-    for rel in (STACK_TABLES_TEST, PROFILES_FILE, STACK_PAGE, SHOWCASE_PAGE):
+    for rel in (STACK_TABLES_TEST, PROFILES_FILE, UNPROFILED_FILE, STACK_PAGE, SHOWCASE_PAGE):
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(UQF_ROOT / rel, root / rel)
     for rel in ("python/uqs/src/uqs/external", "python/uqs/tests"):
