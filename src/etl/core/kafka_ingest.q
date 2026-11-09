@@ -410,7 +410,13 @@
     if[0=count rows; :st];
     p:select resume:1+max offset, tries:0 by topic,partition from rows;
     before:((st`pending) key p)`resume;
-    st[`pending]:(st`pending) upsert update resume:resume|before from p;
+    p:update resume:resume|before from p;
+    / A partition that restarted inside the batch resumes after its LAST restart run's top, as
+    / its mark does (#1659), and replaces whatever the older run owed: 1 + the old tail's top
+    / would tell the broker to skip new-run records not yet delivered (#2361).
+    tops:.qetl.kafka.restart_tops[rows];
+    if[count tops; p:p upsert select resume:1+max offset, tries:0 by topic,partition from 0!tops];
+    st[`pending]:(st`pending) upsert p;
     st}
 
 / Private: poll and hold what came back.
