@@ -21,9 +21,10 @@ from uqs.paths import STREAM_DIR, TABLES_FILE, TEST_DIR, UqsError
 from uqs.scaffold.catalog import catalog_actions
 from uqs.scaffold.columns import (
     TIME_COLUMN,
+    Columns,
+    as_columns,
     is_known,
-    nested_declaration,
-    plant_table_definition,
+    plant_declarations,
     sample_value,
 )
 from uqs.scaffold.docs import NORMALISERS, doc_stub_actions
@@ -50,7 +51,7 @@ def _row(cols: list[tuple[str, str]]) -> str:
 def normalizer(
     name: str,
     sources: list[str],
-    columns: list[tuple[str, str]],
+    shape: Columns,
     source_columns: dict[str, list[tuple[str, str]]],
     *,
     known_tables: set[str],
@@ -62,13 +63,15 @@ def normalizer(
 ) -> ScaffoldPlan:
     """Plan a normalizer publishing `name` from `sources`.
 
-    `columns` is the canonical table as `parse_columns` reads `--schema`,
-    `time` included: the plant's copy keeps it, the normalizer's own output
-    drops it, since `.qetl.job.stream.normalize` refuses an output carrying `time`.
+    `shape` is the canonical table - `--schema` as `parse_columns` reads it,
+    or the `Shape` `--schema-from` copies - `time` included: the plant's copy
+    keeps it, the normalizer's own output drops it, since
+    `.qetl.job.stream.normalize` refuses an output carrying `time`.
     `source_columns` is each source's plant schema, the facts the caller reads
     from the tree - a mapping's input starts as its source's whole table.
     """
     _check_name(name, "normalizer name")
+    columns = as_columns(shape)
     proc = procname or f"{name}1"
     _check_name(proc, "procname")
     if not sources:
@@ -183,7 +186,7 @@ publish:.qetl.job.stream.unwired `{name};
         FileAction(
             TABLES_FILE,
             f"\n/ {proc}'s canonical output. <one line: what a row means>\n"
-            f"{plant_table_definition(name, columns)}\n{nested_declaration(name, columns)}",
+            f"{plant_declarations(name, shape)}",
             mode=WriteMode.APPEND,
         ),
         _expected_table_action(name),

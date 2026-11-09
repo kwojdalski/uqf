@@ -20,7 +20,7 @@ from uqs.cli.choices import ChoiceOpt
 from uqs.cli.create_backfill import backfill_plan
 from uqs.cli.create_bundle import planning_root, refuse_tree_only, write_bundle_plan
 from uqs.cli.create_kinds import DEFAULT_KIND, KindOpt, for_kinds, given_options, misplaced
-from uqs.cli.create_plant import plant_definitions, plant_tables
+from uqs.cli.create_plant import plant_shapes
 from uqs.cli.create_reaction import TriggeredByOpt, scaffold_reaction
 from uqs.cli.regenerate import write_plan
 from uqs.cli.renames import SLICE, SLICE_COLUMN, refused, renamed
@@ -296,9 +296,10 @@ def new_job(
 
     def _plan(root: Path):
         """The plan, read against `root`: the tree, or the tree with --bundle installed."""
-        definitions = plant_definitions(_paths(), root)
-        known = plant_tables(_paths(), root)
-        shape = columns_mod.resolve_shape(columns, columns_from, definitions)
+        shapes = plant_shapes(_paths(), root)
+        definitions = {name: t.definition() for name, t in shapes.items()}
+        known = set(shapes)
+        shape = columns_mod.resolve_shape(columns, columns_from, shapes)
         if kind == "streaming":
             return jobs.streaming_job(
                 name,
@@ -345,7 +346,7 @@ def new_job(
             return normalizer.normalizer(
                 name,
                 subs,
-                columns_mod.as_columns(shape),
+                shape,
                 {
                     s: columns_mod.definition_columns(definitions[s])
                     for s in subs
@@ -375,9 +376,8 @@ def new_job(
             inputs = {
                 s: columns_mod.definition_columns(definitions[s]) for s in subs if s in definitions
             }
-            out = columns_mod.as_columns(shape) if shape else None
             return horizon_scaffold.horizon_job(
-                name, subs, out, inputs, horizon, known_tables=known, publishes=publishes,
+                name, subs, shape or None, inputs, horizon, known_tables=known, publishes=publishes,
                 procname=procname, start_with_all=start_with_all, profile=profile,
                 unprofiled=unprofiled,
             )  # fmt: skip
