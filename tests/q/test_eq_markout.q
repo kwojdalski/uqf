@@ -51,7 +51,7 @@
 
 / The worked books, as the plant carries them, and one closing book per (symbol, source) after the furthest
 / horizon quoting what that series last quoted: the reference covers an instant only once a book at or after
-/ it has arrived, and readiness waits for every source with a book inside max_age of the horizon.
+/ it has arrived, and readiness waits for every source held (#2455).
 .qt.qpipe.job.eq_markout.books:{[] update time:source_time+0D00:00:00.1, market:`equity from .qpipe.transform.eq_markout_outputs.sample_books[]}
 
 .qt.qpipe.job.eq_markout.close_after:{[b;t]

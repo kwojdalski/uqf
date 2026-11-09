@@ -58,8 +58,8 @@
 / The worked books and, per (pair, source), one closing book after the furthest horizon,
 / quoting what that series last quoted: the reference covers an instant only once a row
 / at or after it has arrived, because a book that has not been delivered yet could still
-/ be the one that supersedes the last - and readiness waits for EVERY source with a
-/ book inside max_age of the horizon, not only the first to pass it (#1523).
+/ be the one that supersedes the last - and readiness waits for EVERY source held,
+/ not only the first to pass it (#1523, #2455).
 .qt.qpipe.job.fx_markout.covered:{[]
     b:.qt.qpipe.job.fx_markout.books[];
     last_of:select by sym, source from b;
@@ -381,7 +381,9 @@
 .qt.qpipe.job.fx_markout.test_a_source_that_stopped_quoting_does_not_set_the_live_reference:{[tc]
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;.qt.qpipe.job.fx_markout.dead_source_books[]];
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
-    .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10];
+    / #2455: a source that has stopped is waited for until horizon + lateness - its books
+    / could still be in flight - and then scored without, as here
+    .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10+.qpipe.transform.fx_markout_outputs.lateness];
     r:.qt.qpipe.job.fx_markout.published[`fx_markout];
     tot:select horizon, price_t1, status from r where kind=`total;
     .qunit.assertEquals[count tot;4;"scored at all four horizons"];
@@ -393,7 +395,9 @@
     f:`executions`market_data!(select source_time, venue, sym, side, size, price, fill_id, clock from .qt.qpipe.job.fx_markout.buy[];select source_time, sym, source, bid, ask, clock from b);
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;update time:source_time+0D00:00:00.1, market:`fx from b];
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`executions;.qt.qpipe.job.fx_markout.buy[]];
-    .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10];
+    / #2455: a source that has stopped is waited for until horizon + lateness - its books
+    / could still be in flight - and then scored without, as here
+    .qt.qpipe.job.fx_markout.tick[`fx_markout;.qt.qpipe.job.fx_markout.t+0D00:00:10+.qpipe.transform.fx_markout_outputs.lateness];
     live:.qt.qpipe.job.fx_markout.published[`fx_markout];
     twin:delete time from .qetl.transform.apply[`hdb_fx_markouts_long;f];
     .qunit.assertEquals[live;twin;"live and bounded agree with a dead source in the history"];
