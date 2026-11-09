@@ -476,3 +476,16 @@
     .qunit.assertEquals[count short_close; 0; "buy 0.3, sell 0.1 and 0.2 opens no 2.8e-17 short lot"];
     long_close:.qf.exec.residual[tr[0.1 0.2 0.3;1 1 -1];`fifo];
     .qunit.assertEquals[count long_close; 0; "buy 0.1 and 0.2, sell 0.3 leaves no 5.6e-17 long lot"]};
+
+/ #2381: an opening lot's side was checked but a trade's was not, so a side
+/ of 2 or null closed a long lot as if it were a sell and booked P&L.
+.qt.qf.exec.allocation.test_a_trade_side_outside_plus_minus_one_is_refused:{[t]
+    tr:([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 2; size:1000000 400000f; trade_price:1.10 1.15);
+    .qunit.assertThrows[.qf.exec.allocate[;`fifo];tr;"allocate: 1 trade(s) have a side that is not 1*";"side 2 is refused, not booked as a sell"];
+    .qunit.assertThrows[.qf.exec.allocate[;`fifo];update side:1 0N from tr;"allocate: 1 trade(s) have a side that is not 1*";"a null side is refused"];
+    .qunit.assertThrows[.qf.exec.allocate[;`fifo];update side:0N 1 from tr;"allocate: 1 trade(s) have a side that is not 1*";"nor opens a lot with no side"]};
+
+.qt.qf.exec.allocation.test_a_trade_with_a_null_size_or_price_is_refused:{[t]
+    tr:([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`EURUSD; side:1 -1; size:1000000 400000f; trade_price:1.10 1.15);
+    .qunit.assertThrows[.qf.exec.allocate[;`fifo];update size:1e6 0n from tr;"allocate: 1 trade(s) have a null size*";"a null size is not silently dropped"];
+    .qunit.assertThrows[.qf.exec.allocate[;`fifo];update trade_price:1.1 0n from tr;"allocate: 1 trade(s) have a null size*";"a null price books no null P&L"]};

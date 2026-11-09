@@ -68,6 +68,15 @@
 .qt.qpipe.event_tape.test_an_unsorted_tape_is_refused:{[t]
     .qunit.assertError[{.qf.mkt.require_tape x};`time xdesc .qt.qpipe.event_tape.tape[`add`trade`cancel;1 1 1;1000 1000 1000f];"a rolling window over an unsorted tape returns a plausible wrong number"]};
 
+/ #2428: an unsized trade double-counted the previous trade's volume in a
+/ VPIN bucket (VPIN read 2), shifted large_trade_threshold a rank and
+/ counted as an odd lot. A negative size breaks the bucket arithmetic too.
+.qt.qpipe.event_tape.test_require_tape_refuses_an_unsized_trade:{[t]
+    tp:([] time:2026.01.02D10:00:00+1000000000*til 3; sym:3#`EURUSD; action:3#`trade; side:1 1 -1; size:5e6 0n 2e6);
+    .qunit.assertThrows[.qf.mkt.require_tape;tp;"require_tape: 1 trade(s) with a null or negative size*";"a trade with no size is refused"];
+    .qunit.assertThrows[.qf.mkt.vpin[;5e6;1];tp;"require_tape: 1 trade(s) with a null or negative size*";"so VPIN cannot read 2"];
+    .qunit.assertThrows[.qf.mkt.require_tape;update size:5e6 -1e6 2e6 from tp;"require_tape: 1 trade(s) with a null or negative size*";"nor a signed size"]};
+
 .qt.qpipe.event_tape.test_a_non_table_is_refused:{[t]
     .qunit.assertError[{.qf.mkt.require_tape x};`not`a`table;"the precondition covers shape as well as content"]};
 
