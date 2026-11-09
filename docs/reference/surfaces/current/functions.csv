@@ -99,7 +99,6 @@ qetl.coverage,attach,function,1,
 qetl.coverage,claims,function,4,ds part version as_of
 qetl.coverage,compose,function,1,intervals
 qetl.coverage,contributing_runs,function,3,ds part version
-qetl.coverage,defer_ready,value,,
 qetl.coverage,empty_ledger,function,1,
 qetl.coverage,empty_ready,function,1,
 qetl.coverage,gaps,function,3,from_ts to_ts covered
@@ -112,7 +111,7 @@ qetl.coverage,ledger_path,function,1,
 qetl.coverage,mark_ready,function,2,ks at
 qetl.coverage,materialisations_of,function,1,id
 qetl.coverage,missing,function,6,ds part version as_of from_ts to_ts
-qetl.coverage,note_written,function,3,ds part version
+qetl.coverage,note_written,function,4,ds part version deferred
 qetl.coverage,outstanding,function,3,ds part version
 qetl.coverage,partitions_of,function,1,ds
 qetl.coverage,persist,function,1,
@@ -187,6 +186,7 @@ qetl.io,clip_to_eod,function,4,worker cfg range_from range_to
 qetl.io,days_of,function,2,root times
 qetl.io,default,dict,,
 qetl.io,default_strategy,value,,
+qetl.io,defers_ready,function,1,mgr
 qetl.io,discard,dict,,
 qetl.io,due,function,4,state status now interval
 qetl.io,eod_waiting,function,2,root dates

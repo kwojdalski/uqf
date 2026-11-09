@@ -277,6 +277,16 @@
     .qetl.io.require_manager[m];
     m}
 
+/ Do this manager's writes become queryable only when its deployment releases them?
+/ .
+/ True exactly when it has an on_ready hook: the hook is what asks the readers to
+/ reload and calls .qetl.coverage.release_ready, so a manager with one must hold
+/ readiness until then (#1094), and one without it has nothing to release it (#2658).
+/ @param mgr the manager
+/ @return 1b when readiness is deferred to the manager's on_ready
+/ @eg .qetl.io.defers_ready .qetl.io.memory  ->  0b
+.qetl.io.defers_ready:{[mgr] `on_ready in key mgr}
+
 / Write one batch through a manager.
 / @param mgr the manager
 / @param target the table symbol the source declaration names

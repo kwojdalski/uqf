@@ -95,6 +95,22 @@
     .qetl.job.bounded.runtime.finish_window[`reference;`refdata;`;spec;.qt.qetl.job.bounded.d[1];.qt.qetl.job.bounded.d[2];{1}];
     .qunit.assertEquals[.qetl.job.bounded.state.load_checkpoint[`reference;spec];.qt.qetl.job.bounded.d[2];"the cursor lands on the window's exclusive end, so the next plan starts there"]};
 
+/ #2658: whether a written window is queryable at once is the resolved manager's fact (an on_ready
+/ hook), not a second process-global switch that a deployment must pair with it by hand.
+.qt.qetl.job.bounded.test_readiness_is_deferred_exactly_when_the_manager_has_an_on_ready:{[t]
+    spec:.qt.qetl.job.bounded.spec_for[`v1;1;2];
+    saved:.qetl.io.default;
+    .qetl.coverage.release_ready .z.p;
+    .qetl.io.default:.qetl.io.memory;
+    .qetl.job.bounded.runtime.finish_window[`reference;`refdata;`;spec;.qt.qetl.job.bounded.d[1];.qt.qetl.job.bounded.d[2];{1}];
+    now:(count .qetl.coverage.unready; .qetl.io.defers_ready .qetl.io.default);
+    .qetl.io.default:.qetl.io.memory,enlist[`on_ready]!enlist {[s] 1b};
+    .qetl.job.bounded.runtime.finish_window[`reference;`refdata;`;spec;.qt.qetl.job.bounded.d[2];.qt.qetl.job.bounded.d[3];{1}];
+    held:(count .qetl.coverage.unready; .qetl.io.defers_ready .qetl.io.default);
+    .qetl.io.default:saved;
+    .qetl.coverage.release_ready .z.p;
+    .qunit.assertEquals[now,held;(0;0b;1;1b);"no on_ready: queryable as written; with one: held in unready until released"]};
+
 / --- 3. run-spec invalidation -------------------------------------------
 
 .qt.qetl.job.bounded.test_a_matching_specification_resumes:{[t]

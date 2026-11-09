@@ -48,7 +48,7 @@
 // It is the bounded-worker lifecycle and the HDB writer, unchanged - init, run, finish_window's
 // publish-then-coverage-then-checkpoint order, the staged swap and recovery - with the destination
 // handed to the writer explicitly (.qetl.io.hdb_scoped) and coverage deferred until every verified
-// reader has acknowledged a reload (.qetl.coverage.defer_ready, release_ready). It does not register
+// reader has acknowledged a reload (the writer's on_ready defers it, then release_ready). It does not register
 // with discovery: the launcher names the readers, and ONLY those are asked to reload.
 //
 // WRITTEN IS NOT QUERYABLE, and the outcome says which it is. A window's rows are on disk and covered
@@ -284,9 +284,6 @@ $[remote;
      .qetl.io.default:mgr,enlist[`on_ready]!enlist .qdev.attached.on_ready;
      .qetl.log.ch.info[`storage;"writing into an attached stack's HDB";
         (enlist[`worker]!enlist worker),`attachment`destination`root`partition_col`max_date`deadline`state`readers!(`$first o`attachment;bounds`destination;root;col;bounds`max_date;bounds`deadline;state;`$", " sv string .qdev.attached.readers_named`name)]]];
-/ forced: no reader is told, so coverage cannot wait for one
-.qetl.coverage.defer_ready:not forced;
-
 .qdev.attached.claim o;
 if[.qetl.job.bounded.runtime.allows`record_run; .qetl.run.attach[]];
 / Three named parameters so {...}[ns;spec] is a PROJECTION .Q.trp can call with one argument. The

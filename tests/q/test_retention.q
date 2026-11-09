@@ -303,7 +303,7 @@
     root:.qt.qetl.retention.hdb[];
     .qt.qetl.retention.declare[`rt_ready;root];
     .qt.qetl.retention.claim["2026.01.02";"2026.02.21"];
-    .qetl.coverage.note_written[`rtdeals_ds;`;.qt.qetl.retention.v];
+    .qetl.coverage.note_written[`rtdeals_ds;`;.qt.qetl.retention.v;0b];
     .qunit.assertEquals[count .qetl.coverage.ready_claims[`rtdeals_ds;`;.qt.qetl.retention.v;.z.p];1;"queryable before the cut"];
     .qetl.retention.run[`rt_ready;.qt.qetl.retention.as_at;`apply`supersede!(1b;1b)];
     rc:.qetl.coverage.ready_claims[`rtdeals_ds;`;.qt.qetl.retention.v;.z.p];

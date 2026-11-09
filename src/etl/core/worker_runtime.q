@@ -495,7 +495,7 @@
     covered:.qetl.job.bounded.runtime.commit[dry;`publish_coverage;.qetl.coverage.stage_completion;
         (ds;part;spec`source_version;from_ts;to_ts;rows)];
     / written; queryable now, or when the deployment says so (#1094)
-    if[`done~first covered; .qetl.coverage.note_written[ds;part;spec`source_version]];
+    if[`done~first covered; .qetl.coverage.note_written[ds;part;spec`source_version; .qetl.io.defers_ready .qetl.io.for_cfg $[worker in .qetl.job.bounded.defined[]; .qetl.job.bounded.def worker; ()!()]]];
     checkpointed:.qetl.job.bounded.runtime.commit[dry;`write_checkpoint;.qetl.job.bounded.state.save_checkpoint;
         (worker;spec;to_ts)];
     .[{.qetl.log.ch.dbg[`lifecycle;y;(enlist[`worker]!enlist x),z]};(worker;"window finished";
