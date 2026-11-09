@@ -116,3 +116,4 @@ local = ["NOTICE.md"]
 upstream_tree = "a800950c7d18f106a02430eedb32b01857549db3"
 files = 108
 digest = "sha256:7d3969bc0bbd25b571385bca71a9769214d7f7ec6841cd4f48f928c53946a49b"
+drift_digest = "sha256:54d0a9d72abad611c557b1c91192f6cd565b39d81a22ab1ee426e3b3e93fb4ae"
