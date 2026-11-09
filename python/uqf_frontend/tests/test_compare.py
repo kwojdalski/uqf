@@ -251,6 +251,10 @@ def test_each_operator_reaches_uqs_as_its_text(registry, asked, sent, text):
         ({"column": "sym", "op": "in", "value": "EURUSD"}, "`in` takes a non-empty list"),
         ({"column": "sym", "op": "eq", "value": {"a": 1}}, "a string, a number or a boolean"),
         ({"column": "sym=x", "op": "eq", "value": "y"}, "is not a column name"),
+        # #2479: sent as px<=1.5 / px>=1.5, q would read le / ge
+        ({"column": "px", "op": "lt", "value": "=1.5"}, "does not start with `=`"),
+        ({"column": "px", "op": "gt", "value": "=1.5"}, "does not start with `=`"),
+        ({"column": "sym", "op": "in", "value": ["=A", "B"]}, "does not start with `=`"),
     ],
 )
 def test_a_filter_that_cannot_be_rendered_is_refused_before_uqs(registry, asked, sent, said):
@@ -258,6 +262,16 @@ def test_a_filter_that_cannot_be_rendered_is_refused_before_uqs(registry, asked,
     assert r.status_code == 422, r.text
     assert r.json()["error"] == "ValidationFailed" and said in r.json()["detail"]
     assert not asked[0]
+
+
+def test_a_value_q_would_read_as_part_of_the_operator_is_refused():
+    """#2479: `lt` with `=1.5` must not reach uqs as `px<=1.5`."""
+    from uqf_frontend.compare import filter_texts
+    from uqf_frontend.errors import ValidationFailed
+    from uqf_frontend.models.query import Filter
+
+    with pytest.raises(ValidationFailed, match="does not start with `=`"):
+        filter_texts([Filter(column="px", op="lt", value="=1.5")])
 
 
 def test_every_query_operator_has_its_text():
