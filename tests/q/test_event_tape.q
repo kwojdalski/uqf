@@ -77,6 +77,19 @@
     .qunit.assertThrows[.qf.mkt.vpin[;5e6;1];tp;"require_tape: 1 trade(s) with a null or negative size*";"so VPIN cannot read 2"];
     .qunit.assertThrows[.qf.mkt.require_tape;update size:5e6 -1e6 2e6 from tp;"require_tape: 1 trade(s) with a null or negative size*";"nor a signed size"]};
 
+/ #2531: q orders null below every number, so an unsided trade was booked as
+/ a sell (one made a bucket fully one-sided, VPIN 1); side 0 counted as
+/ neither side and side 2 doubled the trade's signed flow.
+.qt.qpipe.event_tape.test_require_tape_refuses_a_side_other_than_one_or_minus_one:{[t]
+    tp:([] time:2026.01.02D10:00:00+1000000000*til 4; sym:4#`EURUSD; action:4#`trade; side:1 -1 0N 1; size:5 5 10 1f);
+    msg:"require_tape: 1 trade(s) with a side other than 1 or -1*";
+    .qunit.assertThrows[.qf.mkt.require_tape;tp;msg;"a trade with no side is refused"];
+    .qunit.assertThrows[.qf.mkt.vpin[;10f;1];tp;msg;"so VPIN cannot book it as a sell"];
+    .qunit.assertThrows[.qf.mkt.signed_trade_flow;update side:1 -1 2 1 from tp;msg;"nor a side of 2, which doubled the flow"];
+    .qunit.assertThrows[.qf.mkt.require_tape;update side:1 -1 0 1 from tp;msg;"nor a side of 0, which counted as neither"];
+    .qunit.assertThrows[.qf.mkt.require_tape;update side:`buy`sell`buy`buy from tp;"require_tape: 4 trade(s) with a side other than 1 or -1*";"nor a side spelled as a symbol"];
+    .qunit.assertEquals[.qf.mkt.require_tape update side:1 -1 0N 1, action:`trade`trade`add`trade from tp;1b;"an add's side is not a trade's aggressor, so it is not checked"]};
+
 .qt.qpipe.event_tape.test_a_non_table_is_refused:{[t]
     .qunit.assertError[{.qf.mkt.require_tape x};`not`a`table;"the precondition covers shape as well as content"]};
 

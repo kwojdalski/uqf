@@ -61,6 +61,16 @@
     r:.qf.mkt.spread_bps[enlist enlist 1.1000;enlist enlist 1.1002];
     .qt.support.assertApprox[first r;10000*0.0002%1.1001;1e-6;"10000*(ask-bid)/mid"]};
 
+/ #2536: a zero-priced L0 side was read as a price, so a one-sided book gave
+/ a spread of +-20000 bps and a microprice of 0.55 on a 1.1 market.
+.qt.qf.mkt.microstructure.test_a_level_zero_that_is_not_a_price_is_absent:{[t]
+    bids:(enlist 0f;enlist 1.1;enlist 0n;enlist -1.1;enlist 0w;1.1 1.0998);
+    asks:(enlist 1.1;enlist 0f;enlist 1.1;enlist 1.1002;enlist 1.1002;1.1002 1.1004);
+    .qunit.assertEquals[5#.qf.mkt.spread_bps[bids;asks];5#0n;"a zero, null, negative or infinite L0 nulls the spread"];
+    .qunit.assertEquals[5#.qf.mkt.mid_price[bids;asks];5#0n;"and the mid"];
+    .qunit.assertEquals[.qf.mkt.microprice[2#bids;2#enlist enlist 100f;2#asks;2#enlist enlist 100f];0n 0n;"and the microprice, not 0.55"];
+    .qt.support.assertApprox[last .qf.mkt.spread_bps[bids;asks];10000*0.0002%1.1001;1e-6;"a two-sided book is unchanged"]};
+
 / ---- depth_ratio ----
 
 .qt.qf.mkt.microstructure.test_depth_ratio_known_value_and_shallow_row_is_null:{[t]
@@ -165,6 +175,14 @@
     .qunit.assertTrue[null last r;"one-sided row is null, not an error"];
     zero_l0:.qf.mkt.vamp[enlist 0 1.0998;enlist 1e6 1e6;enlist 1.1002 1.1004;enlist 1e6 1e6;500000];
     .qunit.assertTrue[null first zero_l0;"an L0 that is not a price nulls the row"]};
+
+/ #2534: an ask ladder of 200 units cannot fill a 1e6 notional, and its
+/ partial avg_price (1.25) gave a VAMP of 1.175, a deep book's 1.15 moved.
+.qt.qf.mkt.microstructure.test_vamp_nulls_a_row_a_side_cannot_fill:{[t]
+    r:.qf.mkt.vamp[(1.1 1.0;1.1 1.0);(1e9 1e9;1e9 1e9);(1.2 1.3;1.2 1.3);(100 100f;1e9 1e9);1e6];
+    .qunit.assertTrue[null first r;"a thin ask does not price"];
+    .qt.support.assertApprox[last r;1.15;1e-12;"a deep one does"];
+    .qunit.assertTrue[null first .qf.mkt.vamp[enlist 1.1 1.0;enlist 100 100f;enlist 1.2 1.3;enlist 1e9 1e9;1e6];"nor a thin bid"]};
 
 / ---- Tier 2 shared fixture ----
 
@@ -421,7 +439,7 @@
     ([] time:2026.09.11D09:00:00.000000000+0D00:00:01*til 12;
         sym:12#`EURUSD;
         action:(10#`trade),`add`cancel;
-        side:12#`buy;
+        side:12#1;
         / "f"$ on the whole vector, not `100 200f` appended to a long
         / vector: concatenating a long vector with a float one in q yields a
         / MIXED GENERAL LIST (type 0h), not a promoted float vector. The
@@ -464,6 +482,12 @@
     / Sizes 5..10 sum to 45 of 55 - the heavy tail this metric exists to show.
     .qt.support.assertApprox[.qf.mkt.large_trade_volume_share[.qt.qf.mkt.microstructure.lt_tape[];0.5];45%55;1e-12;
         "the larger half of trades by count carries far more than half the volume"]};
+
+/ #2545: the -1e-9 slack in the rank took a tiny q to rank 0 and a null,
+/ which large_trade_ratio then read as no trades at all.
+.qt.qf.mkt.microstructure.test_a_tiny_quantile_is_the_smallest_trade:{[t]
+    .qunit.assertEquals[.qf.mkt.large_trade_threshold[.qt.qf.mkt.microstructure.lt_tape[];1e-11];1f;
+        "q just above 0 is the smallest trade, not null"]};
 
 .qt.qf.mkt.microstructure.test_an_empty_tape_is_null_not_zero:{[t]
     / 0n, not 0: no trades means the question has no answer, and a 0 would
@@ -562,6 +586,16 @@
     .qunit.assertTrue[not any 0w=r;"no row is infinity"];
     .qunit.assertEquals[count r where not null r;2;
         "the withdrawn row nulls out and the other two survive"]};
+
+/ #2535: P_last came from the ladder's raw end, so a null pad nulled the row
+/ and a zero pad inflated the slope ~5000x; convexity read a zero pad as P2.
+.qt.qf.mkt.microstructure.test_book_shape_skips_levels_that_are_not_level_ok:{[t]
+    r:.qf.mkt.book_slope[(1.1 1.0998 0n 0n;1.1 1.0998 0 0f;1.1 0 0f);(100 100 0n 0n;100 100 0 0f;100 0 0f)];
+    .qt.support.assertApprox[2#r;2#1e-6;1e-15;"a null or zero pad is skipped: (1.1-1.0998)/200"];
+    .qunit.assertTrue[null last r;"one usable level has no slope"];
+    c:.qf.mkt.book_convexity[(1.1 1.0998 0n;1.1 1.0998 0f;1.1 1.0998 0w 1.0995);`bid];
+    .qunit.assertEquals[2#c;0n 0n;"two usable levels have no convexity, not -1.0996"];
+    .qt.support.assertApprox[last c;-0.0001;1e-12;"an infinite level is skipped too"]};
 
 .qt.qf.mkt.microstructure.test_book_slope_and_depth_ratio_are_unchanged_on_normal_books:{[t]
     .qt.support.assertApprox[first .qf.mkt.book_slope[enlist 1.1000 1.0998 1.0996;enlist 100 100 100f];

@@ -25,6 +25,14 @@
     r:.qf.mkt.check_market_data_quality[quotes;5];
     .qunit.assertEquals[first r`status;`ok;"a normal 2-pip-ish spread is within a 5bp threshold -> ok"]};
 
+/ #2625: null sorts below every spread and every age, so a null threshold
+/ called a 1.8 bps EURUSD book wide and every timed sym stale.
+.qt.qf.mkt.dqchecks.test_a_null_threshold_is_refused:{[t]
+    t0:2026.01.01D00:00:00.000000000;
+    quotes:(enlist .qt.qf.mkt.dqchecks.mk_quotes_row[t0;`EURUSD;1.0999;1.1001]);
+    .qunit.assertThrows[.qf.mkt.check_market_data_quality[quotes;];0n;"check_market_data_quality: max_spread_bps is null*";"a null spread threshold"];
+    .qunit.assertThrows[.qf.mkt.check_stale_quotes[quotes;t0+0D00:00:01;];0Nn;"check_stale_quotes: max_age is null*";"a null max_age"]};
+
 / #546: a side nobody quoted gives a null spread, and q orders a null below
 / every number - so `spreads<0` called a one-sided quote crossed.
 .qt.qf.mkt.dqchecks.test_check_market_data_quality_a_one_sided_quote_is_not_crossed:{[t]

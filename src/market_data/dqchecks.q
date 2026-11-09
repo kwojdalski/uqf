@@ -53,10 +53,12 @@
 /   status-ascending (`crossed`, `ok`, `one_sided`, `wide` - alphabetical,
 /   not a severity ranking; `crossed` rows are the most urgent, so they land
 /   first, which is what matters)
-/ @throws error if quotes is missing a required column
+/ @throws error if quotes is missing a required column, or max_spread_bps is null
 / @eg .qf.mkt.check_market_data_quality[quotes;5]
 .qf.mkt.check_market_data_quality:{[quotes;max_spread_bps]
     .qf.util.require_depth_quotes[`check_market_data_quality;quotes];
+    / null sorts below every spread, so a null threshold called every quoted row wide (#2625)
+    if[any null max_spread_bps; '"check_market_data_quality: max_spread_bps is null - every quoted row would read `wide"];
     / ONE extraction of the top for every status (#1200): a side whose level 0
     / is not level_ok (zero, negative, null, infinite) is absent, so it is
     / one_sided - never ok, and never judged wide or crossed from a number
@@ -98,10 +100,12 @@
 /   status-ascending (`stale` sorts before `ok`). A sym with rows but no
 /   timed quote at or before as_of (all times null) is `stale`, with null
 /   last_ts and age (#1277)
-/ @throws error if quotes is missing a required column
+/ @throws error if quotes is missing a required column, or max_age is null
 / @eg .qf.mkt.check_stale_quotes[quotes;.z.p;0D00:00:05]
 .qf.mkt.check_stale_quotes:{[quotes;as_of;max_age]
     .qf.util.require_depth_quotes[`check_stale_quotes;quotes];
+    / as max_spread_bps above: a null max_age called every timed sym stale (#2625)
+    if[any null max_age; '"check_stale_quotes: max_age is null - every sym would read `stale"];
     / by before from, where after from - the canonical qSQL clause order,
     / kept because a reordered clause reads as a typo to anyone scanning it.
     / Compared through a local, never `where time<=as_of`: this tree's
