@@ -184,6 +184,49 @@
     .qunit.assertEquals[sum h`claims_superseded;2;
         "the withdrawals are on the record (the claim, then the remainder the first day's removal left over the second)"]};
 
+/ #2440: a refill of 01-03 records its claim while the run is removing 01-02 -
+/ stood in for by recording it as the first item's record is written. Returns
+/ what the run threw, or its plan.
+.qt.qetl.retention.run_with_a_late_claim:{[name;opts]
+    rec:.qetl.retention.record;
+    `.qetl.retention.record set {[rec;id;p;n]
+        r:rec[id;p;n];
+        if[`2026.01.02~first p`item; .qt.qetl.retention.claim["2026.01.03";"2026.01.04"]];
+        r}[rec];
+    r:@[.qetl.retention.run[name;.qt.qetl.retention.as_at;];opts;{[e] e}];
+    `.qetl.retention.record set rec;
+    r}
+
+.qt.qetl.retention.test_a_claim_recorded_after_the_plan_stops_an_unsuperseding_run:{[t]
+    root:.qt.qetl.retention.hdb[];
+    .qt.qetl.retention.declare[`rt_late;root];
+    r:.qt.qetl.retention.run_with_a_late_claim[`rt_late;enlist[`apply]!enlist 1b];
+    .qunit.assertTrue[$[10h=type r; r like "retention: rt_late stopped before removing 2026.01.03*"; 0b];"the claim is read when its day is reached, and refuses"];
+    .qunit.assertEquals[.qt.qetl.retention.held[root];2026.01.03 2026.02.20;"so the claimed day is still on disk"]};
+
+.qt.qetl.retention.test_a_claim_recorded_after_the_plan_is_superseded_with_its_day:{[t]
+    root:.qt.qetl.retention.hdb[];
+    .qt.qetl.retention.declare[`rt_late_sup;root];
+    .qt.qetl.retention.run_with_a_late_claim[`rt_late_sup;`apply`supersede!11b];
+    .qunit.assertEquals[.qt.qetl.retention.held[root];enlist 2026.02.20;"the day is removed"];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`rtdeals_ds;`;.qt.qetl.retention.v;.z.p;`timestamp$2026.01.03;`timestamp$2026.01.04];0b;
+        "and the ledger no longer claims it"]};
+
+.qt.qetl.retention.test_a_claim_recorded_during_the_removal_is_withdrawn_after_it:{[t]
+    / between the re-read and the retire: withdrawn after, an under-claim (#2440)
+    root:.qt.qetl.retention.hdb[];
+    .qt.qetl.retention.declare[`rt_during;root];
+    ret:.qetl.io.retire;
+    `.qetl.io.retire set {[ret;root;dt;tbl]
+        r:ret[root;dt;tbl];
+        if[dt=2026.01.03; .qt.qetl.retention.claim["2026.01.03";"2026.01.04"]];
+        r}[ret];
+    @[.qetl.retention.run[`rt_during;.qt.qetl.retention.as_at;];`apply`supersede!11b;{[e] e}];
+    `.qetl.io.retire set ret;
+    .qunit.assertEquals[.qt.qetl.retention.held[root];enlist 2026.02.20;"the day is removed"];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`rtdeals_ds;`;.qt.qetl.retention.v;.z.p;`timestamp$2026.01.03;`timestamp$2026.01.04];0b;
+        "and the claim that landed meanwhile is withdrawn"]};
+
 .qt.qetl.retention.test_a_claim_crossing_into_a_kept_day_keeps_the_kept_part:{[t]
     root:.qt.qetl.retention.hdb[];
     .qt.qetl.retention.declare[`rt_cross;root];
