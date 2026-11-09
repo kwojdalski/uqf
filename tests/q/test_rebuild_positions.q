@@ -119,6 +119,74 @@
     .qetl.reaction.off[`demo_deals;`edge_out];
     .qunit.assertEquals[(h`name)!h`outcome;`edge_in`edge_out!`ok`failed;"[from; to-1ns] is written, a row at to is refused"]};
 
+/ --- a partition's reaction replaces its own output only (#2328) ----------
+
+/ Two slices of demo_deals by sym, as a parallel backfill declares them, and a
+/ reaction writing the pair it saw. Each publication goes through
+/ notify_published_for, as do_window calls it for a partitioned worker.
+.qt.qpipe.job.rebuild_positions.pair_slices:{[]
+    {[w;p] .qetl.job.bounded.define[w;
+        `source`outputs`width`transform`partition`partition_column!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough;p;`sym)]
+      }'[`rx_eur`rx_jpy;`EURUSD`USDJPY];
+    if[`pair_out in tables `.; delete pair_out from `.];
+    .qetl.reaction.on[`demo_deals;`by_pair;{[ds;f;t] p:.qetl.reaction.published[];
+        .qetl.reaction.write[`pair_out;`deal_id;([] time:count[p]#f; sym:p`sym; deal_id:p`deal_id)]}];}
+
+.qt.qpipe.job.rebuild_positions.drop_slices:{[]
+    .qetl.reaction.off[`demo_deals;`by_pair];
+    .qt.support.drop_rows[`.qetl.job.bounded.worker_cfg;`rx_eur`rx_jpy];}
+
+/ Publish partition p's deals over day one.
+.qt.qpipe.job.rebuild_positions.publish_pair:{[p;deals]
+    .qetl.reaction.notify_published_for[`demo_deals;p;`v1;.qt.qpipe.job.rebuild_positions.d 0;.qt.qpipe.job.rebuild_positions.d 1;deals;.qetl.io.memory]}
+
+.qt.qpipe.job.rebuild_positions.test_each_partitions_reaction_keeps_the_others_output:{[t]
+    .qt.qpipe.job.rebuild_positions.pair_slices[];
+    fx:.qpipe.source.demo_deals.fixture[];
+    .qt.qpipe.job.rebuild_positions.publish_pair[`EURUSD;select from fx where sym=`EURUSD];
+    .qt.qpipe.job.rebuild_positions.publish_pair[`USDJPY;select from fx where sym=`USDJPY];
+    both:exec count i by sym from pair_out;
+    / a restatement of EURUSD's window still replaces EURUSD's own output
+    .qt.qpipe.job.rebuild_positions.publish_pair[`EURUSD;1#select from fx where sym=`EURUSD];
+    again:exec count i by sym from pair_out;
+    h:exec distinct outcome from .qetl.reaction.history where name=`by_pair;
+    .qt.qpipe.job.rebuild_positions.drop_slices[];
+    .qunit.assertEquals[(both;again;h);(`EURUSD`USDJPY!3 1;`EURUSD`USDJPY!1 1;enlist `ok);
+        "USDJPY's reaction left EURUSD's output, and EURUSD's restatement replaced only its own"]};
+
+/ No scope, no clear: each is refused naming why, and nothing is deleted.
+.qt.qpipe.job.rebuild_positions.refused_by_pair:{[] first exec detail from .qetl.reaction.history where name=`by_pair, outcome=`failed}
+
+.qt.qpipe.job.rebuild_positions.test_a_partition_no_worker_scopes_is_refused:{[t]
+    .qt.qpipe.job.rebuild_positions.pair_slices[];
+    .qt.qpipe.job.rebuild_positions.publish_pair[`GBPUSD;select from .qpipe.source.demo_deals.fixture[] where sym=`GBPUSD];
+    e:.qt.qpipe.job.rebuild_positions.refused_by_pair[];
+    .qt.qpipe.job.rebuild_positions.drop_slices[];
+    .qunit.assertTrue[e like "write: no loaded worker names the column holding partition GBPUSD of demo_deals*";"refused, naming the partition"];
+    .qunit.assertTrue[not `pair_out in tables `.;"nothing was written"]};
+
+.qt.qpipe.job.rebuild_positions.test_output_without_the_partition_column_is_refused:{[t]
+    .qt.qpipe.job.rebuild_positions.pair_slices[];
+    .qetl.reaction.on[`demo_deals;`by_pair;{[ds;f;t] .qetl.reaction.write[`pair_out;`deal_id;([] time:enlist f; deal_id:enlist 1)]}];
+    .qt.qpipe.job.rebuild_positions.publish_pair[`EURUSD;select from .qpipe.source.demo_deals.fixture[] where sym=`EURUSD];
+    e:.qt.qpipe.job.rebuild_positions.refused_by_pair[];
+    .qt.qpipe.job.rebuild_positions.drop_slices[];
+    .qunit.assertTrue[e like "write: pair_out's rows need a sym column - partition EURUSD's output is cleared by it*";"refused, naming the column"]};
+
+.qt.qpipe.job.rebuild_positions.test_output_of_another_partition_is_refused:{[t]
+    .qt.qpipe.job.rebuild_positions.pair_slices[];
+    .qt.qpipe.job.rebuild_positions.publish_pair[`EURUSD;select from .qpipe.source.demo_deals.fixture[] where sym=`USDJPY];
+    e:.qt.qpipe.job.rebuild_positions.refused_by_pair[];
+    .qt.qpipe.job.rebuild_positions.drop_slices[];
+    .qunit.assertTrue[e like "write: 1 row(s) of pair_out are not partition EURUSD in sym*";"USDJPY's rows are not EURUSD's to write"]};
+
+.qt.qpipe.job.rebuild_positions.test_an_unpartitioned_reaction_beside_a_partition_is_refused:{[t]
+    .qt.qpipe.job.rebuild_positions.pair_slices[];
+    .qt.qpipe.job.rebuild_positions.publish_pair[`;select from .qpipe.source.demo_deals.fixture[] where sym=`EURUSD];
+    e:.qt.qpipe.job.rebuild_positions.refused_by_pair[];
+    .qt.qpipe.job.rebuild_positions.drop_slices[];
+    .qunit.assertTrue[e like "write: demo_deals is also filled as partition EURUSD, USDJPY*";"its window clear would delete theirs"]};
+
 .qt.qpipe.job.rebuild_positions.test_an_empty_window_writes_nothing:{[t]
     .qetl.reaction.notify_published[`demo_deals;.qt.qpipe.job.rebuild_positions.d 0;.qt.qpipe.job.rebuild_positions.d 1;0#.qpipe.source.demo_deals.fixture[];.qetl.io.memory];
     .qunit.assertEquals[(count .qt.qpipe.job.rebuild_positions.positions[];exec distinct outcome from .qetl.reaction.history);(0;enlist `ok);
