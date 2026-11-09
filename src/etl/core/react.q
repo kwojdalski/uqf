@@ -313,6 +313,12 @@
 / Every reaction registered for a dataset.
 .qetl.reaction.for_dataset:{[dataset] $[dataset in key .qetl.reaction.reactions; .qetl.reaction.reactions dataset; .qetl.reaction.no_reactions[]]}
 
+/ Private: what the `on_writing` reactions on a dataset write - through the
+/ publishing worker's own IO manager, so its recovery must sweep them too
+/ (#2494). An `on_worker` reaction (derived) runs a worker that recovers its own.
+/ @private
+.qetl.reaction.written_by:{[dataset] distinct raze exec outputs from .qetl.reaction.for_dataset[dataset] where not derived}
+
 / Forget every reaction, the queue and the history. For tests, and for
 / rebuilding the wiring after the registries change.
 .qetl.reaction.reset:{[] .qetl.reaction.reactions::(`symbol$())!(); `.qetl.reaction.queue set .qetl.reaction.empty_queue[]; `.qetl.reaction.history set .qetl.reaction.empty_history[]; ()}
