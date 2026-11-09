@@ -56,7 +56,7 @@
 / shares; the job declares it as its own `keep`. Fully qualified, as every global a job reads is.
 / @param x a batch of executions or of market_data
 / @return a boolean per row
-/ @eg .qpipe.job.crypto_markout.keep[([] sym:`$("BTC-USDT";"EURUSD"))]  ->  10b
+/ @eg .qpipe.job.crypto_markout.keep[([] sym:`$("BTC-USDT";"EURUSD"); source:`a`a)]  ->  10b
 .qpipe.job.crypto_markout.keep:{[x] .qpipe.transform.crypto_markout_outputs.keep x}
 
 / Each pending fill's legs: the reference keys readiness waits on.
