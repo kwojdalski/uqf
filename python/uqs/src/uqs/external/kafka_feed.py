@@ -118,13 +118,15 @@ def start_kafka_feed(
     topic: str | None = None,
     group: str = DEFAULT_GROUP,
     credential: str | None = None,
+    base_port: int | None = None,
 ) -> int:
     """Start the consumer against the running stack's tickerplant.
 
     `topic` None is every declared topic; `credential` None resolves as
-    external/connection.py says. Refuses rather than starting a second one:
-    two consumers in the same group would split the partitions between them,
-    so the second would look like it worked while each received half the topic.
+    external/connection.py says; `base_port` None is the runtime's own.
+    Refuses rather than starting a second one: two consumers in the same group
+    would split the partitions between them, so the second would look like it
+    worked while each received half the topic.
 
     Refused, before anything starts, when confluent-kafka (the uqs `kafka`
     extra) is not installed: the detached streamer would only say so in its
@@ -132,7 +134,7 @@ def start_kafka_feed(
     """
     kafka_extra.require()
     topics = ",".join(check_topics(paths, topic))
-    port = connection.tickerplant_port(paths)
+    port = connection.tickerplant_port(paths, base_port)
     tp_credential = connection.tp_credential(credential)
 
     runner = Path(__file__).resolve().parent / "kafka_streamer.py"
@@ -197,6 +199,7 @@ def _start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
         topic=options["topics"],
         group=options["group"],
         credential=options["tp_credential"],
+        base_port=options["base_port"],
     )
 
 
@@ -227,6 +230,7 @@ FEED = ExternalFeed(
             "Consumer group id - the committed offsets belong to it",
             default=DEFAULT_GROUP,
         ),
+        connection.BASE_PORT,
         connection.TP_CREDENTIAL,
     ),
     check=_check,

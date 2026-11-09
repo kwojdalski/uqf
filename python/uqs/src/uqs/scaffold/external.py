@@ -240,10 +240,11 @@ def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
     FeedOption to FEED's options= and it is a `connector start` option.
 
     stp1's host, port and credential are every connector's, so they are not
-    written here (uqs.external.connection): --tp-credential-env NAME, else
-    $UQF_TP_CREDENTIAL, else the starter pack's demo login. The credential
-    reaches the streamer in its environment, never its argv (#1853)."""
-    port = connection.tickerplant_port(paths)
+    written here (uqs.external.connection): --base-port N, else the runtime's;
+    --tp-credential-env NAME, else $UQF_TP_CREDENTIAL, else the starter pack's
+    demo login. The credential reaches the streamer in its environment, never
+    its argv (#1853)."""
+    port = connection.tickerplant_port(paths, options["base_port"])
     credential = connection.tp_credential(options["tp_credential"])
     runner = Path(__file__).resolve().parent / "{name}_streamer.py"
     cmd = [
@@ -277,7 +278,7 @@ FEED = ExternalFeed(
     start,
     stop,
     status,
-    options=(connection.TP_CREDENTIAL,),
+    options=(connection.BASE_PORT, connection.TP_CREDENTIAL),
     produces={{RAW_TABLE: "the external {name} feed (`uqs connector start {name}`)"}},
 )
 '''

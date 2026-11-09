@@ -27,14 +27,6 @@ from uqs.external.crypto import (
 from uqs.external.feeds import ExternalFeed, FeedOption
 from uqs.paths import UqsError, UqsPaths
 
-#: The stack's base port, which both recorders take to find stp1.
-BASE_PORT = FeedOption(
-    "base_port",
-    "Stack base port",
-    type=int,
-    aliases=("--port",),  # #1729's rename
-)
-
 
 def _at_least_one(what: str) -> Any:
     """A `validate` refusing an empty list: `--symbols ,` split to nothing, and
@@ -107,7 +99,7 @@ FEEDS = (
                 type=int,
                 default=CRYPTO_RECORDER_DEFAULT_INTERVAL_MS,
             ),
-            BASE_PORT,
+            connection.BASE_PORT,
             connection.TP_CREDENTIAL,
         ),  # fmt: skip
         produces={CRYPTO_RECORDER_TABLE: RECORDER},
@@ -136,7 +128,7 @@ FEEDS = (
                 type=int,
                 default=CRYPTO_FILLS_RECORDER_DEFAULT_POLL_MS,
             ),
-            BASE_PORT,
+            connection.BASE_PORT,
             connection.TP_CREDENTIAL,
         ),  # fmt: skip
         produces={

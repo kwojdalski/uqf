@@ -90,6 +90,7 @@ def start_databento_feed(
     symbols: tuple[str, ...] = DEFAULT_SYMBOLS,
     api_key: str | None = None,
     credential: str | None = None,
+    base_port: int | None = None,
 ) -> int:
     """Start the handler against the running stack's tickerplant.
 
@@ -113,7 +114,7 @@ def start_databento_feed(
             "against a fixture."
         )
 
-    port = connection.tickerplant_port(paths)
+    port = connection.tickerplant_port(paths, base_port)
     tp_credential = connection.tp_credential(credential)
 
     runner = Path(__file__).resolve().parent / "databento_streamer.py"
@@ -171,6 +172,7 @@ def _start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
         symbols=options["symbols"],
         api_key=options["api_key"],
         credential=options["tp_credential"],
+        base_port=options["base_port"],
     )
 
 
@@ -194,6 +196,7 @@ FEED = ExternalFeed(
             env=DATABENTO_API_KEY_ENV,
         ),
         FeedOption("symbols", "Comma-separated symbols", default=DEFAULT_SYMBOLS, many=True),
+        connection.BASE_PORT,
         connection.TP_CREDENTIAL,
     ),
     produces={

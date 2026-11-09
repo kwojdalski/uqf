@@ -1704,6 +1704,7 @@ def test_kafka_starts_with_its_own_defaults(monkeypatch):
         "topic": "uqf.client.flow",
         "group": kafka_feed.DEFAULT_GROUP,
         "credential": connection.DEMO_TP_CREDENTIAL,
+        "base_port": None,
     }
 
 
