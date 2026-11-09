@@ -355,6 +355,13 @@
     sizes:1000000 2000000 1000000f;
     .qt.support.assertApprox[first .qf.exec.vwap_expanding[prices;sizes];first prices;1e-12;"one fill's VWAP is its own price, whatever its size"]};
 
+/ #2426: sum skips a null, so a null price left its size in the denominator
+/ alone and dragged the VWAP to 0.77, below every real fill.
+.qt.qf.exec.execution.test_vwap_skips_an_unpriced_fill_in_both_sums:{[t]
+    .qt.support.assertApprox[.qf.exec.vwap[1.1 0n 1.2;1 1 1];1.15;1e-12;"null price drops out of numerator and denominator"];
+    .qt.support.assertApprox[.qf.exec.vwap_expanding[1.1 0n 1.2;1 1 1];1.1 1.1 1.15;1e-12;"and from the running VWAP"];
+    .qunit.assertTrue[null .qf.exec.vwap[0n 0n;1 1];"no priced fill, no VWAP"]};
+
 .qt.qf.exec.execution.test_vwap_expanding_is_row_aligned:{[t]
     prices:1.1000 1.1010 1.1005 1.1020;
     .qunit.assertEquals[count .qf.exec.vwap_expanding[prices;4#1000000f];count prices;"one VWAP per fill"]};

@@ -733,13 +733,20 @@
     c};
 
 / Size-weighted average execution price across a set of fills.
+/ .
+/ A fill with a null price or size drops out of numerator and denominator
+/ together. sum skips a null, so a null price used to leave its size in
+/ the denominator alone and drag the VWAP below every real fill (#2426).
 / @param prices list of fill prices
 / @param sizes list of fill sizes, same length as prices
-/ @return the size-weighted average price
+/ @return the size-weighted average price of the fills with both, null if none has
 / @eg .qf.exec.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000]  -> 1.100625
+/ @eg .qf.exec.vwap[1.1 0n 1.2;1 1 1]  -> 1.15
 .qf.exec.vwap:{[prices;sizes]
-    weighted_sum:sum prices*sizes;
-    total_size:sum sizes;
+    notional:prices*sizes;
+    priced:not null notional;
+    weighted_sum:sum 0f^notional;
+    total_size:sum sizes*priced;
     weighted_sum%total_size};
 
 / Size-weighted average execution price as of each fill, rather than for
@@ -754,11 +761,15 @@
 / judged.
 / @param prices list of fill prices, in execution order
 / @param sizes list of fill sizes, same length as prices, aligned to it
-/ @return a vector the same length as prices - the VWAP as of each fill
+/ @return a vector the same length as prices - the VWAP as of each fill,
+/   skipping a fill with a null price or size as vwap does
 / @eg .qf.exec.vwap_expanding[1.1000 1.1010 1.1005;1000000 2000000 1000000]  -> 1.1 1.100667 1.100625
+/ @eg .qf.exec.vwap_expanding[1.1 0n 1.2;1 1 1]  -> 1.1 1.1 1.15
 .qf.exec.vwap_expanding:{[prices;sizes]
-    weighted_sums:sums prices*sizes;
-    total_sizes:sums sizes;
+    notional:prices*sizes;
+    priced:not null notional;
+    weighted_sums:sums 0f^notional;
+    total_sizes:sums sizes*priced;
     weighted_sums%total_sizes};
 
 \d .
