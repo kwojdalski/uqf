@@ -177,13 +177,21 @@
 / `saved_at` useless as a signal of when progress last actually happened.
 / @throws error when the new cursor is not strictly ahead
 .qetl.job.continuous.advance:{[worker;current;next_cursor]
+    .qetl.job.continuous.require_advance[worker;current;next_cursor];
+    .qetl.job.continuous.save_cursor[worker;next_cursor];
+    next_cursor}
+
+/ Private: advance's refusals, without the save - so a caller can make them
+/ before an irreversible publish rather than after it (#2315).
+/ @throws error when the new cursor is null or not strictly ahead
+/ @private
+.qetl.job.continuous.require_advance:{[worker;current;next_cursor]
     if[null next_cursor;
         '"advance: refusing a null cursor for ",string[worker]," - a cursor that cannot be compared cannot be trusted to move forward"];
     if[(not null current) and not next_cursor>current;
         '"advance: refusing to move ",string[worker],"'s cursor from ",
          string[current]," to ",string[next_cursor],
          " - a continuous cursor that does not move strictly forward re-publishes pages, and continuous output has no coverage ledger to notice"];
-    .qetl.job.continuous.save_cursor[worker;next_cursor];
     next_cursor}
 
 / ------------------------------------------------------------- FRESHNESS
@@ -302,9 +310,13 @@
     page:fetch_page current;
     if[0=count page;
         :`state`rows`cursor!(`idle;0;current)];
-    / publish, THEN advance. See save_cursor on why this order.
+    / The next cursor is checked BEFORE the publish, as stream.tick does: a
+    / cursor that does not move was refused only after the send, so every
+    / retry of the page sent it again (#2315). Then publish, THEN advance -
+    / see save_cursor on why this order.
+    nc:.qetl.job.continuous.require_advance[worker;current;next_cursor page];
     rows:publish_page page;
-    c:.qetl.job.continuous.advance[worker;current;next_cursor page];
+    c:.qetl.job.continuous.advance[worker;current;nc];
     `state`rows`cursor!(`published;rows;c)}
 
 \d .

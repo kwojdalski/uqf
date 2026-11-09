@@ -225,6 +225,21 @@
     .qetl.job.continuous.poll_once[`tailer;{[c] .qt.qetl.job.continuous.page};{[p] count p};{[p] .qt.qetl.job.continuous.d 2}];
     .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.qt.qetl.job.continuous.d[2];"the advance is durable, so a restart resumes from it"]};
 
+/ #2315: the next cursor was checked only after publish_page, so a page whose
+/ cursor did not move was sent on every retry. Refused now with nothing sent
+/ and the saved cursor untouched - a null cursor and an unmoved one alike.
+.qt.qetl.job.continuous.test_a_cursor_that_does_not_advance_publishes_nothing:{[t]
+    .qetl.job.continuous.save_cursor[`tailer;.qt.qetl.job.continuous.d[2]];
+    `.qt.qetl.job.continuous.page set ([] ts:enlist .qt.qetl.job.continuous.d 2; v:enlist 1.5);
+    `.qt.qetl.job.continuous.sent set 0;
+    send:{[p] `.qt.qetl.job.continuous.sent set .qt.qetl.job.continuous.sent+1; count p};
+    .qunit.assertThrows[.qetl.job.continuous.poll_once[`tailer;{[c] .qt.qetl.job.continuous.page};send;];{[p] .qt.qetl.job.continuous.d 2};
+        "advance: refusing to move*";"an unmoved cursor is refused"];
+    .qunit.assertThrows[.qetl.job.continuous.poll_once[`tailer;{[c] .qt.qetl.job.continuous.page};send;];{[p] 0Np};
+        "advance: refusing a null cursor*";"and so is a null one"];
+    .qunit.assertEquals[.qt.qetl.job.continuous.sent;0;"neither page was sent"];
+    .qunit.assertEquals[.qetl.job.continuous.load_cursor `tailer;.qt.qetl.job.continuous.d[2];"and the saved cursor did not move"]};
+
 / A tailer on a quiet source is working correctly. An orchestrator that
 / cannot tell "nothing new" from "broken" alerts all night on a healthy
 / process.
