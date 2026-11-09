@@ -255,6 +255,29 @@ def test_the_transports_are_the_ones_q_registers():
     assert transports.default() == "ipc"
 
 
+def _surface_with_rows(tmp_path, rows):
+    """A tree whose transports.csv has the committed header and these rows."""
+    path = tmp_path / transports.TRANSPORTS_FILE
+    path.parent.mkdir(parents=True)
+    committed = (UQF_ROOT / transports.TRANSPORTS_FILE).read_text().splitlines(keepends=True)
+    path.write_text(committed[0] + "".join(rows))
+    return tmp_path
+
+
+def test_a_duplicated_transport_row_is_refused(tmp_path):
+    """#2628: get() read the first copy while the surface check read the last."""
+    row = '"ipc","1","stale","localhost:5010","/ q"\n'
+    root = _surface_with_rows(tmp_path, [row, row.replace("stale", "host:port")])
+    with pytest.raises(UqsError, match="repeats ipc"):
+        transports.get("ipc", root)
+
+
+def test_two_default_transports_are_refused_by_name(tmp_path):
+    rows = ['"ipc","1","a","b","/ q"\n', '"odbc","1","a","b","/ q"\n']
+    with pytest.raises(UqsError, match="marks 2 transports as the default, not one: ipc, odbc"):
+        transports.default(_surface_with_rows(tmp_path, rows))
+
+
 @pytest.mark.parametrize("name", transports.names())
 def test_a_scaffolded_source_takes_its_words_from_the_surface(name):
     t = transports.get(name)
