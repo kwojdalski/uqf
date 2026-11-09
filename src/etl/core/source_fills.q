@@ -228,9 +228,14 @@
 / `rows` is each flagged position's data row number: its row in the file for a csv source
 / (#2403), where a window is only some of the file's rows, and its position for ODBC.
 / @private
-.qetl.source.fills.refuse:{[who;field;flags;rows;what]
+.qetl.source.fills.refuse:{[who;field;flags;rows;what] .qetl.source.fills.refuse_in[who;field;flags;rows;what;"the window"]}
+
+/ Private: refuse, saying where the flagged rows were counted - "the file" for a check over
+/ every row of a csv, which counted rows outside the window as in it (#2551).
+/ @private
+.qetl.source.fills.refuse_in:{[who;field;flags;rows;what;scope]
     bad:where flags;
-    if[count bad; '"fills: ",who," data row ",string[rows first bad]," ",what," (",string[field],"; ",string[count bad]," row(s) in the window)"];
+    if[count bad; '"fills: ",who," data row ",string[rows first bad]," ",what," (",string[field],"; ",string[count bad]," row(s) in ",scope,")"];
     1b}
 
 / Assemble a window from its typed fields: apply the side encoding, refuse what cannot be read,
@@ -301,9 +306,9 @@
     if[count absent; '"fills: ",who,"'s file lacks the mapped column(s): ",", " sv string absent];
     tc:raw m`source_time;
     ts:.qetl.coerce.to_timestamp each tc;
-    .qetl.source.fills.refuse[who;`source_time;null ts;1+til count ts;"has a time that is empty, date-only or malformed"];
+    .qetl.source.fills.refuse_in[who;`source_time;null ts;1+til count ts;"has a time that is empty, date-only or malformed";"the file"];
     off:last each .qetl.coerce.utc_offset each tc;
-    .qetl.source.fills.refuse[who;`source_time;off<>0D;1+til count ts;"carries a UTC offset, but the source is declared UTC"];
+    .qetl.source.fills.refuse_in[who;`source_time;off<>0D;1+til count ts;"carries a UTC offset, but the source is declared UTC";"the file"];
     keep:where (ts>=range_from) & ts<range_to;
     if[0=count keep; :.qetl.source.fills.empty[]];
     / a refusal names the row by its place in the file, not in the window
