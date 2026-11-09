@@ -141,6 +141,13 @@
     .qunit.assertThrows[.qetl.source.csv_rows;p;"csv: build/test-fills/w.csv line 3 has 8 fields, the header has 9 (a quoted comma is not supported)";
         "a short row is refused, not read with its fields shifted"]};
 
+/ The line named is the row's line in the file (#2404): a blank line above it was
+/ skipped before counting, and the message named the blank line instead.
+.qt.qetl.source.fills.test_a_bad_row_after_a_blank_line_is_named_by_its_own_line:{[t]
+    p:.qt.qetl.source.fills.file["blank.csv";("a,b";"1,2";"";"3,4,5")];
+    .qunit.assertThrows[.qetl.source.csv_rows;p;"csv: build/test-fills/blank.csv line 4 has 3 fields, the header has 2*";
+        "line 4, not the blank line 3"]};
+
 .qt.qetl.source.fills.test_the_sample_drop_reads_as_the_fixture:{[t]
     r:.qetl.source.fills.read[`eq_fills;`:tests/q/data/eq_fills.csv;.qt.qetl.source.fills.day[0];.qt.qetl.source.fills.day[2]];
     .qunit.assertEquals[r;.qpipe.source.eq_fills.fixture[];"the file the fixture is the parse of, in contract types"]};
