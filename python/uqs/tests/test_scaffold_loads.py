@@ -35,13 +35,13 @@ from uqs.scaffold import worker as backfill
 from uqs.scaffold.columns import (
     definition_columns,
     parse_columns,
-    parse_raw_columns,
     table_definition,
 )
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE
 from uqs.scaffold.example import example_path
 from uqs.scaffold.horizon import horizon_job
 from uqs.scaffold.normalizer import normalizer
+from uqs.scaffold.raw_columns import parse_raw_columns
 from uqs.scaffold.reaction import reaction
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
