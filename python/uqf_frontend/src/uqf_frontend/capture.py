@@ -76,7 +76,13 @@ class JsonlSink:
             return
         self._dir.mkdir(parents=True, exist_ok=True)
         path = self._dir / f"usage-{process}.jsonl"
+        torn = _ends_torn(path)
         with path.open("a", encoding="utf-8") as fh:
+            if torn:
+                # End the torn line first: last_watermark skipped it so its
+                # row is fetched again, and written straight after the
+                # partial bytes that row would be lost inside them (#2584).
+                fh.write("\n")
             for row in rows:
                 fh.write(json.dumps(row, default=str) + "\n")
 
@@ -105,6 +111,18 @@ class JsonlSink:
                         return stamp
                 tail = lines[0] if pos > 0 else b""
         return None
+
+
+def _ends_torn(path: Path) -> bool:
+    """Does *path* end part-way through a line - a write cut short?"""
+    try:
+        with path.open("rb") as fh:
+            if fh.seek(0, 2) == 0:
+                return False
+            fh.seek(-1, 2)
+            return fh.read(1) != b"\n"
+    except FileNotFoundError:
+        return False
 
 
 #: How much of a JSONL archive's end `last_watermark` reads at a time.
