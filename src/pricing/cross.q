@@ -159,12 +159,14 @@
 
 / Private: the zero-row result of a *_at_sizes call for an empty sizes list,
 / with the columns and types one size gives. Their `each sizes` builds a ()
-/ there, not a table, and want_cols# threw 'type on it (#2389).
+/ there, not a table, and want_cols# threw 'type on it (#2389). `size` keeps
+/ the caller's type, as each size does in a row; only an untyped () has none
+/ to keep, and is float (#2558).
 / @private
 .qf.mkt.no_sizes_result:{[sizes;sides]
     want_cols:`size`sym , raze .qf.mkt.side_cols each sides;
     all_cols:`size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid;
-    want_cols#flip all_cols!("f"$sizes;`symbol$();`float$();`float$();`boolean$();`float$();`float$();`boolean$();`float$())};
+    want_cols#flip all_cols!($[0h=type sizes; `float$(); sizes];`symbol$();`float$();`float$();`boolean$();`float$();`float$();`boolean$();`float$())};
 
 / Depth-aware synthetic cross rate: like cross_book, but walks multi-level
 / order book depth on both legs for each requested size, converting the
