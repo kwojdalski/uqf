@@ -163,8 +163,10 @@ def render(
             items = ", ".join(f"{json.dumps(k)}: {json.dumps(v)}" for k, v in value.items())
             out.append(f"\n#: {FACTS[name]}\n{name}: dict[str, str] = {{{items}}}\n")
             continue
-        words = ", ".join(f'"{w}"' for w in value)
-        out.append(f"\n#: {FACTS[name]}\n{name}: tuple[str, ...] = ({words},)\n")
+        # each word as a string literal, escaped as the others are, and an
+        # empty list as (), not the (,) ruff cannot parse (#2636)
+        words = "".join(f"{json.dumps(w)}, " for w in value)
+        out.append(f"\n#: {FACTS[name]}\n{name}: tuple[str, ...] = ({words})\n")
     formatted = subprocess.run(
         [sys.executable, "-m", "ruff", "format", "--stdin-filename", str(out_path), "-"],
         input="".join(out),

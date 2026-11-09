@@ -1845,11 +1845,13 @@ program, and what is typed into it never passes through `uqs`. `--servers` names
 other process types. Three things are not wrapped:
 
 - a `.gw.*` call of your own, and a `\` system command, are sent as typed;
-- an in-place `update` or
-  `delete ... from `trade` is **refused** - routed, it would change the RDB's live data. The copy form, `update
-  ... from
-  trade`, is routed like any query; to change a table, name its process first (`uqs
-  query rdb1 ...\`);
+- an in-place change is **refused** wherever it appears outside a string:
+  routed, it would change the RDB's live data. That is an `update` or `delete`
+  from a table named with a backtick, `` `trade upsert ... `` (or `insert`,
+  `set`), and the functional `` ![`trade;...] ``; the copy form,
+  `update ... from trade`, is routed like any query. To change a table, name its
+  process first (`uqs query rdb1 ...`). This guards against a slip, not a
+  determined caller: q can build any expression at run time;
 - with `--no-gateway`, nothing is: the gateway gets exactly what you typed.
 
 ```

@@ -100,8 +100,8 @@ def _print(kind, base_port, export, sort, reverse, interactive, as_json, rows=No
     items = _sorted_items(items, sort, reverse)
     shown = [cells(item) for item in items]  # what a table cell and an export hold
     if as_json:
+        _export(shown, export)  # first: a failed export is then the only document
         emit({JSON_KEY.get(kind, kind): records(items)})
-        _export(shown, export)
         return
     table = Table(title=f"{kind} ({len(items)})")
     if items:

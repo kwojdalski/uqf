@@ -37,7 +37,7 @@ def deploy_history(
             autocompletion=completion.targets,
         ),
     ] = None,
-    limit: Annotated[int, typer.Option("--limit", help="Most recent N")] = 20,
+    limit: Annotated[int, typer.Option("--limit", min=1, help="Most recent N")] = 20,
     export: ExportOpt = None,
     sort: SortOpt = None,
     reverse: ReverseOpt = False,
@@ -65,7 +65,7 @@ def deploy_history(
     ]
     rows = [
         {"default": i in defaults, **{k: e.get(k) for k in _KEYS}}
-        for i, e in reversed(found[-limit:])
+        for i, e in reversed(found[len(found) - limit :])
     ]
     try:
         rows = _sorted_items(rows, sort, reverse)

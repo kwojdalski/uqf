@@ -76,12 +76,19 @@ class _DropAuthOnHostChange(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(_DropAuthOnHostChange)
 
 
+#: The hosts GH_TOKEN is sent to: GitHub's own, by exact name (#2580).
+TOKEN_HOSTS = frozenset({"api.github.com", "github.com"})
+
+
 def http_get(url: str) -> bytes:
     headers = {"User-Agent": "uqs-deploy"}
-    if url.startswith(API):
+    parsed = urlparse(url)
+    if parsed.hostname == "api.github.com":
         headers["Accept"] = "application/vnd.github+json"
     token = _token()
-    if token and (url.startswith(API) or url.startswith("https://github.com/")):
+    # by parsed host, never by prefix: https://api.github.com.example.net/
+    # starts with API too
+    if token and parsed.scheme == "https" and parsed.hostname in TOKEN_HOSTS:
         headers["Authorization"] = f"Bearer {token}"
     try:
         with _OPENER.open(urllib.request.Request(url, headers=headers), timeout=TIMEOUT) as r:  # noqa: S310 - https only, checked by the caller

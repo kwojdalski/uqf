@@ -107,6 +107,21 @@ def test_the_format_callable_escapes_what_loguru_would_misread():
     assert out.endswith("\n")
 
 
+def test_a_logged_exception_prints_its_traceback_on_a_coloured_sink():
+    """#2635: loguru appends {exception} only to a template format, not to a
+    callable's, so log.exception printed no traceback on the console."""
+    import io
+
+    buf = io.StringIO()
+    logcore.setup_logging(level="DEBUG", colored_output=True, stream=buf)
+    try:
+        raise ZeroDivisionError("the cause")
+    except ZeroDivisionError:
+        logger.exception("boom")
+    out = buf.getvalue()
+    assert "boom" in out and "Traceback" in out and "ZeroDivisionError: the cause" in out
+
+
 def test_an_angle_bracket_inside_a_value_stays_escaped():
     """`SERVER=<host>` used to leave loguru with a bare `<host>` to read as a
     colour tag, because the escaping `\\` was wrapped in a colour tag of its

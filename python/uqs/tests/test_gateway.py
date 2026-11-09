@@ -14,6 +14,17 @@ from uqs.stack import gateway
         ("select from trade", '.gw.syncexec["select from trade";`rdb]'),
         ("count trade", '.gw.syncexec["count trade";`rdb]'),
         ("update px:0 from trade", '.gw.syncexec["update px:0 from trade";`rdb]'),
+        # a copy, and backticks inside a string or a select, change nothing
+        (
+            'select from trade where note like "update x from `t"',
+            '.gw.syncexec["select from trade where note like \\"update x from `t\\"";`rdb]',
+        ),
+        (
+            "select from trade where sym in `X`Y",
+            '.gw.syncexec["select from trade where sym in `X`Y";`rdb]',
+        ),
+        ("`trade.sym", '.gw.syncexec["`trade.sym";`rdb]'),
+        ("@[f;1;0]", '.gw.syncexec["@[f;1;0]";`rdb]'),
         (
             'select from t where s like "EUR*"',
             '.gw.syncexec["select from t where s like \\"EUR*\\"";`rdb]',
@@ -26,7 +37,24 @@ def test_everything_is_routed_but_a_gateway_call_or_a_system_command(expr, sent)
     assert gateway.expression(expr, "rdb") == sent
 
 
-@pytest.mark.parametrize("expr", ["delete from `trade", "update px:0 from `trade where sym=`X"])
+@pytest.mark.parametrize(
+    "expr",
+    [
+        "delete from `trade",
+        "update px:0 from `trade where sym=`X",
+        # anywhere in the expression, not only at its start (#2611)
+        "(update price:0f from `trade)",
+        "r:update price:0f from `trade",
+        "0N!delete from `trade",
+        "`trade upsert ([] sym:`X; price:1f)",
+        "`trade insert (`X;1f)",
+        "upsert[`trade;([] sym:`X)]",
+        "`trade set 0#trade",
+        "![`trade;();0b;`sym]",
+        "@[`trade;`price;0f*]",
+        ".[`trade;(::;`price);0f*]",
+    ],
+)
 def test_an_in_place_change_is_refused(expr):
     """Routed, it would change the RDB's live data."""
     with pytest.raises(UqsError, match="name the process first"):

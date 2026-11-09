@@ -28,13 +28,17 @@ SECRET_KEYS = (
     "key",
 )
 
-#: A value runs to the next whitespace - or, ODBC {}-quoted, to its closing }
-#: (where ; and spaces are data and }} is an escaped }), or to the line's end
-#: when it is never closed.
+#: A key is one of SECRET_KEYS, alone or as the last part of a snake_case
+#: name (db_password, AWS_SECRET_ACCESS_KEY), not inside a longer word; a
+#: quoted key's closing quote may sit before the = or : (JSON) (#2516). A
+#: value runs to the next whitespace - or, quoted, to its closing quote; or,
+#: ODBC {}-quoted, to its closing } (where ; and spaces are data and }} is an
+#: escaped }) - or to the line's end when it is never closed.
 _SECRETISH = re.compile(
-    r"(?i)\b("
+    r"(?i)(?<![A-Za-z0-9])((?:[A-Za-z0-9_]*_)?(?:"
     + "|".join(sorted(SECRET_KEYS, key=len, reverse=True))
-    + r")\s*[=:]\s*(?:\{(?:[^}\n]|\}\})*\}?|\S+)"
+    + r"))([\"']?)\s*[=:]\s*"
+    r"(?:\{(?:[^}\n]|\}\})*\}?|\"(?:[^\"\\\n]|\\.)*\"?|'[^'\n]*'?|\S+)"
 )
 
 
@@ -43,4 +47,4 @@ def redact(text: str, *secrets: str) -> str:
     `secrets` - a credential known to the caller - wherever it appears."""
     for secret in sorted((s for s in secrets if s), key=len, reverse=True):
         text = text.replace(secret, "<redacted>")
-    return _SECRETISH.sub(lambda m: f"{m.group(1)}=<redacted>", text)
+    return _SECRETISH.sub(lambda m: f"{m.group(1)}{m.group(2)}=<redacted>", text)

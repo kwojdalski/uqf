@@ -169,6 +169,33 @@ def test_a_pushed_release_already_linked_is_saved_as_is(server, tmp_path):
     assert history.read(Path("."))[0]["release"] == release.name
 
 
+def _pushed(release: Path) -> Path:
+    (release / ".venv" / "bin").mkdir(parents=True)
+    (release / ".venv" / "bin" / "uqs").write_text("#!/bin/bash\n")
+    (release / ".venv" / "bin" / "uqs").chmod(0o755)
+    (release / "deploy.env").write_text("")
+    return release
+
+
+def test_a_pushed_release_under_releases_without_current_is_linked_not_moved(server, tmp_path):
+    """#2581: moving it broke its .venv's absolute shebangs."""
+    release = _pushed(server / "releases" / "20261001T000000Z-abcdefabcdef")
+    r = _adopt(server, "--release-dir", str(release), "--apply", "--yes")
+    assert r.exit_code == 0, r.output
+    assert sorted(p.name for p in (server / "releases").iterdir()) == [release.name]
+    assert (server / "current").readlink() == Path("releases") / release.name
+    assert history.read(Path("."))[0]["release"] == release.name
+
+
+def test_a_pushed_release_elsewhere_is_refused_rather_than_moved(server, tmp_path, logged):
+    release = _pushed(tmp_path / "elsewhere")
+    before = _tree(tmp_path)
+    r = _adopt(server, "--release-dir", str(release), "--apply", "--yes")
+    assert r.exit_code == 1
+    assert _has(r.output + "".join(logged), "is a pushed release, whose .venv would break")
+    assert _tree(tmp_path) == before
+
+
 def test_without_yes_it_asks_and_a_no_changes_nothing(server, tmp_path, logged, terminal):
     before = _tree(tmp_path)
     r = _adopt(server, "--launch-python", sys.executable, "--apply", input="n\n")

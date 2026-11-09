@@ -20,7 +20,7 @@ import os
 import re
 
 from uqs.model.pipelines import PROCESS_CSV_FIELDS
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 
 #: The variable that declares a site's extra process.csv columns.
 PROCESS_FIELDS_ENV = "UQS_PROCESS_FIELDS"
@@ -61,3 +61,12 @@ def refuse_unknown_field(field: str, context: str) -> None:
             f"{context}: {field!r} is not one of process.csv's columns {list(fields)} - "
             f"a site's own column, such as taskset_no, is declared in {PROCESS_FIELDS_ENV}"
         )
+
+
+def field_value(row: dict[str, str], field: str) -> str:
+    """`field` of a process.csv row, refused when the row has no such column
+    - not "", which `$(uqs config show rdb1 prot)` would take for a value
+    (#2608)."""
+    if field not in row:
+        raise UqsUsageError(f"unknown process.csv field: {field!r} - the row has {list(row)}")
+    return row[field]

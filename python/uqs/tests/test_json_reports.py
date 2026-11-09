@@ -197,6 +197,17 @@ def test_deploy_history_prints_deployments_newest_first(monkeypatch):
     assert [(d["at"], d["default"]) for d in doc["deployments"]] == [("2", True), ("1", False)]
 
 
+def test_deploy_history_limit_takes_the_newest_n_and_refuses_less_than_one(monkeypatch):
+    """#2514: `found[-0:]` was every entry and `found[--1:]` dropped the oldest."""
+    entries = [{"at": f"r{i}", "host": "h", "status": "ok"} for i in range(1, 6)]
+    monkeypatch.setattr(history, "read", lambda _root: entries)
+    monkeypatch.setattr(history, "defaults", lambda _root: set())
+    doc = _doc(["deploy", "history", "--limit", "2"])
+    assert [d["at"] for d in doc["deployments"]] == ["r5", "r4"]
+    for bad in ("0", "-1"):
+        assert runner.invoke(cli.app, ["deploy", "history", "--limit", bad]).exit_code == 2
+
+
 def test_target_check_prints_the_release(monkeypatch):
     remote = control.Remote("t", "h", "/srv/uqf")
     monkeypatch.setattr(control, "remote_for", lambda *_a: remote)

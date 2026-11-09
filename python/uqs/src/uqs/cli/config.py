@@ -32,7 +32,7 @@ from uqs.cli.shared import (
     console,
 )
 from uqs.paths import UqsError
-from uqs.stack import process_unset
+from uqs.stack import process_unset, site_fields
 from uqs.stack import procs as stack_procs
 
 #: `uqs config show/set/unset/list`: process.csv rows, set in process_overrides.csv (#1855).
@@ -77,15 +77,21 @@ def config_get(
     except UqsError as exc:
         _die(exc)
         return
+    if field is not None:
+        try:
+            value = site_fields.field_value(row, field)
+        except UqsError as exc:
+            _die(exc)
+            return
     if as_json and field is not None:
-        emit({"process": procname, "field": field, "value": row.get(field, "")})
+        emit({"process": procname, "field": field, "value": value})
         return
     if as_json:
         emit({"process": procname, "fields": [{"field": k, "value": v} for k, v in row.items()]})
         _export([{"field": k, "value": v} for k, v in row.items()], export)
         return
     if field is not None:
-        print(row.get(field, ""))  # the value alone, as `$(uqs config show ...)` takes it
+        print(value)  # the value alone, as `$(uqs config show ...)` takes it
         return
     table = Table(title=f"{procname} config")
     table.add_column("field")

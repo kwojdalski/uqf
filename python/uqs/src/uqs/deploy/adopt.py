@@ -10,7 +10,9 @@ adopt works that out by asking the server, in one read-only round trip:
 
   - does `<dest>/current` link to a release already; if not, which directory
     would become one (`--release-dir`, default `<dest>` itself), moved to
-    `<dest>/releases/adopted-<UTC time>` with `current` linked to it;
+    `<dest>/releases/adopted-<UTC time>` with `current` linked to it - or,
+    when it is already `<dest>/releases/<name>`, only linked; a pushed
+    release is never moved, since its .venv names its own path (#2581);
   - can that release launch uqs as pushed (.venv/bin/uqs and deploy.env), or
     must it run from source;
   - for source, the environment file (--launch-env-file, else the release's
@@ -71,7 +73,15 @@ class Survey:
     env_file: str | None  # the environment file found, as a path in the release or absolute
     env_source: str | None
     probes: list[Probe] = field(default_factory=list)
-    release_name: str | None = None  # releases/<name> it would be moved to; None: already one
+    release_name: str | None = None  # releases/<name> it would be linked as; None: already one
+
+    @property
+    def in_place(self) -> bool:
+        """Already at <dest>/releases/<name>: only current is to be linked,
+        never the directory moved (#2581)."""
+        return self.current is None and self.release_dir.rstrip("/").rpartition("/")[0] == (
+            f"{self.dest}/releases"
+        )
 
     @property
     def mode(self) -> str:
@@ -171,7 +181,7 @@ def survey(
             facts[key] = value
     current = facts.get("current") or None
     stamp = (now or datetime.now(UTC)).strftime("%Y%m%dT%H%M%SZ")
-    return Survey(
+    survey = Survey(
         dest=r.dest.rstrip("/"),
         current=current,
         release_dir=facts.get("release_dir", ""),
@@ -183,6 +193,9 @@ def survey(
         probes=probes,
         release_name=None if current else f"adopted-{stamp}",
     )
+    if survey.in_place:
+        survey.release_name = survey.release_dir.rstrip("/").rpartition("/")[2]
+    return survey
 
 
 def _in_current(s: Survey, path: str) -> str:
@@ -199,6 +212,14 @@ def problems(s: Survey) -> list[str]:
     if not s.exists:
         return [f"{s.release_dir} does not exist on the server"]
     out = []
+    if s.pushed and s.current is None and not s.in_place:
+        # its .venv's console scripts name their interpreter by absolute path:
+        # moved, every one of them fails with "bad interpreter" (#2581)
+        out.append(
+            f"{s.release_dir} is a pushed release, whose .venv would break if moved - "
+            f"copy it to {s.dest}/releases/<release-id> and adopt that, or link "
+            f"{s.dest}/current to it by hand"
+        )
     if s.mode == launch.SOURCE:
         if not s.is_uqf:
             out.append(
@@ -234,11 +255,14 @@ def server_changes(s: Survey) -> list[str]:
     if s.current is not None:
         return []
     new = f"{s.dest}/releases/{s.release_name}"
+    link = f"link {s.dest}/current -> releases/{s.release_name}"
+    if s.in_place:
+        return [link]
     if s.release_dir.rstrip("/") == s.dest:
         moved = f"move what {s.dest} holds (but releases/, current and shared/) into {new}"
     else:
         moved = f"move {s.release_dir} to {new}"
-    return [moved, f"link {s.dest}/current -> releases/{s.release_name}"]
+    return [moved, link]
 
 
 def apply_script(s: Survey) -> str:
@@ -247,6 +271,12 @@ def apply_script(s: Survey) -> str:
     q = shlex.quote
     dest, name = s.dest, str(s.release_name)
     new = f"{dest}/releases/{name}"
+    appeared = (
+        f"if [ -e {q(dest)}/current ] || [ -L {q(dest)}/current ]; then "
+        f"echo uqs: {q(dest)}/current appeared since the survey >&2; exit 3; fi; "
+    )
+    if s.in_place:
+        return f"{appeared}ln -s releases/{q(name)} {q(dest)}/current"
     if s.release_dir.rstrip("/") == dest:
         move = (
             f"mkdir {q(new)} && for f in {q(dest)}/* {q(dest)}/.[!.]* {q(dest)}/..?*; do "
@@ -257,8 +287,7 @@ def apply_script(s: Survey) -> str:
     else:
         move = f"mv {q(s.release_dir)} {q(new)}"
     return (
-        f"if [ -e {q(dest)}/current ] || [ -L {q(dest)}/current ]; then "
-        f"echo uqs: {q(dest)}/current appeared since the survey >&2; exit 3; fi; "
+        f"{appeared}"
         f"if [ -e {q(new)} ]; then echo uqs: {q(new)} already exists >&2; exit 3; fi; "
         f"mkdir -p {q(dest)}/releases && {move} && ln -s releases/{q(name)} {q(dest)}/current"
     )

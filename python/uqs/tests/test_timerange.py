@@ -130,6 +130,23 @@ def test_last_must_cover_time(text):
         timerange.resolve(None, None, last=text)
 
 
+@pytest.mark.parametrize(
+    ("given", "name"),
+    [
+        ({"range_from": "0001-01-01T00:00+01:00", "range_to": "2026-01-01"}, "--from"),
+        ({"range_from": "2026-01-01", "range_to": "9999-12-31T23:00-02:00"}, "--to"),
+        ({"last": "999999999d"}, "--last"),
+        ({"last": "9999999999d"}, "--last"),
+        ({"day": "9999-12-31"}, "--date"),
+    ],
+)
+def test_a_bound_past_what_a_timestamp_holds_is_a_usage_error(given, name):
+    """#2519: an OverflowError traceback, exit 1, from every range-taking command."""
+    given = {"range_from": None, "range_to": None} | given
+    with pytest.raises(UqsUsageError, match=f"{name} .* is outside the range a timestamp"):
+        timerange.resolve(**given, now=NOW)
+
+
 # --- the three ways, one at a time ----------------------------------------------
 
 

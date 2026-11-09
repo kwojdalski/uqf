@@ -108,7 +108,10 @@ def parse_bound(name: str, text: str) -> datetime:
         ) from None
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=UTC)
-    return parsed.astimezone(UTC)
+    try:
+        return parsed.astimezone(UTC)
+    except OverflowError:  # 0001-01-01T00:00+01:00 is a year 0 in UTC (#2519)
+        raise UqsUsageError(f"{name} {text!r} {_OUTSIDE}") from None
 
 
 def parse_day(name: str, text: str) -> date:
@@ -133,9 +136,15 @@ def parse_duration(name: str, value: str | float) -> timedelta:
         span = timedelta(seconds=duration.seconds(value))
     except duration.DurationError as exc:
         raise UqsUsageError(f"{name} {exc}") from None
+    except OverflowError:
+        raise UqsUsageError(f"{name} {value!r} {_OUTSIDE}") from None
     if span <= timedelta(0):
         raise UqsUsageError(f"{name} {value!r}: the range must be longer than zero")
     return span
+
+
+#: Why a bound past datetime's years 1-9999 is refused (#2519).
+_OUTSIDE = "is outside the range a timestamp can hold (years 1 to 9999)"
 
 
 def _midnight(day: date) -> datetime:
@@ -260,10 +269,16 @@ def resolve(
             raise UqsUsageError(f"{' and '.join(given)} cannot be given together - {USAGE}")
         if day is not None:
             first = parse_day("--date", day)
-            return TimeRange(_midnight(first), _midnight(first + timedelta(days=1)))
+            try:
+                return TimeRange(_midnight(first), _midnight(first + timedelta(days=1)))
+            except OverflowError:  # 9999-12-31: its end is in year 10000
+                raise UqsUsageError(f"--date {day!r} {_OUTSIDE}") from None
         span = parse_duration("--last", "" if last is None else last)
         end = (now or datetime.now(UTC)).astimezone(UTC)
-        return TimeRange(end - span, end, span)
+        try:
+            return TimeRange(end - span, end, span)
+        except OverflowError:
+            raise UqsUsageError(f"--last {last!r} {_OUTSIDE}") from None
     if not open_ended and (range_from is None or range_to is None):
         missing = "--from" if range_from is None else "--to"
         raise UqsUsageError(f"no {missing} - {USAGE}")

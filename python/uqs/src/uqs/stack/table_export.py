@@ -9,7 +9,22 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from uqs.paths import UqsError
+from uqs.cells import cell
+from uqs.paths import UqsError, UqsUsageError
+
+#: The formats --export writes, by the file's extension.
+SUFFIXES = (".csv", ".parquet")
+
+
+def check_path(path: Path) -> None:
+    """Refuse an export path that cannot be written, before the command runs:
+    a refusal after the rows were printed is a second document on a --json
+    stdout (#2607)."""
+    suffix = path.suffix.lower()
+    if suffix not in SUFFIXES:
+        raise UqsUsageError(f"unsupported export extension {suffix!r} - use .csv or .parquet")
+    if not path.parent.is_dir():
+        raise UqsUsageError(f"cannot write {path}: {path.parent} is not a directory")
 
 
 def export_table(rows: Any, path: Path) -> None:
@@ -21,6 +36,9 @@ def export_table(rows: Any, path: Path) -> None:
     needed). Anything else (a q scalar/atom from query(), e.g. `count t`)
     isn't rows, so it's rejected rather than silently wrapped into a bogus
     one-cell table.
+
+    CSV holds no nested value, so a list or struct column is written as the
+    text its table cell shows (#2517); Parquet keeps it nested.
     """
     import polars as pl
 
@@ -35,9 +53,17 @@ def export_table(rows: Any, path: Path) -> None:
         )
 
     suffix = path.suffix.lower()
-    if suffix == ".csv":
-        df.write_csv(path)
-    elif suffix == ".parquet":
-        df.write_parquet(path)
-    else:
+    if suffix not in SUFFIXES:
         raise UqsError(f"unsupported export extension {suffix!r} - use .csv or .parquet")
+    # a missing or unwritable directory is a refusal, not polars' traceback (#2606)
+    try:
+        if suffix == ".csv":
+            nested = [c for c, t in df.schema.items() if t.is_nested()]
+            df = df.with_columns(
+                pl.Series(c, [cell(v) for v in df[c].to_list()], dtype=pl.String) for c in nested
+            )
+            df.write_csv(path)
+        else:
+            df.write_parquet(path)
+    except (OSError, pl.exceptions.PolarsError) as exc:
+        raise UqsError(f"cannot write {path}: {exc}") from None

@@ -325,7 +325,9 @@ def test_a_files_span_of_time_takes_what_its_flag_does(root, value, seconds):
     assert cfg.verify_timeout == seconds
 
 
-@pytest.mark.parametrize("value", ['"soon"', '"5 m"', '"-5m"', "true", '"1w"'])
+@pytest.mark.parametrize(
+    "value", ['"soon"', '"5 m"', '"-5m"', "true", '"1w"', "inf", "nan", "1e400"]
+)
 def test_a_span_of_time_that_is_no_duration_is_refused_naming_its_key(root, value):
     (root / targets.DECLARATION).write_text(FILE + f"soak = {value}\n")
     with pytest.raises(DeployError) as exc:
