@@ -78,7 +78,7 @@ def test_the_old_q_switch_still_works_alone(monkeypatch, tmp_path):
 @pytest.mark.parametrize("hook", FULL_ONLY)
 def test_a_full_only_hook_is_entered_through_the_switch(hook):
     entry = HOOKS[hook]["entry"]
-    assert entry.startswith(f"python3 scripts/dev/hooks_full.py --hook {hook} -- "), entry
+    assert entry.startswith(f"uv run python scripts/dev/hooks_full.py --hook {hook} -- "), entry
 
 
 def test_a_full_only_hook_runs_its_command_only_in_full_mode(monkeypatch, tmp_path, capsys):

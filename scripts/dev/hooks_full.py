@@ -25,8 +25,8 @@ q hooks alone), the docs render, and the docs' q blocks on PeachQ.
                                         # run CMD only in full mode (what a hook
                                         # that runs only then is entered as)
 
-Standard library only, and Python 3.10-compatible: hooks run it with the
-system python3.
+Standard library only, and Python 3.10-compatible, so a bare python3 can run
+it by hand; the hooks enter it as `uv run python` (#2449).
 """
 
 from __future__ import annotations

@@ -30,11 +30,12 @@ PeachQ is found as the q-docs-peachq hook finds it: $QCMD when it answers as
 PeachQ, else the pinned build from scripts/peachq.json (scripts/peachq.py,
 built into the cache on first use).
 
-    python3 scripts/dev/peachq_push.py              # what the pre-push hook runs
-    python3 scripts/dev/peachq_push.py --base REF   # against another base
+    uv run python scripts/dev/peachq_push.py              # what the pre-push hook runs
+    uv run python scripts/dev/peachq_push.py --base REF   # against another base
     SKIP=peachq-push git push                       # push without it
 
-Standard library only: hooks run it with the system python3.
+Standard library only. The hook runs it as `uv run python`, the project's
+interpreter, never whichever python3 is first on PATH (#2449).
 """
 
 from __future__ import annotations

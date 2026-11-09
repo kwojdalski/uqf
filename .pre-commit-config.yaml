@@ -122,7 +122,7 @@ repos:
 
       - id: check-hook-scopes
         name: Check pre-commit hook scopes cover the code
-        entry: python3 scripts/gates/check_hook_scopes.py
+        entry: uv run python scripts/gates/check_hook_scopes.py
         language: system
         pass_filenames: false
         always_run: true
@@ -154,7 +154,7 @@ repos:
 
       - id: q-traps
         name: Check q files for silent-failure traps
-        entry: python3 scripts/gates/check_q_traps.py
+        entry: uv run python scripts/gates/check_q_traps.py
         language: system
         pass_filenames: false
         always_run: true
@@ -164,7 +164,7 @@ repos:
       # not only what is staged - one list, in the gate itself.
       - id: nested-contexts
         name: Refuse a \d context more than one level deep
-        entry: python3 scripts/gates/check.py nested-contexts
+        entry: uv run python scripts/gates/check.py nested-contexts
         language: system
         pass_filenames: false
         always_run: true
@@ -177,7 +177,7 @@ repos:
       # second list of them, free to drift from the first.
       - id: tool-pins
         name: Hold every copy of a tool version pin equal
-        entry: python3 scripts/gates/check.py tool-pins
+        entry: uv run python scripts/gates/check.py tool-pins
         language: system
         pass_filenames: false
         always_run: true
@@ -189,14 +189,14 @@ repos:
       # else's edit. A tree changes only through scripts/dev/revendor.py.
       - id: vendored
         name: Hold every vendored tree under lib/ to its recorded upstream
-        entry: python3 scripts/gates/check.py vendored
+        entry: uv run python scripts/gates/check.py vendored
         language: system
         pass_filenames: false
         files: '^lib/|^scripts/gates/(check|policy/vendored)\.py$'
 
       - id: bundle-blocks
         name: Refuse an installed bundle's blocks in tracked q files
-        entry: python3 scripts/gates/check_bundle_blocks.py
+        entry: uv run python scripts/gates/check_bundle_blocks.py
         language: system
         pass_filenames: false
         always_run: true
@@ -207,42 +207,42 @@ repos:
       # everything. Each is scoped to what it reads.
       - id: etl-layering
         name: Check the ETL core does not depend on its declarations
-        entry: python3 scripts/gates/check_etl_layering.py --check
+        entry: uv run python scripts/gates/check_etl_layering.py --check
         language: system
         pass_filenames: false
         files: '\.q$|^scripts/gates/check_etl_layering\.py$'
 
       - id: module-deps
         name: Check the q library's module graph is acyclic and reviewed
-        entry: python3 scripts/gates/check_module_deps.py
+        entry: uv run python scripts/gates/check_module_deps.py
         language: system
         pass_filenames: false
         files: '\.q$|^scripts/gates/check_module_deps\.py$'
 
       - id: q-module-size
         name: Check q modules stay under their line budget
-        entry: python3 scripts/gates/check.py q-module-size
+        entry: uv run python scripts/gates/check.py q-module-size
         language: system
         pass_filenames: false
         files: '\.q$|^scripts/gates/(check|policy/q_module_size)\.py$'
 
       - id: markout-mapped
         name: Check a markout's path selects market_data by its date alone and reads no depth
-        entry: python3 scripts/gates/check.py markout-mapped
+        entry: uv run python scripts/gates/check.py markout-mapped
         language: system
         pass_filenames: false
         files: '^src/etl/.*\.q$|^scripts/gates/(check|policy/markout_mapped)\.py$'
 
       - id: variant-gather
         name: Check the reference-variant gather reads the deduped rids once and nothing else
-        entry: python3 scripts/gates/check.py variant-gather
+        entry: uv run python scripts/gates/check.py variant-gather
         language: system
         pass_filenames: false
         files: '^src/etl/.*\.q$|^scripts/gates/(check|policy/variant_gather)\.py$'
 
       - id: registry-enlist
         name: Check every q registry stores its values enlisted
-        entry: python3 scripts/gates/check.py registry-enlist
+        entry: uv run python scripts/gates/check.py registry-enlist
         language: system
         pass_filenames: false
         files: '\.q$|^scripts/gates/(check|policy/registry_enlist)\.py$'
@@ -251,21 +251,21 @@ repos:
       # lib/ and tests/ for a variable read or produced, and the page itself.
       - id: env-reference
         name: Check the environment reference lists every variable
-        entry: python3 scripts/gates/check.py env-reference
+        entry: uv run python scripts/gates/check.py env-reference
         language: system
         pass_filenames: false
         files: '^(src|scripts|sidecars|web|python|lib|tests)/|^docs/reference/environment(\.md|/[a-z]+\.csv)$'
 
       - id: declaration-reference
         name: Check the pipeline declaration reference lists every key
-        entry: python3 scripts/gates/check.py declaration-reference
+        entry: uv run python scripts/gates/check.py declaration-reference
         language: system
         pass_filenames: false
         files: '\.q$|^docs/reference/pipeline-declarations\.md$|^scripts/gates/(check|policy/declaration_reference)\.py$'
 
       - id: doc-references
         name: Check the docs cite functions that exist
-        entry: python3 scripts/gates/check_doc_references.py
+        entry: uv run python scripts/gates/check_doc_references.py
         language: system
         pass_filenames: false
         always_run: true
@@ -300,7 +300,7 @@ repos:
 
       - id: rendered-diagrams
         name: Check the rendered diagrams match their d2 sources
-        entry: python3 scripts/generate/derive.py diagrams --check
+        entry: uv run python scripts/generate/derive.py diagrams --check
         language: system
         pass_filenames: false
         files: ^docs/diagrams/
@@ -363,7 +363,7 @@ repos:
             if [ "${UQF_Q_UNIT_FROM_COVERAGE:-}" = 1 ]; then
               echo "== q-unit: verdict taken from the q-coverage run (attest_kdbx.py) =="
             else
-              selection=$(python3 scripts/dev/test_impact.py --hook)
+              selection=$(uv run python scripts/dev/test_impact.py --hook)
               case "$selection" in
                 ALL) suite=(tests/qrun/test_q_suite.py::test_the_q_suite_passes) ;;
                 NONE) echo "== q-unit: no suite reaches this change - none run ==" ;;
@@ -404,7 +404,7 @@ repos:
       # neither can be had this fails, rather than skipping.
       - id: q-docs-peachq
         name: Run the q blocks in docs/ on PeachQ too (UQF_HOOKS_FULL=1; CI runs it)
-        entry: python3 scripts/dev/hooks_full.py --hook q-docs-peachq -- uv run pytest -q -n auto --dist loadgroup -m peachq --require-q peachq tests/qrun/test_doc_blocks.py
+        entry: uv run python scripts/dev/hooks_full.py --hook q-docs-peachq -- uv run pytest -q -n auto --dist loadgroup -m peachq --require-q peachq tests/qrun/test_doc_blocks.py
         language: system
         files: '\.q$|^scripts/dev/doc_examples\.py$|^tests/qrun/(qrun_support|test_doc_blocks)\.py$|^docs/(architecture/event-tape|guides/config-audit|guides/new-pipeline|reference/quant-modules|services/cross-arbitrage)\.md$'
         pass_filenames: false
@@ -424,7 +424,7 @@ repos:
         # below: a hosted runner cannot have KDB-X but installing Quarto is
         # one step, so CI is the environment that CAN enforce. A q developer
         # without Quarto gets a warning here rather than a block.
-        entry: python3 scripts/dev/hooks_full.py --hook doc-links -- uv run python scripts/gates/check_doc_links.py --allow-missing
+        entry: uv run python scripts/dev/hooks_full.py --hook doc-links -- uv run python scripts/gates/check_doc_links.py --allow-missing
         language: system
         pass_filenames: false
         files: '^docs/.*\.(md|qmd)$|^docs/_quarto\.yml$|^docs/man\.q$|^scripts/gates/check_doc_links\.py$|^scripts/generate/(q_api_docs\.py|export_api_reference\.q)$'
@@ -512,7 +512,7 @@ repos:
         # generated (#2169) from docs/reference/environment/*.csv, which the
         # env-reference gate also reads. Needs no q. To accept an intended change:
         #   uv run python scripts/generate/derive.py environment-tables
-        entry: python3 scripts/generate/derive.py environment-tables --check
+        entry: uv run python scripts/generate/derive.py environment-tables --check
         language: system
         pass_filenames: false
         files: '^docs/reference/environment(\.md|/[a-z]+\.csv)$|^scripts/generate/(derive|environment_tables)\.py$|^scripts/gates/policy/env_reference\.py$'
@@ -570,7 +570,7 @@ repos:
             # commit took 10-30 minutes, so it runs at `git push` (#1965)
             # rather than being dropped: the check is cheap compared to
             # noticing months later that nothing calls a function.
-            selection=$(python3 scripts/dev/test_impact.py --coverage-hook)
+            selection=$(uv run python scripts/dev/test_impact.py --coverage-hook)
             case "$selection" in
               ALL) subset=() ;;
               # -files a.q,b.q -modules src/x.q,...: no spaces in either list
@@ -595,7 +595,7 @@ repos:
       # Push without it: SKIP=peachq-push git push.
       - id: peachq-push
         name: Run the q test files this branch changes on PeachQ (CI runs them all)
-        entry: python3 scripts/dev/peachq_push.py
+        entry: uv run python scripts/dev/peachq_push.py
         language: system
         files: '\.q$'
         pass_filenames: false
@@ -607,7 +607,7 @@ repos:
       # recorded nothing; the generated files' --check gates still decide.
       - id: regenerate-merged
         name: Regenerate the generated files a merge kept one side of
-        entry: python3 scripts/dev/merge_generated.py regenerate
+        entry: uv run python scripts/dev/merge_generated.py regenerate
         language: system
         always_run: true
         pass_filenames: false

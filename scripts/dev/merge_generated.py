@@ -36,7 +36,9 @@ needs them in its attestation (scripts/dev/attest_kdbx.py).
     python3 scripts/dev/merge_generated.py regenerate [--dry-run]
     python3 scripts/dev/merge_generated.py driver %O %A %B %P     # git's call
 
-Standard library only: git and the hooks run it with the system python3.
+Standard library only: git's merge driver runs it with the system python3,
+so it must stay parseable by an older one; the regenerate-merged hook runs it
+as `uv run python` (#2449).
 """
 
 from __future__ import annotations

@@ -10,10 +10,12 @@ scope logic alone, not this repository's current config.
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 _SPEC = importlib.util.spec_from_file_location(
     "check_hook_scopes",
@@ -108,3 +110,36 @@ def test_the_real_doc_scopes_match_the_marked_documents():
     hooks = chs.scoped_hooks(chs.CONFIG.read_text())
     assert {h for h, _, _ in hooks} >= set(chs.DOC_HOOKS)
     assert chs.doc_scope_drift(hooks, *chs.doc_files_and_marked()) == []
+
+
+# --- every hook runs the project's interpreter, not PATH's (#2449) ----------
+
+# `python3`/`python` as a command word: at the start of a line, or after a
+# shell separator or `$(` - not inside `uv run python` or a path.
+_BARE_PYTHON = re.compile(r"(?:^|[\s;&|(])(python3?)(?=\s)", re.MULTILINE)
+
+
+def _bare_python_hooks(config_text: str) -> list[str]:
+    bare = []
+    for repo in yaml.safe_load(config_text)["repos"]:
+        for hook in repo.get("hooks", []):
+            command = " ".join([hook.get("entry", ""), *hook.get("args", [])])
+            if _BARE_PYTHON.search(command.replace("uv run python", "uv-run-python")):
+                bare.append(hook["id"])
+    return bare
+
+
+def test_a_hook_calling_python3_from_path_is_caught():
+    config = (
+        "repos:\n  - repo: local\n    hooks:\n"
+        "      - id: a\n        entry: python3 scripts/x.py\n"
+        "      - id: b\n        entry: bash\n        args: ['-c', 'x=$(python3 scripts/y.py)']\n"
+        "      - id: c\n        entry: uv run python scripts/z.py\n"
+    )
+    assert _bare_python_hooks(config) == ["a", "b"]
+
+
+def test_no_real_hook_runs_whichever_python_is_first_on_path():
+    """test_impact.py and friends are 3.14 code (ruff's py314 target writes
+    `except A, B:`); a python3 from PATH may be 3.12 and fail to parse them."""
+    assert _bare_python_hooks(chs.CONFIG.read_text()) == []
