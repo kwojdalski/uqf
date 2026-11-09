@@ -26,6 +26,18 @@
 / The members of each shared buffer, in the order they joined.
 .qetl.job.stream.horizons.shared.members:([] reference:`symbol$(); name:`symbol$())
 
+/ Private: refuse a job whose reference rows would not fit the buffer it joins - the
+/ same columns and types as the members' - without joining it. define runs this before
+/ anything that can still refuse the declaration, and joins only once nothing can (#2425).
+/ @private
+.qetl.job.stream.horizons.shared.check:{[ref;job;schema]
+    others:exec name from .qetl.job.stream.horizons.shared.members where reference=ref, not name=job;
+    if[count others;
+        have:0#get ` sv (.qetl.job.stream.namespace first others),`history;
+        if[not (meta have)~meta schema;
+            '"shared_reference: ",string[job]," reads ",string[ref]," as ",(", " sv string cols schema),", but ",string[first others]," shares that buffer as ",", " sv string cols have]];
+    }
+
 / Join a shared buffer. The reference rows of every member must have the same columns and types.
 / @param ref the reference table the jobs read
 / @param job the job
@@ -34,11 +46,7 @@
 / @throws error when another member reads the same table in another shape
 / @eg .qetl.job.stream.horizons.shared.join[`eg_ref;`eg_job;([] sym:`symbol$())]  ->  `eg_job
 .qetl.job.stream.horizons.shared.join:{[ref;job;schema]
-    others:exec name from .qetl.job.stream.horizons.shared.members where reference=ref, not name=job;
-    if[count others;
-        have:0#get ` sv (.qetl.job.stream.namespace first others),`history;
-        if[not (meta have)~meta schema;
-            '"shared_reference: ",string[job]," reads ",string[ref]," as ",(", " sv string cols schema),", but ",string[first others]," shares that buffer as ",", " sv string cols have]];
+    .qetl.job.stream.horizons.shared.check[ref;job;schema];
     delete from `.qetl.job.stream.horizons.shared.members where name=job;
     `.qetl.job.stream.horizons.shared.members insert (ref;job);
     job}

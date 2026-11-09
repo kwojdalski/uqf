@@ -82,6 +82,18 @@
         "*claims procname hz_l1 which hz_l already runs*";"the streaming registry refuses it"];
     .qunit.assertFalse[`hz_m in .qetl.job.stream.horizons.defined[];"and nothing half-registered is left"]};
 
+/ #2425: a refused shared_reference declaration used to stay a member of the shared buffer,
+/ so every reference batch of the job that survived threw looking it up.
+.qt.qetl.job.stream.horizons.test_a_refused_shared_registration_leaves_the_buffer_as_it_was:{[t]
+    shared:enlist[`shared_reference]!enlist 1b;
+    nm:.qt.qetl.job.stream.horizons.job[`hz_rx;shared];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_ry;];.qt.qetl.job.stream.horizons.decl_for[`hz_rx],shared;
+        "*claims procname hz_rx1 which hz_rx already runs*";"the streaming registry refuses it"];
+    .qunit.assertFalse[`hz_ry in .qetl.job.stream.horizons.shared.names `hz_refs;"not left in the shared buffer"];
+    (.qt.qetl.job.stream.horizons.ns[nm;`on_batch])[`hz_refs;.qt.qetl.job.stream.horizons.rf[`a;enlist .qt.qetl.job.stream.horizons.t0+0D00:00:00.5;enlist 1.5]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.horizons.ns[nm;`history];1;"the surviving job buffers its reference"];
+    .qetl.job.stream.horizons.shared.leave nm};
+
 .qt.qetl.job.stream.horizons.test_the_retired_publishes_key_is_refused_and_outputs_holds_exactly_one_table:{[t]
     .qt.qetl.job.stream.horizons.define_transform[];
     old:(`outputs _ .qt.qetl.job.stream.horizons.decl[]),enlist[`publishes]!enlist `hz_out;

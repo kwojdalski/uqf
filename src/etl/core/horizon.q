@@ -238,7 +238,9 @@
     ev0:0#first value ins;
     (` sv ns,`pending) set ev0;
     (` sv ns,`history) set 0#last value ins;
-    if[.qetl.job.stream.horizons.is_shared d; .qetl.job.stream.horizons.shared.join[d`reference;name;0#last value ins]];
+    / only the shape is checked here: the job joins the buffer once nothing can refuse it
+    / (#2425), or a refused one would stay a member every reference batch then looked up
+    if[.qetl.job.stream.horizons.is_shared[d]; .qetl.job.stream.horizons.shared.check[d`reference;name;0#last value ins]];
     / Plain typed columns, built by update: a symbol id and a symbol reason
     / rather than joined tables and general columns, which PeachQ types
     / differently from KDB-X.
@@ -265,7 +267,9 @@
         get ` sv ns,`on_timer;
         decl`transform)),extra];
     / registered only once the streaming job is: a refusal there (a procname
-    / another job runs, say) must not leave a horizon job behind
+    / another job runs, say) must not leave a horizon job behind, nor a member
+    / of a shared buffer
+    if[.qetl.job.stream.horizons.is_shared[d]; .qetl.job.stream.horizons.shared.join[d`reference;name;0#last value ins]];
     .qetl.job.stream.horizons.registry[name]:enlist d;
     name}
 
