@@ -165,6 +165,23 @@
     setenv[`UQF_DRY_RUN;""];
     .qunit.assertEquals[m;`dry_run;"UQF_DRY_RUN=true is the dry_run mode"]};
 
+/ A typo in the flag that asks for a rehearsal must not publish (#2303): get_flag only notes an
+/ unrecognised value and returns 0b, which used to make it a real run.
+.qt.qetl.job.bounded.runtime.test_a_malformed_dry_run_flag_refuses_rather_than_running_for_real:{[t]
+    setenv[`UQF_DRY_RUN;"tru"];
+    r:@[{(1b;.qetl.job.bounded.runtime.mode[])};::;{(0b;x)}];
+    d:@[{(1b;.qetl.job.bounded.runtime.is_dry_run[])};::;{(0b;x)}];
+    setenv[`UQF_DRY_RUN;""];
+    .qunit.assertEquals[r;(0b;"mode: dry_run is tru, not a boolean - use one of 1, true, yes, on, 0, false, no, off");"the mode is refused, naming the value and the spellings"];
+    .qunit.assertEquals[first d;0b;"and so is every gated effect: is_dry_run throws rather than answering run"]};
+
+.qt.qetl.job.bounded.runtime.test_every_documented_dry_run_spelling_keeps_its_meaning:{[t]
+    on:{[v] setenv[`UQF_DRY_RUN;v]; .qetl.job.bounded.runtime.mode[]} each ("1";"true";"YES";"on");
+    off:{[v] setenv[`UQF_DRY_RUN;v]; .qetl.job.bounded.runtime.mode[]} each ("0";"false";"No";"off";"");
+    setenv[`UQF_DRY_RUN;""];
+    .qunit.assertEquals[on;4#`dry_run;"each truthy spelling is a dry run, case-insensitively"];
+    .qunit.assertEquals[off;5#`run;"each falsy spelling, and none at all, is a real run"]};
+
 .qt.qetl.job.bounded.runtime.test_the_mode_setting_names_any_of_the_four:{[t]
     seen:{[m] .qetl.cfg.set_override[`mode;m]; .qetl.job.bounded.runtime.mode[]} each ("validate";"plan";"DRY_RUN";"run");
     .qunit.assertEquals[seen;`validate`plan`dry_run`run;"each mode reads back, case-insensitively"]};
