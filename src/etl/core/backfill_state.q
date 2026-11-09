@@ -437,6 +437,8 @@
 / Refuse a durable table whose columns have the expected names but not the
 / expected types (#1101), naming each. A general column (" ") in `want`, or
 / an empty general one read back, is not compared: it has no single type.
+/ A POPULATED general one read back is: it was not checked for emptiness, so
+/ a column mixing longs and symbols passed for a long one (#2308).
 / @param name the table, for the message
 / @param got the table read from disk
 / @param want its typed empty shape
@@ -447,9 +449,9 @@
     w:exec c!t from 0!meta want;
     g:exec c!t from 0!meta got;
     c:(key w) where (key w) in key g;
-    c:c where (" "<>w c) and (" "<>g c) and w[c]<>g c;
+    c:c where (" "<>w c) and ((" "<>g c) or 0<count got) and w[c]<>g c;
     if[count c;
-        '"require_types: ",string[name]," has ",(", " sv {[w;g;x] string[x]," as ",g[x],", not ",w x}[w;g] each c),
+        '"require_types: ",string[name]," has ",(", " sv {[w;g;x] string[x]," as ",$[" "=g x;"general";g x],", not ",w x}[w;g] each c),
          " - written by another version; migrate it or move it aside"];
     1b}
 
