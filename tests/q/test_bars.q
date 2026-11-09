@@ -68,6 +68,13 @@
     .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[.qt.qetl.job.stream.bars.decl[];`width;:;0D];
         "*bt_x's width must be a positive timespan*";"a window has to have an extent"]};
 
+.qt.qetl.job.stream.bars.test_a_width_that_does_not_divide_a_day_is_refused:{[t]
+    / #2422: a 13-minute window straddles midnight, and end of day closed it early
+    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[.qt.qetl.job.stream.bars.decl[];`width;:;0D00:13];
+        "*bt_x's width 0D00:13:00.000000000 does not divide a day*";"a window would straddle the roll"];
+    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[.qt.qetl.job.stream.bars.decl[];`width;:;2D];
+        "*bt_x's width 2D00:00:00.000000000 does not divide a day*";"and so would one longer than a day"]};
+
 .qt.qetl.job.stream.bars.test_a_transform_that_does_not_name_the_window_is_refused:{[t]
     .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[.qt.qetl.job.stream.bars.decl[];`transform;:;`hdb_exec_bars];
         "*bt_x's transform input carries no bar_start*";"the twin's transform reads raw fills"]};

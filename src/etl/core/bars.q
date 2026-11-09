@@ -26,7 +26,9 @@
 / and logged (the `dropped` ledger), because the bar it belongs to is out. A
 / window is also closed at end of day (on_endofday, #943), for every window of
 / the day that ended, whatever its lateness: the open window must not wait for
-/ a tick that, at the day's roll, belongs to the next day.
+/ a tick that, at the day's roll, belongs to the next day. That is why a width
+/ must divide a day (#2422): then no window straddles the roll, and every
+/ window end of day closes has ended.
 / .
 / REPLAY. The job subscribes to its own output as well and replays with it
 / (restore_from, #943): a replayed bar evicts its window's rows, so a restart
@@ -77,8 +79,8 @@
 / Declare a job that aggregates a stream into time bars.
 / @param name the job's name
 / @param decl dict of procname, events (the table aggregated), transform (one
-/   input, the events plus bar_start), outputs (a one-table symbol list: the bar table), width and
-/   lateness (timespans, lateness may be 0D), period (the timer, how often
+/   input, the events plus bar_start), outputs (a one-table symbol list: the bar table), width (dividing
+/   a day) and lateness (timespans, lateness may be 0D), period (the timer, how often
 /   closed windows are looked for); optionally procname (default `<name>1), by (grouping columns, default
 /   `sym), event_time (default `time), and the passthrough options of
 /   .qetl.job.stream.define (start_with_all, note, on_start, check with on_fail)
@@ -98,6 +100,10 @@
         'who,"'s outputs must be a symbol list of exactly one table - the table it publishes, e.g. enlist `my_table"];
     if[not $[-16h=type decl`width; 0D<decl`width; 0b];
         'who,"'s width must be a positive timespan"];
+    / windows are cut on q's epoch, a midnight: only a width that divides a day makes the
+    / last window end at the roll, which end of day closes every window by (#2422)
+    if[0<>(`long$1D) mod `long$decl`width;
+        'who,"'s width ",string[decl`width]," does not divide a day - a window would straddle midnight, and end of day would close it early"];
     if[not $[-16h=type decl`lateness; 0D<=decl`lateness; 0b];
         'who,"'s lateness must be a timespan, 0D for none"];
     if[not (decl`transform) in .qetl.transform.defined[];
