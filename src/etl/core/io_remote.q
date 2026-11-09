@@ -49,6 +49,10 @@
 /   ANOTHER id                 returned different rows for a committed window
 /                              would otherwise append them beside the first.
 /                              Keyed strategies resolve it themselves
+/   superseded with this id    a later batch for its window committed since,
+/                              so the destination no longer holds these
+/                              rows: it is written again, as a direct write
+/                              would be (#2495)
 / .
 / The window is (attachment; dataset; partition; source_version; range), so
 / a restatement under a new source_version is a new window, as coverage says.
@@ -248,6 +252,10 @@
 .qetl.io.remote.opt:{[o;k] $[k in key o; o k; `]}
 
 / Private: record a batch's state in the journal, and persist it.
+/ .
+/ A commit SUPERSEDES every earlier committed batch of its window (#2495):
+/ the destination now holds this batch's rows, not theirs, so a re-send of
+/ one of them is written again rather than answered `duplicate.
 / @private
 .qetl.io.remote.record:{[id;req;st;n]
     o:req`opts;
@@ -255,7 +263,12 @@
         (id;req`attachment;req`dataset;`$string .qetl.io.remote.opt[o;`partition];
          `$string .qetl.io.remote.opt[o;`source_version];o`range_from;o`range_to;req`target;
          o`on_conflict;st;`long$n;.z.p);
-    `.qetl.io.remote.journal set (delete from .qetl.io.remote.journal where batch_id=id),enlist r;
+    j:delete from .qetl.io.remote.journal where batch_id=id;
+    if[st=`committed;
+        same:(j[`state]=`committed) and all (j `attachment`dataset`partition`source_version`range_from`range_to)=
+            r `attachment`dataset`partition`source_version`range_from`range_to;
+        j:update state:`superseded from j where same];
+    `.qetl.io.remote.journal set j,enlist r;
     .qetl.io.remote.persist[];
     }
 
@@ -267,7 +280,7 @@
     held:select from .qetl.io.remote.journal where batch_id=id;
     if[count held;
         if[`committed=first held`state; :`duplicate];
-        if[not o[`on_conflict] in .qetl.io.remote.idempotent;
+        if[(`pending=first held`state) and not o[`on_conflict] in .qetl.io.remote.idempotent;
             '"remote: batch ",string[id]," was pending when the receiver stopped; under ",
              string[o`on_conflict]," writing it again could double its rows - check ",string[g`target],
              " and withdraw the batch with .qetl.io.remote.forget"]];
@@ -387,7 +400,7 @@
     .qetl.io.recover[g`mgr;g`target;range_from;range_to]}
 
 / What the receiver holds, by attachment, dataset and state - pending,
-/ committed - beside the last reader reload of each.
+/ committed, superseded - beside the last reader reload of each.
 / @return dict journal and reloads
 / @eg key .qetl.io.remote.status[]  ->  `journal`reloads
 .qetl.io.remote.status:{[]

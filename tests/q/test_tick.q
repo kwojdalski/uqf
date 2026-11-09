@@ -78,6 +78,16 @@
     .qetl.tick.publish[`tt_trade;([] sym:enlist `EURUSD; px:enlist 1.085)];
     .qunit.assertEmpty[.qt.qetl.tick.received;"and nothing arrives afterwards"]};
 
+/ #2491: two jobs in one process subscribe it to a table they share; the
+/ plant kept a row per call, so the process got every batch twice.
+.qt.qetl.tick.test_a_sink_subscribed_twice_to_a_table_receives_each_batch_once:{[t]
+    .qt.qetl.tick.setup[];
+    .qetl.tick.subscribe[`tt_trade;.qt.qetl.tick.recorder];
+    .qetl.tick.subscribe[`tt_trade`tt_quote;.qt.qetl.tick.recorder];
+    .qetl.tick.publish[`tt_trade;([] sym:enlist `EURUSD; px:enlist 1.085)];
+    .qunit.assertEquals[count .qt.qetl.tick.received;1;"one batch, delivered once"];
+    .qunit.assertEquals[asc exec tbl from .qetl.tick.subscribers;`s#`tt_quote`tt_trade;"one row per table it asked for"]};
+
 / ------------------------------------------------------------- PUBLISHING
 
 .qt.qetl.tick.test_the_plant_stamps_time_at_the_front:{[t]
@@ -162,6 +172,18 @@
     .qunit.assertEquals[.qetl.tick.publish[`tt_trade;([] sym:enlist `EURUSD; px:enlist 1.085)];1;
         "a batch of the schema's shape still publishes"];
     .qunit.assertEquals[count .qt.qetl.tick.received;1;"and is delivered"]};
+
+/ #2492: fan_out applied each sink untrapped, so one that threw stopped
+/ delivery to every later subscriber and reached the publisher as a refusal
+/ of a batch the log already held - and its retry logged it again.
+.qt.qetl.tick.test_a_sink_that_throws_costs_no_other_subscriber_the_batch:{[t]
+    .qt.qetl.tick.fresh_log[];
+    .qetl.tick.subscribe[`tt_trade;{[m] '"sink exploded"}];
+    .qetl.tick.subscribe[`tt_trade;.qt.qetl.tick.recorder];
+    .qunit.assertEquals[.qetl.tick.publish[`tt_trade;([] sym:enlist `EURUSD; px:enlist 1.085)];1;
+        "the batch is logged, so the plant has accepted it and says so"];
+    .qunit.assertEquals[count .qt.qetl.tick.received;1;"the subscriber after the failing one still gets it"];
+    .qunit.assertEquals[.qetl.tick.msg_count;1;"and the log holds it once"]};
 
 .qt.qetl.tick.test_a_learned_schema_refuses_a_later_batch_of_another_shape:{[t]
     .qetl.tick.reset[];

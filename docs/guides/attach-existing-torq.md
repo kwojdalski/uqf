@@ -877,7 +877,9 @@ receiver's journal records each one, persisted in the destination's state
 directory:
 
 - A batch resent after a lost acknowledgement is answered `duplicate`, and
-  nothing is appended.
+  nothing is appended. Only while it is the window's latest: once a later batch
+  for the window commits, the earlier one is `superseded`, and resending it
+  writes it again, as a direct write would.
 - Under `append` or `fail`, a different batch for a window already committed is
   refused. So is a batch the receiver was writing when it stopped, because it is
   in doubt: check the target, then `.qetl.io.remote.forget` it.
