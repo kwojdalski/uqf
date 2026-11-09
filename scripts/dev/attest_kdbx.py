@@ -265,8 +265,7 @@ def needed(base: str) -> list[str]:
     """The hooks whose scope takes a path changed in `base...HEAD`, sorted -
     worked out by the check CI runs, so the two cannot disagree."""
     check = _load("check_kdbx_attestation", "scripts/gates/check_kdbx_attestation.py")
-    changed = git("diff", "--name-only", f"{base}...HEAD").split()
-    return check.needed_hooks(changed)
+    return check.needed_hooks(check.changed_paths(base, "HEAD", cwd=REPO))
 
 
 def hook_stage(hook: str, config: Path | None = None) -> str:

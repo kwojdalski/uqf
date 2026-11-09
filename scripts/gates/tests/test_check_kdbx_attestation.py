@@ -146,6 +146,37 @@ def test_a_q_change_without_an_attestation_is_reported(repo):
     assert "src/a.q" in why and "attest_kdbx.py" in why
 
 
+def test_a_q_file_renamed_out_of_scope_needs_an_attestation(repo):
+    """#2406: rename detection would list only `src/a.q.old`, which no hook
+    judges; the deleted `src/a.q` is in q-tests' scope."""
+    commit(repo, "src/a.q", "a:1\n")
+    base = sh(repo, "rev-parse", "HEAD")
+    sh(repo, "mv", "src/a.q", "src/a.q.old")
+    sh(repo, "commit", "-q", "-m", "move")
+    head = sh(repo, "rev-parse", "HEAD")
+    ok, why = check.report(base, head)
+    assert not ok
+    assert "src/a.q" in why.replace("src/a.q.old", "")
+
+
+def test_a_q_file_with_a_non_ascii_name_needs_an_attestation(repo):
+    """#2406: --name-only C-quotes such a name unless -z is given."""
+    base = sh(repo, "rev-parse", "HEAD")
+    head = commit(repo, "src/café.q", "a:1\n")
+    ok, why = check.report(base, head)
+    assert not ok
+    assert "src/café.q" in why
+
+
+def test_attest_needs_the_deleted_side_of_a_rename(repo, monkeypatch):
+    monkeypatch.setattr(attest, "REPO", repo)
+    commit(repo, "src/a.q", "a:1\n")
+    base = sh(repo, "rev-parse", "HEAD")
+    sh(repo, "mv", "src/a.q", "src/a.q.old")
+    sh(repo, "commit", "-q", "-m", "move")
+    assert attest.needed(base) == Q_HOOKS
+
+
 def test_an_attestation_of_exactly_this_tree_passes(repo):
     base = sh(repo, "rev-parse", "HEAD")
     commit(repo, "src/a.q", "a:1\n")
