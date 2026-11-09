@@ -642,8 +642,13 @@ itself needs none of these. Each table carries one outcome -
 `endpoint_unavailable`, `missing_table`, `differs`, `not_comparable`,
 `incomplete_coverage` or `equal_in_sample` - and the label q wrote for it, which
 for a sample cut at the row limit says it is not proof the tables are equal.
-Every table is put to the table policy like `/query`'s, and the route is the
-`compare` feature's read.
+Every table must be one this stack's catalog lists - an unknown table is the 422
+`/query` answers - and is put to the table policy like `/query`'s; each side is
+read to at most `UQF_FRONTEND_MAX_ROWS` rows, whatever `limit` asks (#2524). uqs
+logs in as the API's service login - the inspection login while inspection mode
+uses one - not the `browser` data login, whose role may call only `.uqf.browse`
+while a comparison reads through `.gw.syncexec`; so the catalog and the row cap
+are what bound it. The route is the `compare` feature's read.
 
 ## Backfill status
 

@@ -256,6 +256,17 @@ def test_the_check_logs_in_with_the_api_s_credential_and_never_shows_it(registry
     assert "very-secret-pw" not in resp.text
 
 
+def test_the_check_logs_in_as_the_inspection_login_in_inspection_mode(registry, stand_ins):
+    """#2524: inspection mode's restricted login, as every other connection."""
+    settings = Settings(
+        enable_writes=True, write_token=TOKEN, user="ops", passwd="very-secret-pw",
+        inspection_mode=True, inspection_user="viewer", inspection_passwd="viewer-pw",
+    )  # fmt: skip
+    resp = _client(Ssh(), settings=settings).get("/services/box/tunnel/check")
+    assert resp.status_code == 200, resp.text
+    assert (stand_ins["user"], stand_ins["passwd"]) == ("viewer", "viewer-pw")
+
+
 def test_an_unreachable_server_is_the_check_s_ssh_category(registry, stand_ins):
     resp = _client(Ssh(reachable=False)).get("/services/box/tunnel/check")
     assert resp.status_code == 200

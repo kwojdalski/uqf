@@ -87,7 +87,7 @@ NAIVE = "2026-09-11T00:00:00"
 COMPARE = {
     "left": "local",
     "right": "box",
-    "tables": ["demo_deals"],
+    "tables": ["trades"],
     "range_to": "2026-09-16T00:00:00Z",
 }
 

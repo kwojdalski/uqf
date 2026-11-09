@@ -21,9 +21,10 @@ from contextlib import contextmanager
 import pytest
 from fastapi.testclient import TestClient
 
+from uqf_frontend import queries
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
-from uqf_frontend.gateway import FakeGateway
+from uqf_frontend.gateway import FAKE_CATALOG, FAKE_SCHEMA, FakeGateway
 from uqs.cli import data_diff as uqs_diff
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsUsageError, default_paths
@@ -101,12 +102,27 @@ def asked(monkeypatch):
     return calls, answer
 
 
+def _gateway() -> FakeGateway:
+    """The local gateway, its catalog listing demo_deals: /compare reads only
+    a table the catalog lists (#2524)."""
+    return FakeGateway(
+        {
+            queries.CATALOG: [*FAKE_CATALOG, {"table": "demo_deals", "description": "Deals"}],
+            queries.SCHEMA: [
+                *FAKE_SCHEMA,
+                {"table": "demo_deals", "column": "time", "kind": "p"},
+                {"table": "demo_deals", "column": "deal_id", "kind": "j"},
+            ],
+        }
+    )
+
+
 def _client(*, writes: bool = True, settings: Settings | None = None) -> TestClient:
     settings = settings or (
         Settings(enable_writes=True, write_token=TOKEN) if writes else Settings()
     )
     return TestClient(
-        create_app(gateway=FakeGateway(), settings=settings),
+        create_app(gateway=_gateway(), settings=settings),
         base_url="http://localhost",
         headers={"Authorization": f"Bearer {TOKEN}"} if writes else {},
     )
@@ -187,6 +203,34 @@ def test_an_unregistered_target_is_not_reached(registry, asked):
 def test_a_request_that_is_not_explicit_is_refused(registry, asked, change):
     assert _client().post("/compare", json=BODY | change).status_code == 422
     assert not asked[0]
+
+
+def test_a_table_the_catalog_does_not_list_is_refused_before_uqs(registry, asked):
+    """#2524: /compare reads only what /query may - an unknown table is the
+    same 422 /query answers, and nothing is reached."""
+    r = _client().post("/compare", json=BODY | {"tables": ["demo_deals", "secret_internal"]})
+    assert r.status_code == 422, r.text
+    assert "unknown table 'secret_internal'" in r.json()["detail"]
+    assert not asked[0]
+
+
+def test_each_side_is_read_to_at_most_max_rows(registry, asked):
+    settings = Settings(enable_writes=True, write_token=TOKEN, max_rows=500)
+    r = _client(settings=settings).post("/compare", json=BODY | {"limit": 100_000})
+    assert r.status_code == 200, r.text
+    assert asked[0][0]["limit"] == 500
+
+
+def test_the_comparison_logs_in_as_the_inspection_login_in_inspection_mode(registry, asked):
+    """#2524: the restricted login every other connection uses in inspection
+    mode - not the service login /me/capabilities says is not in use."""
+    settings = Settings(
+        enable_writes=True, write_token=TOKEN, user="admin", passwd="adminpass",
+        inspection_mode=True, inspection_user="viewer", inspection_passwd="viewer-pw",
+    )  # fmt: skip
+    r = _client(settings=settings).post("/compare", json=BODY)
+    assert r.status_code == 200, r.text
+    assert (asked[0][0]["user"], asked[0][0]["passwd"]) == ("viewer", "viewer-pw")
 
 
 def test_a_usage_refusal_and_a_q_refusal_are_both_422(registry, asked):
@@ -446,9 +490,7 @@ def test_a_target_side_needs_the_write_token(registry, asked):
     """A target side is reached over ssh with the operator's key, so it
     carries the token as /services/{target}/... does (#1950, #2067)."""
     settings = Settings(enable_writes=True, write_token=TOKEN)
-    c = TestClient(
-        create_app(gateway=FakeGateway(), settings=settings), base_url="http://localhost"
-    )
+    c = TestClient(create_app(gateway=_gateway(), settings=settings), base_url="http://localhost")
     r = c.post("/compare", json=BODY)
     assert r.status_code == 401, r.text
     assert r.json()["error"] == "WriteTokenRequired"
@@ -463,7 +505,7 @@ def test_a_target_side_needs_the_write_token(registry, asked):
 
 def test_a_target_side_needs_an_allowed_host(registry, asked):
     r = TestClient(
-        create_app(gateway=FakeGateway(), settings=Settings(enable_writes=True, write_token=TOKEN)),
+        create_app(gateway=_gateway(), settings=Settings(enable_writes=True, write_token=TOKEN)),
         base_url="http://evil.example",
         headers={"Authorization": f"Bearer {TOKEN}"},
     ).post("/compare", json=BODY)

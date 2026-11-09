@@ -13,7 +13,7 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from uqf_frontend import identity, remote_helper, stack
 from uqf_frontend.stack import Process
@@ -74,6 +74,13 @@ REQUEST_HEADROOM = 15
 #: so the operator sees the server's refusal, not an anonymous browser timeout
 #: while torq.sh is still running (#1370).
 LIFECYCLE_MARGIN = 5
+
+
+class UqsLogin(TypedDict, total=False):
+    """uqs's `user=` / `passwd=` keywords; empty, uqs's own default."""
+
+    user: str
+    passwd: str
 
 
 @dataclass(frozen=True)
@@ -236,6 +243,19 @@ class Settings:
         if self.uses_inspection_login:
             return self.inspection_user, self.inspection_passwd
         return self.user, self.passwd
+
+    @property
+    def uqs_login(self) -> UqsLogin:
+        """The login uqs reaches a gateway as for /compare and the tunnel
+        check, as keyword arguments: `service_login` - the inspection login
+        while inspection mode uses one (#2524) - or none, for uqs's default.
+
+        Not `data_user`: its `browser` role may call `.uqf.browse` and
+        nothing else, and a comparison reads `meta` and rows through
+        `.gw.syncexec`. What the query policy bounds for /query, the /compare
+        route bounds itself: catalog tables only, `max_rows` a side."""
+        user, passwd = self.service_login
+        return UqsLogin(user=user, passwd=passwd) if user and passwd else UqsLogin()
 
     @functools.cached_property
     def proxy_networks(self) -> tuple[identity.ProxyNetwork, ...]:

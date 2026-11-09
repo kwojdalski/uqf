@@ -102,17 +102,13 @@ def run(settings: Settings, req: Any) -> dict[str, Any]:
         window = timerange.resolve(start.isoformat(), end.isoformat(), None, None)
     except UqsError as exc:
         raise ValidationFailed(str(exc)) from None
-    # this API's own gateway credential when it has one; else uqs's default
-    login = (
-        {"user": settings.user, "passwd": settings.passwd}
-        if settings.user and settings.passwd
-        else {}
-    )
     try:
         doc = data_diff.run(
             control._paths(settings), req.left, req.right, list(req.tables), window,
-            filters=filters, limit=req.limit, source_version=req.source_version,
-            partition=req.slice, **login,
+            # each side capped as /query's read is (#2524)
+            filters=filters, limit=min(req.limit, settings.max_rows),
+            source_version=req.source_version,
+            partition=req.slice, **settings.uqs_login,
         )  # fmt: skip
     except UqsUsageError as exc:
         raise ValidationFailed(str(exc)) from None
