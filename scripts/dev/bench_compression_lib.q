@@ -359,10 +359,14 @@
 / @eg count .qdev.cbench.table_selector[([] a:til 5)] enlist (=;`i;2)  ->  1
 .qdev.cbench.table_selector:{[t] {[t;w] ?[t;w;0b;()]}[t]}
 
-/ A selector over one partition of an HDB this process has loaded (\l).
-/ @param tbl the table, a symbol
+/ A selector over one partition: in the child, the table of the HDB it loaded (\l), with
+/ .Q.pf and the one partition in .Q.pv.
+/ @param tbl the table: a symbol, or a table holding the partition column
+/ @param pf the partition column (.Q.pf: date, month, int)
+/ @param pv the partition's value
 / @return a function of where clauses
-.qdev.cbench.hdb_selector:{[tbl] {[tbl;w] ?[tbl;(enlist (=;.Q.pf;first .Q.pv)),w;0b;()]}[tbl]}
+/ @eg count .qdev.cbench.hdb_selector[([] date:2026.01.01 2026.01.02; a:1 2);`date;2026.01.02] ()  ->  1
+.qdev.cbench.hdb_selector:{[tbl;pf;pv] {[tbl;pf;pv;w] ?[tbl;(enlist (=;pf;pv)),w;0b;()]}[tbl;pf;pv]}
 
 / ------------------------------------------------------------ COUNTING READS
 

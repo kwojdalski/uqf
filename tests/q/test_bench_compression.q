@@ -167,6 +167,12 @@ system "l scripts/dev/bench_compression_lib.q";
     .qunit.assertEquals[.qdev.cbench.run_shape[`none;sel;p];0j;"the baseline reads nothing"];
     .qunit.assertEquals[.qdev.cbench.read_rows[tb;2 3];(tb[`sym] 2 3;tb[`time] 2 3;tb[`px] 2 3;tb[`qty] 2 3;tb[`tags] 2 3);"every column at those rows"]}
 
+.qt.qdev.cbench.test_the_hdb_selector_keeps_to_its_partition:{[t]
+    tb:([] date:2026.01.01 2026.01.02 2026.01.02; a:1 2 3);
+    sel:.qdev.cbench.hdb_selector[tb;`date;2026.01.02];
+    .qunit.assertEquals[exec a from sel ();2 3;"the partition's rows"];
+    .qunit.assertEquals[exec a from sel enlist (=;`a;3);enlist 3;"and the extra clauses"]}
+
 .qt.qdev.cbench.test_aj_is_null_without_columns_to_join_on:{[t]
     tb:([] px:til 100);
     p:.qdev.cbench.params[tb;.qt.qdev.cbench.opts];

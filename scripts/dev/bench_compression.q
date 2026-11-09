@@ -49,7 +49,7 @@ system "l ",here,"/bench_compression_lib.q";
 if[`child in key opts;
     r:@[{[o]
         system "l ",first o`root;
-        sel:.qdev.cbench.hdb_selector `$first o`table;
+        sel:.qdev.cbench.hdb_selector[`$first o`table;.Q.pf;first .Q.pv];
         p:get hsym `$first o`params;
         s:`$first o`shape;
         t0:.z.p;
