@@ -887,9 +887,13 @@ those pipelines read and write, so their HDBs hold nothing they never write, and
 they fit the licence's connection cap with room to spare:
 
 ```
-uqs --runtime crypto start     # cryptomock1 and crypto_markout1, on 6250
-uqs --runtime crypto list processes
+uqs --runtime crypto start --profile crypto   # cryptomock1, crypto_markout1 and what they read, on 6250
+uqs --runtime crypto process list
 ```
+
+A plain `start` starts only the rows marked `startwithall`, the TorQ core and
+the always-on jobs; the profile's own leaves are not among them, so name the
+profile.
 
 `peachq-etl` is experimental: PeachQ's capture stack with this tree's layers and
 the sidecar bundles declared for it, loaded from a copy of the q tree converted
