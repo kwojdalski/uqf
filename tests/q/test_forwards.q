@@ -926,6 +926,20 @@
     r:.qf.px.convert_quotes[([] sym:enlist `EURUSD; bid:enlist 1.10);(enlist `EURUSD)!enlist `EURUSD;::];
     .qunit.assertEquals[r`bid;enlist 1.10;"a row that does not invert keeps a lone bid"]};
 
+/ #2387: "same pair" and "inverse" compared raw syms, so EUR/USD could map
+/ to neither EURUSD (itself) nor USD/EUR (its inverse).
+.qt.qf.px.forwards.test_convert_quotes_noncanonical_source:{[t]
+    q:([] sym:enlist `$"EUR/USD"; bid:enlist 1.10; ask:enlist 1.1002);
+    r:.qf.px.convert_quotes[q;(enlist `$"EUR/USD")!enlist `EURUSD;::];
+    .qunit.assertEquals[r`bid;enlist 1.10;"same pair, other spelling: unchanged"];
+    .qunit.assertEquals[r`inverted;enlist 0b;"not an inversion"];
+    .qunit.assertEquals[r`sym;enlist `EURUSD;"relabelled with the target's name"];
+    flipped:.qf.px.convert_quotes[q;(enlist `$"EUR/USD")!enlist `$"USD/EUR";::];
+    .qunit.assertEquals[flipped`inverted;enlist 1b;"a spelled inverse is an inversion"];
+    .qt.support.assertApprox[first flipped`bid;1%1.1002;1e-12;"and its prices are inverted"];
+    .qunit.assertThrows[.qf.px.convert_quotes[q;;::];(enlist `$"EUR/USD")!enlist `GBP;
+        "convert_quotes: GBP is neither EUR/USD nor its inverse";"a target that is not a pair is still refused by name"]};
+
 .qt.qf.px.forwards.test_inverse_pair_swaps_legs:{[t]
     .qunit.assertEquals[.qf.px.inverse_pair each `EURUSD`USDJPY;`USDEUR`JPYUSD;"legs swapped"]};
 
