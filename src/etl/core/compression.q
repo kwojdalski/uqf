@@ -12,9 +12,10 @@
 / THE SHAPE, one q dict per table - the library that applies a policy (#2146)
 / reads exactly this, so the keys are fixed:
 / .
-/   `algo       0 decompress, 1 qipc, 2 gzip, 3 snappy
+/   `algo       0 decompress, 1 qipc, 2 gzip, 3 snappy; 4 lz4hc and 5 zstd for
+/               a `write table only (below)
 /   `blocksize  the logical block size as a power of two, 12 to 20
-/   `level      gzip 0-9; qipc and snappy take none (0)
+/   `level      gzip 0-9, lz4hc 0-16, zstd -7 to 22; qipc and snappy take none (0)
 /   `minage     whole days a partition must be old before it is compressed
 /   `columns    column -> (algo;blocksize;level), for the columns that differ
 / .
@@ -25,8 +26,13 @@
 / .
 / TORQ'S .cmp IS THE ENGINE (#2146 wraps .cmp.showcomp and .cmp.compressmaxage),
 / and the CSV below is the file it reads. Its checkcsv
-/ (lib/torq/code/common/compress.q) accepts algorithms 0-3 only, so lz4hc (4)
-/ and zstd (5), which KDB-X has and .cmp does not, are refused here naming that.
+/ (lib/torq/code/common/compress.q) accepts algorithms 0-3 only. lz4hc (4) and
+/ zstd (5), which KDB-X has and .cmp does not, are therefore accepted only where
+/ the age pass never applies the policy: a table whose mode is `write (#2295),
+/ compressed by the writer under .z.zd and pinned out of the age pass. Its CSV
+/ row, which .cmp still loads but never selects, carries 0 0 0 in their place
+/ (`for_age`). Anywhere else - mode `age or `both, the stack default unless it
+/ is `write - they are refused, naming that.
 / The ranges below are the ones a declaration can be checked against without
 / q's TorQ: the authority on what .cmp loads is .cmp.checkcsv itself, which
 / derive.py compression-config runs over every CSV it renders, and
@@ -51,17 +57,19 @@
 
 \d .
 
-/ The algorithms a policy can name, by number: the ones .cmp compresses with.
+/ The algorithms a policy can name, by number: what KDB-X compresses with.
 / @eg .qetl.compression.algos 2  ->  `gzip
-.qetl.compression.algos:0 1 2 3!`decompress`qipc`gzip`snappy
+.qetl.compression.algos:0 1 2 3 4 5!`decompress`qipc`gzip`snappy`lz4hc`zstd
 
-/ The KDB-X algorithms .cmp does not take: refused, saying so, rather than
-/ called out of range.
+/ The KDB-X algorithms .cmp does not take (#2295). Only a `write table may name
+/ one: the writer applies it under .z.zd, and the age pass, which would have to
+/ read it from TorQ's file, never reaches that table. Elsewhere it is refused,
+/ saying so.
 .qetl.compression.beyond_torq:4 5!`lz4hc`zstd
 
 / The (lowest; highest) level each algorithm takes. qipc and snappy take none,
-/ so their only level is 0.
-.qetl.compression.levels:0 1 2 3!(0 0;0 0;0 9;0 0)
+/ so their only level is 0. zstd's negative levels are its fast ones.
+.qetl.compression.levels:0 1 2 3 4 5!(0 0;0 0;0 9;0 0;0 16;-7 22)
 
 / The logical block sizes (as a power of two): lowest and highest.
 .qetl.compression.block_range:12 20
@@ -74,7 +82,8 @@
 /           writers leave it as written. Hot partitions stay fast to read. The default.
 /   `write  the writers compress at save (.qetl.compression.for_write), and the
 /           age pass is pinned away from the table (its CSV rows carry `never`
-/           as minage), so a partition is compressed once, by the writer.
+/           as minage), so a partition is compressed once, by the writer. The
+/           one mode that may name lz4hc or zstd (#2295).
 /   `both   the writers compress at save AND the age pass keeps its rows: it
 /           finds nothing to do in a partition the writer compressed (an
 /           already-compressed file is skipped, never compressed twice) and
@@ -121,15 +130,31 @@
     if[not (type v) in -5 -6 -7h; 'who,": ",name," must be an integer, not ",$[-11h=type v; "`",string v; "a value of type ",string type v]];
     "j"$v}
 
-/ Private: the algorithm, 0-3.
+/ Private: the algorithm, 0-5. Whether 4 or 5 is allowed depends on the mode,
+/ which `check_write_only` judges once both are known.
 / @private
 .qetl.compression.check_algo:{[who;a]
     n:.qetl.compression.int_atom[who;"algo";a];
-    if[n in key .qetl.compression.beyond_torq;
-        'who,": algo ",string[n]," (",string[.qetl.compression.beyond_torq n],") is not supported by TorQ's .cmp, which takes 0-3 (0 decompress, 1 qipc, 2 gzip, 3 snappy)"];
     if[not n in key .qetl.compression.algos;
-        'who,": algo ",string[n]," is not 0-3 (0 decompress, 1 qipc, 2 gzip, 3 snappy)"];
+        'who,": algo ",string[n]," is not 0-5 (0 decompress, 1 qipc, 2 gzip, 3 snappy, 4 lz4hc, 5 zstd)"];
     n}
+
+/ Private: refuse lz4hc or zstd on a policy the age pass applies (#2295). TorQ's
+/ .cmp takes 0-3 and is the age pass, so a table whose mode is not `write would
+/ hand it a row it rejects at startup. A null mode (no stack default yet, so
+/ the mode is not known) defers the check to `resolve`.
+/ @param who the declaration, for the message
+/ @param m the mode the policy ends up with, or a null symbol
+/ @param as the algorithms it ends up with: the table's and its columns'
+/ @private
+.qetl.compression.check_write_only:{[who;m;as]
+    if[null m; :(::)];
+    if[`write=m; :(::)];
+    if[count b:as where as in key .qetl.compression.beyond_torq;
+        a:first b;
+        'who,": algo ",string[a]," (",string[.qetl.compression.beyond_torq a],") needs mode `write: TorQ's .cmp, ",
+            "which compresses a mode `",string[m]," table by age, takes 0-3 (0 decompress, 1 qipc, 2 gzip, 3 snappy)"];
+    }
 
 / Private: the logical block size, 12-20.
 / @private
@@ -225,6 +250,7 @@
     d:`algo`blocksize`level`minage`mode!(s`algo;0j^.qetl.compression.supplied[s;`blocksize];0j^.qetl.compression.supplied[s;`level];s`minage;`age^.qetl.compression.supplied_mode[s]);
     if[0=d`algo; d[`blocksize`level]:0 0j];
     .qetl.compression.check_level_for[who;d`algo;d`level];
+    .qetl.compression.check_write_only[who;d`mode;enlist d`algo];
     `.qetl.compression.stack_default set d;
     d}
 
@@ -245,6 +271,9 @@
     s:n 0;
     if[not ()~d:.qetl.compression.stack_default;
         .qetl.compression.check_level_for[who;$[`algo in key s; s`algo; d`algo];$[`level in key s; s`level; d`level]]];
+    m:$[`mode in key s; s`mode; ()~d; `; d`mode];
+    a:$[`algo in key s; s`algo; ()~d; 0Nj; d`algo];
+    .qetl.compression.check_write_only[who;m;a,{x 0} each value n 1];
     `.qetl.compression.table_policy upsert (tbl;.qetl.compression.supplied[s;`algo];.qetl.compression.supplied[s;`blocksize];
         .qetl.compression.supplied[s;`level];.qetl.compression.supplied[s;`minage];.qetl.compression.supplied_mode[s]);
     c:n 1;
@@ -279,6 +308,7 @@
     c:0!select from .qetl.compression.column_policy where table=tbl;
     c:c iasc c`column;
     cd:$[0=count c; (`symbol$())!(); (c`column)!flip (c`algo;c`blocksize;c`level)];
+    .qetl.compression.check_write_only[who;r`mode;(r`algo),c`algo];
     `algo`blocksize`level`minage`columns`mode!(r`algo;r`blocksize;r`level;r`minage;cd;r`mode)}
 
 / The names a policy can be declared for: the plant's tables and the bounded
@@ -298,6 +328,16 @@
 / @eg .qetl.compression.age_minage `minage`mode!(7j;`write)  ->  36500j
 .qetl.compression.age_minage:{[r] $[`write=r`mode; .qetl.compression.never; r`minage]}
 
+/ The (algo;blocksize;level) a policy's row of TorQ's file carries: its own, or
+/ 0 0 0 for lz4hc and zstd, which .cmp's checkcsv refuses (#2295). Only a
+/ `write table can name those, and its rows carry `never` as their minage, so
+/ the age pass loads the row and selects nothing with it: what it says in place
+/ of the algorithm is never applied.
+/ @param t an (algo;blocksize;level) triple of longs
+/ @return a triple of longs .cmp loads
+/ @eg .qetl.compression.for_age 5 17 3  ->  0 0 0j
+.qetl.compression.for_age:{[t] $[(t 0) in key .qetl.compression.beyond_torq; 0 0 0j; t]}
+
 / Private: one row of TorQ's file.
 / @private
 .qetl.compression.row:{[t;m;c;a;b;l]
@@ -315,15 +355,17 @@
     d:.qetl.compression.require_default[];
     if[count bad:.qetl.compression.declared[] except .qetl.compression.known[];
         '"compression: ",(", " sv string bad)," ",$[1=count bad; "is"; "are"]," declared but neither a plant table nor a bounded worker's dataset"];
-    head:.qetl.compression.row[`default;.qetl.compression.age_minage[d];`default;d`algo;d`blocksize;d`level];
+    dv:.qetl.compression.for_age[(d`algo;d`blocksize;d`level)];
+    head:.qetl.compression.row[`default;.qetl.compression.age_minage[d];`default;dv 0;dv 1;dv 2];
     ledger:.qetl.compression.row[`etl_coverage;0j;`default;0j;0j;0j];
     ts:.qetl.compression.declared[];
     body:$[0=count ts; 0#head; raze {[t]
         r:.qetl.compression.resolve[t];
         m:.qetl.compression.age_minage[r];
-        one:.qetl.compression.row[t;m;`default;r`algo;r`blocksize;r`level];
+        v:.qetl.compression.for_age[(r`algo;r`blocksize;r`level)];
+        one:.qetl.compression.row[t;m;`default;v 0;v 1;v 2];
         cd:r`columns;
-        $[0=count cd; one; one,raze {[t;m;c;v] .qetl.compression.row[t;m;c;v 0;v 1;v 2]}[t;m]'[key cd;value cd]]
+        $[0=count cd; one; one,raze {[t;m;c;v] v:.qetl.compression.for_age[v]; .qetl.compression.row[t;m;c;v 0;v 1;v 2]}[t;m]'[key cd;value cd]]
         } each ts];
     head,ledger,body}
 

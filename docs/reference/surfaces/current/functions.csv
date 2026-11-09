@@ -78,6 +78,7 @@ qetl.compression,csv,function,1,
 qetl.compression,declare,function,2,tbl spec
 qetl.compression,declared,function,1,
 qetl.compression,excluded,value,,
+qetl.compression,for_age,function,1,t
 qetl.compression,for_write,function,2,tbl dir
 qetl.compression,is_compressed,function,1,f
 qetl.compression,keys,value,,
