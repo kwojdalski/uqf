@@ -1100,7 +1100,7 @@ src/etl/workers/hdb_order_quality_backfill.q	.qpipe.job.hdb_order_quality_backfi
 src/etl/workers/hdb_transfer_backfill.q	.qpipe.job.hdb_transfer_backfill.facts	test_every_worker_runs.q,test_hdb_transfer_backfill.q
 src/etl/workers/hdb_transfer_backfill.q	.qpipe.job.hdb_transfer_backfill.with_notional	test_every_worker_runs.q,test_hdb_transfer_backfill.q,test_transform.q
 src/etl/workers/upstream_trades_backfill.q	.qpipe.job.upstream_trades_backfill.facts	test_docstring_examples.q,test_every_worker_runs.q
-src/etl/workers/upstream_trades_backfill.q	.qpipe.job.upstream_trades_backfill.quality_check	test_docstring_examples.q,test_every_worker_runs.q
+src/etl/workers/upstream_trades_backfill.q	.qpipe.job.upstream_trades_backfill.quality_check	test_docstring_examples.q,test_every_worker_runs.q,test_upstream_trades_backfill.q
 src/execution/execution.q	.qf.exec.cross_impact_at_horizons	test_docstring_examples.q,test_forwards.q
 src/execution/execution.q	.qf.exec.cross_markout_at_horizons	test_docstring_examples.q,test_execution.q,test_forwards.q
 src/execution/execution.q	.qf.exec.cross_markout_decomp	test_forwards.q

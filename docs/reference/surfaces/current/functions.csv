@@ -1988,6 +1988,7 @@ qpipe.job.upstream_trades_backfill,quality_check,function,1,batch
 qpipe.job.upstream_trades_backfill,range_from,value,,
 qpipe.job.upstream_trades_backfill,range_to,value,,
 qpipe.job.upstream_trades_backfill,run,function,1,
+qpipe.job.upstream_trades_backfill,side_sign,dict,,
 qpipe.job.upstream_trades_backfill,source_version,value,,
 qpipe.job.upstream_trades_backfill,spec,function,1,
 qpipe.job.vectorize,fold_wide_orderbook,function,1,book
