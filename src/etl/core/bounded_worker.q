@@ -501,12 +501,12 @@
 
 / Resolve everything that can fail BEFORE any work happens.
 / .
-/ Order is deliberate, cheapest and most-likely-misconfigured first:
-/ configuration, then the contract, then the source and its fixture, then
-/ the coverage ledger's shape, then the lock, then the connection. A worker
-/ that takes a lock and then finds its configuration wrong has to release it
-/ again; one that connects and then fails the contract has burned a
-/ connection for nothing.
+/ Order is deliberate. The lock comes first, before anything writes the
+/ status file or the heartbeat a live holder owns (#2319); then, cheapest
+/ and most-likely-misconfigured first: configuration, then the contract,
+/ then the source and its fixture, then the coverage ledger's shape, then
+/ the connection. A worker that connects and then fails the contract has
+/ burned a connection for nothing.
 / .
 / A GUARD, with the work in init_body below (#492).
 / .
@@ -529,8 +529,10 @@
     .qetl.source.preflight (.qetl.job.bounded.def worker)`source;
     / Before the guard below, not inside it: a refusal must write nothing,
     / and the guard's failure path writes the status file - the file this
-    / refusal exists to keep the first worker's.
+    / refusal exists to keep the first worker's. The lock's refusal too: in
+    / the guard, its cleanup deleted the LIVE holder's lock (#2319).
     .qetl.job.bounded.claim_process[.qetl.run.proc_name[];worker];
+    .qetl.job.bounded.state.acquire_lock worker;
     / Each init begins the lifecycle afresh, so its first transition checks the
     / status file for a run an earlier process left unfinished.
     .qetl.job.bounded.write_state[worker;`phase;`];
@@ -790,7 +792,7 @@
     v,`state`planned`cursor`plan`waiting_for_eod!(`planned;count ws;cursor;ws;.qetl.io.eod_waiting_for[.qetl.job.bounded.def worker;v`range_from;v`range_to])}
 
 / The initialisation itself. Never call this directly - `init` is what
-/ releases the lock when this throws.
+/ takes the lock, and releases it when this throws.
 / @param worker the worker's name
 / @param run_spec the run specification - source_version, range_from, range_to
 / @return the worker's name
@@ -809,11 +811,9 @@
     .qetl.hb.attach[];
     .qetl.job.bounded.advance_phase[worker;`ready;""];
 
-    / A deployment's --live (#800): no credential is refused here, before the
-    / lock is taken or a row is read, rather than run on the fixture below.
+    / A deployment's --live (#800): no credential is refused here, before a
+    / row is read, rather than run on the fixture below.
     if[not .qetl.source.has_credentials cfg`source; .qetl.job.bounded.runtime.refuse_fixture["init";cfg`source]];
-
-    .qetl.job.bounded.state.acquire_lock worker;
 
     / Live only when a credential is configured. An absent credential is an
     / explicit statement that this is a demo, NOT a fallback for a failed
@@ -1515,8 +1515,8 @@
 
 .qetl.job.bounded.publish_last_batch:{[worker;unused] .qetl.job.bounded.runtime.retire_fixture_claims[worker;.qetl.job.bounded.own[worker;`publish] .qetl.job.bounded.read_state[worker;`last_batch]]}
 
-/ Release everything the worker holds. Safe on the failure branch too, since
-/ release_lock is a no-op when not held.
+/ Release everything the worker holds. release_lock removes the lock
+/ whoever holds it, so call this only from a worker that took it (#2319).
 .qetl.job.bounded.cleanup:{[worker]
     h:.qetl.job.bounded.read_state[worker;`handle];
     / The transport's `close`: hclose, the ODBC close, or for a local source's
