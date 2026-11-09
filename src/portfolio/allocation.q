@@ -430,6 +430,15 @@
     trades:.qf.exec.prepared[trades;bys];
     opening:.qf.exec.prepared_opening[o`opening;bys];
     trades:(o`universe) trades;
+    / A queue never crosses syms (#2530): a `by without sym buckets on
+    / something else, so a USDJPY sell would close a EURUSD lot and book
+    / the price gap as P&L. Checked after universe, so a book filtered
+    / down to one sym is still allowed to match under any `by.
+    if[not `sym in bys;
+        syms:distinct (trades`sym),$[98h=type opening; $[`sym in cols opening; opening`sym; ()]; ()];
+        if[1<count syms;
+            '"allocate: a `by without sym would match ",(", " sv string syms),
+             " against each other - add sym to `by"]];
     / as_of AFTER universe, so the two compose the way they read: pick the
     / trades that count, then stop the clock.
     if[not (::)~o`as_of; trades:?[trades;enlist (<=;`time;o`as_of);0b;()]];

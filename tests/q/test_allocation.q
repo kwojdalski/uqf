@@ -469,6 +469,17 @@
     .qunit.assertEquals[first exec pnl from r`matches; 50000f; "the carried-in lot closes first"];
     .qunit.assertEquals[first exec price from r`residual; 1.12; "the day's buy is left"]};
 
+/ #2530: a `by without sym put every sym in one queue, so a USDJPY sell
+/ closed a EURUSD buy at 150 and booked 1.489e8.
+.qt.qf.exec.allocation.test_a_by_without_sym_refuses_more_than_one_sym:{[t]
+    tr:([] time:2026.01.01D09:00:00 2026.01.01D10:00:00; sym:`EURUSD`USDJPY; side:1 -1; size:2#1000000f; trade_price:1.10 150.0);
+    .qunit.assertThrows[.qf.exec.allocate[tr;];`method`by!(`fifo;`symbol$());"allocate: a `by without sym would match EURUSD, USDJPY*";"an empty by does not cross pairs"];
+    .qunit.assertThrows[.qf.exec.allocate[update strategy:`a from tr;];`method`by!(`fifo;enlist `strategy);"allocate: a `by without sym*";"nor does a by of strategy alone"];
+    op:([] sym:enlist `USDJPY; qty:enlist 1000000f; price:enlist 150.0; side:enlist 1);
+    .qunit.assertThrows[.qf.exec.allocate[1#tr;];`method`by`opening!(`fifo;`symbol$();op);"allocate: a `by without sym*";"nor an opening lot of another sym"];
+    one:.qf.exec.allocate[tr;`method`by`universe!(`fifo;`symbol$();.qf.exec.by_cols[enlist[`sym]!enlist `EURUSD])];
+    .qunit.assertEmpty[one;"a universe of one sym still matches under an empty by"]};
+
 .qt.qf.exec.allocation.test_a_fractionally_closed_lot_leaves_no_residual:{[t]
     tr:{([] time:2026.10.13D10:00:00.000000000+0D00:01*til count x; sym:(count x)#`BTCUSD;
         side:y; size:x; trade_price:60000f+1000f*til count x)};
