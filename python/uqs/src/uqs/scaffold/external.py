@@ -32,6 +32,7 @@ plant discards in silence.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -157,7 +158,7 @@ from typing import Any
 
 #: The raw table `{raw_table}`'s columns in plant order. `time` is not sent:
 #: .u.upd stamps it.
-FIELDS = {fields!r}
+FIELDS = {json.dumps(fields)}
 
 
 def batches() -> Iterator[list[dict[str, Any]]]:
@@ -213,9 +214,8 @@ A process outside TorQ: not a process.csv row, so `uqs connector start|stop|rest
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from uqs.external import connection
@@ -224,6 +224,7 @@ from uqs.external.lifecycle import DetachedProcess
 from uqs.paths import UqsPaths
 
 RAW_TABLE = "{raw_table}"
+RESHAPED = "{name} -> {publishes}"
 
 
 def _process(paths: UqsPaths) -> DetachedProcess:
@@ -246,10 +247,18 @@ def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
     credential = connection.tp_credential(options["tp_credential"])
     runner = Path(__file__).resolve().parent / "{name}_streamer.py"
     cmd = [
-        "uv", "run", "--project", str(paths.repo_root / "python" / "uqs"),
-        "python", str(runner),
-        "--host", connection.TP_HOST, "--port", str(port),
-        "--table", RAW_TABLE,
+        "uv",
+        "run",
+        "--project",
+        str(paths.repo_root / "python" / "uqs"),
+        "python",
+        str(runner),
+        "--host",
+        connection.TP_HOST,
+        "--port",
+        str(port),
+        "--table",
+        RAW_TABLE,
     ]
     env = connection.credential_env(credential)
     return _process(paths).start(cmd, cwd=paths.repo_root, env=env)
@@ -260,9 +269,7 @@ def stop(paths: UqsPaths) -> int | None:
 
 
 def status(paths: UqsPaths) -> dict[str, str]:
-    return _process(paths).status(
-        publishes=RAW_TABLE, **{{"reshaped by": "{name} -> {publishes}"}}
-    )
+    return _process(paths).status(publishes=RAW_TABLE, **{{"reshaped by": RESHAPED}})
 
 
 FEED = ExternalFeed(
