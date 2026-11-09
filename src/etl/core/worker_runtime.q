@@ -233,6 +233,22 @@
 / nothing was written.
 .qetl.job.bounded.runtime.suppressed_in_dry_run:`publish_rows`publish_coverage`write_checkpoint`record_run`record_facts`finish_store`notify_reactions`pin_config
 
+/ Private: the dry_run flag, failing CLOSED (#2303). A value that is neither a truthy nor a
+/ falsy spelling - UQF_DRY_RUN=tru - is refused, not read as false: .qetl.cfg.get_flag notes it
+/ and returns 0b, and nothing enforced the note, so a typo in the flag that asks for a
+/ rehearsal published for real. Only a loader without .qetl.cfg reads it as unset; an error
+/ reading it otherwise is not turned into "run".
+/ @return 1b for a dry run
+/ @throws error naming the value and the accepted spellings
+/ @private
+.qetl.job.bounded.runtime.dry_run_flag:{[]
+    if[not @[{`raw in key x};`.qetl.cfg;{[e] 0b}]; :0b];
+    v:lower .qetl.cfg.raw `dry_run;
+    $[0=count v; 0b;
+      any v ~/: .qetl.cfg.truthy; 1b;
+      any v ~/: .qetl.cfg.falsy; 0b;
+      '"mode: dry_run is ",v,", not a boolean - use one of ",", " sv .qetl.cfg.truthy,.qetl.cfg.falsy]}
+
 / This run's mode: `mode` (UQF_MODE, or `uqs job backfill --mode`) when set, else
 / `dry_run when the older dry_run flag is set, else `run.
 / .
@@ -246,7 +262,7 @@
     / Protected like the flag: a loader without .qetl.cfg has no mode set,
     / which is not the same as a mode set wrongly.
     m:@[{.qetl.cfg.raw `mode};::;{[e] ""}];
-    dry:@[{.qetl.cfg.get_flag `dry_run};::;{0b}];
+    dry:.qetl.job.bounded.runtime.dry_run_flag[];
     if[0=count m; :$[dry; `dry_run; `run]];
     m:`$lower m;
     if[not m in .qetl.job.bounded.runtime.modes;
