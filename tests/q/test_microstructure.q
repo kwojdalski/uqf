@@ -626,6 +626,14 @@
         e[`cum_flow]~ref`cum_flow};
     .qunit.assertEquals[check[tape;r 2;] each `EURUSD`GBPUSD;11b;"cumulative flow per sym, chunked, equals the batch"]};
 
+/ #2427: the tape was filtered to trades before rows were numbered, so `row`
+/ indexed the trade events, not the tape - rows 0 1 here, an add and a trade.
+.qt.qf.mkt.microstructure.test_stream_trade_rows_index_the_tape:{[t]
+    tape:([] time:2026.01.02D10:00:00+1000000000*til 4; sym:4#`EURUSD; action:`add`trade`cancel`trade; side:1 1 -1 -1; size:100 200 300 400f);
+    r:.qf.mkt.stream_update[.qf.mkt.stream_init[`signed_trade_flow;::];(enlist `tape)!enlist tape;::];
+    .qunit.assertEquals[r[`trades;`row];1 3;"row is the trade's index in the tape batch"];
+    .qunit.assertEquals[tape[`size] r[`trades;`row];abs r[`trades;`signed_flow];"so indexing the tape by row finds each flow's trade"]};
+
 .qt.qf.mkt.microstructure.test_stream_constant_returns_have_zero_variance:{[t]
     n:12;
     flat:([] time:2026.01.02D10:00:00+1000000000*til n; sym:n#`EURUSD;

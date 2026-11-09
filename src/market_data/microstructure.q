@@ -1116,10 +1116,10 @@
 
 / Private: split a batch table by sym, apply the late policy against the
 / per-sym state, and run `step` on each sym's accepted rows. Returns
-/ (per-sym state; dropped count; output table with sym and time).
+/ (per-sym state; dropped count; output table with sym and time). tbl
+/ carries `row`, numbered by the caller BEFORE any filter (#2427).
 / @private
 .qf.mkt.stream_side:{[what;tbl;states;state0;cfg;step]
-    tbl:update row:i from tbl;
     syms:distinct tbl`sym;
     acc:(states;0;());
     run_sym:{[what;tbl;state0;cfg;step;acc;s]
@@ -1178,14 +1178,14 @@
     if[`quotes in key batch;
         if[0=count quote_cols; '"stream_update: batch carries quotes but no quote metric was chosen at stream_init"];
         .qf.util.require_depth_quotes[`stream_update;batch`quotes];
-        r:.qf.mkt.stream_side["quote";batch`quotes;state`quotes;.qf.mkt.quote_state0;cfg;.qf.mkt.stream_quotes_one[;;cfg`window]];
+        r:.qf.mkt.stream_side["quote";update row:i from batch`quotes;state`quotes;.qf.mkt.quote_state0;cfg;.qf.mkt.stream_quotes_one[;;cfg`window]];
         state[`quotes]:r 0;
         state[`dropped]+:r 1;
         q_out:$[98h=type r 2; (`row`sym`time,quote_cols)#r 2; r 2]];
     if[`tape in key batch;
         if[not `signed_trade_flow in metrics; '"stream_update: batch carries a tape but signed_trade_flow was not chosen at stream_init"];
         .qf.mkt.require_tape[batch`tape];
-        trades:select from batch`tape where action=`trade;
+        trades:select from (update row:i from batch`tape) where action=`trade;
         r:.qf.mkt.stream_side["trade";trades;state`trades;.qf.mkt.trade_state0;cfg;.qf.mkt.stream_trades_one];
         state[`trades]:r 0;
         state[`dropped]+:r 1;
