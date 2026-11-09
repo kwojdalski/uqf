@@ -35,6 +35,26 @@ def test_an_instant_is_read_to_the_nanosecond():
     assert instants.text(ns) == "2026-10-14T10:00:00.000001234Z"
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("20260101T100000.5Z", "2026-01-01T10:00:00.500000000Z"),
+        ("2026-01-01T100000,25Z", "2026-01-01T10:00:00.250000000Z"),
+        ("20260101T100000.999999999Z", "2026-01-01T10:00:00.999999999Z"),
+        ("20260101T100000Z", "2026-01-01T10:00:00.000000000Z"),
+    ],
+)
+def test_a_basic_format_fraction_is_read_not_dropped(raw, expected):
+    """#2528: the fraction was matched on extended HH:MM:SS only, so a basic
+    format instant reached fromisoformat whole and was floored to the second."""
+    assert instants.canonical(raw) == expected
+
+
+def test_a_basic_format_fraction_finer_than_a_nanosecond_is_refused():
+    with pytest.raises(instants.InstantRefused, match="finer than a nanosecond"):
+        instants.canonical("20260101T100000.123456789012Z")
+
+
 def test_an_offset_is_converted_not_dropped():
     assert instants.canonical("2026-10-14T12:00:00+02:00") == "2026-10-14T10:00:00.000000000Z"
 
