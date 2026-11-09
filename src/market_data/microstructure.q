@@ -504,11 +504,10 @@
 / (price, order_id, pip_factor) would refuse a legitimately projected tape.
 .qf.mkt.tape_cols:`time`sym`action`side`size
 
-/ Refuse a tape that is missing a column, carries an unknown action, or is
-/ not sorted by time.
+/ Refuse a tape that is missing a column, carries an unknown action, is not
+/ sorted by time, or holds a trade with a null or negative size.
 / .
-/ ALL THREE are silent failures if unchecked, which is why this is a
-/ precondition rather than defensive normalisation:
+/ ALL are silent failures if unchecked, so this is a precondition:
 / .
 /   - a missing column reads as a null in most q code, so a windowed count
 /     over it returns 0 rather than erroring
@@ -516,10 +515,9 @@
 /     `action=`trade`, so every trade-based ratio silently reports on an
 /     empty set
 /   - an UNSORTED tape makes every rolling window compute over the wrong
-/     rows and return a plausible number. Rejecting beats sorting here for
-/     the same reason cross_book_at rejects unsorted quotes: the tape is
-/     sorted by construction, so sorting on every call pays O(n log n) to
-/     hide a caller's bug.
+/     rows and return a plausible number. Rejecting beats sorting, as in
+/     cross_book_at: sorting a tape sorted by construction hides a bug.
+/   - an unsized trade breaks every volume feature (VPIN read 2, #2428)
 / @param tape an event tape table
 / @return 1b when the tape is usable
 / @throws error naming what is wrong
@@ -535,6 +533,8 @@
     time:exec time from tape;
     if[not time~asc time;
         '"require_tape: tape is not sorted ascending by time - a rolling window over an unsorted tape returns a plausible wrong number rather than erroring (docs/architecture/event-tape.md)"];
+    sizes:exec size from tape where action=`trade;
+    if[n_bad:sum (null sizes) or sizes<0; '"require_tape: ",string[n_bad]," trade(s) with a null or negative size - every volume feature would report a plausible wrong number"];
     1b}
 
 / Signed trade flow: the net direction of aggressive volume (ROADMAP #19).
