@@ -103,3 +103,16 @@ local = ["NOTICE.md"]
 upstream_tree = "e02559e9a7f460e5a07986c68a2f682b277133c6"
 files = 3
 digest = "sha256:fddc5b4ef175757e0b5ea1580488feef102335d0976adf78417eea8b8287541e"
+
+[tree.kdb-fix-adaptor]
+upstream = "https://github.com/DataIntellectTech/kdb-fix-adaptor"
+commit = "11941454f0224d377cb17bd32e8d1a666f63294c"
+license = "MIT"
+license_file = "LICENSE-kdb-fix-adaptor"
+omit = [".gitignore", "src/a.out", "third_party/kx/include/kx/test", "third_party/kx/include/kx/test.o", "third_party/pugixml-1.7/docs/samples/a.out"]
+omit_why = "the four are compiled x86-64 ELF executables committed upstream (build output, not source); .gitignore would hide files inside this repository's own tree (as kdb-parquet's was not copied either). NOTICE.md says what the tree is and is not (#2292)"
+renames = { "LICENSE.md" = "LICENSE-kdb-fix-adaptor" }
+local = ["NOTICE.md"]
+upstream_tree = "a800950c7d18f106a02430eedb32b01857549db3"
+files = 108
+digest = "sha256:7d3969bc0bbd25b571385bca71a9769214d7f7ec6841cd4f48f928c53946a49b"
