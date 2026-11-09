@@ -160,6 +160,47 @@
     .qetl.job.stream.wire[nm;{[t;x] .qt.qetl.job.stream.bars.sent,:enlist (t;x); count x}];
     .qunit.assertEquals[.qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.t0+0D00:02:00];1;"published on the next tick"]};
 
+/ #2423: on the plant's own `time` the default lateness is 0D, and the plant stamps a row
+/ before the job sees it. A row stamped just inside a window that is still pending must be
+/ bucketed, not dropped because the job's clock has passed the window's end.
+/ A bars job counting ticks on the plant's `time`, event_time and lateness left to their defaults,
+/ state emptied and publish recorded. Returns its namespace.
+.qt.qetl.job.stream.bars.time_job:{[]
+    if[not `bt_tcount in .qetl.transform.defined[];
+        .qetl.transform.define[`bt_tcount;`inputs`output`fn`examples!(
+            enlist[`ev]!enlist ([] time:`timestamp$(); sym:`symbol$(); price:`float$(); bar_start:`timestamp$());
+            ([] sym:`symbol$(); bar_start:`timestamp$(); trades:`long$());
+            {[ev] 0!select trades:count i by sym, bar_start from ev};
+            enlist `inputs`expected!(enlist[`ev]!enlist ([] time:enlist 2026.10.09D10:00:01; sym:enlist `A; price:enlist 1f; bar_start:enlist 2026.10.09D10:00);
+                ([] sym:enlist `A; bar_start:enlist 2026.10.09D10:00; trades:enlist 1)))]];
+    nm:`bt_tm;
+    if[not nm in .qetl.job.stream.bars.defined[];
+        / event_time and lateness left to their defaults
+        .qetl.job.stream.at_bars[nm;`procname`events`transform`outputs`width`period!(`bttm1;`bt_ticks;`bt_tcount;enlist `bt_tbar;0D00:01;0D00:00:01)]];
+    ns:.qetl.job.stream.namespace nm;
+    .qetl.job.stream.reset nm;
+    (` sv ns,`now) set {[] .qt.qetl.job.stream.bars.clock};
+    `.qt.qetl.job.stream.bars.sent set ();
+    .qetl.job.stream.wire[nm;{[t;x] .qt.qetl.job.stream.bars.sent,:enlist (t;x); count x}];
+    ns}
+
+.qt.qetl.job.stream.bars.test_on_the_plants_time_a_row_is_late_only_when_its_window_is_out:{[t]
+    ns:.qt.qetl.job.stream.bars.time_job[];
+    .qunit.assertEquals[(.qetl.job.stream.bars.def `bt_tm)`event_time`lateness;(`time;0D);"the defaults"];
+    tick:{[tm;px] ([] time:enlist tm; sym:enlist `A; price:enlist px)};
+    on_batch:get ` sv ns,`on_batch;
+    `.qt.qetl.job.stream.bars.clock set 2026.10.09D10:00:30;
+    on_batch[`bt_ticks;tick[2026.10.09D10:00:30;1f]];
+    / stamped by the plant 0.1ms before the minute, delivered 0.1ms after it
+    `.qt.qetl.job.stream.bars.clock set 2026.10.09D10:01:00.000100;
+    on_batch[`bt_ticks;tick[2026.10.09D10:00:59.999900;2f]];
+    .qunit.assertEquals[count get ` sv ns,`dropped;0;"the window was still pending: nothing dropped"];
+    (get ` sv ns,`close_ready) 2026.10.09D10:01:00.5;
+    .qunit.assertEquals[exec trades from .qt.qetl.job.stream.bars.published[];enlist 2;"the bar holds both rows"];
+    / once the window is out, a row for it is refused
+    on_batch[`bt_ticks;tick[2026.10.09D10:00:59.9999;3f]];
+    .qunit.assertEquals[exec reason from get ` sv ns,`dropped;enlist `late;"a row for a published window is late"]};
+
 / --- end of day ------------------------------------------------------------
 
 .qt.qetl.job.stream.bars.test_end_of_day_closes_the_days_open_windows_and_no_others:{[t]

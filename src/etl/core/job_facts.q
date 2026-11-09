@@ -65,7 +65,11 @@
 / of its rows ages). Only the key and its default are shared.
 / .
 / When event_time is the plant's own `time there is no distinct receipt stamp, so
-/ no row can be late and the bound is 0D: inferred, since it loses nothing. When
+/ no row can be late by the clock and the bound is 0D: inferred, since it loses
+/ nothing. Each kind holds to that on `time by not judging a row by the job's
+/ clock - rolling skips the test, and bars (#2423) refuses a row only when its
+/ window is already out - never because the plant stamped it just before a
+/ boundary. When
 / event_time is a source stamp the bound is a retention decision (a horizon job
 / keeps that much more reference history) that no default should make silently,
 / so it is REQUIRED - the kind's missing-key check refuses its absence. The old

@@ -738,11 +738,14 @@ fixed-width time windows: OHLC, VWAP and volume per interval
 Besides these, it accepts the passthrough options (see the streaming job).
 
 A row arriving before its window closes amends it; one arriving after is
-dropped, logged, and kept in `.qpipe.job.<name>.dropped` with its reason. At end
-of day (`on_endofday`, #943) every window of the day that ended is closed,
-whatever its lateness. The job replays its log and restores from its own bars
-(`restore_from`), so a restart rebuilds the open windows and publishes none that
-already went out. Bars are published before the windows are evicted, so a
+dropped, logged, and kept in `.qpipe.job.<name>.dropped` with its reason. On the
+plant's own `time` (the default `event_time`) a row is judged by whether its
+window has closed, which the job remembers for a day, not by the job's clock
+against the window's end (#2423): the plant stamps a row before the job sees it.
+At end of day (`on_endofday`, #943) every window of the day that ended is
+closed, whatever its lateness. The job replays its log and restores from its own
+bars (`restore_from`), so a restart rebuilds the open windows and publishes none
+that already went out. Bars are published before the windows are evicted, so a
 publish that throws is retried on the next tick. `define` installs `pending`,
 `closed`, `dropped`, `publish`, `now`, `on_batch`, `close_ready[now]`,
 `on_timer` and `on_endofday` in `.qpipe.job.<name>`.
