@@ -88,17 +88,23 @@
 / root left it relative; uqs data migrate takes this lock through q
 / (scripts/gates/hdb_lock.q) with the root made absolute, so a writer given
 / either spelling held a different lock than the migration and neither
-/ excluded the other. Lexical only: symlinks are not resolved, so a root
-/ reached through two different links is still two locks.
+/ excluded the other. Nor did `.`, `..` or `//` inside it (#2311): `:/data/hdb/.
+/ and `:./hdb each took a lock of their own. So the path is made absolute and
+/ then normalised: empty and `.` parts dropped, each `..` taking off the part
+/ before it. Lexical only: symlinks are not resolved, so a root reached
+/ through two different links is still two locks.
 / @param root the HDB root, a file symbol
 / @return the lock directory's path, absolute
 / @eg .qetl.io.hdb_lock `:/data/hdb  ->  "/data/hdb.write.lock"
 / @eg .qetl.io.hdb_lock `:/data/hdb/  ->  "/data/hdb.write.lock"
+/ @eg .qetl.io.hdb_lock `:/data/x/..//hdb/.  ->  "/data/hdb.write.lock"
 .qetl.io.hdb_lock:{[root]
     p:1_string root;
-    p:(neg sum mins reverse "/"=p)_p;
     if[not "/"=first p; p:(system"cd"),"/",p];
-    p,".write.lock"}
+    s:"/" vs p;
+    s:s where not (s~\:"") or s~\:enlist ".";
+    s:{[kept;part] $[part~".."; -1_kept; kept,enlist part]}/[();s];
+    "/",("/" sv s),".write.lock"}
 
 / Private: run f . args holding root's write lock.
 / @private
