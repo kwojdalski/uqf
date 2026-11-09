@@ -792,9 +792,17 @@
 
 .qt.qetl.job.stream.test_fill_ids_are_unique_per_venue:{[t]
     .qt.qetl.job.stream.reset[];
+    keep:.qpipe.job.crypto_mock.run_id;
+    .qpipe.job.crypto_mock.run_id:111;
     ids:.qpipe.job.crypto_mock.next_id each 3#`binance_spot;
-    .qunit.assertEquals[ids;`$("binance_spot-1";"binance_spot-2";"binance_spot-3");
-        "monotonic within a venue, the way an exchange's own ids are"]};
+    / #2566: a restarted mock counts from zero again, under a new run.
+    .qetl.job.stream.reset `crypto_mock;
+    .qpipe.job.crypto_mock.run_id:222;
+    again:.qpipe.job.crypto_mock.next_id `binance_spot;
+    .qpipe.job.crypto_mock.run_id:keep;
+    .qunit.assertEquals[ids;`$("binance_spot-111-1";"binance_spot-111-2";"binance_spot-111-3");
+        "monotonic within a venue, the way an exchange's own ids are"];
+    .qunit.assertEquals[again;`$"binance_spot-222-1";"and a restart cannot reissue the last run's ids"]};
 
 .qt.qetl.job.stream.test_fx_fill_ids_are_unique_and_survive_a_restart:{[t]
     / #1080: two fills of one pair at one instant must differ by id. The run

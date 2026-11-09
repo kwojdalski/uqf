@@ -92,6 +92,12 @@
 .qpipe.job.crypto_mock.market:([] venue:raze (count .qpipe.job.crypto_mock.syms)#/:.qpipe.job.crypto_mock.venues; sym:.qpipe.job.crypto_mock.n_market#.qpipe.job.crypto_mock.syms; mid:.qpipe.job.crypto_mock.n_market#.qpipe.job.crypto_mock.mid0; toxicity:.qpipe.job.crypto_mock.n_market#0f)
 
 / The last fill id issued, per venue - monotonic within a process.
+/ .
+/ Fill ids are `<venue>-<run>-<n>` (#2566), as fx_trades_feed's are (#1080):
+/ the run is this process's start, so a restarted mock - counters back at
+/ zero - cannot reissue an id crypto_markout still remembers as scored or
+/ pending, or one the HDB already holds.
+.qpipe.job.crypto_mock.run_id:`long$.z.p
 .qpipe.job.crypto_mock.last_id:.qpipe.job.crypto_mock.venues!(count .qpipe.job.crypto_mock.venues)#0
 
 / ----------------------------------------------------------- FILL MODEL
@@ -229,13 +235,13 @@
         .qpipe.job.crypto_mock.beta_draw[.qpipe.job.crypto_mock.fill_alpha;.qpipe.job.crypto_mock.fill_beta];
         .qpipe.job.crypto_mock.beta_draw[.qpipe.job.crypto_mock.fill_alpha;.qpipe.job.crypto_mock.fill_beta])}
 
-/ Private: issue the next fill id for a venue - `<venue>-<n>`, unique
-/ within a run the way an exchange's are unique within a venue.
+/ Private: issue the next fill id for a venue - `<venue>-<run>-<n>`, unique
+/ across runs the way an exchange's are unique within a venue.
 / @private
 .qpipe.job.crypto_mock.next_id:{[venue]
     n:1+.qpipe.job.crypto_mock.last_id venue;
     .qpipe.job.crypto_mock.last_id[venue]:n;
-    `$string[venue],"-",string n}
+    `$string[venue],"-",string[.qpipe.job.crypto_mock.run_id],"-",string n}
 
 / Private: publish every fill decided for one market row.
 / @private
@@ -277,4 +283,4 @@
     .qpipe.job.crypto_mock.on_timer;
     "stands in for cryptorust's two kdb recorders. startwithall:0: start it INSTEAD of them, never as well as - it publishes onto the same two tables, and an invented ladder or fill must not interleave with a real one";
     enlist `last_id;
-    "a demo feed's fill-id counter: a restart issues ids from zero again, which only a demo sees")];
+    "a demo feed's fill-id counter: a restart counts from zero again under a new run_id, so no id is reissued")];

@@ -1499,6 +1499,7 @@ qpipe.job.crypto_mock,publish,value,,
 qpipe.job.crypto_mock,quote_ccy,function,1,s
 qpipe.job.crypto_mock,quote_share,value,,
 qpipe.job.crypto_mock,quote_size,value,,
+qpipe.job.crypto_mock,run_id,value,,
 qpipe.job.crypto_mock,skewed,function,2,p tox
 qpipe.job.crypto_mock,syms,value,,
 qpipe.job.crypto_mock,tick_seconds,value,,
