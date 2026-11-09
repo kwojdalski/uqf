@@ -415,7 +415,11 @@ def test_the_real_repository_has_none():
     Through the checker's own file list, which excludes the vendored trees
     this repository must not edit.
     """
-    found = [f for f in cqt._linter_findings(QLINTER) if f.rule.startswith("QB002")]
+    found = [
+        f
+        for f in cqt._linter_findings(QLINTER, cqt._tracked_q_files())
+        if f.rule.startswith("QB002")
+    ]
     assert not found, found
 
 
@@ -472,7 +476,11 @@ def test_the_real_repository_is_clean():
     it cannot act on in a tree it must not touch is how a gate gets
     switched off.
     """
-    found = [f for f in cqt._linter_findings(QLINTER) if f.rule.startswith("QB003")]
+    found = [
+        f
+        for f in cqt._linter_findings(QLINTER, cqt._tracked_q_files())
+        if f.rule.startswith("QB003")
+    ]
     assert not found, found
 
 
@@ -607,6 +615,27 @@ def test_the_type_gate_is_registered_in_the_scope_checker():
     text = scope_checker.read_text()
     assert 'TYPE_HOOKS = ("ty",)' in text
     assert '("type", TYPE_HOOKS)' in text
+
+
+@needs_linter
+def test_q_outside_src_tests_and_scripts_is_linted(tmp_path, monkeypatch, capsys):
+    """sidecars/ and uqs's attach/q/ were counted clean but never linted (#2538)."""
+    for name in (".qlinter-version", ".qlinter.toml"):
+        (tmp_path / name).write_text((cqt.REPO / name).read_text())
+    for rel, src in {
+        "src/a.q": "f:{[x] x+1}\n",
+        "sidecars/demo/bad.q": "g:{[count] count+1}\n",
+        "python/uqs/src/uqs/attach/q/bad.q": "h:{[prior] prior+1}\n",
+    }.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(src)
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    monkeypatch.setattr(cqt, "REPO", tmp_path)
+    monkeypatch.setattr(cqt, "VERSION_FILE", tmp_path / ".qlinter-version")
+    assert cqt.main() == 1
+    out = capsys.readouterr().out
+    assert "sidecars/demo/bad.q:1: [QF001" in out
+    assert "python/uqs/src/uqs/attach/q/bad.q:1: [QF001" in out
 
 
 @needs_linter
