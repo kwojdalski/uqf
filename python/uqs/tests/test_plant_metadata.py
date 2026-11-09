@@ -156,6 +156,75 @@ def test_sorting_and_nested_declarations_are_carried(tmp_path, q_binary, pack):
     assert meta.table("mkt_orderbook").nested == {"bid_prices": "F", "ask_prices": "F"}
 
 
+# ------------------------------------------------- the scaffold's schema, round trip
+
+#: `--schema` specs at the boundaries the mini-language has: time omitted and
+#: explicit, `sym` grouped by default and spelled `g#`, grouped columns of every
+#: other type, no `sym`, a lone `time`, one and several list columns.
+_SPECS = {
+    "rt_every_type": "sym:symbol, f:float, j:long, i:int, h:short, b:boolean, c:char, "
+    "d:date, t:time, n:timespan, p:timestamp",
+    "rt_explicit_time": "time:timestamp, sym:g#symbol, px:float",
+    "rt_grouped": "venue:g#symbol, f:g#float, j:g#long, c:g#char, d:g#date",
+    "rt_no_sym": "venue:symbol, sym_count:long",
+    "rt_time_only": "time:timestamp",
+    "rt_one_list": "sym:symbol, levels:list",
+    "rt_lists": "sym:symbol, bids:list, px:float, asks:list",
+}
+
+
+def _scaffold_tables(root: Path, shapes: dict) -> dict[str, str]:
+    """Append each table as `uqs job new` writes it, regenerate the metadata
+    the way the scaffold then does, and return {table: the block written}."""
+    from uqs.scaffold import jobs
+
+    written = {}
+    for table, shape in shapes.items():
+        plan = jobs.streaming_job(table, [], table, shape)
+        (block,) = [a.body for a in plan.actions if a.path == TABLES_FILE]
+        written[table] = block
+        with (root / TABLES_FILE).open("a") as fh:
+            fh.write(block)
+    plant_metadata_gen.write(root)
+    return written
+
+
+def test_a_scaffolded_schema_survives_two_cycles_through_q(tmp_path, q_binary, pack):
+    """spec0 -> plant_tables.q -> q -> --schema-from -> plant_tables.q -> q -> ...
+
+    Each cycle copies the previous generation's tables by `--schema-from`,
+    which reads what q evaluated (plant_definitions). Every generation must hold
+    the same columns, types, attributes and nested columns as spec0 asked for,
+    write the same block under its new name, and say the same `--schema`."""
+    from uqs.scaffold.columns import columns_spec, parse_columns, resolve_shape, table_columns
+
+    root = _tree(tmp_path, metadata=False)
+    blocks = [_scaffold_tables(root, _SPECS)]
+    for gen in (1, 2):
+        own = plant_metadata.load(root).own()
+        definitions = {name: t.definition() for name, t in own.items()}
+        prev = {f"{t}_c{gen - 1}" if gen > 1 else t: t for t in _SPECS}
+        shapes = {f"{t}_c{gen}": resolve_shape(None, name, definitions) for name, t in prev.items()}
+        blocks.append(_scaffold_tables(root, shapes))
+
+    meta = plant_metadata.load(root)
+    for table, spec0 in _SPECS.items():
+        cols0 = parse_columns(spec0)
+        names = (table, f"{table}_c1", f"{table}_c2")
+        evaluated = [meta.table(n) for n in names]
+        shapes = [[(c.name, c.type, c.attribute) for c in t.columns] for t in evaluated]
+        assert shapes[0] == shapes[1] == shapes[2], table
+        assert evaluated[0].nested == evaluated[1].nested == evaluated[2].nested, table
+        assert {c for c, lit in cols0 if lit == "()"} == set(evaluated[0].nested), table
+        # what q evaluated is what spec0 asked for, and says spec0 again
+        for t in evaluated:
+            assert table_columns(t.definition()) == cols0, t.name
+            assert columns_spec(table_columns(t.definition())) == columns_spec(cols0), t.name
+        # the generator is stable: each generation writes the same block
+        for gen, name in ((1, names[1]), (2, names[2])):
+            assert blocks[gen][name].replace(name, table) == blocks[0][table], name
+
+
 def test_a_keyed_plant_table_is_refused_not_dropped(tmp_path, q_binary, pack):
     text = (ROOT / TABLES_FILE).read_text() + ".qetl.plant.kt:([k:`symbol$()] v:`long$())\n"
     root = _tree(tmp_path, text, metadata=False)
