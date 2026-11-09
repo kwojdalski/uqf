@@ -27,8 +27,9 @@ from uqs.model.declarations import read_file_text
 from uqs.paths import UqsError
 from uqs.scaffold import jobs
 from uqs.scaffold import worker as backfill
-from uqs.scaffold.columns import definition_columns, parse_columns, parse_raw_columns
+from uqs.scaffold.columns import definition_columns, parse_columns
 from uqs.scaffold.normalizer import normalizer
+from uqs.scaffold.raw_columns import parse_raw_columns
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 CORE = UQF_ROOT / "src" / "etl" / "core"

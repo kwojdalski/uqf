@@ -39,24 +39,26 @@ evidence and unsupported capabilities never can.
 
 `eod-fence` alone may be waived (#1828, `--skip-eod-fence`): `assess(..., waived=...)` lifts
 those findings, kept as `accepted`, and removes the end-of-day write deadline; every other
-blocker still refuses. backfill_policy.py holds the ids, their policy and the guardrail.
+blocker still refuses. backfill_policy.py holds the ids, their policy and the guardrail;
+backfill_fence.py reads one writer's active date and end-of-day fence.
 """
 
 from __future__ import annotations
 
 import dataclasses
 from collections.abc import Mapping
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Any
 
-from uqs.attach import writer_calendar, writer_clock
+from uqs.attach import writer_calendar
 from uqs.attach.backfill import Destination
+from uqs.attach.backfill_fence import fence
 from uqs.attach.backfill_policy import (
     EOD_FENCE,
-    POLICY,
     Assessment,
     Coordination,
     CoordinationRefused,
+    blocker,
     check_waivers,
     lift,
     lifted_note,
@@ -95,24 +97,12 @@ NETWORK_FILESYSTEMS = (
 HOST = Host()
 
 
-def _blocker(code: str, component: str, message: str, **facts: object) -> Finding:
-    """A coordination blocker: `code` must be in POLICY, `facts` what was observed."""
-    return Finding(
-        "blocker",
-        code,
-        component,
-        message,
-        action=POLICY[code].action,
-        facts={k: "" if v is None else str(v) for k, v in facts.items()},
-    )
-
-
 def _state(proc: Proc, ipc: Ipc, blockers: list[Finding]) -> dict[str, Any] | None:
     try:
         return ipc.call(proc.endpoint, "writer_state", {})
     except IpcError as exc:
         blockers.append(
-            _blocker(
+            blocker(
                 "writer-unreachable",
                 proc.procname,
                 f"{proc.procname} does not answer writer_state ({exc.reason}): what it writes, "
@@ -150,7 +140,7 @@ def _sort_config(
         attrs = {r["col"]: r["att"] for r in use if r.get("att") and r.get("col")}
         if sorted_by != order or attrs != want_attrs:
             blockers.append(
-                _blocker(
+                blocker(
                     "sort-policy",
                     proc.procname,
                     f"{proc.procname}'s sort.csv sorts {dest.dataset} by "
@@ -171,7 +161,7 @@ def _others(obs: Observation, blockers: list[Finding], warnings: list[str]) -> N
     for svc in obs.others:
         if svc["proctype"] in IN_PLACE_PROCTYPES:
             blockers.append(
-                _blocker(
+                blocker(
                     "in-place-maintenance",
                     svc["procname"],
                     f"{svc['procname']} ({svc['proctype']}) works on HDB partitions in place, by "
@@ -185,115 +175,6 @@ def _others(obs: Observation, blockers: list[Finding], warnings: list[str]) -> N
                 f"{svc['procname']} ({svc['proctype']}) may touch the HDB directory per a "
                 "configuration this cannot read; backfilled partitions are fresh files"
             )
-
-
-def fence(
-    state: dict[str, Any], dates: list[date], guard: timedelta, blockers: list[Finding]
-) -> tuple[date | None, datetime | None, datetime | None]:
-    """One writer's active date and end-of-day fence: blockers appended, facts returned."""
-    who = state.get("procname", "a writer")
-    held, unreadable = writer_clock.partitions(state)
-    if not held or unreadable:
-        what = (
-            "current write partition"
-            if state.get("proctype") == "wdb"
-            else "outstanding partitions"
-        )
-        blockers.append(
-            _blocker(
-                "active-date-unknown",
-                who,
-                f"{who} does not report which date it is writing: its {what} are missing, "
-                "empty or unreadable, so the active write date cannot be excluded",
-                proctype=state.get("proctype"),
-                partition=state.get("partition"),
-                partitions=state.get("partitions"),
-            )
-        )
-    active = min(held) if held and not unreadable else None
-    now, roll = (
-        writer_clock.moment(state.get("now", "")),
-        writer_clock.moment(state.get("next_roll", "")),
-    )
-    cal = writer_calendar.of(state)
-    if cal is None or cal.data_adj_ns:
-        blockers.append(
-            _blocker(
-                "native-calendar",
-                who,
-                f"{who} stamps `time` in a data zone other than UTC "
-                f"({cal.describe if cal else 'unreadable calendar'}): a backfill stamps no zone, "
-                "so its rows would sit hours away from the live rows of the same table",
-                datatz_adj=state.get("datatz_adj"),
-            )
-        )
-    if active is not None:
-        touched = [d.isoformat() for d in writer_calendar.touched_days(state, dates, active, roll)]
-        if touched:
-            blockers.append(
-                _blocker(
-                    "active-date",
-                    who,
-                    f"{', '.join(touched)} is not completed history: "
-                    f"{writer_clock.boundary(state, held)} and native end of day will write it. "
-                    "Only dates before it can be backfilled",
-                    active_date=active.isoformat(),
-                    touched_dates=",".join(touched),
-                    partitions=",".join(d.isoformat() for d in held),
-                )
-            )
-    if now is None or roll is None:
-        blockers.append(
-            _blocker(
-                "clock-unknown",
-                who,
-                f"{who} does not report its clock and next roll: the end-of-day fence is unknown",
-                now=state.get("now"),
-                next_roll=state.get("next_roll"),
-            )
-        )
-        return active, now, roll
-    minutes = int(guard.total_seconds() // 60)
-    to_roll = int((roll - now).total_seconds() // 60)
-    if roll - now < guard:
-        blockers.append(
-            _blocker(
-                "eod-fence",
-                who,
-                f"end of day is at {roll.isoformat()}, {to_roll} minutes away on {who}'s clock; "
-                f"reloads, sorts and merges cluster there (guard {minutes} minutes)",
-                window="overdue" if roll <= now else "before-roll",
-                now=now.isoformat(),
-                next_roll=roll.isoformat(),
-                minutes_to_roll=to_roll,
-                guard_minutes=minutes,
-            )
-        )
-    since = now - (roll - timedelta(days=1))
-    if since < guard:
-        blockers.append(
-            _blocker(
-                "eod-fence",
-                who,
-                f"{who}'s last end of day was {int(since.total_seconds() // 60)} minutes ago: "
-                "its sort, merge and reload may still be running",
-                window="after-roll",
-                now=now.isoformat(),
-                next_roll=roll.isoformat(),
-                minutes_since_roll=int(since.total_seconds() // 60),
-                guard_minutes=minutes,
-            )
-        )
-    if state.get("reloadcomplete") is False:
-        blockers.append(
-            _blocker(
-                "reload-in-progress",
-                who,
-                f"{who} has an end-of-day reload in progress",
-                reloadcomplete=False,
-            )
-        )
-    return active, now, roll
 
 
 def examine(
@@ -319,7 +200,7 @@ def examine(
     hdb = str(dest.hdb_dir)
     if not HOST.is_local(att.stack.host):
         blockers.append(
-            _blocker(
+            blocker(
                 "remote-host",
                 hdb,
                 f"the stack runs on {att.stack.host}, not this machine: {dest.hdb_dir} here is "
@@ -330,7 +211,7 @@ def examine(
     kind = filesystem_of(dest.hdb_dir)
     if kind.removeprefix("fuse.") in NETWORK_FILESYSTEMS:
         blockers.append(
-            _blocker(
+            blocker(
                 "network-filesystem",
                 hdb,
                 f"{dest.hdb_dir} is on a {kind} filesystem: kdb+'s serialisation of the sym file "
@@ -341,7 +222,7 @@ def examine(
     _sort_config(att, dest, [p for p in named.values() if p.procname in writers], blockers)
     if (dest.hdb_dir / "par.txt").exists():
         blockers.append(
-            _blocker(
+            blocker(
                 "segmented-hdb",
                 hdb,
                 f"{dest.hdb_dir} is segmented (par.txt): partitions live outside it",

@@ -1,9 +1,9 @@
 """Attached-backfill coordination blockers as structured findings (#1827).
 
-Each blocker `backfill_coordination` raises is a `Finding` with a stable id, the component it
-is about and the facts observed, and every id has a declared policy. Without a waiver these
-tests also pin that admission refuses and admits exactly as it did; waiving eod-fence (#1828)
-is test_attach_backfill_eod_override.py.
+Each blocker `backfill_coordination` and `backfill_fence` raise is a `Finding` with a stable
+id, the component it is about and the facts observed, and every id has a declared policy.
+Without a waiver these tests also pin that admission refuses and admits exactly as it did;
+waiving eod-fence (#1828) is test_attach_backfill_eod_override.py.
 
 Admission and coordination are Python; only the plan's evaluation runs q, and `plan_with`
 replaces it. So these tests run without a q interpreter.
@@ -24,8 +24,8 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import backfill_coordination as coordination
+from uqs.attach import backfill_fence, backfill_policy
 from uqs.attach import backfill_plan as planning
-from uqs.attach import backfill_policy
 from uqs.attach.facts import Host
 from uqs.attach.remote import IpcError
 from uqs.paths import UqsError
@@ -223,20 +223,25 @@ def test_end_of_day_timing_is_one_finding_from_either_side(world, window):
 # ---------------------------------------------------------------------- the policy table
 
 
+#: Every module that makes a coordination blocker: the scan reads them all.
+EMITTERS = (coordination, backfill_fence)
+
+
+def _blocker_calls() -> list[ast.Call]:
+    return [
+        n
+        for module in EMITTERS
+        for n in ast.walk(ast.parse(Path(module.__file__).read_text()))
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "blocker"
+    ]
+
+
 def _emitted_codes() -> set[str]:
-    source = Path(coordination.__file__).read_text()
-    codes: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "_blocker"
-            and node.args
-            and isinstance(first := node.args[0], ast.Constant)
-            and isinstance(code := first.value, str)
-        ):
-            codes.add(code)
-    return codes
+    return {
+        c.args[0].value
+        for c in _blocker_calls()
+        if c.args and isinstance(c.args[0], ast.Constant) and isinstance(c.args[0].value, str)
+    }
 
 
 def test_every_finding_coordination_can_emit_has_a_policy():
@@ -249,12 +254,7 @@ def test_every_finding_coordination_can_emit_has_a_policy():
     # and the cases above provoke every one of them
     assert emitted == set(CASES) | {"eod-fence"}
     # a blocker raised with a computed id would escape the scan: every call names it
-    calls = [
-        n
-        for n in ast.walk(ast.parse(Path(coordination.__file__).read_text()))
-        if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "_blocker"
-    ]
-    assert all(isinstance(c.args[0], ast.Constant) for c in calls)
+    assert all(isinstance(c.args[0], ast.Constant) for c in _blocker_calls())
 
 
 def test_only_end_of_day_timing_could_be_accepted():
@@ -275,7 +275,7 @@ def test_ids_are_kebab_case():
 
 def test_a_finding_without_a_policy_cannot_be_made():
     with pytest.raises(KeyError):
-        coordination._blocker("no-such-check", "wdb1", "message")
+        backfill_policy.blocker("no-such-check", "wdb1", "message")
 
 
 # ------------------------------------------------------------- admission does not change

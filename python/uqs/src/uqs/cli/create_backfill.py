@@ -22,15 +22,9 @@ from uqs.model.declarations import (
 from uqs.model.pipeline import PipelineKind
 from uqs.paths import ETL_DIR, SOURCE_DIR, WORKER_DIR, UqsError, UqsUsageError
 from uqs.scaffold import worker
-from uqs.scaffold.columns import (
-    PHYSICAL_NAME,
-    Columns,
-    as_columns,
-    definition_columns,
-    parse_raw_columns,
-    type_char,
-)
+from uqs.scaffold.columns import Columns, as_columns, definition_columns, type_char
 from uqs.scaffold.plan import ScaffoldPlan
+from uqs.scaffold.raw_columns import PHYSICAL_NAME, parse_raw_columns
 
 
 def workers_filling(repo_root: Path, dataset: str, partition: str | None = None) -> list[str]:

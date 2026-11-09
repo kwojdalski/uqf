@@ -139,7 +139,7 @@ def test_removal_takes_only_what_still_says_scaffolded():
 def test_a_raw_contract_the_fixture_cannot_seed_says_whose_seed_it_is():
     """#1590: raw fields the fixture does not have cannot be guessed; the
     example's seed says so instead of writing a table its query cannot read."""
-    from uqs.scaffold.columns import parse_raw_columns  # noqa: PLC0415
+    from uqs.scaffold.raw_columns import parse_raw_columns  # noqa: PLC0415
 
     body = _action(
         backfill.bounded_worker(
