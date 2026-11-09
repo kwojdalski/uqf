@@ -205,6 +205,29 @@ def test_a_request_that_is_not_explicit_is_refused(registry, asked, change):
     assert not asked[0]
 
 
+@pytest.mark.parametrize(
+    ("raised", "status", "error"),
+    [
+        (uqs_stack_diff.DiffNotRun("no q interpreter - set $QCMD"), 502, "CompareFailed"),
+        (uqs_stack_diff.DiffNotRun("the comparison did not run:\n'boom"), 502, "CompareFailed"),
+        (uqs_stack_diff.DiffTimedOut("data diff: no result after 40s"), 504, "CompareTimedOut"),
+    ],
+)
+def test_a_server_fault_is_not_a_refusal_of_the_request(registry, asked, raised, status, error):
+    """#2529: no q, a crashed q or its timeout is the server's fault - 502 or
+    504 - never the 422 that tells the caller to fix the form."""
+    _, answer = asked
+    answer[0] = raised
+    r = _client().post("/compare", json=BODY)
+    assert (r.status_code, r.json()["error"]) == (status, error), r.text
+
+
+def test_the_comparison_is_killed_inside_the_browser_s_wait(registry, asked):
+    settings = Settings(enable_writes=True, write_token=TOKEN)
+    _client(settings=settings).post("/compare", json=BODY)
+    assert asked[0][0]["timeout"] == settings.lifecycle_timeout < settings.request_timeout
+
+
 def test_a_table_the_catalog_does_not_list_is_refused_before_uqs(registry, asked):
     """#2524: /compare reads only what /query may - an unknown table is the
     same 422 /query answers, and nothing is reached."""

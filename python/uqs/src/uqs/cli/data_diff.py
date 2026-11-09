@@ -138,12 +138,15 @@ def run(
     partition: str | None = None,
     user: str = DEFAULT_USER,
     passwd: str = DEFAULT_PASSWORD,
+    timeout: float = data_diff.DEFAULT_TIMEOUT,
 ) -> dict:
     """The comparison `uqs data diff --json` prints: both sides reached, q's
     report, its times in UTC and `ok` - what the frontend's /compare returns.
 
     @raise UqsUsageError for two sides that are one, or a --slice with no
-    --source-version; UqsError for an undeclared target or a request q refuses.
+    --source-version; UqsError for an undeclared target or a request q refuses
+    (data_diff.DiffNotRun / DiffTimedOut when the q itself failed or ran past
+    `timeout` seconds).
     """
     if left == right:
         raise UqsUsageError(f"--left and --right both name {left} - compare two endpoints")
@@ -153,7 +156,7 @@ def run(
         report = data_diff.compare(
             paths, lside, rside, tables, window,
             filters=filters or [], limit=limit, source_version=source_version,
-            partition=partition, login=f"{user}:{passwd}",
+            partition=partition, login=f"{user}:{passwd}", timeout=timeout,
         )  # fmt: skip
     report = _utc(report)
     return {"ok": report["outcome"] == data_diff.EQUAL, **report}

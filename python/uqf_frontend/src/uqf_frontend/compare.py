@@ -33,6 +33,20 @@ class CompareRefused(FrontendError):
     status_code = 422
 
 
+class CompareFailed(FrontendError):
+    """The comparison never ran: no q interpreter on the server, or its q run
+    failed. A fault of the server, not of the request (#2529)."""
+
+    status_code = 502
+
+
+class CompareTimedOut(FrontendError):
+    """The comparison's q ran past the request's budget and was killed (#2529)."""
+
+    status_code = 504
+    transient = True
+
+
 #: The side that is this frontend's own stack, as uqs spells it.
 LOCAL = "local"
 
@@ -89,6 +103,7 @@ def run(settings: Settings, req: Any) -> dict[str, Any]:
     from uqs import timerange
     from uqs.cli import data_diff
     from uqs.paths import UqsError, UqsUsageError
+    from uqs.stack.data_diff import DiffNotRun, DiffTimedOut
 
     # Exact or refused, before anything is reached: uqs's range is a datetime,
     # and `uqs data diff` refuses a bound finer than a microsecond rather than
@@ -109,9 +124,16 @@ def run(settings: Settings, req: Any) -> dict[str, Any]:
             filters=filters, limit=min(req.limit, settings.max_rows),
             source_version=req.source_version,
             partition=req.slice, **settings.uqs_login,
+            # killed inside the browser's own wait, so it sees a 504, not an
+            # anonymous timeout while q runs on (#2529)
+            timeout=settings.lifecycle_timeout,
         )  # fmt: skip
     except UqsUsageError as exc:
         raise ValidationFailed(str(exc)) from None
+    except DiffTimedOut as exc:
+        raise CompareTimedOut(str(exc)) from None
+    except DiffNotRun as exc:
+        raise CompareFailed(str(exc)) from None
     except UqsError as exc:
         raise CompareRefused(str(exc)) from None
     # The ledger's q column is `partition`; the API's word for it is `slice`,
