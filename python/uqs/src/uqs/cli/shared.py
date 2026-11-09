@@ -207,9 +207,26 @@ ProcsArg = Annotated[
         show_default=False,
     ),
 ]
+
+
+def _export_path(path: Path | None) -> Path | None:
+    """--export's FILE, refused as the command line is read - before any output."""
+    if path is not None:
+        try:
+            table_export.check_path(path)
+        except UqsError as exc:
+            raise typer.BadParameter(str(exc)) from None
+    return path
+
+
 ExportOpt = Annotated[
     Path | None,
-    typer.Option("--export", metavar="FILE", help="Also write output to FILE as .csv or .parquet"),
+    typer.Option(
+        "--export",
+        metavar="FILE",
+        callback=_export_path,
+        help="Also write output to FILE as .csv or .parquet",
+    ),
 ]
 
 

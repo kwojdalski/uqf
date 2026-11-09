@@ -287,6 +287,8 @@ def test_a_path_that_cannot_be_written_is_a_refusal_not_a_traceback(tmp_path):
     """#2606: polars' FileNotFoundError reached the user as a traceback."""
     with pytest.raises(UqsError, match="cannot write"):
         table_export.export_table([{"a": 1}], tmp_path / "missing" / "out.csv")
+    with pytest.raises(UqsError, match="is not a directory"):
+        table_export.check_path(tmp_path / "missing" / "out.csv")
 
 
 def test_a_list_column_is_written_to_csv_as_its_cell_text(tmp_path):

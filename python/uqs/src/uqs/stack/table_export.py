@@ -10,7 +10,21 @@ from pathlib import Path
 from typing import Any
 
 from uqs.cells import cell
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
+
+#: The formats --export writes, by the file's extension.
+SUFFIXES = (".csv", ".parquet")
+
+
+def check_path(path: Path) -> None:
+    """Refuse an export path that cannot be written, before the command runs:
+    a refusal after the rows were printed is a second document on a --json
+    stdout (#2607)."""
+    suffix = path.suffix.lower()
+    if suffix not in SUFFIXES:
+        raise UqsUsageError(f"unsupported export extension {suffix!r} - use .csv or .parquet")
+    if not path.parent.is_dir():
+        raise UqsUsageError(f"cannot write {path}: {path.parent} is not a directory")
 
 
 def export_table(rows: Any, path: Path) -> None:
@@ -39,7 +53,7 @@ def export_table(rows: Any, path: Path) -> None:
         )
 
     suffix = path.suffix.lower()
-    if suffix not in (".csv", ".parquet"):
+    if suffix not in SUFFIXES:
         raise UqsError(f"unsupported export extension {suffix!r} - use .csv or .parquet")
     # a missing or unwritable directory is a refusal, not polars' traceback (#2606)
     try:

@@ -999,9 +999,35 @@ def test_a_failed_export_reports_rather_than_losing_the_output(monkeypatch, tmp_
     unwritable path must say so, not take the whole command down with a
     traceback."""
     _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
-    _patch(monkeypatch, table_export, "export_table", raises=UqsError("unsupported suffix"))
-    result = runner.invoke(cli.app, ["process", "list", "--export", str(tmp_path / "x.txt")])
+    _patch(monkeypatch, table_export, "export_table", raises=UqsError("cannot write"))
+    result = runner.invoke(cli.app, ["process", "list", "--export", str(tmp_path / "x.csv")])
     assert result.exit_code == 1
+
+
+@pytest.mark.parametrize("name", ["x.docx", "missing/x.csv"])
+def test_an_export_path_that_cannot_be_written_is_refused_before_any_output(
+    monkeypatch, tmp_path, name
+):
+    """#2607, #2606: refused after the listing, it was a second --json
+    document - or, for a missing directory, a polars traceback."""
+    rec = _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
+    argv = ["process", "list", "--json", "--export", str(tmp_path / name)]
+    result = runner.invoke(cli.app, argv)
+    assert result.exit_code == 2 and result.stdout == "", result.output
+    assert rec.calls == []
+
+
+def test_a_failed_export_is_the_only_json_document(monkeypatch, tmp_path):
+    from uqs.cli import shared
+
+    monkeypatch.setattr(shared, "json_requested", lambda: True)  # as main() configures it
+    _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
+    _patch(monkeypatch, table_export, "export_table", raises=UqsError("cannot write"))
+    result = runner.invoke(
+        cli.app, ["process", "list", "--json", "--export", str(tmp_path / "x.csv")]
+    )
+    assert result.exit_code == 1
+    assert json.loads(result.stdout)["ok"] is False
 
 
 # ------------------------------------------------------------------ query
