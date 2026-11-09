@@ -1401,3 +1401,15 @@
     .qunit.assertEquals[(mine[;2];mine[;1]);(("initialised";"run finished");`lifecycle`lifecycle);
         "the run's start and its summary are lifecycle lines"];
     .qunit.assertEquals[distinct mine[;3][;`worker];enlist `demo_deals_backfill;"the worker is a field of each"]};
+
+/ #2597: facts keyed by anything but symbols made record refuse the window's facts,
+/ the framework's own with them, and the refusal was swallowed without a log line.
+.qt.qpipe.job.demo_deals_backfill.test_facts_keyed_by_strings_keep_the_framework_facts_and_say_so:{[t]
+    .qt.support.set_field[`.qetl.job.bounded.worker_cfg;`demo_deals_backfill;`facts;{[b] (enlist "x")!enlist 1}];
+    lines:.qt.support.captured_log[0b;{[x]
+        .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;2]];
+        .qpipe.job.demo_deals_backfill.run[]}];
+    .qt.support.set_field[`.qetl.job.bounded.worker_cfg;`demo_deals_backfill;`facts;::];
+    id:exec last run_id from .qetl.run.runs[] where worker=`demo_deals_backfill;
+    .qunit.assertEquals[asc exec label from .qetl.run.facts_of id;`dry_run`rows`source_version;"the framework's facts are recorded"];
+    .qunit.assertTrue[any {[l] (`ERROR=l 0) and l[2] like "facts function returned*"} each lines;"and the bad facts are logged at ERROR"]};

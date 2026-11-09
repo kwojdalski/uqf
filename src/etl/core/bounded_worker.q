@@ -1459,9 +1459,9 @@
             .qetl.log.ch.err[`lifecycle;"facts function failed";
                 (enlist[`worker]!enlist worker),`range_from`range_to`error!(w`range_from;w`range_to;e)];
             ()!()}[worker;w]]];
-    if[not 99h=type declared;
-        .qetl.log.ch.err[`lifecycle;"facts function returned a non-dictionary";
-            (enlist[`worker]!enlist worker),`range_from`range_to!(w`range_from;w`range_to)];
+    / keyed by anything but symbols, record refuses it, and took the framework's facts with it (#2597)
+    if[not $[99h=type declared; (0=count declared) or 11h=abs type key declared; 0b];
+        .qetl.log.ch.err[`lifecycle;"facts function returned a non-dictionary or one not keyed by symbols";(enlist[`worker]!enlist worker),`range_from`range_to!(w`range_from;w`range_to)];
         declared:()!()];
     / A dry run computes the facts - "what would this window have recorded"
     / is worth seeing - and records none of them.
@@ -1470,7 +1470,7 @@
             (enlist[`worker]!enlist worker),`range_from`range_to`facts!(w`range_from;w`range_to;framework,declared)]];
     @[{[a] .qetl.run.record . a};
       (cfg`dataset;w`range_from;w`range_to;framework,declared);
-      {[e] (::)}]}
+      {[worker;w;e] .qetl.log.ch.err[`lifecycle;"run facts not recorded";(enlist[`worker]!enlist worker),`range_from`range_to`error!(w`range_from;w`range_to;e)]}[worker;w]]}
 
 / Private: the new cursor, refusing any move that is not strictly forward.
 / .
