@@ -7,9 +7,12 @@
 / A type change must name its target column in cast_names and round-trip
 / exactly through the original type. Existing columns are never guessed away.
 / .
-/ An optional ninth argument selects the empty-partition reset (#2251):
+/ An optional ninth argument selects the mode:
+/   migrate      the default: check, then stage the renamed and cast table
+/   check        every check migrate makes, casts round-tripped, and stage
+/                nothing; print CHECKED|rows - the dry run's plan (#2463)
 /   reset-check  verify every stored column is empty; print PLAN|old|new; write nothing
-/   reset        the same check, then stage the declaration's empty table
+/   reset        the same check, then stage the declaration's empty table (#2251)
 / Both ignore the rename/cast lists (the caller passes "-"). A reset never
 / guesses: one populated, unreadable or unaccounted-for file refuses it.
 
@@ -25,7 +28,7 @@ old_names:names args 5;
 new_names:names args 6;
 cast_names:names args 7;
 mode:$[8>count args;"migrate";args 8];
-if[not mode in ("migrate";"reset-check";"reset"); -2 "stage_hdb_migration: unknown mode ",mode; exit 2];
+if[not mode in ("migrate";"check";"reset-check";"reset"); -2 "stage_hdb_migration: unknown mode ",mode; exit 2];
 
 fail:{[msg] -2 "stage_hdb_migration: ",msg; exit 1};
 if[()~key root; fail "no HDB at ",string root];
@@ -118,6 +121,7 @@ values:with_attr[want]'[target_cols;values];
 rows:count first values;
 rebuilt:flip target_cols!values;
 if[rows<>count rebuilt; fail "rebuilt table changed its row count"];
+if[mode~"check"; -1 "CHECKED|",string rows; exit 0];
 
 / Stage outside the mapped HDB and enumerate symbols against its own sym
 / file. The caller keeps the original table until an atomic directory swap.

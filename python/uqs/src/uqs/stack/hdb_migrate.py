@@ -151,8 +151,9 @@ def _run_stage(
     renames: dict[str, str] | None = None,
     casts: set[str] | None = None,
 ) -> str:
-    """Run STAGE_SCRIPT; return the staged row count, or for `reset-check` the
-    `stored|declared` column specs it printed. Raises with q's last words."""
+    """Run STAGE_SCRIPT; return the staged row count, for `check` the row count
+    it would stage, or for `reset-check` the `stored|declared` column specs it
+    printed. Raises with q's last words."""
     renames, casts = renames or {}, casts or set()
     schema = declared_schema(paths)
     # q's system "l <path>" cannot load a path with spaces. Load a copy from
@@ -182,12 +183,12 @@ def _run_stage(
             stdin=subprocess.DEVNULL,
             timeout=600,
         )
-    tag = "PLAN|" if mode == "reset-check" else "STAGED|"
+    tag = {"reset-check": "PLAN|", "check": "CHECKED|"}.get(mode, "STAGED|")
     lines = [line for line in result.stdout.splitlines() if line.startswith(tag)]
     if result.returncode != 0 or len(lines) != 1:
         said = (result.stderr or result.stdout).strip().splitlines()[-3:]
         raise UqsError(f"HDB migration stage failed: {' '.join(said)}")
-    if mode == "reset-check":
+    if mode in ("reset-check", "check"):
         return lines[0].split("|", 1)[1]
     _, count, source = lines[0].split("|", 2)
     live = root / partition.strftime("%Y.%m.%d") / table
@@ -222,6 +223,11 @@ def migrate(
     emptiness (and checks it again under the lock, just before staging); the
     dry run reports the schema change from that same check and writes nothing.
     It takes no renames or casts.
+
+    A dry run of renames and casts is likewise q's own check - the stored
+    columns against the declaration, each cast round-tripped - with nothing
+    staged, so a migration `apply` would refuse is refused here with the same
+    message (#2463). Either dry run needs q.
     """
     _name(table)
     for old, new in renames.items():
@@ -258,11 +264,10 @@ def migrate(
         )
     env = with_interpreter(paths)
     q = q_interpreter(env)
-    if reset_empty and q is None:
+    if q is None:
         raise UqsError("HDB migration needs q; set QCMD")
     if not apply:
         if reset_empty:
-            assert q is not None
             plan = _run_stage(paths, q, env, root, partition, table, Path("-"), "reset-check")
             old, new = plan.split("|", 1)
             return (
@@ -271,10 +276,9 @@ def migrate(
                 f"  declared: {new.replace(',', ', ')}\n"
                 "pass --apply after stopping the stack"
             )
-        return f"would migrate {description}; pass --apply after stopping the stack"
+        rows = _run_stage(paths, q, env, root, partition, table, Path("-"), "check", renames, casts)
+        return f"would migrate {description}; {rows} row(s); pass --apply after stopping the stack"
 
-    if q is None:
-        raise UqsError("HDB migration needs q; set QCMD")
     _write_lock(paths, q, env, "acquire", given)
 
     stage_root: Path | None = None
