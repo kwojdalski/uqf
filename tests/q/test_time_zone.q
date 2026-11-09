@@ -266,6 +266,35 @@
 .qt.qetl.time_zone.test_an_uncovered_instant_is_refused_rather_than_nulled:{[t]
     .qunit.assertError[{.qetl.source.utc_to_local[.qt.qetl.time_zone.london;x]};1850.01.01D00:00:00.000000000;"a missed lookup must not come back as a null timestamp"]};
 
+/ A zone whose table starts at offset 0 on 2026.01.01 and moves to +1h on
+/ 2026.06.01, so near the start of coverage one candidate offset is covered
+/ and the other falls before it (#2317).
+.qt.qetl.time_zone.edge:`$"Test/Edge"
+
+/ Run f against the loaded table plus the edge zone, restoring the table
+/ whatever f does. Returns (`ok;value) or (`err;message).
+.qt.qetl.time_zone.with_edge_zone:{[f]
+    saved:.qetl.source.zone_table;
+    edge:([] timezoneID:2#.qt.qetl.time_zone.edge;
+        gmtDateTime:2026.01.01D00:00:00.000000000 2026.06.01D00:00:00.000000000;
+        adjustment:0D00:00:00.000000000 0D01:00:00.000000000);
+    .qetl.source.zone_table:update `g#timezoneID from `gmtDateTime xasc saved,edge;
+    r:@[{(`ok;x[])};f;{(`err;x)}];
+    .qetl.source.zone_table:saved;
+    r}
+
+.qt.qetl.time_zone.test_a_covered_candidate_is_kept_when_another_predates_coverage:{[t]
+    r:.qt.qetl.time_zone.with_edge_zone {.qetl.source.local_to_utc[.qt.qetl.time_zone.edge;2026.01.01D00:30:00.000000000]};
+    .qunit.assertEquals[r;(`ok;2026.01.01D00:30:00.000000000);"the zero-offset candidate is the only covered, valid one, so the reading converts"]};
+
+.qt.qetl.time_zone.test_a_reading_with_no_covered_candidate_is_still_refused:{[t]
+    r:.qt.qetl.time_zone.with_edge_zone {.qetl.source.local_to_utc[.qt.qetl.time_zone.edge;2025.06.01D00:00:00.000000000]};
+    .qunit.assertEquals[(first r;last[r] like "*has no rule covering*");(`err;1b);"a reading no offset covers is refused as uncovered, not nulled"]};
+
+.qt.qetl.time_zone.test_a_gap_reading_in_a_covered_zone_is_still_refused:{[t]
+    r:.qt.qetl.time_zone.with_edge_zone {.qetl.source.local_to_utc[.qt.qetl.time_zone.edge;2026.06.01D00:30:00.000000000]};
+    .qunit.assertEquals[(first r;last[r] like "*does not exist*");(`err;1b);"dropping uncovered candidates does not let a spring-forward gap through"]};
+
 .qt.qetl.time_zone.test_a_utc_source_needs_no_zone_table_at_all:{[t]
     saved:.qetl.source.zone_table;
     saved_names:.qetl.source.zone_names;
