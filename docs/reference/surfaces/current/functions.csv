@@ -769,6 +769,7 @@ qetl.reaction,empty_outcomes,function,1,
 qetl.reaction,empty_queue,function,1,
 qetl.reaction,fillable,function,1,
 qetl.reaction,for_dataset,function,1,dataset
+qetl.reaction,from_now,dict,,
 qetl.reaction,history,table,,
 qetl.reaction,history_limit,value,,
 qetl.reaction,io_now,value,,

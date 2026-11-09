@@ -596,16 +596,22 @@
 / replaces is this window's output and nothing else.
 .qetl.reaction.window_now:0#0Np
 
+/ The dataset and partition being reacted to, for `write`: a partition's
+/ reaction replaces that partition's output and no other's (#2328).
+.qetl.reaction.from_now:`dataset`partition!(`;`)
+
 .qetl.reaction.run_one:{[item;nm;h]
     `.qetl.reaction.depth_now set item`depth;
     `.qetl.reaction.rows_now set item`rows;
     `.qetl.reaction.io_now set item`io;
     `.qetl.reaction.window_now set (item`range_from;item`range_to);
+    `.qetl.reaction.from_now set `dataset`partition!(item`dataset;item`partition);
     r:@[{[h;item] h[item`dataset;item`range_from;item`range_to]; `ok}[h];item;{[e] (`failed;e)}];
     `.qetl.reaction.depth_now set 0;
     `.qetl.reaction.rows_now set ();
     `.qetl.reaction.io_now set (::);
     `.qetl.reaction.window_now set 0#0Np;
+    `.qetl.reaction.from_now set `dataset`partition!(`;`);
     $[`ok~r;
         .qetl.reaction.record[item;nm;`ok;""];
         [.qetl.reaction.record[item;nm;`failed;last r];
@@ -705,12 +711,15 @@
 / one must lie inside the window being reacted to: the window is what gets
 / cleared, so a row timed outside it would be written beside output this
 / call never cleared. That is refused rather than written.
+/ .
+/ A PARTITION'S reaction replaces that partition's output only (#2328): see
+/ write_scope, which refuses a write it cannot confine.
 / @param target the table to write, as a symbol
 / @param row_key the column(s) identifying one output row, e.g. `sym`window
 / @param rows the rows, as a table
 / @return the number of rows written
-/ @throws error outside a reaction, without a `time` column, or with a row
-/   outside the window
+/ @throws error outside a reaction, without a `time` column, with a row
+/   outside the window, or when the clear cannot be confined to the partition
 / @eg .qetl.reaction.on[`demo_deals;`copy_out;{[ds;f;t] .qetl.reaction.write[`demo_copy;`deal_id;.qetl.reaction.published[]]}]
 .qetl.reaction.write:{[target;row_key;rows]
     if[not .qetl.reaction.draining; '"write: only a reaction's handler writes a reaction's output"];
@@ -722,8 +731,46 @@
     if[count outside:select from rows where not (time>=w 0) and time<w 1;
         '"write: ",string[count outside]," row(s) of ",string[target],
          " lie outside the window being reacted to, ",string[w 0]," to ",string w 1];
+    scope:.qetl.reaction.write_scope[target;rows];
     mgr:$[99h=type .qetl.reaction.io_now; .qetl.reaction.io_now; .qetl.io.default];
     .qetl.io.write_keyed[mgr;target;rows;
-        `on_conflict`row_key`time_column`range_from`range_to!(`replace;row_key;`time;w 0;w 1)]}
+        (`on_conflict`row_key`time_column`range_from`range_to!(`replace;row_key;`time;w 0;w 1)),scope]}
+
+/ Private: the partition a reaction's replace is confined to, as the
+/ partition_column and partition .qetl.io.resolve scopes a clear by.
+/ .
+/ Partitions of one dataset publish the same window, and each one's reaction
+/ writes the same target: unscoped, USDJPY's replace deleted EURUSD's output
+/ with both outcomes `ok (#2328). So the clear takes only the rows whose
+/ partition_column - the one the publishing worker declares (#1476) - holds
+/ this partition, and every row written must hold it, as every one must lie
+/ in the window. Where no scope can be named - no loaded worker declares the
+/ partition's column, the rows lack it, or an unpartitioned publication has
+/ a partitioned sibling (#1518) - the write is refused rather than clearing
+/ rows that are not this reaction's.
+/ @param target the table being written, for messages
+/ @param rows the rows being written
+/ @return a dict to join to the write's opts, empty for an unpartitioned dataset
+/ @throws error when the clear cannot be confined to the partition
+/ @private
+.qetl.reaction.write_scope:{[target;rows]
+    ds:.qetl.reaction.from_now`dataset; part:.qetl.reaction.from_now`partition;
+    wc:$[`worker_cfg in key `.qetl.job.bounded; 0!.qetl.job.bounded.worker_cfg; ([] dataset:`symbol$(); partition:`symbol$(); partition_column:`symbol$())];
+    if[null part;
+        others:distinct ((exec partition from wc where dataset=ds),.qetl.coverage.partitions_of ds) except `;
+        if[count others;
+            '"write: ",string[ds]," is also filled as partition ",(", " sv string others),
+             ", whose output an unpartitioned clear of ",string[target]," would delete - publish ",string[ds]," by partition"];
+        :()!()];
+    c:first exec partition_column from wc where dataset=ds, partition=part;
+    if[null c;
+        '"write: no loaded worker names the column holding partition ",string[part]," of ",string[ds],
+         ", so ",string[target],"'s clear cannot be confined to it"];
+    if[not c in cols rows;
+        '"write: ",string[target],"'s rows need a ",string[c]," column - partition ",string[part],"'s output is cleared by it"];
+    if[n:sum not part=rows c;
+        '"write: ",string[n]," row(s) of ",string[target]," are not partition ",string[part]," in ",string[c],
+         " - the partition being reacted to"];
+    `partition_column`partition!(c;part)}
 
 \d .
