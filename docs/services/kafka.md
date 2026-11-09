@@ -397,12 +397,12 @@ recognised by the feed and by every decoder with the same rule
 (`.qetl.kafka.restarted`): a partition whose polled rows all sit below its mark
 has restarted, so its mark is reset, a warning is logged, and the new records
 are published and decoded. A redelivery that reaches the mark is a plain
-redelivery and is dropped - unless every one of its rows at or below the mark
-is newer than the mark's record: then it is a new generation whose first page
+redelivery and is dropped - unless every one of its rows at or below the mark is
+newer than the mark's record: then it is a new generation whose first page
 already reached the old mark, and it restarts the partition too (#2320). The
 cost of the rule is that a redelivery *wholly* below the mark is taken for a
-restart and decoded again; after a decoder restart
-the replay marks such a partition by the top of its last run of offsets.
+restart and decoded again; after a decoder restart the replay marks such a
+partition by the top of its last run of offsets.
 
 ## Limits worth knowing
 
