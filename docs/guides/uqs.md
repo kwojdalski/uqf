@@ -1357,7 +1357,7 @@ collected" on a healthy stack.
   counting only types something in the fleet runs as. The fleet is the one the
   start brings up - a profile's resolved set, or the set the last profile start
   recorded - not the `startwithall=1` rows, so `--profile crypto`, whose
-  seventeen processes fit, keeps `feed` and hears `cryptomock1`. On a fully
+  nineteen processes fit, keeps `feed` and hears `cryptomock1`. On a fully
   licensed kdb+/KDB-X, or on PeachQ, nothing is dropped.
 - **uqf's standing ETLs (`metrics`) are monitored too**; `backfill` workers are
   not, because a finished job's heartbeat would age into a false `error`.
