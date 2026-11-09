@@ -272,7 +272,7 @@ connection and keep everything else their own (`uqs.external.connection`,
 #1786). Every setting an option declares a variable for resolves in one order:
 
 1. **Given explicitly** --- the option to `uqs connector start` (`--brokers`,
-   `--topic`), or the argument a Python caller passes. A secret is never given
+   `--topics`), or the argument a Python caller passes. A secret is never given
    inline (#1853): `--tp-credential-env NAME` and `--api-key-env NAME` name the
    variable holding it, so it reaches neither `ps`, shell history, nor the
    connector's pid file. The inline `--tp-credential` still parses for one
@@ -290,16 +290,16 @@ A dry run (`--dry-run`) lists each setting that is not a default with where it
 came from, and prints a credential or key as `***`; a refusal names the option
 or variable, never the value. What is shared and what is each connector's own:
 
-  | Setting                                         | Kind                           | Where it is set                                                                                       |
-  | ---                                             | ---                            | ---                                                                                                   |
-  | stp1's host                                     | shared                         | `TP_HOST`, `uqs.external.connection`                                                                  |
-  | stp1's port                                     | shared                         | stp1's `process.csv` row (`connection.tickerplant_port`; crypto takes `--base-port`)                  |
-  | stp1's credential                               | shared                         | `--tp-credential-env NAME` > `UQF_TP_CREDENTIAL` > the demo login                                     |
-  | Kafka brokers                                   | shared by both Kafka consumers | `--brokers` > `UQF_KAFKA_BROKERS` > `localhost:9092` (`kafka_feed1`: the variable, required)          |
-  | Kafka topics                                    | q/Python binding               | `--topic` > `UQF_KAFKA_TOPICS` > every topic a decoder declares; an undeclared one is refused by both |
-  | Kafka consumer group                            | each consumer's own            | `uqf-kafka-flow` (Python, `--group`); `uqf-kafka-q` (`kafka_feed1`, `UQF_KAFKA_GROUP`)                |
-  | the raw table published                         | q/Python binding               | the connector's `produces`; refused before a start unless `plant_tables.q` defines it                 |
-  | venues, symbols, dataset, intervals, OMS socket | each connector's own           | that connector's options                                                                              |
+  | Setting                                         | Kind                           | Where it is set                                                                                        |
+  | ---                                             | ---                            | ---                                                                                                    |
+  | stp1's host                                     | shared                         | `TP_HOST`, `uqs.external.connection`                                                                   |
+  | stp1's port                                     | shared                         | stp1's `process.csv` row (`connection.tickerplant_port`; crypto takes `--base-port`)                   |
+  | stp1's credential                               | shared                         | `--tp-credential-env NAME` > `UQF_TP_CREDENTIAL` > the demo login                                      |
+  | Kafka brokers                                   | shared by both Kafka consumers | `--brokers` > `UQF_KAFKA_BROKERS` > `localhost:9092` (`kafka_feed1`: the variable, required)           |
+  | Kafka topics                                    | q/Python binding               | `--topics` > `UQF_KAFKA_TOPICS` > every topic a decoder declares; an undeclared one is refused by both |
+  | Kafka consumer group                            | each consumer's own            | `uqf-kafka-flow` (Python, `--group`); `uqf-kafka-q` (`kafka_feed1`, `UQF_KAFKA_GROUP`)                 |
+  | the raw table published                         | q/Python binding               | the connector's `produces`; refused before a start unless `plant_tables.q` defines it                  |
+  | venues, symbols, dataset, intervals, OMS socket | each connector's own           | that connector's options                                                                               |
 
 ## PeachQ
 

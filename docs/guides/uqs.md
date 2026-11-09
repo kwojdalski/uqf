@@ -456,7 +456,7 @@ options, which are not remembered), `status`, and `logs NAME [-f] [-l N]`, which
 shows the one plain log file `status` names:
 
 ```bash
-uqs connector start kafka --topic trades,quotes
+uqs connector start kafka --topics uqf.client.flow
 uqs connector restart kafka --group uqf-replay     # start's options, given again
 uqs connector logs kafka -f
 uqs connector stop kafka
