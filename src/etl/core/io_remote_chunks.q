@@ -19,9 +19,10 @@
 /   .qetl.io.remote.max_staged_rows rows staged across every batch in flight,
 /   refusing a chunk past it as busy rather than growing without bound. A chunk
 /   not yet in is held at one row, so announcing chunks spends the budget as
-/   sending rows does (#2327). A batch staged longer than
+/   sending rows does (#2327). A batch no chunk of which has arrived for
 /   .qetl.io.remote.stage_ttl is dropped - its client gave up - and the window
-/   is sent again whole by the next run.
+/   is sent again whole by the next run. Inactivity, not age: a large window
+/   still arriving chunk by chunk is not given up on (#2435).
 / .
 /   RESENDING IS SAFE. A chunk sent twice replaces itself; a batch already
 /   committed answers `duplicate at its first chunk, before anything is staged.
@@ -39,11 +40,11 @@
 / The most rows a receiver holds staged across every batch in flight.
 .qetl.io.remote.max_staged_rows:5000000
 
-/ How long a partly-sent batch is kept before it is dropped.
+/ How long a partly-sent batch is kept after its latest chunk before it is dropped.
 .qetl.io.remote.stage_ttl:0D00:10
 
 / The batches being staged: batch id -> dict of request (less its rows), of
-/ (how many chunks), chunks (one slot per chunk) and first (when the first came).
+/ (how many chunks), chunks (one slot per chunk) and last (when the latest came).
 .qetl.io.remote.staged:(enlist `)!enlist (::)
 
 / The keys a chunk carries, exactly.
@@ -56,11 +57,11 @@
     v:1_value .qetl.io.remote.staged;
     $[count v; sum {[e] sum 1|count each e`chunks} each v; 0]}
 
-/ Private: drop batches staged longer than the time-to-live.
+/ Private: drop batches no chunk of which has arrived for the time-to-live.
 / @private
 .qetl.io.remote.expire_staged:{[now]
     k:1_key .qetl.io.remote.staged;
-    old:k where {[now;e] now>(e`first)+.qetl.io.remote.stage_ttl}[now] each .qetl.io.remote.staged k;
+    old:k where {[now;e] now>(e`last)+.qetl.io.remote.stage_ttl}[now] each .qetl.io.remote.staged k;
     if[count old; .qetl.io.remote.staged:old _ .qetl.io.remote.staged];
     count old}
 
@@ -114,8 +115,9 @@
     .qetl.io.remote.expire_staged[.z.p];
     .qetl.io.remote.require_room[id;req];
     e:$[id in key .qetl.io.remote.staged; .qetl.io.remote.staged id;
-        `req`of`chunks`first!(`seq`of`rows _ req;req`of;(req`of)#enlist ();.z.p)];
+        `req`of`chunks`last!(`seq`of`rows _ req;req`of;(req`of)#enlist ();.z.p)];
     e[`chunks]:@[e`chunks;req`seq;:;req`rows];
+    e[`last]:.z.p;
     if[any 0=count each e`chunks;
         .qetl.io.remote.staged[id]:e;
         :`status`batch_id`rows!(`staged;id;count req`rows)];

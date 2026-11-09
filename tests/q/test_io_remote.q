@@ -366,6 +366,20 @@
         .qetl.io.remote.expire_staged[.z.p+.qetl.io.remote.stage_ttl+0D00:00:01]}];
     .qunit.assertEquals[n;1;"its client gave up: the next run sends it whole"]};
 
+.qt.qetl.io.remote.test_a_batch_still_arriving_is_not_dropped_however_long_it_takes:{[t]
+    / expiry judges inactivity, not age: every chunk lands inside the time-to-live,
+    / the whole takes longer than it (#2435)
+    .qt.qetl.io.remote.reset[];
+    .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
+    ttl:.qetl.io.remote.stage_ttl;
+    `.qetl.io.remote.stage_ttl set 0D00:00:00.3;
+    slow:.qetl.io.remote.manager[{[m] r:value m; system"sleep 0.2"; r};`uat;`deals];
+    b:([] time:2026.01.02D09:00:00.000000000+0D01*til 3; sym:`EURUSD`GBPUSD`USDJPY; notional:1e6 2e6 3e6);
+    n:@[.qt.qetl.io.remote.chunked;{[mgr;b;x] .qetl.io.write_keyed[mgr;`rdeals;b;.qt.qetl.io.remote.opts[`append]]}[slow;b];{[e] e}];
+    `.qetl.io.remote.stage_ttl set ttl;
+    .qunit.assertEquals[n;3;"three chunks over 0.6s against a 0.3s time-to-live commit"];
+    .qunit.assertEquals[count rdeals;3;"and every row is written"]};
+
 .qt.qetl.io.remote.test_chunks_that_do_not_reassemble_their_batch_are_refused:{[t]
     .qt.qetl.io.remote.reset[];
     .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
