@@ -143,11 +143,15 @@ def _write_all(contents: dict[Path, str], created: set[Path], repo_root: Path) -
 
 
 def _check_processes(plan: ScaffoldPlan, repo_root: Path) -> None:
-    """Refuse a job whose process another job already runs (#1572).
+    """Refuse a job whose process another job already runs (#1572), or whose
+    name another job already has (#2500).
 
     One process runs one job: the tree refuses to load with two claiming the
     same procname, so the clash is caught here, before any file is written,
-    rather than by the load or the registry after it.
+    rather than by the load or the registry after it. Job names share one
+    namespace, `.qpipe.job.<name>`, across kinds: a streaming job named like a
+    bounded worker has no file of its name to clash with, and `.qetl.job.*.define`
+    refuses it only when the tree next loads.
     """
     new = [
         d
@@ -159,9 +163,16 @@ def _check_processes(plan: ScaffoldPlan, repo_root: Path) -> None:
     ]
     if not new:
         return
+    existing = read_declarations(repo_root)
+    names = {d.name: d.kind.value for d in existing}
     taken = {p.procname: p.procname for p in NON_JOB_PIPELINES}
-    taken |= {d.procname: d.name for d in read_declarations(repo_root)}
+    taken |= {d.procname: d.name for d in existing}
     for d in new:
+        if d.name in names:
+            raise UqsError(
+                f"a job called {d.name!r} already exists (a {names[d.name]} job), and every job "
+                f"shares one namespace (.qpipe.job.{d.name}) - pick another name"
+            )
         if d.procname in taken:
             raise UqsError(
                 f"{d.name} would run as {d.procname}, which {taken[d.procname]} already runs - "

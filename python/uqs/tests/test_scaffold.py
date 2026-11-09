@@ -289,6 +289,44 @@ def test_a_second_worker_on_a_source_registers_its_own_passthrough(tmp_path: Pat
     LoadPlan(read_facts(tmp_path))  # refuses a transform two files register
 
 
+@pytest.mark.parametrize(
+    "plan",
+    [
+        lambda: jobs.streaming_job(
+            "demo_events_backfill", [], "zz_de", "sym:symbol, px:float", unprofiled="t"
+        ),
+        lambda: normalizer.normalizer(
+            "demo_events_backfill",
+            ["trades"],
+            parse_columns("sym:symbol, px:float"),
+            {"trades": _COLS},
+            known_tables={"trades"},
+            unprofiled="t",
+        ),
+        lambda: horizon.horizon_job(
+            "demo_events_backfill",
+            ["trades", "quote"],
+            parse_columns("sym:symbol, px:float"),
+            {"trades": _COLS, "quote": _COLS},
+            "5s",
+            known_tables={"trades", "quote"},
+            unprofiled="t",
+        ),
+    ],
+)
+def test_a_name_a_job_of_another_kind_has_is_refused_before_anything_is_written(
+    tmp_path: Path, plan
+):
+    """#2500: a streaming job, normalizer or horizon job named like a bounded
+    worker had no file of its name to clash with, so it was written - and
+    `.qetl.job.*.define` then refused it, and the whole tree stopped loading."""
+    _copy_of_the_tree(tmp_path)
+    before = sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*"))
+    with pytest.raises(UqsError, match="'demo_events_backfill' already exists.*backfill"):
+        write.apply_plan(plan(), tmp_path)
+    assert sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*")) == before
+
+
 def test_appending_to_a_missing_file_is_refused(tmp_path: Path):
     plan = jobs.streaming_job("j", ["trades"], None, None)
     with pytest.raises(UqsError, match="nothing to append to"):
