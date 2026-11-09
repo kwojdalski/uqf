@@ -28,6 +28,8 @@ BasePortOpt = Annotated[
     int | None,
     typer.Option(
         "--base-port",
+        min=1,
+        max=65535,
         help="The existing stack's base port (-stackid / KDBBASEPORT). No default: "
         "the runtime's own base port is exactly the wrong guess.",
     ),

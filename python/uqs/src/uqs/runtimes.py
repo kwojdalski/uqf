@@ -98,8 +98,20 @@ class Runtime:
             )
 
     def resolve_base_port(self, base_port: int | None) -> int:
-        """KDBBASEPORT: `base_port` when given (`--base-port`), else this runtime's."""
-        return self.base_port if base_port is None else base_port
+        """KDBBASEPORT: `base_port` when given (`--base-port`), else this runtime's.
+
+        Refuses one outside 1..65535 - the CLI's IntRange stops it at the
+        option, and this stops the MCP server's `base_port`, which has none
+        (#2609). A base in range can still push a process's offset past
+        65535: resolving its row refuses that (stack/placeholders.py)."""
+        if base_port is None:
+            return self.base_port
+        if not 0 < base_port <= 65535:
+            # ValueError, not UqsError: this module is a leaf and imports
+            # nothing of uqs (test_module_split.py); the MCP server reports
+            # every exception as its one refusal.
+            raise ValueError(f"base port {base_port} is not a port - give 1..65535")
+        return base_port
 
 
 #: Every runtime, by name. The first is the default.

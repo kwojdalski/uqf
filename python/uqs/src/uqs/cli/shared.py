@@ -190,6 +190,8 @@ BasePortOpt = Annotated[
     int | None,
     typer.Option(
         "--base-port",
+        min=1,
+        max=65535,
         help="The stack's base port, KDBBASEPORT - shifts every process's port. "
         "Default: the runtime's own "
         + ", ".join(f"{r.name} {r.base_port}" for r in runtimes.RUNTIMES.values()),

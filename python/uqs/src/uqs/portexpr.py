@@ -29,7 +29,28 @@ from collections.abc import Mapping
 
 _PORT_CELL = re.compile(r"^(?:(?P<literal>[0-9]+)|\{(?P<name>\w+)\}(?P<offset>[+-][0-9]+)?)$")
 _INTEGER = re.compile(r"-?[0-9]+")
-_MAX_PORT = 65535
+MAX_PORT = 65535
+
+
+def evaluate(raw: str | None, env: Mapping[str, str]) -> int | None:
+    """The number a cell evaluates to under *env*, unbounded: `resolve`
+    without the 1..65535 check, for a caller that refuses an out-of-range
+    result rather than treating it as unknown (stack/placeholders.py). None
+    and never-raises as `resolve`, otherwise."""
+    match = _PORT_CELL.match((raw or "").strip())
+    if match is None:
+        return None
+    if match["literal"] is not None:
+        return int(match["literal"])
+    value = env.get(match["name"], "").strip()
+    if not _INTEGER.fullmatch(value):
+        return None
+    return int(value) + int(match["offset"] or 0)
+
+
+def in_range(port: int) -> bool:
+    """Whether a socket can listen on *port*."""
+    return 0 < port <= MAX_PORT
 
 
 def resolve(raw: str | None, env: Mapping[str, str]) -> int | None:
@@ -42,14 +63,5 @@ def resolve(raw: str | None, env: Mapping[str, str]) -> int | None:
     must not take down a whole fleet view, and the caller reports the row as
     undetermined rather than as some other port.
     """
-    match = _PORT_CELL.match((raw or "").strip())
-    if match is None:
-        return None
-    if match["literal"] is not None:
-        port = int(match["literal"])
-    else:
-        value = env.get(match["name"], "").strip()
-        if not _INTEGER.fullmatch(value):
-            return None
-        port = int(value) + int(match["offset"] or 0)
-    return port if 0 < port <= _MAX_PORT else None
+    port = evaluate(raw, env)
+    return port if port is not None and in_range(port) else None

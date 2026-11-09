@@ -14,6 +14,7 @@ import re
 from string import Template
 
 from uqs import portexpr
+from uqs.paths import UqsError
 
 #: A `port` value in uqs.portexpr's grammar, rather than a `${VAR}` template.
 _BRACE_PLACEHOLDER = re.compile(r"^\{\w+\}(?:[+-]\d+)?$")
@@ -28,4 +29,15 @@ def _resolve_value(value: str, env: dict[str, str]) -> str:
 
 
 def resolve_process_config(row: dict[str, str], env: dict[str, str]) -> dict[str, str]:
+    """The row as torq.sh would start it. Refuses a port the base port pushes
+    outside 1..65535: no process can listen there, and leaving the cell
+    unresolved would read as "unknown" rather than as the operator's mistake
+    (#2609)."""
+    port = portexpr.evaluate(row.get("port"), env)
+    if port is not None and not portexpr.in_range(port):
+        raise UqsError(
+            f"{row.get('procname', '?')} would listen on port {port} "
+            f"({row['port']} with KDBBASEPORT={env.get('KDBBASEPORT', '?')}) - "
+            f"every port must be 1..{portexpr.MAX_PORT}: choose a lower --base-port"
+        )
     return {field: _resolve_value(value, env) for field, value in row.items()}
