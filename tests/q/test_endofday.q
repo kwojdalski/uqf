@@ -526,6 +526,20 @@
     .qunit.assertEquals[count e;1;"the existing detection still speaks"];
     .qunit.assertEquals[exec base_qty from .qpipe.job.fx_positions.positions;enlist 1e5;"and the book is today's fill alone"]};
 
+/ #2310: a marker that is there but unreadable, .bak and all, is not a first
+/ start - the restart says what it cannot tell, rather than replay quietly.
+.qt.qetl.job.stream.endofday.test_an_unreadable_carry_marker_is_reported_not_a_first_start:{[t]
+    .qt.qetl.job.stream.endofday.missed_logs .z.D-2;
+    p:.qetl.job.stream.carry_marker_path `fx_positions;
+    {[f] system "echo not-a-marker > ",f} each (p;p,".bak");
+    .qunit.assertThrows[.qetl.job.stream.last_end_seen;`fx_positions;"*is unreadable (*";"the marker reads as broken, not absent"];
+    .qetl.job.stream.reset `fx_positions;
+    e:.qt.qetl.job.stream.endofday.errors[.qt.support.captured_log[0b] {.qetl.job.stream.start[`fx_positions;.qt.qetl.job.stream.endofday.gap_transport[]]}];
+    system "rm -f ",p,"*";
+    .qetl.tick.reset[];
+    .qunit.assertEquals[count e;1;"the restart still runs, and says once that the carried state may be missing"];
+    .qunit.assertTrue[e[0;2] like "*the marker of the last end of day this job saw cannot be read*";"naming the marker as the reason"]};
+
 / --- the plant's day, not the job's (#1212) ---------------------------------
 
 / Start fx_positions after logs from `marker`, on a transport whose plant is on

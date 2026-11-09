@@ -15,13 +15,16 @@
 .qetl.job.stream.carry_marker_path:{[job] (.qetl.job.bounded.state.lock_dir[]),"/carry_",string job}
 
 / The last end of day a carrying job recorded, 0Nd when none (a first start).
+/ A marker that is there but unreadable, .bak and all, is not a first start:
+/ it throws, rather than answer the 0Nd that would skip catch-up quietly (#2310).
 / @param job the job's name
 / @return a date, or 0Nd
+/ @throws error when the marker and its .bak are both unreadable
 / @eg .qetl.job.stream.last_end_seen `fx_positions
 .qetl.job.stream.last_end_seen:{[job]
     p:.qetl.job.stream.carry_marker_path[job];
     if[()~key hsym `$p; :0Nd];
-    @[{first (.qetl.job.bounded.state.durable_get x)`last_end_of_day};p;{[e] 0Nd}]}
+    first (.qetl.job.bounded.state.durable_get p)`last_end_of_day}
 
 / How many batches the publish seam has withheld (a check or the plant's
 / contract): `withhold` returns :: like a publisher that sent nothing, so
@@ -99,7 +102,8 @@
 / @return how many messages were replayed
 / @eg .qetl.job.stream.catch_up[`fx_positions;()!();`executions`fx_position_open;{[t;x]}]  / a transport with no earlier_days: nothing to replay
 .qetl.job.stream.catch_up:{[job;tr;tbls;h]
-    last_eod:.qetl.job.stream.last_end_seen[job];
+    / an unreadable marker leaves nothing to replay from: missed_end_of_day reports it (#2310)
+    last_eod:@[.qetl.job.stream.last_end_seen;job;{[e] 0Nd}];
     today:.qetl.job.stream.plant_today[tr];
     if[(null last_eod) or last_eod>=today-1; :0];
     if[not `earlier_days in key tr; :0];
@@ -120,7 +124,8 @@
 / is found and this is quiet; so is a catch_up that read the log of the day
 / after the marker, snapshot or not (#1189: the book was flat at the marker).
 / It speaks when that log could not be read (a transport without earlier_days
-/ or has_log, or logs since cleared).
+/ or has_log, or logs since cleared), and when the marker itself cannot be
+/ (#2310).
 / @param job the job's name
 / @param today the date the replayed log is for (the plant's, see plant_today)
 / @return 1b when an end of day was missed, after logging it as an ERROR
@@ -128,7 +133,12 @@
 .qetl.job.stream.missed_end_of_day:{[job;today]
     if[(first $[job in key .qetl.job.stream.carry_log; .qetl.job.stream.carry_log job; enlist `none]) in `restored`restored_full; :0b];
     if[job in key .qetl.job.stream.caught_up; if[.qetl.job.stream.caught_up job; :0b]];
-    last_eod:.qetl.job.stream.last_end_seen[job];
+    r:@[{(1b;.qetl.job.stream.last_end_seen[x])};job;{(0b;x)}];
+    if[not first r;
+        .qetl.log.ch.err[`eod;"replayed with no carried snapshot, and the marker of the last end of day this job saw cannot be read - whether it missed one cannot be told, so the state carried from before today may be missing";
+            (enlist[`job]!enlist job),`error`today`table!(last r;today;.qetl.job.stream.def[job][`carry]`table)];
+        :1b];
+    last_eod:last r;
     if[(null last_eod) or last_eod>=today-1; :0b];
     .qetl.log.ch.err[`eod;"replayed with no carried snapshot, and the last end of day this job saw was before yesterday - it was down at an end of day, so the state carried from before today is missing, and no earlier log held it";
         (enlist[`job]!enlist job),`last_end_of_day`today`table!(last_eod;today;.qetl.job.stream.def[job][`carry]`table)];
