@@ -82,6 +82,8 @@ facts:(!) . flip (
     (`SOURCE_CREDENTIAL_PREFIX; .qetl.source.credential_prefix);
     (`FIXTURE_TAG;            .qetl.source.fixture_tag);
     (`REVISION_TAG;           .qetl.job.bounded.runtime.revision_tag);
+    / The rows a remote client puts in one chunk: the least an approval's max_rows may be (#2610).
+    (`REMOTE_CHUNK_ROWS;      .qetl.io.remote.chunk_rows);
     (`Q_TYPE_NAMES;           (`$enlist each type_chars)!type_names);
     (`Q_TYPE_CHARS;           type_names!`$enlist each type_chars);
     (`Q_ATTRIBUTES;           attributes))

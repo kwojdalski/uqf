@@ -883,15 +883,17 @@ directory:
   in doubt: check the target, then `.qetl.io.remote.forget` it.
 - `upsert`, `replace` and `ignore` write it again, which is harmless.
 
-A window larger than one message (the approval's `--max-message-rows`, 100000 by
-default) is sent in chunks of 50000 rows. The receiver stages them and commits
-the window only when its last chunk arrives and the reassembled rows match the
-batch's id, so a window that stops half-way writes nothing and its coverage does
-not move. Each chunk is a synchronous call, so the extractor never runs ahead of
-the receiver. The receiver holds at most `-max_staged_rows` rows staged across
-batches in flight (5000000 by default) and refuses more as busy, and it drops a
-batch staged for longer than ten minutes. Resending is safe: a chunk sent twice
-replaces itself, and a committed batch answers `duplicate` at its first chunk.
+A window larger than 50000 rows is sent in chunks of 50000 rows, so the
+approval's `--max-message-rows` (100000 by default) may not be lower than 50000:
+`approve` refuses it, as the receiver refuses such a `-max_rows`. The receiver
+stages them and commits the window only when its last chunk arrives and the
+reassembled rows match the batch's id, so a window that stops half-way writes
+nothing and its coverage does not move. Each chunk is a synchronous call, so the
+extractor never runs ahead of the receiver. The receiver holds at most
+`-max_staged_rows` rows staged across batches in flight (5000000 by default) and
+refuses more as busy, and it drops a batch staged for longer than ten minutes.
+Resending is safe: a chunk sent twice replaces itself, and a committed batch
+answers `duplicate` at its first chunk.
 
 A running receiver holds the attachment's owner record on the stack's machine,
 so `uqs job attachment remove` there refuses while it runs.
