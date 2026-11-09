@@ -22,6 +22,8 @@ last_value,3,default,2,17,6
 market_data,3,default,2,17,6
 mkt_orderbook,3,default,2,17,6
 order_routing,7,default,0,0,0
+quote,7,default,2,16,6
+quote,36500,time,0,0,0
 reference_data,7,default,0,0,0
 superbook,3,default,2,17,6
 wide_orderbook,3,default,2,17,6
