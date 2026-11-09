@@ -191,9 +191,11 @@
 / Split a timestamp's zone suffix off: (the text without it; its offset east
 / of UTC as a timespan). No suffix is an offset of 0D; one that is there and
 / unreadable is 0Nn. Only the CLOCK is searched for a sign - the "-"s of an
-/ ISO date come before the T, D or space that starts it.
+/ ISO date come before the T, D or space that starts it. Trimmed first, as
+/ to_timestamp trims: a leading space was taken for the clock's (#2548).
 / @eg .qetl.coerce.utc_offset["2026-09-15T09:30:00-05:00"]  ->  ("2026-09-15T09:30:00";-0D05:00)
 .qetl.coerce.utc_offset:{[str]
+    str:trim str;
     if[last[str] in "Zz"; :(-1_str;0D)];
     clock:first where str in "TD ";
     if[null clock; :(str;0D)];

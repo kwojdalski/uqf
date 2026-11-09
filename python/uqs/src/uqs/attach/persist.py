@@ -190,8 +190,10 @@ def render_uses(name: str, token: str, tables: tuple[str, ...], separated: bool 
     quoted = json.dumps(name)
     for t in tables:
         body.append(
+            # (), so a one-character name is a string, not a char atom: enlist "b"
+            # made the users a string, which detach and leave could not read (#2604)
             f".uqfattach.uses[`{t}]:distinct $[`{t} in key .uqfattach.uses;"
-            f".uqfattach.uses`{t};()],enlist {quoted};"
+            f".uqfattach.uses`{t};()],enlist (),{quoted};"
         )
         body.append(_rejoin(t))
     return _block(

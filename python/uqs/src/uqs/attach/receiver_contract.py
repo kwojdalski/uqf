@@ -274,8 +274,13 @@ def approve(
             f"--on-conflict {', '.join(wider)}: contract {contract.identity} permits only "
             f"{', '.join(contract.conflict_policies)} - approval may narrow it, never widen it"
         )
-    if not 0 < max_rows <= 10_000_000:
-        raise UqsError(f"--max-message-rows {max_rows} must be between 1 and 10000000")
+    # the extractor chunks at REMOTE_CHUNK_ROWS, never at this limit: under it,
+    # every window larger than max_rows would be refused (#2610)
+    if not q_facts.REMOTE_CHUNK_ROWS <= max_rows <= 10_000_000:
+        raise UqsError(
+            f"--max-message-rows {max_rows} must be between {q_facts.REMOTE_CHUNK_ROWS} "
+            "(the rows an extractor puts in one chunk) and 10000000"
+        )
     dest = _contract_destination(paths, attachment, contract, attach_root)
     att = config.load(attachment, attach_root)
     record = {

@@ -176,13 +176,34 @@
 
 .qt.qetl.source.fills.test_a_date_only_time_refuses_the_file:{[t]
     r:.qt.qetl.source.fills.with_source[`t_fills;enlist "2026-02-25,XNAS,a2,AAPL,B,10,271.7,0.1,USD";{.qt.qetl.source.fills.window[`t_fills;x]}];
-    .qunit.assertEquals[r;(`threw;"fills: t_fills data row 1 has a time that is empty, date-only or malformed (source_time; 1 row(s) in the window)");"a date is not midnight"]};
+    .qunit.assertEquals[r;(`threw;"fills: t_fills data row 1 has a time that is empty, date-only or malformed (source_time; 1 row(s) in the file)");"a date is not midnight"]};
 
 .qt.qetl.source.fills.test_a_time_with_an_offset_refuses_the_file:{[t]
     r:.qt.qetl.source.fills.with_source[`t_fills;enlist "2026-02-25T15:30:00+01:00,XNAS,a2,AAPL,B,10,271.7,0.1,USD";{.qt.qetl.source.fills.window[`t_fills;x]}];
-    .qunit.assertEquals[r;(`threw;"fills: t_fills data row 1 carries a UTC offset, but the source is declared UTC (source_time; 1 row(s) in the window)");"declared UTC, so not converted"];
+    .qunit.assertEquals[r;(`threw;"fills: t_fills data row 1 carries a UTC offset, but the source is declared UTC (source_time; 1 row(s) in the file)");"declared UTC, so not converted"];
     ok:.qt.qetl.source.fills.with_source[`t_fills;("2026-02-25T14:30:00+00:00,XNAS,a1,AAPL,B,10,271.7,0.1,USD";"2026-02-25T14:31:00Z,XNAS,a2,AAPL,B,10,271.7,0.1,USD");{.qt.qetl.source.fills.window[`t_fills;x]}];
     .qunit.assertEquals[ok`source_time;2026.02.25D14:30:00.000000000 2026.02.25D14:31:00.000000000;"a zero offset and Z are UTC"]};
+
+/ #2548: a padded time parsed, but the offset check read the leading space as the clock's.
+.qt.qetl.source.fills.test_a_time_with_a_leading_space_is_read_as_utc:{[t]
+    r:.qt.qetl.source.fills.with_source[`t_fills;enlist " 2026-02-25T14:31:00.020000,XNAS,a2,AAPL,B,10,271.7,0.1,USD";{.qt.qetl.source.fills.window[`t_fills;x]}];
+    .qunit.assertEquals[r`source_time;enlist 2026.02.25D14:31:00.020000000;"read, not refused as carrying an offset"];
+    .qunit.assertEquals[.qetl.coerce.utc_offset " 2026-02-25T14:30:00.5";("2026-02-25T14:30:00.5";0D);"no offset, as to_timestamp reads it"]};
+
+/ #2551: the time checks run over the whole file, so they count the file's rows, not the window's.
+.qt.qetl.source.fills.test_a_time_refusal_counts_the_rows_of_the_file:{[t]
+    r:.qt.qetl.source.fills.with_source[`t_fills;("2026-02-20T15:30:00+01:00,XNAS,a0,AAPL,B,10,271.7,0.1,USD";
+        "2026-02-21T15:30:00+01:00,XNAS,a1,AAPL,B,10,271.7,0.1,USD";.qt.qetl.source.fills.good_row);{.qt.qetl.source.fills.window[`t_fills;x]}];
+    .qunit.assertEquals[r;(`threw;"fills: t_fills data row 1 carries a UTC offset, but the source is declared UTC (source_time; 2 row(s) in the file)");
+        "two rows of the file, neither of them in the window"]};
+
+/ #2550: a byte order mark on the header made its first column read as absent.
+.qt.qetl.source.fills.test_a_file_opening_with_a_byte_order_mark_is_read:{[t]
+    p:.qt.qetl.source.fills.file["bom.csv";(("\357\273\277",.qt.qetl.source.fills.header);.qt.qetl.source.fills.good_row)];
+    .qetl.source.fills.declare[`t_fills;.qt.qetl.source.fills.decl[]];
+    r:@[.qt.qetl.source.fills.window[`t_fills;];p;{(`threw;x)}];
+    ![`.qetl.source.fills.registry;enlist (in;`name;enlist `t_fills);0b;`symbol$()];
+    .qunit.assertEquals[r`fill_id;enlist `a1;"the time column, first in the file, is found"]};
 
 .qt.qetl.source.fills.test_an_empty_fill_id_refuses_the_window:{[t]
     r:.qt.qetl.source.fills.with_source[`t_fills;enlist "2026-02-25T14:31:00Z,XNAS,,AAPL,B,10,271.7,0.1,USD";{.qt.qetl.source.fills.window[`t_fills;x]}];

@@ -256,21 +256,30 @@
     books:select distinct sym, source, source_time:quoted, bid, ask, clock, rid, date from (f lj got) where not null quoted, quoted>=arg`read_from;
     .qetl.mapped.arrange books}
 
-/ The newest source_time among the books of one market in the newest partition of the global `market_data`, read from
-/ the END of each (sym; source) run - the run is ascending, so its last row is its newest - and the market from the
-/ run's first. No where clause, no scan of a column: a few elements per run.
+/ The newest source_time among the books of one market in the newest partition of the global `market_data` that holds
+/ any, read from the END of each (sym; source) run - the run is ascending, so its last row is its newest - and the
+/ market from the run's first. No where clause, no scan of a column: a few elements per run.
+/ .
+/ Partitions are walked newest first and the walk stops at the first holding the market: the newest day can hold only
+/ another market's books (a Saturday holds crypto alone), and reading it alone answered -0Wp for FX (#2571).
 / .
 / Run in the process that maps market_data, like tob_at.
 / @param arg a dictionary: market (a symbol, or ` for every market)
-/ @return the newest source_time, or -0Wp when the partition holds none
+/ @return the newest source_time, or -0Wp when no partition holds the market
 / @eg .qetl.mapped.newest[enlist[`market]!enlist `crypto]
 .qetl.mapped.newest:{[arg]
-    d:exec max date from select distinct date from `market_data;
-    if[null d; :-0Wp];
-    t:$[null arg`market; select sym,source,source_time from `market_data where date=d; select sym,source,source_time,market from `market_data where date=d];
+    ds:desc exec date from select distinct date from `market_data;
+    n:-0Wp;
+    while[(n=-0Wp) and count ds; n:.qetl.mapped.newest_on[arg`market;first ds]; ds:1_ds];
+    n}
+
+/ Private: newest's read of one partition, -0Wp when it holds no book of the market.
+/ @private
+.qetl.mapped.newest_on:{[mkt;d]
+    t:$[null mkt; select sym,source,source_time from `market_data where date=d; select sym,source,source_time,market from `market_data where date=d];
     r:.qetl.mapped.runs[t;`];
     if[0=count r; :-0Wp];
-    if[not null arg`market; r:r where (.qetl.mapped.plain (t`market) r`lo)=arg`market];
+    if[not null mkt; r:r where (.qetl.mapped.plain (t`market) r`lo)=mkt];
     $[count r; max .qetl.mapped.plain (t`source_time) (r`hi)-1; -0Wp]}
 
 / The instants a markout asks the market about, one per (sym; time): for each execution, each of its legs at the

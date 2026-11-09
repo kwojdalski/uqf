@@ -496,13 +496,14 @@
 / -3! rather than `string`, because string on a list or dict produces a
 / nested result that does not fit one cell, while -3! always yields a single
 / readable string. Two types bypass it: a string passes through unchanged so
-/ it does not acquire a layer of quotes on every round trip, and a symbol
+/ it does not acquire a layer of quotes on every round trip - a char atom too,
+/ as the one-character string it is (#2598) - and a symbol
 / atom is stringified plainly, because -3! would render `v1 as "`v1" and the
 / backtick is noise to every reader of this column.
 / .qf.util.full, not -3!: run facts are PERSISTED, and -3! cut them at the
 / console width (#605).
 / @private
-.qetl.run.as_text:{[v] $[10h=type v; v; -11h=type v; string v; .qf.util.full v]}
+.qetl.run.as_text:{[v] $[10h=abs type v; (),v; -11h=type v; string v; .qf.util.full v]}
 
 / Attach metadata to one materialisation.
 / .

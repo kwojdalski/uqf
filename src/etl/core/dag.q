@@ -161,13 +161,22 @@
 
 / ----------------------------------------------------------- ORDERING
 
+/ Private: the jobs of `remaining` on a cycle, once Kahn's algorithm stalls on it.
+/ What stalls is the cycle and everything downstream of it (#2552): a job none
+/ of `remaining` reads from is downstream only, so those are stripped until none is left.
+/ @private
+.qetl.dag.in_cycle:{[e;remaining]
+    while[count leaf:remaining where not remaining in exec upstream from e where upstream in remaining, downstream in remaining;
+        remaining:remaining except leaf];
+    remaining}
+
 / A runnable order: every job appears after everything it reads from.
 / .
 / Kahn's algorithm, one layer at a time. The layers matter beyond ordering -
 / jobs in the same layer have no dependency between them, so a scheduler can
 / run a layer in parallel, which is the question a DAG is usually asked.
 / .
-/ Refuses on a cycle and NAMES the jobs still unplaced, because "there is a
+/ Refuses on a cycle and NAMES the jobs in it, because "there is a
 / cycle" without saying where leaves the reader tracing edges by hand.
 / @throws error naming every job in the cycle
 .qetl.dag.topological:{[]
@@ -179,7 +188,7 @@
                                                      downstream in remaining;
         ready:asc remaining where not remaining in blocked;
         if[0=count ready;
-            '"topological: cycle among ",", " sv string asc remaining];
+            '"topological: cycle among ",", " sv string asc .qetl.dag.in_cycle[e;remaining]];
         order,:ready;
         remaining:remaining except ready];
     order}
@@ -194,7 +203,7 @@
                                                      downstream in remaining;
         ready:asc remaining where not remaining in blocked;
         if[0=count ready;
-            '"layers: cycle among ",", " sv string asc remaining];
+            '"layers: cycle among ",", " sv string asc .qetl.dag.in_cycle[e;remaining]];
         out,:enlist ready;
         remaining:remaining except ready];
     out}

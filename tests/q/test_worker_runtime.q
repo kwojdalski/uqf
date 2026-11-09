@@ -79,6 +79,13 @@
 .qt.qetl.job.bounded.runtime.test_the_policy_falls_back_to_the_defaults:{[t]
     .qunit.assertEquals[.qetl.job.bounded.runtime.policy[]`max_attempts;.qetl.job.bounded.runtime.default_policy`max_attempts;"an unconfigured policy is the documented default"]};
 
+/ #2599: zero attempts fetched nothing and reported every window as a transport failure.
+.qt.qetl.job.bounded.runtime.test_a_policy_of_no_attempts_is_refused:{[t]
+    .qetl.cfg.set_layers[()!();()!();(enlist `retry_max_attempts)!enlist "0"];
+    .qunit.assertThrows[.qetl.job.bounded.runtime.policy;::;"retry: UQF_RETRY_MAX_ATTEMPTS must be at least 1, not 0";"zero attempts"];
+    .qetl.cfg.set_layers[()!();()!();(enlist `retry_base_delay_ms)!enlist "-5"];
+    .qunit.assertThrows[.qetl.job.bounded.runtime.policy;::;"retry: the retry delays must not be negative";"a negative delay"]};
+
 / --- retrying ------------------------------------------------------------
 
 .qt.qetl.job.bounded.runtime.test_a_successful_attempt_does_not_retry:{[t]

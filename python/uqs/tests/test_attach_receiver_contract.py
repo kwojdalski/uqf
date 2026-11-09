@@ -21,6 +21,7 @@ from uqs import cli
 from uqs.attach import backfill as attached
 from uqs.attach import receiver_contract as rc
 from uqs.attach.schema import TableSpec
+from uqs.generated import q_facts
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, paths_for_root
 
@@ -136,16 +137,25 @@ def test_a_file_that_is_not_json_is_refused(tmp_path):
 
 
 def test_an_approval_binds_the_contract_to_the_attachments_destination(world, exported):
-    record = rc.approve(world.paths, exported, "pb-uat", max_rows=500)
+    record = rc.approve(world.paths, exported, "pb-uat", max_rows=60_000)
     b = record["binding"]
     dest = attached.resolve(world.paths, "pb-uat", WORKER)
     assert b["destination"] == dest.identity and b["hdb_dir"] == str(dest.hdb_dir)
-    assert b["users"] == ["admin"] and b["max_rows"] == 500
+    assert b["users"] == ["admin"] and b["max_rows"] == 60_000
     assert b["conflict_policies"] == exported.conflict_policies
     contract, binding, found, path = rc.approved(world.paths, "pb-uat", exported.identity[:8])
     assert contract == exported and binding == b and found == dest
     assert path.parent == rc.approved_dir("pb-uat")
     assert [r["contract"]["identity"] for r in rc.records("pb-uat")] == [exported.identity]
+
+
+def test_a_message_limit_under_the_extractors_chunk_is_refused(world, exported):
+    # the extractor chunks at REMOTE_CHUNK_ROWS: a lower limit refuses every larger window (#2610)
+    with pytest.raises(UqsError, match=f"must be between {q_facts.REMOTE_CHUNK_ROWS}"):
+        rc.approve(world.paths, exported, "pb-uat", max_rows=q_facts.REMOTE_CHUNK_ROWS - 1)
+    assert not rc.approved_dir("pb-uat").exists(), "nothing was stored"
+    record = rc.approve(world.paths, exported, "pb-uat", max_rows=q_facts.REMOTE_CHUNK_ROWS)
+    assert record["binding"]["max_rows"] == q_facts.REMOTE_CHUNK_ROWS
 
 
 def test_an_approval_may_narrow_the_conflict_policies_never_widen_them(world, exported):

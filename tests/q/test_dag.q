@@ -128,6 +128,16 @@
     .qunit.assertError[{[u] .qetl.dag.topological[]};::;
         "a cycle is refused rather than silently ordered"]};
 
+/ #2552: Kahn's algorithm leaves the cycle AND what is downstream of it unplaced;
+/ only the cycle is named. a and b cycle; c and d only read from it.
+.qt.qetl.dag.test_a_cycle_names_only_its_own_jobs:{[t]
+    .qetl.dag.register[`a;`kind`inputs`outputs!(`stream;`t2;`t1)];
+    .qetl.dag.register[`b;`kind`inputs`outputs!(`stream;`t1;`t2)];
+    .qetl.dag.register[`c;`kind`inputs`outputs!(`stream;`t2;`t3)];
+    .qetl.dag.register[`d;`kind`inputs`outputs!(`stream;`t3;`t4)];
+    .qunit.assertThrows[{[u] .qetl.dag.topological[]};::;"topological: cycle among a, b";"c and d are downstream, not in it"];
+    .qunit.assertThrows[{[u] .qetl.dag.layers[]};::;"layers: cycle among a, b";"layers names the same"]};
+
 .qt.qetl.dag.test_a_lone_job_orders_fine:{[t]
     .qetl.dag.register[`only;`kind`inputs`outputs!(`bounded;`$();`out)];
     .qunit.assertEquals[.qetl.dag.topological[];enlist `only;

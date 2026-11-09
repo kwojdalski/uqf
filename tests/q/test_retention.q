@@ -227,6 +227,42 @@
     .qunit.assertEquals[.qetl.coverage.is_covered[`rtdeals_ds;`;.qt.qetl.retention.v;.z.p;`timestamp$2026.01.03;`timestamp$2026.01.04];0b;
         "and the claim that landed meanwhile is withdrawn"]};
 
+/ #2596: another process's claim reaches the ledger file, not this process's
+/ copy of it - stood in for by restoring the in-memory ledger after the claim.
+.qt.qetl.retention.claim_elsewhere:{[a;b]
+    own:.qetl.coverage.ledger[];
+    .qt.qetl.retention.claim[a;b];
+    `etl_coverage set own}
+
+.qt.qetl.retention.test_a_claim_another_process_records_during_the_run_is_seen:{[t]
+    root:.qt.qetl.retention.hdb[];
+    .qt.qetl.retention.declare[`rt_elsewhere;root];
+    ret:.qetl.io.retire;
+    `.qetl.io.retire set {[ret;root;dt;tbl]
+        r:ret[root;dt;tbl];
+        if[dt=2026.01.02; .qt.qetl.retention.claim_elsewhere["2026.01.03";"2026.01.04"]];
+        r}[ret];
+    r:@[.qetl.retention.run[`rt_elsewhere;.qt.qetl.retention.as_at;];enlist[`apply]!enlist 1b;{[e] e}];
+    `.qetl.io.retire set ret;
+    .qunit.assertTrue[$[10h=type r; r like "retention: rt_elsewhere stopped before removing 2026.01.03*"; 0b];
+        "the claim on disk stops the run before its day"];
+    .qunit.assertEquals[.qt.qetl.retention.held[root];2026.01.03 2026.02.20;"so the claimed day is still on disk"]};
+
+.qt.qetl.retention.test_a_claim_another_process_records_during_a_removal_is_withdrawn:{[t]
+    root:.qt.qetl.retention.hdb[];
+    .qt.qetl.retention.declare[`rt_elsewhere_late;root];
+    ret:.qetl.io.retire;
+    `.qetl.io.retire set {[ret;root;dt;tbl]
+        r:ret[root;dt;tbl];
+        if[dt=2026.01.03; .qt.qetl.retention.claim_elsewhere["2026.01.03";"2026.01.04"]];
+        r}[ret];
+    @[.qetl.retention.run[`rt_elsewhere_late;.qt.qetl.retention.as_at;];`apply`supersede!11b;{[e] e}];
+    `.qetl.io.retire set ret;
+    .qunit.assertEquals[.qt.qetl.retention.held[root];enlist 2026.02.20;"the day is removed"];
+    .qetl.coverage.reload[];
+    .qunit.assertEquals[.qetl.coverage.is_covered[`rtdeals_ds;`;.qt.qetl.retention.v;.z.p;`timestamp$2026.01.03;`timestamp$2026.01.04];0b;
+        "and the claim the other process recorded meanwhile is withdrawn on disk"]};
+
 / #2437: the remainder of a cut claim is a new claim no reaction outcome matches;
 / the reaction that succeeded over its parent must not read as owed over it.
 .qt.qetl.retention.test_a_cut_claims_remainder_keeps_its_reactions_done:{[t]

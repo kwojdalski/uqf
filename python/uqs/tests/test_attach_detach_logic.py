@@ -538,6 +538,19 @@ def test_a_user_of_the_table_still_holds_the_creator_back_after_a_restart(
     assert schema.read_text() == "trade:([] time:`timestamp$())\n"
 
 
+def test_a_one_character_user_is_a_list_of_one_after_a_restart(world, tmp_path, q_binary):
+    """#2604: `enlist "b"` is a char atom made a string, so the users read back as
+    "b" rather than ["b"], and the creator's detach could not name them."""
+    fake, make, state, schema, log = world
+    a, b = make("pb-a"), make("b")
+    apply_(a, fake, state)
+    apply_(b, fake, state)
+    restart_from_schema_file(fake, schema, tmp_path, q_binary)
+    assert fake.named("stp1")["owned"][TABLE]["users"] == ["b"]
+    result = detach_(a, fake, state)
+    assert result.outcome == "refused" and "used by attachment(s) b" in reasons(result)
+
+
 def test_a_user_the_plant_forgot_fails_verify_and_applying_again_joins_again(world):
     """A restart without the +uses block (runtime-only, or written before it
     existed) drops the user: verify closes the gate, and apply puts it back."""

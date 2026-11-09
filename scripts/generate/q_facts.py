@@ -89,6 +89,7 @@ FACTS = {
         "what precedes a worker's output revision in a release - "
         ".qetl.job.bounded.runtime.revision_tag"
     ),
+    "REMOTE_CHUNK_ROWS": "the least a grant's max_rows may be - .qetl.io.remote.chunk_rows",
     "Q_TYPE_NAMES": "q's type characters (`meta`'s `t`) -> the names a cast takes (#1785)",
     "Q_TYPE_CHARS": "the names a q cast takes -> q's type characters (#1785)",
     "Q_ATTRIBUTES": "q's column attributes, as `attr` and `meta`'s `a` report them (#1785)",
@@ -112,7 +113,7 @@ these in q fails the commit until this file is regenerated.
 '''
 
 
-def export() -> dict[str, list[str] | str | dict[str, str] | dict[str, list[str]]]:
+def export() -> dict[str, list[str] | str | int | dict[str, str] | dict[str, list[str]]]:
     """Run the q exporter and return its facts."""
     from uqs.interpreter import q_interpreter
 
@@ -141,7 +142,7 @@ def export() -> dict[str, list[str] | str | dict[str, str] | dict[str, list[str]
 
 
 def render(
-    facts: dict[str, list[str] | str | dict[str, str] | dict[str, list[str]]], out_path: Path
+    facts: dict[str, list[str] | str | int | dict[str, str] | dict[str, list[str]]], out_path: Path
 ) -> str:
     """The module, already ruff-formatted - the format hook would otherwise
     rewrite it, and --check would then call every commit's copy stale."""
@@ -151,6 +152,9 @@ def render(
         value = facts[name]
         if isinstance(value, str):
             out.append(f"\n#: {FACTS[name]}\n{name}: str = {json.dumps(value)}\n")
+            continue
+        if isinstance(value, int):
+            out.append(f"\n#: {FACTS[name]}\n{name}: int = {value}\n")
             continue
         if isinstance(value, dict) and all(isinstance(v, list) for v in value.values()):
             items = ", ".join(

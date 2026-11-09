@@ -728,9 +728,9 @@
 / checks its readers serve the data must check the dates of all of them, not only the
 / windows it wrote itself.
 / .
-/ A claim spans [range_from; range_to): its dates run from the date of range_from to the
-/ date of the last instant it covers, range_to less one nanosecond, so a window ending at
-/ midnight does not claim the next day. A claim that published no rows is skipped: it
+/ A claim spans [range_from; range_to): its dates run from the partition range_from files
+/ under to that of the last instant it covers, range_to less one nanosecond, so a window
+/ ending at midnight does not claim the next day. A claim that published no rows is skipped: it
 / asserts a window was looked at, and leaves no partition behind to check. What would
 / bring them back: a writer that creates an empty partition for an empty window.
 / @param ks table dataset, partition, source_version - the keys being released
@@ -740,13 +740,15 @@
 .qetl.coverage.release_dates:{[ks;at]
     out:([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$(); date:`date$());
     if[0=count ks; :out];
-    per:{[at;k]
+    / by the stack's roll calendar, as the writer files rows (#2549), not UTC midnight; a loader without io_hdb_scoped has none
+    day:$[`scoped_day_of in key `.qetl.io; .qetl.io.scoped_day_of; {[t] `date$t}];
+    per:{[at;day;k]
         w:(.qetl.coverage.ready_table[])[k]`ready_at;
         c:.qetl.coverage.claims_at[k`dataset;k`partition;k`source_version;at];
         c:select from c where rows_published>0;
         if[not null w; c:select from c where recorded_at>w];
-        ds:distinct raze {[f;t] d0:`date$f; d0+til 1+(`date$t-1)-d0}'[c`range_from;c`range_to];
-        ([] dataset:count[ds]#k`dataset; partition:count[ds]#k`partition; source_version:count[ds]#k`source_version; date:asc ds)}[at];
+        ds:distinct raze {[day;f;t] d0:day f; d0+til 1+(day t-1)-d0}[day]'[c`range_from;c`range_to];
+        ([] dataset:count[ds]#k`dataset; partition:count[ds]#k`partition; source_version:count[ds]#k`source_version; date:asc ds)}[at;day];
     raze per each 0!distinct ks}
 
 / The days a dataset is still being written to: every date a current claim with rows

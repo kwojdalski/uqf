@@ -957,6 +957,7 @@ qetl.source,transport_fields,value,,
 qetl.source,transport_functions,value,,
 qetl.source,transport_preflight,dict,,
 qetl.source,transports,function,1,
+qetl.source,unbom,function,1,lines
 qetl.source,utc_to_local,function,2,tz ts
 qetl.source,validate,function,2,source tbl
 qetl.source,validate_fixture,function,1,source
