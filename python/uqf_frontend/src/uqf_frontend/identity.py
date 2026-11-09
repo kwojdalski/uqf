@@ -42,12 +42,16 @@ __all__ = [
     "ANONYMOUS",
     "EVERYONE",
     "FORBIDDEN_HEADERS",
+    "GROUP_PREFIX",
+    "USER_PREFIX",
     "Identity",
+    "group_subject",
     "is_name",
     "is_user",
     "parse_proxies",
     "peer_is_trusted",
     "resolve",
+    "user_subject",
 ]
 
 #: The identity of every caller the frontend cannot vouch for.
@@ -72,6 +76,12 @@ FORBIDDEN_HEADERS = frozenset(
     {"authorization", "proxy-authorization", "cookie", "set-cookie", "host", "x-forwarded-for"}
 )
 
+#: The namespaces a policy subject is asked in (#2525). A user name and a
+#: group name share one spelling in a policy file, so the enforcer is built
+#: and asked with these prefixes: a user can only ever be the user.
+USER_PREFIX = "user:"
+GROUP_PREFIX = "group:"
+
 ProxyNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
 
 
@@ -83,6 +93,16 @@ def is_user(value: str) -> bool:
 def is_name(value: str) -> bool:
     """Is *value* a user or group name - and not one of the reserved words?"""
     return bool(_GROUP.match(value)) and value not in (ANONYMOUS, EVERYONE)
+
+
+def user_subject(name: str) -> str:
+    """*name* as a user, in the enforcer's subject space."""
+    return USER_PREFIX + name
+
+
+def group_subject(name: str) -> str:
+    """*name* as a group, in the enforcer's subject space."""
+    return GROUP_PREFIX + name
 
 
 @dataclass(frozen=True)
@@ -97,8 +117,10 @@ class Identity:
 
     @property
     def subjects(self) -> tuple[str, ...]:
-        """What the policy is asked about: the user, then each proxy group."""
-        return (self.user, *self.groups)
+        """What the policy is asked about: the user, then each proxy group,
+        each in its own namespace (#2525) - a user the proxy names `admins`
+        is `user:admins`, never the group `group:admins`."""
+        return (user_subject(self.user), *(group_subject(g) for g in self.groups))
 
 
 ANONYMOUS_IDENTITY = Identity()
