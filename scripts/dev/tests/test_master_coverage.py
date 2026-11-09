@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -106,3 +107,21 @@ def test_if_new_skips_a_tip_already_judged(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(mc, "run", lambda *a: (_ for _ in ()).throw(AssertionError("ran")))
     assert mc.main(["--no-fetch", "--ref", head, "--if-new"]) == 0
     assert "already judged: passed" in capsys.readouterr().out
+
+
+# `python3` as a command word: at the start of a line, or after a shell
+# separator or `$(` - not inside `uv run python` or a comment's prose.
+_BARE_PYTHON = re.compile(r"(?:^|[\s;&|(])python3?(?=\s)")
+
+
+def test_ship_runs_the_gates_and_coverage_on_the_project_interpreter():
+    """master_coverage.py and test_impact.py are 3.14 code (`except A, B:`); a
+    python3 from PATH may be 3.13, so the post-merge coverage run died and a
+    .q branch's gate_ok never passed (#2540)."""
+    code = [
+        re.sub(r"uv run (?:--project \S+ )?python", "uv-run-python", line.split("#", 1)[0])
+        for line in (REPO / "scripts/dev/ship.sh").read_text().splitlines()
+        if not line.lstrip().startswith("#")
+    ]
+    assert [line for line in code if _BARE_PYTHON.search(line)] == []
+    assert mc.RUN_HINT.startswith("uv run python ")

@@ -14,7 +14,7 @@ merge it makes (`--if-new`, so a tip already judged is not run again, and a
 lock so two merges do not run it twice at once). It can also be scheduled
 nightly on a machine with KDB-X:
 
-    0 3 * * * cd ~/github_projects/uqf && python3 scripts/dev/master_coverage.py --if-new
+    0 3 * * * cd ~/github_projects/uqf && uv run python scripts/dev/master_coverage.py --if-new
 
 and every attestation that runs a subset prints its last verdict
 (status_line), so a failing or missing run is seen where subsets are made.
@@ -37,8 +37,8 @@ The verdict is kept in the git directory (uqf-master-coverage/last.json),
 shared by every worktree. Exit 0 when both pass, 1 when either fails - the
 output says which - and 2 when the ref cannot be checked out.
 
-    python3 scripts/dev/master_coverage.py [--ref REF] [--no-fetch] [--if-new]
-                                           [--write-map PATH]
+    uv run python scripts/dev/master_coverage.py [--ref REF] [--no-fetch]
+                                                 [--if-new] [--write-map PATH]
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 MAP = "tests/q/coverage_map.txt"
-RUN_HINT = "python3 scripts/dev/master_coverage.py"
+RUN_HINT = "uv run python scripts/dev/master_coverage.py"
 
 
 def git(*args: str, cwd: Path = REPO) -> subprocess.CompletedProcess:

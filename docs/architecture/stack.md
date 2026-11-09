@@ -304,9 +304,10 @@ with the same pick, under the key `venue, sym, bar_start`. It is in the `crypto`
 profile.
 
 `crypto_markout1`'s buffers live in its process, so a fill it never saw goes
-unscored: it was down, restarting, or the fill came before it. The FX markouts
-have a bounded backfill for that, `hdb_fx_markouts_backfill1`; real crypto fills
-have none yet. See [markouts](../services/markouts.md).
+unscored: it was down, restarting, or the fill came before it. Its bounded twin,
+`hdb_crypto_markout_backfill1`, scores those fills from the HDB, as
+`hdb_fx_markouts_backfill1` does the FX markouts. See
+[markouts](../services/markouts.md).
 
 `cross_quotes` is drawn dashed because it never becomes a real database table -
 it's `.qpipe.job.cross.crosses`, a plain in-memory table inside `cross1`'s own

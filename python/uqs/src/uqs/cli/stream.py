@@ -103,7 +103,7 @@ def preview(
     With a time range - --from/--to, --date or --last - it previews the rows
     in that window instead, fetched from a temporary cursor: the saved cursor
     and the live poll are untouched, and it is not the running job's next page.
-    e.g. `uqs job preview vectorize2 --last 30s`
+    e.g. `uqs job preview demo_deals_feed --last 30s`
     """
     try:
         given = (range_from, range_to, day, last)

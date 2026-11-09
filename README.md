@@ -289,7 +289,7 @@ also refreshes the map (`--write-map tests/q/coverage_map.txt`) (#1719).
 
 This repository's own code is MIT licensed --- see [`LICENSE`](LICENSE).
 
-Seven vendored dependencies under `lib/` and `tests/lib/` carry their own terms,
+Nine vendored dependencies under `lib/` and `tests/lib/` carry their own terms,
 one of which (qUnit, the test framework) is **non-commercial**. See
 [**`LICENSING.md`**](LICENSING.md) for the per-dependency breakdown: the license
 each is under, where its full text lives, whether `src/init.q` loads it, and

@@ -69,5 +69,5 @@
     (`hdb_fx_markouts;enlist `fx_markout;0D01;`hdb_fx_markouts_long;
      .qpipe.job.hdb_fx_markouts_backfill.quality_check;.qpipe.job.hdb_fx_markouts_backfill.facts;
      `hdb_fx_markouts_backfill1;
-     "bounded: marks out the HDB's executions against its market_data, into fx_markout, with the calculation fx_markout1 applies live";
+     "bounded: marks out the HDB's executions against its market_data, into fx_markout, with the calculation fxmarkout1 applies live";
      `venue`fill_id`horizon`kind`step;`source_time;`replace;1;.qpipe.transform.fx_markout_outputs.pin;`fx_markout)];

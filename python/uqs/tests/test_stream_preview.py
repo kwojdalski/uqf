@@ -8,6 +8,7 @@ script it sends, the result line it reads, and the exit code.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from datetime import timedelta
 from pathlib import Path
@@ -78,6 +79,17 @@ def test_a_job_the_tree_does_not_declare_is_refused_before_q(monkeypatch):
     monkeypatch.setattr(stream_preview, "q_interpreter", lambda: pytest.fail("asked q"))
     with pytest.raises(UqsError, match="no streaming job 'nosuchjob' - `uqs job list` names"):
         stream_preview.preview(default_paths(), "nosuchjob")
+
+
+def test_the_help_s_example_names_a_streaming_job_the_tree_declares():
+    """It named the hypothetical vectorize2 from docs/scaffolding/feed.md (#2617)."""
+    from uqs.cli import stream
+    from uqs.model.jobs import job_rows
+
+    (job,) = re.findall(r"uqs job preview (\w+)", stream.preview.__doc__ or "")
+    # job_rows itself: an autouse fixture here stubs streaming_jobs
+    kinds = {r["job"]: r["kind"] for r in job_rows(default_paths().repo_root)}
+    assert kinds.get(job) not in (None, *stream_preview._NOT_STREAMING)
 
 
 def test_a_q_side_refusal_is_raised_with_its_message(monkeypatch):

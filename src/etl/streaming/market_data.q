@@ -78,7 +78,8 @@
         bid_prices, bid_sizes, ask_prices, ask_sizes, clock:`venue from batch}
 
 / The rows market_data is about to publish, held to the .qf.mkt check (#944)
-/ for a crossed book (bid at or through the ask). And to what a book must be before ANY consumer reads
+/ for a crossed book (bid through the ask; a locked one, bid at the ask,
+/ passes, #1176). And to what a book must be before ANY consumer reads
 / it (#1021), judged here once rather than by each: a level 0 that is not a
 / price by .qf.mkt.level_ok (`bad_level), and a source_time further ahead of
 / this host than .qf.mkt.max_clock_lead (`bad_time), and a book superbook

@@ -1170,7 +1170,10 @@ src/foundation/stats.q	.qf.math.npdf	test_docstring_examples.q,test_options.q,te
 src/integrations/data.q	.qdata.cfg	test_data.q
 src/integrations/data.q	.qdata.databentoDir	test_data.q
 src/integrations/data.q	.qdata.databentoFile	test_data.q
+src/integrations/data.q	.qdata.envStrip	test_data.q
 src/integrations/data.q	.qdata.parseEnv	test_data.q
+src/integrations/data.q	.qdata.parseEnvLine	test_data.q
+src/integrations/data.q	.qdata.parseEnvValue	test_data.q
 src/market_data/asof.q	.qf.mkt.lookup	test_docstring_examples.q,test_endofday.q,test_enrich.q,test_every_worker_runs.q,test_execution.q,test_job_output_contracts.q,test_last_value.q,test_replay_equivalence.q,test_stream_job.q,test_transform.q,test_twins.q
 src/market_data/book.q	.qf.mkt.all_digit_string	test_book.q,test_docstring_examples.q
 src/market_data/book.q	.qf.mkt.book_from_wide_levels	test_book.q,test_job_output_contracts.q,test_stream_job.q,test_transform.q

@@ -23,6 +23,21 @@
     .qunit.assertEquals[count d;1;"only the real KEY=VALUE line is kept"];
     .qunit.assertEquals[d`FOO;"bar";"survives alongside comments/blanks"]};
 
+/ #2544: these lines read differently in q than in uqs's parse_dotenv.
+.qt.qdata.testParseEnvReadsAsUqsDoes:{[t]
+    f:hsym `$"/tmp/uqf_test_data_parseenv3_",string[.z.i],".env";
+    f 0: ("DATABENTO_DATA_DIR=\"/data/databento\"";"export OTHER=/x";"SPACED = /y";"COMMENTED=/z # note";
+        "SINGLE='a # b'  # c";"HASH=a#b";"not an assignment";"9BAD=1";"SPACED=/last");
+    d:.qdata.parseEnv[f];
+    hdel f;
+    .qunit.assertEquals[key d;`DATABENTO_DATA_DIR`OTHER`SPACED`COMMENTED`SINGLE`HASH;"keys as uqs reads them"];
+    .qunit.assertEquals[d`DATABENTO_DATA_DIR;"/data/databento";"the quotes are not part of the value"];
+    .qunit.assertEquals[d`OTHER;"/x";"an export prefix is dropped"];
+    .qunit.assertEquals[d`SPACED;"/last";"spaces around = are stripped, and the last line wins"];
+    .qunit.assertEquals[d`COMMENTED;"/z";"a trailing comment is not part of an unquoted value"];
+    .qunit.assertEquals[d`SINGLE;"a # b";"a quoted value keeps a # inside its quotes"];
+    .qunit.assertEquals[d`HASH;"a#b";"a # with no space before it is part of the value"]};
+
 .qt.qdata.testParseEnvMissingFileReturnsEmptyDict:{[t]
     d:.qdata.parseEnv[`:/tmp/uqf_test_data_definitely_does_not_exist.env];
     .qunit.assertEmpty[d;"missing .env file -> empty dict, not an error"]};

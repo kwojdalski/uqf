@@ -13,7 +13,7 @@ canonical `executions` and `market_data` and scores the crypto fills among them
 (a BASE-QUOTE symbol such as `BTC-USDT`; the FX fills in the same table are not
 routable by the crypto domain and are dropped). It never reads
 `crypto_sim_fills`: simulated and real execution are kept apart. Like
-`fx_markout1`, it is a horizon job over the [markout
+`fxmarkout1`, it is a horizon job over the [markout
 core](../architecture/markout-contract.md): it queues each fill and, once a
 second, scores the ones whose 10s horizon has passed and whose books have caught
 up. The result is `crypto_markout`, in the contract's long layout: a row per

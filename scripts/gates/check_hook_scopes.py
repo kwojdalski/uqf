@@ -170,33 +170,40 @@ def scoped_hooks(config_text: str) -> list[tuple[str, str, str | None]]:
     on 49. The coverage half ignored it for longer, and that was not cosmetic:
     an exclude widened to `^(lib|python)/` took nearly all Python out of the
     lint, test and type gates while coverage still read 396/396 (#1335).
+
+    A hook's keys are collected until the next `- id:`, in whatever order
+    they are written, and a column-0 `files:`/`exclude:` is pre-commit's
+    global filter, applied to every hook as well as its own: an exclude
+    written before its `files:`, or one written once at the top, took Python
+    out of the gates while coverage still read full (#2539).
     """
-    hooks: list[tuple[str, str, str | None]] = []
-    current: str | None = None
-    pending_files: str | None = None
-
-    def flush() -> None:
-        nonlocal pending_files
-        if current is not None and pending_files is not None:
-            hooks.append((current, pending_files, None))
-        pending_files = None
-
+    keys: list[tuple[str, dict[str, str]]] = []
+    top: dict[str, str] = {}
     for line in config_text.splitlines():
         id_match = re.match(r"\s*-\s*id:\s*(\S+)", line)
         if id_match:
-            flush()
-            current = id_match.group(1)
+            keys.append((id_match.group(1), {}))
             continue
-        files_match = re.match(r"""\s*files:\s*['"]?(.+?)['"]?\s*$""", line)
-        if files_match and current is not None:
-            flush()
-            pending_files = files_match.group(1)
+        key_match = re.match(r"""(\s*)(files|exclude):\s*['"]?(.+?)['"]?\s*$""", line)
+        if key_match is None:
             continue
-        excl_match = re.match(r"""\s*exclude:\s*['"]?(.+?)['"]?\s*$""", line)
-        if excl_match and current is not None and pending_files is not None:
-            hooks.append((current, pending_files, excl_match.group(1)))
-            pending_files = None
-    flush()
+        indent, key, value = key_match.groups()
+        if not indent:
+            top[key] = value
+        elif keys:
+            keys[-1][1][key] = value
+    hooks: list[tuple[str, str, str | None]] = []
+    for hook_id, own in keys:
+        if "files" not in own:
+            continue
+        files = own["files"]
+        if "files" in top:
+            # both must search-match: the global one as a lookahead from the start
+            files = f"^(?=.*?(?:{top['files']})).*?(?:{files})"
+        excludes = [x for x in (top.get("exclude"), own.get("exclude")) if x]
+        if len(excludes) > 1:
+            excludes = ["|".join(f"(?:{x})" for x in excludes)]
+        hooks.append((hook_id, files, next(iter(excludes), None)))
     return hooks
 
 

@@ -33,10 +33,10 @@ job to it. TorQ is what the *deployed* stack runs on.
 
 ## Do I need KDB-X?
 
-KDB-X is what everything here is verified against; its personal edition is free
-for non-commercial use. Other q implementations may work for the pure-q modules
-in `src/`, but none is verified - see the README's
-[Requirements](../README.md#requirements).
+KDB-X is what everything here is verified against; its Community Edition is free
+for personal and commercial use, with a registered licence. Other q
+implementations may work for the pure-q modules in `src/`, but none is verified -
+see the README's [Requirements](../README.md#requirements).
 
 ## Why does a job call `publish` rather than `.u.upd`?
 

@@ -156,7 +156,7 @@ The next `uqs` command picks up any of them.
 
   |             | Plain TorQ                           | uqf                                                                                                                                                                                        |
   | ---         | ---                                  | ---                                                                                                                                                                                        |
-  | start       | `torq.sh start <proc>` / `start all` | `uqs start --profile fx,arbitrage`: named sets of processes                                                                                                                                |
+  | start       | `torq.sh start <proc>` / `start all` | `uqs start --profile arbitrage`: a named set of processes                                                                                                                                  |
   | connections | found out at runtime                 | every profile is checked against the licence's budget (16 − 2 = 14 on the community licence; set `UQS_LICENCE_CONNECTIONS` for a larger one)                                               |
   | watch       | tail the log files                   | `uqs start -f`: starts the processes and streams every log to the console; Ctrl-C ends the stream                                                                                          |
   | inspect     | `torq.sh summary`                    | `uqs status` · `logs` · `query --proc`                                                                                                                                                     |
