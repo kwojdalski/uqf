@@ -366,6 +366,16 @@
         .qetl.io.remote.expire_staged[.z.p+.qetl.io.remote.stage_ttl+0D00:00:01]}];
     .qunit.assertEquals[n;1;"its client gave up: the next run sends it whole"]};
 
+.qt.qetl.io.remote.test_a_sorted_batch_sent_in_chunks_matches_its_id:{[t]
+    / xasc leaves s# on the sort column and the receiver's raze of the chunks drops it (#2439)
+    .qt.qetl.io.remote.reset[];
+    .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];
+    b:`time xasc ([] time:2026.01.02D11:00:00.000000000 2026.01.02D09:00:00.000000000 2026.01.02D10:00:00.000000000;
+        sym:`USDJPY`EURUSD`GBPUSD; notional:3e6 1e6 2e6);
+    n:.qt.qetl.io.remote.chunked[{[b;x] .qt.qetl.io.remote.send[`append;b]}[b]];
+    .qunit.assertEquals[n;3;"three one-row chunks of a sorted window commit"];
+    .qunit.assertEquals[count rdeals;3;"and every row is written"]};
+
 .qt.qetl.io.remote.test_a_batch_still_arriving_is_not_dropped_however_long_it_takes:{[t]
     / expiry judges inactivity, not age: every chunk lands inside the time-to-live,
     / the whole takes longer than it (#2435)

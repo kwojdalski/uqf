@@ -81,6 +81,11 @@
 .qetl.io.remote.idempotent:`upsert`replace`ignore
 
 / A batch's identity: the md5 of its destination, options and rows.
+/ .
+/ The rows are hashed WITHOUT their columns' attributes: -8! serialises the
+/ attribute byte, and a window sorted with xasc carries s# that the receiver's
+/ raze of its chunks drops, so a sorted window sent in chunks never matched its
+/ own id (#2439). An attribute is how q indexes the rows, not which rows they are.
 / @param attachment the attachment, a symbol
 / @param dataset the dataset, a symbol
 / @param target the target table, a symbol
@@ -89,7 +94,8 @@
 / @return a 32-character hex symbol
 / @eg count string .qetl.io.remote.batch_id[`uat;`deals;`deals;`on_conflict`row_key!(`upsert;`id);([] id:1 2)]  ->  32
 .qetl.io.remote.batch_id:{[attachment;dataset;target;opts;batch]
-    `$raze string md5 "c"$-8!(attachment;dataset;target;opts;batch)}
+    plain:$[98h=type batch; @[batch;cols batch;{[c] `#c}]; batch];
+    `$raze string md5 "c"$-8!(attachment;dataset;target;opts;plain)}
 
 / ------------------------------------------------------------ RECEIVER
 
