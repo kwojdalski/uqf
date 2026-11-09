@@ -115,8 +115,17 @@ class Deployment(Server):
         return remote_archive
 
     def transfer(self, pkg: Artifact, rid: str) -> str:
+        """Upload the archive, check it and extract it into releases/<rid>.
+
+        Whole or not at all, as runtime_install does for a runtime (#2442):
+        tar writes into a hidden releases/.<rid>.partial - cleared first, in
+        case an interrupted attempt left one, and removed by a trap if this
+        one fails - and only a complete tree is renamed into place. A failed
+        extraction so leaves no releases/<rid>, and the push can be retried.
+        """
         staging = f"{self.cfg.dest}/staging/{rid}"
         release = f"{self.releases}/{rid}"
+        partial = f"{self.releases}/.{rid}.partial"
         self.run(
             "transfer",
             "creating the staging directory",
@@ -132,8 +141,11 @@ class Deployment(Server):
             f"  rm -rf {q(staging)}; exit 1",
             "fi",
             f"test ! -e {q(release)} || {{ echo 'release {rid} already exists' >&2; exit 1; }}",
-            f"mkdir {q(release)}",
-            f"tar -xzf {q(remote_archive)} -C {q(release)}",
+            f"rm -rf {q(partial)}",
+            f"trap {q(f'rm -rf {q(partial)}')} EXIT",
+            f"mkdir {q(partial)}",
+            f"tar -xzf {q(remote_archive)} -C {q(partial)}",
+            f"mv {q(partial)} {q(release)}",
             f"rm -rf {q(staging)}",
         )
         return release

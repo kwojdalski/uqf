@@ -1413,3 +1413,37 @@ def test_the_deploy_smoke_fails_a_list_result_with_a_message(tmp_path):
     r = _smoke(tmp_path, ".qf.math.ncdf:{[x] 0.5 0.5};")
     assert r.returncode == 1 and "DEPLOY_SMOKE_OK" not in r.stdout
     assert "DEPLOY_SMOKE_FAILED: ncdf at 0" in r.stderr
+
+
+class _BashRemote(FakeRemote):
+    """Runs each script with bash here; `put` copies the file. With
+    `fail_tar`, tar extracts and then fails - a disk that filled part-way."""
+
+    def __init__(self, fail_tar: bool = False) -> None:
+        super().__init__()
+        self.fail_tar = fail_tar
+
+    def run(self, script, timeout, stage, as_login=False):
+        self.scripts.append((stage, script))
+        if self.fail_tar:
+            script = 'tar() { command tar "$@"; echo "tar: disk full" >&2; return 1; }\n' + script
+        return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False)
+
+    def put(self, local, remote_path, timeout, stage):
+        self.puts.append(remote_path)
+        Path(remote_path).write_bytes(local.read_bytes())
+
+
+def test_a_failed_extraction_leaves_no_release_and_can_be_retried(tmp_path):
+    """#2442: a release is extracted whole or not at all, so the same artifact
+    can be pushed again once the cause is gone."""
+    pkg = artifact.read_artifact(_artifact(tmp_path))
+    dest = tmp_path / "srv"
+    cfg = make_config(artifact=str(pkg.path), ssh="uqf-server", dest=str(dest), profile="essential")
+    with pytest.raises(DeployError, match="disk full"):
+        Deployment(cfg, _BashRemote(fail_tar=True)).transfer(pkg, pkg.release)
+    assert not (dest / "releases" / pkg.release).exists()
+    assert [p.name for p in (dest / "releases").iterdir()] == []
+    release = Deployment(cfg, _BashRemote()).transfer(pkg, pkg.release)
+    assert (Path(release) / "RELEASE_MANIFEST.json").is_file()
+    assert sorted(p.name for p in (dest / "releases").iterdir()) == [pkg.release]
