@@ -39,10 +39,14 @@ export function errorBody(payload: unknown, status: number): ErrorBody {
 }
 
 export class ApiError extends Error {
+  /** `error` is the API's error type (ErrorBody.error, e.g.
+   *  CoverageIncomplete): several unrelated refusals share a status, so a
+   *  heading is chosen by this, never by the status alone (#2481). */
   constructor(
     message: string,
     public transient = false,
     public status = 0,
+    public error = "",
   ) {
     super(message);
   }
@@ -163,7 +167,12 @@ export async function request<T>(
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const failure = errorBody(payload, response.status);
-    throw new ApiError(failure.detail, failure.transient, response.status);
+    throw new ApiError(
+      failure.detail,
+      failure.transient,
+      response.status,
+      failure.error,
+    );
   }
   if (payload === null)
     throw new ApiError("The API returned an invalid response.", true);
