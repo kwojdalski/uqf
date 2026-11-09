@@ -495,6 +495,15 @@
     .qunit.assertEquals[full`fill_probability;0.4;"exactly 0.4"];
     .qunit.assertEquals[full`censored_count;0;"nothing censored when every horizon was observed"]};
 
+/ #2543: a horizon given twice counted every order twice.
+.qt.qf.exec.execution.test_fill_probability_counts_a_repeated_horizon_once:{[t]
+    o:.qt.qf.exec.execution.mk_fill_orders[];
+    as_of:.qt.qf.exec.execution.fill_as_of;
+    .qunit.assertEquals[.qf.exec.fill_probability_by[o;0D00:01:00 0D00:01:00;`symbol$();as_of;::];.qf.exec.fill_probability_by[o;0D00:01:00;`symbol$();as_of;::];"the same table as one horizon"];
+    one:.qf.exec.fill_probability_by[1#o;0D00:01:00 0D00:01:00;`symbol$();as_of;(enlist `min_count)!enlist 2];
+    .qunit.assertEquals[one`order_count;1 1;"one order is one order"];
+    .qunit.assertEquals[distinct one`status;enlist `sparse;"and one observation is still sparse"]};
+
 .qt.qf.exec.execution.test_fill_probability_partial_fills_separate_any_from_full:{[t]
     r:.qf.exec.fill_probability_by[.qt.qf.exec.execution.mk_fill_orders[];0D00:01:00;`symbol$();.qt.qf.exec.execution.fill_as_of;::];
     .qunit.assertEquals[.qt.qf.exec.execution.fill_row[r;`any]`fill_count;6;"the two part-filled orders count as any-fills"];

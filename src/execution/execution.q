@@ -510,7 +510,9 @@
 / @eg .qf.exec.fill_probability_by[fill_orders;0D00:01:00;`symbol$();2026.01.01D12:00:00.000000000;(enlist `cancel_policy)!enlist `ignore]  -> throws
 .qf.exec.fill_probability_by:{[orders;horizons;group_cols;as_of;opts]
     group_cols:(),group_cols;
-    hs:(),horizons;
+    / distinct: a repeated horizon expanded each order twice into one group,
+    / doubling every count and turning a `sparse bucket `ok (#2543)
+    hs:distinct (),horizons;
     .qf.exec.fill_probability_require_args[orders;hs;group_cols;as_of];
     o:.qf.exec.fill_probability_opts[opts];
     orders:0!orders;
