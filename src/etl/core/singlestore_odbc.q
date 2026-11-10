@@ -38,7 +38,8 @@
 / @private
 .qetl.io.odbc.loaded:{[] @[{0<count .odbc.natives};::;{0b}]}
 
-/ Load our odbc.q wrapper and bind KX's odbc.so, once, and report whether it is usable.
+/ Bind KX's odbc.so through our odbc.q wrapper (loaded by src/etl/init.q), once,
+/ and report whether it is usable.
 / .
 / Never throws. A missing driver is the EXPECTED state on any machine that
 / has not installed unixODBC and a SingleStore driver, which includes every
@@ -48,7 +49,7 @@
 / @eg .qetl.io.odbc.available[]
 .qetl.io.odbc.available:{[]
     if[.qetl.io.odbc.loaded[]; :1b];
-    @[{if[()~key `.odbc.bind; system"l src/etl/core/odbc.q"]; .odbc.bind[]; .qetl.io.odbc.loaded[]};::;{[e] 0b}]}
+    @[{.odbc.bind[]; .qetl.io.odbc.loaded[]};::;{[e] 0b}]}
 
 / Can this interpreter load a shared library (`2:`)? The ODBC client is one, so a
 / static build - PeachQ's - can never reach a driver. Asked by trying a library

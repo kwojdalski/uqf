@@ -67,6 +67,9 @@
 \l src/etl/core/io_remote.q
 \l src/etl/core/io_remote_chunks.q
 \l src/etl/core/io_remote_contract.q
+/ odbc.q only defines .odbc; odbc.so is bound on first use (.odbc.bind), so it
+/ loads on any interpreter and singlestore_odbc.q needs no load of its own.
+\l src/etl/core/odbc.q
 \l src/etl/core/singlestore_odbc.q
 \l src/etl/core/heartbeat.q
 \l src/etl/core/dag.q

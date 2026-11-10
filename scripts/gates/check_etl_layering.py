@@ -164,11 +164,6 @@ CWD_CALLS = {
         "line in it); unparse is optional, so the load is conditional on the file, "
         "which a bare \\l could not be"
     ),
-    ("src/etl/core/singlestore_odbc.q", "l odbc.k"): (
-        "odbc.k is the KX ODBC interface, found on QHOME's search path and not "
-        "in the working directory; the load is protected, since a missing driver is "
-        "the expected state"
-    ),
 }
 
 
