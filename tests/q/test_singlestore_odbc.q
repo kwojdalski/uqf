@@ -10,6 +10,7 @@
 / window, and the refusal path, which is what every caller hits when the
 / driver is absent.
 
+\l src/etl/core/odbc.q
 
 / --- availability and refusal --------------------------------------------
 
@@ -187,13 +188,17 @@
 
 / --- run_sql, against a stubbed driver --------------------------------------
 
-/ A fake .odbc: what the KX client populates, minus the driver. Installed for
-/ one test and removed after, so every other test still sees "no driver".
+/ A fake odbc.so: the natives src/etl/core/odbc.q binds, minus the driver, with
+/ handle 7 already open. Installed for one test and removed after, so every
+/ other test still sees "no driver".
 .qt.qetl.io.odbc.with_fake_driver:{[f]
-    `.odbc.open set {[c] 7};
-    `.odbc.eval set {[h;sql] ([] h:enlist h; sql:enlist sql)};
+    saved:(.odbc.natives;.odbc.handles);
+    .odbc.natives:`open`close`eval`tables!(
+        {[c;t] 7}; {[h] ::}; {[h;sql;t] ([] h:enlist h; sql:enlist sql)}; {[h] ([] name:`symbol$())});
+    .odbc.handles:enlist 7;
     r:@[f;::;{(`threw;x)}];
-    ![`.odbc;();0b;`open`eval`close];
+    .odbc.natives:saved 0;
+    .odbc.handles:saved 1;
     r}
 
 .qt.qetl.io.odbc.test_run_sql_returns_the_drivers_table:{[t]
@@ -209,7 +214,7 @@
 
 .qt.qetl.io.odbc.test_run_sql_names_the_statement_on_failure:{[t]
     err:.qt.qetl.io.odbc.with_fake_driver[{
-        `.odbc.eval set {[h;sql] '"syntax"};
+        `.odbc.natives set @[.odbc.natives;`eval;:;{[h;sql;t] '"syntax"}];
         @[.qetl.io.odbc.run_sql[7;];"select nope";{x}]}];
     / two likes: a pattern with more than one inner `*` throws 'nyi here
     .qunit.assertTrue[(err like "*syntax*") and err like "*select nope";"a failing statement is named in the error, with the driver's reason"]};
@@ -224,7 +229,7 @@
     .qt.qetl.io.odbc.closed:`long$();
     / binary, so the projection waits for with_fake_driver to apply it
     r:.qt.qetl.io.odbc.with_fake_driver[{[f;u]
-        `.odbc.close set {[h] .qt.qetl.io.odbc.closed,:h};
+        `.odbc.natives set @[.odbc.natives;`close;:;{[h] .qt.qetl.io.odbc.closed,:h}];
         @[.qetl.io.odbc.with_connection["DRIVER=fake"];f;{(`threw;x)}]}[f]];
     (r;.qt.qetl.io.odbc.closed)}
 
@@ -255,7 +260,7 @@
     / Logged BEFORE it is sent, so a statement that throws - or hangs - is
     / still in the trace.
     lines:.qt.qetl.io.odbc.logged {.qt.qetl.io.odbc.with_fake_driver[{
-        `.odbc.eval set {[h;sql] '"syntax"};
+        `.odbc.natives set @[.odbc.natives;`eval;:;{[h;sql;t] '"syntax"}];
         @[.qetl.io.odbc.run_sql[7;];"select nope";::]}]};
     .qunit.assertEquals[lines[;2];("sql sent";"sql failed");"the statement is logged, then its failure - and nothing claims it returned"];
     .qunit.assertEquals[(lines[0;3]`request)~lines[1;3]`request;1b;"sent and failed carry the same request number"];

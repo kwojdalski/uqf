@@ -20,7 +20,6 @@ from uqs.paths import UqsError
 from uqs.stack import odbc_home
 
 FILES = {
-    "q/odbc.k": b"/ KX's client\n",
     "q/l64/odbc.so": b"\x7fELF client",
     "lib/libodbc.so.2": b"\x7fELF driver manager",
     "lib/libtestodbc.so": b"\x7fELF driver",
@@ -100,7 +99,7 @@ def test_the_overlay_adds_the_client_and_links_everything_else(tmp_path, qhome):
     overlay = odbc_home.install(home, pkg, qhome) / "qhome"
     assert (overlay / "kc.lic").resolve() == (qhome / "kc.lic").resolve()
     assert (overlay / "l64" / "q").resolve() == (qhome / "l64" / "q").resolve()
-    assert (overlay / "odbc.k").read_bytes() == FILES["q/odbc.k"]
+    assert not (overlay / "odbc.k").exists(), "the package needs no odbc.k: the tree ships odbc.q"
     assert (overlay / "l64" / "odbc.so").read_bytes() == FILES["q/l64/odbc.so"]
     assert sorted(p.name for p in qhome.rglob("*")) == ["kc.lic", "l64", "q", "q.k"], (
         "the managed QHOME is never written to"

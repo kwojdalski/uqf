@@ -12,7 +12,9 @@
 / facts from that page shape this file, and each would be a bug if assumed
 / wrongly:
 / .
-/   1. The library loads with `\l odbc.k`, NOT with 2:. It populates .odbc.
+/   1. KX's client is odbc.k over a native odbc.so. This tree does not load
+/      odbc.k (k source, which PeachQ cannot run): src/etl/core/odbc.q is our own
+/      wrapper over odbc.so with the same .odbc.open/eval/close/tables (#2508).
 /   2. `.odbc.eval[h;sql]` takes a SQL STRING. There is no bind-parameter
 /      API and no `.odbc.exec` at all, whatever other drivers offer.
 /   3. `.odbc.open` accepts a connection string, a DSN symbol, or a
@@ -31,21 +33,22 @@
 
 / ------------------------------------------------------- AVAILABILITY
 
-/ Private: has the ODBC library been loaded into this process?
+/ Private: is odbc.so bound in this process? Loading src/etl/core/odbc.q is not
+/ enough - it binds nothing until first use - so this asks for the natives.
 / @private
-.qetl.io.odbc.loaded:{[] @[{`open in key x};`.odbc;{0b}]}
+.qetl.io.odbc.loaded:{[] @[{0<count .odbc.natives};::;{0b}]}
 
-/ Load KX's ODBC client, once, and report whether it is usable.
+/ Load our odbc.q wrapper and bind KX's odbc.so, once, and report whether it is usable.
 / .
 / Never throws. A missing driver is the EXPECTED state on any machine that
 / has not installed unixODBC and a SingleStore driver, which includes every
 / CI runner this repository uses - so a caller decides what to do about it
 / rather than being handed an error at load time.
-/ @return 1b when .odbc is available, 0b otherwise
+/ @return 1b when odbc.so is bound, 0b otherwise (no odbc.so in QHOME, or a q that cannot load one)
 / @eg .qetl.io.odbc.available[]
 .qetl.io.odbc.available:{[]
     if[.qetl.io.odbc.loaded[]; :1b];
-    @[{system"l odbc.k"; .qetl.io.odbc.loaded[]};::;{[e] 0b}]}
+    @[{if[()~key `.odbc.bind; system"l src/etl/core/odbc.q"]; .odbc.bind[]; .qetl.io.odbc.loaded[]};::;{[e] 0b}]}
 
 / Can this interpreter load a shared library (`2:`)? The ODBC client is one, so a
 / static build - PeachQ's - can never reach a driver. Asked by trying a library
