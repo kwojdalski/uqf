@@ -90,7 +90,6 @@ import argparse
 import ast
 import importlib.util
 import re
-import subprocess
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -168,15 +167,23 @@ SKIPPED = {
 }
 
 
-def _test_impact():
+def _sibling(name: str):
+    """scripts/dev/`name`.py, loaded by path (scripts/ is not a package)."""
     spec = importlib.util.spec_from_file_location(
-        "test_impact", Path(__file__).resolve().parent / "test_impact.py"
+        name, Path(__file__).resolve().parent / f"{name}.py"
     )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
-    sys.modules.setdefault("test_impact", module)
+    sys.modules.setdefault(name, module)
     spec.loader.exec_module(module)
     return module
+
+
+def _test_impact():
+    return _sibling("test_impact")
+
+
+_git = _sibling("_git")
 
 
 def _module_file(name: str, near: Path, root: Path) -> Path | None:
@@ -220,15 +227,7 @@ def changed(base: str, head: str = "HEAD", root: Path = REPO) -> list[tuple[str,
     """(status letter, path) for what `head` changes against `base`: the
     three-dot diff, as a pull request is read; a rename is a deletion and an
     addition."""
-    out = subprocess.run(
-        ["git", "diff", "--name-status", "--no-renames", "-z", f"{base}...{head}"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-    words = [w for w in out.split("\0") if w]
-    return [(words[i][0], words[i + 1]) for i in range(0, len(words) - 1, 2)]
+    return _git.changed(f"{base}...{head}", cwd=root)
 
 
 def named_in_docs(paths: Iterable[str], root: Path = REPO) -> dict[str, str]:

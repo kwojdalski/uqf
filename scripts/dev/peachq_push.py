@@ -69,16 +69,12 @@ def _load(name: str, rel: str):
     return module
 
 
+_git = _load("_git", "scripts/dev/_git.py")
+
+
 def changed(base: str) -> list[str]:
     """Paths `base...HEAD` adds, modifies or renames into (not deletes)."""
-    out = subprocess.run(
-        ["git", "diff", "--name-only", "--diff-filter=AMR", f"{base}...HEAD"],
-        cwd=REPO,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-    return [p for p in out.splitlines() if p]
+    return _git.changed(f"{base}...HEAD", cwd=REPO, status=False, renames=True, diff_filter="AMR")
 
 
 def q_diff(base: str) -> str:

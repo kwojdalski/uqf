@@ -61,13 +61,26 @@ MAP = "tests/q/coverage_map.txt"
 RUN_HINT = "uv run python scripts/dev/master_coverage.py"
 
 
-def git(*args: str, cwd: Path = REPO) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=False)
+def _sibling(name: str):
+    """scripts/dev/`name`.py, loaded by path (scripts/ is not a package)."""
+    spec = importlib.util.spec_from_file_location(
+        name, Path(__file__).resolve().parent / f"{name}.py"
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(name, module)
+    spec.loader.exec_module(module)
+    return module
+
+
+#: scripts/dev/_git.py's runner. Every call here reads the return code
+#: itself, so each passes check=False.
+git = _sibling("_git").git
 
 
 def common_dir(root: Path = REPO) -> Path:
     """The git directory every worktree shares."""
-    common = git("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=root)
+    common = git("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=root, check=False)
     return Path(common.stdout.strip()) if common.returncode == 0 else root / ".git"
 
 
@@ -203,8 +216,8 @@ def main(argv: list[str] | None = None) -> int:
         # a worktree that may be removed while it runs.
         common = common_dir()
         if not args.no_fetch:
-            git("fetch", "-q", "origin", cwd=common)
-        sha = git("rev-parse", "--verify", f"{args.ref}^{{commit}}", cwd=common)
+            git("fetch", "-q", "origin", cwd=common, check=False)
+        sha = git("rev-parse", "--verify", f"{args.ref}^{{commit}}", cwd=common, check=False)
         if sha.returncode:
             print(f"master_coverage: no commit {args.ref}: {sha.stderr.strip()}", file=sys.stderr)
             return 2
@@ -215,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if last.get("verdict") == "passed" else 1
         with tempfile.TemporaryDirectory(prefix="master_coverage.") as tmp:
             tree = Path(tmp) / "tree"
-            added = git("worktree", "add", "--detach", str(tree), commit, cwd=common)
+            added = git("worktree", "add", "--detach", str(tree), commit, cwd=common, check=False)
             if added.returncode:
                 print(
                     f"master_coverage: cannot check out {commit}: {added.stderr}", file=sys.stderr
@@ -231,7 +244,7 @@ def main(argv: list[str] | None = None) -> int:
                     shutil.copyfile(fresh, args.write_map)
                     print(f"master_coverage: wrote the coverage map to {args.write_map}")
             finally:
-                git("worktree", "remove", "--force", str(tree), cwd=common)
+                git("worktree", "remove", "--force", str(tree), cwd=common, check=False)
         verdict = "passed" if code == 0 else "FAILED"
         record = {
             "sha": commit,

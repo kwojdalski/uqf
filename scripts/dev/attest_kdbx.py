@@ -155,10 +155,7 @@ def interpreter() -> str | None:
     return None if q is None else identified(q)
 
 
-def git(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=REPO, capture_output=True, text=True, check=True
-    ).stdout
+_git = _load("_git", "scripts/dev/_git.py")
 
 
 def _test_impact():
@@ -304,7 +301,7 @@ def dirt() -> str | None:
     `git status --porcelain` leaves them out, so build output and the venv
     are no obstacle.
     """
-    lines = git("status", "--porcelain").splitlines()
+    lines = _git.git("status", "--porcelain", cwd=REPO).stdout.splitlines()
     untracked = [line[3:] for line in lines if line.startswith("??")]
     if len(untracked) < len(lines):
         return "uncommitted changes - commit them, so what is tested is what is pushed"
@@ -356,7 +353,7 @@ def main(argv: list[str] | None = None) -> int:
     if why:
         print(f"attest_kdbx: refused: {why}", file=sys.stderr)
         return 1
-    tree = git("rev-parse", "HEAD^{tree}").strip()
+    tree = _git.git("rev-parse", "HEAD^{tree}", cwd=REPO).stdout.strip()
     print(f"attest_kdbx: needed: {', '.join(hooks)}", flush=True)
     cov = None
     cov_ran = "all"
@@ -412,7 +409,7 @@ def main(argv: list[str] | None = None) -> int:
                         "whole suite decided",
                         flush=True,
                     )
-    if git("rev-parse", "HEAD^{tree}").strip() != tree or dirt():
+    if _git.git("rev-parse", "HEAD^{tree}", cwd=REPO).stdout.strip() != tree or dirt():
         print(
             "attest_kdbx: a hook changed the tree - commit that, then run this again",
             file=sys.stderr,
@@ -445,7 +442,7 @@ def main(argv: list[str] | None = None) -> int:
                 "the suites q-tests selected" if subset else "the whole suite"
             )
     try:
-        git(
+        _git.git(
             "commit",
             "--allow-empty",
             "-m",
@@ -453,6 +450,7 @@ def main(argv: list[str] | None = None) -> int:
             "-m",
             f"{', '.join(hooks)} - {why_these} - run on KDB-X over the whole tree."
             f"{ran}\n\n{trailer}",
+            cwd=REPO,
         )
     except subprocess.CalledProcessError as exc:
         # The commit runs the repository's hooks too; one that refuses (a
