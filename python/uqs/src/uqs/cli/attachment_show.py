@@ -4,7 +4,10 @@ state now. Split from attach.py, which holds the two commands that change a stac
 
 from __future__ import annotations
 
+from rich.markup import escape
+
 from uqs.attach import backfill_audit, config
+from uqs.cli import attach_next
 from uqs.cli.attach import NameArg
 from uqs.cli.attach_output import redact, secrets_of
 from uqs.cli.attachment import attachment_app
@@ -16,7 +19,8 @@ from uqs.stack import attach_state
 
 ShowJson = json_opt(
     '{"attachment": {name, stack, publisher, tables, ...}, "state": {...}, '
-    '"backfill_overrides": {"record": path, "entries": [...]}}'
+    '"backfill_overrides": {"record": path, "entries": [...]}, '
+    '"next": {"follow", "rows", "port_from", "tables"}}'
 )
 
 
@@ -30,6 +34,9 @@ def show(name: NameArg, as_json: ShowJson = False) -> None:
     any credential redacted. Changes nothing. Last, every waiver an attached
     backfill into its destination used (`--skip-eod-fence`), from that
     destination's backfill_overrides.jsonl: an accepted risk, never saved here.
+    Then what to run next: `uqs logs` to follow its publisher, and `uqs query`
+    for its rows - the rdb's host and port come from the stack's discovery,
+    which `show` does not ask.
     """
     try:
         att = config.load(name)
@@ -40,10 +47,12 @@ def show(name: NameArg, as_json: ShowJson = False) -> None:
     state = next((r for r in rows if r["attachment"] == name), {})
     record, waivers = backfill_audit.of_attachment(_paths(), name)
     overrides = {"record": None if record is None else str(record), "entries": waivers}
+    nxt = attach_next.commands(att, None)
     doc = redact(
-        {"attachment": config.to_json(att), "state": state, "backfill_overrides": overrides},
+        {"attachment": config.to_json(att), "state": state, "backfill_overrides": overrides,
+         "next": nxt},
         secrets_of(att),
-    )
+    )  # fmt: skip
     if as_json:
         emit(doc)
         return
@@ -54,3 +63,5 @@ def show(name: NameArg, as_json: ShowJson = False) -> None:
         console.print(f"[bold]backfill overrides[/] ({record}):", highlight=False)
         for line in backfill_audit.lines_of(doc["backfill_overrides"]["entries"]):
             console.print(f"  {line}", markup=False, soft_wrap=True, highlight=False)
+    for line in attach_next.lines(doc["next"]):
+        console.print(escape(line), soft_wrap=True, highlight=False)
