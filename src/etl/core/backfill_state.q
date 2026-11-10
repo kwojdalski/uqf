@@ -107,11 +107,36 @@
 / @eg .qetl.job.bounded.state.shell_word "/a b/c.lock"  ->  "'/a b/c.lock'"
 .qetl.job.bounded.state.shell_word:{[path] "'",ssr[path;"'";"'\\''"],"'"}
 
-/ Private: create one lock directory, atomically - 0 when this call made it,
-/ 1 when it exists already (or cannot be made). mkdir on an existing
-/ directory returns non-zero: that IS the test.
+/ Private: take one lock directory, atomically WITH its owner record - 0 when
+/ this call made the lock, 1 when it exists already (or cannot be made).
+/ .
+/ THE OWNER IS NEVER ABSENT. A lock made by `mkdir` and then given its owner
+/ is two steps, and a process stopped between them (KDB-X turns SIGTERM into
+/ an 'os in whatever system call is in flight) left an ownerless lock - which
+/ is read as live, so it wedged the destination for every later run (#2679).
+/ The owner is written inside a fresh sibling directory, which is then
+/ renamed into the lock path: rename is atomic, so the lock exists complete or
+/ not at all. An interrupt before the rename leaves only the sibling
+/ (`<lock>.XXXXXX`), which is not a lock and which nothing reads.
+/ .
+/ The rename refuses to replace anything already at the path, so an existing
+/ lock - live or not - is left alone exactly as mkdir's failure left it. (A
+/ rename onto an EMPTY directory would succeed, so perl checks first; the only
+/ empty lock directory left is one an older version made, and the check is
+/ only racy against that older version.)
 / @private
-.qetl.job.bounded.state.try_mkdir:{[path] @[{system"mkdir ",.qetl.job.bounded.state.shell_word[x]," 2>/dev/null"; 0};path;{[e] 1}]}
+.qetl.job.bounded.state.try_take:{[path;pid]
+    tmp:@[{first system"mktemp -d ",.qetl.job.bounded.state.shell_word[x,".XXXXXX"]};path;{[e] ""}];
+    if[0=count tmp; :1];
+    rc:@[{[tmp;path;pid]
+          .qetl.job.bounded.state.write_owner_as[tmp;pid];
+          system"perl -e 'exit 1 if -e $ARGV[1]; rename($ARGV[0],$ARGV[1]) or exit 1' ",
+              .qetl.job.bounded.state.shell_word[tmp]," ",.qetl.job.bounded.state.shell_word[path]," 2>/dev/null";
+          0}[tmp;path];pid;{[e] 1}];
+    / Whatever happened the sibling is not wanted; after a successful rename it
+    / is already gone, so this is then a no-op.
+    .qetl.job.bounded.state.rm_lock[tmp];
+    rc}
 
 / Private: remove a lock directory and everything in it.
 / @private
@@ -160,9 +185,10 @@
 
 / The holder recorded inside a lock, or () when there is none to read.
 / .
-/ AN UNREADABLE OWNER IS NOT AN ABSENT ONE. acquire_lock creates the
-/ directory and writes the owner as two steps, so a competitor looking in
-/ between sees a lock with no owner file - and that lock is live, not stale.
+/ AN UNREADABLE OWNER IS NOT AN ABSENT ONE. try_take makes the lock and its
+/ owner in one atomic rename, so a lock with no owner file is one an older
+/ version made between its mkdir and its owner write - or a foreign directory -
+/ and it is live, not stale (remove it by hand if its writer is known dead).
 / Every caller here treats () as "assume held".
 / @param path the lock directory
 / @return the parsed owner dictionary, or ()
@@ -248,10 +274,9 @@
 / @eg .qetl.job.bounded.state.break_stale "/tmp/nonexistent.lock"  ->  0b
 .qetl.job.bounded.state.break_stale:{[path]
     b:path,".break";
-    if[0<>.qetl.job.bounded.state.try_mkdir[b];
+    if[0<>.qetl.job.bounded.state.try_take[b;.z.i];
         if[.qetl.job.bounded.state.lock_is_stale[b]; .qetl.job.bounded.state.rm_lock[b]];
         :0b];
-    .qetl.job.bounded.state.write_owner[b];
     broke:.qetl.job.bounded.state.lock_is_stale[path];
     if[broke; .qetl.job.bounded.state.rm_lock[path]];
     .qetl.job.bounded.state.rm_lock[b];
@@ -295,7 +320,7 @@
     dir:.qetl.job.bounded.state.lock_dir[];
     system"mkdir -p ",.qetl.job.bounded.state.shell_word[dir];
     path:.qetl.job.bounded.state.lock_path[worker];
-    rc:.qetl.job.bounded.state.try_mkdir[path];
+    rc:.qetl.job.bounded.state.try_take[path;.z.i];
     / A lock whose recorded holder is gone from this host is BROKEN AND
     / RETAKEN rather than reported (#490). Nothing releases a lock when a
     / process ends - this tree has no .z.exit handler - so without this a
@@ -310,16 +335,15 @@
             / Retake it through the same atomic mkdir. Losing THIS race means
             / another process got in first, and the refusal below - now
             / describing that live holder - is the right answer.
-            rc:.qetl.job.bounded.state.try_mkdir[path]]];
+            rc:.qetl.job.bounded.state.try_take[path;.z.i]]];
     if[rc<>0;
         '"acquire_lock: ",string[worker]," is already running (lock held at ",path,
          " by ",(.qetl.job.bounded.state.owner_desc[path]),
          ") - refusing to start a second instance, because two instances would ",
          "both advance the same private checkpoint"];
-    / Record who holds it, so the next process can tell a live lock from one
-    / this process left behind. READ BACK by lock_is_stale above; it was
-    / write-only until #490.
-    .qetl.job.bounded.state.write_owner[path];
+    / The owner went in with the lock (try_take), so the next process can tell
+    / a live lock from one this process left behind. READ BACK by
+    / lock_is_stale above; it was write-only until #490.
     .[{.qetl.log.ch.dbg[`lifecycle;y;(enlist[`worker]!enlist x),z]};(worker;"lock acquired";enlist[`path]!enlist path);::];
     path}
 
@@ -399,7 +423,7 @@
 / @eg .qetl.job.bounded.state.release_lock_at[;.z.i] .qetl.job.bounded.state.take_lock_at["/tmp/uqf_eg_take.lock";0D00:00:01;.z.i]  ->  1b
 .qetl.job.bounded.state.take_lock_at:{[path;wait;pid]
     deadline:.z.p+wait;
-    while[0<>.qetl.job.bounded.state.try_mkdir[path];
+    while[0<>.qetl.job.bounded.state.try_take[path;pid];
         / Same staleness rule acquire_lock uses, and it matters MORE here.
         / This mutex is SHARED, so one process dying mid-write used to wedge
         / the ledger for every worker on the host - five seconds at a time,
@@ -418,9 +442,9 @@
                  $[stale; ", which is gone, but the lock could not be broken (is ",path,".break left behind?)";
                      ", which is still running"]];
             system"sleep 0.01"]];
-    / Record the holder, so a lock left by a dead process can be broken by
-    / the next process to want it rather than waited on.
-    .qetl.job.bounded.state.write_owner_as[path;pid];
+    / The holder was recorded by try_take, in the same atomic step as the lock,
+    / so a lock left by a dead process can be broken by the next process to
+    / want it rather than waited on - and is never left with no holder (#2679).
     path}
 
 / Give up a lock take_lock_at took for pid - and only that one. A lock

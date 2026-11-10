@@ -784,3 +784,45 @@ def test_one_reader_failing_leaves_no_qualified_readiness(world):
         assert (started.state_dir / "etl_ready").is_file()
     finally:
         second.stop()
+
+
+# ------------------------------------------------------------ SIGTERM mid-range (#2679)
+
+
+def _lock_dirs(state_dir: Path) -> list[Path]:
+    """Every lock under the run's state directory. A half-made sibling (`x.lock.AbC123`, what an
+    interrupted take leaves before its rename) is not a lock and is not counted."""
+    return sorted(p for p in state_dir.iterdir() if p.name.endswith((".lock", ".lock.break")))
+
+
+def _wait_for(predicate, *, timeout: float = 120.0, poll: float = 0.05) -> bool:
+    """Poll rather than sleep: true as soon as predicate is, false at the timeout."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(poll)
+    return False
+
+
+def test_a_sigterm_mid_range_wedges_nothing_and_a_rerun_completes_the_range(world):
+    """KDB-X turns SIGTERM into an 'os in the system call in flight (or defers it to the end of
+    the script), so where it lands is not ours to choose - the signal is sent again and again.
+    Whatever it does to the run, it must never leave a lock the next run cannot take: the
+    coverage lock used to be left ownerless, and so live for ever (#2679)."""
+    started, _ = run(world)
+    state = started.state_dir
+    # the run is mid-range once it has begun filing coverage
+    assert _wait_for(
+        lambda: (state / "etl_coverage").exists() or started.process.poll() is not None
+    )
+    started.process.terminate()
+    assert _wait_for(lambda: started.process.poll() is not None), "the signalled run ends"
+    ownerless = [p for p in _lock_dirs(state) if p.is_dir() and not (p / "owner").exists()]
+    assert not ownerless, f"a lock with no owner record: {ownerless}"
+    code, result = backfill_run.follow(started, timeout=120)
+    assert code in (0, 1, 3, -15), started.log.read_text()
+    rerun, rerun_code, rerun_result = _rerun(world)
+    assert rerun_code == 0 and rerun_result["state"] in ("completed", "idle"), rerun.log.read_text()
+    assert read_rows(world.hdb, "2015.01.07") > 0
+    assert backfill_owner.active("pb-uat") == []
