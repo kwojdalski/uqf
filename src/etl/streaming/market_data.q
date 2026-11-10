@@ -27,6 +27,11 @@
 .qpipe.job.market_data.quote:.qetl.plant.columns[`quote;`time`sym`bid`ask`bsize`asize`src]
 .qpipe.job.market_data.fx_orderbook:.qetl.plant.shape `fx_orderbook
 .qpipe.job.market_data.crypto_book:.qetl.plant.shape `crypto_book
+/ How far a source's clock may lead this host's before its book is refused
+/ (`bad_time, #1021). market_data's OWN setting, taken once from the library's
+/ default (#2656), not the library constant itself: superbook has its own, so
+/ tuning one no longer silently changes what the other accepts.
+.qpipe.job.market_data.max_clock_lead:.qf.mkt.max_clock_lead
 
 / Direct top-of-book quotes, with the feed's own source identifier.
 / The shared quote table also carries equities; only canonical FX pairs pass.
@@ -82,7 +87,7 @@
 / passes, #1176). And to what a book must be before ANY consumer reads
 / it (#1021), judged here once rather than by each: a level 0 that is not a
 / price by .qf.mkt.level_ok (`bad_level), and a source_time further ahead of
-/ this host than .qf.mkt.max_clock_lead (`bad_time), and a book superbook
+/ this host than .qpipe.job.market_data.max_clock_lead (`bad_time), and a book superbook
 / could not hold (#2564): a price ladder and its size ladder of different
 / lengths, or a null source (`malformed) - left in, superbook threw on it
 / and dropped the whole batch, good books included. A book with an empty side is NOT a failure - the
@@ -113,7 +118,7 @@
     graded:.qf.mkt.check_market_data_quality[q;0w];
     bad:select from graded where status=`crossed;
     crossed:([] check:count[bad]#`crossed_book; status:bad`status; detail:.qf.util.full each bad; row:`long$bad`time);
-    ahead:where rows[`source_time]>.z.p+.qf.mkt.max_clock_lead;
+    ahead:where rows[`source_time]>.z.p+.qpipe.job.market_data.max_clock_lead;
     / An empty ladder is a withdrawal, not a bad level: only a level that is
     / there and is not a price fails.
     off:{[px;sz] $[count px; not .qf.mkt.level_ok["f"$first px;"f"$first sz]; 0b]};
@@ -121,7 +126,7 @@
     level:([] check:count[bad]#`bad_level; status:count[bad]#`bad_level;
         detail:count[bad]#enlist "a level-0 price or size that is not positive and finite"; row:bad);
     timed:([] check:count[ahead]#`bad_time; status:count[ahead]#`future;
-        detail:count[ahead]#enlist "source_time is further ahead of this host than .qf.mkt.max_clock_lead"; row:ahead);
+        detail:count[ahead]#enlist "source_time is further ahead of this host than .qpipe.job.market_data.max_clock_lead"; row:ahead);
     uneven:((count each rows`bid_prices)<>count each rows`bid_sizes) or (count each rows`ask_prices)<>count each rows`ask_sizes;
     bad:where uneven or null rows`source;
     shape:([] check:count[bad]#`malformed_book; status:count[bad]#`malformed;
