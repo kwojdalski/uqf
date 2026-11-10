@@ -31,8 +31,8 @@ import typer
 from uqs.attach import config, service, workflow
 from uqs.attach import detach as detaching
 from uqs.attach import publisher as publishing
+from uqs.cli import attach_launch, safety, shared
 from uqs.cli import attach_options as o
-from uqs.cli import safety, shared
 from uqs.cli.attach_output import (
     Output,
     checks_table,
@@ -46,6 +46,7 @@ from uqs.cli.attach_output import (
 from uqs.cli.attachment import OLD_REASON, attachment_app
 from uqs.cli.concepts import AttachmentArg
 from uqs.cli.json_out import json_opt
+from uqs.cli.launch_options import FollowOpt, LevelOpt, StopOnExitOpt, TraceOpt
 from uqs.cli.shared import _debug_requested, _paths, log
 from uqs.guardrails import spelled
 from uqs.paths import UqsError
@@ -123,6 +124,10 @@ def attach(
     clear_overrides: o.ClearOverridesOpt = False,
     dry_run: DryRunOpt = False,
     start: o.StartOpt = True,
+    follow: FollowOpt = False,
+    stop_on_exit: StopOnExitOpt = False,
+    level: LevelOpt = None,
+    trace: TraceOpt = False,
     yes: YesOpt = False,
     as_json: JsonOpt = False,
 ) -> None:
@@ -139,6 +144,11 @@ def attach(
     TorQ process file, after verify, so a native torq.sh start runs it through
     the same start gate; --start-with-all puts it in `start all`.
 
+    The publisher it starts takes `uqs start`'s launch options, meaning what
+    they mean there: --trace starts it with -trace, --follow (-f) streams its
+    log until Ctrl-C (--level filters it), and --stop-on-exit stops it then.
+    None applies with --no-start.
+
     A new attachment needs --job and --base-port; a saved one is reused by name.
     Replaces the stage commands plan, validate, status, apply, verify and start.
     """
@@ -146,6 +156,12 @@ def attach(
     out = Output(as_json, debug)
     out.doc = {"attachment": name, "dry_run": dry_run}
     _refuse_extra(out, "job attachment add", ctx.args)
+    refused = attach_launch.refusal(
+        start=start, follow=follow, level=level, stop_on_exit=stop_on_exit, trace=trace,
+        as_json=as_json, dry_run=dry_run,
+    )  # fmt: skip
+    if refused is not None:
+        out.fail(refused, code=shared.EXIT_USAGE)
     if remote_schema_file:
         out.fail(o.REMOTE_SCHEMA_RETIRED)
     began = time.monotonic()
@@ -228,8 +244,20 @@ def attach(
                 except UqsError as exc:
                     out.fail(exc)
             confirmed = getpass.getuser()
+    publisher = publishing.UqsPublisher(paths, trace=trace)
+    attach_launch.run(
+        att, publisher,
+        lambda: _execute(out, name, resolved, planned, ipc, paths, publisher, start,
+                         confirmed, began),
+        follow=follow, level=level, stop_on_exit=stop_on_exit, trace=trace, as_json=as_json,
+    )  # fmt: skip
+
+
+def _execute(out, name, resolved, planned, ipc, paths, publisher, start, confirmed, began) -> None:
+    """Save, apply, verify and start, then report each stage and exit: `add`'s execution."""
+    debug = out.debug
     outcome = workflow.execute(
-        resolved, planned, ipc, paths.repo_root, publishing.UqsPublisher(paths),
+        resolved, planned, ipc, paths.repo_root, publisher,
         start=start, confirmed_risks=confirmed,
     )  # fmt: skip
     stages = [asdict(s) | {"stage": s.name} for s in outcome.stages]

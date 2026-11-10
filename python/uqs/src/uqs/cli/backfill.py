@@ -15,10 +15,11 @@ import typer
 
 from uqs import timerange
 from uqs.attach.backfill_forced import ANY_WRITER
-from uqs.cli import backfill_attached, completion, safety
+from uqs.cli import backfill_attached, completion, launch_options, safety
 from uqs.cli.choices import ChoiceOpt, alternatives
 from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import JSON_HELP, emit
+from uqs.cli.launch_options import FollowOpt, LevelOpt, StopOnExitOpt, TraceOpt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import ATTACHMENT, bypass_flag, renamed, warn_renamed
@@ -146,15 +147,7 @@ def backfill(
         ),
     ] = False,
     port: BasePortOpt = None,
-    trace: Annotated[
-        bool,
-        typer.Option(
-            "--trace",
-            help="Log at TRACE inside the backfill process: every query the source is "
-            "sent - the SQL, or the q lambda and its bounds - and the rows and time it "
-            "took. Includes everything `uqs --debug` shows",
-        ),
-    ] = False,
+    trace: TraceOpt = False,
     wait: Annotated[
         bool,
         typer.Option(
@@ -167,24 +160,9 @@ def backfill(
             "whether the process started",
         ),
     ] = False,
-    follow: Annotated[
-        bool,
-        typer.Option(
-            "--follow",
-            "-f",
-            help="With --attachment: --wait, streaming every line of the run's own log as it "
-            "goes. Ctrl-C stops the stream; the run keeps running",
-        ),
-    ] = False,
-    stop_on_exit: Annotated[
-        bool,
-        typer.Option(
-            "--stop-on-exit",
-            help="With --follow: on Ctrl-C, stop what this started - the run finishes its "
-            "current window, keeps what it completed and exits 4 as `stopped`, and a re-run "
-            "does the rest; a second Ctrl-C stops following and leaves that request in place",
-        ),
-    ] = False,
+    follow: FollowOpt = False,
+    stop_on_exit: StopOnExitOpt = False,
+    level: LevelOpt = None,
     override: safety.OverrideOpt = None,
     reason: safety.ReasonOpt = None,
 ) -> None:
@@ -225,6 +203,8 @@ def backfill(
     never inside one): it finishes its current window, records `stopped`, and
     the command exits 4 once it has; a second Ctrl-C stops following and
     leaves the request standing. A re-run does the windows that remain.
+    `--level` filters the stream as `uqs start -f --level` does; a line the
+    run wrote without a level - a q error, its RESULT - is always shown.
 
     With `--attachment`, `--skip-eod-fence --reason TEXT` (`--override eod-fence`)
     admits a plan, dry run or run within the native writers' end-of-day fence
@@ -274,8 +254,9 @@ def backfill(
             )
         )
         return
-    if stop_on_exit and not follow:
-        _die(UqsUsageError("--stop-on-exit needs --follow: it stops what the stream started"))
+    refused = launch_options.refusal(follow=follow, level=level, stop_on_exit=stop_on_exit)
+    if refused is not None:
+        _die(refused)
         return
     if follow and attach is None:
         _die(
@@ -286,7 +267,7 @@ def backfill(
         )
         return
     if follow and as_json:  # stdout is one JSON document (#1685); a stream is not one
-        _die(UqsUsageError("--follow does not apply with --json: use --wait --json"))
+        _die(UqsUsageError(f"{launch_options.FOLLOW_NOT_WITH_JSON}: use --wait --json"))
         return
     if follow and mode in run_modes.READ_ONLY_MODES:
         _die(UqsError(f"--follow has nothing to follow with --mode {mode}: it starts no run"))
@@ -319,6 +300,7 @@ def backfill(
             wait=wait,
             follow=follow,
             stop_on_exit=stop_on_exit,
+            level=level,
             verbose=_debug_requested(ctx),
             trace=trace,
             writer=writer,

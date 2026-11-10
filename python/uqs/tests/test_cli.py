@@ -505,6 +505,96 @@ def test_restart_trace_and_a_start_without_trace_say_nothing_about_it(monkeypatc
     assert "did not reach" not in result.output
 
 
+def _start_json(monkeypatch, argv, already=frozenset(), failed=(), command="start"):
+    """`uqs start --json` (#2687) with the stack faked: `already` is what `status`
+    reports up, `failed` what the grace check finds. Returns the result, the
+    parsed document and the launch recorder."""
+    import subprocess
+
+    from uqs.stack import start_check
+
+    done = subprocess.CompletedProcess([command], 0, "torq says hi\n", "")
+    rec = _patch(monkeypatch, runtime, command, result=done)
+    monkeypatch.setattr(lifecycle, "_running", lambda port: set(already))
+    monkeypatch.setattr(stack_logs, "resolve_procnames", lambda paths, names: names.split())
+    monkeypatch.setattr(start_check, "snapshot", lambda paths, port: {})
+    monkeypatch.setattr(start_check, "confirm", lambda *a, **kw: list(failed))
+    result = runner.invoke(cli.app, [command, *argv, "--json"])
+    return result, json.loads(result.stdout), rec
+
+
+def test_start_json_lists_what_it_started_and_what_was_already_running(monkeypatch):
+    result, doc, rec = _start_json(monkeypatch, ["rdb1", "fxfeed1"], already={"fxfeed1"})
+    assert result.exit_code == 0, result.output
+    assert doc["started"] == ["rdb1"] and doc["already_running"] == ["fxfeed1"]
+    assert doc["untraced"] == [] and doc["ok"] is True and doc["dry_run"] is False
+    assert doc["output"] == ["torq says hi"], "torq.sh's output is in the document, not on stdout"
+    assert rec.kwargs["capture"] is True and rec.kwargs["trace"] is False
+
+
+def test_start_json_with_trace_names_what_trace_did_not_reach(monkeypatch):
+    result, doc, rec = _start_json(monkeypatch, ["rdb1", "fxfeed1", "--trace"], already={"fxfeed1"})
+    assert result.exit_code == 0, result.output
+    assert doc["untraced"] == ["fxfeed1"] and rec.kwargs["trace"] is True
+    assert "did not reach" not in result.stdout.split("{", 1)[0], "stdout is the document alone"
+
+
+def test_restart_json_restarts_everything_it_names(monkeypatch):
+    result, doc, _ = _start_json(monkeypatch, ["rdb1", "fxfeed1"], already={"fxfeed1"},
+                                 command="restart")  # fmt: skip
+    assert result.exit_code == 0, result.output
+    assert doc["started"] == ["rdb1", "fxfeed1"] and doc["already_running"] == []
+
+
+def test_start_json_carries_the_warnings_a_start_prints(monkeypatch):
+    monkeypatch.setattr(
+        start_warnings, "unfed_inputs", lambda procs, port: shared.console.print("warning x")
+    )
+    result, doc, _ = _start_json(monkeypatch, ["rdb1"])
+    assert result.exit_code == 0, result.output
+    assert doc["warnings"] == ["warning x"]
+
+
+def test_start_json_reports_a_process_that_did_not_come_up(monkeypatch):
+    from uqs.stack.start_check import Failure
+
+    failed = [Failure("rdb1", "it exited", None)]
+    result, doc, _ = _start_json(monkeypatch, ["rdb1"], failed=failed)
+    assert result.exit_code == shared.EXIT_REFUSED, result.output
+    assert doc["ok"] is False and "rdb1: it exited" in doc["error"]
+
+
+@pytest.mark.parametrize("verb", ["start", "restart"])
+def test_start_json_is_refused_with_follow(monkeypatch, verb):
+    said = _refusals(monkeypatch, lifecycle)
+    rec = _patch(monkeypatch, runtime, verb, result=Completed())
+    assert runner.invoke(cli.app, [verb, "rdb1", "-f", "--json"]).exit_code == 1
+    assert said == ["--follow does not apply with --json: use --json alone"]
+    assert rec.calls == []
+
+
+def test_start_dry_run_json_lists_the_start_lines(monkeypatch):
+    from uqs.stack import start_lines
+
+    seen: dict[str, Any] = {}
+
+    def plan(paths, procs, base_port=None, selected=None, extras=()):
+        seen.update(procs=procs, extras=extras)
+        return [start_lines.StartLine("rdb1", "q torq.q -procname rdb1 -trace ", "rdb1.txt")]
+
+    monkeypatch.setattr(start_lines, "plan", plan)
+    rec = _patch(monkeypatch, runtime, "start", result=Completed())
+    result = runner.invoke(cli.app, ["start", "rdb1", "--dry-run", "--trace", "--json"])
+    assert result.exit_code == 0, result.output
+    doc = json.loads(result.stdout)
+    assert doc["dry_run"] is True and doc["would_stop"] == []
+    assert doc["start_lines"] == [
+        {"process": "rdb1", "line": "q torq.q -procname rdb1 -trace ", "log": "rdb1.txt"}
+    ]
+    assert seen == {"procs": "rdb1", "extras": runtime.TRACE_EXTRAS}
+    assert rec.calls == [], "a dry run starts nothing"
+
+
 def test_stop_with_a_profile_stops_its_set_whatever_its_budget(monkeypatch):
     """A set too big to start must still be stoppable: stop resolves the
     profile without the budget check `start` refuses on."""

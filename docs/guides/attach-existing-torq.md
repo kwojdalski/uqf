@@ -57,6 +57,16 @@ re-verified and left running.
 
 - `--no-start` applies and verifies, and leaves the publisher stopped; the same
   command without it starts it later.
+- The publisher it starts takes `uqs start`'s launch options, meaning what they
+  mean there (#2687): `--trace` starts it with `-trace` on its start line, so
+  its log carries every source query from before the first; `--follow` (`-f`)
+  streams its log from before it starts until Ctrl-C, which ends the stream and
+  leaves it running; `--level` filters that stream; and `--stop-on-exit` makes
+  Ctrl-C stop it (`uqs stop`'s path) - unless it was already running when the
+  command began. A publisher already running is not restarted, so `--trace` does
+  not reach it, and the command says so. All four are refused with `--no-start`,
+  which starts nothing; `--level` and `--stop-on-exit` need `--follow`, and
+  `--follow` is refused with `--json` and `--dry-run`.
 - `--yes` skips the confirmation; the plan and results are still printed.
 - `--json` prints one JSON document; executing with it needs `--yes` (and
   `--accept-risks` when risks are accepted), and refuses with a JSON error
@@ -735,15 +745,20 @@ anything starts) and then start the runner, `scripts/dev/attached_backfill.q`.
 It is the bounded-worker lifecycle and the HDB writer, not a second engine: a
 window's rows are published, then its coverage is recorded, then the checkpoint
 saved, and a killed run leaves an under-claim that the next run redoes.
-`--wait`, `--debug`, `--trace` and `--on-conflict` work as they do elsewhere.
+`--wait`, `--debug`, `--trace` and `--on-conflict` work as they do elsewhere;
+`--follow`, `--level`, `--stop-on-exit` and `--trace` are `uqs start`'s, the one
+launch-option set `start`, `job backfill` and `job attachment add` share
+(#2687).
 
 `--follow` (`-f`) is `--wait` that also streams the run's own log: the file the
 launch reports, under the destination's state directory, from its first line to
 the run's `RESULT` line, then the outcome and the exit code `--wait` would give
 (#2677). Ctrl-C stops the stream, not the run: it says the run is still running,
 names `uqs logs --attachment NAME --worker JOB -f` to follow it again, and exits
-130. `--follow` is refused with `--json`, whose stdout is one document, and with
-`--writer`.
+130. `--level` filters the stream as `uqs start -f --level` does; a line the run
+wrote without a level - a q error, its `RESULT` - is shown whatever it says, and
+`--level` is refused without `--follow`. `--follow` is refused with `--json`,
+whose stdout is one document, and with `--writer`.
 
 `--follow --stop-on-exit` (#2677, #2679) makes the first Ctrl-C ask THIS run to
 stop instead, and keeps following until it has. A signal cannot do that: KDB-X

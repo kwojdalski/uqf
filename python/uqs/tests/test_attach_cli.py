@@ -514,7 +514,7 @@ def test_debug_does_not_turn_on_the_publishers_runtime_logging(world, monkeypatc
     monkeypatch.delenv("LOG_LEVEL", raising=False)
     result = run("add", *new(world, "--yes"), debug=True)
     assert result.exit_code == 0, result.output
-    assert seen == [("pb_ledger1", 6000, {"capture": True})], "no extras, no -debug/-verbose"
+    assert seen == [("pb_ledger1", 6000, {"trace": False, "capture": True})], "no -trace, no -debug"
     assert "LOG_LEVEL" not in os.environ
 
 

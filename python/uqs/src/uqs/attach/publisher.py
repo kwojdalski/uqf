@@ -47,8 +47,10 @@ def stop_publisher(att: Attachment, publisher: Publisher) -> bool:
 class UqsPublisher:
     """The publisher as `uqs start` / `uqs stop` see it."""
 
-    def __init__(self, paths: UqsPaths, host: Host | None = None) -> None:
-        self._paths, self._host = paths, host or Host()
+    def __init__(self, paths: UqsPaths, host: Host | None = None, *, trace: bool = False) -> None:
+        """`trace` starts it with `-trace` on its start line, as `uqs start --trace`
+        does (runtime.TRACE_EXTRAS, #2687): its process script reads it."""
+        self._paths, self._host, self._trace = paths, host or Host(), trace
 
     def running(self, att: Attachment) -> bool:
         """Listening HERE: the publisher runs where `start` started it, not on
@@ -59,7 +61,11 @@ class UqsPublisher:
     def start(self, att: Attachment) -> None:
         try:
             done = runtime.start(
-                self._paths, att.publisher.procname, base_port=att.stack.id, capture=True
+                self._paths,
+                att.publisher.procname,
+                base_port=att.stack.id,
+                trace=self._trace,
+                capture=True,
             )
         except UqsError as exc:
             raise AttachmentError(f"{att.publisher.procname} did not start: {exc}") from None
