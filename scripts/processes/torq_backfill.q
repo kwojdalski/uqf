@@ -210,8 +210,7 @@
     .qetl.io.default:.qetl.io.hdb[root;col],enlist[`on_ready]!enlist .qproc.backfill.on_hdb_ready;
     / yesterday is TorQ's until its end of day has moved it: the wdb's directory says when (#2186)
     if[count wdb:getenv `KDBWDB; .qetl.io.watch_eod[root;hsym `$wdb]];
-    / coverage here means written; queryable once the HDBs reload (#1094)
-    .qetl.coverage.defer_ready:1b;
+    / coverage here means written; queryable once the HDBs reload (#1094) - the on_ready above defers it
     .qetl.log.ch.info[`storage;"writing into the HDB";`root`partition_col!(root;col)];
     .qetl.io.default}
 

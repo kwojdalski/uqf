@@ -125,9 +125,7 @@ Q_COMMENT_LINE = re.compile(r"^\s*/.*$", re.MULTILINE)
 #: production read of `dry_run` means UQF_DRY_RUN is live with that string
 #: appearing in no file. This is the one case grep cannot answer and the
 #: strongest reason the doc exists.
-QWCFG_READ = re.compile(
-    r"\.qetl\.cfg\.(?:get_timestamp|get_positive|get_symbol|get_flag|raw|explain)\s*\[?\s*`([a-z_]+)"
-)
+QWCFG_READ = re.compile(r"\.qetl\.cfg\.(?:get_long|get_flag|raw|explain)\s*\[?\s*`([a-z_]+)")
 
 #: `build_env`'s dict keys: produced for TorQ, never read back by us, so they
 #: are exempt from the stale direction but still required to be documented -

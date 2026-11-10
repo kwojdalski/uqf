@@ -633,18 +633,16 @@
     .qt.support.reset_coverage_ledger[];
     .qetl.coverage.stage_completion[`rdy_a;`;`v1;.qt.qetl.coverage.d[1];.qt.qetl.coverage.d[2];1];
     .qunit.assertEquals[count .qetl.coverage.ready_claims[`rdy_a;`;`v1;.z.p];0;"written, and not yet said to be ready"];
-    .qetl.coverage.note_written[`rdy_a;`;`v1];
+    .qetl.coverage.note_written[`rdy_a;`;`v1;0b];
     .qunit.assertEquals[count .qetl.coverage.ready_claims[`rdy_a;`;`v1;.z.p];1;"no deferral: ready as it is written"];
     .qunit.assertEquals[.qetl.coverage.outstanding[`rdy_a;`;`v1];0b;"and nothing is owed"]};
 
 .qt.qetl.coverage.test_a_deferring_deployment_holds_readiness_until_it_releases:{[t]
     .qt.support.reset_coverage_ledger[];
-    .qetl.coverage.defer_ready:1b;
     .qetl.coverage.stage_completion[`rdy_b;`;`v1;.qt.qetl.coverage.d[1];.qt.qetl.coverage.d[2];1];
-    .qetl.coverage.note_written[`rdy_b;`;`v1];
+    .qetl.coverage.note_written[`rdy_b;`;`v1;1b];
     held:(count .qetl.coverage.ready_claims[`rdy_b;`;`v1;.z.p];.qetl.coverage.outstanding[`rdy_b;`;`v1]);
     released:.qetl.coverage.release_ready .z.p;
-    .qetl.coverage.defer_ready:0b;
     .qunit.assertEquals[held;(0;1b);"covered but not queryable, and owed"];
     .qunit.assertEquals[(released;count .qetl.coverage.ready_claims[`rdy_b;`;`v1;.z.p];count .qetl.coverage.unready);1 1 0;
         "released: queryable, and nothing left held"]};

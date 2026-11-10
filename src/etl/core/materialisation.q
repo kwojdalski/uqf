@@ -647,8 +647,8 @@
 / .
 / WHO MOVES IT. A store whose writes are visible at once (memory, anything
 / without an on_ready) advances it as each window is written. A deployment
-/ that defers visibility sets defer_ready and calls release_ready once its
-/ readers have caught up - torq_backfill, after every running HDB has
+/ that defers visibility gives its io manager an on_ready (.qetl.io.defers_ready)
+/ and calls release_ready once its readers have caught up - torq_backfill, after every running HDB has
 / acknowledged a reload with no partition open.
 
 / Where the readiness watermarks are kept, beside the coverage ledger.
@@ -669,10 +669,6 @@
 / @eg cols .qetl.coverage.empty_ready[]
 .qetl.coverage.empty_ready:{[] ([dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$()] ready_at:`timestamp$())}
 
-/ Whether this process's writes become queryable only when its deployment
-/ says so (release_ready). Set by the deployment, never by a worker.
-.qetl.coverage.defer_ready:0b
-
 / The (dataset, partition, source_version) written since the last release,
 / while readiness is deferred.
 .qetl.coverage.unready:([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$())
@@ -690,14 +686,16 @@
         count new};(ks;at)]}
 
 / A window's coverage was just staged: queryable now, or once the deployment
-/ releases it. Called by finish_window.
+/ releases it. Called by finish_window, which derives `deferred` from the worker's
+/ resolved io manager (.qetl.io.defers_ready) - there is no separate switch to pair (#2658).
 / @param ds the dataset
 / @param part the partition, or `
 / @param version the release the claim is under
+/ @param deferred 1b when the store's writes become visible only on release_ready
 / @return nothing
-.qetl.coverage.note_written:{[ds;part;version]
+.qetl.coverage.note_written:{[ds;part;version;deferred]
     k:([] dataset:enlist ds; partition:enlist part; source_version:enlist version);
-    $[.qetl.coverage.defer_ready; `.qetl.coverage.unready set distinct .qetl.coverage.unready,k; .qetl.coverage.mark_ready[k;.z.p]];
+    $[deferred; `.qetl.coverage.unready set distinct .qetl.coverage.unready,k; .qetl.coverage.mark_ready[k;.z.p]];
     }
 
 / The deployment's readers have caught up with everything written before

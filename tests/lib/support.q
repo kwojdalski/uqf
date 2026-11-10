@@ -91,7 +91,6 @@
     // and its readiness (#1094): the watermarks, and this process's state
     @[{system"rm -f ",x};.qetl.coverage.ready_path[];{[e] (::)}];
     `.qetl.coverage.unready set 0#.qetl.coverage.unready;
-    `.qetl.coverage.defer_ready set 0b;
     .qetl.coverage.init_ledger[];
     value `etl_coverage};
 

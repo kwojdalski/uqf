@@ -88,23 +88,14 @@
 
 / --- typed getters -------------------------------------------------------
 
-.qt.qetl.cfg.test_a_timestamp_parses:{[t]
-    .qetl.cfg.set_layers[()!();()!();(enlist `w)!enlist "2026.09.13D00:00:00.000000000"];
-    .qunit.assertEquals[.qetl.cfg.get_timestamp `w;2026.09.13D00:00:00.000000000;"a configured timestamp round-trips"]};
-
-.qt.qetl.cfg.test_a_timestamp_setting_applies_its_zone_offset:{[t]
-    / "P"$ alone read the clock and ignored the +02:00 - a bound two hours off
-    .qetl.cfg.set_layers[()!();()!();(enlist `w)!enlist "2026-09-13T02:00:00+02:00"];
-    .qunit.assertEquals[.qetl.cfg.get_timestamp `w;2026.09.13D00:00:00.000000000;"the offset is applied, so the bound is UTC"]};
-
-.qt.qetl.cfg.test_a_date_setting_is_midnight:{[t]
-    / unlike a row's event time, a window bound legitimately is a day
-    .qetl.cfg.set_layers[()!();()!();(enlist `w)!enlist "2026.09.13"];
-    .qunit.assertEquals[.qetl.cfg.get_timestamp `w;2026.09.13D00:00:00.000000000;"a date bound means its midnight"]};
-
-.qt.qetl.cfg.test_a_positive_long_parses:{[t]
+.qt.qetl.cfg.test_a_long_parses:{[t]
     .qetl.cfg.set_layers[()!();()!();(enlist `n)!enlist "500"];
-    .qunit.assertEquals[.qetl.cfg.get_positive `n;500j;"a configured count round-trips"]};
+    .qunit.assertEquals[.qetl.cfg.get_long[`n;3j];500j;"a configured count round-trips"]};
+
+.qt.qetl.cfg.test_an_absent_long_is_its_default:{[t]
+    .qetl.cfg.set_layers[()!();()!();()!()];
+    .qunit.assertEquals[.qetl.cfg.get_long[`n;3j];3j;"an unset optional count is the default"];
+    .qunit.assertEquals[count .qetl.cfg.errors;0;"and is not an error"]};
 
 .qt.qetl.cfg.test_a_flag_accepts_the_usual_spellings:{[t]
     .qetl.cfg.set_layers[()!();()!();`a`b`c`d!("true";"1";"YES";"off")];
@@ -122,22 +113,18 @@
 / worker was never configured. require_contract in backfill_state.q makes
 / the same choice for the same reason.
 .qt.qetl.cfg.test_every_bad_setting_is_reported_at_once:{[t]
-    .qetl.cfg.set_layers[()!();()!();`x`y!("not-a-timestamp";"-5")];
-    .qetl.cfg.get_timestamp `x;
-    .qetl.cfg.get_positive `y;
-    .qetl.cfg.get_symbol `absent_symbol;
-    .qunit.assertEquals[count .qetl.cfg.errors;3;"three bad settings produce three messages, not one"]};
+    .qetl.cfg.set_layers[()!();()!();`x`y`z!("thre";"maybe";"5")];
+    .qetl.cfg.get_long[`x;3j];
+    .qetl.cfg.get_flag `y;
+    .qetl.cfg.get_long[`z;3j];
+    .qunit.assertEquals[count .qetl.cfg.errors;2;"two bad settings produce two messages, not one"]};
 
 .qt.qetl.cfg.test_a_valid_configuration_passes:{[t]
     .qetl.cfg.set_layers[()!();()!();(enlist `n)!enlist "7"];
-    .qetl.cfg.get_positive `n;
+    .qetl.cfg.get_long[`n;3j];
     .qunit.assertEquals[.qetl.cfg.require_valid[];1b;"nothing wrong, nothing thrown"]};
 
 .qt.qetl.cfg.test_an_invalid_configuration_refuses_to_start:{[t]
-    .qetl.cfg.set_layers[()!();()!();()!()];
-    .qetl.cfg.get_timestamp `missing_window_start;
-    .qunit.assertError[{.qetl.cfg.require_valid[]};::;"refusing to start beats backfilling the wrong range and reporting success"]};
-
-.qt.qetl.cfg.test_a_non_positive_count_is_rejected:{[t]
-    .qetl.cfg.set_layers[()!();()!();(enlist `n)!enlist "0"];
-    .qunit.assertEquals[null .qetl.cfg.get_positive `n;1b;"zero is not a positive count"]};
+    .qetl.cfg.set_layers[()!();()!();(enlist `n)!enlist "thre"];
+    .qetl.cfg.get_long[`n;3j];
+    .qunit.assertThrows[.qetl.cfg.require_valid;::;"worker config invalid (1 problem(s)): setting n (UQF_N) is not an integer: thre";"refusing to start beats starting with the default silently substituted"]};

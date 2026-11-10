@@ -58,7 +58,7 @@
 / @eg .qetl.job.stream.require_recovery[`fx_positions;.qetl.job.stream.recovery_keys!3#enlist {[x]}]  / `fx_positions
 .qetl.job.stream.require_recovery:{[job;tr]
     d:.qetl.job.stream.def[job];
-    if[not (`carry in key d) and $[`replay in key d; d`replay; 0b]; :job];
+    if[not (`carry in key d) and d`replay; :job];
     present:.qetl.job.stream.recovery_keys inter key tr;
     if[count[present]=count .qetl.job.stream.recovery_keys; :job];
     if[count present;

@@ -178,32 +178,22 @@
 / @private
 .qetl.cfg.note:{[msg;null_value] .qetl.cfg.errors,:enlist msg; null_value}
 
-/ A required timestamp, e.g. a backfill window bound.
+/ An optional long with a default, e.g. a retry count.
 / .
-/ Read by .qetl.coerce.to_timestamp, so a zone suffix (Z, +02:00) is applied
-/ and the value is UTC - "P"$ alone ignored "+02:00", two hours off. A
-/ date-only value is midnight here, unlike in to_timestamp: a window bound
-/ legitimately is a day, where a row's event time never is.
-.qetl.cfg.get_timestamp:{[k]
+/ Absent means the default - that is what optional means. PRESENT but not an
+/ integer is a mistake, not an absence: it is recorded in .qetl.cfg.errors
+/ (so require_valid refuses the start, naming the key) and the default is
+/ returned so the caller can finish reading the rest of the settings and
+/ report every problem at once. "thre" used to read as the default, silently.
+/ @param k the config key
+/ @param default the long returned when the setting is absent or malformed
+/ @return the configured long, or the default
+/ @eg .qetl.cfg.get_long[`never_set_example;3j]  ->  3j
+.qetl.cfg.get_long:{[k;default]
     v:.qetl.cfg.raw[k];
-    $[0=count v; .qetl.cfg.note["missing required setting ",string[k]," (",.qetl.cfg.env_name[k]," or config)";0Np];
-      null p:$[.qetl.coerce.is_date_only v; .qetl.coerce.to_date_as_midnight v; .qetl.coerce.to_timestamp v];
-        .qetl.cfg.note["setting ",string[k]," is not a timestamp: ",v;0Np];
-      p]}
-
-/ A required positive long, e.g. a row cap.
-.qetl.cfg.get_positive:{[k]
-    v:.qetl.cfg.raw[k];
-    $[0=count v; .qetl.cfg.note["missing required setting ",string[k];0Nj];
-      null j:"J"$v; .qetl.cfg.note["setting ",string[k]," is not an integer: ",v;0Nj];
-      j<=0; .qetl.cfg.note["setting ",string[k]," must be positive, got ",v;0Nj];
+    $[0=count v; default;
+      null j:"J"$v; .qetl.cfg.note["setting ",string[k]," (",.qetl.cfg.env_name[k],") is not an integer: ",v;default];
       j]}
-
-/ A required symbol, e.g. a source_version.
-.qetl.cfg.get_symbol:{[k]
-    v:.qetl.cfg.raw[k];
-    $[0=count v; .qetl.cfg.note["missing required setting ",string[k];`];
-      `$v]}
 
 / The accepted spellings. Note `enlist "1"`, not `"1"`: a single character is
 / an ATOM in q, so the plain literal would make these mixed atom-and-vector

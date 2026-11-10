@@ -16,9 +16,7 @@ qetl.cfg,errors,value,,
 qetl.cfg,explain,function,1,k
 qetl.cfg,falsy,value,,
 qetl.cfg,get_flag,function,1,k
-qetl.cfg,get_positive,function,1,k
-qetl.cfg,get_symbol,function,1,k
-qetl.cfg,get_timestamp,function,1,k
+qetl.cfg,get_long,function,2,k default
 qetl.cfg,override_layer,value,,
 qetl.cfg,raw,function,1,k
 qetl.cfg,require_valid,function,1,
@@ -101,7 +99,6 @@ qetl.coverage,attach,function,1,
 qetl.coverage,claims,function,4,ds part version as_of
 qetl.coverage,compose,function,1,intervals
 qetl.coverage,contributing_runs,function,3,ds part version
-qetl.coverage,defer_ready,value,,
 qetl.coverage,empty_ledger,function,1,
 qetl.coverage,empty_ready,function,1,
 qetl.coverage,gaps,function,3,from_ts to_ts covered
@@ -114,7 +111,7 @@ qetl.coverage,ledger_path,function,1,
 qetl.coverage,mark_ready,function,2,ks at
 qetl.coverage,materialisations_of,function,1,id
 qetl.coverage,missing,function,6,ds part version as_of from_ts to_ts
-qetl.coverage,note_written,function,3,ds part version
+qetl.coverage,note_written,function,4,ds part version deferred
 qetl.coverage,outstanding,function,3,ds part version
 qetl.coverage,partitions_of,function,1,ds
 qetl.coverage,persist,function,1,
@@ -189,6 +186,7 @@ qetl.io,clip_to_eod,function,4,worker cfg range_from range_to
 qetl.io,days_of,function,2,root times
 qetl.io,default,dict,,
 qetl.io,default_strategy,value,,
+qetl.io,defers_ready,function,1,mgr
 qetl.io,discard,dict,,
 qetl.io,due,function,4,state status now interval
 qetl.io,eod_waiting,function,2,root dates
@@ -367,6 +365,7 @@ qetl.job.bounded.runtime,require_aligned,function,4,worker cfg range_from range_
 qetl.job.bounded.runtime,require_dependencies,function,1,worker
 qetl.job.bounded.runtime,require_revision,function,2,worker decl
 qetl.job.bounded.runtime,require_upstream,function,6,upstream upstream_part version as_of from_ts to_ts
+qetl.job.bounded.runtime,require_valid_config,function,1,
 qetl.job.bounded.runtime,retire_fixture_claims,function,2,worker rows
 qetl.job.bounded.runtime,retry_boundary,value,,
 qetl.job.bounded.runtime,retryable,function,1,err
@@ -471,6 +470,7 @@ qetl.job.stream,next_position,function,1,job
 qetl.job.stream,normalize,function,2,name decl
 qetl.job.stream,normalizer,dict,,
 qetl.job.stream,optional_declarations,value,,
+qetl.job.stream,optional_defaults,dict,,
 qetl.job.stream,passthrough,function,1,decl
 qetl.job.stream,passthrough_keys,value,,
 qetl.job.stream,plant_today,function,1,tr
@@ -500,6 +500,7 @@ qetl.job.stream,trapping,value,,
 qetl.job.stream,unwired,function,1,job
 qetl.job.stream,watch_subscription,function,2,job tr
 qetl.job.stream,wire,function,2,job publisher
+qetl.job.stream,with_defaults,function,1,decl
 qetl.job.stream,withheld_n,value,,
 qetl.job.stream.bars,assign,function,3,width tc x
 qetl.job.stream.bars,close_ready,function,2,name now

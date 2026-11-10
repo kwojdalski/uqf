@@ -104,13 +104,13 @@
 / @param live the live job's declaration
 / @return a symbol
 / @private
-.qetl.twin.live_transform:{[live] $[99h=type live; $[`transform in key live; live`transform; `]; `]}
+.qetl.twin.live_transform:{[live] $[99h=type live; live`transform; `]}
 
 / Does the twin share its live job's calculation?
 / @param twin_transform the transform the backfill applies
 / @param live the live job's declaration, or :: when it is not loaded
 / @return `shared when both apply one registered transform, `not_established when they do not or the live job declares none, `unchecked when it is not loaded
-/ @eg .qetl.twin.calculation[`t;()!()]  ->  `not_established
+/ @eg .qetl.twin.calculation[`t;enlist[`transform]!enlist `]  ->  `not_established
 .qetl.twin.calculation:{[twin_transform;live]
     if[(::)~live; :`unchecked];
     lt:.qetl.twin.live_transform[live];

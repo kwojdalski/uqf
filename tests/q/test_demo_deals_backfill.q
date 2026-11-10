@@ -95,6 +95,15 @@
 .qt.qpipe.job.demo_deals_backfill.test_a_null_source_version_is_refused_at_init:{[t]
     .qunit.assertError[{.qpipe.job.demo_deals_backfill.init x};.qt.qpipe.job.demo_deals_backfill.spec_for[`;1;4];"a run that cannot name its release cannot record coverage"]};
 
+/ #2654: a malformed retry setting used to read as the default (UQF_RETRY_MAX_ATTEMPTS=thre
+/ ran with 3 attempts). The start is refused instead, naming the key, and takes no lock.
+.qt.qpipe.job.demo_deals_backfill.test_a_malformed_retry_setting_refuses_the_start:{[t]
+    .qetl.cfg.set_layers[()!();()!();(enlist `retry_max_attempts)!enlist "thre"];
+    .qunit.assertThrows[{.qpipe.job.demo_deals_backfill.init x};.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4];
+        "worker config invalid (1 problem(s)): setting retry_max_attempts (UQF_RETRY_MAX_ATTEMPTS) is not an integer: thre";"the typo is refused, not read as 3"];
+    .qetl.cfg.set_layers[()!();()!();()!()];
+    .qunit.assertEquals[.qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];.qt.qpipe.job.demo_deals_backfill.spec_for[.qt.qpipe.job.demo_deals_backfill.fv;1;4];"the refusal took no lock, so the corrected start proceeds"]};
+
 .qt.qpipe.job.demo_deals_backfill.test_a_reversed_range_is_refused_at_init:{[t]
     .qunit.assertError[{.qpipe.job.demo_deals_backfill.init x};.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;4;1];"a bad bound fails before any work happens, not part-way through"]};
 

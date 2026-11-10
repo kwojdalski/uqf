@@ -96,22 +96,29 @@
 / wait through.
 .qetl.job.bounded.runtime.default_policy:`max_attempts`base_delay_ms`max_delay_ms!(3j;250j;8000j)
 
-/ Resolve the policy from configuration, falling back to the defaults.
+/ Resolve the policy from configuration, falling back to the defaults when a
+/ setting is absent; a malformed one is noted in .qetl.cfg.errors (#2654).
 / .
 / Read through .qetl.cfg so the precedence is the settled one, rather than a
 / second ad-hoc lookup order that drifts from it.
 .qetl.job.bounded.runtime.policy:{[]
-    read_one:{[k;fallback]
-        v:@[{.qetl.cfg.raw x};k;{""}];
-        $[0=count v; fallback; null j:"J"$v; fallback; j]};
     pol:`max_attempts`base_delay_ms`max_delay_ms!(
-        read_one[`retry_max_attempts;  .qetl.job.bounded.runtime.default_policy`max_attempts];
-        read_one[`retry_base_delay_ms; .qetl.job.bounded.runtime.default_policy`base_delay_ms];
-        read_one[`retry_max_delay_ms;  .qetl.job.bounded.runtime.default_policy`max_delay_ms]);
+        .qetl.cfg.get_long[`retry_max_attempts;  .qetl.job.bounded.runtime.default_policy`max_attempts];
+        .qetl.cfg.get_long[`retry_base_delay_ms; .qetl.job.bounded.runtime.default_policy`base_delay_ms];
+        .qetl.cfg.get_long[`retry_max_delay_ms;  .qetl.job.bounded.runtime.default_policy`max_delay_ms]);
     / under one attempt no fetch ran, and every window read as a transport outage (#2599)
     if[pol[`max_attempts]<1; '"retry: ",.qetl.cfg.env_name[`retry_max_attempts]," must be at least 1, not ",string pol`max_attempts];
     if[any 0>pol`base_delay_ms`max_delay_ms; '"retry: the retry delays must not be negative"];
     pol}
+
+/ Refuse to start on a malformed setting (#2654): the typed getters note a bad value and return
+/ the default, and this enforces the notes. Resets first so the verdict is this run's own.
+/ @return 1b
+/ @throws error listing every malformed setting, naming each key
+/ @eg .qetl.job.bounded.runtime.require_valid_config[]  ->  1b
+.qetl.job.bounded.runtime.require_valid_config:{[]
+    .qetl.cfg.reset[]; .qetl.job.bounded.runtime.policy[];
+    .qetl.cfg.require_valid[]}
 
 / Exponential backoff for attempt n (1-based), capped.
 / @eg .qetl.job.bounded.runtime.backoff_ms[.qetl.job.bounded.runtime.default_policy;3]  ->  1000
@@ -488,7 +495,7 @@
     covered:.qetl.job.bounded.runtime.commit[dry;`publish_coverage;.qetl.coverage.stage_completion;
         (ds;part;spec`source_version;from_ts;to_ts;rows)];
     / written; queryable now, or when the deployment says so (#1094)
-    if[`done~first covered; .qetl.coverage.note_written[ds;part;spec`source_version]];
+    if[`done~first covered; .qetl.coverage.note_written[ds;part;spec`source_version; .qetl.io.defers_ready .qetl.io.for_cfg $[worker in .qetl.job.bounded.defined[]; .qetl.job.bounded.def worker; ()!()]]];
     checkpointed:.qetl.job.bounded.runtime.commit[dry;`write_checkpoint;.qetl.job.bounded.state.save_checkpoint;
         (worker;spec;to_ts)];
     .[{.qetl.log.ch.dbg[`lifecycle;y;(enlist[`worker]!enlist x),z]};(worker;"window finished";
