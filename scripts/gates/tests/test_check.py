@@ -196,6 +196,10 @@ _FIXTURE = (
     "README.md",
     "web/package.json",
     "web/README.md",
+    # diagram-ports: the diagrams, and the stack its ports come from.
+    "docs/diagrams",
+    "scripts/processes/process_ports.csv",
+    "lib/torq-finance-starter-pack/appconfig/process.csv",
 )
 
 

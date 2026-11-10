@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Fail if a `procname :port` label in a d2 diagram disagrees with the stack.
 
 docs/diagrams/stack-topology.d2 hand-copies every procname and port into node
@@ -13,7 +12,8 @@ generate_operational_docs.py renders, resolved at the default base port with
 the one port grammar (`uqs.portexpr`). A label whose procname is not a process
 at all fails too - a renamed process whose box was left behind.
 
-    uv run python scripts/gates/check_diagram_ports.py
+Unlike the other checks it reads the stack through uqs, so it runs under the
+project environment: `uv run python scripts/gates/check.py diagram-ports`.
 """
 
 from __future__ import annotations
@@ -22,10 +22,12 @@ import re
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
+#: This checkout: scripts/gates/policy/<this file>. Its uqs is the one read.
+REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "python" / "uqs" / "src"))
 
-DIAGRAMS = REPO / "docs" / "diagrams"
+#: Where the d2 sources are, under the root checked.
+DIAGRAMS = Path("docs") / "diagrams"
 
 #: `fxfeed1 :6069` - a procname, one space, a four-digit port. Prose such as
 #: "reachable on :6075" has no procname directly before the colon and is
@@ -33,16 +35,16 @@ DIAGRAMS = REPO / "docs" / "diagrams"
 LABEL = re.compile(r"\b(?P<proc>[a-z][a-z0-9_]*) :(?P<port>\d{4,5})\b")
 
 
-def authoritative_ports() -> dict[str, int]:
-    """procname -> port at the default base, for every process in the stack."""
+def authoritative_ports(root: Path = REPO) -> dict[str, int]:
+    """procname -> port at the default base, for every process in `root`'s stack."""
     from uqs import portexpr
     from uqs.model.registry import DEFAULT_BASE_PORT
-    from uqs.paths import default_paths
+    from uqs.paths import paths_for_root
     from uqs.stack import procs
 
     env = {"KDBBASEPORT": str(DEFAULT_BASE_PORT)}
     ports: dict[str, int] = {}
-    for row in procs._composed_rows(default_paths()):
+    for row in procs._composed_rows(paths_for_root(root)):
         port = portexpr.resolve(row.get("port"), env)
         if port is not None:
             ports[row["procname"]] = port
@@ -83,10 +85,12 @@ def problems(diagrams: Path, ports: dict[str, int]) -> list[str]:
     return found
 
 
-def main() -> int:
-    found = problems(DIAGRAMS, authoritative_ports())
+def run(root: Path) -> int:
+    """Every label under `root`'s docs/diagrams against `root`'s stack; the
+    exit status. The findings share one pointer to the authority."""
+    found = problems(root / DIAGRAMS, authoritative_ports(root))
     if found:
-        print("check_diagram_ports: diagram ports disagree with the stack:", file=sys.stderr)
+        print("diagram-ports: diagram ports disagree with the stack:", file=sys.stderr)
         for line in found:
             print(f"  {line}", file=sys.stderr)
         print(
@@ -95,9 +99,5 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    print("check_diagram_ports: every diagram port label matches the stack")
+    print("diagram-ports: every diagram port label matches the stack")
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

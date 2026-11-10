@@ -32,9 +32,11 @@ WHAT THE COMMAND OWNS, and every check shares:
     could not run, 2 for a usage error. A check that crashes is reported as
     one that could not run - never as one that found nothing.
 
-Every check is read-only and needs only the standard library: no q, no
-configuration, no credentials. Not every gate under scripts/gates/ is one -
-the HDB utilities there operate on data, and the rest have not moved here.
+Every check is read-only and needs no q, no configuration and no
+credentials. All but diagram-ports need only the standard library; that one
+reads the stack's ports through uqs, so its hook runs it under `uv run`. Not
+every gate under scripts/gates/ is one - the HDB utilities there operate on
+data, and the rest have not moved here.
 """
 
 from __future__ import annotations
@@ -188,6 +190,11 @@ def _etl_layering(layering: ModuleType, root: Path) -> int:
     return layering.run(root)
 
 
+def _diagram_ports(ports: ModuleType, root: Path) -> int:
+    """Every `procname :port` label in docs/diagrams matches the stack (#1369)."""
+    return ports.run(root)
+
+
 @dataclass(frozen=True)
 class Check:
     name: str
@@ -257,6 +264,12 @@ CHECKS: dict[str, Check] = {
             "src/etl/core/ depends on no declaration, and src/ reads TorQ only through its owners",
             "etl_layering",
             _etl_layering,
+        ),
+        Check(
+            "diagram-ports",
+            "every `procname :port` label in docs/diagrams matches the stack's ports",
+            "diagram_ports",
+            _diagram_ports,
         ),
         Check(
             "vendored",

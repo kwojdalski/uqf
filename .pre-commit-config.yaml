@@ -308,10 +308,10 @@ repos:
 
       - id: diagram-ports
         name: Check the diagram port labels match the stack (#1369)
-        entry: uv run python scripts/gates/check_diagram_ports.py
+        entry: uv run python scripts/gates/check.py diagram-ports
         language: system
         pass_filenames: false
-        files: ^(docs/diagrams/.*\.d2|scripts/processes/|scripts/torqconfig/|python/uqs/src/uqs/(model|stack)/)
+        files: ^(docs/diagrams/.*\.d2|scripts/processes/|scripts/torqconfig/|python/uqs/src/uqs/(model|stack)/|scripts/gates/(check|policy/diagram_ports)\.py$)
 
       # At `git push`, not at commit (#1965), with q-coverage and
       # python-tests: the three that run test suites made a commit take 10-30
