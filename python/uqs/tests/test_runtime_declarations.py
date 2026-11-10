@@ -123,10 +123,11 @@ def test_a_runtime_with_pipelines_parses_a_marked_command_as_ever():
 #: its connectors and its process graph. A command whose code reaches one
 #: needs them, so carries `needs_pipelines`; each is reached by a marked one.
 PIPELINE_MODULES = {
+    # data diff's comparison: deploy/ runs stack/data_diff.py since #2655
+    "uqs.deploy.diff_endpoints",
     "uqs.external.feeds",
     "uqs.model.process_graph",
     "uqs.stack.backfill",
-    "uqs.stack.data_diff",
     "uqs.stack.dataset_verify",
     "uqs.stack.runs",
     "uqs.stack.snapshots",
