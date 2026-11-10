@@ -104,6 +104,25 @@
     .qunit.assertTrue[(first exec detail from h) like "*outside the window*";"and says why"];
     .qunit.assertTrue[not `stray_out in tables `.;"nothing was written"]};
 
+/ #2570: deal_positions rows are identified by their window's START, and the
+/ reaction clears by `time` over [from;to). A restatement over part of a day
+/ shares its start with that day's rows, so it cleared them all and rewrote only
+/ the deals inside it - USDJPY's position went, its deal still in demo_deals,
+/ with every outcome `ok. The worker therefore declares align:1D: a run whose
+/ edges are not whole days is refused before it publishes anything.
+.qt.qpipe.job.rebuild_positions.test_a_restatement_over_part_of_a_day_is_refused_and_loses_no_position:{[t]
+    d:.qt.qpipe.job.rebuild_positions.d;
+    deals:.qpipe.source.demo_deals.fixture[];
+    .qetl.reaction.notify_published[`demo_deals;d 0;d 1;1#deals;.qetl.io.memory];
+    .qetl.reaction.notify_published[`demo_deals;d 1;d 2;select from deals where i=1;.qetl.io.memory];
+    before:.qt.qpipe.job.rebuild_positions.positions[];
+    .qunit.assertThrows[.qpipe.job.demo_deals_backfill.init;
+        `source_version`range_from`range_to!(`rp2570;d[1];d[1]+0D12:00);
+        "*--from and --to must be multiples of it*";"a window that is not whole days is refused"];
+    .qpipe.job.demo_deals_backfill.cleanup[];
+    .qunit.assertEquals[(count before;.qt.qpipe.job.rebuild_positions.positions[]);(2;before);
+        "the refused restatement deleted no position"]};
+
 / #2055: the window is [from;to). A row AT from is inside; one a nanosecond
 / before to is inside; one AT to belongs to the next window and is refused -
 / whatever precision the column has, since no bound is "to minus a tick".
