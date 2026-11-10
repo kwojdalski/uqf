@@ -76,16 +76,6 @@
 / in src/etl/core/bounded_flags.q - the one parser scripts/dev/run_backfill.q
 / uses too, so a command line means the same thing to both.
 
-/ Whether this process was asked for DEBUG output.
-/ @param opts the parsed command line, as .Q.opt returns it
-/ @return 1b when -verbose was given
-.qproc.backfill.verbose:{[opts] `verbose in key opts}
-
-/ Whether this process was asked for TRACE output.
-/ @param opts the parsed command line, as .Q.opt returns it
-/ @return 1b when -trace was given
-.qproc.backfill.trace:{[opts] `trace in key opts}
-
 / Refuse a per-run flag that an environment variable would silently outrank
 / (#1304). Shared with scripts/dev/run_backfill.q (#1319): the logic is
 / .qetl.job.bounded.runtime.flag_vs_env, this names the launcher in the text.
@@ -311,13 +301,9 @@
 / Before any worker runs, so a malformed sources.csv stops the process here.
 .qtorq.load_source_settings[];
 
-/ DEBUG before anything else logs, so -verbose covers discovery too. .qetl.log is
-/ only defined once the tree above has loaded.
-if[.qproc.backfill.verbose .Q.opt .z.x; .qetl.log.debug 1b];
-/ -trace is the most detail there is, so it includes DEBUG: a traced query is
-/ read beside the window it was sent for, which only DEBUG logs. The two stay
-/ separate switches in .qetl.log - only this flag ties them.
-if[.qproc.backfill.trace .Q.opt .z.x; .qetl.log.debug 1b; .qetl.log.trace 1b];
+/ -verbose and -trace before anything else logs, so they cover discovery too.
+/ .qetl.log is only defined once the tree above has loaded.
+.qetl.log.apply_flags .Q.opt .z.x;
 .qetl.log.ch.dbg[`lifecycle;"debug logging on";
     `procname`pid`port`cwd!(.proc.procname;.z.i;system"p";first system"pwd")];
 

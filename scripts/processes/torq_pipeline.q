@@ -148,19 +148,16 @@ load_uqf:{[only]
 / @return elapsed milliseconds as a long
 elapsed_ms:{[t0] `long$(.z.p-t0)%1000000}
 
-/ Switch DEBUG logging on when this process was started with -verbose, and
-/ TRACE with DEBUG when it was started with -trace, then say who this process
-/ is. Every uqf process script takes the same flags, so `-extras -verbose` or
-/ `-extras -trace` on a start line - `uqs --debug job backfill`, `uqs start
-/ --trace` - is one spelling for all of them; -trace brings DEBUG as
-/ torq_backfill.q's does. A process already running can be switched too,
-/ without a restart: `uqs query ".qetl.log.trace 1b" --port <port>`.
+/ Apply -verbose and -trace (.qetl.log.apply_flags, the one mapping), then say
+/ who this process is. Every uqf process script takes the same flags, so
+/ `-extras -verbose` or `-extras -trace` on a start line - `uqs --debug job
+/ backfill`, `uqs start --trace` - is one spelling for all of them. A process
+/ already running can be switched too, without a restart:
+/ `uqs query ".qetl.log.trace 1b" --port <port>`.
 / @param opts the parsed command line, as .Q.opt returns it
 / @return 1b when debug logging is now on
 apply_log_flags:{[opts]
-    on:any `verbose`trace in key opts;
-    if[on; .qetl.log.debug 1b];
-    if[`trace in key opts; .qetl.log.trace 1b];
+    on:first .qetl.log.apply_flags opts;
     .qetl.log.ch.dbg[`config;"debug logging on";
         `procname`pid`port`cwd!(@[get;`.proc.procname;`];.z.i;system"p";first system"pwd")];
     on}
