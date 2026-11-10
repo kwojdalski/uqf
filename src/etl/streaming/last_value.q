@@ -20,7 +20,7 @@
 / .
 / A CRYPTO SYM IS PRICED ACROSS VENUES (#990). Its row is the shared
 / reference .qf.mkt.best_across_venues gives - the best bid and best ask over
-/ every venue quoting within .qf.mkt.reference_max_age, and their mid - with
+/ every venue quoting within .qpipe.job.last_value.reference_max_age, and their mid - with
 / `source` `venues. That is the price crypto_markout and posbook already use
 / (#886); the last venue's own book would be a third answer to "the current
 / price", and this table exists to be the one. So the job also holds the
@@ -43,6 +43,13 @@
 
 .qpipe.job.last_value.last_value:.qetl.plant.published `last_value
 .qpipe.job.last_value.market_data:.qetl.plant.shape `market_data
+/ The oldest a venue's top may be and still count towards a crypto sym's
+/ reference: last_value's OWN setting, taken once from the library's
+/ cross-venue default (#2656), not the library constant itself - posbook has
+/ its own, so tuning one no longer moves the other. Read where it is used. Not
+/ audited: last_value has no config_change output, which test_config_audit.q
+/ requires of an audited job.
+.qpipe.job.last_value.reference_max_age:.qf.mkt.reference_max_age
 
 / The latest row per sym: what the job compares an arriving book with.
 / Rebuilt by replay after a restart.
@@ -67,7 +74,7 @@
     tob:tob upsert c;
     syms:distinct c`sym;
     at:0!select time:max time by sym from tob where sym in syms;
-    best:.qf.mkt.best_across_venues[0!tob;at;.qf.mkt.reference_max_age];
+    best:.qf.mkt.best_across_venues[0!tob;at;.qpipe.job.last_value.reference_max_age];
     mk:exec last market by sym from batch;
     venues:select from ([] sym:at`sym; market:mk at`sym; source:`venues; source_time:at`time;
         bid:best`bid; ask:best`ask; mid:best`mid) where not null mid;

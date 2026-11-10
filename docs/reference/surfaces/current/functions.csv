@@ -1922,6 +1922,7 @@ qpipe.job.last_value,last_value,table,,
 qpipe.job.last_value,market_data,table,,
 qpipe.job.last_value,on_batch,function,2,t x
 qpipe.job.last_value,publish,value,,
+qpipe.job.last_value,reference_max_age,value,,
 qpipe.job.last_value,state,dict,,
 qpipe.job.last_value,tob,dict,,
 qpipe.job.market_data,check,function,1,rows
@@ -1973,6 +1974,7 @@ qpipe.job.posbook,position,table,,
 qpipe.job.posbook,position_book,table,,
 qpipe.job.posbook,position_trades,table,,
 qpipe.job.posbook,publish,value,,
+qpipe.job.posbook,reference_max_age,value,,
 qpipe.job.rebuild_positions,as_fills,function,1,deals
 qpipe.job.rebuild_positions,handler,function,3,dataset range_from range_to
 qpipe.job.rebuild_positions,side_sign,dict,,
