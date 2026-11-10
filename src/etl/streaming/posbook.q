@@ -54,6 +54,19 @@
 / replayed takes the fallback exactly as it did live. test_replay_equivalence.q
 / restarts at every point.
 / .
+/ WHAT A RESTART CANNOT REPLAY (#2460). A clean restart on a new day replays
+/ that day's log alone, and the previous day's last mid of a pair that has not
+/ quoted yet today is in no log it reads. A running job holds it (the FX mark
+/ has no age limit); a restarted one would mark the fill at its own price. So
+/ once the replay is done, seed_mids reads the latest top of book of every
+/ (sym; source) from before the plant's log began from the HDB, on the
+/ mapped partitions (.qetl.mapped.last_tops: the as-of join runs where the
+/ market is mapped, never a copy of it), and adds each sym's latest mid to the
+/ history at its own time. It is older than every book of today, so it marks
+/ only the fills that precede them, as the running job's would. Crypto is not
+/ seeded: its marks expire after .qf.mkt.reference_max_age, which a day-old top
+/ is far past. A process with no HDB restarts as before, and says so.
+/ .
 / WHAT IS IN THIS FILE: the schemas, the marking transform with its examples,
 / the batch handler, the book and the mark cache, and the declaration the
 / runner reads. Every step, in the order it runs.
@@ -254,6 +267,40 @@
       ()];
     }
 
+/ How far before the plant's log began an HDB book may be and still seed the
+/ mid history: a weekend and a holiday on top of it, the reach hdb_fx_markouts
+/ gives its own look-back cap.
+.qpipe.job.posbook.seed_lookback:7D
+
+/ Seed the mid history with the market as it stood before `before`: the latest
+/ mid of every FX sym, from the HDB, at the book's own time. Quoted both sides
+/ only, as own_book_mids drops a one-sided book; a sym with several sources
+/ takes the newest book, which is the one the history's as-of would give.
+/ Adds to the history and publishes nothing.
+/ @param before the exclusive instant, when the plant's log began
+/ @return the number of syms seeded
+/ @eg .qpipe.job.posbook.seed_mids[2026.10.10D00:00:00]  ->  0
+.qpipe.job.posbook.seed_mids:{[before]
+    t:.qetl.job.stream.hdb_tops[before;.qpipe.job.posbook.seed_lookback];
+    t:select from t where `own_book=.qf.mkt.price_rule market, not null bid, not null ask;
+    if[0=count t; :0];
+    t:select sym, source_time, mid:(bid+ask)%2 from `source_time xasc t;
+    seed:select last source_time, last mid by sym from t;
+    `.qpipe.job.posbook.mid_history set .qetl.enrich.add[.qpipe.job.posbook.mid_history;0!seed];
+    .qetl.log.ch.info[`transform;"seeded the mid history from the HDB";(`job`syms`before!(`posbook;count seed;before))];
+    count seed}
+
+/ After the replay: seed the mid history from before the plant's log began.
+/ The instant is the plant's own roll (the transport's plant_roll), else the
+/ start of the current day.
+/ @return nothing
+/ @eg .qpipe.job.posbook.on_replayed[]
+.qpipe.job.posbook.on_replayed:{[]
+    b:.qetl.job.stream.rolling.plant_roll[`posbook;.z.p];
+    if[null b; b:.qetl.job.stream.rolling.day_start .z.p];
+    .qpipe.job.posbook.seed_mids[b];
+    }
+
 \d .
 
 .qetl.transform.define[`position;`inputs`output`fn`examples!(
@@ -298,13 +345,14 @@
 / The book carries across days (#943, #963): the shell publishes it onto
 / position_open at end of day and, on replay, sets it from that snapshot and
 / re-applies whatever was logged ahead of it - fills included, in order.
-.qetl.job.stream.define[`posbook;`procname`subscribe_to`outputs`on_batch`start_with_all`replay`carry`note`state!(
+.qetl.job.stream.define[`posbook;`procname`subscribe_to`outputs`on_batch`start_with_all`replay`on_replayed`carry`note`state!(
     `posbook1;
     `executions`market_data;
     `position`position_open;
     .qpipe.job.posbook.on_batch;
     1b;
     1b;
+    .qpipe.job.posbook.on_replayed;
     `state`table!(`book;`position_open);
     "reads the normalizers' outputs - executions and market_data, not trades and quote - so one book carries FX and crypto and a new market is a mapping, not a job";
     `book`mid_history`crypto_tob)];

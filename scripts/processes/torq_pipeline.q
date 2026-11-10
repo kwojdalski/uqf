@@ -912,6 +912,17 @@ reader_handle:{[]
         '"qtorq.reader_handle: no ",string[rdb_type]," could be reached to ask which rows of an in-doubt page are published - nothing was published"];
     h}
 
+/ A handle to the HDB, registering it from discovery the first time it is
+/ asked for: a stream process connects to the tickerplant alone, and a job
+/ that reads the previous day's books at a restart (.qetl.job.stream.hdb_handle,
+/ posbook's seed) opens this. Null when none can be reached - the caller says so
+/ and the job restarts knowing only today's log.
+/ @return the handle, or 0Ni
+hdb_handle:{[]
+    if[0=count .servers.getservers[`proctype;hdb_type;()!();1b;1b]; .servers.registerfromdiscovery[enlist hdb_type;1b]];
+    h:.servers.gethandlebytype[hdb_type;`any];
+    $[-6h=type h; $[null h; 0Ni; h]; h]}
+
 / Which rows of `k` the table `t` on `h` already holds, matched on k's columns.
 / A table the process does not define holds none.
 / @param h a handle to the process holding `t` (an rdb)

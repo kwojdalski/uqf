@@ -212,7 +212,8 @@
         ".qetl.verify.check_retries[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000]`status";
         ".qetl.verify.check_conflict[`demo_deals_backfill;.qpipe.source.demo_deals.fixture[];2026.09.11D00:00:00.000000000;2026.09.16D00:00:00.000000000]`status";
         ".qetl.verify.check_coverage[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.14D00:00:00.000000000;3]`status";
-        ".qetl.mapped.newest[enlist[`market]!enlist `crypto]");
+        ".qetl.mapped.newest[enlist[`market]!enlist `crypto]";
+        "count .qetl.mapped.last_tops[`before`read_from!(2026.09.17D00:00:00;2026.09.10D00:00:00)]");
     reason:(
         "sends .u.upd over a tickerplant handle";
         "sends .u.upd over a tickerplant handle";
@@ -236,7 +237,8 @@
         "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
         "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
         "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
-        "reads the newest partition of the global market_data, which exists only in a process that has loaded an HDB (#2288)"))
+        "reads the newest partition of the global market_data, which exists only in a process that has loaded an HDB (#2288)";
+        "reads the partitions of the global market_data, which exists only in a process that has loaded an HDB (#2460)"))
 
 / Private: drop a trailing prose gloss - "1.016667 (2024 is a leap year)".
 / Both forms are tried by classify below rather than only the stripped one,

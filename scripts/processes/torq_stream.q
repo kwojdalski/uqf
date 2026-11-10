@@ -133,6 +133,9 @@
 
 \d .
 
+/ The HDB a restarted job reads the previous day's books from (#2460).
+.qetl.job.stream.hdb_handle:{[] .qtorq.hdb_handle[]}
+
 / Every plant subscriber needs these at ROOT - see .qtorq's own header.
 .qtorq.install_period_handlers[];
 
