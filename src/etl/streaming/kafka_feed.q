@@ -165,7 +165,7 @@
     f:hsym `$tmp,"/kfk.q";
     f 0: .qpipe.job.kafka_feed.pin_library[home;read0 hsym `$home,"/kfk.q"];
     r:@[{system "l ",x; `ok};tmp,"/kfk.q";{x}];
-    system "rm -rf ",tmp;
+    hdel f; hdel hsym `$tmp;
     if[not r~`ok; '"kafka_feed: could not load kfk from ",home,": ",r];
     `.kfk.logcb set .qpipe.job.kafka_feed.on_log;
     / kfk.q hands a message whose topic has no subscribed callback to

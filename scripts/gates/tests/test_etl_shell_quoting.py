@@ -35,7 +35,6 @@ BASELINE = {
     "core/react.q": 1,
     "core/worker_runtime.q": 1,
     "core/tick.q": 1,
-    "streaming/kafka_feed.q": 2,
 }
 
 
