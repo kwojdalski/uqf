@@ -41,12 +41,14 @@ ALL = (True, True, True, True)
     [
         # (docs, q, frontend, python)
         # -- the browser application ------------------------------------
-        ([("M", "web/src/App.tsx")], (False, False, True, False)),
         ([("M", "web/vite.config.ts")], (False, False, True, False)),
         ([("M", "web/package-lock.json")], (False, False, True, False)),
-        ([("A", "web/src/Chart.tsx")], (False, False, True, False)),
         # a web/ file a Python file names: the API types uqf_frontend's tests
-        # hold to its models, and the Node pin the tool-pins gate reads
+        # hold to its models, the Node pin the tool-pins gate reads, and every
+        # source under web/src, whose path literals test_browser_paths.py holds
+        # to the FastAPI routes
+        ([("M", "web/src/App.tsx")], (False, False, True, True)),
+        ([("A", "web/src/Chart.tsx")], (False, False, True, True)),
         ([("M", "web/src/api/query.ts")], (False, False, True, True)),
         ([("M", "web/package.json")], (False, False, True, True)),
         ([("M", "web/README.md")], (False, False, True, True)),
@@ -77,7 +79,7 @@ ALL = (True, True, True, True)
         # a deletion a document links to
         ([("D", "scripts/dev/odbc_rosetta.sh")], (True, True, False, True)),
         ([("D", "web/src/api/query.ts")], (False, False, True, True)),
-        ([("D", "web/src/App.tsx")], (False, False, True, False)),
+        ([("D", "web/src/App.tsx")], (False, False, True, True)),
         ([("D", "src/pricing/forwards.q")], (True, True, False, True)),
         # -- shared test configuration: every group --------------------------
         ([("M", ".github/workflows/ci.yml")], ALL),
@@ -104,10 +106,10 @@ def test_each_group_runs_for_what_can_change_its_result(changes, expected):
 
 
 def test_every_decision_to_run_says_why_path_by_path():
-    changes = [("M", "src/pricing/forwards.q"), ("M", "web/src/App.tsx"), ("M", "README.md")]
+    changes = [("M", "src/pricing/forwards.q"), ("M", "web/vite.config.ts"), ("M", "README.md")]
     s = scope.decide(changes, None)
     assert s.why["q"] == ["src/pricing/forwards.q: q"]
-    assert s.why["frontend"] == ["web/src/App.tsx: the browser application"]
+    assert s.why["frontend"] == ["web/vite.config.ts: the browser application"]
     assert s.why["python"] == [
         "src/pricing/forwards.q: q, which the Python tests start",
         "README.md: outside web/, where a Python test or a gate's tests can read it",
@@ -117,7 +119,7 @@ def test_every_decision_to_run_says_why_path_by_path():
 
 
 def test_a_skipped_group_says_why_it_was_skipped():
-    s = scope.decide([("M", "web/src/App.tsx")], None)
+    s = scope.decide([("M", "web/vite.config.ts")], None)
     text = scope.report(s, 1)
     assert f"**PeachQ Python tests**: skipped - {scope.SKIPPED['python']}" in text
     assert "**PeachQ q tests**: skipped - " in text
@@ -127,10 +129,12 @@ def test_a_skipped_group_says_why_it_was_skipped():
 
 
 def test_a_python_reader_of_a_web_file_is_named():
-    """The cross-language edge: web/src/api/ mirrors the API models, and
-    uqf_frontend's tests read it to hold the two together."""
-    named = scope.named_by_python(["web/src/api/query.ts", "web/src/App.tsx"])
-    assert set(named) == {"web/src/api/query.ts"}
+    """The cross-language edges: web/src/api/ mirrors the API models, and
+    uqf_frontend's tests read it to hold the two together; test_browser_paths.py
+    reads every web/src source to hold its paths to the routes."""
+    named = scope.named_by_python(["web/src/api/query.ts", "web/src/App.tsx", "web/vite.config.ts"])
+    assert set(named) == {"web/src/api/query.ts", "web/src/App.tsx"}
+    assert named["web/src/App.tsx"] == "python/uqf_frontend/tests/test_browser_paths.py"
     s = scope.decide([("M", "web/src/api/query.ts")], None)
     assert s.why["python"] == [f"web/src/api/query.ts: named by {named['web/src/api/query.ts']}"]
 
@@ -320,7 +324,7 @@ def test_ci_pr_tests_full_runs_each_group_the_change_reaches_as_before(monkeypat
     args = ("--event", "pull_request", "--pr-tests", "full")
     out = _run_main(monkeypatch, tmp_path, EVERYWHERE, *args)
     assert out == dict(full="false", docs="true", q="true", frontend="true", python="true")
-    out = _run_main(monkeypatch, tmp_path / "web", [("M", "web/src/App.tsx")], *args)
+    out = _run_main(monkeypatch, tmp_path / "web", [("M", "web/vite.config.ts")], *args)
     assert (out["docs"], out["q"], out["frontend"], out["python"]) == (
         "false",
         "false",
