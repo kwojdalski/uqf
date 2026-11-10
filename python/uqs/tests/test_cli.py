@@ -471,6 +471,55 @@ def test_restart_with_a_profile_hands_torq_its_set(monkeypatch):
     assert rec.kwargs["selected"] == ["rdb1", "stp1"]
 
 
+@pytest.mark.parametrize("verb", ["start", "restart"])
+def test_trace_reaches_the_launch_and_is_off_by_default(monkeypatch, verb):
+    """#2675: `--trace` is handed to runtime, which puts `-extras -trace` on
+    torq.sh's command line; without it nothing extra is asked for."""
+    rec = _patch(monkeypatch, runtime, verb, result=Completed())
+    monkeypatch.setattr(lifecycle, "_running", lambda port: set())
+    monkeypatch.setattr(stack_logs, "resolve_procnames", lambda paths, names: names.split())
+    assert runner.invoke(cli.app, [verb, "rdb1", "--trace"]).exit_code == 0
+    assert rec.kwargs["trace"] is True
+    assert runner.invoke(cli.app, [verb, "rdb1"]).exit_code == 0
+    assert rec.kwargs["trace"] is False
+
+
+def test_trace_does_not_need_follow_but_follow_carries_it(monkeypatch):
+    result, start, _, _ = _up(monkeypatch, ["rdb1", "--trace"], already=set(),
+                              command=("start", "-f"))  # fmt: skip
+    assert result.exit_code == 0, result.output
+    assert start.kwargs["trace"] is True
+
+
+def test_dry_run_with_trace_composes_its_lines_with_it(monkeypatch):
+    rec = _patch(monkeypatch, runtime, "print_procs", result=Completed(stdout="line\n"))
+    assert runner.invoke(cli.app, ["start", "rdb1", "--dry-run", "--trace"]).exit_code == 0
+    assert rec.kwargs["trace"] is True
+
+
+@pytest.mark.parametrize("follow", [[], ["-f"]])
+def test_start_trace_names_what_was_already_running_and_how_to_trace_it(monkeypatch, follow):
+    """torq.sh skips a process that is up, so --trace never reaches it: the
+    start names those and the two ways to switch tracing on in them."""
+    result, start, _, _ = _up(monkeypatch, ["rdb1", "fxfeed1", "--trace"], already={"fxfeed1"},
+                              command=("start", *follow))  # fmt: skip
+    assert result.exit_code == 0, result.output
+    out = " ".join(result.output.split())
+    assert "already running, so --trace did not reach: fxfeed1." in out
+    assert "`uqs restart fxfeed1 --trace`" in out
+    assert '`uqs query fxfeed1 ".qetl.log.trace 1b"`' in out
+
+
+def test_restart_trace_and_a_start_without_trace_say_nothing_about_it(monkeypatch):
+    """restart restarts every process it names, so none is skipped; a start
+    with no --trace has nothing to report."""
+    result, _, _, _ = _up(monkeypatch, ["fxfeed1", "--trace"], already={"fxfeed1"},
+                          command=("restart",))  # fmt: skip
+    assert "did not reach" not in result.output
+    result, _, _, _ = _up(monkeypatch, ["fxfeed1"], already={"fxfeed1"}, command=("start",))
+    assert "did not reach" not in result.output
+
+
 def test_stop_with_a_profile_stops_its_set_whatever_its_budget(monkeypatch):
     """A set too big to start must still be stoppable: stop resolves the
     profile without the budget check `start` refuses on."""

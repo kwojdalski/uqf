@@ -23,8 +23,10 @@
 if[0=count getenv`UQF_ROOT; '"torq_tap: UQF_ROOT is not set"];
 system"l ",getenv[`UQF_ROOT],"/src/etl/core/log.q";
 
-/ -verbose switches DEBUG on, the same flag every uqf process script takes.
+/ -verbose switches DEBUG on, and -trace TRACE with DEBUG - the same flags every
+/ uqf process script takes.
 if[`verbose in key .Q.opt .z.x; .qetl.log.debug 1b];
+if[`trace in key .Q.opt .z.x; .qetl.log.debug 1b; .qetl.log.trace 1b];
 
 \d .
 

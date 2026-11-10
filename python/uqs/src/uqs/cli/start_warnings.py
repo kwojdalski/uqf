@@ -2,16 +2,39 @@
 
 Each looks at the fleet the start will leave and names a problem the plant
 would not: a subscriber with no producer, more connections than the licence
-lets one process hold, proctypes monitor1 cannot watch. None can fail the
+lets one process hold, proctypes monitor1 cannot watch - and, once a start
+has run, the processes its `--trace` could not reach. None can fail the
 command. Split from cli/lifecycle.py, which holds its modules to 400 lines.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Annotated
+
+import typer
+
+from uqs.cli import start_follow
 from uqs.cli.shared import _paths, console, log
 from uqs.model import dependencies, profiles
+from uqs.paths import UqsError
 from uqs.stack import alive, deployment, listing
 from uqs.stack import procs as procs_model
+
+#: `start`'s and `restart`'s --trace (#2675): `-trace` on each start line, read
+#: by uqf's process scripts before their first source request. Here, beside
+#: what reports the processes it cannot reach, to keep cli/lifecycle.py to 400 lines.
+TraceOpt = Annotated[
+    bool,
+    typer.Option(
+        "--trace",
+        help="Log at TRACE inside each process this starts, from before its first source "
+        "request: every query the source is sent - the SQL, or the q lambda and its bounds "
+        "- and the rows and time it took, as `uqs job backfill --trace` does. Includes "
+        "everything `uqs --debug` shows. A process already running is not restarted, so "
+        "it is not traced. Off by default; --level only filters what --follow shows",
+    ),
+]
 
 
 def running(port: int | None) -> set[str]:
@@ -124,4 +147,38 @@ def connection_cap(procs: str, port: int | None) -> None:
         "wedges in its retry loop and still reports `up`, and monitor1 may become "
         "unreachable so the Heartbeat column empties. Start a subset, or stop what "
         "you are not using."
+    )
+
+
+def untraced(
+    verb: str, names: str, port: int | None, running_now: Callable[[int | None], set[str]]
+) -> list[str]:
+    """The processes of `names` a `start --trace` does not reach: torq.sh
+    skips one that is already up - `running_now` says which - so its start
+    line, and `-trace`, never run (#2675). A restart stops each first, so it
+    reaches them all. Advisory: a set it cannot work out is none."""
+    if verb != "start":
+        return []
+    try:
+        wanted = start_follow.procnames_started_by(names, port)
+        up = running_now(port)
+    except (UqsError, OSError) as exc:
+        log.debug("could not tell what --trace reaches: {}", exc)
+        return []
+    return [p for p in wanted if p in up]
+
+
+def trace_unreached(names: list[str], port: int | None) -> None:
+    """Name the processes `--trace` did not reach, and the two ways to trace
+    them: restart them traced, or switch tracing on in place."""
+    if not names:
+        return
+    procs = " ".join(names)
+    base = f" --base-port {port}" if port is not None else ""
+    console.print(
+        f"[yellow]already running, so --trace did not reach: {procs}.[/] "
+        f"`uqs restart {procs} --trace{base}` restarts them traced; "
+        f'`uqs query {names[0]} ".qetl.log.trace 1b"{base}` switches tracing on in one '
+        "without a restart",
+        highlight=False,
     )

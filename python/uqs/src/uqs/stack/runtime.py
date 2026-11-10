@@ -253,10 +253,28 @@ def _bootstrap_and_run(
         ) from exc
 
 
-def start(paths: UqsPaths, procs: str = "all", base_port: int | None = None, **kw: Any):
-    """`selected=` a profile's resolved set; `capture=`, `timeout=` as run_torq_sh."""
+#: What `trace=True` appends to each start line, through torq.sh's `-extras`:
+#: the flag uqf's process scripts read to switch source-query tracing on before
+#: their first source request, as torq_backfill.q always has (#2675).
+TRACE_EXTRAS = ("-trace",)
+
+
+def _extras(trace: bool) -> list[str]:
+    """torq.sh's `-extras` for a start or restart: `-trace`, or nothing."""
+    return ["-extras", *TRACE_EXTRAS] if trace else []
+
+
+def start(
+    paths: UqsPaths,
+    procs: str = "all",
+    base_port: int | None = None,
+    trace: bool = False,
+    **kw: Any,
+):
+    """`selected=` a profile's resolved set; `capture=`, `timeout=` as run_torq_sh.
+    `trace` starts each process with `-trace` (TRACE_EXTRAS)."""
     kw.setdefault("capture", False)
-    return run_torq_sh(paths, ["start", procs], base_port=base_port, **kw)
+    return run_torq_sh(paths, ["start", procs, *_extras(trace)], base_port=base_port, **kw)
 
 
 def stop(paths: UqsPaths, procs: str = "all", base_port: int | None = None, **kw: Any):
@@ -265,9 +283,15 @@ def stop(paths: UqsPaths, procs: str = "all", base_port: int | None = None, **kw
     return run_torq_sh(paths, ["stop", procs], base_port=base_port, **kw)
 
 
-def restart(paths: UqsPaths, procs: str = "all", base_port: int | None = None, **kw: Any):
+def restart(
+    paths: UqsPaths,
+    procs: str = "all",
+    base_port: int | None = None,
+    trace: bool = False,
+    **kw: Any,
+):
     kw.setdefault("capture", False)
-    return run_torq_sh(paths, ["restart", procs], base_port=base_port, **kw)
+    return run_torq_sh(paths, ["restart", procs, *_extras(trace)], base_port=base_port, **kw)
 
 
 def summary(
@@ -285,10 +309,12 @@ def print_procs(
     procs: str = "all",
     base_port: int | None = None,
     selected: Sequence[str] | None = None,
+    trace: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     """What `torq.sh print` shows for `procs`, composed without bootstrapping:
-    a dry run writes nothing (stack/start_lines.py, #1880)."""
-    lines = start_lines.plan(paths, procs, base_port, selected)
+    a dry run writes nothing (stack/start_lines.py, #1880). `trace` as `start`'s."""
+    extras = TRACE_EXTRAS if trace else ()
+    lines = start_lines.plan(paths, procs, base_port, selected, extras=extras)
     text = "".join(f"{line.printed()}\n" for line in lines)
     return subprocess.CompletedProcess(["print", procs], 0, text, "")
 

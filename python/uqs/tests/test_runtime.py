@@ -152,6 +152,12 @@ def test_a_launcher_that_cannot_run_is_refused(monkeypatch, tmp_path, value, mes
         (runtime.start, {"procs": "rdb1"}, ["start", "rdb1"]),
         (runtime.stop, {"procs": "all"}, ["stop", "all"]),
         (runtime.restart, {"procs": "hdb1"}, ["restart", "hdb1"]),
+        (runtime.start, {"procs": "rdb1", "trace": True}, ["start", "rdb1", "-extras", "-trace"]),
+        (
+            runtime.restart,
+            {"procs": "hdb1", "trace": True},
+            ["restart", "hdb1", "-extras", "-trace"],
+        ),
     ],
 )
 def test_each_verb_passes_torq_sh_its_own_arguments(monkeypatch, fn, extra, argv):

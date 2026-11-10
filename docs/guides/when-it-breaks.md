@@ -64,7 +64,8 @@ If the error alone doesn't explain it, re-run with more detail:
 
 - `--debug` adds the coverage gaps planned, each fetch's bounds and row counts,
   retries, locks and checkpoints;
-- `--trace` adds every query the source was sent.
+- `--trace` adds every query the source was sent. A live job takes it too:
+  `uqs restart <procname> --trace`.
 
 See [the DEBUG level](uqs.md#where-a-process-stopped).
 

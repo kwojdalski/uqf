@@ -42,7 +42,7 @@
 # test_stream_job.q hands them a recording one.
 #
 # wait_for_tickerplant and reload_hdb joined this list in #462, and the four
-# that arrived with them did NOT: elapsed_ms, record_received, apply_verbose
+# that arrived with them did NOT: elapsed_ms, record_received, apply_log_flags
 # and record_published need no tickerplant at all and are covered by
 # test_torq_pipeline.q instead. This list means "uncovered on purpose", so
 # the distinction is the whole value of it - a pure millisecond conversion
