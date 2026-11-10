@@ -27,11 +27,12 @@ from dataclasses import replace as dc_replace
 from typing import Annotated
 
 import typer
+from rich.markup import escape
 
 from uqs.attach import config, service, workflow
 from uqs.attach import detach as detaching
 from uqs.attach import publisher as publishing
-from uqs.cli import attach_launch, safety, shared
+from uqs.cli import attach_launch, attach_next, safety, shared
 from uqs.cli import attach_options as o
 from uqs.cli.attach_output import (
     Output,
@@ -248,13 +249,17 @@ def attach(
     attach_launch.run(
         att, publisher,
         lambda: _execute(out, name, resolved, planned, ipc, paths, publisher, start,
-                         confirmed, began),
+                         confirmed, began, follow),
         follow=follow, level=level, stop_on_exit=stop_on_exit, trace=trace, as_json=as_json,
     )  # fmt: skip
 
 
-def _execute(out, name, resolved, planned, ipc, paths, publisher, start, confirmed, began) -> None:
-    """Save, apply, verify and start, then report each stage and exit: `add`'s execution."""
+def _execute(
+    out, name, resolved, planned, ipc, paths, publisher, start, confirmed, began, follow
+) -> None:
+    """Save, apply, verify and start, then report each stage and exit: `add`'s execution.
+    A success that is not followed ends with what to run next (attach_next.py): the
+    follow and query commands, or with --no-start the query alone."""
     debug = out.debug
     outcome = workflow.execute(
         resolved, planned, ipc, paths.repo_root, publisher,
@@ -288,6 +293,13 @@ def _execute(out, name, resolved, planned, ipc, paths, publisher, start, confirm
     if outcome.ok:
         last = outcome.stages[-1]
         out.text(f"[green]attached[/]: {name} is verified; {last.detail}")
+        if not follow:
+            nxt = attach_next.commands(resolved.att, attach_next.rdb_of(planned.observation))
+            if not start:
+                nxt.pop("follow")
+            out.doc["next"] = nxt
+            for line in attach_next.lines(nxt, follow=start):
+                out.text(escape(line))
         out.finish(ok=True, recovery=[])
     for line in outcome.recovery:
         out.text(f"[yellow]->[/] {line}")

@@ -75,6 +75,25 @@ re-verified and left running.
   check, timings and recovery detail. It works through `uqs --target`, and does
   not change how the publisher logs.
 
+A run that started the publisher, and is not following it, ends with what to run
+next (#2696), filled in from the attachment - the same wording
+`uqs job backfill` uses:
+
+```text
+attached: pb-uat is verified; pb_ledger1 on stack 6000
+follow it with `uqs logs pb_ledger1 -f`
+query its rows with `uqs query --host uat-host --port 6002 --password-env UAT_PW 'select from piggybank_general_ledger where i >= count[i]-10'`
+  the port is rdb1's, as the stack's discovery at uat-host:6001 lists it
+```
+
+The port is the stack's rdb's, as discovery listed it to this run's preflight;
+it is never guessed. `--user` and `--password-env` appear only where they are
+not `uqs query`'s defaults, and the password only ever by its variable's name.
+An attachment of several tables queries the first and names the rest.
+`--no-start` prints the query line alone (nothing is publishing yet);
+`--dry-run`, `--follow` and a failed run print neither. With `--json` the
+commands are the `next` field (`follow`, `rows`, `port_from`, `tables`).
+
 A new attachment needs `--job` and `--base-port`; `--host` (default
 `localhost`), `--discovery HOST:PORT` (default: the stack id + 1; its HOST must
 be the `--host` machine, since a stack is attached on one host),
@@ -1155,7 +1174,10 @@ asked again, and the readiness record advances only when each has answered.
   ledger; `show` prints the re-run command with `--attachment` in it.
 - `uqs job attachment show NAME` - ends with every
   [waiver](#waiving-the-end-of-day-fence) a backfill into the attachment's
-  destination used.
+  destination used, then the same two commands `add` ends with (`next` in
+  `--json`). `show` asks no stack process, and the rdb's port is not saved with
+  the attachment, so its query line reads `--host <rdb-host> --port <rdb-port>`
+  and says those come from the stack's discovery, naming its address.
 - `uqs job backfill ... --attachment NAME --mode plan` shows `reload owed` when
   an earlier run left rows written and covered but not yet queryable.
 
