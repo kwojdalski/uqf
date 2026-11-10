@@ -45,14 +45,26 @@ WHAT IS SEEN, through Python's audit hooks (sys.addaudithook):
     q       a q, qlinter, or a shell (torq.sh starts a q): reaches .q and
             shell files, qlinter's .qlinter* settings, and what a q file names
             by a path literal (test_impact.q_readers);
+    args    a program that reads only the files its arguments name (d2,
+            grep, cat, ...; #2660): reaches each repository file named -
+            and its siblings, for an import or include beside it - and
+            everything under each repository directory named (`trees`).
+            One naming the repository inside a larger argument (a pattern,
+            a script) is charged as `other`;
     other   anything else: reaches any file - but for a few programs that
-            read none of it (ps, hostname, ...), which are not recorded;
-* `scripts` - the repository .py files a Python child was started on.
+            read none of it (ps, hostname, ...), and an unknown program
+            asked only its version or usage (`d2 --version`), which are
+            not recorded;
+* `scripts` - the repository .py files a Python child was started on, or an
+  `args` program named;
+* `trees` - the repository directories an `args` program may read anything
+  under.
 
 What this cannot see, the python-tests hook does not pretend to: a file read
 by a cached loader is charged to the first test that loaded it in each
-worker, and a Python child's own reads are not seen at all (hence `python`
-reaching everything). CI runs the whole suite on every pull request that can
+worker, and a Python child started with an environment that does not carry
+the recorder is not seen at all (hence such a `python` start reaching
+everything). CI runs the whole suite on every pull request that can
 reach a Python test (scripts/dev/ci_scope.py, which checks its rule against
 this record where there is one).
 """
@@ -97,7 +109,9 @@ _IGNORED_SUFFIXES = (".py", ".pyc", ".pyi", ".so")
 _IGNORED_NAMES = {".testmondata", ".testmondata-wal", ".testmondata-shm"}
 
 #: Programs that run another program: classified by what they run.
-_WRAPPERS = {"env", "timeout", "nice", "nohup", "stdbuf", "exec", "command", "time"}
+_WRAPPERS = {"env", "timeout", "nice", "nohup", "stdbuf", "exec", "command", "time", "sandbox-exec"}
+#: A wrapper's options that take the next word as their value.
+_WRAPPER_VALUES = {"sandbox-exec": {"-p", "-f", "-n", "-D"}}
 _PYTHON = {"uv", "uvx", "uqs", "pytest", "pre-commit", "pip"}
 _SHELLS = {"bash", "sh", "zsh", "dash"}
 _Q = {"q", "peachq", "qlinter"}
@@ -110,6 +124,15 @@ _INERT = {
     "mount", "df", "ssh",
 }  # fmt: skip
 
+#: Programs that read no file but those their arguments name, and stdin
+#: (#2660). Not awk, sed or node: a program text can name a file of its own.
+_ARGUMENT_READERS = {
+    "d2", "cat", "head", "tail", "wc", "diff", "cmp", "grep", "egrep", "fgrep", "jq",
+    "shasum", "sha256sum", "sha1sum", "md5sum", "md5",
+}  # fmt: skip
+#: An unknown program run with only one of these reads nothing of the tree.
+_ONLY_ASKS = {"--version", "-V", "--help", "-h", "version", "help"}
+
 KINDS = ("git", "python", "q", "other")
 
 
@@ -120,11 +143,12 @@ def kind_of(argv: list[str], qcmd: str | None = None) -> str:
         name = os.path.basename(words[0])
         if name in _WRAPPERS:
             # its options, VAR=value and a duration (timeout 30) before the program
+            takes = _WRAPPER_VALUES.get(name, set())
             words = words[1:]
             while words and (
                 words[0].startswith("-") or "=" in words[0] or _DURATION.match(words[0])
             ):
-                words = words[1:]
+                words = words[2:] if words[0] in takes else words[1:]
             continue
         if name in _INERT:
             return "inert"
@@ -136,6 +160,10 @@ def kind_of(argv: list[str], qcmd: str | None = None) -> str:
             return "q"
         if words[0].startswith(_TMP):
             return "q"  # a stand-in a test wrote - most often a fake q
+        if len(words) == 2 and words[1] in _ONLY_ASKS:
+            return "inert"
+        if name in _ARGUMENT_READERS:
+            return "args"
         return "other"
     return "other"
 
@@ -266,6 +294,10 @@ class Recorder:
         kind = kind_of(argv, self.qcmd)
         if kind == "inert":
             return
+        if kind == "args" and self._named(argv[1:], cwd, owner):
+            return
+        if kind == "args":
+            kind = "other"
         if not (kind == "python" and seen):
             self._charge("starts", kind, owner)
         if kind == "git" and _rel(cwd or ".") is not None:
@@ -275,6 +307,36 @@ class Recorder:
                 rel = _rel(word, cwd) if word.endswith(".py") else None
                 if rel and os.path.isfile(REPO / rel):
                     self._charge("scripts", rel, owner)
+
+    def _named(self, words: list[str], cwd: str | None, owner: str | None) -> bool:
+        """Charge what an `args` program's arguments name: a repository file
+        reaches its directory, a directory everything under it, a .py file is
+        also a script. False, charging nothing, when an argument holds the
+        repository but is not a path to it - it cannot be taken apart."""
+        trees: set[str] = set()
+        scripts: set[str] = set()
+        root = str(REPO)
+        for word in words:
+            # --option=value: the value; a flag (-r, -f/x): nothing to resolve
+            part = word.partition("=")[2] if word.startswith("-") and "=" in word else word
+            if part.startswith("-") or not part:
+                if root in part:
+                    return False
+                continue
+            rel = _rel(part, cwd)
+            if rel is not None and os.path.isdir(REPO / rel):
+                trees.add(rel)
+            elif rel is not None and os.path.isfile(REPO / rel):
+                trees.add(rel.rpartition("/")[0] or ".")
+                if rel.endswith(".py"):
+                    scripts.add(rel)
+            elif root in part:
+                return False
+        for tree in trees:
+            self._charge("trees", tree, owner)
+        for script in scripts:
+            self._charge("scripts", script, owner)
+        return True
 
     def _read_children(self) -> None:
         """Charge what this process's Python children wrote to the owner each
@@ -527,8 +589,13 @@ def reached(
 
 def _why(seen: dict[str, set[str]], status: str, path: str, q_reads: dict[str, list[str]]):
     starts = seen.get("starts", set())
+    tree = next((d for d in sorted(seen.get("trees", ())) if _under(path, d)), None)
     if path.endswith(".py"):
-        return f"starts {path}" if path in seen.get("scripts", ()) else None
+        if path in seen.get("scripts", ()):
+            return f"starts {path}"
+        return f"starts a program reading {tree}" if tree else None
+    if tree is not None:
+        return f"starts a program reading {tree}"
     if path in seen.get("reads", ()):
         return f"reads {path}"
     if status in "AD" and any(_under(path, d) for d in seen.get("lists", ())):

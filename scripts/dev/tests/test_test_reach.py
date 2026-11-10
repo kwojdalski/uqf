@@ -49,6 +49,18 @@ else:
         ([str(Path(reach.tempfile.gettempdir()) / "x" / "q_fake"), "-q"], "q"),
         (["docker", "run", "x"], "other"),
         ([], "other"),
+        # #2660: what reads only the files its arguments name ...
+        (["d2", "a.d2", "a.svg"], "args"),
+        (["/usr/bin/grep", "-r", "x", "src"], "args"),
+        # ... a program asked only its version or usage, which reads none ...
+        (["rustc", "--version"], "inert"),
+        (["d2", "--version"], "inert"),
+        (["git", "--version"], "git"),
+        (["node", "-e", "x"], "other"),
+        # ... and sandbox-exec, known by what it runs, past its profile
+        (["sandbox-exec", "-p", "(version 1)(allow default)", "true"], "inert"),
+        (["sandbox-exec", "-p", "(version 1)", "bash", "-c", "x"], "q"),
+        (["sandbox-exec", "-f", "p.sb", "docker"], "other"),
     ],
 )
 def test_a_started_process_is_known_by_the_program_it_runs(argv, kind):
@@ -191,6 +203,70 @@ def test_reached_picks_by_the_record(recorded):
     assert f"{mod}::test_starts_git" in added
     assert f"{mod}::test_uses_the_fixture" not in added
     assert reach.reached(data, [("M", "docs/README.md")], {}) == {}
+
+
+def _started(tmp_path, argv, cwd=None):
+    """A record of one test that started `argv` and did nothing else."""
+    rec = reach.Recorder(tmp_path / "reach.json")
+    rec.stack = ["t::x"]
+    rec.tests = {"t::x": ["t::x"]}
+    rec._start(argv, cwd)
+    return rec.data()
+
+
+def _picks(record, *paths):
+    return bool(reach.reached(record, [("M", p) for p in paths], {}))
+
+
+def test_a_program_reading_only_its_arguments_reaches_only_what_they_name(tmp_path):
+    """#2660: d2 rendering a diagram copied out of the tree reaches no file
+    of it - neither CHANGELOG.md nor docs/ - where an unknown program would
+    reach every one."""
+    copy = tmp_path / "sample.d2"
+    record = _started(tmp_path, ["d2", str(copy), str(tmp_path / "sample.svg")])
+    assert not _picks(record, "CHANGELOG.md", "docs/diagrams/tap.d2", "src/init.q")
+    assert _picks(_started(tmp_path, ["docker", "run", "x"]), "CHANGELOG.md")
+
+
+def test_a_repository_file_it_names_reaches_its_directory_but_no_further(tmp_path):
+    """The file itself, and its siblings (a d2 import, an awk include, an svg
+    beside its source): under-selecting costs more than a few extra tests."""
+    named = REPO / "docs" / "diagrams" / "tap.d2"
+    record = _started(tmp_path, ["d2", str(named), str(tmp_path / "tap.svg")])
+    assert _picks(record, "docs/diagrams/tap.d2")
+    assert _picks(record, "docs/diagrams/kafka.d2")
+    assert not _picks(record, "CHANGELOG.md", "docs/README.md")
+    # relative to where it runs, which by default is the repository
+    assert _picks(_started(tmp_path, ["cat", "docs/diagrams/tap.d2"]), "docs/diagrams/x.d2")
+
+
+def test_a_repository_directory_it_names_reaches_everything_under_it(tmp_path):
+    record = _started(tmp_path, ["grep", "-r", "x", "src"])
+    assert _picks(record, "src/etl/new.q")
+    assert not _picks(record, "CHANGELOG.md")
+    # an option's value is an argument too
+    record = _started(tmp_path, ["grep", "-r", "x", f"--include={REPO / 'docs'}"])
+    assert _picks(record, "docs/a.md")
+
+
+def test_a_python_file_it_names_is_charged_as_a_script(tmp_path):
+    """A .py file testmon never executed is chosen by who may read it."""
+    record = _started(tmp_path, ["cat", "scripts/dev/test_reach.py"])
+    assert reach.reach(record, "t::x")["scripts"] == {"scripts/dev/test_reach.py"}
+    assert _picks(_started(tmp_path, ["grep", "-r", "x", "scripts"]), "scripts/gates/x.py")
+
+
+def test_the_repository_named_inside_an_argument_is_an_unknown_program(tmp_path):
+    """A path this cannot take apart - inside a pattern, a script, a list -
+    could name any file, so the program is charged as one it cannot see into."""
+    for argv in (
+        ["grep", f"{REPO}/src|x", str(tmp_path / "f")],
+        ["grep", f"-f{REPO}/x", str(tmp_path / "f")],
+        ["jq", f"--from-file={REPO}/missing.jq"],
+    ):
+        record = _started(tmp_path, argv)
+        assert reach.reach(record, "t::x")["starts"] == {"other"}, argv
+        assert _picks(record, "CHANGELOG.md"), argv
 
 
 def test_a_rerun_replaces_a_test_s_entry_and_adds_to_a_fixture_s():
