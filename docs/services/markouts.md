@@ -69,11 +69,12 @@ fills and the books are on one clock (`tests/q/test_crypto_markout.q`).
 `eq_markout1` (`src/etl/streaming/eq_markout.q`) is the same job over the equity
 domain (`src/etl/transforms/eq_domain.q`, #1981). It scores the fills of the
 equity venues among the canonical `executions` (`XNAS`, named once in
-`.qpipe.transform.eq_markout_outputs.venues`) against the equity venues' books
-in `market_data`, and publishes `eq_markout` in the contract's long layout: a
-row per fill, horizon (5s, 30s and 1min) and component (`total`, and
-`execution`). The FX and crypto fills of the same table are not kept: the equity
-domain prices any symbol, so the venue is what tells a fill's dataset.
+`.qetl.venue`, `src/etl/core/venue_market.q`, which says which market every
+venue is, #2650) against the equity venues' books in `market_data`, and
+publishes `eq_markout` in the contract's long layout: a row per fill, horizon
+(5s, 30s and 1min) and component (`total`, and `execution`). The FX and crypto
+fills of the same table are not kept: the equity domain prices any symbol, so
+the venue is what tells a fill's dataset.
 
 - **The reference is the mid of the venue's book.** At `source_time + horizon`
   the latest top of book counts unless it is more than a minute old (`max_age`).

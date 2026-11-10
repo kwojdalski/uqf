@@ -110,19 +110,18 @@
 / .
 / The equity venues' fills and books are not kept (#2574): the resolver prices any
 / BASE-QUOTE symbol, so a ticker with a dash - XNAS `BF-B` - read as a pair quoted
-/ in `B`. Their venue is the tell, as eq_markout_outputs.q says, and its list is
-/ the one place an equity venue is named.
+/ in `B`. Their venue is the tell, and .qetl.venue (#2650) is what says which market a venue
+/ is: this file names no other dataset.
 / @param x a batch of executions or of market_data
 / @return a boolean per row
 / @eg .qpipe.transform.crypto_markout_outputs.keep[([] sym:`$("BTC-USDT";"EURUSD";"BF-B"); source:`a`a`XNAS)]  ->  100b
 .qpipe.transform.crypto_markout_outputs.keep:{[x]
     dom:.qpipe.transform.crypto_markout.domain;
     spec:.qpipe.transform.markout_core.validate[dom;.qpipe.transform.crypto_markout_outputs.job_spec];
-    eq:.qpipe.transform.eq_markout_outputs.venues;
-    if[`fill_id in cols x; :(null .qpipe.transform.markout_core.why[dom;spec;x]) and not (x`venue) in eq];
+    if[`fill_id in cols x; :(null .qpipe.transform.markout_core.why[dom;spec;x]) and .qetl.venue.in_market[`crypto;x`venue]];
     syms:distinct x`sym;
     priced:(.qpipe.transform.crypto_markout.resolve[spec;syms]`ok) syms?x`sym;
-    (priced or x[`sym] in .qpipe.transform.crypto_markout_outputs.rate_syms[]) and not (x`source) in eq}
+    (priced or x[`sym] in .qpipe.transform.crypto_markout_outputs.rate_syms[]) and .qetl.venue.in_market[`crypto;x`source]}
 
 / Each pending fill's legs: the reference keys readiness waits on - its pair, and the
 / conversion pair when the spec reads a rate from a book.
@@ -133,13 +132,13 @@
     .qpipe.transform.markout_core.legs_of[.qpipe.transform.crypto_markout.domain;.qpipe.transform.crypto_markout_outputs.job_spec;pending]}
 
 / The plant table's rows for some fills and the books around them: the core's rows and
-/ the crypto measures, with the core's own `time`. Fills of an equity venue are not scored.
+/ the crypto measures, with the core's own `time`. Fills of another market's venue are not scored.
 / @param exe executions, as executions_in
 / @param md market_data, as market_data_in
 / @return crypto_markout's rows, `time` first
 / @eg count .qpipe.transform.crypto_markout_outputs.rows[0#.qpipe.transform.crypto_markout_outputs.executions_in;0#.qpipe.transform.crypto_markout_outputs.market_data_in]  ->  0
 .qpipe.transform.crypto_markout_outputs.rows:{[exe;md]
-    exe:select from exe where not venue in .qpipe.transform.eq_markout_outputs.venues;
+    exe:select from exe where .qetl.venue.in_market[`crypto;venue];
     r:.qpipe.transform.crypto_markout.score[.qpipe.transform.crypto_markout_outputs.job_spec;exe;md];
     (cols .qetl.plant.shape `crypto_markout)#r}
 

@@ -7,7 +7,7 @@
 / what its bounded twin reads instead, two inputs from what the HDB holds:
 / .
 /   `executions   the canonical executions end of day saved, narrowed to the equity venues
-/                 (.qpipe.transform.eq_markout_outputs.venues), with the clock the core's clock
+/                 (.qetl.venue.venues_of `equity), with the clock the core's clock
 /                 rule needs. The PRIMARY input: it owns the window and its rows are what a run
 /                 counts. The FX and crypto fills of the same table are not read
 /   `market_data  the equity venues' TOP OF BOOK for every symbol the executions need, at exactly the
@@ -84,7 +84,7 @@
 .qpipe.source.hdb_eq_markouts.query:{[h;range_from;range_to]
     rr:.qetl.source.reference_read .qpipe.source.hdb_eq_markouts.source_name;
     skew:rr`date_skew;
-    ven:.qpipe.transform.eq_markout_outputs.venues;
+    ven:.qetl.venue.venues_of `equity;
     deals:.qetl.source.ipc[h;{[ven;skew;from_ts;to_ts]
         `source_time xasc select source_time, venue, sym, side, size, price, fill_id, clock from `executions
             where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts, venue in ven
@@ -154,7 +154,7 @@
 / @return `executions`market_data!(the XNAS executions; the XNAS books)
 / @eg key .qpipe.source.hdb_eq_markouts.fixture[]  ->  `executions`market_data
 .qpipe.source.hdb_eq_markouts.fixture:{[]
-    ven:.qpipe.transform.eq_markout_outputs.venues;
+    ven:.qetl.venue.venues_of `equity;
     e:select source_time, venue, sym, side, size, price, fill_id, clock from .qpipe.source.hdb_eq_markouts.raw_executions[] where venue in ven;
     b:select source_time, sym, source, bid, ask, clock from .qpipe.source.hdb_eq_markouts.raw_market_data[] where source in ven;
     `executions`market_data!(e;b)}
