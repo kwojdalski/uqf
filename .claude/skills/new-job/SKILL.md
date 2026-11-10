@@ -214,7 +214,7 @@ Write in this order, and run the suite between each:
 
 - **`publish`, never `.u.upd`.** A job calls `publish` in its own namespace; the
   runner wires it to the tickerplant and a test wires it to a recorder. Nothing
-  under `src/` may touch TorQ --- `scripts/gates/check_etl_layering.py` fails
+  under `src/` may touch TorQ --- `scripts/gates/check.py etl-layering` fails
   the build if it does.
 - **Never publish `time`.** `.u.upd` stamps its own (invariant 1).
 - **Parameterised queries, never concatenation.** The window bounds are

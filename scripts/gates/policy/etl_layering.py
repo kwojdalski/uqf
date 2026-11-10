@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Keep `src/etl/core/` from depending on the declaring directories under src/etl/.
 
 Question the question bank settled the split: `core/` is framework, `sources/` and
@@ -58,22 +57,21 @@ STRING AND COMMENT AWARE, and it has to be. `bounded_worker.q` names
 `.qpipe.job.demo_deals_backfill"), which is documentation, not a dependency. A naive search reports
 it on the first run, and a checker that is wrong the day it lands gets
 suppressed rather than fixed - after which it protects nothing.
+
+    python3 scripts/gates/check.py etl-layering
 """
 
 from __future__ import annotations
 
-import argparse
 import re
 import sys
 from collections.abc import Iterator
 from pathlib import Path
 
-# parents[2], not parent.parent: this file sits one level deeper since
-# scripts/ was foldered (#241). Getting it wrong does not raise - it
-# resolves to scripts/ and the checker reports over an empty tree.
-REPO = Path(__file__).resolve().parents[2]
-CORE = REPO / "src" / "etl" / "core"
-ETL = REPO / "src" / "etl"
+#: This checkout: scripts/gates/policy/<this file>. The default for the
+#: helpers other scripts call as a library (declaring_dirs); a check run takes
+#: its root from check.py.
+REPO = Path(__file__).resolve().parents[3]
 #: The subdirectories of src/etl/ that hold no declarations: the framework
 #: itself, and what is generated from the declarations. EVERY other
 #: subdirectory is a declaring one - sources/, transforms/, workers/,
@@ -389,29 +387,28 @@ def http_reach(root: Path) -> list[str]:
     return hits
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="accepted for symmetry")
-    parser.parse_args()
-
-    if not CORE.is_dir():
-        print(f"error: {CORE.relative_to(REPO)} is missing", file=sys.stderr)
+def run(root: Path) -> int:
+    """Check every rule over `root`; the exit status. Each rule's findings
+    carry their own advice, so the rule reports them itself."""
+    core = root / "src" / "etl" / "core"
+    if not core.is_dir():
+        print(f"error: {core.relative_to(root)} is missing", file=sys.stderr)
         return 1
 
-    declared = declaring_namespaces()
+    declared = declaring_namespaces(root)
     if not declared:
         print("error: no declaring namespaces found under src/etl/ - has the", file=sys.stderr)
         print("layout changed? refusing to report success over an empty set.", file=sys.stderr)
         return 1
 
-    violations = core_reach(REPO)
+    violations = core_reach(root)
 
     adapter_hits: list[str] = []
-    for path in sorted(ETL.rglob("*.q")):
+    for path in sorted((root / "src" / "etl").rglob("*.q")):
         code = strip_comments_and_strings(path.read_text(encoding="utf-8"))
         for lineno, line in enumerate(code.splitlines(), 1):
             if re.search(rf"{re.escape(ADAPTER_NS)}\b", line):
-                adapter_hits.append(f"{path.relative_to(REPO)}:{lineno}: {line.strip()}")
+                adapter_hits.append(f"{path.relative_to(root)}:{lineno}: {line.strip()}")
 
     if adapter_hits:
         print(
@@ -426,11 +423,11 @@ def main() -> int:
         )
         return 1
 
-    absent = [owner for owner in TORQ_OWNERS.values() if not (REPO / owner).is_file()]
+    absent = [owner for owner in TORQ_OWNERS.values() if not (root / owner).is_file()]
     if absent:
         print(f"error: TorQ owner file(s) missing: {', '.join(absent)}", file=sys.stderr)
         return 1
-    derived = torq_namespaces()
+    derived = torq_namespaces(root / "lib" / "torq")
     unknown = sorted(set(TORQ_OWNERS) - derived)
     if not derived or unknown:
         print(
@@ -440,7 +437,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    stale = unused_remote_calls(REPO)
+    stale = unused_remote_calls(root)
     if stale:
         print("TORQ_REMOTE_CALLS allows calls src/ no longer makes:", file=sys.stderr)
         for v in stale:
@@ -450,7 +447,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    torq_hits = torq_reach(REPO)
+    torq_hits = torq_reach(root)
     if torq_hits:
         print("src/ reads a TorQ facility outside the file that owns it:", file=sys.stderr)
         for v in torq_hits:
@@ -464,8 +461,8 @@ def main() -> int:
         )
         return 1
 
-    env_hits = torq_env_reach(REPO)
-    stale_env = unused_env_reads(REPO)
+    env_hits = torq_env_reach(root)
+    stale_env = unused_env_reads(root)
     if env_hits or stale_env:
         print("src/ reads TorQ's environment contract (#2653):", file=sys.stderr)
         for v in env_hits:
@@ -478,8 +475,8 @@ def main() -> int:
         )
         return 1
 
-    cwd_hits = cwd_reach(REPO)
-    stale_cwd = unused_cwd_calls(REPO)
+    cwd_hits = cwd_reach(root)
+    stale_cwd = unused_cwd_calls(root)
     if cwd_hits or stale_cwd:
         print("src/ depends on the working directory (#2653):", file=sys.stderr)
         for v in cwd_hits:
@@ -493,7 +490,7 @@ def main() -> int:
         )
         return 1
 
-    http_hits = http_reach(REPO)
+    http_hits = http_reach(root)
     if http_hits:
         print(f"src/etl/ speaks HTTP outside {HTTP_OWNER}:", file=sys.stderr)
         for v in http_hits:
@@ -522,7 +519,7 @@ def main() -> int:
         return 1
 
     print(
-        f"check_etl_layering: {len(list(CORE.rglob('*.q')))} core file(s) depend on none "
+        f"etl-layering: {len(list(core.rglob('*.q')))} core file(s) depend on none "
         f"of the {len(declared)} declaring namespace(s); nothing under src/etl/ calls "
         f"{ADAPTER_NS}; each of {', '.join(TORQ_OWNERS)} is read only by its owner file "
         f"and no other of TorQ's {len(derived)} namespace(s) is read beyond "
@@ -530,7 +527,3 @@ def main() -> int:
         f"HTTP only in {HTTP_OWNER}"
     )
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

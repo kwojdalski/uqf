@@ -64,7 +64,7 @@
 / hides a durable write.
 / .
 / WHAT THIS FILE DOES NOT DO. It knows no TorQ (scripts/gates/
-/ check_etl_layering.py): connecting, authenticating a handle and gating
+/ check.py etl-layering): connecting, authenticating a handle and gating
 / .z.pg belong to the deployment. .qetl.io.remote.permitted is the pure
 / check such a gate calls. max_rows bounds one message; a larger batch is sent
 / in chunks (io_remote_chunks.q).

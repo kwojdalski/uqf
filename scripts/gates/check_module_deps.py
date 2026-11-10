@@ -73,7 +73,7 @@ def _load_qlint_graph():
 qlint_graph = _load_qlint_graph()
 
 #: The library: one module per file directly under these src/ directories.
-#: Not src/etl/ (held by check_etl_layering.py) and not the loaders.
+#: Not src/etl/ (held by check.py etl-layering) and not the loaders.
 LIBRARY_DIRS = (
     "foundation",
     "pricing",

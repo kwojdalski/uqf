@@ -181,6 +181,13 @@ def _vendored(vendored: ModuleType, root: Path) -> int:
     )
 
 
+def _etl_layering(layering: ModuleType, root: Path) -> int:
+    """src/etl/core/ never depends on a declaration; src/ reads TorQ only
+    through its owner files; HTTP only in the webhook transport. Each rule's
+    findings carry their own advice, so the rule reports them itself."""
+    return layering.run(root)
+
+
 @dataclass(frozen=True)
 class Check:
     name: str
@@ -244,6 +251,12 @@ CHECKS: dict[str, Check] = {
             "every copy of a tool's version (uv, pre-commit, Python...) matches its authority",
             "tool_pins",
             _tool_pins,
+        ),
+        Check(
+            "etl-layering",
+            "src/etl/core/ depends on no declaration, and src/ reads TorQ only through its owners",
+            "etl_layering",
+            _etl_layering,
         ),
         Check(
             "vendored",

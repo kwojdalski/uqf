@@ -207,10 +207,10 @@ repos:
       # everything. Each is scoped to what it reads.
       - id: etl-layering
         name: Check the ETL core does not depend on its declarations
-        entry: uv run python scripts/gates/check_etl_layering.py --check
+        entry: uv run python scripts/gates/check.py etl-layering
         language: system
         pass_filenames: false
-        files: '\.q$|^scripts/gates/check_etl_layering\.py$'
+        files: '\.q$|^scripts/gates/(check|policy/etl_layering)\.py$'
 
       - id: module-deps
         name: Check the q library's module graph is acyclic and reviewed

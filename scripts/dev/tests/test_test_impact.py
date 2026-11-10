@@ -678,7 +678,7 @@ def test_all_is_unchanged_by_the_map(tmp_path):
 
 
 def test_a_new_declaring_directory_is_scanned_without_naming_it_here(tmp_path):
-    """The declaring directories are check_etl_layering's - every src/etl/
+    """The declaring directories are the etl-layering rule's - every src/etl/
     subdirectory but core/ and generated/ - not a list kept here, so a call
     into core from a directory added later is still checked."""
     for d in ("core", "generated", "sources", "rollups"):

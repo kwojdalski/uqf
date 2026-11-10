@@ -1,4 +1,4 @@
-"""Tests for `scripts/gates/check_etl_layering.py`'s TorQ-owner rule (#619).
+"""Tests for `scripts/gates/policy/etl_layering.py`'s TorQ-owner rule (#619).
 
 The gate ran in CI with no tests of its own. The rule added here - each TorQ
 namespace read by one owner file in src/ - gets a case it must flag and one it
@@ -17,12 +17,12 @@ from pathlib import Path
 import pytest
 
 _SPEC = importlib.util.spec_from_file_location(
-    "check_etl_layering",
-    Path(__file__).resolve().parents[3] / "scripts" / "gates" / "check_etl_layering.py",
+    "etl_layering",
+    Path(__file__).resolve().parents[3] / "scripts" / "gates" / "policy" / "etl_layering.py",
 )
 assert _SPEC and _SPEC.loader
 layering = importlib.util.module_from_spec(_SPEC)
-sys.modules["check_etl_layering"] = layering
+sys.modules["etl_layering"] = layering
 _SPEC.loader.exec_module(layering)
 
 
@@ -159,10 +159,9 @@ def test_the_real_tree_has_only_the_listed_cwd_calls():
     assert layering.unused_cwd_calls(layering.REPO) == []
 
 
-def test_the_real_tree_is_clean(monkeypatch):
+def test_the_real_tree_is_clean():
     assert layering.torq_reach(layering.REPO) == []
-    monkeypatch.setattr(sys, "argv", ["check_etl_layering.py", "--check"])
-    assert layering.main() == 0
+    assert layering.run(layering.REPO) == 0
 
 
 @pytest.mark.parametrize(

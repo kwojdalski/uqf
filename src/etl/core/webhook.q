@@ -5,7 +5,7 @@
 / the breach was dropped. This file sends the request over a handle and reads
 / the status line, so only a 2xx is a delivery. A job declares what goes out
 / and to whom; it never calls .Q.hp/.Q.hg/.Q.hmb itself, and
-/ scripts/gates/check_etl_layering.py refuses it (this file is the exception).
+/ scripts/gates/check.py etl-layering refuses it (this file is the exception).
 / .
 / WHAT THIS RELIES ON (checked against the issue's run on KDB-X, not against
 / q.k, which is not shipped here): hopen on a `:http://host[:port]` or

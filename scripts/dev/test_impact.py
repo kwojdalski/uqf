@@ -104,9 +104,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 
 
-def _load_gate(name: str):
+def _load_gate(name: str, folder: str = "gates"):
     spec = importlib.util.spec_from_file_location(
-        name, Path(__file__).resolve().parents[1] / "gates" / f"{name}.py"
+        name, Path(__file__).resolve().parents[1].joinpath(*folder.split("/"), f"{name}.py")
     )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -116,7 +116,7 @@ def _load_gate(name: str):
 
 
 qlint_graph = _load_gate("qlint_graph")
-check_etl_layering = _load_gate("check_etl_layering")
+etl_layering = _load_gate("etl_layering", "gates/policy")
 
 #: The suites, as tests/lib/support.q's .qt.support.suite_files globs them.
 SUITE_DIR = "tests/q"
@@ -144,11 +144,9 @@ ENTRY_POINT = re.compile(r"^(define|register\w*|declare\w*|watch)$")
 
 def declaration_dirs(root: Path) -> tuple[str, ...]:
     """Declaration directories under `root`, each `src/etl/<name>/`: every
-    top-level call in them registers something. check_etl_layering's, not a
+    top-level call in them registers something. The etl-layering rule's, not a
     list kept here - one left a new directory unscanned (#1794)."""
-    return tuple(
-        f"{d.relative_to(root).as_posix()}/" for d in check_etl_layering.declaring_dirs(root)
-    )
+    return tuple(f"{d.relative_to(root).as_posix()}/" for d in etl_layering.declaring_dirs(root))
 
 
 #: Files outside the suites whose `dynamic` entries (names reached by a value

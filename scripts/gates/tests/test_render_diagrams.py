@@ -165,7 +165,7 @@ def test_print_version_is_the_pin(capsys):
 
 def test_an_empty_diagram_directory_is_an_error(diagram_dir, capsys):
     """A moved directory must fail loudly rather than gate nothing - the same
-    refusal check_etl_layering.py makes over an empty namespace set."""
+    refusal the etl-layering check makes over an empty namespace set."""
     assert _check() == 1
     assert "no .d2 sources" in capsys.readouterr().err
 

@@ -112,7 +112,7 @@ a feed. Without `--transform` you get the custom handler above.
 ## Rules
 
 **Never call `.u.upd`.** Call `publish`. The runner wires it to the plant, a
-test wires it to a recorder, and `check_etl_layering.py` fails the build if
+test wires it to a recorder, and `check.py etl-layering` fails the build if
 anything under `src/` reaches for `.qtorq`.
 
 **Never publish `time`.** The plant stamps its own (invariant 1).

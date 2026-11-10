@@ -326,7 +326,7 @@
 / TorQ stays the authority - this only reads it - and the fallback is decided
 / here once: outside TorQ there is no name, so the null symbol. What a caller
 / does with a null is its own policy (the status file falls back to the
-/ worker's name; the claim is skipped). check_etl_layering.py refuses a
+/ worker's name; the claim is skipped). check.py etl-layering refuses a
 / .proc. reference anywhere else in src/.
 / .
 / Read through a protected eval because .proc is TorQ's and this file is unit
