@@ -121,6 +121,9 @@ CASES: dict[str, tuple[list[str], str]] = {
         "--listen-port is required",
     ),
     "job receiver stop": (["job", "receiver", "stop", "--attachment", "nosuch", "-n"], "stopped"),
+    # #2695: the planned start lines, and a refusal - both offline, neither starts anything
+    "start": (["start", "-n"], "start_lines"),
+    "restart": (["restart", "nosuchproc1", "-n"], "no process nosuchproc1"),
     "job backfill": (
         ["job", "backfill", "w", "--from", "2024-01-01", "--to", "2024-01-02"],
         "source_version",
