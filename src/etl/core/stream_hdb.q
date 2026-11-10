@@ -33,7 +33,7 @@
 .qetl.job.stream.hdb_tops:{[before;lookback]
     none:0#([] sym:`symbol$(); source:`symbol$(); market:`symbol$(); source_time:`timestamp$(); bid:`float$(); ask:`float$(); clock:`symbol$());
     r:@[{h:.qetl.job.stream.hdb_handle[];
-         $[$[-6h=type h; not null h; (type h) within 100 112h];
+         $[$[-6h=type h; not null h; .qetl.declared.callable h];
             (1b;.qetl.source.ipc_call[h;{[a] .qetl.mapped.last_tops a};enlist x]);
             (0b;"no HDB handle - this process has none")]};
         `before`read_from!(before;before-lookback);{(0b;x)}];
