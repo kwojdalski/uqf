@@ -88,8 +88,8 @@
         `source_time xasc select source_time, venue, sym, side, size, price, fee, fee_ccy, fill_id, clock from `executions
             where date within (neg[skew],skew)+`date$(from_ts;to_ts), source_time>=from_ts, source_time<to_ts
       }[skew];range_from;range_to];
-    / not the equity venues' fills (#2574): rows would drop them, and their books are not fetched for nothing
-    deals:deals where not deals[`venue] in .qpipe.transform.eq_markout_outputs.venues;
+    / not another market's fills (#2574, #2650): rows would drop them, and their books are not fetched for nothing
+    deals:deals where .qetl.venue.in_market[`crypto;deals`venue];
     if[0=count deals; :`executions`market_data!(deals;0#.qpipe.source.hdb_crypto_markouts.supporting`market_data)];
     spec:.qpipe.transform.crypto_markout_outputs.job_spec;
     early:.qpipe.transform.crypto_markout_outputs.lookback[];

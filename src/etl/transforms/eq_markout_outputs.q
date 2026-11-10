@@ -14,11 +14,12 @@
 / shared with other asset classes: the executions normalizer, the FX and crypto
 / fills and the equity fills worker (eq_fills_backfill) all write the one
 / `executions`. The equity domain prices ANY non-null symbol, so it cannot tell an
-/ equity fill from an FX one by the symbol. The tell is the venue: `venues` below
-/ names the venues whose fills are equity fills and whose books are equity books
-/ (the venue is a fill's `venue` and a book's `source`), and everything else is
-/ left to the other datasets. A site that adds a venue adds it there, and the spec's
-/ digest is not affected: the venues select inputs, they are not a calculation.
+/ equity fill from an FX one by the symbol. The tell is the venue: .qetl.venue
+/ (src/etl/core/venue_market.q, #2650) says which market a venue is, and owns the
+/ equity list (a fill's `venue` and a book's `source`), so everything else is left to
+/ the other datasets without any of them naming this one. A site that adds a venue
+/ adds it there, and the spec's digest is not affected: the venues select inputs,
+/ they are not a calculation.
 / .
 / THE SPEC, each choice and why:
 /   horizons      5s, 30s and 1min: an equity touch moves in hundreds of milliseconds
@@ -67,10 +68,6 @@
 / could have been stamped, since all of an execution's horizons are published together.
 
 \d .
-
-/ The venues whose fills and books are equity: a fill's `venue` and a book's `source`.
-/ The one place a venue is added; the keep predicate, the scoring and the HDB source read it.
-.qpipe.transform.eq_markout_outputs.venues:enlist `XNAS
 
 / The first and last date of the declared calendar, inclusive.
 .qpipe.transform.eq_markout_outputs.calendar_from:2026.01.01
@@ -216,9 +213,8 @@
 .qpipe.transform.eq_markout_outputs.keep:{[x]
     dom:.qpipe.transform.eq_domain.domain;
     spec:.qpipe.transform.markout_core.validate[dom;.qpipe.transform.eq_markout_outputs.job_spec];
-    ven:.qpipe.transform.eq_markout_outputs.venues;
-    if[`fill_id in cols x; :(null .qpipe.transform.markout_core.why[dom;spec;x]) and (x`venue) in ven];
-    (x`source) in ven}
+    if[`fill_id in cols x; :(null .qpipe.transform.markout_core.why[dom;spec;x]) and .qetl.venue.in_market[`equity;x`venue]];
+    .qetl.venue.in_market[`equity;x`source]}
 
 / Each pending fill's legs: the reference keys readiness waits on - its symbol, and the
 / conversion pair when the spec reads a rate from a book (it does not).
@@ -244,7 +240,7 @@
 .qpipe.transform.eq_markout_outputs.rows:{[exe;md]
     dom:.qpipe.transform.eq_markout_outputs.scoring_domain;
     spec:.qpipe.transform.markout_core.validate[dom;.qpipe.transform.eq_markout_outputs.job_spec];
-    exe:select from exe where venue in .qpipe.transform.eq_markout_outputs.venues;
+    exe:select from exe where .qetl.venue.in_market[`equity;venue];
     r:.qpipe.transform.eq_markout_outputs.measures[.qpipe.transform.markout_core.score[dom;spec;exe;md]];
     (cols .qetl.plant.shape `eq_markout)#r}
 

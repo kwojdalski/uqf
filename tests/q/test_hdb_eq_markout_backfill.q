@@ -161,7 +161,7 @@
     a:first .qt.qpipe.job.hdb_eq_markout_backfill.sent 1;
     spec:.qpipe.transform.eq_markout_outputs.job_spec;
     .qunit.assertEquals[a`read_from;(w 0)-spec`max_age;"no book older than the reference's max_age before the window's start (the grid has no negative horizon)"];
-    .qunit.assertEquals[(a`skew;a`venues);(1;.qpipe.transform.eq_markout_outputs.venues);"a day either side, the equity venues only"];
+    .qunit.assertEquals[(a`skew;a`venues);(1;.qetl.venue.venues_of `equity);"a day either side, the equity venues only"];
     .qunit.assertEquals[asc distinct (a`probes)`sym;`AAPL`META;"only the symbols the executions trade"];
     .qunit.assertEquals[key r;`executions`market_data;"both inputs, raw - the scoring is the transform's"];
     .qunit.assertEquals[asc exec distinct fill_id from r`executions;`e1`e2`e3;"the equity venue's fills only: the FX fill of the shared table is not read"];
