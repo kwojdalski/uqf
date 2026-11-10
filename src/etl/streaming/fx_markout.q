@@ -62,30 +62,20 @@
 
 \d .
 
-.qetl.job.stream.at_horizons[`fx_markout;`procname`events`reference`transform`outputs`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail`shared_reference!(
-    `fxmarkout1;
-    `executions;
-    `market_data;
-    `fx_markout_score_long;
-    enlist `fx_markout;
-    .qpipe.transform.fx_markout.wait[.qpipe.transform.fx_markout_outputs.job_spec;.qpipe.transform.fx_markout_outputs.settle];
-    0D00:00:01;
-    `source_time;
-    `source_time;
-    `both;
-    .qpipe.job.fx_markout.legs;
-    .qpipe.transform.fx_markout.lookback[.qpipe.transform.fx_markout_outputs.job_spec];
-    .qpipe.transform.fx_markout_outputs.job_spec`max_age;
-    `sym;
-    `sym`source;
-    `venue`fill_id;
-    .qpipe.transform.fx_markout_outputs.remember;
-    .qpipe.transform.fx_markout_outputs.lateness;
-    .qpipe.transform.fx_markout_outputs.expire_after[];
-    .qpipe.job.fx_markout.keep;
-    "normalized FX markouts, long layout: the markout, the execution residual, each cross leg's allocation and the residual, from the canonical executions and market_data. On demand - it needs executions and market_data sources a site wires in";
-    "executions waiting for their horizons at a restart are not scored, and the book history is rebuilt from the next snapshots; the job publishes derived rows, not a book of record - hdb_fx_markouts_backfill re-derives any window from the HDB";
-    {[] .qpipe.transform.fx_markout_outputs.pin[]; (::)};
-    .qpipe.transform.config_markout.check_pinned;
-    `hold;
-    1b)];
+.qetl.job.stream.at_horizons[`fx_markout;.qpipe.transform.markout_job.decl[`fx_markout;(
+    (`procname;`fxmarkout1);
+    (`events;`executions);
+    (`reference;`market_data);
+    (`transform;`fx_markout_score_long);
+    (`outputs;enlist `fx_markout);
+    (`horizon;.qpipe.transform.fx_markout.wait[.qpipe.transform.fx_markout_outputs.job_spec;.qpipe.transform.fx_markout_outputs.settle]);
+    (`legs;.qpipe.job.fx_markout.legs);
+    (`lookback;.qpipe.transform.fx_markout.lookback[.qpipe.transform.fx_markout_outputs.job_spec]);
+    (`max_age;.qpipe.transform.fx_markout_outputs.job_spec`max_age);
+    (`remember;.qpipe.transform.fx_markout_outputs.remember);
+    (`lateness;.qpipe.transform.fx_markout_outputs.lateness);
+    (`expire_after;.qpipe.transform.fx_markout_outputs.expire_after[]);
+    (`keep;.qpipe.job.fx_markout.keep);
+    (`note;"normalized FX markouts, long layout: the markout, the execution residual, each cross leg's allocation and the residual, from the canonical executions and market_data. On demand - it needs executions and market_data sources a site wires in");
+    (`ephemeral;"executions waiting for their horizons at a restart are not scored, and the book history is rebuilt from the next snapshots; the job publishes derived rows, not a book of record - hdb_fx_markouts_backfill re-derives any window from the HDB");
+    (`on_start;{[] .qpipe.transform.fx_markout_outputs.pin[]; (::)}))]];

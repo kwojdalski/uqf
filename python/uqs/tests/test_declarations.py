@@ -32,6 +32,26 @@ def test_a_semicolon_inside_a_string_or_bracket_does_not_split():
     assert split_top_level('`a; "x; y"; f[1;2]; (3;4)') == ["`a", '"x; y"', "f[1;2]", "(3;4)"]
 
 
+def test_a_markout_jobs_pairs_are_read_beside_their_keys():
+    """The markout constructor takes (key; value) pairs; the registry reads them (#2651)."""
+    text = (
+        ".qetl.job.stream.at_horizons[`demo_markout;.qpipe.transform.markout_job.decl[`demo_markout;(\n"
+        "    (`procname;`demo_markout1);\n"
+        "    (`events;`executions);\n"
+        '    (`note;"a; note");\n'
+        "    (`outputs;enlist `demo_markout))]];\n"
+    )
+    (decl,) = read_file_text(text, Path("demo_markout.q"))
+    assert (decl.procname, decl.subscribe_to, decl.publishes) == (
+        "demo_markout1",
+        ("executions",),
+        ("demo_markout",),
+    )
+    assert decl.note == "a; note"
+    with pytest.raises(UqsError, match="not a"):
+        dictionary_fields(".qpipe.transform.markout_job.decl[`x;(`procname;`x1)]")
+
+
 def test_a_newline_between_bang_and_paren_is_read():
     """The worker files put one there; a `!(` split read them as nothing."""
     fields = dictionary_fields("`source`outputs!\n    (`s;enlist `d)")

@@ -67,30 +67,20 @@
 
 \d .
 
-.qetl.job.stream.at_horizons[`crypto_markout;`procname`events`reference`transform`outputs`horizon`period`event_time`reference_time`ready_on`legs`lookback`max_age`by`retain_by`identity`remember`lateness`expire_after`keep`note`ephemeral`on_start`check`on_fail`shared_reference!(
-    `crypto_markout1;
-    `executions;
-    `market_data;
-    `crypto_markout_score;
-    enlist `crypto_markout;
-    .qpipe.transform.crypto_markout_outputs.wait[];
-    0D00:00:01;
-    `source_time;
-    `source_time;
-    `both;
-    .qpipe.job.crypto_markout.legs;
-    .qpipe.transform.crypto_markout_outputs.lookback[];
-    (.qpipe.transform.crypto_markout_outputs.job_spec)`max_age;
-    `sym;
-    `sym`source;
-    `venue`fill_id;
-    .qpipe.transform.crypto_markout_outputs.remember;
-    .qpipe.transform.crypto_markout_outputs.lateness;
-    .qpipe.transform.crypto_markout_outputs.expire_after[];
-    .qpipe.job.crypto_markout.keep;
-    "markouts on real crypto fills, in bps against the best mid across venues and net of the fee, from the canonical executions and market_data. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock";
-    "fills waiting for their horizons at a restart are not scored, and the venue-book history is rebuilt from the next books; the job publishes scores, it holds no book of record - hdb_crypto_markout_backfill re-derives any window from the HDB";
-    {[] .qpipe.transform.crypto_markout_outputs.pin[]; (::)};
-    .qpipe.transform.config_markout.check_pinned;
-    `hold;
-    1b)];
+.qetl.job.stream.at_horizons[`crypto_markout;.qpipe.transform.markout_job.decl[`crypto_markout;(
+    (`procname;`crypto_markout1);
+    (`events;`executions);
+    (`reference;`market_data);
+    (`transform;`crypto_markout_score);
+    (`outputs;enlist `crypto_markout);
+    (`horizon;.qpipe.transform.crypto_markout_outputs.wait[]);
+    (`legs;.qpipe.job.crypto_markout.legs);
+    (`lookback;.qpipe.transform.crypto_markout_outputs.lookback[]);
+    (`max_age;(.qpipe.transform.crypto_markout_outputs.job_spec)`max_age);
+    (`remember;.qpipe.transform.crypto_markout_outputs.remember);
+    (`lateness;.qpipe.transform.crypto_markout_outputs.lateness);
+    (`expire_after;.qpipe.transform.crypto_markout_outputs.expire_after[]);
+    (`keep;.qpipe.job.crypto_markout.keep);
+    (`note;"markouts on real crypto fills, in bps against the best mid across venues and net of the fee, from the canonical executions and market_data. Not started with the stack: its inputs come from cryptorust's recorders, or from cryptomock1 in their place, neither of which starts by default - `uqs start --profile crypto` brings it up with the mock");
+    (`ephemeral;"fills waiting for their horizons at a restart are not scored, and the venue-book history is rebuilt from the next books; the job publishes scores, it holds no book of record - hdb_crypto_markout_backfill re-derives any window from the HDB");
+    (`on_start;{[] .qpipe.transform.crypto_markout_outputs.pin[]; (::)}))]];
