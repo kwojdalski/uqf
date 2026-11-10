@@ -1678,8 +1678,8 @@
     .qunit.assertEquals[exec row from f where check=`bad_time;enlist 4;"a book stamped a minute ahead of this host"];
     .qunit.assertEquals[3 in f`row;0b;"an empty ladder is still a withdrawal, not a failure"];
     / lead less a millisecond: timespan arithmetic only, as `%` gives a float on PeachQ
-    lead:book[enlist 1.10;enlist 1e6;now+.qf.mkt.max_clock_lead-0D00:00:00.001];
-    .qunit.assertEquals[count .qpipe.job.market_data.check lead;0;"a clock within the shared lead passes"]};
+    lead:book[enlist 1.10;enlist 1e6;now+.qpipe.job.market_data.max_clock_lead-0D00:00:00.001];
+    .qunit.assertEquals[count .qpipe.job.market_data.check lead;0;"a clock within market_data's lead passes"]};
 
 / #2564: a book superbook cannot hold - ladders of different lengths, or a
 / null source - is withheld here, or superbook throws and drops the batch.
@@ -1725,20 +1725,29 @@
     g:.qpipe.job.market_data.check old;
     .qunit.assertEquals[4 in g`row;0b;"an old row is not withheld for its age either (#2456)"]};
 
-/ #1063: superbook reads the shared lead when a batch arrives, not a copy
-/ taken at load, so tuning it moves superbook and market_data's check together.
-.qt.qetl.job.stream.test_superbook_reads_the_shared_clock_lead_when_it_is_used:{[t]
-    saved:.qf.mkt.max_clock_lead;
-    `.qf.mkt.max_clock_lead set 0D00:00:01;
+/ #2656: each job holds its own clock lead, read when used. Tuning superbook's
+/ moves superbook and not market_data's refusal rule, and the reverse.
+.qt.qetl.job.stream.test_superbook_and_market_data_hold_separate_clock_leads:{[t]
+    sb:.qpipe.job.superbook.max_clock_lead;
+    md:.qpipe.job.market_data.max_clock_lead;
+    lib:.qf.mkt.max_clock_lead;
+    .qunit.assertEquals[(sb;md);(lib;lib);"both default to the library's value"];
+    `.qpipe.job.superbook.max_clock_lead set 0D00:00:01;
     `.qpipe.job.superbook.books set 0#.qpipe.job.superbook.books;
     .qetl.job.stream.wire[`superbook;{[t;x]}];
     row:([] sym:enlist `EURUSD; source:enlist `LP_A; market:enlist `fx; source_time:enlist .z.p+0D00:00:00.600;
-        bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6; clock:enlist `receipt; bid:enlist 1.10; ask:enlist 1.12; rid:enlist 0N);
+        bid_prices:enlist enlist 1.10; bid_sizes:enlist enlist 1e6; ask_prices:enlist enlist 1.12; ask_sizes:enlist enlist 1e6; clock:enlist `receipt);
     r:@[{.qpipe.job.superbook.on_batch[`market_data;x]; count .qpipe.job.superbook.books};row;{x}];
-    `.qf.mkt.max_clock_lead set saved;
+    refused:count .qpipe.job.market_data.check row;
+    `.qpipe.job.superbook.max_clock_lead set sb;
     `.qpipe.job.superbook.books set 0#.qpipe.job.superbook.books;
-    .qunit.assertEquals[r;1;"a row 600ms ahead counts once the shared lead is a second"];
-    .qunit.assertEquals[`max_clock_lead in key `.qpipe.job.superbook;0b;"and superbook keeps no copy of it"]};
+    .qunit.assertEquals[r;1;"a row 600ms ahead counts once superbook's lead is a second"];
+    .qunit.assertEquals[refused;1;"while market_data still refuses it at its own, unchanged lead"];
+    .qunit.assertEquals[.qf.mkt.max_clock_lead;lib;"and the library constant was never the setting"]};
+
+.qt.qetl.job.stream.test_superbook_audits_its_own_clock_lead:{[t]
+    .qunit.assertTrue[`.qpipe.job.superbook.max_clock_lead in .qetl.cfg.audit.watching `superbook;"superbook audits the lead it uses"];
+    .qunit.assertEquals[`.qf.mkt.max_clock_lead in .qetl.cfg.audit.watching `superbook;0b;"not the library constant"]};
 
 / --- fx_positions loads its limits at start (#1112) -------------------------
 / Nothing used to: only tests called load_limits, so a running fxpositions1
