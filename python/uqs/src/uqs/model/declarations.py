@@ -71,12 +71,40 @@ class Declaration:
         return self.name if self.kind is PipelineKind.BACKFILL else None
 
 
+#: The markout jobs' constructor (src/etl/transforms/markout_job.q): it takes (key; value) pairs.
+_PAIRS_CALL = ".qpipe.transform.markout_job.decl["
+
+
+def pair_fields(expr: str) -> dict[str, str]:
+    """A markout job's `decl[`name; ((`k;v); (`k;v))]` as {key: value text}.
+
+    Read from the pairs, not from two parallel lists, because that is what the q
+    constructor takes: a value is read beside the key it is for, as q reads it."""
+    args = split_top_level(call_body(expr, expr.index("[")))
+    if len(args) != 2 or not args[1].strip().startswith("("):
+        raise UqsError(
+            f"markout_job.decl takes a name and a list of (key; value) pairs: {expr[:60]!r}"
+        )
+    fields: dict[str, str] = {}
+    for pair in split_top_level(args[1].strip()[1:-1]):
+        pair = pair.strip()
+        parts = split_top_level(pair[1:-1]) if pair.startswith("(") else []
+        if len(parts) != 2 or not parts[0].strip().startswith("`"):
+            raise UqsError(f"markout_job.decl: not a (`key; value) pair: {pair[:60]!r}")
+        fields[parts[0].strip().lstrip("`")] = parts[1].strip()
+    return fields
+
+
 def dictionary_fields(expr: str) -> dict[str, str]:
     """A q `` `k`k!(v; v) `` literal as {key: value text}, in declared order.
+
+    A markout job's `decl[`name; pairs]` is read by `pair_fields`.
 
     Whitespace, including a newline, may sit between `!` and `(` - the worker
     files put one there - and values may be strings or nested dictionaries.
     """
+    if expr.strip().startswith(_PAIRS_CALL):
+        return pair_fields(expr.strip())
     keys_text, bang, values_text = expr.partition("!")
     if not bang:
         return {}

@@ -2392,6 +2392,10 @@ qpipe.transform.markout_core,unscoreable,function,3,domain spec exe
 qpipe.transform.markout_core,validate,function,2,domain spec
 qpipe.transform.markout_core,wait,function,2,spec settle
 qpipe.transform.markout_core,why,function,3,domain spec exe
+qpipe.transform.markout_job,decl,function,2,name pairs
+qpipe.transform.markout_job,keys,value,,
+qpipe.transform.markout_job,own,value,,
+qpipe.transform.markout_job,shared,function,1,
 qpipe.transform.markout_layouts,canonical,function,2,spec lng
 qpipe.transform.markout_layouts,core_spec,function,3,columns components extra_own
 qpipe.transform.markout_layouts,long,function,2,spec wde
