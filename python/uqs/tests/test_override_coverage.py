@@ -182,8 +182,12 @@ def test_completion_offers_the_skip_with_its_declared_help():
 
 def test_help_carries_the_declaration_risk_and_action():
     [g] = skip_options.declared("job backfill")
+    # Rich wraps a long help line inside its panel, so drop the panel's side
+    # borders: the text then reads as one run however the line wrapped.
     shown = _plain(
-        PlainRunner().invoke(cli.app, ["job", "backfill", "--help"], env={"COLUMNS": "300"}).output
+        PlainRunner()
+        .invoke(cli.app, ["job", "backfill", "--help"], env={"COLUMNS": "300"})
+        .output.replace("│", " ")
     )
     for part in (g.description, g.risk, g.action):
         assert _plain(part).rstrip(".")[1:80] in shown
