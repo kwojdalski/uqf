@@ -521,7 +521,7 @@
     `demo_deals set 0#.qpipe.source.demo_deals.fixture[];
     `event_tape set 0#.qpipe.source.demo_events.fixture[];
     .qetl.reaction.on_worker[`event_tape;`demo_deals_backfill;
-        {[f;tt] `source_version`range_from`range_to!(`rx_nested;f;tt)}];
+        {[f;tt] day:1D xbar f; `source_version`range_from`range_to!(`rx_nested;day;day+1D)}];
     .qpipe.job.demo_events_backfill.init[`source_version`range_from`range_to!(`rx_nested;.qt.qetl.reaction.d[1]+0D09:00:00;.qt.qetl.reaction.d[1]+0D11:00:00)];
     r:.qpipe.job.demo_events_backfill.run[];
     a:exec from .qetl.run.runs[] where worker=`demo_events_backfill;
