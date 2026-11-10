@@ -35,16 +35,16 @@
 /                 until the next one, and a limit tighter than the quiet periods would
 /                 turn them into holes. A minute is also the furthest horizon, so a book
 /                 older than the horizon it is read at is never a reference
-/   sessions      the US regular session, 09:30 to 16:00 New York, for every weekday of
-/                 calendar_from to calendar_to (regular_sessions below), as UTC instants.
+/   sessions      the US regular session, 09:30 to 16:00 New York (13:00 on early-close days),
+/                 for every NYSE trading day of calendar_from to calendar_to (regular_sessions below), as UTC instants.
 /                 Half-open: a horizon that lands ON the close is already after it
 /   halts         none declared
 / .
-/ WHAT THE CALENDAR DOES NOT KNOW, so nobody reads more into it than it says. It has
-/ no holidays (nothing trades, so nothing is scored), no early closes (13:00 on the
-/ day after Thanksgiving, Christmas Eve and 3 July: a horizon after the early close
-/ finds no book and is unavailable for want of one rather than for the calendar, and a
-/ fill of that afternoon cannot exist), and no extended hours: a fill outside
+/ WHAT THE CALENDAR KNOWS AND DOES NOT. It is the NYSE's: no session on a holiday (nothing trades, so
+/ nothing is scored) and a 13:00 New York close on the early-close days - the day after Thanksgiving,
+/ Christmas Eve and 3 July (#2572; nyse_year holds the rules, nyse_ad_hoc_closures the closures no
+/ rule produces). A fill after an early close, or on a holiday, is `unavailable like any fill outside
+/ the regular session, and a horizon past the early close is unavailable. It has no extended hours: a fill outside
 / the regular session is `unavailable, not scored against a pre-market book. Outside
 / calendar_from..calendar_to the declared table is data, but scoring does not stop at its end
 / (#2183): the rule that generated it is applied on demand to the days a batch of fills
@@ -53,7 +53,8 @@
 / 2025 is in session too. The rule has two hard bounds, calendar_floor (2007, when its
 / daylight-time dates came in) and calendar_horizon, outside which scoring refuses the batch
 / with a named error - a fill is never marked unavailable for want of a calendar.
-/ Holidays and early closes are still unknown (the paragraph above). A site with another calendar declares its own sessions table in a
+/ A closure the exchange announces after this was written (a day of mourning) is not in the rule until it is added to
+/ nyse_ad_hoc_closures. A site with another calendar declares its own sessions table in a
 / spec of its own; this one is data, not logic.
 / .
 / THE MEASURE is markout_bps, 10000*move%price, the same figure the crypto dataset
@@ -81,11 +82,55 @@
 / from 2007. Scoring a fill before it throws (available), rather than shift its session by an hour.
 .qpipe.transform.eq_markout_outputs.calendar_floor:2007.01.01
 
+/ Closures no rule produces: the 2007 Ford funeral, Hurricane Sandy (two days), the 2018 Bush funeral
+/ and the 2025 Carter funeral.
+.qpipe.transform.eq_markout_outputs.nyse_ad_hoc_closures:2007.01.02 2012.10.29 2012.10.30 2018.12.05 2025.01.09
+
+/ The days of one year the NYSE does not open and the days it closes at 13:00 New York, from the
+/ exchange's published rules (#2572). Day of week below is the day number mod 7: 0 Saturday, 1 Sunday,
+/ 2 Monday .. 6 Friday. Holidays: New Year's Day (a Sunday moves to Monday; a Saturday is not
+/ observed on the Friday), Martin Luther King Jr. Day (third Monday of January), Presidents Day (third
+/ Monday of February), Good Friday (two days before the Gregorian Easter), Memorial Day (last Monday of May),
+/ Juneteenth (19 June, from 2022), Independence Day, Labor Day (first Monday of September),
+/ Thanksgiving (fourth Thursday of November) and Christmas; Juneteenth, Independence Day and Christmas
+/ move to the Friday before when they fall on a Saturday and to the Monday after on a Sunday.
+/ Early closes: the day after Thanksgiving, 24 December and 3 July when each is a Monday to Thursday
+/ (a Friday 3 July or 24 December is the observed holiday itself). The rule is trusted between
+/ calendar_floor and calendar_horizon; nyse_ad_hoc_closures adds what no rule produces.
+/ @param y the year, a long
+/ @return a dictionary: holidays and early, each an ascending list of dates
+/ @eg .qpipe.transform.eq_markout_outputs.nyse_year[2026]`early  ->  2026.07.03 is a holiday so 2026.11.27 2026.12.24
+/ @private
+.qpipe.transform.eq_markout_outputs.nyse_year:{[y]
+    dow:{[x] (`long$x) mod 7};
+    first_of:{[y;m] `date$`month$(12*(y-2000))+m-1};
+    nth:{[y;m;wd;n] f:`date$`month$(12*(y-2000))+m-1; f+(7*(n-1))+(7+wd-(`long$f) mod 7) mod 7};
+    last_wd:{[y;m;wd] e:(`date$`month$(12*(y-2000))+m)-1; e-((`long$e)-wd) mod 7};
+    observed:{[x] x+(-1 1 0 0 0 0 0)(`long$x) mod 7};
+    / Gregorian Easter by the anonymous algorithm; Good Friday is two days before it
+    a:y mod 19; b:y div 100; c:y mod 100;
+    d:b div 4; e:b mod 4; f:(b+8) div 25; g:(1+b-f) div 3;
+    h:((15+((19*a)+b))-(d+g)) mod 30; i:c div 4; k:c mod 4;
+    wl:(((32+(2*e)+(2*i))-h)-k) mod 7;
+    m:(a+(11*h)+(22*wl)) div 451;
+    t:(114+h+wl)-7*m;
+    easter:(first_of[y;t div 31])+(t mod 31);
+    new_year:first_of[y;1];
+    ny:$[1=dow new_year;enlist new_year+1;0=dow new_year;`date$();enlist new_year];
+    juneteenth:$[y>=2022;enlist observed first_of[y;6]+18;`date$()];
+    thanksgiving:nth[y;11;5;4];
+    hol:ny,(nth[y;1;2;3];nth[y;2;2;3];easter-2;last_wd[y;5;2]),juneteenth,(observed first_of[y;7]+3;nth[y;9;2;1];thanksgiving;observed first_of[y;12]+24);
+    jul3:first_of[y;7]+2;
+    dec24:first_of[y;12]+23;
+    early:(jul3;thanksgiving+1;dec24) where ((dow[jul3] within 2 5);1b;(dow[dec24] within 2 5));
+    `holidays`early!(asc hol;asc early)}
+
 / The US regular session of each weekday in a range, as UTC instants: 09:30 to 16:00
 / New York, which is 14:30 to 21:00 UTC in standard time and 13:30 to 20:00 in daylight
 / time. Daylight time runs from the second Sunday of March to the first Sunday of
 / November; both changes are made at 02:00 on a Sunday, when no session is open, so a
-/ session's offset is a function of its date alone.
+/ session's offset is a function of its date alone. A weekday the NYSE is shut on (nyse_year's holidays,
+/ nyse_ad_hoc_closures) has no row; an early-close day's session ends at 13:00 New York (#2572).
 / @param from_d first date, inclusive
 / @param to_d last date, inclusive
 / @return table sym (null: every instrument), open_time, close_time; half-open, one row per weekday
@@ -96,6 +141,11 @@
     d:from_d+til 1+to_d-from_d;
     / 2000.01.01 was a Saturday: the day number mod 7 is 0 Saturday, 1 Sunday, 2 Monday .. 6 Friday
     d:d where 1<(`long$d) mod 7;
+    / no session on a holiday; a 13:00 New York close on an early-close day (#2572)
+    cal:.qpipe.transform.eq_markout_outputs.nyse_year each distinct `long$`year$d;
+    shut:.qpipe.transform.eq_markout_outputs.nyse_ad_hoc_closures,raze {x`holidays} each cal;
+    d:d except shut;
+    early:d in raze {x`early} each cal;
     mnth:{[d;k] `date$`month$(12*(`long$`year$d)-2000)+k};
     first_sunday:{[x] x+`long$((1-(`long$x) mod 7) mod 7)};
     dst_from:first_sunday[7+mnth[d;2]];
@@ -103,6 +153,7 @@
     dst:(d>=dst_from) and d<dst_to;
     open_off:?[dst;0D13:30:00;0D14:30:00];
     close_off:?[dst;0D20:00:00;0D21:00:00];
+    close_off:close_off-?[early;0D03:00:00;0D00:00:00];
     ([] sym:(count d)#`; open_time:(`timestamp$d)+open_off; close_time:(`timestamp$d)+close_off)}
 
 / The domain's availability rule over a calendar that reaches as far as the fills do: the declared

@@ -231,8 +231,11 @@
 
 .qt.qpipe.job.eq_markout.test_the_extended_calendar_is_the_declared_rule_and_2026_to_2028_is_unchanged:{[tc]
     s:.qpipe.transform.eq_markout_outputs.regular_sessions[2026.01.01;2028.12.31];
-    .qunit.assertEquals[count s;782;"every weekday of 2026-2028"];
-    .qunit.assertEquals[(sum `long$s`open_time;sum `long$s`close_time);-3863042327253409792 -3844743527253409792;"the sessions are the ones produced before #2183"];
+    .qunit.assertEquals[count s;753;"every trading day of 2026-2028"];
+    hol:2026.01.01 2026.01.19 2026.02.16 2026.04.03 2026.05.25 2026.06.19 2026.07.03 2026.09.07 2026.11.26 2026.12.25,2027.01.01 2027.01.18 2027.02.15 2027.03.26 2027.05.31 2027.06.18 2027.07.05 2027.09.06 2027.11.25 2027.12.24,2028.01.17 2028.02.21 2028.04.14 2028.05.29 2028.06.19 2028.07.04 2028.09.04 2028.11.23 2028.12.25;
+    wk:{x where 1<(`long$x) mod 7} 2026.01.01+til 1096;
+    .qunit.assertEquals[`date$s`open_time;wk except hol;"every weekday but the 29 NYSE holidays of 2026-2028"];
+    .qunit.assertEquals[`date$exec open_time from s where (close_time-open_time)<0D06:30:00;2026.11.27 2026.12.24 2027.11.26 2028.07.03 2028.11.24;"the early closes (2027-12-24 is the observed Christmas, 2028-12-24 a Sunday)"];
     .qunit.assertEquals[.qpipe.transform.eq_markout_outputs.job_spec`sessions;s;"the spec's table is unchanged, so is its snapshot id"];
     / inside the declared table the extended rule is the domain's own
     sp:.qpipe.transform.markout_core.validate[.qpipe.transform.eq_domain.domain;.qpipe.transform.eq_markout_outputs.job_spec];
@@ -240,6 +243,56 @@
     .qunit.assertEquals[.qpipe.transform.eq_markout_outputs.available[sp;fr];.qpipe.transform.eq_domain.available[sp;fr];"identical to the domain's rule for 2026-2028"];
     / and a generated 2035 day is the rule's output
     .qunit.assertEquals[exec open_time from .qpipe.transform.eq_markout_outputs.regular_sessions[2035.03.12;2035.03.12];enlist 2035.03.12D13:30:00.000000000;"daylight open"]};
+
+/ --- US holidays and early closes (#2572) ------------------------------------------------
+/ The rule knows the NYSE calendar: no session on a holiday, a 13:00 New York close on an early-close day.
+
+/ The session instants of one date, or an empty table.
+.qt.qpipe.job.eq_markout.day:{[d] .qpipe.transform.eq_markout_outputs.regular_sessions[d;d]}
+
+.qt.qpipe.job.eq_markout.test_the_day_after_thanksgiving_closes_at_1300_new_york:{[tc]
+    / 2026-11-27: standard time, so 13:00 New York is 18:00 UTC
+    .qunit.assertEquals[exec close_time from .qt.qpipe.job.eq_markout.day 2026.11.27;enlist 2026.11.27D18:00:00.000000000;"early close at 13:00 ET"];
+    .qunit.assertEquals[exec open_time from .qt.qpipe.job.eq_markout.day 2026.11.27;enlist 2026.11.27D14:30:00.000000000;"the open is the regular one"];
+    f:.qt.qpipe.job.eq_markout.shifted_status;
+    / the issue's fill: 12:59:30 ET = 17:59:30 UTC. +5s is in session, +30s lands on the close, +1min is after it
+    .qunit.assertEquals[f 2026.11.27D17:59:30;`ok`unavailable`unavailable;"a horizon across the early close is unavailable"];
+    / after hours: 14:00 ET is after the 13:00 close, so the fill itself is outside every session
+    .qunit.assertEquals[f 2026.11.27D19:00:00;3#`unavailable;"an after-hours fill is not in session"];
+    / the ordinary Friday a week earlier closes at 16:00 ET
+    .qunit.assertEquals[f 2026.11.20D19:00:00;3#`ok;"the same instant a week earlier is in session"]};
+
+.qt.qpipe.job.eq_markout.test_a_holiday_has_no_session_so_a_fill_on_it_is_unavailable:{[tc]
+    .qunit.assertEquals[count .qt.qpipe.job.eq_markout.day 2026.11.26;0;"Thanksgiving"];
+    .qunit.assertEquals[.qt.qpipe.job.eq_markout.shifted_status[2026.11.26D15:00:00];3#`unavailable;"a fill on Thanksgiving is unavailable"];
+    .qunit.assertEquals[count .qt.qpipe.job.eq_markout.day 2026.07.03;0;"Independence Day 2026 is a Saturday, observed on Friday"];
+    .qunit.assertEquals[count .qt.qpipe.job.eq_markout.day 2026.04.03;0;"Good Friday 2026 (Easter is 04-05)"]};
+
+.qt.qpipe.job.eq_markout.test_the_holiday_count_of_a_year_is_the_nyse_one:{[tc]
+    n:{[y] count .qpipe.transform.eq_markout_outputs.regular_sessions[y;y+364]};
+    .qunit.assertEquals[n 2026.01.01;251;"2026: 261 weekdays less 10 holidays"];
+    .qunit.assertEquals[n 2027.01.01;251;"2027: 261 weekdays less 10 holidays"];
+    / 2027: Independence Day Sunday -> Monday, Christmas Saturday -> Friday, Juneteenth Saturday -> Friday
+    .qunit.assertEquals[(count .qt.qpipe.job.eq_markout.day 2027.07.05;count .qt.qpipe.job.eq_markout.day 2027.12.24;count .qt.qpipe.job.eq_markout.day 2027.06.18);0 0 0;"observed on the nearest weekday"];
+    / New Year's Day on a Saturday (2028-01-01) is not observed on the Friday before
+    .qunit.assertEquals[count .qt.qpipe.job.eq_markout.day 2027.12.31;1;"2027-12-31 trades"];
+    / Juneteenth is a holiday from 2022 only
+    .qunit.assertEquals[(count .qt.qpipe.job.eq_markout.day 2021.06.18;count .qt.qpipe.job.eq_markout.day 2022.06.20);1 0;"Juneteenth from 2022"];
+    / Good Friday across Easters, early and late
+    gf:2008.03.21 2011.04.22 2013.03.29 2024.03.29 2038.04.23;
+    .qunit.assertEquals[{count .qt.qpipe.job.eq_markout.day x} each gf;5#0;"Good Friday"];
+    / the rule is not a 2026 table: a 2035 Thanksgiving (11-22) is a holiday
+    .qunit.assertEquals[count .qt.qpipe.job.eq_markout.day 2035.11.22;0;"2035 Thanksgiving"]};
+
+.qt.qpipe.job.eq_markout.test_the_three_early_closes_and_the_ad_hoc_closures:{[tc]
+    early:{[d] first exec close_time-`timestamp$d from .qt.qpipe.job.eq_markout.day d};
+    .qunit.assertEquals[early 2025.07.03;0D17:00:00;"3 July 2025 closes 13:00 EDT = 17:00 UTC"];
+    .qunit.assertEquals[early 2025.12.24;0D18:00:00;"Christmas Eve 2025"];
+    .qunit.assertEquals[early 2025.11.28;0D18:00:00;"day after Thanksgiving 2025"];
+    / Christmas Eve on a Friday (2027 is a Friday-observed Christmas) and on a weekend have no early close
+    .qunit.assertEquals[count .qt.qpipe.job.eq_markout.day 2022.12.24;0;"a Saturday"];
+    / ad hoc closures no rule produces
+    .qunit.assertEquals[(count .qt.qpipe.job.eq_markout.day 2025.01.09;count .qt.qpipe.job.eq_markout.day 2018.12.05;count .qt.qpipe.job.eq_markout.day 2012.10.29);0 0 0;"national days of mourning and Sandy"]};
 
 .qt.qpipe.job.eq_markout.test_a_fill_past_the_calendar_horizon_is_refused_not_marked_unavailable:{[tc]
     sp:.qpipe.transform.markout_core.validate[.qpipe.transform.eq_domain.domain;.qpipe.transform.eq_markout_outputs.job_spec];

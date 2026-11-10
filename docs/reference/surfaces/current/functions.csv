@@ -2268,6 +2268,7 @@ qpipe.transform.eq_markout_outputs,live,function,2,exe md
 qpipe.transform.eq_markout_outputs,lookback,function,1,
 qpipe.transform.eq_markout_outputs,market_data_in,table,,
 qpipe.transform.eq_markout_outputs,measures,function,1,rows
+qpipe.transform.eq_markout_outputs,nyse_ad_hoc_closures,value,,
 qpipe.transform.eq_markout_outputs,out,table,,
 qpipe.transform.eq_markout_outputs,pin,function,1,
 qpipe.transform.eq_markout_outputs,regular_sessions,function,2,from_d to_d
