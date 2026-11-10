@@ -16,7 +16,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from uqs.liveness import on_this_host, pid_alive
+from uqs.liveness import process_gone
 from uqs.paths import UqsPaths
 from uqs.stack import attach_state, runs
 
@@ -51,7 +51,8 @@ def _owners(attachment: str) -> list[dict[str, Any]]:
     for path in sorted(folder.glob("*.owner.json")) if folder.is_dir() else []:
         try:
             record = json.loads(path.read_text())
-            alive = pid_alive(int(record["pid"])) if on_this_host(str(record["host"])) else True
+            pid, host = int(record["pid"]), str(record["host"])
+            alive = not process_gone(host, pid, record.get("started"))
         except OSError, ValueError, KeyError, TypeError:
             continue
         if alive:

@@ -96,9 +96,10 @@ def process_gone(status: WorkerStatus) -> bool:
 
     Only provable on the host that ran it: another host's pid says nothing
     here, so that is not gone - the sensor keeps waiting, as before. The rule
-    is `liveness.process_gone`, a copy of uqs.liveness held equal to it.
+    is `liveness.process_gone`, a copy of uqs.liveness held equal to it; the
+    file's `updated_at` lets it tell a recycled pid from the writer (#2652).
     """
-    return not status.terminal and liveness.process_gone(status.host, status.pid)
+    return not status.terminal and liveness.process_gone(status.host, status.pid, status.updated_at)
 
 
 def poke_worker_status(

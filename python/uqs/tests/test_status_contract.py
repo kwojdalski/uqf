@@ -15,6 +15,7 @@ wait's verdict for every terminal state is q's own.
 from __future__ import annotations
 
 import json
+import os
 import re
 import socket
 import subprocess
@@ -161,6 +162,32 @@ def test_a_file_on_this_host_whose_process_is_gone_is_abandoned(tmp_path, monkey
                 "updated_at": "2026-10-04T12:00:05.000000000",
                 "pid": proc.pid,
                 "host": socket.gethostname().upper(),
+                "error": "",
+            }
+        )
+    )
+    outcome = backfill_wait.wait_for_outcome(
+        default_paths(), "w1", "v1", FROM, TO, LAUNCH, sleep=lambda _: None, now=lambda: LAUNCH
+    )
+    assert outcome[:2] == ("abandoned", 1)
+
+
+def test_a_file_whose_pid_was_recycled_since_it_was_written_is_abandoned(tmp_path, monkeypatch):
+    """After a container restart the worker is pid 1 again: a live pid that
+    started after the file's `updated_at` is not its writer (#2652)."""
+    monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
+    name = f"{q_facts.STATUS_FILE_PREFIX}w1{q_facts.STATUS_FILE_SUFFIX}"
+    (tmp_path / name).write_text(
+        json.dumps(
+            {
+                "state": "running",
+                "source_version": "v1",
+                "range_from": "2026-09-13T00:00:00.000000000",
+                "range_to": "2026-09-15T00:00:00.000000000",
+                # LAUNCH's day, long before this test process started
+                "updated_at": "2026-10-04T12:00:05.000000000",
+                "pid": os.getpid(),
+                "host": socket.gethostname().lower(),
                 "error": "",
             }
         )

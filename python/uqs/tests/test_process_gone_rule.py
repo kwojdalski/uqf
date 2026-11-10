@@ -43,24 +43,31 @@ def _dead_pid() -> int:
     return proc.pid
 
 
+#: A time the writer recorded while alive: a q `.j.j` timestamp, no zone.
+NOW = "2999-01-01T00:00:00.000000000"
+LONG_AGO = "2000-01-01T00:00:00.000000000"
+
 CASES = {
-    "dead pid, this host as recorded": (lambda: _dead_pid(), HOST, True),
-    "dead pid, host lower-cased as q's .z.h is": (lambda: _dead_pid(), HOST.lower(), True),
-    "dead pid, host upper-cased": (lambda: _dead_pid(), HOST.upper(), True),
-    "live pid, this host": (os.getpid, HOST.lower(), False),
-    "dead pid, another host": (lambda: _dead_pid(), "elsewhere.example", False),
+    "dead pid, this host as recorded": (lambda: _dead_pid(), HOST, NOW, True),
+    "dead pid, host lower-cased as q's .z.h is": (lambda: _dead_pid(), HOST.lower(), NOW, True),
+    "dead pid, host upper-cased": (lambda: _dead_pid(), HOST.upper(), NOW, True),
+    "live pid, this host": (os.getpid, HOST.lower(), NOW, False),
+    "dead pid, another host": (lambda: _dead_pid(), "elsewhere.example", NOW, False),
+    # pid 1 again after a container restart: alive, but not the writer (#2652)
+    "live pid started after the file was written": (os.getpid, HOST.lower(), LONG_AGO, True),
+    "live pid recycled, another host": (os.getpid, "elsewhere.example", LONG_AGO, False),
 }
 
 
 @pytest.mark.parametrize("case", list(CASES))
 def test_every_reader_answers_alike(case):
-    make_pid, host, gone = CASES[case]
+    make_pid, host, updated_at, gone = CASES[case]
     pid = make_pid()
-    # Each reader reads only these three; each package's own status type has more.
-    status: Any = SimpleNamespace(terminal=False, pid=pid, host=host)
+    # Each reader reads only these four; each package's own status type has more.
+    status: Any = SimpleNamespace(terminal=False, pid=pid, host=host, updated_at=updated_at)
     answers = {
-        "uqs.liveness": liveness.process_gone(host, pid),
-        "airflow provider's copy": provider_liveness.process_gone(host, pid),
+        "uqs.liveness": liveness.process_gone(host, pid, updated_at),
+        "airflow provider's copy": provider_liveness.process_gone(host, pid, updated_at),
         "airflow sensor": sensor_gone(status),
         "frontend status": frontend_gone(status),
     }

@@ -71,6 +71,13 @@ def _dead_pid() -> int:
     return proc.pid
 
 
+def written_now() -> str:
+    """`updated_at` as q writes it, at this moment: a file this live process
+    wrote. One dated before the process started would name a recycled pid,
+    which reads as gone (#2652)."""
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f000")
+
+
 def write_status(
     directory: Path,
     *,
@@ -113,7 +120,7 @@ def test_a_missing_file_is_pending_not_an_error(tmp_path):
 
 
 def test_a_running_worker_is_pending(tmp_path):
-    write_status(tmp_path, state="running")
+    write_status(tmp_path, state="running", updated_at=written_now())
     assert poke_worker_status(tmp_path, WORKER, INSTANCE, EXPECT) is PokeOutcome.PENDING
 
 
@@ -360,7 +367,7 @@ def _sensor(tmp_path, **kw):
 
 
 def test_poke_is_false_while_the_worker_is_pending(fake_airflow, tmp_path):
-    write_status(tmp_path, state="running")
+    write_status(tmp_path, state="running", updated_at=written_now())
     assert _sensor(tmp_path).poke(context={}) is False
 
 
