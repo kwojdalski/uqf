@@ -196,6 +196,7 @@
 "etl_coverage","recorded_at","p"
 "etl_coverage","superseded_at","p"
 "etl_coverage","run_id","g"
+"etl_coverage","touched"," "
 "etl_run_meta","run_id","g"
 "etl_run_meta","dataset","s"
 "etl_run_meta","range_from","p"

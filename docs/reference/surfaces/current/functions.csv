@@ -125,6 +125,7 @@ qetl.coverage,require_interval,function,2,range_from range_to
 qetl.coverage,require_schema,function,1,
 qetl.coverage,schema,value,,
 qetl.coverage,stage_completion,function,6,dataset partition source_version range_from range_to rows_published
+qetl.coverage,stage_written,function,7,dataset partition source_version range_from range_to rows_published touched
 qetl.coverage,still_current,value,,
 qetl.coverage,supersede,function,5,ds part version from_ts to_ts
 qetl.coverage,unready,table,,
@@ -221,6 +222,7 @@ qetl.io,scoped_day_of,function,1,times
 qetl.io,scoped_roots,value,,
 qetl.io,strategies,value,,
 qetl.io,touched,table,,
+qetl.io,touched_since,function,1,n
 qetl.io,use_calendar,function,1,text
 qetl.io,watch_eod,function,2,root wdb_dir
 qetl.io,write,function,3,mgr target batch

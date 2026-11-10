@@ -95,6 +95,19 @@
     .qetl.job.bounded.runtime.finish_window[`reference;`refdata;`;spec;.qt.qetl.job.bounded.d[1];.qt.qetl.job.bounded.d[2];{1}];
     .qunit.assertEquals[.qetl.job.bounded.state.load_checkpoint[`reference;spec];.qt.qetl.job.bounded.d[2];"the cursor lands on the window's exclusive end, so the next plan starts there"]};
 
+/ #2549: finish_window records the partitions the window's publish touched - here the next day's, as a
+/ markout twin's horizon-shifted `time` writes - and not those an earlier window left in `touched`.
+.qt.qetl.job.bounded.test_a_window_records_the_partitions_its_publish_touched:{[t]
+    spec:.qt.qetl.job.bounded.spec_for[`v1;1;2];
+    .qt.fixture.reference_worker.init spec;
+    saved:.qetl.io.touched;
+    `.qetl.io.touched set ([] hdb_root:enlist `:/earlier; dt:enlist 2026.01.01; tbl:enlist `refdata);
+    .qetl.job.bounded.runtime.finish_window[`reference;`refdata;`;spec;.qt.qetl.job.bounded.d[1];.qt.qetl.job.bounded.d[2];
+        {`.qetl.io.touched upsert (`:/h;2026.09.11;`refdata); `.qetl.io.touched upsert (`:/h;2026.09.12;`refdata); 7}];
+    `.qetl.io.touched set saved;
+    .qunit.assertEquals[first exec touched from .qetl.coverage.ledger[] where dataset=`refdata;
+        2026.09.11 2026.09.12;"the window ends at midnight, yet its D+1 partition is recorded, and the earlier window's is not"]};
+
 / #2658: whether a written window is queryable at once is the resolved manager's fact (an on_ready
 / hook), not a second process-global switch that a deployment must pair with it by hand.
 .qt.qetl.job.bounded.test_readiness_is_deferred_exactly_when_the_manager_has_an_on_ready:{[t]

@@ -117,7 +117,7 @@ if[count hold:getenv`HOLD;
   tb:`$getenv`TABLE; d:.z.D-"J"$getenv`HOLD_DAYS;
   system "mkdir -p \"",.qetl.job.bounded.state.lock_dir[],"\"";
   claim:`dataset`partition`source_version`range_from`range_to!(tb;`;`v1;"p"$d;"p"$d+1);
-  claim,:`rows_published`recorded_at`superseded_at`run_id!(100;.z.p;0Wp;0Ng);
+  claim,:`rows_published`recorded_at`superseded_at`run_id`touched!(100;.z.p;0Wp;0Ng;`date$());
   ledger:.qetl.coverage.empty_ledger[] upsert claim;
   .qetl.job.bounded.state.durable_set[.qetl.coverage.ledger_path[];ledger];
   key1:([] dataset:enlist tb; partition:enlist `; source_version:enlist `v1);

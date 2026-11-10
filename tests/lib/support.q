@@ -69,7 +69,7 @@
     ([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
         range_from:`timestamp$();
         range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$();
-        superseded_at:`timestamp$(); run_id:0#0Ng)};
+        superseded_at:`timestamp$(); run_id:0#0Ng; touched:())};
 
 // Start a suite with no configuration snapshots, in the status directory it has set:
 // the table, the file and what this process remembers having verified (#1999). Like the
