@@ -29,7 +29,7 @@
 / mid of the latest book at or before the fill (a book AT the fill's time
 / counts), with no age limit, as the last mid never had one. Crypto: a
 / history of each venue's top per sym and venue, and the best mid across the
-/ venues whose top at the fill's time is within .qf.mkt.reference_max_age of
+/ venues whose top at the fill's time is within .qpipe.job.posbook.reference_max_age of
 / it (#886), so a venue silent for longer than that does not mark the fill.
 / .
 / A late, older book (#1088, #1049) is inserted at its own time. It marks only
@@ -166,8 +166,15 @@
     h:hist,enlist[`rows]!enlist select from hist[`rows] where sym in ev`sym;
     (.qetl.enrich.lookup[h;ev;`event_time`attach`tolerance!(`time;enlist `mid;0Nn)])`mid}
 
+/ The oldest a venue's top may be and still set a crypto mark: posbook's OWN
+/ setting, taken once from the library's cross-venue default (#2656), not the
+/ library constant itself - last_value has its own, so tuning one no longer
+/ moves the other. Read where it is used. Not audited: posbook has no
+/ config_change output, which test_config_audit.q requires of an audited job.
+.qpipe.job.posbook.reference_max_age:.qf.mkt.reference_max_age
+
 / The crypto marks for a batch of fills: per fill, the best mid across the
-/ venues whose top AS OF THE FILL'S TIME is within .qf.mkt.reference_max_age
+/ venues whose top AS OF THE FILL'S TIME is within .qpipe.job.posbook.reference_max_age
 / of it. Null for a fill with no fresh venue, so the transform falls back to
 / the fill's own price, as it does for a sym never quoted.
 / .
@@ -182,7 +189,7 @@
 .qpipe.job.posbook.crypto_marks:{[tob;batch]
     t:select from (tob`rows) where sym in batch`sym;
     if[(0=count t) or 0=count batch; :(count batch)#0n];
-    .qf.mkt.best_mid_across_venues[t;select sym, time from batch;.qf.mkt.reference_max_age]}
+    .qf.mkt.best_mid_across_venues[t;select sym, time from batch;.qpipe.job.posbook.reference_max_age]}
 
 / The canonical tables this job reads, as the plant delivers them - the
 / normalizers' outputs with `time` stamped in front. Declared so that
