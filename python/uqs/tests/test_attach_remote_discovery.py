@@ -10,13 +10,15 @@ it, and nothing else does.
 
 from __future__ import annotations
 
+import contextlib
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from uqs.attach import config, service
+from uqs.attach import config, publisher, service
 from uqs.paths import UqsError, default_paths, repo_root
-from uqs.stack import start_policy
+from uqs.stack import generated, runtime, start_policy
 
 ROOT = repo_root()
 PUBLISHER = "executions1"
@@ -77,3 +79,30 @@ def test_a_remote_publisher_started_with_others_is_refused():
     attach("uat-stack", runtime_only=True)
     with pytest.raises(UqsError, match="start it on its own"):
         extras("start", f"{PUBLISHER} rdb1")
+
+
+@pytest.mark.parametrize(
+    ("host", "after"),
+    [("localhost", []), ("uat-stack", ["-.servers.DISCOVERY", ":uat-stack:6001"])],
+)
+def test_a_traced_publisher_start_carries_trace_on_its_start_line(monkeypatch, host, after):
+    """`job attachment add --trace` (#2687) starts the publisher as `uqs start
+    --trace` does: `-trace` through torq.sh's -extras, which a remote stack's
+    discovery then extends - one -extras, both on the publisher's start line."""
+    att = attach(host, runtime_only=True)
+    seen: list[list[str]] = []
+
+    def launched(paths, args, *rest):
+        seen.append(args)
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(start_policy, "refuse_start", lambda *a, **kw: None)
+    monkeypatch.setattr(runtime, "torq_launcher", lambda paths: Path("torq.sh"))
+    monkeypatch.setattr(generated, "lifecycle_lock", lambda *a, **kw: contextlib.nullcontext())
+    monkeypatch.setattr(runtime, "_bootstrap_and_run", launched)
+    publisher.UqsPublisher(default_paths(), trace=True).start(att)
+    publisher.UqsPublisher(default_paths()).start(att)
+    assert seen == [
+        ["start", PUBLISHER, "-extras", "-trace", *after],
+        ["start", PUBLISHER, *(["-extras", *after] if after else [])],
+    ]

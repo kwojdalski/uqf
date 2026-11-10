@@ -1582,6 +1582,22 @@ uqs start fxmarkout1 --trace          # trace its source queries (see below)
 What a process prints while it loads is shown too. With `--stop-on-exit`,
 processes already running when it began are left running at Ctrl-C.
 
+`start --json` (and `restart --json`) prints one document instead (#2687):
+`started` (what it launched), `already_running` (what a start left alone, as
+torq.sh does; a restart has none), `untraced` (what `--trace` did not reach),
+`warnings` (the advisory lines a start prints), torq.sh's `output`, and `ok`,
+with the `error` the grace check names when a process did not come up. With
+`--dry-run` it is `{dry_run, would_stop, start_lines: [{process, line, log}]}`,
+composed and never bootstrapped. It is refused with `--follow`, as on
+`job backfill`: a stream is not one document.
+
+The same launch options - `--follow`/`-f`, `--level`, `--stop-on-exit`,
+`--trace`, `--json`, `--dry-run`, `--override`/`--reason` and `--base-port` -
+are `uqs job backfill`'s and `uqs job attachment add`'s too, declared once
+(`cli/launch_options.py`) and meaning the same on each: on a backfill they act
+on the run it starts, on an attachment on the publisher it starts once verified
+([attach-existing-torq.md](attach-existing-torq.md)).
+
 ### Where a process stopped
 
 Every uqf process script - `torq_stream.q` (every streaming job),
@@ -1635,6 +1651,7 @@ source request:
 ```
 uqs job backfill <worker> ... --trace       # a backfill: passes -trace
 uqs start <procname> --trace                # live jobs, at start (also restart)
+uqs job attachment add <name> --trace       # an attached publisher, as it starts
 uqs start <procname> --dry-run --trace      # the start line, with -trace on it
 uqs query <procname> ".qetl.log.trace 1b"   # a process already running, no restart
 ```
@@ -2236,9 +2253,10 @@ still reads rdb1. A job or worker is JOB in every command (`job backfill JOB`,
 
 `start`, `restart` and `stop` take one option set: the processes positionally,
 `--profile` and `--base-port` on all three; `start` and `restart` add the same
-`--follow`/`-f`, `--level`, `--dry-run` and overrides, so `restart -f` is
-`start -f` for a fleet already up. `stop` adds `--kill` instead. A connector's
-whole lifecycle is its own group,
+`--follow`/`-f`, `--level`, `--stop-on-exit`, `--trace`, `--json`, `--dry-run`
+and overrides, so `restart -f` is `start -f` for a fleet already up - the launch
+options `job backfill` and `job attachment add` take too (#2687). `stop` adds
+`--kill` instead. A connector's whole lifecycle is its own group,
 `uqs connector start|stop|restart|status|logs NAME`, not the stack's verbs with
 a `connector:` prefix: a connector is no torq.sh process, so it takes none of
 `start`'s options and has start options of its own, and rule 1 puts the noun

@@ -19,8 +19,9 @@ from typing import Annotated, Any
 import typer
 
 from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
-from uqs.cli import completion, start_follow, start_warnings, vocabulary
+from uqs.cli import completion, launch_options, start_follow, start_json, start_warnings, vocabulary
 from uqs.cli.force_stop import ForceOpt, _force_stop
+from uqs.cli.launch_options import FollowOpt, LevelOpt, StopOnExitOpt, TraceOpt
 from uqs.cli.safety import ChangesState, Effect, OverrideOpt, ReasonOpt, dry_run_note, marked
 from uqs.cli.shared import (
     PASS_THROUGH,
@@ -34,9 +35,7 @@ from uqs.cli.shared import (
     console,
     log,
 )
-from uqs.cli.start_follow import FollowOpt, LevelOpt, StopOnExitOpt
 from uqs.cli.start_override_opts import parsed as _overrides
-from uqs.cli.start_warnings import TraceOpt
 from uqs.cli.start_warnings import running as _running
 from uqs.model import profiles
 from uqs.paths import UqsError, UqsUsageError
@@ -156,17 +155,22 @@ def _launch(
     stop_on_exit: bool = False,
     grace: float = start_check.DEFAULT_GRACE,
     trace: bool = False,
+    as_json: bool = False,
 ) -> None:
     """`start` and `restart`, which differ only in the torq.sh verb they run."""
-    if level is not None and not follow:
-        _die(UqsUsageError("--level needs --follow"))
-    if stop_on_exit and not follow:
-        _die(UqsUsageError("--stop-on-exit needs --follow: it stops what the stream started"))
-    if print_only and follow:
-        _die(UqsUsageError("--dry-run does not apply with --follow"))
+    refused = launch_options.refusal(
+        follow=follow, level=level, stop_on_exit=stop_on_exit, dry_run=print_only
+    )
+    if refused is None and follow and as_json:
+        refused = UqsUsageError(f"{launch_options.FOLLOW_NOT_WITH_JSON}: use --json alone")
+    if refused is not None:
+        _die(refused)
     overrides = _overrides(verb, override, reason, profile=profile, print_only=print_only)
     names = _names_to_start(procs, profile, overrides)
     if print_only:
+        _reject_unknown(names)
+        if as_json:
+            start_json.dry_run(verb, names, port, _selected(names, profile), trace)
         _print_startlines(verb, names, port, profile, trace)
         return
     launch = runtime.start if verb == "start" else runtime.restart
@@ -174,6 +178,10 @@ def _launch(
     kwargs: dict[str, Any] = {"base_port": port, "selected": selected, "skips": overrides}
     kwargs["trace"] = trace  # -extras -trace on each start line (runtime.TRACE_EXTRAS)
     untraced = start_warnings.untraced(verb, names, port, _running) if trace else []
+    if as_json:
+        run = lambda paths, names, **kw: launch(paths, names, **kwargs, **kw)  # noqa: E731
+        checks = lambda: _launch_checks(verb, names, port, profile)  # noqa: E731
+        start_json.launch(verb, names, port, run, checks, grace, untraced, _running)
     if not follow:
         _launch_checks(verb, names, port, profile)
         _launch_and_confirm(verb, launch, names, port, grace, kwargs)
@@ -239,6 +247,7 @@ def start(
     reason: ReasonOpt = None,
     grace: GraceOpt = start_check.DEFAULT_GRACE,
     trace: TraceOpt = False,
+    as_json: start_json.JsonOpt = False,
 ) -> None:
     """Start every startwithall=1 process (or specific process name(s)).
 
@@ -253,10 +262,13 @@ def start(
     compose up` is: Ctrl-C then stops what it started, and leaves what was
     already running. `--trace` turns source-query tracing on in each process
     it starts, before its first source request, and names any already running.
+    `--json` prints one document instead: what it started, what was already
+    running and what `--trace` did not reach - or, with `--dry-run`, the start
+    lines. The same options launch `uqs job backfill` and `uqs job attachment add`.
     """
     _launch(
         "start", procs, port, profile, follow, level, print_only,
-        override, reason, stop_on_exit, grace, trace,
+        override, reason, stop_on_exit, grace, trace, as_json,
     )  # fmt: skip
 
 
@@ -273,16 +285,18 @@ def restart(
     reason: ReasonOpt = None,
     grace: GraceOpt = start_check.DEFAULT_GRACE,
     trace: TraceOpt = False,
+    as_json: start_json.JsonOpt = False,
 ) -> None:
     """Restart every startwithall=1 process (or specific process name(s)).
 
     Takes exactly `start`'s options: `--profile` restarts a named set,
     `--follow` streams the restarted processes' logs until Ctrl-C, which ends
-    the stream and leaves them running; `--stop-on-exit` stops them then.
+    the stream and leaves them running; `--stop-on-exit` stops them then;
+    `--json` prints what it restarted as one document.
     """
     _launch(
         "restart", procs, port, profile, follow, level, print_only,
-        override, reason, stop_on_exit, grace, trace,
+        override, reason, stop_on_exit, grace, trace, as_json,
     )  # fmt: skip
 
 
@@ -342,7 +356,6 @@ def _print_startlines(
     """`start --dry-run` and `restart --dry-run`: what a restart would stop, then
     each start line - composed, never bootstrapped, so nothing is written here
     or on a server `uqs --target` sent it to (stack/start_lines.py, #1880)."""
-    _reject_unknown(names)
     try:
         stopping = start_follow.procnames_started_by(names, port) if verb == "restart" else []
         result = runtime.print_procs(

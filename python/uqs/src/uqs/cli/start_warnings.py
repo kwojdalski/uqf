@@ -10,9 +10,6 @@ command. Split from cli/lifecycle.py, which holds its modules to 400 lines.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Annotated
-
-import typer
 
 from uqs.cli import start_follow
 from uqs.cli.shared import _paths, console, log
@@ -20,21 +17,6 @@ from uqs.model import dependencies, profiles
 from uqs.paths import UqsError
 from uqs.stack import alive, deployment, listing
 from uqs.stack import procs as procs_model
-
-#: `start`'s and `restart`'s --trace (#2675): `-trace` on each start line, read
-#: by uqf's process scripts before their first source request. Here, beside
-#: what reports the processes it cannot reach, to keep cli/lifecycle.py to 400 lines.
-TraceOpt = Annotated[
-    bool,
-    typer.Option(
-        "--trace",
-        help="Log at TRACE inside each process this starts, from before its first source "
-        "request: every query the source is sent - the SQL, or the q lambda and its bounds "
-        "- and the rows and time it took, as `uqs job backfill --trace` does. Includes "
-        "everything `uqs --debug` shows. A process already running is not restarted, so "
-        "it is not traced. Off by default; --level only filters what --follow shows",
-    ),
-]
 
 
 def running(port: int | None) -> set[str]:

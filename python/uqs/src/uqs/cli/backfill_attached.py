@@ -41,6 +41,7 @@ def run(
     wait: bool = False,
     follow: bool = False,
     stop_on_exit: bool = False,
+    level: str | None = None,
     verbose: bool = False,
     trace: bool = False,
     writer: str | None = None,
@@ -131,6 +132,7 @@ def run(
                 wait=wait or follow,
                 follow=follow,
                 stop_on_exit=stop_on_exit,
+                level=level,
                 verbose=verbose,
                 trace=trace,
                 waived=waived,
@@ -205,6 +207,7 @@ def _execute(
     waived=None,
     follow=False,
     stop_on_exit=False,
+    level=None,
 ):
     att = config.load(attachment)
     try:
@@ -238,7 +241,7 @@ def _execute(
         )
         raise typer.Exit(code=0)
     if follow:
-        _stream(attachment, worker, run_, stop_on_exit=stop_on_exit)
+        _stream(attachment, worker, run_, stop_on_exit=stop_on_exit, level=level)
     elif not as_json:  # with --json, stdout is the one document below (#1685)
         console.print(
             f"[dim]waiting for {worker} (pid {run_.pid}); Ctrl-C stops waiting, not the run[/]"
@@ -264,7 +267,12 @@ EXIT_INTERRUPTED = 130
 
 
 def _stream(
-    attachment: str, worker: str, run_: backfill_run.Launched, *, stop_on_exit: bool = False
+    attachment: str,
+    worker: str,
+    run_: backfill_run.Launched,
+    *,
+    stop_on_exit: bool = False,
+    level: str | None = None,
 ) -> None:
     """`--follow` (#2677): stream the launched run's own log - the file the launch reported -
     until its process exits, every line it wrote included. Ctrl-C ends the stream, never the
@@ -299,6 +307,7 @@ def _stream(
             worker,
             until=lambda: run_.process.poll() is not None,
             on_interrupt=ask_to_stop if stop_on_exit else None,
+            min_level=level,
         )
     except KeyboardInterrupt:
         console.print(

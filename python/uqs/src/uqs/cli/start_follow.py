@@ -12,48 +12,21 @@ This was `uqs up`, a command of its own with its own option set (#1734). It is
 a flag now, so `start`, `restart` and their `--follow` take one set of options;
 `uqs up` stays a hidden alias for a release (cli/lifecycle.py).
 
-Split from cli/lifecycle.py, which holds its modules to 400 lines.
+Its options are cli/launch_options.py's (#2687). Split from cli/lifecycle.py,
+which holds its modules to 400 lines.
 """
 
 from __future__ import annotations
 
 import subprocess
 from collections.abc import Callable
-from typing import Annotated
 
 import typer
 
-from uqs.cli.choices import ChoiceOpt
 from uqs.cli.shared import _paths, console, log
 from uqs.paths import UqsError
 from uqs.stack import listing, log_follow, runtime
 from uqs.stack import logs as stack_logs
-
-FollowOpt = Annotated[
-    bool,
-    typer.Option(
-        "--follow",
-        "-f",
-        help="Stay in the foreground, streaming every started process's log until "
-        "Ctrl-C, which stops the stream; the processes keep running",
-    ),
-]
-
-StopOnExitOpt = Annotated[
-    bool,
-    typer.Option(
-        "--stop-on-exit",
-        help="With --follow: when the stream ends (Ctrl-C), stop what this started; what "
-        "was already running is left running",
-    ),
-]
-
-LevelOpt = ChoiceOpt(
-    stack_logs.LEVEL_CHOICES,
-    "--level",
-    stack_logs.LEVEL_HELP + " (with --follow)",
-    case_sensitive=False,
-)
 
 
 def procnames_started_by(names: str, port: int | None) -> list[str]:
