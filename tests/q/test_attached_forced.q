@@ -5,7 +5,7 @@
 // into a directory of its own, so what was and was not sent is read back from disk.
 
 system "l scripts/dev/attached_forced.q";
-system "l scripts/dev/attached_calendar.q";
+system "l scripts/dev/attached_lib.q";
 
 .qt.qetl.attached_forced.root:`:build/test_attached_forced
 
