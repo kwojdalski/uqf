@@ -35,7 +35,7 @@ SOURCES = [PYTHON / "uqs" / "src", PYTHON / "uqf_frontend" / "src"]
 
 #: (module the helper lives in, its name): each opens a tunnel to a target's q.
 HELPERS = {
-    ("uqs.cli.query_target", "connect"),
+    ("uqs.deploy.query_target", "connect"),
     ("uqs.deploy.tunnel", "tunnel"),
     ("uqs.deploy.tunnel", "forwarded"),
     ("uqs.deploy.workspace", "open_connection"),
@@ -52,7 +52,7 @@ READ_ONLY: dict[str, str] = {
         "`uqs schema --tunnel` sends only schema_view's own programs - the table "
         "list, a table's meta and its row count - never the caller's q"
     ),
-    "uqs/cli/data_diff.py:reach": (
+    "uqs/deploy/diff_endpoints.py:reach": (
         "`uqs data diff` and the frontend's /compare send only compare.q's "
         "program; a filter's column, operator and value go as typed arguments"
     ),
@@ -78,8 +78,8 @@ def _modules() -> dict[str, tuple[Path, ast.Module]]:
 
 
 def _aliases(tree: ast.Module) -> dict[str, str]:
-    """Each local name bound to a helper's module: `from uqs.cli import
-    query_target as via_target` binds via_target to uqs.cli.query_target."""
+    """Each local name bound to a helper's module: `from uqs.deploy import
+    query_target as via_target` binds via_target to uqs.deploy.query_target."""
     modules = {m for m, _ in HELPERS}
     bound = {}
     for node in ast.walk(tree):
@@ -171,7 +171,7 @@ def test_every_read_only_exemption_is_still_a_caller():
 
 
 def test_connect_refuses_what_it_is_told_is_a_change():
-    tree = _modules()["uqs/cli/query_target.py"][1]
+    tree = _modules()["uqs/deploy/query_target.py"][1]
     connect = next(
         n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "connect"
     )

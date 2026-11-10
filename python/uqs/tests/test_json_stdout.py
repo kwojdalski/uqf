@@ -26,7 +26,7 @@ import typer.main
 from loguru import logger
 from typer.testing import CliRunner
 
-from uqs import cli
+from uqs import cli, timefmt
 from uqs.cells import Shown, cells
 from uqs.cli import json_out, shared
 from uqs.logger import core as logcore
@@ -473,14 +473,14 @@ def test_emit_refuses_a_document_that_is_not_an_object():
     ],
 )
 def test_a_time_is_iso_8601_with_its_offset(value, naive, expected):
-    assert json_out.timestamp(value, naive=naive) == expected
+    assert timefmt.timestamp(value, naive=naive) == expected
 
 
 def test_a_zoneless_local_time_takes_this_machines_offset():
-    stamped = json_out.timestamp("2026.08.22D14:21:10", naive="local")
+    stamped = timefmt.timestamp("2026.08.22D14:21:10", naive="local")
     expected = datetime(2026, 8, 22, 14, 21, 10).astimezone().isoformat()
     assert stamped == expected
-    today = json_out.timestamp("04:05:06")  # TorQ's summary clock
+    today = timefmt.timestamp("04:05:06")  # TorQ's summary clock
     assert today is not None and today[10:19] == "T04:05:06" and not _ZONELESS.fullmatch(today)
 
 

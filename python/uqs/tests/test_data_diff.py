@@ -26,6 +26,7 @@ from plain_cli import PlainRunner
 
 from uqs import cli, timerange
 from uqs.cli import data_diff as diff_cli
+from uqs.deploy import diff_endpoints
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsUsageError, default_paths
 from uqs.stack import data_diff
@@ -231,7 +232,7 @@ def _reached(name: str, user: str, passwd: str, paths=None) -> Iterator[data_dif
 
 def invoke(monkeypatch, answer: dict, *extra: str):
     sent = fake_q(monkeypatch, answer)
-    monkeypatch.setattr(diff_cli, "reach", _reached)
+    monkeypatch.setattr(diff_endpoints, "reach", _reached)
     result = runner.invoke(
         cli.app,
         ["data", "diff", "--left", "local", "--right", "prod", "--table", "demo_deals", *WINDOW,
@@ -300,7 +301,7 @@ def test_filters_limit_and_coverage_reach_q(monkeypatch):
 )
 def test_a_command_that_names_nothing_to_compare_is_refused(monkeypatch, extra, said):
     fake_q(monkeypatch, report("equal_in_sample"))
-    monkeypatch.setattr(diff_cli, "reach", _reached)
+    monkeypatch.setattr(diff_endpoints, "reach", _reached)
     died: list[UqsError] = []
     monkeypatch.setattr(diff_cli, "_die", died.append)
     runner.invoke(cli.app, ["data", "diff", *extra, "--table", "demo_deals", *WINDOW])
@@ -311,9 +312,11 @@ def test_a_command_that_names_nothing_to_compare_is_refused(monkeypatch, extra, 
 
 
 def test_a_local_stack_that_is_down_is_an_unavailable_side(monkeypatch):
-    monkeypatch.setattr(diff_cli.listing, "configured_ports", lambda paths: {"gateway1": "17007"})
-    monkeypatch.setattr(diff_cli.alive, "running", lambda paths: set())
-    with diff_cli.reach("local", "u", "p") as ep:
+    monkeypatch.setattr(
+        diff_endpoints.listing, "configured_ports", lambda paths: {"gateway1": "17007"}
+    )
+    monkeypatch.setattr(diff_endpoints.alive, "running", lambda paths: set())
+    with diff_endpoints.reach("local", "u", "p") as ep:
         assert ep == data_diff.Endpoint(
             "local", error="gateway1 on this machine: gateway1 is not running - start it with "
             "`uqs start gateway1`"
@@ -321,9 +324,11 @@ def test_a_local_stack_that_is_down_is_an_unavailable_side(monkeypatch):
 
 
 def test_a_running_local_stack_is_its_gateways_port(monkeypatch):
-    monkeypatch.setattr(diff_cli.listing, "configured_ports", lambda paths: {"gateway1": "17007"})
-    monkeypatch.setattr(diff_cli.alive, "running", lambda paths: {"gateway1"})
-    with diff_cli.reach("local", "u", "p") as ep:
+    monkeypatch.setattr(
+        diff_endpoints.listing, "configured_ports", lambda paths: {"gateway1": "17007"}
+    )
+    monkeypatch.setattr(diff_endpoints.alive, "running", lambda paths: {"gateway1"})
+    with diff_endpoints.reach("local", "u", "p") as ep:
         assert ep == data_diff.Endpoint("local", "localhost:17007")
 
 
@@ -331,37 +336,37 @@ def test_an_undeclared_target_is_refused_not_reported(monkeypatch):
     def nobody(name, root):
         raise UqsError(f"no target or deployed server named {name}")
 
-    monkeypatch.setattr(diff_cli.control, "remote_for", nobody)
-    with pytest.raises(UqsError, match="no target"), diff_cli.reach("nosuch", "u", "p"):
+    monkeypatch.setattr(diff_endpoints.control, "remote_for", nobody)
+    with pytest.raises(UqsError, match="no target"), diff_endpoints.reach("nosuch", "u", "p"):
         pass
 
 
 def test_a_target_that_cannot_be_reached_is_an_unavailable_side_without_the_password(
     monkeypatch,
 ):
-    monkeypatch.setattr(diff_cli.control, "remote_for", lambda name, root: None)
+    monkeypatch.setattr(diff_endpoints.control, "remote_for", lambda name, root: None)
 
     @contextmanager
     def refused(*args, **_):
         raise UqsError("ssh: connect to host prod: password sekret rejected")
         yield
 
-    monkeypatch.setattr(diff_cli.via_target, "connect", refused)
-    with diff_cli.reach("prod", "u", "sekret") as ep:
+    monkeypatch.setattr(diff_endpoints.via_target, "connect", refused)
+    with diff_endpoints.reach("prod", "u", "sekret") as ep:
         assert ep.address == "" and "gateway1 on target prod: ssh: connect" in ep.error
         assert "sekret" not in ep.error
 
 
 def test_a_reached_target_is_its_tunnels_local_end(monkeypatch):
-    monkeypatch.setattr(diff_cli.control, "remote_for", lambda name, root: None)
+    monkeypatch.setattr(diff_endpoints.control, "remote_for", lambda name, root: None)
 
     @contextmanager
     def tunnelled(name, proc, port, base_port, user, passwd, *, change):
         assert (name, proc, change) == ("prod", "gateway1", None)  # a read (#2179)
-        yield diff_cli.via_target.Via(name, "prod.example", proc, 17007, 61234, passwd)
+        yield diff_endpoints.via_target.Via(name, "prod.example", proc, 17007, 61234, passwd)
 
-    monkeypatch.setattr(diff_cli.via_target, "connect", tunnelled)
-    with diff_cli.reach("prod", "u", "p") as ep:
+    monkeypatch.setattr(diff_endpoints.via_target, "connect", tunnelled)
+    with diff_endpoints.reach("prod", "u", "p") as ep:
         assert ep == data_diff.Endpoint("prod", "127.0.0.1:61234")
 
 
@@ -497,7 +502,7 @@ def test_the_command_end_to_end_on_fixture_targets(fixture_targets, monkeypatch)
     def reached(name, user, passwd, paths=None):
         yield sides[name]
 
-    monkeypatch.setattr(diff_cli, "reach", reached)
+    monkeypatch.setattr(diff_endpoints, "reach", reached)
     r = runner.invoke(
         cli.app,
         ["data", "diff", "--left", "local", "--right", "prod", "--table", "demo_deals",
@@ -513,7 +518,7 @@ def test_partition_is_refused_naming_slice(monkeypatch):
     """#2239: "partition" is an HDB date partition; the coverage slice is
     `--slice`, and the old spelling is refused - never read as a date."""
     fake_q(monkeypatch, report("equal_in_sample"))
-    monkeypatch.setattr(diff_cli, "reach", _reached)
+    monkeypatch.setattr(diff_endpoints, "reach", _reached)
     argv = ["data", "diff", "--table", "demo_deals", *WINDOW, "--partition", "2026.09.13"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 2

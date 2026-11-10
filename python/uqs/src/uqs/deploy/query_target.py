@@ -1,8 +1,10 @@
-"""`uqs query --tunnel TARGET`: what the query command needs to reach a process
-on a deployed target through an ssh tunnel (#1561). The tunnel and the
-remote port lookup are deploy/tunnel.py's; this is the CLI's side - the
-target named, its port resolved, the connection's errors worded without the
-password.
+"""A process on a deployed target, reached through an ssh tunnel (#1561):
+what `uqs query --tunnel TARGET`, `uqs schema --tunnel` and `uqs data diff`
+(and so the frontend's /compare) connect with. The tunnel and the remote port
+lookup are deploy/tunnel.py's; this is the caller's side - the target named,
+its port resolved, the connection's errors worded without the password. It
+lives outside uqs.cli so the frontend can reach a target without loading the
+command line (#2655).
 
 Not the global `uqs --target TARGET query`, which runs `uqs query` on the
 server (deploy/control.py). The two are refused together - cli/target.py -

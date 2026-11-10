@@ -2,7 +2,7 @@
 compares it (#2033).
 
 NOTHING HERE COMPARES. Reaching each side - this stack's gateway, or a
-target's through an ssh tunnel - is uqs's (`uqs.cli.data_diff.run`, the
+target's through an ssh tunnel - is uqs's (`uqs.deploy.diff_endpoints.run`, the
 function the command calls), and every rule that decides the result is q's
 (src/etl/core/compare.q): how a filter's text is typed, the row key, what
 differs, the five outcomes and the label a truncated sample carries. This
@@ -108,7 +108,7 @@ def sides(left: str, right: str) -> list[str]:
 def run(settings: Settings, req: Any) -> dict[str, Any]:
     """`uqs data diff --json`'s document for `req` (a models.CompareRequest)."""
     from uqs import timerange
-    from uqs.cli import data_diff
+    from uqs.deploy import diff_endpoints
     from uqs.paths import UqsError, UqsUsageError
     from uqs.stack.data_diff import DiffNotRun, DiffTimedOut
 
@@ -125,7 +125,7 @@ def run(settings: Settings, req: Any) -> dict[str, Any]:
     except UqsError as exc:
         raise ValidationFailed(str(exc)) from None
     try:
-        doc = data_diff.run(
+        doc = diff_endpoints.run(
             control._paths(settings), req.left, req.right, list(req.tables), window,
             # each side capped as /query's read is (#2524)
             filters=filters, limit=min(req.limit, settings.max_rows),

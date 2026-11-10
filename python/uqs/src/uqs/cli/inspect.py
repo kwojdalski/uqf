@@ -16,7 +16,6 @@ from uqs import paths as stack_paths
 from uqs.checks import schema_view
 from uqs.checks.schema_view import DEFAULT_PROC
 from uqs.cli import completion
-from uqs.cli import query_target as via_target
 from uqs.cli.concepts import target_opt
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.q_login import DEFAULT_USER, QPasswdOpt, QPasswordEnvOpt, QUserOpt, q_password
@@ -34,6 +33,7 @@ from uqs.cli.shared import (
     console,
 )
 from uqs.cli.vocabulary import EVERY_DEFAULT, EveryOpt
+from uqs.deploy import query_target as via_target
 from uqs.paths import UqsError
 
 #: How often `schema -i` re-reads the process: often enough to watch a table

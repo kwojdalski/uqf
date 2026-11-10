@@ -48,7 +48,7 @@ from plain_cli import PlainRunner
 from typer.testing import CliRunner
 from which_support import fake_which
 
-from uqs import cli, runtimes
+from uqs import cli, runtimes, timefmt
 from uqs import paths as stack_paths
 from uqs.checks import schema_view
 from uqs.cli import (
@@ -1683,7 +1683,7 @@ def test_connector_logs_shows_the_tail_of_the_log_its_status_names(monkeypatch, 
         ),
         (
             "2026.10.20D09:00:00.000000000|h|feed|kafka1|INF|id|a|b",
-            {"time": json_out.timestamp("2026.10.20D09:00:00.000000000"), "level": "INFO",
+            {"time": timefmt.timestamp("2026.10.20D09:00:00.000000000"), "level": "INFO",
              "message": "a|b"},
         ),
         ("started, pid 42", {"time": None, "level": None, "message": "started, pid 42"}),
