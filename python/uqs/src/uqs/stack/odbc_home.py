@@ -1,6 +1,7 @@
 """`uqs setup odbc`: a deployment-owned, versioned ODBC setup (#840).
 
-q reaches an ODBC database through KX's client (odbc.k and a native odbc.so),
+q reaches an ODBC database through KX's native client (odbc.so, wrapped by
+this tree's own src/etl/core/odbc.q - no odbc.k, #2508),
 a driver manager (unixODBC) and the database's own driver. On a server none of
 that may be installed system-wide by the deployment: no sudo, nothing in /etc,
 and the managed QHOME is not ours to change. So everything lives in one
@@ -8,7 +9,7 @@ directory the deployment owns - the ODBC HOME - and a process opts in by
 sourcing that directory's env.sh, which sets:
 
   QHOME          an OVERLAY of the managed QHOME: a directory of links to
-                 every entry of it, with the package's odbc.k and odbc.so in
+                 every entry of it, with the package's odbc.so in
                  place. The managed QHOME itself is never written to.
   ODBCSYSINI     the version's own etc/, holding odbcinst.ini, which
   ODBCINSTINI    registers each driver by name -> its library's absolute path.
@@ -21,7 +22,7 @@ may not be redistributed, so this repository ships none of them:
   package.json  {"name", "version", "platform": "linux-x86_64",
                  "files": {path: sha256, ...},
                  "drivers": {"Driver Name": "lib/libdriver.so", ...}}
-  q/...         overlaid onto the managed QHOME (odbc.k, l64/odbc.so)
+  q/...         overlaid onto the managed QHOME (l64/odbc.so)
   lib/...       native libraries: the driver manager and the drivers
   certs/...     optional: CA certificates a driver's TLS settings may name
 

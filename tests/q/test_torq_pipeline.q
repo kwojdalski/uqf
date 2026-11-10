@@ -151,16 +151,38 @@
     `.qtorq.received set saved;
     .qunit.assertEquals[(n;total);(1;1);"the first batch counts as one, not as null"]};
 
-.qt.qtorq.pipeline.test_apply_verbose_reports_the_flag_this_process_was_started_with:{[t]
-    / Restores the logging state it may change: debug_enabled is a process
-    / global, and a suite that left DEBUG on would change what every later
-    / suite prints.
-    saved:.qetl.log.debug_enabled;
-    on:.qtorq.apply_verbose[];
-    .qetl.log.debug saved;
-    .qunit.assertEquals[on;`verbose in key .Q.opt .z.x;
-        "it reports whether -verbose was on this process's own start line"];
-    .qunit.assertEquals[.qetl.log.debug_enabled;saved;"and this test left the setting as it found it"]};
+/ Run .qtorq.apply_log_flags on a start line's parsed flags, from both
+/ switches off, and return what it left them as - then put them back: they
+/ are process globals, and a suite that left DEBUG on would change what every
+/ later suite prints.
+/ @param opts a parsed command line, as .Q.opt returns it
+/ @return (debug_enabled;trace_enabled) as the flags left them
+.qt.qtorq.pipeline.log_flags_after:{[opts]
+    saved:(.qetl.log.debug_enabled;.qetl.log.trace_enabled);
+    .qetl.log.debug 0b; .qetl.log.trace 0b;
+    .qtorq.apply_log_flags opts;
+    after:(.qetl.log.debug_enabled;.qetl.log.trace_enabled);
+    .qetl.log.debug saved 0; .qetl.log.trace saved 1;
+    after};
+
+.qt.qtorq.pipeline.test_apply_log_flags_turns_trace_and_debug_on_for_trace:{[t]
+    / `uqs start --trace` puts -trace on the start line (#2675). It must be on
+    / before the first source request, and it brings DEBUG with it, as
+    / torq_backfill.q's -trace does.
+    .qunit.assertEquals[.qt.qtorq.pipeline.log_flags_after (enlist`trace)!enlist ();11b;
+        "-trace switches TRACE on, and DEBUG with it"]};
+
+.qt.qtorq.pipeline.test_apply_log_flags_leaves_trace_off_without_the_flag:{[t]
+    .qunit.assertEquals[.qt.qtorq.pipeline.log_flags_after (`symbol$())!();00b;
+        "no flag: both stay off"];
+    .qunit.assertEquals[.qt.qtorq.pipeline.log_flags_after (enlist`verbose)!enlist ();10b;
+        "-verbose is DEBUG alone"]};
+
+.qt.qtorq.pipeline.test_apply_log_flags_leaves_the_settings_as_it_found_them:{[t]
+    saved:(.qetl.log.debug_enabled;.qetl.log.trace_enabled);
+    .qt.qtorq.pipeline.log_flags_after (enlist`trace)!enlist ();
+    .qunit.assertEquals[(.qetl.log.debug_enabled;.qetl.log.trace_enabled);saved;
+        "this suite's helper puts both switches back"]};
 
 / --- reload reporting and the outbound credential (backfill -> HDB) ----
 

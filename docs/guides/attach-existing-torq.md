@@ -750,6 +750,17 @@ window's rows are published, then its coverage is recorded, then the checkpoint
 saved, and a killed run leaves an under-claim that the next run redoes.
 `--wait`, `--debug`, `--trace` and `--on-conflict` work as they do elsewhere.
 
+`--follow` (`-f`) is `--wait` that also streams the run's own log: the file the
+launch reports, under the destination's state directory, from its first line to
+the run's `RESULT` line, then the outcome and the exit code `--wait` would give
+(#2677). Ctrl-C stops the stream, not the run: it says the run is still running,
+names `uqs logs --attachment NAME --worker JOB -f` to follow it again, and exits
+130. There is no `--stop-on-exit`: the runner has no graceful stop yet - a
+signal fails the window it lands in and the run goes on, and a SIGTERM that
+lands inside the coverage ledger's file lock can leave that lock held.
+`--follow` is refused with `--json`, whose stdout is one document, and with
+`--writer`.
+
 **A historical HDB backfill does not populate today's RDB and publishes nothing
 through the tickerplant.** The rows exist only in the HDB, in the partition of
 the day they happened, and only readers that reload see them.
@@ -1043,7 +1054,7 @@ when, the command (rebuilt from the run's arguments, never with a credential),
 the mode, the destination, the run's bounds, the accepted findings with their
 observed facts, and `needed`, false when no finding of it fired. It is never
 rewritten: an `outcome` entry with the same `run` (the log's name) follows when
-the process cannot be started or `--wait` follows it to its end.
+the process cannot be started or `--wait` (or `--follow`) waits for its end.
 `uqs job attachment show NAME` lists the entries (`backfill_overrides` in its
 `--json`).
 

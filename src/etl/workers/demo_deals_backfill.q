@@ -65,10 +65,16 @@
 / Window width is this worker's own business rather than part of the
 / contract, but it is what makes the bound observable window by window.
 / .
+/ `align:1D` (#2570): this worker's reaction, rebuild_positions, keys a position
+/ by its window's START and clears by it over [from;to). A run that starts
+/ mid-day (a restatement of [12D00;12D12)) shares its start with that day's rows
+/ and so deleted the positions of deals outside it. Whole-day edges keep every
+/ window on one grid, where a start identifies a window; init refuses the rest.
+/ .
 / `check` is optional on the declaration; this worker declares one, which
 / makes it unskippable for every window this worker ever fetches.
 .qetl.job.bounded.define[`demo_deals_backfill;
-    `source`outputs`width`transform`check`procname`note`twin_of`twin_calculation!
-    (`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough;.qpipe.job.demo_deals_backfill.quality_check;
+    `source`outputs`width`align`transform`check`procname`note`twin_of`twin_calculation!
+    (`demo_deals;enlist `demo_deals;1D;1D;`demo_deals_passthrough;.qpipe.job.demo_deals_backfill.quality_check;
      `deals_backfill1;
      "bounded: runs a window range and exits, so it must not start with the stack";`demo_deals_feed;`shared)];

@@ -6,7 +6,7 @@
 # function never entered hands its verdict to a whole run.
 #
 # module<TAB>function<TAB>suite files, comma-separated
-scripts/processes/torq_pipeline.q	.qtorq.apply_verbose	test_torq_pipeline.q
+scripts/processes/torq_pipeline.q	.qtorq.apply_log_flags	test_torq_pipeline.q
 scripts/processes/torq_pipeline.q	.qtorq.as_table	test_stream_job.q,test_torq_delivery.q
 scripts/processes/torq_pipeline.q	.qtorq.assert_publishable	test_torq_pipeline.q
 scripts/processes/torq_pipeline.q	.qtorq.credential_from	test_docstring_examples.q,test_torq_pipeline.q

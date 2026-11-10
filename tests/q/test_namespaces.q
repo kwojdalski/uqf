@@ -213,6 +213,7 @@
 .qt.qf.util.namespaces.outside_the_prefix[`.rp]:"TorQ's OWN reporter namespace - uqs_reporter_config.q sets .rp.inputcsv there, where reporter.q reads it, and the result handler its generated rows name sits beside it (#1209).";
 .qt.qf.util.namespaces.outside_the_prefix[`.cov]:"the coverage tool, in KX's published .cov API shape. .qetl.coverage is already the ETL coverage LEDGER, so the obvious rename collides with an unrelated namespace.";
 .qt.qf.util.namespaces.outside_the_prefix[`.surface]:"the contract-surface exporter, which enumerates this tree's namespaces. Inside the prefix it would export itself - a tool appearing in the artifact it produces.";
+.qt.qf.util.namespaces.outside_the_prefix[`.odbc]:"KX's published ODBC client API (.odbc.open/eval/close/tables), reimplemented in src/etl/core/odbc.q so it runs without odbc.k (#2508). Kept under KX's name because it replaces odbc.k as a drop-in: the same calls, the same documentation, and a deployment can still load KX's own.";
 
 / Namespaces a file WRITES INTO without declaring them: names it assigns in q's or
 / TorQ's own namespace (.z.ts, .servers.x) or in a check script's private one.
@@ -320,7 +321,9 @@
 .qt.qf.util.namespaces.test_the_exception_list_has_not_become_the_rule:{[t]
     / A floor on the prefix's meaning: if half the tree ends up excepted,
     / the tools built on the prefix are measuring a minority of the code.
-    .qunit.assertTrue[5>count key .qt.qf.util.namespaces.outside_the_prefix;
+    / 6: `.odbc was the fifth exception (#2508) - KX's own API name, which a drop-in
+    / replacement for odbc.k has to keep.
+    .qunit.assertTrue[6>count key .qt.qf.util.namespaces.outside_the_prefix;
         "the exceptions stay a handful - each one is code no tool can see"]};
 
 / ---------------------------------------------------------------------------

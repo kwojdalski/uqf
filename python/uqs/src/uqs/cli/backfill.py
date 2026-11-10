@@ -170,6 +170,15 @@ def backfill(
             "whether the process started",
         ),
     ] = False,
+    follow: Annotated[
+        bool,
+        typer.Option(
+            "--follow",
+            "-f",
+            help="With --attachment: --wait, streaming every line of the run's own log as it "
+            "goes. Ctrl-C stops the stream; the run keeps running",
+        ),
+    ] = False,
     override: safety.OverrideOpt = None,
     reason: safety.ReasonOpt = None,
 ) -> None:
@@ -202,8 +211,10 @@ def backfill(
     window.
 
     The exit code is torq.sh's: whether the process STARTED, not how the run
-    ended. `--wait` follows the run to its outcome and exits with that - what
-    a script or a scheduler wants.
+    ended. `--wait` waits for the run's outcome and exits with that - what
+    a script or a scheduler wants. With `--attachment`, `--follow` (`-f`) is
+    `--wait` that also streams the run's own log as it goes; Ctrl-C stops the
+    stream and leaves the run running.
 
     With `--attachment`, `--skip-eod-fence --reason TEXT` (`--override eod-fence`)
     admits a plan, dry run or run within the native writers' end-of-day fence
@@ -253,6 +264,20 @@ def backfill(
             )
         )
         return
+    if follow and attach is None:
+        _die(
+            UqsUsageError(
+                "--follow is for --attachment: this backfill runs as a stack process - use "
+                "--wait, and follow its log with `uqs logs <process> -f`"
+            )
+        )
+        return
+    if follow and as_json:  # stdout is one JSON document (#1685); a stream is not one
+        _die(UqsUsageError("--follow does not apply with --json: use --wait --json"))
+        return
+    if follow and mode in run_modes.READ_ONLY_MODES:
+        _die(UqsError(f"--follow has nothing to follow with --mode {mode}: it starts no run"))
+        return
     if wait and mode in run_modes.READ_ONLY_MODES:
         _die(UqsError(f"--wait has nothing to wait for with --mode {mode}: it writes no status"))
         return
@@ -279,6 +304,7 @@ def backfill(
             on_conflict=on_conflict,
             as_json=as_json,
             wait=wait,
+            follow=follow,
             verbose=_debug_requested(ctx),
             trace=trace,
             writer=writer,

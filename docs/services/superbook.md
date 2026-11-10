@@ -103,17 +103,19 @@ The default maximum age is five seconds, inclusive at the boundary, controlled
 by `.qpipe.job.superbook.max_age`. The process recomputes on updates and every
 500ms. Known pairs whose sources all expire produce an empty superbook snapshot.
 
-A source's clock may lead this host's by up to `.qf.mkt.max_clock_lead` (250ms),
-read each time a batch arrives, and its rows still count: every multi-venue feed
-has some skew, and with none allowed a venue a few milliseconds ahead vanished
-from the book. A row dated further ahead is refused, so it cannot poison that
-source's watermark, and the refusal is logged as a warning naming the source.
-`market_data`'s publish check withholds such a row before it reaches any
-consumer (#1021), using the same shared tolerance, so superbook's own refusal is
-a second line rather than the only one. A level is kept only when
-`.qf.mkt.level_ok` holds, the rule `top_sides` and that check use too. Each
-output has an `as_of` calculation timestamp; the plant stamps its own `time`
-independently.
+A source's clock may lead this host's by up to
+`.qpipe.job.superbook.max_clock_lead` (250ms, defaulting to the library's
+`.qf.mkt.max_clock_lead` and audited as superbook's own setting; market_data
+keeps its own copy), read each time a batch arrives, and its rows still count:
+every multi-venue feed has some skew, and with none allowed a venue a few
+milliseconds ahead vanished from the book. A row dated further ahead is refused,
+so it cannot poison that source's watermark, and the refusal is logged as a
+warning naming the source. `market_data`'s publish check withholds such a row
+before it reaches any consumer (#1021), using the same shared tolerance, so
+superbook's own refusal is a second line rather than the only one. A level is
+kept only when `.qf.mkt.level_ok` holds, the rule `top_sides` and that check use
+too. Each output has an `as_of` calculation timestamp; the plant stamps its own
+`time` independently.
 
 ## Reading opportunities
 

@@ -1576,6 +1576,7 @@ uqs start -f                          # the default set, streamed; Ctrl-C leaves
 uqs start -f --stop-on-exit           # ... and Ctrl-C stops what it started
 uqs start rdb1 fxpositions1 -f        # just these
 uqs start --profile fx -f --level WARNING
+uqs start fxmarkout1 --trace          # trace its source queries (see below)
 ```
 
 What a process prints while it loads is shown too. With `--stop-on-exit`,
@@ -1626,11 +1627,28 @@ uqs query ".qetl.log.debug 1b" --port <port>              # a process already ru
 `-verbose` is uqf's own flag, taken by every process script. It is not TorQ's
 `-debug`, which also stops the log going to its file.
 
-One level below that, `uqs job backfill <worker> ... --trace` logs every query
-the source is sent (the SQL statement, or the q lambda and its bounds) and
-includes everything `--debug` shows. The log record stays one line, so `-f` and
-`grep` keep working, with the query as a full-length q string. `uqs logs` prints
-it as a header and an indented block:
+One level below that, `--trace` logs every query the source is sent (the SQL
+statement, or the q lambda and its bounds) and includes everything `--debug`
+shows. The same flag switches it on everywhere, before the process's first
+source request:
+
+```
+uqs job backfill <worker> ... --trace       # a backfill: passes -trace
+uqs start <procname> --trace                # live jobs, at start (also restart)
+uqs start <procname> --dry-run --trace      # the start line, with -trace on it
+uqs query <procname> ".qetl.log.trace 1b"   # a process already running, no restart
+```
+
+`uqs start --trace` adds `-trace` to each start line through torq.sh's
+`-extras`, and does not need `--follow`; `--level` stays only a filter on what
+`--follow` shows. torq.sh skips a process that is already up, so `--trace`
+cannot reach it: the start names each one it skipped, with the two ways to trace
+it, `uqs restart <procname> --trace` or the `uqs query` above. TorQ's own
+processes (rdb, tickerplant) take no `-trace` and ignore it.
+
+The log record stays one line, so `-f` and `grep` keep working, with the query
+as a full-length q string. `uqs logs` prints it as a header and an indented
+block:
 
 ```
 query sent range_from=2026.09.10D00:00:00.000000000 range_to=2026.09.11D00:00:00.000000000
@@ -2086,10 +2104,12 @@ Every command exits the same way for the same outcome (#1885), and
   and the command's (`UqsUsageError`) alike.
 - **1** also when a question is answered no, or not at all.
 - **3**: done in part, with the rest to retry (`EXIT_PARTIAL`, #2226). Only
-  `job backfill --attachment --wait` exits 3: its rows are written and covered,
-  but a reader has not reloaded them, and running the same command again asks
-  the readers again. The attached runner's own refusal (its exit 2) is a refusal
-  here, 1, never a usage error.
+  `job backfill --attachment --wait` (or `--follow`) exits 3: its rows are
+  written and covered, but a reader has not reloaded them, and running the same
+  command again asks the readers again. The attached runner's own refusal (its
+  exit 2) is a refusal here, 1, never a usage error.
+- **130**: `job backfill --attachment --follow` whose stream Ctrl-C ended. The
+  run goes on, and nothing is yet known of how it ends.
 
 A command asks through one helper, `safety.ask`/`safety.confirm`: `[y/N]`, so
 the default is no; an EOF or Ctrl-C is a no; and with no terminal to ask on it

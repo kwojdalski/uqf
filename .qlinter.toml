@@ -30,6 +30,8 @@ ignore = ["QS001", "QS008", "QS010"]
 # and to prove a datetime column is refused.
 "tests/q/test_time_zone.q" = ["QP002"]
 "tests/q/test_execution.q" = ["QP002", "QS006"]
+# odbc.so answers legacy datetime (15h); the double must return that type.
+"tests/q/test_odbc.q" = ["QP002"]
 # TimeStored's qunit, vendored: kept as upstream wrote it.
 "tests/lib/qunit.q" = ["QF017", "QL001", "QS003"]
 # Test stubs stand in for real functions (.lg.l, connect_etl, a reaction

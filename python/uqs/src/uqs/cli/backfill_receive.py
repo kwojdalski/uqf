@@ -104,7 +104,7 @@ def extract(
         raise typer.Exit(code=0)
     if not as_json:  # with --json, stdout is the one document below (#1685)
         console.print(
-            f"[dim]following {worker} (pid {run_.pid}); Ctrl-C stops waiting, not the run[/]"
+            f"[dim]waiting for {worker} (pid {run_.pid}); Ctrl-C stops waiting, not the run[/]"
         )
     runner, result = backfill_run.follow(run_)
     code = exit_code(runner)

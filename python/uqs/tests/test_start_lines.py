@@ -44,11 +44,22 @@ def test_the_lines_are_composed_with_nothing_written(paths):
     assert _tree(paths.torqdata.parent) == before
 
 
+def test_trace_is_on_every_composed_line(paths):
+    """`start --dry-run --trace` shows the `-trace` torq.sh appends (#2675)."""
+    lines = start_lines.plan(paths, "rdb1 hdb1", base_port=7000, extras=("-trace",))
+    assert all(line.line.endswith(" -trace ") for line in lines)
+    assert not any("-trace" in line.line for line in start_lines.plan(paths, "rdb1 hdb1"))
+
+
 @needs_tools
-@pytest.mark.parametrize(("procs", "port"), [("all", None), ("rdb1 hdb1 stp1", 7000)])
-def test_the_composed_lines_are_torq_sh_print(paths, procs, port):
-    composed = runtime.print_procs(paths, procs, base_port=port).stdout
-    printed = runtime.run_torq_sh(paths, ["print", procs], base_port=port, capture=True)
+@pytest.mark.parametrize(
+    ("procs", "port", "trace"),
+    [("all", None, False), ("rdb1 hdb1 stp1", 7000, False), ("rdb1 hdb1", 7000, True)],
+)
+def test_the_composed_lines_are_torq_sh_print(paths, procs, port, trace):
+    composed = runtime.print_procs(paths, procs, base_port=port, trace=trace).stdout
+    extras = ["-extras", "-trace"] if trace else []
+    printed = runtime.run_torq_sh(paths, ["print", procs, *extras], base_port=port, capture=True)
     assert printed.returncode == 0, printed.stderr
     assert composed == printed.stdout
 

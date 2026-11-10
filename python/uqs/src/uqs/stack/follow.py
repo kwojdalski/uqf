@@ -37,7 +37,10 @@ def follow(
     poll: float = 0.25,
 ) -> None:
     """Write `path`'s last `lines` lines to `out`, then every line appended,
-    until `stop()` is true.
+    until `stop()` is true - and then whatever the file still holds, so a
+    caller that stops when the writer has exited (`uqs job backfill
+    --follow`, #2677) is shown its last lines, even when it had exited
+    before the first poll.
 
     A file `path` comes to name later is read from its first line: it is a
     new run's log, and all of it is new. A file that does not exist yet is
@@ -86,6 +89,24 @@ def follow(
         if current.st_size < handle.tell():
             handle.seek(0)  # truncated in place
         time.sleep(poll)
+    _drain(path, handle, pending, lines if first else None, out)
+
+
+def _drain(path: Path, handle: TextIO | None, pending: str, lines: int | None, out: TextIO) -> None:
+    """What is left once `stop()` is true: the rest of the open file, or - when
+    none was opened yet - the file's last `lines` lines (None: all of it was
+    owed already)."""
+    if handle is None:
+        try:
+            handle = path.open(errors="replace")
+        except FileNotFoundError:
+            return
+        if lines is not None:
+            out.writelines(deque(handle, maxlen=lines))
+    rest = pending + handle.read()
+    out.write(rest if not rest or rest.endswith("\n") else rest + "\n")
+    out.flush()
+    handle.close()
 
 
 def main(argv: list[str]) -> int:

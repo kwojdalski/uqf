@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ODBC from q on Apple silicon, by running q as x86_64 under Rosetta.
 #
-# KX's q client for ODBC is published for Linux and Windows. The only macOS
+# KX's native ODBC client (odbc.so) is published for Linux and Windows. The only macOS
 # build (KxSystems/kdb m64/odbc.so) is x86_64 and links
 # /usr/lib/libodbc.2.dylib, which current macOS does not ship and SIP does not
 # let anyone add. KDB-X's q is a universal binary, so this works around both:
@@ -12,8 +12,12 @@
 #      then re-sign it ad hoc, since the rewrite invalidates the signature;
 #   3. fetch DuckDB's universal ODBC driver and register it in a local
 #      odbcinst.ini;
-#   4. assemble an overlay QHOME - links to ~/.kx plus m64/odbc.so and
-#      odbc.k - so ~/.kx itself is never modified.
+#   4. assemble an overlay QHOME - links to ~/.kx plus m64/odbc.so - so ~/.kx
+#      itself is never modified.
+#
+# The q side is src/etl/core/odbc.q, our own wrapper over odbc.so (#2508); KX's
+# odbc.k is NOT needed. It is fetched only by `fetch-odbc-k`, as the reference
+# the parity test (tests/qrun/test_odbc_parity.py) compares odbc.q with.
 #
 # A workaround for a development machine, not a deployment path: on Linux the
 # same source runs with the platform's own unixODBC and KX's l64/odbc.so.
@@ -23,6 +27,7 @@
 # Usage:
 #   scripts/dev/odbc_rosetta.sh setup          build/fetch everything (idempotent)
 #   scripts/dev/odbc_rosetta.sh q <q args...>  run q under Rosetta with ODBC wired up
+#   scripts/dev/odbc_rosetta.sh fetch-odbc-k   fetch KX's odbc.k into the overlay (parity test only)
 #   scripts/dev/odbc_rosetta.sh backfill <worker> [-version V -from T -to T [-hdb root]]
 #       run one bounded worker under Rosetta, which is the ONLY way an
 #       ODBC-backed worker reaches a driver on macOS: `uqs job backfill` launches
@@ -99,6 +104,10 @@ setup_qhome() {
         install_name_tool -change /usr/lib/libodbc.2.dylib "$PREFIX/lib/libodbc.2.dylib" "$QHOME_OVERLAY/m64/odbc.so"
         codesign -f -s - "$QHOME_OVERLAY/m64/odbc.so"
     fi
+}
+
+fetch_odbc_k() {
+    mkdir -p "$QHOME_OVERLAY"
     curl -sSfL -o "$QHOME_OVERLAY/odbc.k" "$KX_KDB_RAW/c/odbc.k"
 }
 
@@ -120,6 +129,10 @@ case "${1:-}" in
         setup_duckdb_driver
         setup_qhome
         echo "ready: scripts/dev/odbc_rosetta.sh q <args>"
+        ;;
+    fetch-odbc-k)
+        fetch_odbc_k
+        echo "KX odbc.k fetched into $QHOME_OVERLAY (reference for the parity test; nothing else loads it)"
         ;;
     q)
         shift
