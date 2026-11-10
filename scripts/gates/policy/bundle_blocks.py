@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Refuse a commit that would make an operator's bundle part of the tree (#881).
 
 `uqs runtime prepare` installs a bundle by writing a `/ BEGIN bundle <name>`
@@ -20,7 +19,9 @@ working tree is what says which files are a bundle's: a commit staging the
 ledger, or any file it lists, is refused too. The process overrides file is
 host state and may also hold bundle rows; staging any of it is refused.
 
-Run directly, or via the pre-commit hook. Exits 1 on any block or file.
+Run through the pre-commit hook, or directly (`--root` names whose index):
+
+    python3 scripts/gates/check.py bundle-blocks
 """
 
 from __future__ import annotations
@@ -30,21 +31,19 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
 
-
-def staged_blocks() -> list[str]:
+def staged_blocks(root: Path) -> list[str]:
     """`path:line: text` for each bundle marker in the index's q files."""
     r = subprocess.run(
         ["git", "grep", "--cached", "-n", "-E", r"^/ (BEGIN|END) bundle ", "--", "*.q"],
-        cwd=REPO,
+        cwd=root,
         capture_output=True,
         text=True,
         check=False,
     )
     # 0 = found, 1 = none; anything else is git failing, never a clean pass
     if r.returncode not in (0, 1):
-        raise SystemExit(f"check_bundle_blocks: git grep failed: {r.stderr.strip()}")
+        raise SystemExit(f"bundle-blocks: git grep failed: {r.stderr.strip()}")
     return [line for line in r.stdout.splitlines() if line.strip()]
 
 
@@ -54,22 +53,22 @@ OVERRIDES = "python/uqs/process_overrides.csv"
 BUNDLE_OVERRIDES = "python/uqs/bundle_overrides.csv"
 
 
-def staged_bundle_files() -> list[str]:
+def staged_bundle_files(root: Path) -> list[str]:
     """Staged bundle files, ledger or host overrides: additions or changes."""
     r = subprocess.run(
         ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
-        cwd=REPO,
+        cwd=root,
         capture_output=True,
         text=True,
         check=False,
     )
     if r.returncode:
-        raise SystemExit(f"check_bundle_blocks: git diff failed: {r.stderr.strip()}")
+        raise SystemExit(f"bundle-blocks: git diff failed: {r.stderr.strip()}")
     staged = set(r.stdout.split())
     found = [f"{OVERRIDES} (host and bundle overrides)"] if OVERRIDES in staged else []
     if BUNDLE_OVERRIDES in staged:
         found.append(f"{BUNDLE_OVERRIDES} (installed bundle overrides)")
-    ledger_path = REPO / LEDGER
+    ledger_path = root / LEDGER
     if not ledger_path.is_file():
         if LEDGER in staged:
             found.append(f"{LEDGER} (the bundle ledger)")
@@ -91,38 +90,41 @@ def staged_bundle_files() -> list[str]:
     return found
 
 
-def main() -> int:
-    found = staged_blocks()
-    files = staged_bundle_files()
+def run(root: Path) -> int:
+    """Refuse what `root`'s index would commit; the exit status. Each kind of
+    finding carries its own advice, so the rule reports them itself: on
+    stderr, with the one-line pass on stdout."""
+    found = staged_blocks(root)
+    files = staged_bundle_files(root)
     if not found and not files:
-        print("check_bundle_blocks: no bundle blocks or bundle files staged")
+        print("bundle-blocks: no bundle blocks or bundle files staged")
         return 0
     if files:
         print(
-            "check_bundle_blocks: staged files contain host or installed bundle state "
-            "that must not become repository content:\n"
+            "bundle-blocks: staged files contain host or installed bundle state "
+            "that must not become repository content:\n",
+            file=sys.stderr,
         )
         for line in files:
-            print(f"  {line}")
+            print(f"  {line}", file=sys.stderr)
         print(
             "\nUnstage them (git restore --staged <path>), or remove the bundle first "
-            "(uqs job remove).\n"
+            "(uqs job remove).\n",
+            file=sys.stderr,
         )
     if not found:
         return 1
     print(
-        "check_bundle_blocks: tracked q files carry bundle blocks - an operator's\n"
+        "bundle-blocks: tracked q files carry bundle blocks - an operator's\n"
         "installed bundle, which `uqs runtime prepare` writes into the working tree\n"
-        "and which must not become tree content:\n"
+        "and which must not become tree content:\n",
+        file=sys.stderr,
     )
     for line in found:
-        print(f"  {line}")
+        print(f"  {line}", file=sys.stderr)
     print(
         "\nUnstage those hunks (the blocks stay in your working tree), or uninstall\n"
-        "the bundle before committing."
+        "the bundle before committing.",
+        file=sys.stderr,
     )
     return 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())

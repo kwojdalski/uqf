@@ -196,7 +196,7 @@ repos:
 
       - id: bundle-blocks
         name: Refuse an installed bundle's blocks in tracked q files
-        entry: uv run python scripts/gates/check_bundle_blocks.py
+        entry: uv run python scripts/gates/check.py bundle-blocks
         language: system
         pass_filenames: false
         always_run: true

@@ -300,7 +300,7 @@ invariants, is `uqf-q-traps.md`.
 - **W2** Never hand-write a bundle job into the tree. A sidecar bundle lives in
   its own folder, and `uqs job install`/`uqs runtime prepare` writes it into a
   working tree. The commit gate refuses its blocks, its job files and its ledger
-  (`scripts/gates/check_bundle_blocks.py`, `docs/guides/sidecar-bundles.md`).
+  (`scripts/gates/check.py bundle-blocks`, `docs/guides/sidecar-bundles.md`).
 
 --------------------------------------------------------------------------------
 

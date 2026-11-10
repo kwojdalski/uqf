@@ -34,9 +34,10 @@ WHAT THE COMMAND OWNS, and every check shares:
 
 Every check is read-only and needs no q, no configuration and no
 credentials. All but diagram-ports need only the standard library; that one
-reads the stack's ports through uqs, so its hook runs it under `uv run`. Not
-every gate under scripts/gates/ is one - the HDB utilities there operate on
-data, and the rest have not moved here.
+reads the stack's ports through uqs, so its hook runs it under `uv run`.
+bundle-blocks reads the root's git index, not its working tree. Not every gate
+under scripts/gates/ is one - the HDB utilities there operate on data, and the
+rest have not moved here.
 """
 
 from __future__ import annotations
@@ -195,6 +196,11 @@ def _diagram_ports(ports: ModuleType, root: Path) -> int:
     return ports.run(root)
 
 
+def _bundle_blocks(blocks: ModuleType, root: Path) -> int:
+    """Nothing in the index makes an operator's installed bundle tree content (#881)."""
+    return blocks.run(root)
+
+
 @dataclass(frozen=True)
 class Check:
     name: str
@@ -270,6 +276,12 @@ CHECKS: dict[str, Check] = {
             "every `procname :port` label in docs/diagrams matches the stack's ports",
             "diagram_ports",
             _diagram_ports,
+        ),
+        Check(
+            "bundle-blocks",
+            "the index stages no installed bundle's blocks, files, ledger or host overrides",
+            "bundle_blocks",
+            _bundle_blocks,
         ),
         Check(
             "vendored",

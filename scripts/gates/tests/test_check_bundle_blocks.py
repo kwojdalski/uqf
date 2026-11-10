@@ -13,6 +13,7 @@ import importlib.util
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -21,8 +22,8 @@ from uqs.deploy.artifact import ReleaseError
 from uqs.deploy.foreign_blocks import refuse as refuse_foreign_blocks
 from uqs.stack.bundle_blocks import block_names, with_block
 
-GATE = Path(__file__).resolve().parents[1] / "check_bundle_blocks.py"
-_spec = importlib.util.spec_from_file_location("check_bundle_blocks", GATE)
+GATE = Path(__file__).resolve().parents[1] / "policy" / "bundle_blocks.py"
+_spec = importlib.util.spec_from_file_location("bundle_blocks", GATE)
 assert _spec and _spec.loader
 gate = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gate)
@@ -36,12 +37,11 @@ def _no_enclosing_repository(monkeypatch):
         monkeypatch.delenv(name)
 
 
-def _repo(tmp_path: Path, monkeypatch) -> Path:
+def _repo(tmp_path: Path) -> Path:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     (tmp_path / "src" / "etl").mkdir(parents=True)
     (tmp_path / TABLES).write_text("trade:([] sym:`symbol$())\n")
     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
-    monkeypatch.setattr(gate, "REPO", tmp_path)
     return tmp_path
 
 
@@ -50,24 +50,24 @@ def _install(root: Path, name: str) -> None:
     path.write_text(with_block(path.read_text(), name, ["pbt:([] x:`long$())"], TABLES))
 
 
-def test_a_clean_index_passes(tmp_path, monkeypatch):
-    _repo(tmp_path, monkeypatch)
-    assert gate.main() == 0
+def test_a_clean_index_passes(tmp_path):
+    _repo(tmp_path)
+    assert gate.run(tmp_path) == 0
 
 
-def test_a_block_only_in_the_working_tree_passes(tmp_path, monkeypatch):
+def test_a_block_only_in_the_working_tree_passes(tmp_path):
     """Prepare is allowed to write it there: only committing it is refused."""
-    root = _repo(tmp_path, monkeypatch)
+    root = _repo(tmp_path)
     _install(root, "pb")
-    assert gate.main() == 0
+    assert gate.run(tmp_path) == 0
 
 
-def test_a_staged_block_is_refused_naming_its_file(tmp_path, monkeypatch, capsys):
-    root = _repo(tmp_path, monkeypatch)
+def test_a_staged_block_is_refused_naming_its_file(tmp_path, capsys):
+    root = _repo(tmp_path)
     _install(root, "pb")
     subprocess.run(["git", "-C", str(root), "add", TABLES], check=True)
-    assert gate.main() == 1
-    out = capsys.readouterr().out
+    assert gate.run(tmp_path) == 1
+    out = capsys.readouterr().err
     assert f"{TABLES}:" in out and "/ BEGIN bundle pb" in out
 
 
@@ -104,66 +104,82 @@ def _install_files(root: Path, name: str) -> None:
     (root / gate.LEDGER).write_text(json.dumps(ledger) + "\n")
 
 
-def test_installed_files_only_in_the_working_tree_pass(tmp_path, monkeypatch):
-    root = _repo(tmp_path, monkeypatch)
+def test_installed_files_only_in_the_working_tree_pass(tmp_path):
+    root = _repo(tmp_path)
     _install_files(root, "pb")
-    assert gate.main() == 0
+    assert gate.run(tmp_path) == 0
 
 
-def test_a_staged_bundle_job_file_is_refused_naming_its_bundle(tmp_path, monkeypatch, capsys):
-    root = _repo(tmp_path, monkeypatch)
+def test_a_staged_bundle_job_file_is_refused_naming_its_bundle(tmp_path, capsys):
+    root = _repo(tmp_path)
     _install_files(root, "pb")
     subprocess.run(["git", "-C", str(root), "add", "src/etl/sources/pb.q"], check=True)
-    assert gate.main() == 1
-    assert "src/etl/sources/pb.q (bundle pb)" in capsys.readouterr().out
+    assert gate.run(tmp_path) == 1
+    assert "src/etl/sources/pb.q (bundle pb)" in capsys.readouterr().err
 
 
-def test_a_staged_bundle_connector_copy_is_refused_naming_its_bundle(tmp_path, monkeypatch, capsys):
+def test_a_staged_bundle_connector_copy_is_refused_naming_its_bundle(tmp_path, capsys):
     """#1776: a bundle's connectors are copied into the tree as its q files are,
     and listed under `connectors` - so they stay out of git the same way."""
-    root = _repo(tmp_path, monkeypatch)
+    root = _repo(tmp_path)
     copy = root / "src/etl/connectors/pb/pb_feed.py"
     copy.parent.mkdir(parents=True)
     copy.write_text("FEED = None\n")
     ledger = {"pb": {"files": {}, "connectors": ["src/etl/connectors/pb/pb_feed.py"]}}
     (root / gate.LEDGER).write_text(json.dumps(ledger) + "\n")
     subprocess.run(["git", "-C", str(root), "add", str(copy)], check=True)
-    assert gate.main() == 1
-    assert "src/etl/connectors/pb/pb_feed.py (bundle pb)" in capsys.readouterr().out
+    assert gate.run(tmp_path) == 1
+    assert "src/etl/connectors/pb/pb_feed.py (bundle pb)" in capsys.readouterr().err
 
 
-def test_the_staged_ledger_is_refused(tmp_path, monkeypatch, capsys):
-    root = _repo(tmp_path, monkeypatch)
+def test_the_staged_ledger_is_refused(tmp_path, capsys):
+    root = _repo(tmp_path)
     _install_files(root, "pb")
     subprocess.run(["git", "-C", str(root), "add", gate.LEDGER], check=True)
-    assert gate.main() == 1
-    assert "the bundle ledger" in capsys.readouterr().out
+    assert gate.run(tmp_path) == 1
+    assert "the bundle ledger" in capsys.readouterr().err
 
 
-def test_staged_process_overrides_are_refused(tmp_path, monkeypatch, capsys):
-    root = _repo(tmp_path, monkeypatch)
+def test_staged_process_overrides_are_refused(tmp_path, capsys):
+    root = _repo(tmp_path)
     path = root / gate.OVERRIDES
     path.parent.mkdir(parents=True)
     path.write_text("procname,field,value\ntap1,extras,-tables quote wide_orderbook\n")
     subprocess.run(["git", "-C", str(root), "add", str(path)], check=True)
-    assert gate.main() == 1
-    assert "host and bundle overrides" in capsys.readouterr().out
+    assert gate.run(tmp_path) == 1
+    assert "host and bundle overrides" in capsys.readouterr().err
 
 
-def test_staged_bundle_overrides_are_refused(tmp_path, monkeypatch, capsys):
-    root = _repo(tmp_path, monkeypatch)
+def test_staged_bundle_overrides_are_refused(tmp_path, capsys):
+    root = _repo(tmp_path)
     path = root / gate.BUNDLE_OVERRIDES
     path.parent.mkdir(parents=True)
     path.write_text("procname,field,value\npiggy_spread1,startwithall,0\n")
     subprocess.run(["git", "-C", str(root), "add", str(path)], check=True)
-    assert gate.main() == 1
-    assert "installed bundle overrides" in capsys.readouterr().out
+    assert gate.run(tmp_path) == 1
+    assert "installed bundle overrides" in capsys.readouterr().err
 
 
-def test_a_tree_file_the_ledger_does_not_list_still_commits(tmp_path, monkeypatch):
-    root = _repo(tmp_path, monkeypatch)
+def test_a_tree_file_the_ledger_does_not_list_still_commits(tmp_path):
+    root = _repo(tmp_path)
     _install_files(root, "pb")
     own = root / "src/etl/sources/mine.q"
     own.write_text("source_name:`mine\n")
     subprocess.run(["git", "-C", str(root), "add", "src/etl/sources/mine.q"], check=True)
-    assert gate.main() == 0
+    assert gate.run(tmp_path) == 0
+
+
+def test_check_py_runs_it_over_the_root_s_index(tmp_path, capsys):
+    """Through the one command: --root names the repository whose index is read."""
+    root = _repo(tmp_path)
+    _install(root, "pb")
+    subprocess.run(["git", "-C", str(root), "add", TABLES], check=True)
+    check = Path(__file__).resolve().parents[1] / "check.py"
+    r = subprocess.run(
+        [sys.executable, str(check), "bundle-blocks", "--root", str(root)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 1
+    assert "/ BEGIN bundle pb" in r.stderr
