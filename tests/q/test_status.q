@@ -176,3 +176,20 @@
     .qunit.assertEquals[r;1b;"the write returns"];
     .qunit.assertEquals[inside;enlist `airflow_status_st1.txt;"the final file, and no .tmp left behind"];
     .qunit.assertEquals[made;enlist `$dir;"and no other directory was created"]};
+
+/ --- neither variable set (#2653) ------------------------------------------
+
+/ The old fallback was TORQDATA,"/status" = "/status", the filesystem root.
+.qt.qetl.status.test_status_dir_refuses_when_neither_variable_is_set:{[t]
+    was_s:getenv`UQF_STATUS_DIR; was_t:getenv`TORQDATA;
+    setenv[`UQF_STATUS_DIR;""]; setenv[`TORQDATA;""];
+    r:@[.qetl.status.status_dir;::;{[e] e}];
+    setenv[`UQF_STATUS_DIR;was_s]; setenv[`TORQDATA;was_t];
+    .qunit.assertEquals[r like "status_dir: set UQF_STATUS_DIR*";1b;"a named refusal, not \"/status\""]};
+
+.qt.qetl.status.test_status_dir_falls_back_to_torqdata_status:{[t]
+    was_s:getenv`UQF_STATUS_DIR; was_t:getenv`TORQDATA;
+    setenv[`UQF_STATUS_DIR;""]; setenv[`TORQDATA;"/x/data"];
+    r:.qetl.status.status_dir[];
+    setenv[`UQF_STATUS_DIR;was_s]; setenv[`TORQDATA;was_t];
+    .qunit.assertEquals[r;"/x/data/status";"TORQDATA still locates the directory under a TorQ process"]};

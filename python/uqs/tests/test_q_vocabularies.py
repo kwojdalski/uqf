@@ -168,7 +168,7 @@ def test_status_dir_is_qs_rule(tmp_path):
     q's rule are read from status.q, then checked against Python's."""
     body = q_definition("status.q", "status_dir")
     assert "getenv`UQF_STATUS_DIR" in body
-    assert '(getenv[`TORQDATA]),"/status"' in body
+    assert "getenv`TORQDATA" in body and 't,"/status"' in body
     paths: Any = SimpleNamespace(torqdata=tmp_path / "data")  # all status_dir reads
     assert runs.status_dir(paths, {}) == tmp_path / "data" / "status"
     assert runs.status_dir(paths, {"UQF_STATUS_DIR": "/elsewhere"}) == Path("/elsewhere")
