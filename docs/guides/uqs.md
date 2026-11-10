@@ -2086,10 +2086,12 @@ Every command exits the same way for the same outcome (#1885), and
   and the command's (`UqsUsageError`) alike.
 - **1** also when a question is answered no, or not at all.
 - **3**: done in part, with the rest to retry (`EXIT_PARTIAL`, #2226). Only
-  `job backfill --attachment --wait` exits 3: its rows are written and covered,
-  but a reader has not reloaded them, and running the same command again asks
-  the readers again. The attached runner's own refusal (its exit 2) is a refusal
-  here, 1, never a usage error.
+  `job backfill --attachment --wait` (or `--follow`) exits 3: its rows are
+  written and covered, but a reader has not reloaded them, and running the same
+  command again asks the readers again. The attached runner's own refusal (its
+  exit 2) is a refusal here, 1, never a usage error.
+- **130**: `job backfill --attachment --follow` whose stream Ctrl-C ended. The
+  run goes on, and nothing is yet known of how it ends.
 
 A command asks through one helper, `safety.ask`/`safety.confirm`: `[y/N]`, so
 the default is no; an EOF or Ctrl-C is a no; and with no terminal to ask on it
