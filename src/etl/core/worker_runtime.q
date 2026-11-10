@@ -480,20 +480,20 @@
 / wrongly believes is done.
 / @param worker the worker's name
 / @param ds the dataset
-/ @param part the partition this worker fills, or ` when its dataset has no
-/   partition dimension
+/ @param part the partition this worker fills, or ` for none
 / @param spec the run specification (source_version, range_from, range_to)
 / @param from_ts window start
 / @param to_ts window end, exclusive
-/ @param publish a niladic function publishing the window, returning a row
-/   count
+/ @param publish a niladic function publishing the window, returning a row count
 / @return dict of the three effects' outcomes plus the row count
 .qetl.job.bounded.runtime.finish_window:{[worker;ds;part;spec;from_ts;to_ts;publish]
     dry:.qetl.job.bounded.runtime.is_dry_run[];
+    seen:count .qetl.io.touched;
     published:.qetl.job.bounded.runtime.commit[dry;`publish_rows;publish;()];
     rows:$[`done~first published; last published; 0];
-    covered:.qetl.job.bounded.runtime.commit[dry;`publish_coverage;.qetl.coverage.stage_completion;
-        (ds;part;spec`source_version;from_ts;to_ts;rows)];
+    wrote:$[`done~first published; .qetl.io.touched_since seen; `date$()];
+    covered:.qetl.job.bounded.runtime.commit[dry;`publish_coverage;.qetl.coverage.stage_written;
+        (ds;part;spec`source_version;from_ts;to_ts;rows;wrote)];
     / written; queryable now, or when the deployment says so (#1094)
     if[`done~first covered; .qetl.coverage.note_written[ds;part;spec`source_version; .qetl.io.defers_ready .qetl.io.for_cfg $[worker in .qetl.job.bounded.defined[]; .qetl.job.bounded.def worker; ()!()]]];
     checkpointed:.qetl.job.bounded.runtime.commit[dry;`write_checkpoint;.qetl.job.bounded.state.save_checkpoint;

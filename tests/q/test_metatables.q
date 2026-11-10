@@ -81,7 +81,7 @@
     if[count rows;`etl_coverage insert flip .qetl.coverage.schema!flip rows];};
 
 .qt.qf.util.metatables.claim:{[from_ts;to_ts;published;superseded]
-    (`trade;`;`v1;from_ts;to_ts;published;2026.09.03D00:00:00.000000000;superseded;0Ng)};
+    (`trade;`;`v1;from_ts;to_ts;published;2026.09.03D00:00:00.000000000;superseded;0Ng;`date$())};
 
 .qt.qf.util.metatables.tearDown:{[t] ![`.;();0b;enlist`etl_coverage]};
 

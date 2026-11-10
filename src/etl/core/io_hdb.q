@@ -114,6 +114,14 @@
 / Partitions written and not yet finished: root, date, table.
 .qetl.io.touched:([] hdb_root:`symbol$(); dt:`date$(); tbl:`symbol$())
 
+/ The dates of the partitions written since `touched` held `n` rows - what one window's publish
+/ added (#2549). A table that has shrunk meanwhile (a finish ran) gives all of it: more
+/ partitions to check, never fewer.
+/ @param n the row count taken before the publish
+/ @return the sorted distinct dates
+/ @eg .qetl.io.touched_since count .qetl.io.touched  ->  `date$()
+.qetl.io.touched_since:{[n] asc distinct ((n*n<=count .qetl.io.touched)_.qetl.io.touched)`dt}
+
 / An HDB writer for one root and partition column.
 / @param root the HDB directory, as a file symbol, e.g. `:/data/hdb
 / @param partition_col the timestamp column that becomes `time`, and so picks
