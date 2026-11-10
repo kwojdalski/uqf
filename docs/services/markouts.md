@@ -85,15 +85,16 @@ domain prices any symbol, so the venue is what tells a fill's dataset.
   turning a per-share or per-order fee into a share of notional is declared yet.
 - **The session close is a boundary, not a gap.** The spec's sessions are the US
   regular session (09:30 to 16:00 New York, as UTC instants, daylight time
-  included) for every weekday of 2026 to 2028. A `[open, close)` interval: a
-  pair whose horizon crosses the close, or lands exactly on it, is `unavailable`
-  with a null move, whatever book the next session has already published; so is
-  a fill outside every session. Worked by hand in
-  `src/etl/transforms/eq_markout_outputs.q` and
+  included; 13:00 on the day after Thanksgiving, Christmas Eve and 3 July) for
+  every NYSE trading day of 2026 to 2028, and by the same rule outside it. A
+  `[open, close)` interval: a pair whose horizon crosses the close, or lands
+  exactly on it, is `unavailable` with a null move, whatever book the next
+  session has already published; so is a fill outside every session. Worked by
+  hand in `src/etl/transforms/eq_markout_outputs.q` and
   `tests/q/test_hdb_eq_markout_backfill.q`: a META sell ten seconds before the
-  close is priced at 5s and unavailable at 30s and 1min. The calendar has no
-  holidays or early closes and no extended hours; it is data in the spec, so a
-  site with another declares its own.
+  close is priced at 5s and unavailable at 30s and 1min. The calendar skips NYSE
+  holidays, has no extended hours and is data in the spec, so a site with
+  another declares its own.
 - **Both clocks are the venue's.** The Databento bundle's books are on the
   `venue` clock and so are the fills `eq_fills_backfill1` declares; a fill on
   the `receipt` clock is a `clock_mismatch` row, as for crypto.
