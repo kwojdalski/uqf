@@ -143,7 +143,15 @@ def test_the_wait_ends_on_every_terminal_state_with_qs_verdict(tmp_path, monkeyp
         assert outcome is None
     else:
         assert outcome is not None
-        assert outcome[:2] == (state, 0 if state in q_exit_successes() else 1)
+        # q's exit_code: 0 for a success, its own stop code for `stopped`, 1 for a failure (#2679)
+        want = (
+            0
+            if state in q_exit_successes()
+            else q_facts.STOP_EXIT_CODE
+            if state == "stopped"
+            else 1
+        )
+        assert outcome[:2] == (state, want)
 
 
 def test_a_file_on_this_host_whose_process_is_gone_is_abandoned(tmp_path, monkeypatch):

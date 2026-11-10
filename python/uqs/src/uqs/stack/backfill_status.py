@@ -89,6 +89,10 @@ def _row(state: Path) -> dict[str, Any]:
         )
     elif result.get("error"):
         row["detail"] = str(result["error"])
+    elif result.get("outcome") == "stopped":
+        row["detail"] = (
+            "stopped on request - run the same command again to do the remaining windows"
+        )
     elif result.get("outcome") in ("failed", "partial"):
         row["detail"] = "see the log; windows already covered are skipped on a re-run"
     elif not result:

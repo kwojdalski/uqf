@@ -621,10 +621,10 @@
 / The checkpoint, coverage and reaction ledgers are per window, not per run,
 / and each already has one writer (finish_window, notify_published), so they
 / are not derived from the phase.
-.qetl.job.bounded.phases:([phase:`ready`running`idle`completed`partial`failed]
-    beat:`starting`running`idle`completed`partial`failed;
-    status:`starting`running`idle`completed`failed`failed;
-    run_ledger:`none`begin`finish`finish`finish`finish)
+.qetl.job.bounded.phases:([phase:`ready`running`idle`completed`partial`failed`stopped]
+    beat:`starting`running`idle`completed`partial`failed`stopped;
+    status:`starting`running`idle`completed`failed`failed`stopped;
+    run_ledger:`none`begin`finish`finish`finish`finish`finish)
 
 / Private: where each phase may go next. ` is a worker before init. Any phase
 / may fail; a finished run may only begin again, through `ready.
@@ -632,11 +632,11 @@
 .qetl.job.bounded.phase_edges:(!). flip (
     (`;          `ready`failed);
     (`ready;     `running`failed);
-    (`running;   `idle`completed`partial`failed);
+    (`running;   `idle`completed`partial`failed`stopped);
     (`idle;      `ready`failed);
     (`completed; `ready`failed);
     (`partial;   `ready`failed);
-    (`failed;    `ready`failed))
+    (`failed;    `ready`failed); (`stopped;   `ready`failed))
 
 / Private: move a worker's run to its next phase, and write every record the
 / move implies.
@@ -1082,7 +1082,7 @@
         ended:.qetl.job.bounded.advance_phase[worker;$[count owed; `partial; `idle];$[count owed; .qetl.job.bounded.owed_error owed; ""]];
         :`state`windows_completed`windows_failed`rows_published`cursor`reactions_owed!
             (ended;0;0;0;cursor;count owed)];
-    .qetl.job.bounded.do_window[worker] each windows;
+    stopped:.qetl.job.bounded.run_windows[worker;windows]; / stops BETWEEN windows when asked (bounded_stop.q)
     / The io manager's end-of-run step, after the LAST window and whatever
     / its outcome: a window that failed wrote nothing, but the ones that
     / succeeded may have left a store that is not finished data until this
@@ -1099,7 +1099,7 @@
     .qetl.job.bounded.write_state[worker;`progress;@[.qetl.job.bounded.read_state[worker;`progress];`reactions_owed;:;count owed]];
     p:.qetl.job.bounded.read_state[worker;`progress];
     result:`state`windows_completed`windows_failed`rows_published`cursor`reactions_owed!
-        ($[(p[`windows_failed]>0) or 0<count owed;`partial;`completed];
+        ($[stopped;`stopped;$[(p[`windows_failed]>0) or 0<count owed;`partial;`completed]];
          p`windows_completed;p`windows_failed;p`rows_published;p`cursor;count owed);
     / one summary line per run at INFO - the aggregate a fleet view wants,
     / without the per-window noise that stays at DEBUG.
@@ -1108,13 +1108,13 @@
     / per-window beat inside do_window is the one that catches a worker
     / stuck mid-window, which is the case a status file cannot show - it
     / says `running` and keeps saying it.
-    why:();
+    why:$[stopped; enlist .qetl.job.bounded.stop.why[p;count windows]; ()];
     if[p[`windows_failed]>0;
         why,:enlist string[p`windows_failed]," of ",string[count windows]," window(s) failed - they stay uncovered, so a re-run retries them"];
     if[count owed; why,:enlist .qetl.job.bounded.owed_error owed];
     / Report the phase reached, not the one asked for: a run whose ledger
     / close failed ends `failed (#675), and its result and exit code say so.
-    result[`state]:.qetl.job.bounded.advance_phase[worker;result`state;$[count why; "; " sv why; ""]];
+    result[`state]:.qetl.job.bounded.advance_phase[worker;result`state;$[count why; "; " sv why; ""]]; if[stopped; .qetl.job.bounded.stop.clear worker];
     / No cleanup here: `run` above releases on EVERY exit, this one included.
     / .
     / The release used to live on this line, which made it the happy path's
@@ -1148,13 +1148,13 @@
 / `partial` IS a failure, and deliberately: some windows failed, coverage
 / never claimed them, and a retry should pick them up.
 / @param state a run's terminal state
-/ @return 0i when an orchestrator should read success, 1i otherwise
+/ @return 0i when an orchestrator should read success, 1i for a failure, and for `stopped its own code (bounded_stop.q)
 / @eg .qetl.job.bounded.exit_code `completed  ->  0i
 / @eg .qetl.job.bounded.exit_code `idle  ->  0i
 / @eg .qetl.job.bounded.exit_code `partial  ->  1i
 / @eg .qetl.job.bounded.exit_code `failed  ->  1i
 / @eg .qetl.job.bounded.exit_code `planned  ->  0i
-.qetl.job.bounded.exit_code:{[state] $[state in `completed`idle`validated`planned; 0i; 1i]}
+.qetl.job.bounded.exit_code:{[state] $[state in `completed`idle`validated`planned; 0i; state~`stopped; .qetl.job.bounded.stop.code; 1i]}
 
 / Private: open this execution's run, tolerating an absent .qetl.run.
 / .

@@ -19,7 +19,7 @@ from uqs.attach import backfill_plan as planning
 from uqs.attach.backfill_policy import EOD_BYPASSED, EOD_FENCE, coordination_line, override_lines
 from uqs.cli import backfill_receive
 from uqs.cli.json_out import emit
-from uqs.cli.shared import EXIT_PARTIAL, EXIT_REFUSED, _die, _paths, console, log
+from uqs.cli.shared import EXIT_PARTIAL, EXIT_REFUSED, EXIT_STOPPED, _die, _paths, console, log
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import attached_logs, run_modes
 from uqs.stack import backfill as stack_backfill
@@ -40,6 +40,7 @@ def run(
     as_json: bool,
     wait: bool = False,
     follow: bool = False,
+    stop_on_exit: bool = False,
     verbose: bool = False,
     trace: bool = False,
     writer: str | None = None,
@@ -129,6 +130,7 @@ def run(
                 as_json=as_json,
                 wait=wait or follow,
                 follow=follow,
+                stop_on_exit=stop_on_exit,
                 verbose=verbose,
                 trace=trace,
                 waived=waived,
@@ -202,6 +204,7 @@ def _execute(
     trace,
     waived=None,
     follow=False,
+    stop_on_exit=False,
 ):
     att = config.load(attachment)
     try:
@@ -235,12 +238,13 @@ def _execute(
         )
         raise typer.Exit(code=0)
     if follow:
-        _stream(attachment, worker, run_)
+        _stream(attachment, worker, run_, stop_on_exit=stop_on_exit)
     elif not as_json:  # with --json, stdout is the one document below (#1685)
         console.print(
             f"[dim]waiting for {worker} (pid {run_.pid}); Ctrl-C stops waiting, not the run[/]"
         )
     runner, result = backfill_run.follow(run_)
+    backfill_run.clear_stop(run_)  # a request nothing is left to read
     code = exit_code(runner)
     backfill_audit.outcome(
         run_.audit, run_.run_id, outcome=result.get("outcome") or result.get("state", "unknown"),
@@ -259,20 +263,48 @@ def _execute(
 EXIT_INTERRUPTED = 130
 
 
-def _stream(attachment: str, worker: str, run_: backfill_run.Launched) -> None:
+def _stream(
+    attachment: str, worker: str, run_: backfill_run.Launched, *, stop_on_exit: bool = False
+) -> None:
     """`--follow` (#2677): stream the launched run's own log - the file the launch reported -
     until its process exits, every line it wrote included. Ctrl-C ends the stream, never the
-    run: it says so, names the command that follows it again, and exits EXIT_INTERRUPTED."""
+    run: it says so, names the command that follows it again, and exits EXIT_INTERRUPTED.
+
+    With `stop_on_exit` the first Ctrl-C asks THIS run to stop instead (its stop file, written
+    for the pid this invocation launched and no other) and goes on streaming until the run
+    exits, so the operator sees it finish its window and say `stopped`. A second Ctrl-C ends
+    the stream and leaves the request where it is: the run will still stop."""
     console.print(
         f"[dim]following {worker} (pid {run_.pid}); log {run_.log}; "
-        "Ctrl-C stops following, not the run[/]"
+        + (
+            "Ctrl-C asks it to stop after its current window; a second one stops following"
+            if stop_on_exit
+            else "Ctrl-C stops following, not the run"
+        )
+        + "[/]"
     )
+
+    def ask_to_stop() -> None:
+        path = backfill_run.request_stop(run_)
+        console.print(
+            f"stop requested of {worker} (pid {run_.pid}): it stops after its current window "
+            f"({path}); following until it does - Ctrl-C again stops following and leaves the "
+            "request in place",
+            markup=False,
+        )
+
     try:
-        attached_logs.stream(run_.log, worker, until=lambda: run_.process.poll() is not None)
+        attached_logs.stream(
+            run_.log,
+            worker,
+            until=lambda: run_.process.poll() is not None,
+            on_interrupt=ask_to_stop if stop_on_exit else None,
+        )
     except KeyboardInterrupt:
         console.print(
-            f"{worker} (pid {run_.pid}) is still running; follow it again with "
-            f"`{logs_command(attachment, worker)} -f`",
+            f"{worker} (pid {run_.pid}) is still running"
+            + ("; its stop request stands" if stop_on_exit and run_.stop_file.exists() else "")
+            + f"; follow it again with `{logs_command(attachment, worker)} -f`",
             markup=False,
         )
         raise typer.Exit(code=EXIT_INTERRUPTED) from None
@@ -282,9 +314,12 @@ def exit_code(runner: int) -> int:
     """The attached runner's exit code as the CLI's (#2226). The runner exits 2 for a
     refusal - the q launchers' convention - where every `uqs` command's 2 is a usage
     error, so a refusal and a failure are both EXIT_REFUSED; rows written and covered
-    that a reader has not reloaded are EXIT_PARTIAL."""
+    that a reader has not reloaded are EXIT_PARTIAL, and a run an operator stopped between two
+    windows is EXIT_STOPPED (#2679)."""
     if runner == 0:
         return 0
+    if runner == backfill_run.EXIT_STOPPED:
+        return EXIT_STOPPED
     return EXIT_PARTIAL if runner == backfill_run.EXIT_NOT_QUERYABLE else EXIT_REFUSED
 
 
@@ -329,6 +364,11 @@ def _outcome_text(worker, run_, code, result) -> str:
             f"{head}\n  appended into the writer's HDB WITHOUT CHECKS (--override any-writer); no "
             "reader was told to reload - run `\\l .` on the HDB processes. A re-run of covered "
             "windows sends nothing, but nothing guards against a duplicate append"
+        )
+    if outcome == "stopped":
+        return (
+            f"{head}\n  stopped on request between two windows: what it finished is written and "
+            "covered; the rest is not. Run the same command again to do the remaining windows"
         )
     if outcome == "queryable":
         readers = ", ".join(result.get("readers", [])) or "none"

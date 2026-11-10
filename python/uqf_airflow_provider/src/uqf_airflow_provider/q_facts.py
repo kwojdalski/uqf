@@ -12,6 +12,7 @@ STATUS_STATES: tuple[str, ...] = (
     "idle",
     "completed",
     "failed",
+    "stopped",
 )
 
 #: the states that end a run - .qetl.status.terminal_states
@@ -19,6 +20,7 @@ STATUS_TERMINAL_STATES: tuple[str, ...] = (
     "idle",
     "completed",
     "failed",
+    "stopped",
 )
 
 #: every key of a worker's status file, in order - .qetl.status.fields

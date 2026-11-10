@@ -67,6 +67,12 @@ FACTS = {
     ),
     "STATUS_FILE_PREFIX": "a status file's name before the instance id - .qetl.status.file_prefix",
     "STATUS_FILE_SUFFIX": "a status file's name after the instance id - .qetl.status.file_suffix",
+    "STOP_FILE_SUFFIX": (
+        "a stop file's name after <worker>.<pid> - .qetl.job.bounded.stop.suffix (#2677)"
+    ),
+    "STOP_EXIT_CODE": (
+        "the exit code of a run that stopped on request - .qetl.job.bounded.stop.code"
+    ),
     "BOUNDED_DATASET_TIME_COLUMNS": (
         "dataset -> time column getdata reads it by - .qetl.job.bounded.read_time_column"
     ),

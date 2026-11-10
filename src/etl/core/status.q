@@ -38,7 +38,7 @@
 
 \d .
 
-/ The lifecycle states a worker may report. Three of them are terminal, and
+/ The lifecycle states a worker may report. Four of them are terminal, and
 / the distinction between the first two is the important one - "nothing
 / to do" must not look like "failed", or an orchestrator retries a
 / successful no-op forever.
@@ -47,7 +47,10 @@
 /   idle      - ran, found no work, nothing wrong (terminal for this run)
 /   completed - ran, did work, finished the window (terminal)
 /   failed    - error set, see the error field (terminal)
-.qetl.status.status_states:`starting`running`idle`completed`failed
+/   stopped   - an operator asked for a stop (a stop file, bounded_stop.q) and the run
+/               stopped between two windows: what it finished is kept, the rest is
+/               for a re-run (terminal, and not success: it exits non-zero)
+.qetl.status.status_states:`starting`running`idle`completed`failed`stopped
 
 / Which states may legally follow which.
 / .
@@ -88,12 +91,13 @@
 / .
 / running -> running is legal and normal: it is the next window.
 .qetl.status.legal_transitions:(!). flip (
-    (`starting;  `running`idle`completed`failed);
-    (`running;   `running`idle`completed`failed);
+    (`starting;  `running`idle`completed`failed`stopped);
+    (`running;   `running`idle`completed`failed`stopped);
     / terminal states: begin again, or report a failure
     (`idle;      `starting`failed);
     (`completed; `starting`failed);
-    (`failed;    `starting`failed))
+    (`failed;    `starting`failed);
+    (`stopped;   `starting`failed))
 
 / The states that end a run: those legal_transitions lets go only to
 / `starting (begin again) or `failed - `idle`completed`failed. A reader

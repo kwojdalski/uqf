@@ -2108,8 +2108,17 @@ Every command exits the same way for the same outcome (#1885), and
   written and covered, but a reader has not reloaded them, and running the same
   command again asks the readers again. The attached runner's own refusal (its
   exit 2) is a refusal here, 1, never a usage error.
+- **4**: stopped on request (`EXIT_STOPPED`, #2679). A bounded run was asked to
+  stop - a stop file beside its lock, which
+  `job backfill --attachment --follow --stop-on-exit` writes on Ctrl-C - and
+  did, between two windows, with the windows it finished kept; the same command
+  again does the rest. The run's outcome is `stopped`. `job backfill --wait`
+  exits 4 for such a run too.
 - **130**: `job backfill --attachment --follow` whose stream Ctrl-C ended. The
-  run goes on, and nothing is yet known of how it ends.
+  run goes on, and nothing is yet known of how it ends. With `--stop-on-exit`
+  the first Ctrl-C asks the run to stop and keeps following, so the command
+  exits with the run's own code (4); a second Ctrl-C ends it with 130 and leaves
+  the request in place.
 
 A command asks through one helper, `safety.ask`/`safety.confirm`: `[y/N]`, so
 the default is no; an EOF or Ctrl-C is a no; and with no terminal to ask on it

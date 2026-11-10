@@ -63,6 +63,9 @@
 //   written_not_queryable  3  written and covered; some reader has not reloaded: re-run to retry
 //   written_forced  0  -force: appended into the writer's HDB unchecked; no reader was told to reload
 //   partial      1  some windows failed; those are neither written nor covered
+//   stopped      4  an operator asked for a stop (<state>/<worker>.<pid>.stop, bounded_stop.q): the run
+//                   stopped between two windows, what it finished is written and covered, the rest
+//                   is for a re-run
 //   failed       1  the run did not do its job
 //
 // While it runs it holds the run owner record named by -owner, which `uqs job attachment remove` reads: an
@@ -227,7 +230,7 @@ system"l scripts/dev/attached_forced.q";
 .qdev.attached.outcome:{[result;dry;forced]
     code:.qetl.job.bounded.exit_code result`state;
     owed:.qdev.attached.reload_state`dirty;
-    o:$[not 0=code; $[`partial~result`state; `partial; `failed];
+    o:$[not 0=code; $[result[`state] in `partial`stopped; result`state; `failed];
         dry; `dry_run;
         forced; `written_forced;
         owed; `written_not_queryable;

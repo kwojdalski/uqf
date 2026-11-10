@@ -14,7 +14,7 @@ from uqf_frontend.instants import AwareInstant
 #: tests/test_status.py holds to q's legal_transitions. A Literal rather than a
 #: str so the browser's `RunState` is held to it word for word (#820): typed
 #: as a string, a state q added fell through the browser to "In progress".
-RunState = Literal["starting", "running", "idle", "completed", "failed"]
+RunState = Literal["starting", "running", "idle", "completed", "failed", "stopped"]
 
 
 class OpsTableResponse(BaseModel):

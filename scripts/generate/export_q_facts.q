@@ -66,6 +66,9 @@ facts:(!) . flip (
     (`STATUS_SUCCESS_STATES;  .qetl.status.status_states where 0i=.qetl.job.bounded.exit_code each .qetl.status.status_states);
     (`STATUS_FILE_PREFIX;     .qetl.status.file_prefix);
     (`STATUS_FILE_SUFFIX;     .qetl.status.file_suffix);
+    / A clean stop is a file beside the run's lock (bounded_stop.q, #2677): the launcher writes it.
+    (`STOP_FILE_SUFFIX;       .qetl.job.bounded.stop.suffix);
+    (`STOP_EXIT_CODE;         .qetl.job.bounded.stop.code);
     / The datasets bounded workers write, keyed by name (#1363).
     (`BOUNDED_DATASET_TIME_COLUMNS;       (!) . (asc datasets[]; string .qetl.job.bounded.read_time_column each asc datasets[]));
     (`BOUNDED_DATASET_INSTRUMENT_COLUMNS; (!) . (asc datasets[]; string .qetl.job.bounded.read_instrument_column each asc datasets[]));

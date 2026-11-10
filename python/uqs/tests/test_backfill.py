@@ -665,6 +665,19 @@ def test_an_outcome_written_just_before_the_process_exited_is_still_read(tmp_pat
     assert _wait(tmp_path, monkeypatch, now=lambda: _LATER, is_up=is_up)[:2] == ("completed", 0)
 
 
+def test_wait_reports_a_run_an_operator_stopped_with_the_stop_code_not_a_failures(
+    tmp_path, monkeypatch
+):
+    """`stopped` is terminal and not a success; its code is q's own (#2679), 1 stays a failure's."""
+    from uqs.generated import q_facts
+
+    why = "stopped on request after 2 of 5 window(s) - the rest are uncovered"
+    _status(tmp_path, state="stopped", error=why)
+    assert _wait(tmp_path, monkeypatch) == ("stopped", q_facts.STOP_EXIT_CODE, why)
+    _status(tmp_path, state="failed", error="boom")
+    assert _wait(tmp_path, monkeypatch)[:2] == ("failed", 1)
+
+
 def test_wait_reports_a_run_whose_process_died_as_abandoned(tmp_path, monkeypatch):
     proc = subprocess.Popen(["true"])  # noqa: S603, S607
     proc.wait()

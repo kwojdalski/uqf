@@ -16,8 +16,9 @@ uqs job runs list --unfinished
 
 lists every run that began and never finished. That includes runs whose process
 died, which nothing else records. `uqs job runs list` shows every run with its
-outcome: `completed`, `idle` (nothing to do), `partial` (some windows failed) or
-`failed`.
+outcome: `completed`, `idle` (nothing to do), `partial` (some windows failed),
+`stopped` (an operator asked it to stop between two windows; the windows it
+finished stand and the same command again does the rest) or `failed`.
 
 The process also told whoever started it:
 
@@ -26,11 +27,12 @@ The process also told whoever started it:
   the process, so its exit code says only whether the process started. With
   `--wait` it follows the run to its outcome and exits with that: 0 for
   `completed` or `idle`, 1 for `failed`, `partial`, a refusal or a process that
-  died, and - with `--attachment` - 3 for rows written and covered that a reader
-  has not reloaded, which running the same command again retries. That includes
-  a process that died before it recorded anything, for example while loading the
-  tree: once it has had 30 seconds to start and is no longer running, the wait
-  ends and points at `uqs logs`. Use `--wait` in a script or a scheduler;
+  died, 4 for `stopped`, and - with `--attachment` - 3 for rows written and
+  covered that a reader has not reloaded, which running the same command again
+  retries. That includes a process that died before it recorded anything, for
+  example while loading the tree: once it has had 30 seconds to start and is no
+  longer running, the wait ends and points at `uqs logs`. Use `--wait` in a
+  script or a scheduler;
 - the Airflow sensor fails the task with q's error;
 - the browser's **Backfills** view shows **Failure**.
 
