@@ -363,6 +363,7 @@ FAKE_SCHEMA: list[dict[str, str]] = [
     {"table": "etl_coverage", "column": "recorded_at", "kind": "p"},
     {"table": "etl_coverage", "column": "superseded_at", "kind": "p"},
     {"table": "etl_coverage", "column": "run_id", "kind": "g"},
+    {"table": "etl_coverage", "column": "touched", "kind": "D"},
 ]
 
 #: Whether each FAKE_SCHEMA table is q's whole table ("complete") or a subset

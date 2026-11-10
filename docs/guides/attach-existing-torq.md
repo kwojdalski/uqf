@@ -18,11 +18,6 @@ uqs job attachment show NAME            what was saved for it, and its state now
 uqs job attachment list                 every attachment and its state
 ```
 
-An attachment is a noun with its own commands (#1737): `uqs job attach` and
-`uqs job detach` were its `add` and `remove`, and `uqs job contract` its
-`contract`. The old spellings still work for one release, hidden from `--help`,
-each logging the new one.
-
 What it guarantees:
 
 - **It never restarts a process.** Everything it does to a running process is an
@@ -395,23 +390,15 @@ own `on_timer` or `on_batch` orders its own steps. None of it is exactly-once.
   died, rows its error mode trapped (unless `ack` is on), and rows sent onto a
   table it no longer defines.
 
-### Migration from the stage commands
+### Retired options
 
   | Before                                             | Now                                                         |
   | ----------------------------------------           | ----------------------------------------------------------- |
-  | `uqs job attach plan NAME ...`                     | `uqs job attachment add NAME ... --dry-run`                 |
-  | `uqs job attach validate NAME`                     | `uqs job attachment add NAME --dry-run`                     |
-  | `uqs job attach apply NAME`                        | `uqs job attachment add NAME --no-start`                    |
-  | `uqs job attach verify NAME`                       | `uqs job attachment add NAME --no-start`                    |
-  | `uqs job attach start NAME`                        | `uqs job attachment add NAME`                               |
-  | `uqs job attach status NAME`                       | `uqs job attachment show NAME`, or `... add NAME --dry-run` |
-  | `uqs job attach detach NAME [--dry-run]`           | `uqs job attachment remove NAME [--dry-run]`                |
-  | `plan --no-save`                                   | `--dry-run`                                                 |
   | `uqs job attachment add NAME --remote-schema-file` | `uqs job attachment add NAME --schema-writer tickerplant`   |
 
-The old forms are refused with the command that replaced them. An attachment
-saved with `--remote-schema-file` keeps its writer: run
-`uqs job attachment add NAME` with neither option.
+`--remote-schema-file` is refused with the option that replaced it. An
+attachment saved with it keeps its writer: run `uqs job attachment add NAME`
+with neither option.
 
 ### Configuration
 

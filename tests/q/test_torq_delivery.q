@@ -191,3 +191,20 @@
     r:.qt.qtorq.delivery.with_rdbs[0;();{[unused] .qtorq.reader_handle[]}];
     .qunit.assertEquals[r;(`threw;"qtorq.reader_handle: no rdb could be reached to ask which rows of an in-doubt page are published - nothing was published");
         "so the tick fails and the page waits"]};
+
+/ --- the HDB handle a restarted job reads from (#2460) ----------------------
+
+/ .qtorq.hdb_handle with .servers.getservers answering a registered hdb and
+/ gethandlebytype answering `answer`; .servers put back afterwards.
+.qt.qtorq.delivery.hdb_handle_with:{[answer]
+    had:@[{key x};`.servers;{[e] `symbol$()}];
+    keep:{[had;n] $[n in had; (1b;get ` sv `.servers,n); (0b;::)]}[had] each `getservers`gethandlebytype;
+    `.servers.getservers set {[a;b;c;d;e] ([] procname:enlist `hdb1)};
+    `.servers.gethandlebytype set {[answer;ptype;sel] answer}[answer];
+    r:@[{.qtorq.hdb_handle[]};::;{[e] (`threw;e)}];
+    {[n;k] $[first k; (` sv `.servers,n) set last k; ![`.servers;();0b;enlist n]]}'[`getservers`gethandlebytype;keep];
+    r}
+
+.qt.qtorq.delivery.test_hdb_handle_answers_the_hdb_handle_and_null_when_none:{[t]
+    .qunit.assertEquals[.qt.qtorq.delivery.hdb_handle_with 7i;7i;"the handle .servers gives"];
+    .qunit.assertEquals[.qt.qtorq.delivery.hdb_handle_with 0Ni;0Ni;"none reachable is the null handle the job reads as no HDB"]};

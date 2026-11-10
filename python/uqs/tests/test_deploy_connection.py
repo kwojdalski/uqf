@@ -153,27 +153,9 @@ def test_the_connection_flags_read_the_same_wherever_they_are_accepted():
     assert len({tuple(v.items()) for v in seen.values()}) == 1, seen
 
 
-@pytest.mark.parametrize("command", sorted(COMMANDS))
-def test_the_old_host_spelling_still_names_the_ssh_destination(root, monkeypatch, command):
-    """#1768: `--host` is `--ssh` now, since every other --host is a q host;
-    the old spelling parses for one release, saying what to type instead."""
-    from uqs.cli import renames
-
-    said: list[tuple[str, str]] = []
-    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append((old, new)))
-    r, seen = _run(monkeypatch, command, ["--host", "h", "--dest", "/opt/uqf"])
-    assert r.exit_code == 0, r.output
-    assert seen[0].ssh == "h"
-    assert said == [("--host", "--ssh")]
-
-
-def test_rollback_to_is_release_and_the_old_spelling_still_parses(root, monkeypatch):
+def test_rollback_names_its_release_with_release(root, monkeypatch):
     """#1768: `--to` ends a time range everywhere else, so rollback names its
-    release with `--release`; `--to` parses for one release."""
-    from uqs.cli import renames
-
-    said: list[tuple[str, str]] = []
-    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append((old, new)))
+    release with `--release`."""
     to = []
     monkeypatch.setattr(
         deploy_server.rollback,
@@ -182,8 +164,6 @@ def test_rollback_to_is_release_and_the_old_spelling_still_parses(root, monkeypa
     )
     monkeypatch.setattr(deploy_server.rollback, "render", lambda result: "rendered")
     release = "20260101T000000Z-abc123456789"
-    for flag in ("--release", "--to"):
-        r = CliRunner().invoke(cli.app, ["deploy", "rollback", "prod-a", flag, release])
-        assert r.exit_code == 0, r.output
-    assert to == [release, release]
-    assert said == [("--to", "--release")]
+    r = CliRunner().invoke(cli.app, ["deploy", "rollback", "prod-a", "--release", release])
+    assert r.exit_code == 0, r.output
+    assert to == [release]

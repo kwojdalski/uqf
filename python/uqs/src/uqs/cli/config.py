@@ -20,7 +20,7 @@ from rich.table import Table
 
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.renames import alias_command, renamed, warn_renamed
+from uqs.cli.renames import warn_renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     BasePortOpt,
@@ -50,11 +50,8 @@ GetJson = json_opt(
     '{"process", "fields": [{field, value}]} - or, given a FIELD, {"process", "field", "value"}'
 )
 
-#: The old spellings `config show` still takes (#1729).
-_SHOW_RENAMES = {"--port": "--base-port", "--raw": "--unresolved"}
 
-
-@config_app.command("show", cls=renamed(_SHOW_RENAMES, ReadOnly))
+@config_app.command("show", cls=ReadOnly)
 def config_get(
     procname: Annotated[
         str, typer.Argument(metavar="PROC", help="The process", autocompletion=completion.procname)
@@ -184,7 +181,3 @@ def config_unset(
     console.print(f"{verb} {procname}.{', '.join(fields)}", markup=False)
     if dry_run:
         console.print(dry_run_note())
-
-
-#: Its name before #1733: `show` is one record, `get` was the same thing.
-alias_command(config_app, "get", "uqs config show", config_get, cls=renamed(_SHOW_RENAMES))

@@ -15,13 +15,11 @@ from pathlib import Path
 
 import pytest
 from attach_backfill_support import HdbStack, save_attachment
-from typer.testing import CliRunner
 
 from uqs.attach import backfill_owner, hdb_where
 from uqs.attach.config import AttachmentError
 from uqs.attach.facts import Host
-from uqs.cli import hdb_scope, shared, target, target_confirm
-from uqs.cli.shared import app
+from uqs.cli import hdb_scope, target, target_confirm
 from uqs.deploy import control
 from uqs.paths import UqsError, paths_for_root
 from uqs.stack import hdb_remote
@@ -214,13 +212,3 @@ def test_target_runs_both_commands_on_the_release_asking_there(command, options,
 def test_target_with_another_handle_is_refused(handle):
     with pytest.raises(UqsError, match="one of --target, --attachment and --hdb"):
         target.forward("uat", False, ["data", "alter", "pb", handle, "x"], interactive=False)
-
-
-def test_fix_is_refused_naming_apply(monkeypatch):
-    errors: list[str] = []
-    monkeypatch.setattr(shared, "log", type("L", (), {
-        "error": lambda self, m, *a: errors.append(m.format(*a)),
-        "__getattr__": lambda self, n: lambda *a, **k: None})())  # fmt: skip
-    result = CliRunner().invoke(app, ["data", "check", "--fix"])
-    assert result.exit_code == 1
-    assert errors and "--apply" in errors[0]

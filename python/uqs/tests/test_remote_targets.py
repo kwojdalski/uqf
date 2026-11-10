@@ -93,12 +93,12 @@ def test_the_target_is_read_from_the_global_options_only(argv, expected):
 @pytest.mark.parametrize(
     ("args", "changes"),
     [
-        (["summary"], False),
+        (["status"], False),
         (["logs", "rdb1", "-f"], False),
-        (["summary", "--sort", "Process"], False),
-        (["summary", "-i"], True),
-        (["summary", "--interactive"], True),
-        (["--runtime", "fx", "summary", "-i"], True),
+        (["status", "--sort", "Process"], False),
+        (["status", "-i"], True),
+        (["status", "--interactive"], True),
+        (["--runtime", "fx", "status", "-i"], True),
         (["query", "--proc", "rdb1", "1+1"], True),
         (["query", "--proc", "rdb1", "delete from `trade"], True),
         (["query", "--port", "6001", "exit 0"], True),
@@ -190,19 +190,7 @@ def test_an_unmarked_command_is_named():
 @pytest.mark.parametrize(
     ("old", "new"),
     [
-        (["summary"], ["status"]),
-        (["config", "get"], ["config", "show"]),
-        (["deploy", "verify"], ["deploy", "check"]),
-        (["data", "hdb-check"], ["data", "check"]),
-        (["data", "hdb-alter"], ["data", "alter"]),
-        (["job", "runs", "status"], ["job", "runs", "list"]),
-        (["job", "runs", "migrate"], ["job", "runs", "upgrade"]),
-        (["job", "contract", "list"], ["job", "attachment", "contract", "list"]),
-        (["job", "contract", "export"], ["job", "attachment", "contract", "export"]),
-        (["job", "attach"], ["job", "attachment", "add"]),
-        (["remove", "output"], ["clean"]),
-        (["up"], ["start"]),
-        (["raw"], ["exec"]),
+        (["job", "receive"], ["job", "receiver", "start"]),
     ],
 )
 def test_a_hidden_old_name_is_classified_as_its_new_one(old, new):
@@ -314,7 +302,7 @@ def test_connector_logs_runs_without_a_prompt_or_yes(server, capfd, monkeypatch)
 def test_classifying_warns_of_no_old_spelling(capfd):
     """Parsing to decide whether to ask rewrites an old spelling silently: the
     server's uqs warns about it, once."""
-    assert target_confirm.changes_the_server(["graph", "--port", "6000"]) is False
+    assert target_confirm.changes_the_server(["job", "preview", "feed", "--sample", "3"]) is False
     assert "renamed" not in capfd.readouterr().err
 
 

@@ -6,8 +6,7 @@ Beside cli/deploy.py, whose `build` makes the release they run under.
 These are a release's bundled components - the interpreter and framework a
 push installs with --q-mode/--torq-mode/--python-mode bundled - not a stack
 runtime (`uqs --runtime`, `uqs runtime ...`), which is why the group is
-`component` (#1740). `uqs deploy build-runtime`, its name before that, stays
-for one release as a hidden alias that prints the new spelling."""
+`component` (#1740)."""
 
 from __future__ import annotations
 
@@ -84,22 +83,6 @@ def build(
     `python`, the CPython uv installs for linux --arch, for --python-mode bundled and
     `uqs deploy build --python-component`. KX's q is never bundled."""
     _build("uqs deploy component build", component, output, arch, python, dry_run)
-
-
-@deploy_app.command("build-runtime", hidden=True, cls=renamed(OUTPUT_DIR, ChangesState))
-def build_runtime(
-    component: Component,
-    output: Output = None,
-    arch: Arch = DEFAULT_ARCH,
-    python: Python = None,
-) -> None:
-    """Renamed `uqs deploy component build` (#1740); kept for one release."""
-    log.warning(
-        "`uqs deploy build-runtime` is renamed `uqs deploy component build {}` - "
-        "the old name goes in the next release",
-        component,
-    )
-    _build("uqs deploy build-runtime", component, output, arch, python)
 
 
 def _build(

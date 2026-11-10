@@ -274,12 +274,13 @@ system "l scripts/dev/attached_calendar.q";
 
 .qt.qetl.hdb_scoped.covered:{[] .qetl.coverage.is_covered[`demo_deals;`;`$"v1~fixture";.z.p;2026.09.11D00:00:00.000000000;2026.09.14D00:00:00.000000000]}
 
-/ Run f with .qetl.coverage.stage_completion replaced by a throw, restoring it whatever happens.
+/ Run f with the ledger writer (.qetl.coverage.stage_written, which stage_completion and finish_window both reach)
+/ replaced by a throw, restoring it whatever happens.
 .qt.qetl.hdb_scoped.with_broken_ledger:{[f]
-    orig:.qetl.coverage.stage_completion;
-    `.qetl.coverage.stage_completion set {[a;b;c;d;e;g] '"injected: the coverage ledger cannot be written"};
+    orig:.qetl.coverage.stage_written;
+    `.qetl.coverage.stage_written set {[a;b;c;d;e;g;h] '"injected: the coverage ledger cannot be written"};
     r:@[f;::;{[e] (`err;e)}];
-    `.qetl.coverage.stage_completion set orig;
+    `.qetl.coverage.stage_written set orig;
     r}
 
 .qt.qetl.hdb_scoped.test_a_coverage_failure_leaves_rows_written_but_unclaimed_and_a_retry_does_not_duplicate:{[t]

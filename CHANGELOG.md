@@ -2,6 +2,47 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-11-09
+
+**Overview.** Eleven days, about 300 merged PRs and 1,255 commits. The bulk is
+correctness: three bugfinder merge trains (#2377-#2454, #2455-#2507,
+#2514-#2636) plus a 44-PR train fixing ETL durability, locking and source edge
+cases (#2302-#2337). Alongside: a cross-asset markout core (FX, crypto, equity),
+HDB compression on TorQ's `.cmp`, a CLI and frontend API that say each thing one
+way, and a Compare view / `uqs data diff`.
+
+**Changes by area**
+
+- **`src/etl` and `tests/q`:** markout contract, core transform and FX/crypto/
+  equity domains with bounded twins (#1923-#1936, #1981); markouts run as-of
+  against mapped market_data, never copied (#2288); compression policy
+  generating TorQ's compressionconfig.csv, housekeeping on a schedule,
+  write-time mode (#2146-#2155); declared log channels (#2274, #2279); backfill
+  fenced on TorQ's end of day, resubscribe after tickerplant restart,
+  quarantined unreplayable batches (#2186, #2195, #2201, #2214); cryptorust
+  Kafka book snapshots (#1495).
+- **`python/uqs`:** one vocabulary, exit-code set, confirmation model and
+  `--json` key contract (#1855-#1893, #2122, #2226, #2229); every bypass is
+  `--override NAME --reason`, credentials off the command line (#1852, #1853);
+  `uqs data compress`, `data diff`, `data migrate --reset-empty`, `job check`,
+  `target tunnel plan|check` (#2147, #2033, #2251, #1851, #2030).
+- **`python/uqf_frontend` and `web/`:** Compare, Services and Settings views,
+  SSH file browser and uploads, prepared Plotly charts, trusted-proxy identity
+  with Casbin policy, inspection mode, one API error shape and naming per fact
+  (#2029-#2046, #2104-#2111, #2238, #2255); modules split by area (#2168).
+- **`lib/`:** vendored kdb-fix-adaptor and patmok/unparse; every vendored tree
+  held to its recorded upstream (#2157, #2292).
+- **`scripts/` and CI:** registries, environment tables and CLI choices derived
+  from their authorities (#2170, #1893); owner-only PRs enforced; qlinter
+  v0.14.20 pinned; PR test suites moved to master and nightly (#2167).
+- **`docs/`:** derived facts no longer restated; generated environment tables.
+
+**Known issue:** master CI's PeachQ Python lane fails
+`test_cli_activity.py::test_an_out_of_range_limit_is_refused_not_clamped` (ANSI
+colour in the error output breaks a plain-text match).
+
+**Files changed:** 1557 files changed, 227913 insertions(+), 21518 deletions(-)
+
 ## stable/2026-10-29
 
 **Overview.** Eight days, 145 merged PRs. The headline: the uqs CLI redesign

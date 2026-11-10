@@ -24,10 +24,9 @@ from uqs.cli.attachment import attachment_app
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.renames import ATTACHMENT, alias_command, renamed
+from uqs.cli.renames import ATTACHMENT, renamed
 from uqs.cli.safety import ChangesState, Effect, ReadOnly, dry_run_note, marked
 from uqs.cli.shared import (
-    JOB_OPERATIONS_PANEL,
     ExportOpt,
     InteractiveOpt,
     _die,
@@ -35,7 +34,6 @@ from uqs.cli.shared import (
     _paths,
     _show,
     console,
-    job_app,
 )
 from uqs.cli.sorting import ReverseOpt, SortOpt, _sorted_items
 from uqs.paths import UqsError
@@ -48,12 +46,6 @@ contract_app = typer.Typer(
     "`uqs job receiver start` writes the worker's rows without the worker's code.",
 )
 attachment_app.add_typer(contract_app, name="contract")
-
-#: The old path, `uqs job contract ...`, hidden, for one release (#1737).
-legacy_contract_app = typer.Typer(no_args_is_help=True, add_completion=False, hidden=True)
-job_app.add_typer(
-    legacy_contract_app, name="contract", hidden=True, rich_help_panel=JOB_OPERATIONS_PANEL
-)
 
 
 @contract_app.command(
@@ -233,13 +225,3 @@ def _row(record: dict) -> dict:
         "approved_at": b.get("approved_at"),
         "approved_by": b.get("approved_by"),
     }
-
-
-for _verb, _fn in (("export", export), ("approve", approve), ("list", list_)):
-    alias_command(
-        legacy_contract_app,
-        _verb,
-        f"uqs job attachment contract {_verb}",
-        _fn,
-        cls=renamed(_APPROVE_RENAMES),
-    )

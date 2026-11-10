@@ -22,7 +22,7 @@ from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit, json_opt, utc_times
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.renames import ATTACHMENT, alias_command, renamed
+from uqs.cli.renames import ATTACHMENT, renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
@@ -199,22 +199,6 @@ def _overlaps(row: dict, window: timerange.TimeRange) -> bool:
     )
 
 
-def _unfinished(
-    interactive: InteractiveOpt = False, attach: AttachOpt = None, as_json: RunsJson = False
-) -> None:
-    """`job runs list --unfinished`, under the name it had before #1733."""
-    list_runs(interactive=interactive, attach=attach, unfinished=True, as_json=as_json)
-
-
-alias_command(
-    runs_app,
-    "status",
-    "uqs job runs list --unfinished",
-    _unfinished,
-    cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER)),
-)
-
-
 @runs_app.command("upgrade", cls=needs_pipelines(_LEDGER, ChangesState))
 def upgrade(
     dry_run: Annotated[
@@ -240,9 +224,6 @@ def upgrade(
         console.print(f"upgraded {upgraded} run(s) - the ledger is current", markup=False)
     else:
         console.print("the run ledger is already current - nothing to do", markup=False)
-
-
-alias_command(runs_app, "migrate", "uqs job runs upgrade", upgrade, cls=needs_pipelines(_LEDGER))
 
 
 @runs_app.command("show", cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER, ReadOnly)))

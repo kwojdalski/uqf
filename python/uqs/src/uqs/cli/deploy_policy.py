@@ -19,15 +19,11 @@ from uqs.paths import UqsError
 
 log = get_logger()
 
-#: The old per-override options, each now `--override NAME --reason REASON`
-#: (#1732), their value the reason; and the old bypass flags, which took no
-#: value (#1852). Kept, hidden, for one release.
+#: The old bypass flags, each now `--override NAME --reason REASON`, which
+#: took no value (#1852). Kept, hidden, for one release.
 OLD_SPELLINGS: dict[str, str | tuple[str, ...]] = {
-    **{f"--{name}": ("--override", name) for name in overrides.POLICY},
-    **{
-        f"--{name}": bypass_flag(name)
-        for name in (overrides.ALLOW_DIRTY, overrides.FIX_HDB, overrides.BREAK_LOCK)
-    },
+    f"--{name}": bypass_flag(name)
+    for name in (overrides.ALLOW_DIRTY, overrides.FIX_HDB, overrides.BREAK_LOCK)
 }
 #: `deploy build`'s and `deploy rollback`'s old bypass flags (#1852).
 BUILD_OLD_SPELLINGS = {

@@ -526,8 +526,7 @@ With `torq_mode = "bundled"`, the push ships TorQ itself: `lib/torq` and
 `lib/torq-finance-starter-pack` exactly as vendored, in a runtime artifact of
 their own. Many releases share one runtime, so it is built separately, by
 `uqs deploy component build`. A bundled component's runtime is not a stack
-runtime (`uqs --runtime`), which is why the command is not named for it. Its
-name before #1740, `uqs deploy build-runtime`, still works for one release.
+runtime (`uqs --runtime`), which is why the command is not named for it.
 
 ```bash
 uqs deploy component build torq      # dist/torq-runtime-<version>-<id>.tar.gz

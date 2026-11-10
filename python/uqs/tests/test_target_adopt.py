@@ -131,12 +131,12 @@ def test_apply_links_the_release_saves_the_target_and_it_then_runs(server, tmp_p
     # `uqs --target lvc ...` now reaches it, from source, through the entry point
     env = {**os.environ, "PYTHONPATH": str(Path(control.__file__).parents[2])}
     done = subprocess.run(
-        [sys.executable, "-c", "from uqs.cli import main; main()", "--target", "lvc", "summary"],
+        [sys.executable, "-c", "from uqs.cli import main; main()", "--target", "lvc", "status"],
         capture_output=True, text=True, env=env, stdin=subprocess.DEVNULL, check=False,
         timeout=60,
     )  # fmt: skip
     assert done.returncode == 0, done.stderr
-    assert "copied uqs ran: summary" in done.stdout
+    assert "copied uqs ran: status" in done.stdout
 
 
 def test_it_refuses_when_no_python_imports_uqfs_dependencies(server, tmp_path, logged):

@@ -1046,7 +1046,7 @@ def test_rule3_a_list_kind_is_not_another_nouns_name():
     from uqs.stack import listing
 
     nouns = {path.split()[-1] for path in GROUPS}
-    kinds = set(listing.LISTABLE_KINDS) - set(lists.MOVED)
+    kinds = set(listing.LISTABLE_KINDS) - set(lists.MOVED) - set(lists.REFUSED)
     clash = {k for k in kinds if {k, k.removesuffix("s"), k.removesuffix("es")} & nouns}
     assert not clash, f"`uqs list` kinds named like a noun group: {sorted(clash)}"
 
@@ -2111,7 +2111,7 @@ def test_h_is_help_everywhere():
 
 #: Every list command, as argv: each of `uqs list`'s kinds and every noun's own.
 LIST_COMMANDS = [
-    *(["list", kind] for kind in sorted(listing.LISTABLE_KINDS)),
+    *(["list", kind] for kind in sorted(listing.LISTABLE_KINDS) if kind not in lists.REFUSED),
     ["target", "list"],
     ["runtime", "list"],
     ["job", "list"],
@@ -2152,7 +2152,9 @@ def piped(monkeypatch):
 
 
 #: A noun's own list -> the kind of `uqs list` it lists.
-_NOUN_KINDS = {command.removeprefix("uqs "): kind for kind, command in lists.MOVED.items()}
+_NOUN_KINDS = {
+    command.removeprefix("uqs "): kind for kind, command in {**lists.MOVED, **lists.REFUSED}.items()
+}
 
 
 def _cells(argv: list[str]) -> list[str]:

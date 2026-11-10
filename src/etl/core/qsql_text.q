@@ -28,23 +28,11 @@
 
 \d .
 
-/ Where unparse is, from the repository root like every other loader here.
-/ `load` below names the same path as a literal: a fixed, space-free path, so
-/ there is nothing to quote (test_etl_shell_quoting).
-.qetl.qsql.unparse_file:`:lib/unparse/unparse.q
-
-/ Whether unparse is loaded.
+/ Whether unparse is loaded. This file does not load it: src/etl/init.q, which
+/ names every file from the repository root, does, when lib/unparse is there.
 / @return 1b when `.unparse.unparse` is defined
 / @eg .qetl.qsql.available[]  ->  1b
 .qetl.qsql.available:{[] `unparse in key `.unparse}
-
-/ Load unparse when this tree has it; a tree without lib/ is not an error.
-/ @return 1b when unparse is available afterwards
-/ @eg .qetl.qsql.load[]  ->  1b
-.qetl.qsql.load:{[]
-    if[not .qetl.qsql.available[];
-        if[not ()~key .qetl.qsql.unparse_file; system "l lib/unparse/unparse.q"]];
-    .qetl.qsql.available[]}
 
 / Private: run `f x` with the console at its widest, and put it back even if
 / `f` throws.
@@ -227,7 +215,5 @@
     ok:where not (::)~/: e;
     m:(pb[0] ok)!e ok;
     .qetl.qsql.render .qetl.qsql.subst[m;tree]}
-
-.qetl.qsql.load[];
 
 \d .

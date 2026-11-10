@@ -217,7 +217,8 @@
         ".odbc.open \"DRIVER=DuckDB;Database=:memory:\"";
         ".odbc.close h";
         ".odbc.eval[h; \"select 1 as a\"]";
-        ".odbc.tables h");
+        ".odbc.tables h";
+        "count .qetl.mapped.last_tops[`before`read_from!(2026.09.17D00:00:00;2026.09.10D00:00:00)]");
     reason:(
         "sends .u.upd over a tickerplant handle";
         "sends .u.upd over a tickerplant handle";
@@ -246,7 +247,8 @@
         "opens an ODBC connection, which needs odbc.so and a driver this tree does not require";
         "closes a handle that .odbc.open returned, which needs odbc.so and a driver";
         "runs SQL on a handle that .odbc.open returned, which needs odbc.so and a driver";
-        "lists tables on a handle that .odbc.open returned, which needs odbc.so and a driver"))
+        "lists tables on a handle that .odbc.open returned, which needs odbc.so and a driver";
+        "reads the partitions of the global market_data, which exists only in a process that has loaded an HDB (#2460)"))
 
 / Private: drop a trailing prose gloss - "1.016667 (2024 is a leap year)".
 / Both forms are tried by classify below rather than only the stripped one,

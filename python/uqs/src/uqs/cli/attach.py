@@ -33,7 +33,6 @@ from uqs.attach import detach as detaching
 from uqs.attach import publisher as publishing
 from uqs.cli import attach_options as o
 from uqs.cli import safety, shared
-from uqs.cli.attach_legacy import refuse_legacy
 from uqs.cli.attach_output import (
     Output,
     checks_table,
@@ -90,6 +89,12 @@ def waivers(override: list[str] | None, reason: str) -> list[str]:
     return list(safety.given("job attachment add", specs or None, reason or None))
 
 
+def _refuse_extra(out: Output, command: str, extra: list[str]) -> None:
+    """Refuse words after NAME: the command takes one attachment name."""
+    if extra:
+        out.fail(f"unexpected argument(s) {extra}: `uqs {command}` takes one attachment name")
+
+
 @attachment_app.command("add", context_settings=EXTRA_WORDS, cls=OLD_REASON)
 def attach(
     ctx: typer.Context,
@@ -140,7 +145,7 @@ def attach(
     debug = _debug_requested(ctx)
     out = Output(as_json, debug)
     out.doc = {"attachment": name, "dry_run": dry_run}
-    refuse_legacy(out, "job attachment add", name, ctx.args)
+    _refuse_extra(out, "job attachment add", ctx.args)
     if remote_schema_file:
         out.fail(o.REMOTE_SCHEMA_RETIRED)
     began = time.monotonic()
@@ -294,7 +299,7 @@ def detach(
     """
     out = Output(as_json, _debug_requested(ctx))
     out.doc = {"attachment": name, "dry_run": dry_run}
-    refuse_legacy(out, "job attachment remove", name, ctx.args)
+    _refuse_extra(out, "job attachment remove", ctx.args)
     began = time.monotonic()
     try:
         att = config.load(name)

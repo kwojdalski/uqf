@@ -148,6 +148,25 @@ TORQ_ENV_READS = {
 }
 
 
+#: A literal `system "l <file>"` or `system "cd <dir>"`: a load or a directory
+#: change that depends on the process's working directory (#2653). The target is
+#: group 2; a load whose target is built at run time (`"l ",path`) has none here
+#: and is the caller's own path, so only a literal is judged. A `cd` is judged
+#: whatever it names: it moves every other relative path in the process.
+CWD_CALL_RE = re.compile(r'system\s*"\s*(l|cd)\s+([^"]*)"')
+
+#: Relative loads and directory changes src/ makes on purpose: (file, command) ->
+#: why, the command spelt as it is written ("l odbc.k"). An entry nothing uses
+#: any more is reported, as with TORQ_ENV_READS.
+CWD_CALLS = {
+    ("src/etl/init.q", "l lib/unparse/unparse.q"): (
+        "the load plan is what names files from the repository root (like every \\l "
+        "line in it); unparse is optional, so the load is conditional on the file, "
+        "which a bare \\l could not be"
+    ),
+}
+
+
 def torq_namespaces(torq: Path = TORQ) -> frozenset[str]:
     """Every namespace TorQ defines under `torq`'s code/ and torq.q, less NOT_TORQ.
 
@@ -320,6 +339,36 @@ def unused_env_reads(root: Path) -> list[str]:
     return [f"{rel}: {var}" for rel, var in sorted(TORQ_ENV_READS) if (rel, var) not in made]
 
 
+def _cwd_calls(root: Path) -> Iterator[tuple[str, int, str]]:
+    """(file, line number, command) for every cwd-relative `system "l"`/`"cd"` in `root`'s src/."""
+    for path in sorted((root / "src").rglob("*.q")):
+        rel = path.relative_to(root).as_posix()
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith("/"):
+                continue
+            for match in CWD_CALL_RE.finditer(line):
+                verb, target = match.group(1), match.group(2).strip()
+                if verb == "l" and (not target or target[0] in "/~"):
+                    continue
+                yield rel, lineno, f"{verb} {target}".strip()
+
+
+def cwd_reach(root: Path) -> list[str]:
+    """Every relative load or directory change in `root`'s src/ that CWD_CALLS does not allow."""
+    return [
+        f'{rel}:{lineno}: system "{cmd}" depends on the working directory - '
+        "load from the plan in src/etl/init.q, or name the path absolutely"
+        for rel, lineno, cmd in _cwd_calls(root)
+        if (rel, cmd) not in CWD_CALLS
+    ]
+
+
+def unused_cwd_calls(root: Path) -> list[str]:
+    """Every CWD_CALLS entry `root`'s src/ no longer makes."""
+    made = {(rel, cmd) for rel, _, cmd in _cwd_calls(root)}
+    return [f"{rel}: {cmd}" for rel, cmd in sorted(CWD_CALLS) if (rel, cmd) not in made]
+
+
 def unused_remote_calls(root: Path) -> list[str]:
     """Every TORQ_REMOTE_CALLS entry `root`'s src/ no longer makes."""
     made = {(rel, ns) for rel, _, ns in _torq_reads(root)}
@@ -425,6 +474,21 @@ def main() -> int:
             print(f"  TORQ_ENV_READS entry no longer used: {v}", file=sys.stderr)
         print(
             "\nTake the value from a UQF_* variable, or add a reasoned TORQ_ENV_READS entry.",
+            file=sys.stderr,
+        )
+        return 1
+
+    cwd_hits = cwd_reach(REPO)
+    stale_cwd = unused_cwd_calls(REPO)
+    if cwd_hits or stale_cwd:
+        print("src/ depends on the working directory (#2653):", file=sys.stderr)
+        for v in cwd_hits:
+            print(f"  {v}", file=sys.stderr)
+        for v in stale_cwd:
+            print(f"  CWD_CALLS entry no longer used: {v}", file=sys.stderr)
+        print(
+            "\nA relative load or cd breaks under any other cwd. Load from src/etl/init.q,"
+            "\nuse an absolute path, or add a reasoned CWD_CALLS entry.",
             file=sys.stderr,
         )
         return 1

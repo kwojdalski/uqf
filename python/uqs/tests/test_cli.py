@@ -42,7 +42,6 @@ import pytest
 # The CLI is a package of command families now (see cli/entry.py): the `cli`
 # package itself still exposes the assembled `app` and `main`, and each
 # command's own helpers live in the family module that registers it.
-import rename_support
 import typer
 from plain_cli import PlainRunner
 from typer.testing import CliRunner
@@ -220,7 +219,7 @@ def _known_procs(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "command", ["start", "stop", "restart", "start --dry-run", "start -f", "restart -f", "up"]
+    "command", ["start", "stop", "restart", "start --dry-run", "start -f", "restart -f"]
 )
 def test_an_unknown_process_is_refused_before_anything_runs(monkeypatch, _known_procs, command):
     """A typo must not reach torq.sh.
@@ -299,9 +298,8 @@ def _up(
 ):
     """Run `uqs start --follow --stop-on-exit` with the stack faked: the follow starts, then
     returns as a Ctrl-C would. Returns the launch and stop recorders and the
-    follow call. `command` is `restart --follow`, or the `up` alias."""
-    start = _patch(monkeypatch, runtime, command[0] if command[0] != "up" else "start",
-                   result=Completed())  # fmt: skip
+    follow call. `command` is `restart --follow`."""
+    start = _patch(monkeypatch, runtime, command[0], result=Completed())
     stop = _patch(monkeypatch, runtime, "stop", result=Completed())
     monkeypatch.setattr(stack_logs, "resolve_procnames", lambda paths, names: names.split())
     monkeypatch.setattr(listing, "list_items", lambda *a, **kw: list(rows))
@@ -393,19 +391,6 @@ def test_restart_follow_restarts_and_on_ctrl_c_stops_what_was_not_running(monkey
     assert restart.args[1] == "rdb1 fxpositions1"
     assert follow["procnames"] == ["rdb1", "fxpositions1"]
     assert stop.args[1] == "fxpositions1"
-
-
-def test_up_is_a_hidden_alias_of_start_follow_that_names_it(monkeypatch):
-    said = []
-    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append((old, new)))
-    result, start, stop, follow = _up(
-        monkeypatch, ["rdb1", "--level", "ERROR"], already=set(), command=("up",)
-    )
-    assert result.exit_code == 0, result.output
-    assert start.args[1] == "rdb1" and follow["min_level"] == "ERROR"
-    assert stop.args[1] == "rdb1"
-    assert said == [("up", "uqs start --follow --stop-on-exit")]
-    assert _command("up").hidden
 
 
 @pytest.mark.parametrize("command", [("start", "-f"), ("restart", "--follow")])
@@ -1111,7 +1096,6 @@ def test_query_password_is_never_an_argument(monkeypatch):
 
 @pytest.mark.parametrize("command", [["query", "1"], ["schema"]])
 def test_the_inline_passwd_still_parses_for_one_release_and_warns(monkeypatch, command):
-    from uqs.cli import renames
 
     said: list[tuple[str, str]] = []
     monkeypatch.setattr(renames, "warn_secret_argv", lambda old, new: said.append((old, new)))
@@ -1299,7 +1283,7 @@ def test_list_with_no_kind_shows_the_kinds_rather_than_failing(monkeypatch):
     result = runner.invoke(cli.app, ["list"])
     assert result.exit_code == 0
     for kind in LISTABLE_KINDS:
-        assert (kind in result.stdout) is (kind not in lists.MOVED)
+        assert (kind in result.stdout) is (kind not in lists.MOVED and kind not in lists.REFUSED)
 
 
 def test_list_renders_the_items_of_a_kind(monkeypatch):
@@ -1462,18 +1446,6 @@ def test_multitail_passes_its_options_to_core_and_execs(monkeypatch):
     assert run.args == (["multitail", "x"],)
 
 
-@pytest.mark.parametrize("old", ["--columns", "-c"])
-def test_multitail_columns_is_the_old_spelling_of_pane_columns(monkeypatch, old):
-    """#1739: --columns is which columns of a table to show (`summary`)."""
-    renames = rename_support.said(monkeypatch)
-    build = _patch(monkeypatch, stack_multitail, "multitail_command", result=["multitail", "x"])
-    _patch(monkeypatch, stack_multitail, "run_multitail")
-    result = runner.invoke(cli.app, ["logs", "--multitail", old, "3"])
-    assert result.exit_code == 0
-    assert build.kwargs["columns"] == 3
-    assert renames == [rename_support.renamed(old, "--pane-columns")]
-
-
 def test_multitail_print_shows_the_command_and_runs_nothing(monkeypatch):
     _patch(monkeypatch, stack_multitail, "multitail_command", result=["multitail", "-t", "a b"])
     run = _patch(monkeypatch, stack_multitail, "run_multitail")
@@ -1491,28 +1463,18 @@ def test_a_multitail_refusal_exits_one(monkeypatch):
 # ------------------------------------------------------------------- exec
 
 
-@pytest.mark.parametrize("command", ["exec", "raw"])
-def test_exec_passes_every_extra_argument_through_verbatim(monkeypatch, command):
+def test_exec_passes_every_extra_argument_through_verbatim(monkeypatch):
     """`exec` exists to reach torq.sh verbs this CLI does not model. Dropping
     or reordering the arguments would make it useless in a way no other
-    command's failure resembles. `raw` is its old name, kept for a release."""
+    command's failure resembles."""
     rec = _patch(monkeypatch, runtime, "run_torq_sh", result=Completed())
-    runner.invoke(cli.app, [command, "--", "qcon", "gateway1", "admin:admin"])
+    runner.invoke(cli.app, ["exec", "--", "qcon", "gateway1", "admin:admin"])
     assert rec.args[1] == ["qcon", "gateway1", "admin:admin"]
 
 
 def test_exec_propagates_the_exit_code(monkeypatch):
     _patch(monkeypatch, runtime, "run_torq_sh", result=Completed(returncode=7))
     assert runner.invoke(cli.app, ["exec", "--", "debug", "rdb1"]).exit_code == 7
-
-
-def test_raw_names_exec_and_is_hidden(monkeypatch):
-    said = []
-    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: said.append((old, new)))
-    _patch(monkeypatch, runtime, "run_torq_sh", result=Completed())
-    runner.invoke(cli.app, ["raw", "--", "debug", "rdb1"])
-    assert said == [("raw", "uqs exec")]
-    assert _command("raw").hidden
 
 
 # ------------------------------------------------------------------ clean
@@ -2901,7 +2863,7 @@ def test_summary_sorts_a_numeric_column_numerically(monkeypatch):
 
 def test_summary_reverse_sorts_descending(monkeypatch):
     _summary_ok(monkeypatch, rows=[dict(r) for r in _SORTABLE])
-    argv = ["summary", "--columns", "Process,Port", "--sort", "Port", "--reverse"]
+    argv = ["status", "--columns", "Process,Port", "--sort", "Port", "--reverse"]
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
     assert _order(result.output, ["tap1", "rdb1", "hdb1"]) == ["tap1", "hdb1", "rdb1"]

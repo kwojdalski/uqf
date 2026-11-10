@@ -40,14 +40,9 @@
 
 / ---------------------------------------------------------------- SCHEMA
 
-/ DECIDED, and this tree is the authority (issue #60, closed 2026-09-16).
-/ .
-/ This block used to read "ASSUMED, NOT VERIFIED", because etl_coverage
-/ existed only in a canonical tree that could not be reached from here. That
-/ premise is gone: this repository is the primary lineage now and canonical
-/ froze canonical, so there is no other schema to verify against. The shape
-/ below IS the schema, and `.qetl.coverage.require_schema[]` confirms the
-/ code and the table agree.
+/ DECIDED, and this tree is the authority (issue #60, closed 2026-09-16). The shape
+/ below IS the schema - canonical froze, so there is no other to verify against - and
+/ `.qetl.coverage.require_schema[]` confirms the code and the table agree.
 / .
 / ON THE PARTITION KEY, WHICH IS THE PART WORTH READING
 / .
@@ -74,48 +69,42 @@
 / does, and it is the whole reason the column exists rather than being
 / recovered from the dataset name by string surgery.
 / .
-/ THE UNPARTITIONED SENTINEL is the null symbol, `. A dataset with no
-/ partition dimension records ` and reads `, and because the filter is
-/ equality, a read for ` does NOT match partitioned rows and a read for a
-/ partition does not match ` rows. The two populations cannot bleed into one
-/ another in either direction.
-/ .
-/ The sentinel is deliberately NOT refused the way a null source_version is.
-/ For source_version a null means "the caller forgot"; here it is a legitimate
-/ value meaning "this dataset has no partition dimension", and the protection
-/ against forgetting is arity, not a null check.
+/ THE UNPARTITIONED SENTINEL is the null symbol, `. A dataset with no partition
+/ dimension records ` and reads `; because the filter is equality, the two populations
+/ cannot bleed into one another. It is deliberately NOT refused the way a null
+/ source_version is: there a null means "the caller forgot", here it is a legitimate
+/ value, and the protection against forgetting is arity, not a null check.
 / .
 / ON run_id, WHICH IS THE COLUMN THAT DID GET ADDED
 / .
-/ Every column above describes
-/ the WINDOW, and none described the EXECUTION, so "which materialisations
-/ came from one run" and "were these two datasets built together" had no
-/ answer. run_id is that column. It differs from `partition` above in exactly
-/ the way that matters - it does NOT partition the data, so no read here
-/ filters on it and no existing query can aggregate across it wrongly.
-/ Adding it cannot make a gap-ridden range report as complete; it can only
-/ add attribution that was absent.
+/ Every column above describes the WINDOW; none described the EXECUTION, so "which
+/ materialisations came from one run" had no answer. run_id is that column. It does
+/ NOT partition the data, so no read filters on it and it cannot make a gap-ridden
+/ range report as complete. It is written from .qetl.run.current[] rather than passed
+/ in - see that file's header for why an ambient fact is not source_version's choice.
 / .
-/ It is written from .qetl.run.current[] rather than passed in - see that file's
-/ header for why an ambient fact is not the same as source_version's required choice.
+/ A LEDGER WRITTEN BEFORE THIS COLUMN EXISTED fails require_schema, naming run_id.
 / .
-/ A LEDGER WRITTEN BEFORE THIS COLUMN EXISTED will now fail require_schema
-/ with "missing run_id". That is deliberate and is the whole point of the
-/ guard: this file's reads would return nulls for a column the table does not
-/ have. require_schema's error names the missing column.
+/ ON touched (#2549)
+/ .
+/ A claim's endpoints say which window it covers, not which date partitions its rows
+/ landed in: a markout twin's `time` is source_time plus its furthest horizon, so a
+/ window ending at midnight writes the NEXT day. `touched` holds the dates the window's
+/ publish reported writing (.qetl.io.touched); release_dates names those, and maps the
+/ endpoints only for a claim that recorded none (a store with no date partitions, a dry
+/ run). Always adding D+1 was refused: reload_all would check a partition that may not
+/ exist. A ledger without the column fails require_schema, with the migration.
 / .
 / Deliberately one constant in one place: changing it should be an edit here
 / plus the writer's column list, not a hunt through the file.
-.qetl.coverage.schema:`dataset`partition`source_version`range_from`range_to`rows_published`recorded_at`superseded_at`run_id
+.qetl.coverage.schema:`dataset`partition`source_version`range_from`range_to`rows_published`recorded_at`superseded_at`run_id`touched
 
 / Create the ledger if absent.
 / .
 / Append-only in the strict sense: no row is ever deleted, and no fact
 / about a window is edited once written. `supersede` is the one writer that
 / updates, and it only ever stamps `superseded_at` on a row whose claim has
-/ been withdrawn - the claim itself stays readable at any earlier as-of
-/ This comment used to say "nothing in this file updates or deletes a
-/ row", which supersede made false the moment it landed here.
+/ been withdrawn - the claim itself stays readable at any earlier as-of.
 / .
 / The table lives at the ROOT, not in .qetl.coverage, because it is a published
 / database table like fx_orderbook/trades/position - it flows through the
@@ -160,7 +149,7 @@
     source_version:`symbol$();
     range_from:`timestamp$(); range_to:`timestamp$();
     rows_published:`long$(); recorded_at:`timestamp$();
-    superseded_at:`timestamp$(); run_id:0#0Ng)}
+    superseded_at:`timestamp$(); run_id:0#0Ng; touched:())}
 
 / The root ledger table. Exists so no read below names `etl_coverage` bare -
 / see init_ledger's note on namespace resolution.
@@ -233,6 +222,9 @@
     live:exec c from 0!meta .qetl.coverage.ledger[];
     missing:.qetl.coverage.schema where not .qetl.coverage.schema in live;
     extra:live where not live in .qetl.coverage.schema;
+    / short: q truncates a thrown string at 255 bytes
+    if[(`touched~first missing) and 1=count missing;
+        '"require_schema: etl_coverage is missing touched - it predates #2549; migrate: update touched:(count i)#enlist `date$() on the ledger file, or move it aside"];
     if[count missing;
         '"require_schema: etl_coverage is missing ",(", " sv string missing),
          " - this ledger was built to a different shape, and reads here would fail or return nulls"];
@@ -399,6 +391,20 @@
 / @throws error if source_version is null, or the interval is empty/reversed
 / @eg .qetl.coverage.stage_completion[`markouts;`EURUSD;`v1;2026.09.13D00:00;2026.09.14D00:00;1234]
 .qetl.coverage.stage_completion:{[dataset;partition;source_version;range_from;range_to;rows_published]
+    .qetl.coverage.stage_written[dataset;partition;source_version;range_from;range_to;rows_published;`date$()]}
+
+/ stage_completion, recording the dates the publish wrote; release_dates names these (#2549).
+/ @param dataset the dataset completed
+/ @param partition the slice of the dataset, or `
+/ @param source_version the immutable source-release label
+/ @param range_from window start
+/ @param range_to window end, exclusive
+/ @param rows_published how many rows the window published
+/ @param touched the dates the publish wrote; empty when none were reported
+/ @return the number of rows now in the ledger
+/ @throws error if source_version is null, or the interval is empty/reversed
+/ @eg .qetl.coverage.stage_written[`markouts;`;`v1;2026.09.13D00:00;2026.09.14D00:00;9;2026.09.13 2026.09.14]
+.qetl.coverage.stage_written:{[dataset;partition;source_version;range_from;range_to;rows_published;touched]
     if[null source_version;
         '"stage_completion: source_version must be set - coverage under one source release says nothing about another"];
     .qetl.coverage.require_interval[range_from;range_to];
@@ -411,7 +417,7 @@
         `etl_coverage insert row;
         .qetl.coverage.persist[]};
         enlist (dataset;partition;source_version;range_from;range_to;
-                "j"$rows_published;.z.p;.qetl.coverage.still_current;.qetl.coverage.current_run[])];
+                "j"$rows_published;.z.p;.qetl.coverage.still_current;.qetl.coverage.current_run[];asc distinct `date$touched)];
     .[{.qetl.log.ch.dbg[x;y;z]};(`coverage;"coverage recorded";
         `dataset`partition`source_version`range_from`range_to`rows!
             (dataset;partition;source_version;range_from;range_to;"j"$rows_published));::];
@@ -745,7 +751,8 @@
         c:.qetl.coverage.claims_at[k`dataset;k`partition;k`source_version;at];
         c:select from c where rows_published>0;
         if[not null w; c:select from c where recorded_at>w];
-        ds:distinct raze {[day;f;t] d0:day f; d0+til 1+(day t-1)-d0}[day]'[c`range_from;c`range_to];
+        / a claim that recorded the partitions it wrote names those (#2549); one that recorded none, its endpoints' days
+        ds:distinct raze {[day;f;t;w] $[count w; w; [d0:day f; d0+til 1+(day t-1)-d0]]}[day]'[c`range_from;c`range_to;c`touched];
         ([] dataset:count[ds]#k`dataset; partition:count[ds]#k`partition; source_version:count[ds]#k`source_version; date:asc ds)}[at;day];
     raze per each 0!distinct ks}
 
@@ -784,9 +791,9 @@
 .qetl.coverage.claims_at:{[ds;part;version;as_of]
     p:hsym `$.qetl.coverage.ledger_path[];
     t:$[()~key p; 0#([] dataset:`symbol$(); partition:`symbol$(); source_version:`symbol$();
-          range_from:`timestamp$(); range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$(); superseded_at:`timestamp$());
+          range_from:`timestamp$(); range_to:`timestamp$(); rows_published:`long$(); recorded_at:`timestamp$(); superseded_at:`timestamp$(); touched:());
         .qetl.job.bounded.state.durable_get .qetl.coverage.ledger_path[]];
-    select range_from, range_to, rows_published, recorded_at from t
+    select range_from, range_to, rows_published, recorded_at, touched from t
         where dataset=ds, partition=part, source_version=version,
               recorded_at<=as_of, as_of<superseded_at, range_to>range_from}
 

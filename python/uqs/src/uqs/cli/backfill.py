@@ -59,11 +59,7 @@ _AttachOpt = attach_opt(
     rich_help_panel=JOB_OPERATIONS_PANEL,
     cls=renamed(
         {
-            "--port": "--base-port",
-            "--force": bypass_flag(ANY_WRITER),
             "--any-writer": bypass_flag(ANY_WRITER),
-            "--debug": "--debug",
-            "--version": "--source-version",
             **ATTACHMENT,
         },
         needs_pipelines(

@@ -227,3 +227,29 @@
 .qt.qpipe.job.last_value.contract_driver:{[]
     .qetl.job.stream.reset `last_value;
     .qpipe.job.last_value.on_batch[`market_data;.qt.qpipe.job.last_value.book[enlist (`EURUSD;`LP_A;.qt.qpipe.job.last_value.d[0];1.10;1.12)]]}
+
+/ #2656: last_value and posbook each hold their own reference age, read when
+/ used, defaulted once from .qf.mkt.reference_max_age. Tuning one moves
+/ neither the other nor the library constant.
+.qt.qpipe.job.last_value.test_last_value_and_posbook_hold_separate_reference_ages:{[t]
+    lib:.qf.mkt.reference_max_age;
+    .qunit.assertEquals[(.qpipe.job.last_value.reference_max_age;.qpipe.job.posbook.reference_max_age);(lib;lib);"both default to the library's value"];
+    s:`$"BTC-USDT";
+    / binance quotes 10s before okx: stale at the 5s default, live at 20s
+    feed:{[s] .qt.qpipe.job.last_value.reset[];
+        .qpipe.job.last_value.on_batch[`market_data;.qt.qpipe.job.last_value.cbook[enlist (s;`binance;.qt.qpipe.job.last_value.d[0];100.;104.)]];
+        .qpipe.job.last_value.on_batch[`market_data;.qt.qpipe.job.last_value.cbook[enlist (s;`okx;.qt.qpipe.job.last_value.d[10];99.;103.)]];
+        (first .qt.qpipe.job.last_value.latest[])`bid};
+    tob:.qetl.enrich.add[.qpipe.job.posbook.crypto_tob;([] sym:2#s; venue:`binance`okx; time:.qt.qpipe.job.last_value.d[0 10]; bid:100 99f; ask:104 103f)];
+    fill:([] time:enlist .qt.qpipe.job.last_value.d[10]; sym:enlist s);
+    base:(feed s;first .qpipe.job.posbook.crypto_marks[tob;fill]);
+    `.qpipe.job.last_value.reference_max_age set 0D00:00:20;
+    lv:(feed s;first .qpipe.job.posbook.crypto_marks[tob;fill]);
+    `.qpipe.job.last_value.reference_max_age set lib;
+    `.qpipe.job.posbook.reference_max_age set 0D00:00:20;
+    pb:(feed s;first .qpipe.job.posbook.crypto_marks[tob;fill]);
+    `.qpipe.job.posbook.reference_max_age set lib;
+    .qunit.assertEquals[base;(99f;101f);"at the default only okx is live"];
+    .qunit.assertEquals[lv;(100f;101f);"last_value's age widened: it sees binance, posbook's mark does not move"];
+    .qunit.assertEquals[pb;(99f;101.5);"posbook's age widened: its mark sees binance, last_value does not"];
+    .qunit.assertEquals[.qf.mkt.reference_max_age;lib;"and the library constant was never the setting"]};

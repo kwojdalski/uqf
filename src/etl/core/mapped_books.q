@@ -256,6 +256,41 @@
     books:select distinct sym, source, source_time:quoted, bid, ask, clock, rid, date from (f lj got) where not null quoted, quoted>=arg`read_from;
     .qetl.mapped.arrange books}
 
+/ The latest top of book of every (sym; source) strictly before an instant, with its market: what a job that
+/ restarts needs to know of the market as it stood at the close of the previous day, without reading the market.
+/ .
+/ Run in the process that maps market_data, like tob_at. The partitions are walked newest first from the one
+/ holding `before`, each by a DATE-ONLY select (every column stays memory-mapped), the (sym; source) runs found by
+/ galloping and priced by `asof` at the instant: a few elements per run, never a scan of a day. A (sym; source)
+/ already found in a newer partition is not looked for in an older one, so the walk back over a weekend or a
+/ holiday reads only what is still missing, down to `read_from`.
+/ .
+/ The latest BOOK is returned, whether or not both its sides are quoted: the caller decides what a one-sided
+/ book is worth (a mid needs both).
+/ @param arg a dictionary: before (the exclusive instant), read_from (the oldest source_time a book may have)
+/ @return table sym, source, market, source_time, bid, ask, clock: one row per (sym; source) that has a book in range
+/ @eg count .qetl.mapped.last_tops[`before`read_from!(2026.09.17D00:00:00;2026.09.10D00:00:00)]
+.qetl.mapped.last_tops:{[arg]
+    before:arg`before;
+    empty:0#([] sym:`symbol$(); source:`symbol$(); market:`symbol$(); source_time:`timestamp$(); bid:`float$(); ask:`float$(); clock:`symbol$());
+    / `market_data, quoted: as in tob_at, a bare name is not the global under the coverage tool
+    have:desc exec distinct date from select date from `market_data where date within (`date$arg`read_from;`date$before);
+    got:empty;
+    while[count have;
+        d:first have;
+        have:1_have;
+        part:select sym,source,market,source_time,bid,ask,clock from `market_data where date=d;
+        r:.qetl.mapped.runs[part;`];
+        if[count r;
+            r:update market:`symbol$.qetl.mapped.plain (part`market) lo from r;
+            / only the (sym; source) pairs a newer partition has not answered
+            r:r where not ((r`sym),'(r`source)) in (got`sym),'(got`source);
+            if[count r;
+                j:.qetl.mapped.asof[part;select sym, source, source_time:before-1 from r];
+                j:select sym, source, source_time:quoted, bid, ask, clock from j where not null quoted, quoted>=arg`read_from;
+                got,:select sym, source, market, source_time, bid, ask, clock from (j lj `sym`source xkey select sym, source, market from r)]]];
+    got}
+
 / The newest source_time among the books of one market in the newest partition of the global `market_data` that holds
 / any, read from the END of each (sym; source) run - the run is ascending, so its last row is its newest - and the
 / market from the run's first. No where clause, no scan of a column: a few elements per run.

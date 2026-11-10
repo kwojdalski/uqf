@@ -96,10 +96,6 @@ _AttachOpt = attach_opt(
 @app.command(
     cls=renamed(
         {
-            "-n": "--lines",
-            "--print": "--show-command",
-            "--columns": "--pane-columns",
-            "-c": "--pane-columns",
             "--run": "--stamp",  # a log's stamp, not the run_id "run" means (#1890)
             **ATTACHMENT,
         },

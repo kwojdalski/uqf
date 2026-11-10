@@ -16,7 +16,6 @@ from rich.table import Table
 
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.renames import alias_command, renamed
 from uqs.cli.safety import Effect, marked
 from uqs.cli.shared import (
     BasePortOpt,
@@ -148,16 +147,12 @@ def _json(rows: list[dict], gathered, status) -> None:
     })  # fmt: skip
 
 
-#: The old spellings `status` still takes (#1729).
-_RENAMES = {"--port": "--base-port", "--debug": "--debug"}
-
-
 #: `status`'s mark: with --interactive, its browser starts, stops and restarts
 #: processes with single keys, so `uqs --target` asks first (#1893).
 _STATUS = marked(Effect.READ_ONLY, acts_when="--interactive")
 
 
-@app.command("status", cls=renamed(_RENAMES, _STATUS))
+@app.command("status", cls=_STATUS)
 def summary(
     ctx: typer.Context,
     port: BasePortOpt = None,
@@ -366,7 +361,3 @@ def summary(
         )
     _export(rows, export)
     raise typer.Exit(code=result.returncode)
-
-
-#: Its name before #1733: `status` is the state of something running.
-alias_command(app, "summary", "uqs status", summary, cls=renamed(_RENAMES))

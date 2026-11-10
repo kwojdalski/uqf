@@ -35,7 +35,7 @@ from uqs.cli.hdb_scope import (
     tables_given,
 )
 from uqs.cli.json_out import Verbatim, emit, json_opt
-from uqs.cli.renames import ATTACHMENT, alias_command, renamed
+from uqs.cli.renames import ATTACHMENT, renamed
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
@@ -77,9 +77,6 @@ def hdb_check(
     hdb: HdbOpt = None,
     apply: ApplyOpt = False,
     yes: YesOpt = False,
-    fix: Annotated[
-        bool, typer.Option("--fix", hidden=True, help="Retired: --apply, which asks first")
-    ] = False,
     as_json: CheckJson = False,
 ) -> None:
     """Check the HDB for missing tables and columns, and columns of the wrong type.
@@ -96,12 +93,6 @@ def hdb_check(
     shows the plan, asks, and writes only what is missing - additive: a table
     directory or column file that exists is never touched.
     """
-    if fix:
-        _die(UqsError(
-            "--fix is now --apply (#1732): `uqs data check --apply` shows what it would "
-            "write and asks first; add --yes where nothing can ask"
-        ))  # fmt: skip
-        return
     tables = tables_given(table)
     if tables or template or attach or hdb:
         try:
@@ -230,7 +221,3 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
         "declared TYPE changed is not repaired here.[/]"
     )
     raise typer.Exit(code=1)
-
-
-#: Its name before #1733: `check` actively probes and exits non-zero on a problem.
-alias_command(data_app, "hdb-check", "uqs data check", hdb_check, cls=renamed(ATTACHMENT))

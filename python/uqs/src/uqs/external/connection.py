@@ -114,7 +114,6 @@ BASE_PORT = FeedOption(
     "Stack base port",
     type=int,
     default_help="the runtime's own",
-    aliases=("--port",),  # #1729's rename
 )
 
 

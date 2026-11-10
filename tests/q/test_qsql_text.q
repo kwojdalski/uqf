@@ -30,6 +30,26 @@
     .qunit.assertTrue[.qetl.qsql.available[];"the tree carries lib/unparse and the module loaded it"];
     .qunit.assertEquals[.unparse.unparse parse"1+/:1 2 3*5";"+/:[1;1 2 3*5]";"upstream's own README example"]};
 
+/ qsql_text.q reads nothing from the working directory (#2653): loaded by a q
+/ whose cwd holds a lib/unparse/unparse.q of its own, it must not run it - the
+/ load plan (src/etl/init.q) names that file from the repository root, and a
+/ declaration that did it itself loaded whatever the cwd held.
+.qt.qetl.qsql.test_loading_the_module_does_not_read_the_working_directory:{[t]
+    dir:first system "mktemp -d";
+    system "mkdir -p ",dir,"/lib/unparse";
+    (hsym `$dir,"/lib/unparse/unparse.q") 0: enlist ".unparse.planted:1b";
+    root:first system "pwd";
+    (hsym `$dir,"/child.q") 0: (
+        "\\l ",root,"/src/etl/core/declared.q";
+        "\\l ",root,"/src/etl/core/qsql_text.q";
+        "-1 \"planted=\",string `planted in key `.unparse;";
+        "-1 \"available=\",string .qetl.qsql.available[];";
+        "exit 0");
+    out:system "sh -c 'cd ",dir," && ",.qt.support.q_interpreter[]," child.q < /dev/null 2>&1'";
+    system "rm -rf ",dir;
+    .qunit.assertTrue["planted=0" in out;"the cwd's own lib/unparse was not loaded: ",-3!out];
+    .qunit.assertTrue["available=0" in out;"so unparse is reported absent, not found by a path guess"]};
+
 .qt.qetl.qsql.test_upstream_cases_pass_but_one_which_this_q_cannot_parse:{[t]
     cases:.qt.qetl.qsql.upstream_cases[];
     ok:{@[{p~parse .unparse.unparse p:parse x};x;0b]} each cases;

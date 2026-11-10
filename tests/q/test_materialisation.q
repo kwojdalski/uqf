@@ -689,6 +689,32 @@
     `.qetl.io.native_day_fn set saved 1;
     .qunit.assertEquals[r`date;2026.03.02 2026.03.03;"the partitions the writer files the claim's rows under"]};
 
+/ #2549: a markout twin's `time` is source_time plus its furthest horizon, so a window ending at midnight
+/ writes the NEXT day's partition, which no mapping of the claim's endpoints can know. The claim records the
+/ partitions the writer reported touching, and release_dates names those.
+.qt.qetl.coverage.test_release_dates_name_the_partitions_a_claim_wrote:{[t]
+    .qt.support.reset_coverage_ledger[];
+    .qetl.coverage.stage_written[`rel_mk;`;`v1;2026.09.10D00:00;2026.09.11D00:00;10;2026.09.10 2026.09.11];
+    r:.qetl.coverage.release_dates[.qt.qetl.coverage.rdy[`rel_mk];.z.p];
+    .qunit.assertEquals[r`date;2026.09.10 2026.09.11;"the horizon-shifted partition is checked though the window ends at midnight"];
+    .qunit.assertEquals[.qetl.coverage.unreleased[.z.p];([] dataset:2#`rel_mk; date:2026.09.10 2026.09.11);
+        "and it is held back from maintenance until released"]};
+
+/ A claim that recorded nothing keeps the endpoint mapping; one that recorded partitions is not widened by it.
+.qt.qetl.coverage.test_release_dates_fall_back_to_the_endpoints_where_nothing_was_recorded:{[t]
+    .qt.support.reset_coverage_ledger[];
+    .qetl.coverage.stage_completion[`rel_fb;`;`v1;2026.09.10D22:00;2026.09.11D02:00;5];
+    .qetl.coverage.stage_written[`rel_fb;`;`v1;2026.09.12D00:00;2026.09.14D00:00;5;enlist 2026.09.13];
+    .qunit.assertEquals[(.qetl.coverage.release_dates[.qt.qetl.coverage.rdy[`rel_fb];.z.p])`date;2026.09.10 2026.09.11 2026.09.13;
+        "unrecorded claim: the endpoints' dates; recorded claim: exactly what was written"]};
+
+/ A ledger written before `touched` existed is refused, with the way to migrate it.
+.qt.qetl.coverage.test_a_ledger_without_touched_is_refused_with_the_migration:{[t]
+    `etl_coverage set delete touched from .qt.support.foreign_coverage_ledger[];
+    r:.qunit.assertThrows[{.qetl.coverage.require_schema[]};::;"require_schema: etl_coverage is missing touched*";"an old ledger is refused, naming the column"];
+    .qunit.assertTrue[0<count ss[r;"migrate: update touched:(count i)#enlist `date$()"];"and says how to migrate it"];
+    .qt.support.reset_coverage_ledger[]};
+
 .qt.qetl.coverage.test_release_dates_skip_a_claim_that_published_nothing:{[t]
     .qt.support.reset_coverage_ledger[];
     .qetl.coverage.stage_completion[`rel_b;`;`v1;2026.09.10D00:00;2026.09.11D00:00;0];

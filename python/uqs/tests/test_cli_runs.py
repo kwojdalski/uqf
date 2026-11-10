@@ -23,7 +23,7 @@ runner = CliRunner()
 )
 def test_migrate_says_what_it_did(monkeypatch, upgraded, said):
     monkeypatch.setattr(stack_runs, "migrate", lambda paths, dry_run=False: upgraded)
-    result = runner.invoke(cli.app, ["job", "runs", "migrate"])
+    result = runner.invoke(cli.app, ["job", "runs", "upgrade"])
     assert result.exit_code == 0, result.output
     assert said in result.output
 
@@ -33,7 +33,7 @@ def test_a_migrate_refusal_exits_one(monkeypatch):
         raise UqsError("not ours to rewrite")
 
     monkeypatch.setattr(stack_runs, "migrate", refuse)
-    assert runner.invoke(cli.app, ["job", "runs", "migrate"]).exit_code == 1
+    assert runner.invoke(cli.app, ["job", "runs", "upgrade"]).exit_code == 1
 
 
 @pytest.mark.parametrize(

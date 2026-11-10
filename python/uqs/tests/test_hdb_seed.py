@@ -278,40 +278,6 @@ def test_a_range_off_whole_days_is_refused_with_nothing_copied(seeded, argv, sai
     assert said in seen["refused"]
 
 
-def test_from_naming_a_runtime_is_the_old_spelling_and_says_the_new(seeded):
-    seen = seeded("--from", "uqf", "--to", "2026-09-03")
-    assert (seen["source"], seen["first"], seen["last"]) == ("uqf", None, date(2026, 9, 2))
-    assert seen["renamed"] == [("--from uqf", "--from-runtime uqf")]
-
-
-@pytest.mark.parametrize(
-    ("text", "want", "spelled"),
-    [
-        (
-            "2026-09-01..2026-09-30",
-            (date(2026, 9, 1), date(2026, 9, 30)),
-            "--from 2026-09-01 --to 2026-10-01",
-        ),
-        ("2026-09-01..", (date(2026, 9, 1), None), "--from 2026-09-01"),
-        ("..2026-09-30", (None, date(2026, 9, 30)), "--to 2026-10-01"),
-    ],
-)
-def test_dates_is_the_old_spelling_of_the_range(seeded, text, want, spelled):
-    seen = seeded("--from-runtime", "uqf", "--dates", text)
-    assert (seen["first"], seen["last"]) == want
-    assert seen["renamed"] == [(f"--dates {text}", spelled)]
-
-
-def test_dates_with_a_range_is_refused(seeded):
-    seen = seeded("--from-runtime", "uqf", "--dates", "2026-09-01..", "--date", "2026-09-01")
-    assert seen["refused"].startswith("--dates cannot be given with a time range")
-
-
-def test_a_malformed_dates_is_refused(seeded):
-    seen = seeded("--from-runtime", "uqf", "--dates", "2026-09-01-2026-09-30")
-    assert "is not FIRST..LAST" in seen["refused"]
-
-
 def test_no_runtime_to_copy_from_is_refused(seeded):
     seen = seeded("--from", "2026-09-01")
     assert seen["refused"].startswith("name the runtime to copy from: --from-runtime")

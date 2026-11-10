@@ -125,6 +125,7 @@ qetl.coverage,require_interval,function,2,range_from range_to
 qetl.coverage,require_schema,function,1,
 qetl.coverage,schema,value,,
 qetl.coverage,stage_completion,function,6,dataset partition source_version range_from range_to rows_published
+qetl.coverage,stage_written,function,7,dataset partition source_version range_from range_to rows_published touched
 qetl.coverage,still_current,value,,
 qetl.coverage,supersede,function,5,ds part version from_ts to_ts
 qetl.coverage,unready,table,,
@@ -221,6 +222,7 @@ qetl.io,scoped_day_of,function,1,times
 qetl.io,scoped_roots,value,,
 qetl.io,strategies,value,,
 qetl.io,touched,table,,
+qetl.io,touched_since,function,1,n
 qetl.io,use_calendar,function,1,text
 qetl.io,watch_eod,function,2,root wdb_dir
 qetl.io,write,function,3,mgr target batch
@@ -459,6 +461,8 @@ qetl.job.stream,end_of_day,function,1,dt
 qetl.job.stream,evict,function,2,table_name mask
 qetl.job.stream,for_procname,function,1,procname
 qetl.job.stream,handler,function,1,job
+qetl.job.stream,hdb_handle,function,1,
+qetl.job.stream,hdb_tops,function,2,before lookback
 qetl.job.stream,horizons,dict,,
 qetl.job.stream,initial,dict,,
 qetl.job.stream,job_root,value,,
@@ -675,6 +679,7 @@ qetl.mapped,depth_at,function,1,arg
 qetl.mapped,depth_reads,value,,
 qetl.mapped,full_check_rows,value,,
 qetl.mapped,gather,function,1,arg
+qetl.mapped,last_tops,function,1,arg
 qetl.mapped,newest,function,1,arg
 qetl.mapped,order,value,,
 qetl.mapped,plain,function,1,x
@@ -762,10 +767,8 @@ qetl.plant,with_flat,function,1,rows
 qetl.qsql,available,function,1,
 qetl.qsql,cut_at,value,,
 qetl.qsql,full,function,1,x
-qetl.qsql,load,function,1,
 qetl.qsql,of_call,function,2,f args
 qetl.qsql,render,function,1,tree
-qetl.qsql,unparse_file,value,,
 qetl.reaction,audit,function,1,
 qetl.reaction,dag_consumers,function,1,dataset
 qetl.reaction,draining,value,,
@@ -1907,6 +1910,7 @@ qpipe.job.kafka_feed,on_message,function,1,m
 qpipe.job.kafka_feed,on_start,function,1,
 qpipe.job.kafka_feed,on_timer,function,1,
 qpipe.job.kafka_feed,open,function,2,cfg topics
+qpipe.job.kafka_feed,pin_library,function,2,home lines
 qpipe.job.kafka_feed,properties,dict,,
 qpipe.job.kafka_feed,publish,value,,
 qpipe.job.kafka_feed,read_env,function,1,
@@ -1929,6 +1933,7 @@ qpipe.job.last_value,last_value,table,,
 qpipe.job.last_value,market_data,table,,
 qpipe.job.last_value,on_batch,function,2,t x
 qpipe.job.last_value,publish,value,,
+qpipe.job.last_value,reference_max_age,value,,
 qpipe.job.last_value,state,dict,,
 qpipe.job.last_value,tob,dict,,
 qpipe.job.market_data,check,function,1,rows
@@ -1976,10 +1981,14 @@ qpipe.job.posbook,market_data,table,,
 qpipe.job.posbook,mid_history,dict,,
 qpipe.job.posbook,next_book,function,2,book positions
 qpipe.job.posbook,on_batch,function,2,t x
+qpipe.job.posbook,on_replayed,function,1,
 qpipe.job.posbook,position,table,,
 qpipe.job.posbook,position_book,table,,
 qpipe.job.posbook,position_trades,table,,
 qpipe.job.posbook,publish,value,,
+qpipe.job.posbook,reference_max_age,value,,
+qpipe.job.posbook,seed_lookback,value,,
+qpipe.job.posbook,seed_mids,function,1,before
 qpipe.job.rebuild_positions,as_fills,function,1,deals
 qpipe.job.rebuild_positions,handler,function,3,dataset range_from range_to
 qpipe.job.rebuild_positions,side_sign,dict,,

@@ -7,8 +7,7 @@ These were `uqs remove output` and `uqs remove checkpoint`: a verb with nouns
 under it, one level from `uqs job remove`, which undoes a scaffold - so a user
 after "delete a worker's checkpoint" found `job remove` first. The checkpoint
 sits under `job` now, beside the `job backfill` whose state it resets. Neither
-touches the repository. The old paths stay for one release as a hidden
-`remove` group, each logging its new spelling.
+touches the repository.
 """
 
 from __future__ import annotations
@@ -19,7 +18,6 @@ import typer
 
 from uqs.cli import completion, safety
 from uqs.cli.pipelines import needs_pipelines
-from uqs.cli.renames import alias_command
 from uqs.cli.safety import ChangesState, YesOpt, dry_run_note
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
@@ -40,10 +38,6 @@ checkpoint_app = typer.Typer(
     help="A bounded worker's checkpoint, where its next run resumes: remove.",
 )
 job_app.add_typer(checkpoint_app, name="checkpoint", rich_help_panel=JOB_OPERATIONS_PANEL)
-
-#: The old verb group, hidden, for one release (#1727).
-remove_app = typer.Typer(no_args_is_help=True, add_completion=False, hidden=True)
-app.add_typer(remove_app, name="remove", hidden=True)
 
 
 DryRunOpt = Annotated[
@@ -177,13 +171,3 @@ def remove_checkpoint(
         console.print(f"cleared {worker}'s checkpoint ({path})", markup=False)
     if dry_run:
         console.print(dry_run_note())
-
-
-alias_command(remove_app, "output", "uqs clean", clean)
-alias_command(
-    remove_app,
-    "checkpoint",
-    "uqs job checkpoint remove",
-    remove_checkpoint,
-    cls=needs_pipelines(_CHECKPOINT),
-)

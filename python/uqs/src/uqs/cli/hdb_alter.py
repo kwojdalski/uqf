@@ -17,7 +17,7 @@ import typer
 from uqs.cli import completion, safety
 from uqs.cli.hdb_scope import ApplyOpt, AttachOpt, HdbOpt, YesOpt, _table, resolve, run_scoped
 from uqs.cli.json_out import json_opt
-from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
+from uqs.cli.renames import ATTACHMENT, renamed, warn_renamed
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, data_app
 from uqs.generated.q_facts import Q_ATTRIBUTES
@@ -138,7 +138,3 @@ def _old_rename(value: str | None) -> str | None:
     if not sep or not old or not new:
         raise UqsError(f"--rename {value!r} must be OLD:NEW")
     return f"{old}={new}"
-
-
-#: Its name before #1733, beside `hdb-check`: `alter` is a domain verb.
-alias_command(data_app, "hdb-alter", "uqs data alter", hdb_alter, cls=renamed(ATTACHMENT))
