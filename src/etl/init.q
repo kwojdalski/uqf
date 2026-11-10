@@ -49,6 +49,7 @@
 \l src/etl/core/log.q
 \l src/etl/core/coercion.q
 \l src/etl/core/declared.q
+\l src/etl/core/venue_market.q
 \l src/etl/core/intervals.q
 \l src/etl/core/materialisation.q
 \l src/etl/core/mapped_books.q

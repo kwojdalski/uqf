@@ -146,3 +146,20 @@
     .qunit.assertEquals[ds where {[moved;d] any moved in cols .qetl.plant.schema d}[moved] each ds;`symbol$();"report_ccy, rate_timing and contract_version live in the snapshot"];
     .qunit.assertEquals[last .qpipe.transform.markout_core.core_cols;`config_id;"config_id is the core's last column"];
     .qunit.assertEquals[ds where not {[d] `config_id in cols .qetl.plant.schema d} each ds;`symbol$();"and every dataset carries it"]};
+
+/ The datasets the registered markout domains declare, found by what each domain holds rather than by a list (#2651).
+/ @return symbol list, one per dataset a domain declares
+.qt.qetl.plant.markout.domain_datasets:{[]
+    ns:key `.qpipe.transform;
+    doms:ns where {[n] `domain in key ` sv `.qpipe.transform,n} each ns;
+    raze {[n] `symbol$(value ` sv `.qpipe.transform,n,`domain)`datasets} each doms}
+
+/ A domain's dataset that the hand-kept list omits is the dataset a new asset class adds first, and this is
+/ the line that notices; the other direction (a listed table no domain declares) is caught the same way.
+.qt.qetl.plant.markout.test_the_datasets_registered_here_are_the_ones_the_domains_declare:{[t]
+    .qunit.assertEquals[asc .qt.qetl.plant.markout.domain_datasets[];asc key .qt.qetl.plant.markout.datasets[];"every domain's datasets, and nothing else"]};
+
+/ Each dataset is written by a backfill and read by scans of its whole day, so each has a compression rule.
+.qt.qetl.plant.markout.test_every_declared_dataset_has_a_compression_rule:{[t]
+    d:.qt.qetl.plant.markout.domain_datasets[];
+    .qunit.assertEquals[d where not d in .qetl.compression.declared[];`symbol$();"a dataset left to the default policy"]};
