@@ -14,11 +14,14 @@ the runs of all of them are looked through.
 
 from __future__ import annotations
 
+import io
 import re
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.paths import UqsError, UqsPaths
+from uqs.stack import follow as follower
 from uqs.stack import log_follow, logs, runs
 from uqs.stack.backfill_status import STATE_SUBDIR
 
@@ -169,3 +172,38 @@ def show(
     sink = logs.log_sink()
     for rec in history:
         logs.emit(sink, rec, min_level)
+
+
+def stream(
+    path: Path,
+    worker: str,
+    *,
+    until: Callable[[], bool],
+    min_level: str | None = None,
+    poll: float = 0.25,
+) -> None:
+    """`uqs job backfill --attachment --follow` (#2677): ONE run's log, the file its launch
+    reported, from its first line, printed as `show` prints it, until `until()` is true - the
+    run has exited - and then every line it still held, its RESULT among them. The follower is
+    `uqs logs -f`'s (stack/follow.py), run here rather than as a child so that it stops when
+    the run does; Ctrl-C ends it as it ends `uqs logs -f`, by KeyboardInterrupt."""
+    logs.min_level_name(min_level)
+    named = _RUN.match(path.name)
+    parse = parser(RunLog(path, worker, named["stamp"] if named else "", path.parent.parent.name))
+    sink = logs.log_sink()
+
+    class _Lines(io.StringIO):
+        """follow's `out`: it writes whole lines; each is parsed and printed, none kept."""
+
+        def write(self, text: str) -> int:
+            for line in text.splitlines():
+                if (rec := parse(line)) is not None:
+                    logs.emit(sink, rec, min_level)
+            return len(text)
+
+        def writelines(self, lines: Iterable[str]) -> None:
+            for line in lines:
+                self.write(line)
+
+    # from its first line: it is this run's own file, and every line of it is this run's
+    follower.follow(path, log_follow._ALL_LINES, _Lines(), stop=until, poll=poll)

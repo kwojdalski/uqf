@@ -21,8 +21,8 @@ from uqs.cli import backfill_receive
 from uqs.cli.json_out import emit
 from uqs.cli.shared import EXIT_PARTIAL, EXIT_REFUSED, _die, _paths, console, log
 from uqs.paths import UqsError, UqsUsageError
+from uqs.stack import attached_logs, run_modes
 from uqs.stack import backfill as stack_backfill
-from uqs.stack import run_modes
 from uqs.stack.run_modes import MODES
 
 
@@ -39,6 +39,7 @@ def run(
     on_conflict: str | None,
     as_json: bool,
     wait: bool = False,
+    follow: bool = False,
     verbose: bool = False,
     trace: bool = False,
     writer: str | None = None,
@@ -67,6 +68,14 @@ def run(
             attachment,
             "; ".join(sorted(set(waived.values()))),
         )
+    if follow and writer is not None:
+        _die(
+            UqsUsageError(
+                "--follow is not supported with --writer: use --wait, and read the extractor's "
+                f"log with `{logs_command(attachment, worker)} -f`"
+            )
+        )
+        return
     if writer is not None:
         backfill_receive.extract(
             attachment, worker, version, bound_from, bound_to,
@@ -118,7 +127,8 @@ def run(
                 fixture=fixture,
                 on_conflict=on_conflict,
                 as_json=as_json,
-                wait=wait,
+                wait=wait or follow,
+                follow=follow,
                 verbose=verbose,
                 trace=trace,
                 waived=waived,
@@ -191,6 +201,7 @@ def _execute(
     verbose,
     trace,
     waived=None,
+    follow=False,
 ):
     att = config.load(attachment)
     try:
@@ -223,9 +234,11 @@ def _execute(
             + _bypass_note(plan, run_.audit),
         )
         raise typer.Exit(code=0)
-    if not as_json:  # with --json, stdout is the one document below (#1685)
+    if follow:
+        _stream(attachment, worker, run_)
+    elif not as_json:  # with --json, stdout is the one document below (#1685)
         console.print(
-            f"[dim]following {worker} (pid {run_.pid}); Ctrl-C stops waiting, not the run[/]"
+            f"[dim]waiting for {worker} (pid {run_.pid}); Ctrl-C stops waiting, not the run[/]"
         )
     runner, result = backfill_run.follow(run_)
     code = exit_code(runner)
@@ -239,6 +252,30 @@ def _execute(
         _outcome_text(worker, run_, code, result) + _bypass_note(plan, run_.audit),
     )
     raise typer.Exit(code=code)
+
+
+#: What `--follow` exits with when Ctrl-C ends the stream and the run goes on: the shell's code
+#: for a command ended by SIGINT. Not 0 - nothing is known yet of how the run will end.
+EXIT_INTERRUPTED = 130
+
+
+def _stream(attachment: str, worker: str, run_: backfill_run.Launched) -> None:
+    """`--follow` (#2677): stream the launched run's own log - the file the launch reported -
+    until its process exits, every line it wrote included. Ctrl-C ends the stream, never the
+    run: it says so, names the command that follows it again, and exits EXIT_INTERRUPTED."""
+    console.print(
+        f"[dim]following {worker} (pid {run_.pid}); log {run_.log}; "
+        "Ctrl-C stops following, not the run[/]"
+    )
+    try:
+        attached_logs.stream(run_.log, worker, until=lambda: run_.process.poll() is not None)
+    except KeyboardInterrupt:
+        console.print(
+            f"{worker} (pid {run_.pid}) is still running; follow it again with "
+            f"`{logs_command(attachment, worker)} -f`",
+            markup=False,
+        )
+        raise typer.Exit(code=EXIT_INTERRUPTED) from None
 
 
 def exit_code(runner: int) -> int:

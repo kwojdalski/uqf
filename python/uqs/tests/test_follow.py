@@ -126,3 +126,30 @@ def test_a_half_written_line_arrives_whole(tmp_path):
     pane.wait_for("half")
     pane.stop()
     assert pane.lines() == ["half"]
+
+
+def test_when_it_is_stopped_it_writes_what_the_file_still_holds(tmp_path):
+    # `uqs job backfill --follow` (#2677) stops as the run exits: its last lines - the RESULT -
+    # are written after the follower's last poll, and must still be shown
+    log = tmp_path / "run.log"
+    log.write_text("first\n")
+    out = io.StringIO()
+    reads = {"n": 0}
+
+    def stop() -> bool:
+        reads["n"] += 1
+        if reads["n"] == 3:
+            _append(log, "last-1\nlast-2\n")
+        return reads["n"] >= 3
+
+    follow(log, 10**9, out, stop=stop, poll=0.01)
+    assert out.getvalue().splitlines() == ["first", "last-1", "last-2"]
+
+
+def test_a_file_that_is_already_finished_is_written_whole(tmp_path):
+    # stopped before the first poll - a run that had exited by the time it was followed
+    log = tmp_path / "run.log"
+    log.write_text("a\nb\nRESULT {}")
+    out = io.StringIO()
+    follow(log, 10**9, out, stop=lambda: True)
+    assert out.getvalue().splitlines() == ["a", "b", "RESULT {}"]

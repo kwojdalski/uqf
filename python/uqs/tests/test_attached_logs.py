@@ -247,3 +247,27 @@ def test_a_finished_run_names_the_command_that_reads_its_log():
 
     text = backfill_attached._outcome_text(WORKER, Run, 0, {"outcome": "queryable"})
     assert f"uqs logs --attachment pb-uat --worker {WORKER}" in text
+
+
+def test_streaming_a_run_shows_its_whole_log_and_ends_when_it_has_ended(
+    paths, tmp_path, monkeypatch
+):
+    # `uqs job backfill --follow` (#2677): this run's own log, from its first line, read like
+    # `uqs logs --attachment -f` reads it, until the run is over - then what it still held
+    log = write_run(tmp_path, [DEBUG, INFO])
+    seen: list[dict[str, str]] = []
+    monkeypatch.setattr(logs, "emit", lambda sink, rec, min_level: seen.append(rec))
+    polls = {"n": 0}
+
+    def ended() -> bool:
+        polls["n"] += 1
+        if polls["n"] == 2:
+            with log.open("a") as f:
+                f.write(f"{ERROR}\n{RESULT}\n")
+        return polls["n"] >= 2
+
+    attached_logs.stream(log, WORKER, until=ended, poll=0.01)
+    assert [r["message"] for r in seen] == [
+        "flags parsed", "window 1 of 3 fetched rows=12", "run failed error=\"'type\"", RESULT,
+    ]  # fmt: skip
+    assert {r["procname"] for r in seen} == {WORKER}
