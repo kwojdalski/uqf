@@ -20,6 +20,9 @@
 \c 400 1000
 \l src/init.q
 \l src/etl/core/log.q
+/ The synthetic-book helpers the examples share: .qf.demo.book, .qf.demo.level_cols,
+/ .qf.demo.timestamps.
+\l scripts/examples/lib/example_books.q
 
 / .qetl.log suppresses DEBUG lines by default; this example's narration uses them.
 .qetl.log.debug 1b;
@@ -29,35 +32,17 @@
 / .qf.demo.level_size_unit (src/examples/example_defaults.q) are one pip (0.0001) and one
 / depth level's notional, in clean round millions.
 
-mk_book:{[spot]
-    levels:til 10;
-    bid_prices:spot-.qf.demo.pip_size*levels;
-    ask_prices:(spot+.qf.demo.pip_size)+.qf.demo.pip_size*levels;
-    bid_sizes:.qf.demo.level_size_unit*1+levels;
-    ask_sizes:(.qf.demo.level_size_unit-.qf.demo.level_size_unit%10)+.qf.demo.level_size_unit*levels;
-    `bid_prices`bid_sizes`ask_prices`ask_sizes!(bid_prices;bid_sizes;ask_prices;ask_sizes)};
-
-/ Synthetic tick timestamps, ~200ms apart with Normal(200ms,50ms) jitter -
-/ see reshape_wide_order_book_multi_pair_example.q for the same helper
-/ pattern (Normal gaps via this repo's own .qf.math.inv_ncdf) at a 1ms
-/ cadence instead; this example uses a slower cadence so a handful of
+/ The tick cadence for .qf.demo.timestamps: ~200ms apart with Normal(200ms,50ms)
+/ jitter, floored at 50ms - slower than the other examples' 1ms, so a handful of
 / ticks span a readable ~1 second window.
-mk_timestamps:{[n;start_ts]
-    mean_gap:0D00:00:00.200;
-    std_gap:0D00:00:00.050;
-    min_gap:0D00:00:00.050;
-    p:1e-9+(1-2e-9)*n?1.0;
-    .qetl.log.ch.dbg[`lifecycle;"running: .qf.math.inv_ncdf p";enlist[`example]!enlist `cross_markout];
-    shock:.qf.math.inv_ncdf p;
-    gaps:min_gap|mean_gap+std_gap*shock;
-    start_ts+sums gaps};
+tick_gaps:`mean`std`min!(0D00:00:00.200;0D00:00:00.050;0D00:00:00.050);
 
 / A tick series for one pair: n prices drifting linearly by drift_per_tick,
 / one row per timestamp in time.
 mk_tick_series:{[sym;start_spot;drift_per_tick;time]
     n:count time;
     spots:start_spot+drift_per_tick*til n;
-    ([] time; sym:n#sym),'(mk_book each spots)};
+    ([] time; sym:n#sym),'(.qf.demo.book each spots)};
 
 / 6 ticks per leg over roughly a second: AUDUSD and EURPLN drift up,
 / EURUSD drifts down - so a synthetic AUDPLN move should show up as a
@@ -69,9 +54,9 @@ mk_tick_series:{[sym;start_spot;drift_per_tick;time]
 default_n_ticks:6;
 n_ticks:$[0<count .z.x; "J"$first .z.x; default_n_ticks];
 start_ts:.z.p;
-audusd_ts:mk_timestamps[n_ticks;start_ts];
-eurusd_ts:mk_timestamps[n_ticks;start_ts];
-eurpln_ts:mk_timestamps[n_ticks;start_ts];
+audusd_ts:.qf.demo.timestamps[`cross_markout;n_ticks;start_ts;tick_gaps];
+eurusd_ts:.qf.demo.timestamps[`cross_markout;n_ticks;start_ts;tick_gaps];
+eurpln_ts:.qf.demo.timestamps[`cross_markout;n_ticks;start_ts;tick_gaps];
 audusd_q:mk_tick_series[`AUDUSD;0.6550;0.00005;audusd_ts];
 eurusd_q:mk_tick_series[`EURUSD;1.0850;-0.00002;eurusd_ts];
 eurpln_q:mk_tick_series[`EURPLN;4.2500;0.0001;eurpln_ts];
@@ -107,7 +92,7 @@ if[0.0<>first horizons_r[`markout_pips] where horizons_r[`horizon]=0D00:00:00;
 / Between the earliest time ALL 3 legs have a quote (max of each leg's
 / own first tick) and the latest time all 3 still have one (min of each
 / leg's own last tick) - each leg's tick times are independently
-/ jittered by mk_timestamps, so they aren't aligned to a shared grid.
+/ jittered by .qf.demo.timestamps, so they aren't aligned to a shared grid.
 t0:max (first audusd_ts;first eurusd_ts;first eurpln_ts);
 t1:min (last audusd_ts;last eurusd_ts;last eurpln_ts);
 .qetl.log.ch.dbg[`lifecycle;"running: .qf.exec.cross_markout_decomp[quotes;`AUDPLN;t0;t1;10000;1]";enlist[`example]!enlist `cross_markout];

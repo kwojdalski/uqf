@@ -18,6 +18,9 @@
 \c 400 1000
 \l src/init.q
 \l src/etl/core/log.q
+/ The synthetic-book helpers the examples share: .qf.demo.book, .qf.demo.level_cols,
+/ .qf.demo.timestamps.
+\l scripts/examples/lib/example_books.q
 
 / .qetl.log suppresses DEBUG lines by default; this example's narration uses them.
 .qetl.log.debug 1b;
@@ -52,22 +55,6 @@ base_prices:tick_scale*approx_spot_rates;
 size_unit:.qf.demo.level_size_unit;
 size_row_drift:.qf.demo.size_row_drift;
 
-/ Build one prefix's worth of zero-padded, per-level columns as a single
-/ dict col_name!column_vector, e.g. bid_px_00!... bid_px_09!... . row_step
-/ is the per-row drift (row_drift for prices, size_row_drift for sizes).
-mk_level_cols:{[prefix;n_levels;base;step;row_step]
-    names:`symbol$();
-    vals_list:();
-    i:0;
-    while[i<n_levels;
-        suffix:$[i<10;"0","",string i;string i];
-        col_name:`$prefix,suffix;
-        vals:(base+step*i)+(row_step*til rows_per_pair);
-        names:names,col_name;
-        vals_list:vals_list,enlist vals;
-        i+:1];
-    names!vals_list};
-
 / Synthetic per-row event timestamps, one contiguous series covering every
 / pair's rows back-to-back (so the final table's time column is strictly
 / increasing top to bottom, same as row order): each row lands ~1ms after
@@ -77,26 +64,18 @@ mk_level_cols:{[prefix;n_levels;base;step;row_step]
 / positive gap so timestamps stay strictly increasing (an unclamped
 / Normal(1ms,1ms) draw goes negative ~16% of the time, which a real feed
 / wouldn't).
-mk_timestamps:{[n;start_ts]
-    mean_gap:0D00:00:00.001;
-    std_gap:0D00:00:00.001;
-    min_gap:0D00:00:00.0001;
-    p:1e-9+(1-2e-9)*n?1.0;
-    .qetl.log.ch.dbg[`lifecycle;"running: .qf.math.inv_ncdf p";enlist[`example]!enlist `reshape_wide_order_book_multi_pair];
-    shock:.qf.math.inv_ncdf p;
-    gaps:min_gap|mean_gap+std_gap*shock;
-    start_ts+sums gaps};
-all_ts:mk_timestamps[rows_per_pair*count pairs;.z.p];
+all_ts:.qf.demo.timestamps[`reshape_wide_order_book_multi_pair;rows_per_pair*count pairs;.z.p;
+    `mean`std`min!(0D00:00:00.001;0D00:00:00.001;0D00:00:00.0001)];
 
 / One pair's whole wide table: 10-level bid/ask ladder plus the same
 / string-typed identifier columns as the single-pair example, all
 / rows_per_pair rows tagged with that pair's own sym. action/side cycle
 / through a small repeating pattern so rows aren't all identical.
 mk_pair_table:{[pair;base;ts_slice]
-    bid_px:mk_level_cols["bid_px_";10;base;neg pip_size;row_drift];
-    bid_sz:mk_level_cols["bid_sz_";10;size_unit;size_unit;size_row_drift];
-    ask_px:mk_level_cols["ask_px_";10;base+pip_size;pip_size;row_drift];
-    ask_sz:mk_level_cols["ask_sz_";10;size_unit-(size_unit%10);size_unit;size_row_drift];
+    bid_px:.qf.demo.level_cols["bid_px_";10;base;neg pip_size;row_drift;rows_per_pair];
+    bid_sz:.qf.demo.level_cols["bid_sz_";10;size_unit;size_unit;size_row_drift;rows_per_pair];
+    ask_px:.qf.demo.level_cols["ask_px_";10;base+pip_size;pip_size;row_drift;rows_per_pair];
+    ask_sz:.qf.demo.level_cols["ask_sz_";10;size_unit-(size_unit%10);size_unit;size_row_drift;rows_per_pair];
     level_table:flip (bid_px,bid_sz,ask_px,ask_sz);
     action_idx:(til rows_per_pair) mod 3;
     side_idx:(til rows_per_pair) mod 2;

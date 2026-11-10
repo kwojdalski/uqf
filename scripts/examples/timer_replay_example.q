@@ -68,10 +68,11 @@
 
 / ==== Step 1: pre-generate the "historical" tick series, once ====
 / Same EURUSD single-pair spot/scale as cross_markout_example.q's
-/ mk_book, scaled by .qf.demo.pip_size/.qf.demo.level_size_unit (src/examples/example_defaults.q)
+/ .qf.demo.book (scripts/examples/lib/example_books.q), scaled by .qf.demo.pip_size/
+/ .qf.demo.level_size_unit (src/examples/example_defaults.q)
 / - stands in for timersvc.q's tradeGE.N0821.csv, a fixed dataset with
 / its own recorded timestamps, generated/loaded once before replay
-/ starts. Unlike mk_book elsewhere, this builds one WIDE row (a dict of
+/ starts. Unlike .qf.demo.book, this builds one WIDE row (a dict of
 / 20 scalar bid_px_NN/bid_sz_NN/ask_px_NN/ask_sz_NN columns, not the
 / vector-of-vectors book shape) - see the header comment for why.
 mk_wide_row:{[spot]

@@ -22,6 +22,9 @@
 \c 400 1000
 \l src/init.q
 \l src/etl/core/log.q
+/ The synthetic-book helpers the examples share: .qf.demo.book, .qf.demo.level_cols,
+/ .qf.demo.timestamps.
+\l scripts/examples/lib/example_books.q
 
 / .qetl.log suppresses DEBUG lines by default; this example's narration uses them.
 .qetl.log.debug 1b;
@@ -34,35 +37,8 @@
 / across 10 levels) - typical order-of-magnitude for eFX top-of-book
 / depth on a major pair.
 
-/ A single 10-level top-of-book: bid/ask start .qf.demo.pip_size apart at spot
-/ and walk out one pip per level; sizes grow by .qf.demo.level_size_unit per level,
-/ ask offset a tenth of a level below bid so bid/ask sizes stay visually
-/ distinct - see mk_level_cols in the other example scripts for the same
-/ pattern applied to a whole table instead of one book dict.
-mk_book:{[spot]
-    levels:til 10;
-    bid_prices:spot-.qf.demo.pip_size*levels;
-    ask_prices:(spot+.qf.demo.pip_size)+.qf.demo.pip_size*levels;
-    bid_sizes:.qf.demo.level_size_unit*1+levels;
-    ask_sizes:(.qf.demo.level_size_unit-.qf.demo.level_size_unit%10)+.qf.demo.level_size_unit*levels;
-    `bid_prices`bid_sizes`ask_prices`ask_sizes!(bid_prices;bid_sizes;ask_prices;ask_sizes)};
-
-/ Synthetic per-leg event timestamps, ~1ms apart - see
-/ reshape_wide_order_book_multi_pair_example.q for the same helper with
-/ fuller commentary (Normal(1ms,1ms) gaps via this repo's own
-/ .qf.math.inv_ncdf, floored so timestamps stay strictly increasing).
-mk_timestamps:{[n;start_ts]
-    mean_gap:0D00:00:00.001;
-    std_gap:0D00:00:00.001;
-    min_gap:0D00:00:00.0001;
-    p:1e-9+(1-2e-9)*n?1.0;
-    .qetl.log.ch.dbg[`lifecycle;"running: .qf.math.inv_ncdf p";enlist[`example]!enlist `cross_book_chain];
-    shock:.qf.math.inv_ncdf p;
-    gaps:min_gap|mean_gap+std_gap*shock;
-    start_ts+sums gaps};
-
 / A quotes table - time, sym, bid_prices, bid_sizes, ask_prices, ask_sizes,
-/ one row per pair - rather than a bare dict per leg: `mk_book each spots`
+/ one row per pair - rather than a bare dict per leg: `.qf.demo.book each spots`
 / comes back as a table already (a list of dicts sharing the same keys
 / auto-collapses to one), so ,'-joining time/sym onto it is exactly the
 / meta_table,'level_table idiom the other example scripts use. Sorted
@@ -71,8 +47,10 @@ mk_timestamps:{[n;start_ts]
 / unsorted input, so cross_book_at checks and errors instead of guessing).
 pairs:`AUDUSD`EURUSD`EURPLN;
 approx_spot_rates:0.6550 1.0850 4.2500;
-time:mk_timestamps[count pairs;.z.p];
-unsorted_quotes:([] time;sym:pairs),'(mk_book each approx_spot_rates);
+/ One event timestamp per leg, ~1ms apart: Normal(1ms,1ms) gaps floored at 0.1ms.
+time:.qf.demo.timestamps[`cross_book_chain;count pairs;.z.p;
+    `mean`std`min!(0D00:00:00.001;0D00:00:00.001;0D00:00:00.0001)];
+unsorted_quotes:([] time;sym:pairs),'(.qf.demo.book each approx_spot_rates);
 quotes:`sym`time xasc unsorted_quotes;
 .qetl.log.ch.info[`lifecycle;"quotes - ",.Q.s1[count quotes]," rows, one 10-level book per pair, no wide-table reshape needed for this example";enlist[`example]!enlist `cross_book_chain];
 show quotes;
@@ -146,7 +124,7 @@ if[not manual_audpln_book~audpln_book;
 / tick1's price, not tick2's.
 tick_ts:.z.p+0D 0D00:00:00.010 0D00:00:00.020;
 tick_spots:0.6550 0.6555 0.6560;
-unsorted_audusd_ticks:([] time:tick_ts; sym:3#`AUDUSD),'(mk_book each tick_spots);
+unsorted_audusd_ticks:([] time:tick_ts; sym:3#`AUDUSD),'(.qf.demo.book each tick_spots);
 audusd_ticks:`sym`time xasc unsorted_audusd_ticks;
 .qetl.log.ch.info[`lifecycle;"audusd_ticks - ",.Q.s1[count audusd_ticks]," successive AUDUSD quotes, 10ms apart, price drifting up:";enlist[`example]!enlist `cross_book_chain];
 show audusd_ticks;
