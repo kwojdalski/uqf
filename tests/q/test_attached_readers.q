@@ -1,10 +1,10 @@
 // test_attached_readers.q - the check an attached backfill makes of its HDB readers before
-// readiness advances (#1773): scripts/dev/attached_readers.q. Load qunit.q and support.q first.
+// readiness advances (#1773): scripts/dev/attached_lib.q. Load qunit.q and support.q first.
 //
 // The reader-side lambda is run in process against a real partitioned directory built with .Q.dpft,
 // which is what it sees over IPC on a TorQ HDB; .Q.pv is set by hand to what a loaded database holds.
 
-system "l scripts/dev/attached_readers.q";
+system "l scripts/dev/attached_lib.q";
 
 .qt.qetl.attached.root:`:build/test_attached_readers
 

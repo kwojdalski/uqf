@@ -54,7 +54,7 @@ Two rules are not negotiable:
   vendored. TorQ is the authority by being *read*, not changed; extend it
   through this repository's overlay files (`scripts/torqconfig/`).
 - **No file under `src/` may know TorQ exists**
-  (`scripts/gates/check_etl_layering.py`). A q fact that comes from TorQ reaches
+  (`scripts/gates/check.py etl-layering`). A q fact that comes from TorQ reaches
   `src/` only through the `.qtorq` adapter in `scripts/processes/`, never by
   `src/` reading a TorQ file.
 

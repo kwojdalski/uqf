@@ -88,6 +88,7 @@ def _sibling(name: str):
     return module
 
 
+_git = _sibling("_git")
 hooks_full = _sibling("hooks_full")
 test_reach = _sibling("test_reach")
 
@@ -129,15 +130,7 @@ def staged_changes(environ: dict[str, str] | None = None) -> list[tuple[str, str
     env = os.environ if environ is None else environ
     start, end = env.get("PRE_COMMIT_FROM_REF"), env.get("PRE_COMMIT_TO_REF")
     which = [start, end] if start and end else ["--cached"]
-    out = subprocess.run(
-        ["git", "diff", *which, "--name-status", "--no-renames", "-z"],
-        capture_output=True,
-        text=True,
-        check=True,
-        cwd=REPO,
-    ).stdout
-    words = [w for w in out.split("\0") if w]
-    return [(words[i][0], words[i + 1]) for i in range(0, len(words) - 1, 2)]
+    return _git.changed(*which, cwd=REPO)
 
 
 def testmon_files(data: Path = TESTMON_DATA) -> set[str] | None:

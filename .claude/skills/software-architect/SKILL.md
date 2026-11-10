@@ -34,7 +34,7 @@ findings live on the seams between them:
 Two rules are load-bearing and enforced:
 
 - **No file under `src/` may know TorQ exists.** Exactly one namespace may ---
-  `.qtorq`, in `scripts/`. `scripts/gates/check_etl_layering.py` fails the build
+  `.qtorq`, in `scripts/`. `scripts/gates/check.py etl-layering` fails the build
   otherwise. This is what lets a job be tested against a recorder instead of a
   tickerplant.
 - **Derived artefacts are generated and `--check`ed, never hand-maintained**:

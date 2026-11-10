@@ -1,4 +1,4 @@
-"""Tests for `scripts/gates/check_diagram_ports.py` (#1369).
+"""Tests for the diagram-ports rule, `scripts/gates/policy/diagram_ports.py` (#1369).
 
 The gate must fire on a perturbed port and on a procname that is not a
 process, pass on the real diagrams, and refuse to pass over zero labels.
@@ -12,11 +12,11 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 _SPEC = importlib.util.spec_from_file_location(
-    "check_diagram_ports", REPO / "scripts" / "gates" / "check_diagram_ports.py"
+    "diagram_ports", REPO / "scripts" / "gates" / "policy" / "diagram_ports.py"
 )
 assert _SPEC and _SPEC.loader
 cdp = importlib.util.module_from_spec(_SPEC)
-sys.modules["check_diagram_ports"] = cdp
+sys.modules["diagram_ports"] = cdp
 _SPEC.loader.exec_module(cdp)
 
 PORTS = {"fxfeed1": 6069, "wdb1": 6055, "stp1": 6050}
@@ -27,8 +27,20 @@ def _diagrams(tmp_path: Path, body: str) -> Path:
     return tmp_path
 
 
-def test_the_real_diagrams_match_the_stack():
-    assert cdp.problems(cdp.DIAGRAMS, cdp.authoritative_ports()) == []
+def test_the_real_diagrams_match_the_stack(capsys):
+    assert cdp.problems(REPO / cdp.DIAGRAMS, cdp.authoritative_ports()) == []
+    assert cdp.run(REPO) == 0
+    assert "every diagram port label matches" in capsys.readouterr().out
+
+
+def test_a_planted_violation_fails_the_run_on_stderr(tmp_path, monkeypatch, capsys):
+    diagrams = tmp_path / cdp.DIAGRAMS
+    diagrams.mkdir(parents=True)
+    (diagrams / "t.d2").write_text('a: "fxfeed1 :6070"\n')
+    monkeypatch.setattr(cdp, "authoritative_ports", lambda _root: PORTS)
+    assert cdp.run(tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "t.d2:1: `fxfeed1 :6070` but fxfeed1 is on 6069" in err
 
 
 def test_authority_covers_uqf_and_vendored_processes():

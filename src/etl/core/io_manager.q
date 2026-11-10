@@ -59,7 +59,7 @@
 / `on_ready` is the deployment's hook, not the store's: called after every
 / flush and finish with `finished`pending`final, it decides what to do now
 / that more is finished - a TorQ runner asks the HDB to reload. Kept off the
-/ store so the store stays TorQ-free (scripts/gates/check_etl_layering.py).
+/ store so the store stays TorQ-free (scripts/gates/check.py etl-layering).
 
 / Refuse a manager that is not one, naming what is wrong.
 / .

@@ -656,6 +656,7 @@ qetl.load,selected,function,1,dirs
 qetl.load,source_files,function,1,names
 qetl.load,sources,dict,,
 qetl.load,topics,dict,,
+qetl.log,apply_flags,function,1,opts
 qetl.log,ch,dict,,
 qetl.log,channels,value,,
 qetl.log,context,dict,,

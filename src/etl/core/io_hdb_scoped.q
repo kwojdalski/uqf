@@ -50,12 +50,12 @@
 .qetl.io.calendar:""
 
 / How a calendar is put in force and asked: hooks the launcher scripts fill in, because TorQ's .eodtime is not
-/ src/'s to read (check_etl_layering). scripts/dev/attached_calendar.q loads TorQ's own eodtime.q over the
+/ src/'s to read (check.py etl-layering). scripts/dev/attached_lib.q loads TorQ's own eodtime.q over the
 / two adjustments and answers with .eodtime.getday; with no calendar loaded, adopting one is refused.
 / @param offset_ns the stack's rolltimeoffset, nanoseconds
 / @param adj_ns the roll zone's adjustment, nanoseconds
 .qetl.io.calendar_adopter:{[offset_ns;adj_ns]
-    '"calendar: no native calendar is loaded - load scripts/dev/attached_calendar.q"}
+    '"calendar: no native calendar is loaded - load scripts/dev/attached_lib.q"}
 
 / The hook's partner: the stack's getday over a list of UTC instants.
 / @param times a timestamp or a list of them

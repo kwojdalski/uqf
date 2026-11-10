@@ -68,7 +68,7 @@ the past arrives stamped now.
 **Never call `.u.upd`.** Call `publish` in your own namespace. The runner wires
 it to the tickerplant; a test wires it to a recorder and reads your output as
 data. That is what lets the job be tested with no TorQ present, and
-`scripts/gates/check_etl_layering.py` fails the build if anything under `src/`
+`scripts/gates/check.py etl-layering` fails the build if anything under `src/`
 reaches for `.qtorq`.
 
 **Keep the randomness in `on_timer`, and nowhere else.** This is the convention

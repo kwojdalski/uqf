@@ -281,7 +281,7 @@ be silently lost.
 ## 9. Declarations live apart, arrive together
 
 `src/etl/core/` defines the contract. `sources/` and `workers/` declare against
-it. The core never depends on a declaration --- `check_etl_layering.py` enforces
+it. The core never depends on a declaration --- `check.py etl-layering` enforces
 that in CI --- so the framework can be reasoned about without knowing what is
 declared on top of it.
 
@@ -331,7 +331,7 @@ Airflow sensor and the frontend poll --- lives in `core/status.q`
 (`.qetl.status`), not in the adapter, because it is not TorQ plumbing: it is a
 cross-repository contract, and its header names its readers.
 
-*Enforced by* `scripts/gates/check_etl_layering.py`, three times: `core/` may
+*Enforced by* `scripts/gates/check.py etl-layering`, three times: `core/` may
 not reference a declaring namespace (§9), nothing under `src/etl/` may reference
 `.qtorq`, and each TorQ facility `src/` reads has one owner file. Logging
 (`.lg`) is read only in `core/log.q`, connected services (`.servers`) only in

@@ -17,7 +17,7 @@ right is everything that talks to that pipeline without being part of it.
 The line worth knowing is the one between the first two bands. **No q file under
 `src/` knows TorQ exists** --- that is what lets a worker be tested against a
 recorder instead of a tickerplant --- and exactly one namespace is allowed to,
-`.qtorq` in `scripts/`. `scripts/gates/check_etl_layering.py` fails the build if
+`.qtorq` in `scripts/`. `scripts/gates/check.py etl-layering` fails the build if
 anything under `src/etl/` reaches for it. The core does *read* three of TorQ's
 facilities when they are there - logging, connected services and the process
 name - each from one owner file and with a plain-q fallback, and the same gate

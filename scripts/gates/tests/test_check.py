@@ -32,6 +32,14 @@ _SPEC.loader.exec_module(check)
 NAMES = sorted(check.CHECKS)
 
 
+@pytest.fixture(autouse=True)
+def _no_enclosing_repository(monkeypatch):
+    """bundle-blocks runs git: a commit hook's GIT_DIR or GIT_INDEX_FILE would
+    point it at the checkout being committed rather than the root given."""
+    for name in [n for n in os.environ if n.startswith("GIT_")]:
+        monkeypatch.delenv(name)
+
+
 def _main(capsys, *argv: str) -> tuple[object, str, str]:
     try:
         rc = check.main(list(argv))
@@ -196,6 +204,10 @@ _FIXTURE = (
     "README.md",
     "web/package.json",
     "web/README.md",
+    # diagram-ports: the diagrams, and the stack its ports come from.
+    "docs/diagrams",
+    "scripts/processes/process_ports.csv",
+    "lib/torq-finance-starter-pack/appconfig/process.csv",
 )
 
 
@@ -222,6 +234,9 @@ def test_a_check_changes_nothing_in_the_tree_it_reads(capsys, tmp_path, name):
             shutil.copytree(src, dst)
         elif src.is_file():
             shutil.copy2(src, dst)
+    # bundle-blocks reads the root's git index: an empty one, made before
+    # the snapshot and the chmod.
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
     writable = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
     paths = [root, *root.rglob("*")]
     for p in paths:

@@ -159,7 +159,7 @@
     saved:(.qetl.io.scoped_roots;.qetl.io.calendar;.qetl.io.native_day_fn);
     `.qetl.io.scoped_roots set enlist `$string root;
     `.qetl.io.calendar set "off=x,adj=y";
-    / a stand-in for attached_calendar.q's .eodtime.getday at a 17:00 UTC roll
+    / a stand-in for attached_lib.q's .eodtime.getday at a 17:00 UTC roll
     `.qetl.io.native_day_fn set {[times] `date$times+0D07:00};
     cfg:enlist[`io]!enlist .qetl.io.hdb[root;`time];
     r:@[{[cfg;D] .qetl.io.clip_to_eod[`w;cfg;`timestamp$D-1;`timestamp$D+1]}[cfg];D;{[e] e}];

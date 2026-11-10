@@ -17,7 +17,7 @@
 # file under src/ loads in a plain q process with no TorQ present, which is
 # what lets a worker or a streaming job be tested against a recorder instead
 # of a tickerplant. Only scripts/processes may know TorQ exists - its runners
-# build on .qtorq (torq_pipeline.q) - and scripts/gates/check_etl_layering.py
+# build on .qtorq (torq_pipeline.q) - and scripts/gates/check.py etl-layering
 # fails the build if anything under src/etl/ reaches for it. So the runners
 # get their own band, and the pipeline's only arrow into the stack leaves
 # from there. run_stream.q sits beside them because it is a runner too, but

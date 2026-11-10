@@ -136,6 +136,36 @@
     .qetl.log.trace[1b];
     .qunit.assertEquals[(off;.qetl.log.enabled `TRACE);01b;"enabled follows the trace switch"]};
 
+/ --- the -verbose / -trace start-line flags -----------------------------
+
+/ The (debug;trace) switches after apply_flags over a parsed command line,
+/ starting from both off (tearDown puts them off again).
+/ @param opts a parsed command line, as .Q.opt returns it
+/ @return (debug_enabled;trace_enabled; what apply_flags returned)
+.qt.qetl.log.flags_after:{[opts]
+    r:.qetl.log.apply_flags opts;
+    (.qetl.log.debug_enabled;.qetl.log.trace_enabled;r)};
+
+.qt.qetl.log.test_apply_flags_verbose_is_debug_alone:{[t]
+    .qunit.assertEquals[.qt.qetl.log.flags_after (enlist`verbose)!enlist ();(1b;0b;10b);
+        "-verbose switches DEBUG on and leaves TRACE off"]};
+
+.qt.qetl.log.test_apply_flags_trace_brings_debug:{[t]
+    .qunit.assertEquals[.qt.qetl.log.flags_after (enlist`trace)!enlist ();(1b;1b;11b);
+        "-trace switches TRACE on, and DEBUG with it"]};
+
+.qt.qetl.log.test_apply_flags_without_either_changes_nothing:{[t]
+    .qunit.assertEquals[.qt.qetl.log.flags_after (enlist`job)!enlist enlist"x";(0b;0b;00b);
+        "no flag: both stay off"];
+    .qetl.log.debug 1b; .qetl.log.trace 1b;
+    .qetl.log.apply_flags (`symbol$())!();
+    .qunit.assertEquals[(.qetl.log.debug_enabled;.qetl.log.trace_enabled);11b;
+        "no flag never switches a level off either"]};
+
+.qt.qetl.log.test_apply_flags_on_an_empty_command_line:{[t]
+    .qunit.assertEquals[.qt.qetl.log.flags_after .Q.opt ();(0b;0b;00b);
+        ".Q.opt of no arguments is no flag"]};
+
 / --- scoped context ----------------------------------------------------
 / .
 / What a line is about (run, worker, source, window, attempt), added to every

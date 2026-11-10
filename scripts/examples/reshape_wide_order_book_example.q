@@ -18,6 +18,9 @@
 \c 400 1000
 \l src/init.q
 \l src/etl/core/log.q
+/ The synthetic-book helpers the examples share: .qf.demo.book, .qf.demo.level_cols,
+/ .qf.demo.timestamps.
+\l scripts/examples/lib/example_books.q
 
 / .qetl.log suppresses DEBUG lines by default; this example's narration uses them.
 .qetl.log.debug 1b;
@@ -51,26 +54,12 @@ base:tick_scale*eurusd_spot;
 size_unit:.qf.demo.level_size_unit;
 size_row_drift:.qf.demo.size_row_drift;
 
-/ Build one prefix's worth of zero-padded, per-level columns as a single
-/ dict col_name!column_vector, e.g. bid_px_00!... bid_px_09!... . row_step
-/ is the per-row drift (row_drift for prices, size_row_drift for sizes).
-mk_level_cols:{[prefix;n_levels;base;step;row_step]
-    names:`symbol$();
-    vals_list:();
-    i:0;
-    while[i<n_levels;
-        suffix:$[i<10;"0","",string i;string i];
-        col_name:`$prefix,suffix;
-        vals:(base+step*i)+(row_step*til n_rows);
-        names:names,col_name;
-        vals_list:vals_list,enlist vals;
-        i+:1];
-    names!vals_list};
-
-bid_px:mk_level_cols["bid_px_";10;base;neg pip_size;row_drift];
-bid_sz:mk_level_cols["bid_sz_";10;size_unit;size_unit;size_row_drift];
-ask_px:mk_level_cols["ask_px_";10;base+pip_size;pip_size;row_drift];
-ask_sz:mk_level_cols["ask_sz_";10;size_unit-(size_unit%10);size_unit;size_row_drift];
+/ Each prefix's ten zero-padded per-level columns (.qf.demo.level_cols): row_drift
+/ for prices, size_row_drift for sizes, over n_rows rows.
+bid_px:.qf.demo.level_cols["bid_px_";10;base;neg pip_size;row_drift;n_rows];
+bid_sz:.qf.demo.level_cols["bid_sz_";10;size_unit;size_unit;size_row_drift;n_rows];
+ask_px:.qf.demo.level_cols["ask_px_";10;base+pip_size;pip_size;row_drift;n_rows];
+ask_sz:.qf.demo.level_cols["ask_sz_";10;size_unit-(size_unit%10);size_unit;size_row_drift;n_rows];
 level_table:flip (bid_px,bid_sz,ask_px,ask_sz);
 
 / Synthetic per-row event timestamps: each row lands ~1ms after the
@@ -80,16 +69,8 @@ level_table:flip (bid_px,bid_sz,ask_px,ask_sz);
 / positive gap so timestamps stay strictly increasing (an unclamped
 / Normal(1ms,1ms) draw goes negative ~16% of the time, which a real feed
 / wouldn't).
-mk_timestamps:{[n;start_ts]
-    mean_gap:0D00:00:00.001;
-    std_gap:0D00:00:00.001;
-    min_gap:0D00:00:00.0001;
-    p:1e-9+(1-2e-9)*n?1.0;
-    .qetl.log.ch.dbg[`lifecycle;"running: .qf.math.inv_ncdf p";enlist[`example]!enlist `reshape_wide_order_book];
-    shock:.qf.math.inv_ncdf p;
-    gaps:min_gap|mean_gap+std_gap*shock;
-    start_ts+sums gaps};
-time:mk_timestamps[n_rows;.z.p];
+time:.qf.demo.timestamps[`reshape_wide_order_book;n_rows;.z.p;
+    `mean`std`min!(0D00:00:00.001;0D00:00:00.001;0D00:00:00.0001)];
 
 / Identifier columns ingested as strings (type 10h cells) instead of
 / symbols - the shape symbolize_columns/candidate_symbol_columns exist

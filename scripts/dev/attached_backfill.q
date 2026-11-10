@@ -142,10 +142,10 @@ if[not `worker in key opts:.Q.opt .z.x;
 
 / ------------------------------------------------------------ READERS
 / .
-/ Naming the readers, asking each to reload, and the reload state: scripts/dev/attached_readers.q,
-/ which the destination's receiver (scripts/dev/remote_receiver.q, #1650) loads too.
-system"l scripts/dev/attached_readers.q";
-system"l scripts/dev/attached_calendar.q";
+/ Naming the readers, asking each to reload, the reload state, and TorQ's calendar:
+/ scripts/dev/attached_lib.q, which the destination's receiver (scripts/dev/remote_receiver.q,
+/ #1650) loads too.
+system"l scripts/dev/attached_lib.q";
 
 / The writer's on_ready: reload the named readers when .qetl.io.due says so, and release coverage to the
 / readers only when every one acknowledged with nothing open. A reader that failed is asked again at the

@@ -132,6 +132,19 @@
 
 .qetl.log.trace_enabled:0b
 
+/ Apply the start-line log flags every uqf process script takes: -verbose
+/ switches DEBUG on, and -trace TRACE with DEBUG (a traced query is read
+/ beside the window it was sent for, which only DEBUG logs). Without either
+/ nothing changes - a level already on stays on. The one mapping; the two
+/ switches stay independent in .qetl.log, and only this ties them.
+/ @param opts the parsed command line, as .Q.opt returns it
+/ @return (debug;trace) - which of the two this switched on
+.qetl.log.apply_flags:{[opts]
+    on:(any `verbose`trace in key opts;`trace in key opts);
+    if[on 0; .qetl.log.debug[1b]];
+    if[on 1; .qetl.log.trace[1b]];
+    on}
+
 / Private: is a quiet level switched on, outside TorQ?
 / @private
 .qetl.log.switched:{[level] $[level=`DEBUG; .qetl.log.debug_enabled; level=`TRACE; .qetl.log.trace_enabled; 1b]}

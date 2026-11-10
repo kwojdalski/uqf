@@ -423,7 +423,7 @@
 / --- process identity: the one read of TorQ's .proc (#619) ----------------
 / .
 / .qetl.run.proc_name is the only place src/ reads .proc.procname
-/ (check_etl_layering.py holds it there). Each behaviour is shown in both
+/ (check.py etl-layering holds it there). Each behaviour is shown in both
 / hosts: plain q, where .proc does not exist, and a TorQ process.
 
 .qt.qetl.run.test_the_process_name_is_null_in_plain_q:{[t]

@@ -32,9 +32,12 @@ WHAT THE COMMAND OWNS, and every check shares:
     could not run, 2 for a usage error. A check that crashes is reported as
     one that could not run - never as one that found nothing.
 
-Every check is read-only and needs only the standard library: no q, no
-configuration, no credentials. Not every gate under scripts/gates/ is one -
-the HDB utilities there operate on data, and the rest have not moved here.
+Every check is read-only and needs no q, no configuration and no
+credentials. All but diagram-ports need only the standard library; that one
+reads the stack's ports through uqs, so its hook runs it under `uv run`.
+bundle-blocks reads the root's git index, not its working tree. Not every gate
+under scripts/gates/ is one - the HDB utilities there operate on data, and the
+rest have not moved here.
 """
 
 from __future__ import annotations
@@ -181,6 +184,23 @@ def _vendored(vendored: ModuleType, root: Path) -> int:
     )
 
 
+def _etl_layering(layering: ModuleType, root: Path) -> int:
+    """src/etl/core/ never depends on a declaration; src/ reads TorQ only
+    through its owner files; HTTP only in the webhook transport. Each rule's
+    findings carry their own advice, so the rule reports them itself."""
+    return layering.run(root)
+
+
+def _diagram_ports(ports: ModuleType, root: Path) -> int:
+    """Every `procname :port` label in docs/diagrams matches the stack (#1369)."""
+    return ports.run(root)
+
+
+def _bundle_blocks(blocks: ModuleType, root: Path) -> int:
+    """Nothing in the index makes an operator's installed bundle tree content (#881)."""
+    return blocks.run(root)
+
+
 @dataclass(frozen=True)
 class Check:
     name: str
@@ -244,6 +264,24 @@ CHECKS: dict[str, Check] = {
             "every copy of a tool's version (uv, pre-commit, Python...) matches its authority",
             "tool_pins",
             _tool_pins,
+        ),
+        Check(
+            "etl-layering",
+            "src/etl/core/ depends on no declaration, and src/ reads TorQ only through its owners",
+            "etl_layering",
+            _etl_layering,
+        ),
+        Check(
+            "diagram-ports",
+            "every `procname :port` label in docs/diagrams matches the stack's ports",
+            "diagram_ports",
+            _diagram_ports,
+        ),
+        Check(
+            "bundle-blocks",
+            "the index stages no installed bundle's blocks, files, ledger or host overrides",
+            "bundle_blocks",
+            _bundle_blocks,
         ),
         Check(
             "vendored",

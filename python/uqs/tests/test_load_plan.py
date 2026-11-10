@@ -251,12 +251,12 @@ def test_the_declaration_dirs_are_init_qs_in_its_order():
 
 def test_the_declaration_dirs_are_every_declaring_directory_on_disk():
     """Every src/etl/ subdirectory but core/ and generated/ holds declarations
-    (scripts/gates/check_etl_layering.py's declaring_dirs): a new one on disk
+    (scripts/gates/policy/etl_layering.py's declaring_dirs): a new one on disk
     that DIRS does not name is a file no plan loads."""
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(
-        "check_etl_layering", REPO / "scripts" / "gates" / "check_etl_layering.py"
+        "etl_layering", REPO / "scripts" / "gates" / "policy" / "etl_layering.py"
     )
     assert spec and spec.loader
     layering = importlib.util.module_from_spec(spec)

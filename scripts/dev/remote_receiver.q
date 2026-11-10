@@ -46,8 +46,7 @@ if[not all `contract`attachment in key opts:.Q.opt .z.x;
 / no declarations at all: the contract says what the batches are
 .qetl.load.only:`symbol$()
 \l src/etl/init.q
-\l scripts/dev/attached_readers.q
-\l scripts/dev/attached_calendar.q
+\l scripts/dev/attached_lib.q
 
 \d .
 

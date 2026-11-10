@@ -69,7 +69,7 @@ Apply the rules below. Each cites the file that holds or enforces it.
   - `.servers` only in `src/etl/core/worker_runtime.q`;
   - `.proc` only in `.qetl.run.proc_name` (`src/etl/core/run.q`).
 
-  Enforced by `scripts/gates/check_etl_layering.py`.
+  Enforced by `scripts/gates/check.py etl-layering`.
 
 - **L2** The one namespace that may know TorQ is `.qtorq`
   (`scripts/processes/torq_pipeline.q`). The arrow points one way: `src/` never
@@ -78,7 +78,7 @@ Apply the rules below. Each cites the file that holds or enforces it.
 
 - **L3** `src/etl/core/` never references a declaring namespace (`.qpipe.job.*`,
   `.qpipe.source.*`). A shell that branches on which instance it runs has
-  stopped being generic (`check_etl_layering.py`).
+  stopped being generic (`check.py etl-layering`).
 
 - **L4** Never edit `lib/torq` or `lib/torq-finance-starter-pack`. Extend them
   through the overlays and generated configuration that `uqs` applies after
@@ -300,7 +300,7 @@ invariants, is `uqf-q-traps.md`.
 - **W2** Never hand-write a bundle job into the tree. A sidecar bundle lives in
   its own folder, and `uqs job install`/`uqs runtime prepare` writes it into a
   working tree. The commit gate refuses its blocks, its job files and its ledger
-  (`scripts/gates/check_bundle_blocks.py`, `docs/guides/sidecar-bundles.md`).
+  (`scripts/gates/check.py bundle-blocks`, `docs/guides/sidecar-bundles.md`).
 
 --------------------------------------------------------------------------------
 
