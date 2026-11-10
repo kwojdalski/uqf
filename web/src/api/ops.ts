@@ -5,12 +5,7 @@ import type { Pollable, Row } from "./client";
 /** A worker's state as status.q writes it - models.RunState, held to it by
  * test_api_types.py, and RunState to q by test_status.py (#820). */
 export type RunState =
-  | "starting"
-  | "running"
-  | "idle"
-  | "completed"
-  | "failed"
-  | "stopped";
+  "starting" | "running" | "idle" | "completed" | "failed" | "stopped";
 export interface Worker {
   worker: string;
   instance_id: string;
