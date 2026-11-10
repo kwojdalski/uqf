@@ -181,22 +181,33 @@ def stream(
     until: Callable[[], bool],
     min_level: str | None = None,
     poll: float = 0.25,
+    on_interrupt: Callable[[], None] | None = None,
 ) -> None:
     """`uqs job backfill --attachment --follow` (#2677): ONE run's log, the file its launch
     reported, from its first line, printed as `show` prints it, until `until()` is true - the
     run has exited - and then every line it still held, its RESULT among them. The follower is
     `uqs logs -f`'s (stack/follow.py), run here rather than as a child so that it stops when
-    the run does; Ctrl-C ends it as it ends `uqs logs -f`, by KeyboardInterrupt."""
+    the run does; Ctrl-C ends it as it ends `uqs logs -f`, by KeyboardInterrupt.
+
+    With `on_interrupt` the FIRST Ctrl-C calls it instead and the stream carries on, without
+    printing a line twice (`--stop-on-exit`, #2677: the run is asked to stop, and followed to
+    its end). A second Ctrl-C - or one that `on_interrupt` itself raises - ends the stream."""
     logs.min_level_name(min_level)
     named = _RUN.match(path.name)
     parse = parser(RunLog(path, worker, named["stamp"] if named else "", path.parent.parent.name))
     sink = logs.log_sink()
+    #: lines of the file handed on so far, and how many of them a resumed stream must skip
+    seen = skip = 0
 
     class _Lines(io.StringIO):
         """follow's `out`: it writes whole lines; each is parsed and printed, none kept."""
 
         def write(self, text: str) -> int:
+            nonlocal seen
             for line in text.splitlines():
+                seen += 1
+                if seen <= skip:
+                    continue
                 if (rec := parse(line)) is not None:
                     logs.emit(sink, rec, min_level)
             return len(text)
@@ -206,4 +217,13 @@ def stream(
                 self.write(line)
 
     # from its first line: it is this run's own file, and every line of it is this run's
-    follower.follow(path, log_follow._ALL_LINES, _Lines(), stop=until, poll=poll)
+    while True:
+        try:
+            follower.follow(path, log_follow._ALL_LINES, _Lines(), stop=until, poll=poll)
+            return
+        except KeyboardInterrupt:
+            if on_interrupt is None:
+                raise
+            handler, on_interrupt = on_interrupt, None  # only the first Ctrl-C is the handler's
+            handler()
+            skip, seen = seen, 0  # start again from the top of the file, past what was shown

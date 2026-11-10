@@ -6869,7 +6869,8 @@
               "running",
               "idle",
               "completed",
-              "failed"
+              "failed",
+              "stopped"
             ],
             "title": "State"
           },

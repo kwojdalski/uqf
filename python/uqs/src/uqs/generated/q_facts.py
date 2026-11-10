@@ -91,6 +91,7 @@ STATUS_STATES: tuple[str, ...] = (
     "idle",
     "completed",
     "failed",
+    "stopped",
 )
 
 #: the states that end a run - .qetl.status.terminal_states
@@ -98,6 +99,7 @@ STATUS_TERMINAL_STATES: tuple[str, ...] = (
     "idle",
     "completed",
     "failed",
+    "stopped",
 )
 
 #: every key of a worker's status file, in order - .qetl.status.fields
@@ -130,6 +132,12 @@ STATUS_FILE_PREFIX: str = "airflow_status_"
 
 #: a status file's name after the instance id - .qetl.status.file_suffix
 STATUS_FILE_SUFFIX: str = ".txt"
+
+#: a stop file's name after <worker>.<pid> - .qetl.job.bounded.stop.suffix (#2677)
+STOP_FILE_SUFFIX: str = ".stop"
+
+#: the exit code of a run that stopped on request - .qetl.job.bounded.stop.code
+STOP_EXIT_CODE: int = 4
 
 #: dataset -> time column getdata reads it by - .qetl.job.bounded.read_time_column
 BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {

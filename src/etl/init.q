@@ -110,6 +110,7 @@ if[not ()~key `:lib/unparse/unparse.q; system "l lib/unparse/unparse.q"];
 \l src/etl/core/job_facts.q
 \l src/etl/core/bounded_worker.q
 \l src/etl/core/bounded_pin.q
+\l src/etl/core/bounded_stop.q
 \l src/etl/core/bounded_outputs.q
 \l src/etl/core/twin.q
 \l src/etl/core/bounded_batching.q

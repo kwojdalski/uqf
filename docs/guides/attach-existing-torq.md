@@ -742,11 +742,23 @@ launch reports, under the destination's state directory, from its first line to
 the run's `RESULT` line, then the outcome and the exit code `--wait` would give
 (#2677). Ctrl-C stops the stream, not the run: it says the run is still running,
 names `uqs logs --attachment NAME --worker JOB -f` to follow it again, and exits
-130. There is no `--stop-on-exit`: the runner has no graceful stop yet - a
-signal fails the window it lands in and the run goes on, and a SIGTERM that
-lands inside the coverage ledger's file lock can leave that lock held.
-`--follow` is refused with `--json`, whose stdout is one document, and with
+130. `--follow` is refused with `--json`, whose stdout is one document, and with
 `--writer`.
+
+`--follow --stop-on-exit` (#2677, #2679) makes the first Ctrl-C ask THIS run to
+stop instead, and keeps following until it has. A signal cannot do that: KDB-X
+acts on SIGTERM only at q's idle loop, which a window loop never reaches, and
+SIGINT raises `'stop` inside whatever is being evaluated - a failed window, or a
+lock half taken. So the request is a file, `<state dir>/<worker>.<pid>.stop`,
+for the pid this invocation launched and no other (`touch` it by hand to stop a
+run you can see the pid of). The run looks for it BETWEEN windows only: the
+window it is in completes or fails as it would anyway, then it does not start
+the next one, finishes its store and the readers' reload as any run does,
+releases its locks, records `stopped` in its status file and run ledger, removes
+the file, and exits **4**. Everything it completed is written and covered; the
+rest is not, and the same command again does exactly the remaining windows. A
+second Ctrl-C ends the stream and leaves the request standing (exit 130). The
+option is refused without `--follow`.
 
 **A historical HDB backfill does not populate today's RDB and publishes nothing
 through the tickerplant.** The rows exist only in the HDB, in the partition of
@@ -1069,12 +1081,13 @@ the process cannot be started or `--wait` (or `--follow`) waits for its end.
 
 These are three different things and the outcome says which one a run reached.
 
-  | outcome                 | exit | meaning                                                                        |
-  | ----------------------- | ---- | ------------------------------------------------------------------------------ |
-  | `queryable`             | 0    | written, covered, and every verified reader reloaded and serves the table      |
-  | `dry_run`               | 0    | nothing written                                                                |
-  | `written_not_queryable` | 3    | written and covered; a reader has not reloaded or does not serve the table     |
-  | `partial` / `failed`    | 1    | a window failed: neither written nor covered; covered windows are skipped      |
+  | outcome                 | exit | meaning                                                                                |
+  | ----------------------- | ---- | ------------------------------------------------------------------------------         |
+  | `queryable`             | 0    | written, covered, and every verified reader reloaded and serves the table              |
+  | `dry_run`               | 0    | nothing written                                                                        |
+  | `written_not_queryable` | 3    | written and covered; a reader has not reloaded or does not serve the table             |
+  | `partial` / `failed`    | 1    | a window failed: neither written nor covered; covered windows are skipped              |
+  | `stopped`               | 4    | stopped on request between two windows; those done are covered, a re-run does the rest |
 
 Only the HDB readers that the stack's discovery lists *and* that report the
 destination's directory as the one they serve are asked to reload; one serving

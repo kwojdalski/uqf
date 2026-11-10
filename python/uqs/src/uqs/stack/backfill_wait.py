@@ -12,6 +12,7 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
+from uqs.generated import q_facts
 from uqs.generated.q_facts import (
     STATUS_FILE_PREFIX,
     STATUS_FILE_SUFFIX,
@@ -58,6 +59,7 @@ def wait_for_outcome(
     same file the Airflow sensor reads, with the sensor's rules: a file for
     another run (version, range, or written before this launch) is not this
     one's; a state q's worker exits 0 for (`idle`/`completed`) exits 0, any
+    `stopped` (an operator stopped the run between two windows) the stop code; any
     other terminal state (`failed`) 1; and a `starting`/`running` file whose
     process is gone on this host is `abandoned`, 1, because it will never be
     written again. The state sets are q's own, generated into
@@ -102,7 +104,8 @@ def wait_for_outcome(
             if state in STATUS_SUCCESS_STATES:
                 return state, 0, ""
             if state in STATUS_TERMINAL_STATES:
-                return state, 1, str(status.get("error") or "")
+                code = q_facts.STOP_EXIT_CODE if state == "stopped" else 1
+                return state, code, str(status.get("error") or "")
             host, pid = str(status.get("host", "")), int(status["pid"])
             if process_gone(host, pid, status.get("updated_at")):
                 return "abandoned", 1, "its process is gone and it never recorded an outcome"

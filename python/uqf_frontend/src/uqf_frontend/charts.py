@@ -431,7 +431,15 @@ class CoverageParams(ChartParams):
 
 #: A worker's state on a day, worst first: what a cell shows when two runs of
 #: one worker cover the same day. The number is the cell's colour.
-_STATE_RANK = {"failed": 5, "abandoned": 4, "running": 3, "starting": 3, "completed": 2, "idle": 1}
+_STATE_RANK = {
+    "failed": 5,
+    "abandoned": 4,
+    "stopped": 4,
+    "running": 3,
+    "starting": 3,
+    "completed": 2,
+    "idle": 1,
+}
 _STATE_COLOUR = [
     (0.0, "#eef1f5"),  # 0: no run covers the day
     (0.2, "#eef1f5"),
@@ -509,7 +517,10 @@ def _coverage_build(read: Read, p: CoverageParams, cap: int) -> Built:
         for k, day in enumerate(days):
             if first <= day <= last:
                 grid[row["worker"]][k] = max(grid[row["worker"]][k], rank)
-    names = {v: k for k, v in _STATE_RANK.items() if k != "starting"} | {0: "not covered"}
+    names = {
+        r: " / ".join(k for k, v in _STATE_RANK.items() if v == r and k != "starting")
+        for r in set(_STATE_RANK.values())
+    } | {0: "not covered"}
     z = [grid[w] for w in workers]
     fig = go.Figure(
         go.Heatmap(

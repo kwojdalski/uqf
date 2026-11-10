@@ -20,7 +20,7 @@ from typer.testing import CliRunner
 from uqs import cli
 from uqs.attach import backfill_audit, backfill_remote, backfill_run, config
 from uqs.cli import backfill_attached
-from uqs.cli.shared import EXIT_PARTIAL, EXIT_REFUSED, EXIT_USAGE
+from uqs.cli.shared import EXIT_PARTIAL, EXIT_REFUSED, EXIT_STOPPED, EXIT_USAGE
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import backfill_wait
 
@@ -53,6 +53,7 @@ def _attached(monkeypatch, runner_code: int, result: dict, *, writer: bool = Fal
     monkeypatch.setattr(backfill_remote, "launch_remote", lambda *a, **k: (_Run(), {}))
     monkeypatch.setattr(backfill_audit, "outcome", lambda *a, **k: None)
     monkeypatch.setattr(backfill_run, "follow", lambda _r: (runner_code, result))
+    monkeypatch.setattr(backfill_run, "clear_stop", lambda _r: None)
     argv = [*ARGV, "--attachment", "a", "--mode", "run", "--json"]
     if writer:
         argv += ["--writer", "h:5000"]
@@ -76,6 +77,7 @@ RUNNER_CODES = [
     (1, {"state": "partial", "outcome": "partial"}, EXIT_REFUSED),
     (2, {}, EXIT_REFUSED),  # a refusal inside the runner: never the CLI's usage error
     (3, {"state": "completed", "outcome": "written_not_queryable"}, EXIT_PARTIAL),
+    (4, {"state": "stopped", "outcome": "stopped"}, EXIT_STOPPED),  # an operator's stop (#2679)
 ]
 
 

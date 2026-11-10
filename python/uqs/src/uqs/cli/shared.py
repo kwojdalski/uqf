@@ -23,6 +23,7 @@ from uqs import paths as stack_paths
 from uqs import runtimes
 from uqs.cli import completion, json_out, rendering, table_browser
 from uqs.cli.concepts import target_opt
+from uqs.generated import q_facts
 from uqs.logger import LOG_LEVEL_ENV, configure_logging, get_logger, json_requested
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import listing, table_export
@@ -304,6 +305,10 @@ EXIT_REFUSED, EXIT_USAGE = 1, 2
 #: attached backfill whose rows are written and covered but which a reader
 #: has not reloaded - running the same command again asks the readers again.
 EXIT_PARTIAL = 3
+#: A run that stopped because an operator asked it to (#2679, #2677): it finished its current
+#: window, kept everything it had completed, and left the rest for a re-run. q's own code for
+#: the stop, so the CLI and the runner say the same number.
+EXIT_STOPPED = q_facts.STOP_EXIT_CODE
 
 
 def _die(exc: UqsError) -> None:

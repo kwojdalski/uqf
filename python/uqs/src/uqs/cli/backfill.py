@@ -160,7 +160,8 @@ def backfill(
         typer.Option(
             "--wait",
             help="Wait for the run's outcome and exit with it: 0 for completed or idle; "
-            "1 for failed, partial, refused or a process that died; with --attachment, 3 "
+            "1 for failed, partial, refused or a process that died; 4 for a run an operator "
+            "stopped between two windows; with --attachment, 3 "
             "for rows written and covered that a reader has not reloaded - run the same "
             "command again to ask the readers again. Without it, the exit code says only "
             "whether the process started",
@@ -173,6 +174,15 @@ def backfill(
             "-f",
             help="With --attachment: --wait, streaming every line of the run's own log as it "
             "goes. Ctrl-C stops the stream; the run keeps running",
+        ),
+    ] = False,
+    stop_on_exit: Annotated[
+        bool,
+        typer.Option(
+            "--stop-on-exit",
+            help="With --follow: on Ctrl-C, stop what this started - the run finishes its "
+            "current window, keeps what it completed and exits 4 as `stopped`, and a re-run "
+            "does the rest; a second Ctrl-C stops following and leaves that request in place",
         ),
     ] = False,
     override: safety.OverrideOpt = None,
@@ -210,7 +220,11 @@ def backfill(
     ended. `--wait` waits for the run's outcome and exits with that - what
     a script or a scheduler wants. With `--attachment`, `--follow` (`-f`) is
     `--wait` that also streams the run's own log as it goes; Ctrl-C stops the
-    stream and leaves the run running.
+    stream and leaves the run running. `--follow --stop-on-exit` makes Ctrl-C
+    ask the run to stop instead (a stop file the run checks between windows,
+    never inside one): it finishes its current window, records `stopped`, and
+    the command exits 4 once it has; a second Ctrl-C stops following and
+    leaves the request standing. A re-run does the windows that remain.
 
     With `--attachment`, `--skip-eod-fence --reason TEXT` (`--override eod-fence`)
     admits a plan, dry run or run within the native writers' end-of-day fence
@@ -260,6 +274,9 @@ def backfill(
             )
         )
         return
+    if stop_on_exit and not follow:
+        _die(UqsUsageError("--stop-on-exit needs --follow: it stops what the stream started"))
+        return
     if follow and attach is None:
         _die(
             UqsUsageError(
@@ -301,6 +318,7 @@ def backfill(
             as_json=as_json,
             wait=wait,
             follow=follow,
+            stop_on_exit=stop_on_exit,
             verbose=_debug_requested(ctx),
             trace=trace,
             writer=writer,

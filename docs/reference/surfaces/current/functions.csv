@@ -328,6 +328,7 @@ qetl.job.bounded,runtime,dict,,
 qetl.job.bounded,spec,function,1,worker
 qetl.job.bounded,spec_from_flags,function,1,opts
 qetl.job.bounded,state,dict,,
+qetl.job.bounded,stop,dict,,
 qetl.job.bounded,unpartitioned,value,,
 qetl.job.bounded,validate,function,2,worker run_spec
 qetl.job.bounded,version_from_flags,function,2,opts worker
@@ -419,6 +420,12 @@ qetl.job.bounded.state,with_file_lock,function,3,name f args
 qetl.job.bounded.state,with_lock_at,function,4,path wait f args
 qetl.job.bounded.state,write_owner,function,1,path
 qetl.job.bounded.state,write_owner_as,function,2,path pid
+qetl.job.bounded.stop,clear,function,1,worker
+qetl.job.bounded.stop,code,value,,
+qetl.job.bounded.stop,path,function,2,worker pid
+qetl.job.bounded.stop,requested,function,1,worker
+qetl.job.bounded.stop,suffix,value,,
+qetl.job.bounded.stop,why,function,2,progress planned
 qetl.job.continuous,advance,function,3,worker current next_cursor
 qetl.job.continuous,clear_cursor,function,1,worker
 qetl.job.continuous,cursor_path,function,1,worker

@@ -38,7 +38,8 @@ _SUCCESS_STATES = STATUS_SUCCESS_STATES
 def translate(status: WorkerStatus) -> PokeOutcome:
     """The whole mapping. `starting`/`running` are not terminal, so the
     sensor must keep polling; `idle`/`completed` succeed; `failed` (any other
-    terminal state) fails
+    terminal state, `stopped` - an operator stopped the run between two
+    windows - included) fails
     the task outright rather than exhausting the sensor's own retry
     budget on an outcome q has already reported as final — Airflow's task
     retry is a distinct concern from q's transport retry (see

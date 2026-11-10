@@ -30,6 +30,7 @@ from uqs.attach import backfill_audit, backfill_owner, config
 from uqs.attach.backfill import Destination, require_verified
 from uqs.attach.backfill_plan import plan_attached
 from uqs.attach.remote import Ipc
+from uqs.generated import q_facts
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import backfill as stack_backfill
@@ -41,6 +42,9 @@ from uqs.stack.run_modes import EXECUTION_MODES
 REACH_PASSWORD_ENV = "UQF_ATTACH_REACH_PASSWORD"
 #: The runner's exit code for rows that are written and covered but not yet queryable.
 EXIT_NOT_QUERYABLE = 3
+#: The runner's exit code for a run that stopped on request, between two windows (#2679). q's
+#: own (.qetl.job.bounded.stop.code), so the two cannot disagree.
+EXIT_STOPPED = q_facts.STOP_EXIT_CODE
 RUNNER = Path("scripts") / "dev" / "attached_backfill.q"
 LOGS = "logs"
 #: The runner's -deadline when the end-of-day fence is waived: q's infinite timestamp, which
@@ -60,10 +64,17 @@ class Launched:
     process: subprocess.Popen[bytes]
     #: backfill_overrides.jsonl, when a waiver was used: written before the process started
     audit: Path | None = None
+    #: the worker the process runs: half of its stop file's name
+    worker: str = ""
 
     @property
     def run_id(self) -> str:
         return self.log.stem
+
+    @property
+    def stop_file(self) -> Path:
+        """Where a stop is asked of THIS run (see `stop_file_for`)."""
+        return stop_file_for(self.state_dir, self.worker, self.pid)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -74,6 +85,30 @@ class Launched:
             "destination": self.destination.as_dict(),
             "override_record": None if self.audit is None else str(self.audit),
         }
+
+
+def stop_file_for(state_dir: Path, worker: str, pid: int) -> Path:
+    """The file that asks a run to stop (#2679): `<state dir>/<worker>.<pid>.stop`, beside the
+    worker's lock and status file. q derives the same path from the same parts
+    (`.qetl.job.bounded.stop.path`, src/etl/core/bounded_stop.q) - the suffix is q's fact,
+    generated - and checks for it between windows, never inside one. It names the process, so a
+    request left behind for a run that has ended stops no other."""
+    return state_dir / f"{worker}.{pid}{q_facts.STOP_FILE_SUFFIX}"
+
+
+def request_stop(run: Launched) -> Path:
+    """Ask `run` to stop before its next window: its current window completes or fails as it
+    would anyway, then it releases its locks, records `stopped` and exits EXIT_STOPPED. Writes
+    nothing for a run that has already exited - the file would stop nothing, and linger."""
+    if run.process.poll() is not None:
+        return run.stop_file
+    run.stop_file.touch()
+    return run.stop_file
+
+
+def clear_stop(run: Launched) -> None:
+    """Remove a stop request nothing is left to read (the run has exited)."""
+    run.stop_file.unlink(missing_ok=True)
 
 
 def q_date(day: date) -> str:
@@ -257,7 +292,7 @@ def launch(
         # the process exists: record it before the lock is released, so no second run or detach
         # can slip in between its start and its own claim
         backfill_owner.claim(attachment, worker, proc.pid, dest.identity, attach_root)
-    return Launched(proc.pid, log, dest.state_dir, owner, dest, proc, audit), plan
+    return Launched(proc.pid, log, dest.state_dir, owner, dest, proc, audit, worker), plan
 
 
 def _destination(plan: dict[str, Any]) -> dict[str, Any]:
@@ -276,7 +311,8 @@ def _destination(plan: dict[str, Any]) -> dict[str, Any]:
 def follow(run: Launched, *, poll: float = 0.5, timeout: float | None = None) -> tuple[int, dict]:
     """Wait for the runner; its exit code and what it reported. The code is the runner's own: 0
     for completed or idle, 2 for a refusal, EXIT_NOT_QUERYABLE for rows written and covered that
-    a reader has not yet reloaded, and another non-zero for anything that did not do its job.
+    a reader has not yet reloaded, EXIT_STOPPED for a run an operator stopped, and another
+    non-zero for anything that did not do its job.
     `uqs job backfill` exits with it as the CLI's (cli/backfill_attached.exit_code, #2226)."""
     started = time.monotonic()
     while True:
