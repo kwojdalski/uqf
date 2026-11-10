@@ -175,8 +175,8 @@ def backfill(
         typer.Option(
             "--follow",
             "-f",
-            help="With --attachment: --wait, streaming the run's own log as it goes. Ctrl-C "
-            "stops the stream; the run keeps running",
+            help="With --attachment: --wait, streaming every line of the run's own log as it "
+            "goes. Ctrl-C stops the stream; the run keeps running",
         ),
     ] = False,
     override: safety.OverrideOpt = None,
