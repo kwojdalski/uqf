@@ -55,8 +55,6 @@ def _day(
 #: `--schema-file`, as `job attachment add` names it (#1855).
 #: The TorQ files are spelt as `job attachment add` spells them (#1890).
 _RENAMES = {
-    "--port": "--base-port",
-    "--proc": "PROC",
     "--schema": "--schema-file",
     "--dir": "--tplogdir",
 }

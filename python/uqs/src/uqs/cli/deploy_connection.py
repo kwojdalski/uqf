@@ -44,7 +44,6 @@ Ssh = Annotated[
         "alias; overrides TARGET's",
     ),
 ]
-OLD_SPELLINGS = {"--host": "--ssh"}
 Dest = Annotated[
     str | None,
     typer.Option("--dest", help="Absolute directory on the server; overrides TARGET's"),
@@ -157,17 +156,6 @@ def server(ctx: typer.Context, target: str | None, *, unnamed: str | None = None
     out.update({k: v for k, v in flags.items() if on_command_line(ctx, k)})
     log.info("target {}: {}:{}", r.name, out["ssh"], out["dest"])
     return out
-
-
-def renamed_target_option(names: str) -> None:
-    """`deploy push --target A,B`, the spelling before #1736: still accepted
-    for one release, saying what to type instead."""
-    shown = " ".join(n.strip() for n in names.split(",") if n.strip())
-    log.warning(
-        "--target is renamed: give the targets after the artifact, "
-        "`uqs deploy push ARTIFACT {}` - the option goes in the next release",
-        shown,
-    )
 
 
 LiveCheckTimeout = Annotated[

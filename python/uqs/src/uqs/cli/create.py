@@ -44,7 +44,7 @@ app.add_typer(job_app, name="job")
 
 
 #: --procname: a process is PROC, or `--proc` as an option, on every command (#1857)
-_RENAMES = {"--columns": "--schema", "--columns-from": "--schema-from", "--procname": "--proc"}
+_RENAMES = {"--procname": "--proc"}
 
 
 _TransformOpt = ChoiceOpt(

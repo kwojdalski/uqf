@@ -33,22 +33,9 @@ from uqs.logger import get_logger
 
 log = get_logger()
 
-#: Spellings a renamed option or command keeps for one release (#1738 rule
-#: 6), every one logging the new spelling when it is used. A rename adds a row
-#: here or a `renamed(...)` on its command; the release after removes both.
-RENAMED_GLOBAL_FLAGS = frozenset({"--debug"})
-
-#: ctx.meta's list of the values an old option gave a positional (`--proc
-#: rdb1` -> PROC rdb1), so a command can tell a named PROC from a guessed one.
-MOVED_KEY = "uqs.renames.moved"
-
 #: ctx.meta's flag for a parse that only reads the arguments (`uqs --target`
 #: deciding whether to ask, #1780): old spellings rewritten, nothing warned.
 QUIET_KEY = "uqs.renames.quiet"
-
-#: The new spelling of a flag that is gone because it did nothing (`job preview
-#: --dry-run`: a preview is always dry), so the old one is accepted and ignored.
-DROPPED = ""
 
 
 #: An old bypass FLAG - `--allow-dirty`, taking no value - now `--override
@@ -64,10 +51,6 @@ def legacy_reason(old: str) -> str:
     """The --reason recorded for an old bypass flag given without one."""
     return f"given as {old}, which records no reason"
 
-
-#: `--port` meant the stack's base port on most commands; it is `--base-port`
-#: now, and `--port` is only ever one process's port (#1729).
-BASE_PORT = {"--port": "--base-port"}
 
 #: `--attach NAME` was a verb naming a noun: the saved attachment is
 #: `--attachment NAME` on every command that reads or writes one (#1855).
@@ -103,23 +86,13 @@ def warn_secret_argv(old: str, new: str) -> None:
 
 
 def _rewrite_renamed(
-    args: list[str],
-    renames: Mapping[str, str | tuple[str, ...]],
-    command_path: str,
-    root: typer.Context | None,
-    moved: list[str] | None = None,
-    quiet: bool = False,
+    args: list[str], renames: Mapping[str, str | tuple[str, ...]], quiet: bool = False
 ) -> list[str]:
     """`args` with every old option spelling in `renames` replaced by its new
     one, each warned about once. Stops at `--`, after which nothing is an
-    option. `--debug` given after a command moves to the global flag. An old
-    option whose new spelling is a positional (`--proc` -> `PROC`) gives its
-    value as the first word, where the command's first positional is. `quiet`
-    rewrites without a warning or a change to logging: a parse that only reads
-    the arguments, as completion and `uqs --target` do (#1780)."""
+    option. `quiet` rewrites without a warning: a parse that only reads the
+    arguments, as completion and `uqs --target` do (#1780)."""
     out: list[str] = []
-    front: list[str] = []
-    reasons: list[str] = []
     flags: list[str] = []
     warned: set[str] = set(renames) if quiet else set()  # all warned: none is
     head = args[: args.index("--")] if "--" in args else args
@@ -127,67 +100,27 @@ def _rewrite_renamed(
     rest = iter(args)
     for arg in rest:
         if arg == "--":
-            return front + out + _reason(reasons, flags, has_reason) + [arg, *rest]
+            return out + _reason(flags, has_reason) + [arg, *rest]
         name, eq, value = arg.partition("=")
-        bypass = renames.get(name)
-        if isinstance(bypass, tuple) and len(bypass) == 3 and name.startswith("--"):
-            _warn_once(warned, name, f"{bypass[0]} {bypass[1]} --reason REASON")
-            out += list(bypass[:2])
+        new = renames.get(name) if name.startswith("--") else None
+        if isinstance(new, tuple):  # bypass_flag(NAME)
+            _warn_once(warned, name, f"{new[0]} {new[1]} --reason REASON")
+            out += list(new[:2])
             flags.append(name)
-            continue
-        if isinstance(bypass, tuple) and name.startswith("--"):
-            _warn_once(warned, name, f"{' '.join(bypass)} --reason REASON")
-            out += list(bypass)
-            reasons.append(value if eq else next(rest, ""))
-            continue
-        if name in RENAMED_GLOBAL_FLAGS and name in renames:
-            if quiet:
-                continue
-            command = command_path.partition(" ")[2]
-            _warn_once(warned, f"uqs {command} {name}", f"uqs {name} {command}")
-            if root is not None and isinstance(root.obj, dict):
-                root.obj["debug"] = True
-            # Through shared, as the global flag's callback does, so a test
-            # that stubs the one stubs the other.
-            from uqs.cli import shared
-
-            shared.configure_logging(component="uqs", level="DEBUG")
-            continue
-        new = renames.get(name)
-        if new == DROPPED and name.startswith("--"):
-            if not quiet:
-                log.warning("`{}` does nothing here and goes in the next release; drop it", name)
-            continue
-        if isinstance(new, str) and name.startswith("--") and not new.startswith("-"):
-            _warn_once(warned, name, f"{command_path} {new}")
-            front.append(value if eq else next(rest, ""))
-            if moved is not None:
-                moved.append(front[-1])
-            continue
-        if isinstance(new, str) and name.startswith("--"):
+        elif isinstance(new, str):
             _warn_once(warned, name, new)
             out.append(new + eq + value)
-            continue
-        short = next((o for o in renames if not o.startswith("--") and arg.startswith(o)), None)
-        if short is not None:
-            long = str(renames[short])
-            _warn_once(warned, short, long)
-            out.append(long)
-            if len(arg) > len(short):  # `-n20`: the value attached to the flag
-                out.append(arg[len(short) :])
-            continue
-        out.append(arg)
-    return front + out + _reason(reasons, flags, has_reason)
+        else:
+            out.append(arg)
+    return out + _reason(flags, has_reason)
 
 
-def _reason(reasons: list[str], flags: Sequence[str] = (), has_reason: bool = False) -> list[str]:
-    """The one --reason the old per-override options' reasons become (#1732);
-    for old bypass flags that took none (#1852), one saying so - unless the
-    command line gives its own --reason, which then covers them."""
-    if not reasons and (has_reason or not flags):
+def _reason(flags: Sequence[str], has_reason: bool) -> list[str]:
+    """For old bypass flags, which took no reason (#1852), a --reason saying
+    so - unless the command line gives its own, which then covers them."""
+    if not flags or has_reason:
         return []
-    said = reasons + ([legacy_reason(", ".join(flags))] if flags and not has_reason else [])
-    return ["--reason", "; ".join(said)]
+    return ["--reason", legacy_reason(", ".join(flags))]
 
 
 def _warn_once(warned: set[str], old: str, new: str) -> None:
@@ -201,12 +134,7 @@ def renamed(
 ) -> type[TyperCommand]:
     """`cls=` for a command whose options were renamed: the old spellings in
     `renames` (old -> new) still parse, hidden from --help, each logging its
-    new spelling. A short old spelling (`-n`) matches only as its own word or
-    with its value attached (`-n20`). `--debug` -> `--debug` moves a
-    per-command `--debug` to the global one, and a new spelling with no dash
-    names the first positional (`--proc` -> `PROC`). A pair names a bypass:
-    `--accept-digest R` -> `--override accept-digest`, its value the
-    --reason (#1732). A `bypass_flag(NAME)` names an old bypass FLAG, which
+    new spelling. A `bypass_flag(NAME)` names an old bypass FLAG, which
     takes no value: `--allow-dirty` -> `--override allow-dirty` (#1852). `mark`
     is the command's class from safety (`ReadOnly`, `ChangesState`,
     `ConfirmsOnServer`), so the effect it states carries over;
@@ -217,11 +145,8 @@ def renamed(
         renames: dict[str, str | tuple[str, ...]] = {}
 
         def parse_args(self, ctx, args):
-            root = ctx.find_root()
-            path = ctx.command_path
-            moved = ctx.meta.setdefault(MOVED_KEY, [])
             quiet = ctx.resilient_parsing or ctx.meta.get(QUIET_KEY, False)
-            args = _rewrite_renamed(list(args), renames, path, root, moved, quiet)
+            args = _rewrite_renamed(list(args), renames, quiet)
             return super().parse_args(ctx, args)
 
     Renamed.renames = dict(renames)

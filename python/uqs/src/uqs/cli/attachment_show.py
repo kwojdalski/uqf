@@ -1,21 +1,16 @@
-"""`uqs job attachment show NAME`, and the verbs the attachment noun replaced (#1737).
-
-`show` is one attachment: what was saved for it and its state now. `uqs job
-attach` and `uqs job detach` are its `add` and `remove` (attach.py), kept here
-for one release as hidden aliases that log the new spelling. Split from
-attach.py, which holds the two commands that change a stack.
+"""`uqs job attachment show NAME`: one attachment, what was saved for it and its
+state now. Split from attach.py, which holds the two commands that change a stack.
 """
 
 from __future__ import annotations
 
 from uqs.attach import backfill_audit, config
-from uqs.cli.attach import EXTRA_WORDS, NameArg, attach, detach
+from uqs.cli.attach import NameArg
 from uqs.cli.attach_output import redact, secrets_of
-from uqs.cli.attachment import OLD_REASON, attachment_app
+from uqs.cli.attachment import attachment_app
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.renames import alias_command
 from uqs.cli.safety import ReadOnly
-from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
+from uqs.cli.shared import _die, _paths, console
 from uqs.paths import UqsError
 from uqs.stack import attach_state
 
@@ -59,14 +54,3 @@ def show(name: NameArg, as_json: ShowJson = False) -> None:
         console.print(f"[bold]backfill overrides[/] ({record}):", highlight=False)
         for line in backfill_audit.lines_of(doc["backfill_overrides"]["entries"]):
             console.print(f"  {line}", markup=False, soft_wrap=True, highlight=False)
-
-
-# The verbs that were the noun's only spelling, kept for one release (#1737).
-alias_command(
-    job_app, "attach", "uqs job attachment add", attach, cls=OLD_REASON,
-    rich_help_panel=JOB_OPERATIONS_PANEL, context_settings=EXTRA_WORDS,
-)  # fmt: skip
-alias_command(
-    job_app, "detach", "uqs job attachment remove", detach,
-    rich_help_panel=JOB_OPERATIONS_PANEL, context_settings=EXTRA_WORDS,
-)  # fmt: skip

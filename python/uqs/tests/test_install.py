@@ -12,7 +12,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-import rename_support
 from typer.testing import CliRunner
 
 from uqs import cli
@@ -251,15 +250,3 @@ def test_cli_installs_a_direct_line_that_says_why(sidecar: Path, cli_repo: Path)
     code, out = _run(str(sidecar), "--copy", "--yes")
     assert code == 0, out
     assert (cli_repo / SOURCE_DIR / "acme.q").exists()
-
-
-@pytest.mark.parametrize(("old", "new"), [("symlink", "--link"), ("copy", "--copy")])
-def test_cli_mode_is_the_old_spelling_of_link_and_copy(
-    sidecar: Path, cli_repo: Path, monkeypatch, old: str, new: str
-) -> None:
-    """#1739: --mode is backfill's validate/plan/run, so install's is a flag."""
-    said = rename_support.said(monkeypatch)
-    code, out = _run(str(sidecar), "--mode", old, "--yes")
-    assert code == 0, out
-    assert (cli_repo / WORKER_DIR / "acme_backfill.q").is_symlink() is (old == "symlink")
-    assert said == [rename_support.renamed(f"--mode {old}", new)]

@@ -462,7 +462,6 @@ def test_removing_an_exempt_process_named_like_a_profile_drops_only_its_exemptio
     [
         ["--override", "even-if-edited", "--reason", "rewriting it from scratch"],
         ["--even-if-edited"],  # the old flag, for one release (#1852)
-        ["--force"],
     ],
 )
 def test_a_written_job_is_removed_only_through_the_named_override(tree, monkeypatch, argv):

@@ -23,7 +23,7 @@ from uqs import cli
 from uqs.attach import config, facts, plan, publisher, service
 from uqs.attach import verify as verifying
 from uqs.attach.manifest import Manifest
-from uqs.cli import attach_legacy, shared, target_confirm
+from uqs.cli import shared, target_confirm
 from uqs.deploy import control
 from uqs.paths import repo_root
 from uqs.stack import attach_state, listing, runtime
@@ -31,7 +31,6 @@ from uqs.stack import attach_state, listing, runtime
 TABLE = "piggybank_general_ledger"
 SECRET = "s3cr3t-Pw!x"
 REAL_START = publisher.UqsPublisher.start
-STAGES = ("plan", "validate", "status", "apply", "verify", "start", "detach")
 
 
 class _ErrorLog:
@@ -149,31 +148,6 @@ def test_attachment_is_a_noun_and_no_stage_or_status_command_remains():
     assert "attachments" in listing.LISTABLE_KINDS
 
 
-def test_the_old_verbs_are_hidden_aliases_that_name_the_new_spelling(world, monkeypatch):
-    """`job attach`, `job detach` and `job contract ...` still run for one
-    release, hidden from --help, each logging its new spelling (#1737)."""
-    from uqs.cli import renames
-
-    warned: list[tuple[str, str]] = []
-    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: warned.append((old, new)))
-    job = _group(typer.main.get_command(cli.app), "job")
-    for old in ("attach", "detach", "contract"):
-        assert job.commands[old].hidden, old
-    assert run_old("attach", *new(world, "--dry-run")).exit_code == 0
-    assert run_old("detach", "pb-uat", "--dry-run").exit_code == 1, "nothing saved by a dry run"
-    done = run_old("contract", "list", "--attachment", "pb-uat", "--json")
-    assert done.exit_code == 0 and json.loads(done.output) == {"contracts": []}
-    assert warned == [
-        ("attach", "uqs job attachment add"),
-        ("detach", "uqs job attachment remove"),
-        ("list", "uqs job attachment contract list"),
-    ]
-
-
-def run_old(*argv: str):
-    return CliRunner().invoke(cli.app, ["job", *argv], catch_exceptions=False)
-
-
 def test_show_is_one_attachment_saved_and_now(world):
     assert run("add", *new(world), "--yes").exit_code == 0
     doc = json.loads(run("show", "pb-uat", "--json").output)
@@ -184,17 +158,6 @@ def test_show_is_one_attachment_saved_and_now(world):
     assert "state: verified" in human and "pb_general_ledger" in human
     missing = run("show", "nosuch")
     assert missing.exit_code == 1 and "nosuch" in " ".join(world.errors)
-
-
-@pytest.mark.parametrize("stage", STAGES)
-def test_every_old_stage_command_is_refused_with_the_command_that_replaced_it(world, stage):
-    result = run_old("attach", stage, "pb-uat")
-    assert result.exit_code == 1
-    message = world.errors[-1]
-    assert f"`uqs job attach {stage}` was replaced" in message
-    new_command = attach_legacy.MIGRATION[stage][0].format(name="pb-uat")
-    assert new_command in message
-    assert not world.state_dir.exists() and changes(world) == []
 
 
 # ------------------------------------------------------------------ dry run

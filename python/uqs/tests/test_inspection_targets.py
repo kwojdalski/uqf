@@ -181,9 +181,7 @@ def test_a_change_forwarded_to_an_inspection_target_is_refused(declared, no_ssh,
         target_cli.forward("prod", True, args, interactive=False)
 
 
-@pytest.mark.parametrize(
-    "args", [["status"], ["summary"], ["stop", "--dry-run"], ["data", "check"], ["--help"]]
-)
+@pytest.mark.parametrize("args", [["status"], ["stop", "--dry-run"], ["data", "check"], ["--help"]])
 def test_a_read_forwarded_to_an_inspection_target_still_runs(declared, monkeypatch, args):
     ran: list = []
     monkeypatch.setattr(control, "run", lambda r, a, **_: ran.append((r.name, a)) or 0)

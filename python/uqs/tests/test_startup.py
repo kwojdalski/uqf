@@ -123,11 +123,7 @@ def _summary_with_one_process(monkeypatch) -> list[list[str]]:
     return asked
 
 
-@pytest.mark.parametrize(
-    "argv",
-    [["summary", "--debug"], ["--debug", "status"]],
-    ids=["old command flag", "global flag"],
-)
+@pytest.mark.parametrize("argv", [["--debug", "status"]], ids=["global flag"])
 def test_debug_adds_each_process_s_load_time(monkeypatch, argv):
     asked = _summary_with_one_process(monkeypatch)
     result = runner.invoke(cli.app, [*argv, "--columns", "status"])

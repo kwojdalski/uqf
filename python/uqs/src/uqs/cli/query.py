@@ -30,7 +30,6 @@ from uqs.cli.q_login import (
     QUserOpt,
     q_password,
 )
-from uqs.cli.renames import renamed
 from uqs.cli.safety import Effect, marked
 from uqs.cli.shared import (
     ExportOpt,
@@ -175,14 +174,11 @@ _RenderOpt = ChoiceOpt(
 
 
 @app.command(
-    cls=renamed(
-        {"--raw": "--no-gateway", "--target": "--tunnel", "--proc": "PROC"},
-        marked(
-            Effect.CHANGES_STATE,
-            no_dry_run="runs any q on a process - so it may change it, which is its Effect - "
-            "and what it changes is the expression's: there is nothing to check without "
-            "running it",
-        ),
+    cls=marked(
+        Effect.CHANGES_STATE,
+        no_dry_run="runs any q on a process - so it may change it, which is its Effect - "
+        "and what it changes is the expression's: there is nothing to check without "
+        "running it",
     )
 )
 def query(
@@ -266,7 +262,7 @@ def query(
     """
     try:
         render = stack_render.renderer(render)
-        proc, expr = _proc_first(ctx, proc, expr, port is not None)
+        proc, expr = _proc_first(proc, expr, port is not None)
         passwd = q_password(password_env, passwd)
     except UqsError as exc:
         _die(exc)

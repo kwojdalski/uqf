@@ -24,11 +24,10 @@ attachment_app = typer.Typer(
     "one (contract).",
 )
 
-#: `add`, and its old spelling `job attach`: `--override-reason` is `--reason`
-#: (#1732); the stack's base port is `--base-port`, as on every command, and
-#: "runtime" names a uqs runtime only, so `--runtime-only` is `--transient` (#1855)
+#: `add`'s old spellings: the stack's base port is `--base-port`, as on every
+#: command, and "runtime" names a uqs runtime only, so `--runtime-only` is `--transient` (#1855)
 OLD_REASON = renamed(
-    {"--override-reason": "--reason", "--stack-id": "--base-port", "--runtime-only": "--transient"},
+    {"--stack-id": "--base-port", "--runtime-only": "--transient"},
     ChangesState,
 )
 

@@ -30,10 +30,7 @@ _NameOpt = job_arg("The job, as uqs job new named it")
     "remove",
     rich_help_panel=JOB_AUTHORING_PANEL,
     cls=renamed(
-        {
-            "--force": bypass_flag(EVEN_IF_EDITED),
-            "--even-if-edited": bypass_flag(EVEN_IF_EDITED),
-        },
+        {"--even-if-edited": bypass_flag(EVEN_IF_EDITED)},
         ChangesState,
     ),
 )

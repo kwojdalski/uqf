@@ -135,7 +135,7 @@ def _tokenizes(cmd: Any, ctx: Any, args: list[str]) -> None:
     not converted here: a missing or invalid one the server refuses itself."""
     renames = getattr(cmd, "renames", None)
     if renames is not None:  # renames.renamed: as its own parse_args does
-        args = _rewrite_renamed(list(args), renames, ctx.command_path, None, None, quiet=True)
+        args = _rewrite_renamed(list(args), renames, quiet=True)
     probe = cmd.context_class(
         cmd, info_name=ctx.info_name, parent=ctx.parent, resilient_parsing=False
     )  # a child inherits its parent's resilience unless told: the parent's is True

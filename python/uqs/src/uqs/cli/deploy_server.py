@@ -21,7 +21,7 @@ from uqs.cli.concepts import profile_opt
 from uqs.cli.deploy import deploy_app
 from uqs.cli.hdb_scope import tables_given
 from uqs.cli.json_out import emit, emit_line, json_opt
-from uqs.cli.renames import alias_command, renamed
+from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, OverrideOpt, ReadOnly, ReasonOpt, YesOpt
 from uqs.cli.shared import _die, json_refusal
 from uqs.cli.vocabulary import duration
@@ -50,7 +50,7 @@ StatusJson = json_opt(
 )
 
 
-@deploy_app.command("status", cls=renamed(conn.OLD_SPELLINGS, ReadOnly))
+@deploy_app.command("status", cls=ReadOnly)
 def status_cmd(
     ctx: typer.Context,
     target: conn.Target = None,
@@ -94,14 +94,7 @@ def status_cmd(
     raise typer.Exit(code=1 if failing else 0)
 
 
-#: `--to` names a release here, and only here, while everywhere else it ends a
-#: time range: `--release` since #1768, the old spelling parsing for one release.
-@deploy_app.command(
-    "rollback",
-    cls=renamed(
-        conn.OLD_SPELLINGS | {"--to": "--release"} | policy.ROLLBACK_OLD_SPELLINGS, ChangesState
-    ),
-)
+@deploy_app.command("rollback", cls=renamed(policy.ROLLBACK_OLD_SPELLINGS, ChangesState))
 def rollback_cmd(
     ctx: typer.Context,
     target: conn.NamedTarget = None,
@@ -169,7 +162,7 @@ def rollback_cmd(
     raise typer.Exit(code=code)
 
 
-@deploy_app.command("prune", cls=renamed(conn.OLD_SPELLINGS, ChangesState))
+@deploy_app.command("prune", cls=ChangesState)
 def prune_cmd(
     ctx: typer.Context,
     target: conn.NamedTarget = None,
@@ -271,7 +264,6 @@ VerifyJson = json_opt(
 #: name it, and a process beyond the profile `--proc`, repeatable (#1857).
 #: `deploy push` asks the release which it takes (deploy/selection.py).
 _CHECK_RENAMES = {
-    "--port": "--base-port",
     "--deadline": "--verify-timeout",
     "--procs": "--proc",
     "--tables": "--table",  # tables are a repeatable --table on every command (#1856)
@@ -349,9 +341,3 @@ def verify_cmd(
         emit_line(result)
         print(verify.OK_MARKER if code == 0 else verify.FAILED_MARKER)
     raise typer.Exit(code=code)
-
-
-#: Its name before #1733: `check` actively probes and exits non-zero on a problem.
-#: An older release on a server has only `verify`, which a rollback runs
-#: (deploy/selection.py's verify_command asks for whichever it has).
-alias_command(deploy_app, "verify", "uqs deploy check", verify_cmd, cls=renamed(_CHECK_RENAMES))

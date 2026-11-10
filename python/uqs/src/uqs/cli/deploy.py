@@ -171,12 +171,7 @@ def build(
     print(artifact.path)
 
 
-_PUSH_RENAMES = (
-    policy.OLD_SPELLINGS
-    | conn.OLD_SPELLINGS
-    | components.OLD_Q_SPELLINGS
-    | components.OLD_SPELLINGS
-)
+_PUSH_RENAMES = policy.OLD_SPELLINGS | components.OLD_Q_SPELLINGS | components.OLD_SPELLINGS
 _ProfileOpt = profile_opt("The uqs profile to start, e.g. essential")
 
 
@@ -205,15 +200,6 @@ def push(
     ssh: conn.Ssh = None,
     dest: conn.Dest = None,
     profile: _ProfileOpt = None,
-    target: Annotated[
-        str | None,
-        typer.Option(
-            "--target",
-            metavar="NAME,...",
-            hidden=True,
-            help="Renamed: give the targets after ARTIFACT (`uqs deploy push ARTIFACT A B`)",
-        ),
-    ] = None,
     remote_user: conn.RemoteUser = None,
     torq_home: Annotated[
         str | None, typer.Option("--torq-home", help="An existing TorQ on the server (TORQHOME)")
@@ -337,20 +323,14 @@ def push(
 ) -> None:
     """Deploy a release onto a server, on its TorQ and q or bundled ones, and verify it there."""
     options = conn.config_options(dict(locals()))
-    del options["ctx"], options["target"], options["target_names"]
+    del options["ctx"], options["target_names"]
     del options["override"], options["reason"]
     code = 0
     shown = deploy_out.PushOutput(as_json, dry_run)
     try:
         bypass = policy.bypasses(override, reason)
         options.update(bypass)
-        if target is not None:
-            if target_names:
-                raise config.DeployError(
-                    "arguments", "give the targets after ARTIFACT, not also as --target"
-                )
-            conn.renamed_target_option(target)
-        names = ",".join(target_names or []) or target
+        names = ",".join(target_names or [])
         if names:
             given = {
                 k: v

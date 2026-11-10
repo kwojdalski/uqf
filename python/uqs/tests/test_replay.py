@@ -343,7 +343,7 @@ def test_start_passes_the_flags_through_torq_sh_extras(monkeypatch):
     assert seen["kw"]["base_port"] == 6050
 
 
-AIMED = ["--port", "6050", "--tplogdir", TPLOGS, "--hdb", HDB, "--schema-file", SCHEMA]
+AIMED = ["--base-port", "6050", "--tplogdir", TPLOGS, "--hdb", HDB, "--schema-file", SCHEMA]
 
 
 def _explode(*a, **k):

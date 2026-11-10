@@ -151,21 +151,6 @@ def test_only_a_flag_given_on_the_command_line_overrides(root, monkeypatch):
     assert seen[0].verify_timeout == 180 and seen[0].sources["verify_timeout"] == "--verify-timeout"
 
 
-def test_the_old_target_option_still_deploys_and_names_the_new_spelling(
-    root, monkeypatch, log_text
-):
-    """--target A,B, renamed by #1736, works for one release, saying what to type."""
-    r, seen = _push(monkeypatch, root, ["--target", "prod-a,prod-b"], [0, 0])
-    assert r.exit_code == 0 and [c.target for c in seen] == ["prod-a", "prod-b"]
-    assert "uqs deploy push ARTIFACT prod-a prod-b" in log_text()
-
-
-def test_targets_given_both_ways_are_refused(root, monkeypatch, log_text):
-    r, seen = _push(monkeypatch, root, ["prod-a", "--target", "prod-b"], [0])
-    assert r.exit_code == 2 and not seen
-    assert "not also as --target" in log_text()
-
-
 class Untouched:
     """A server that must not be reached: the refusal comes first."""
 
