@@ -81,6 +81,14 @@
     .qetl.snapshot.attach[]};
 
 .qt.support.reset_coverage_ledger:{[]
+    // The ledger's mutex is shared by every process using this status directory,
+    // and each wait on it is bounded by file_lock_wait (5 seconds in production:
+    // a hung live holder should fail loudly). On a machine loaded by concurrent
+    // suites a holder's write takes longer than that, and a test that only
+    // wanted to write the ledger failed with "could not take the lock" (#2683).
+    // No test here asserts the production wait, so a suite that touches the
+    // ledger waits for the lock like a patient process, not a production one.
+    .qetl.job.bounded.state.file_lock_wait:0D00:10;
     ![`.;();0b;enlist `etl_coverage];
     // The ledger is persisted now, so deleting the in-memory table is no
     // longer a reset: the next attach or stage_completion reloads whatever
