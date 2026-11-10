@@ -1,8 +1,9 @@
 # ODBC sources on a server
 
 A source read over ODBC needs three things on the server: - KX's q client for
-ODBC (`odbc.k` and `odbc.so`); - a driver manager (unixODBC); - the database's
-own driver.
+ODBC (the native `odbc.so`; the q side, `src/etl/core/odbc.q`, is in this
+repository and needs no `odbc.k`); - a driver manager (unixODBC); - the
+database's own driver.
 
 They live in one directory the deployment owns, the **ODBC home**. Nothing is
 installed system-wide, nothing needs sudo, and the managed `QHOME` and `/etc`
@@ -17,12 +18,12 @@ KX's client and most drivers may not be redistributed, so this repository ships
 none of them. The operator assembles a package, a `.tar.gz`, from approved
 binaries:
 
-  | Path           | What it holds                                                                                                         |
-  | ---            | ---                                                                                                                   |
-  | `package.json` | `name`, `version`, `platform` (`linux-x86_64`), every file's sha256 under `files`, and `drivers`: name → library path |
-  | `q/`           | laid over the managed QHOME: `odbc.k`, and `l64/odbc.so` for the platform                                             |
-  | `lib/`         | native libraries: unixODBC's `libodbc.so.2` and each driver                                                           |
-  | `certs/`       | optional CA certificates a driver's TLS settings name                                                                 |
+  | Path           | What it holds                                                                                                          |
+  | ---            | ---                                                                                                                    |
+  | `package.json` | `name`, `version`, `platform` (`linux-x86_64`), every file's sha256 under `files`, and `drivers`: name → library path  |
+  | `q/`           | laid over the managed QHOME: `l64/odbc.so` for the platform                                                            |
+  | `lib/`         | native libraries: unixODBC's `libodbc.so.2` and each driver                                                            |
+  | `certs/`       | optional CA certificates a driver's TLS settings name                                                                  |
 
 Packages are built for Linux. On a development machine, `./install.sh --odbc`
 sets ODBC up as far as it can without root:
@@ -147,3 +148,34 @@ UQF_LIVE_SOURCE_TEST=deals_db,quotes_db UQS_ODBC_HOME=/srv/uqf/odbc \
 
 Skipped unless `UQF_LIVE_SOURCE_TEST` names sources, so ordinary runs and CI
 never need a driver, a credential or the network.
+
+## The q client: `odbc.q`, not `odbc.k`
+
+KX's `odbc.k` is k source, which PeachQ cannot run. This repository ships its
+own wrapper, `src/etl/core/odbc.q`, over the same native `odbc.so`, and
+`.qetl.io.odbc.available[]` loads it. It provides `.odbc.open`, `.odbc.eval`,
+`.odbc.close` and `.odbc.tables` and nothing else:
+
+- `open` takes a connection string, a DSN symbol or a `(string;timeout)` pair,
+  and registers the handle. A dotted DSN symbol (odbc.k's `.mdb`/`.dsn` file
+  conveniences) is refused.
+- `eval` takes a handle or `(handle;timeout)` and a SQL string, refuses an
+  unknown handle with `invalid`, and returns whole-day datetime columns as
+  dates.
+- `close` refuses an unknown handle with `invalid` and unregisters it.
+
+Nothing is bound at load time; `odbc.so` is found in `QHOME` on first use.
+
+### What is verified
+
+  | Where                                         | What                                                                                                                                                     |
+  | ---                                           | ---                                                                                                                                                      |
+  | every lane, with no ODBC                      | `tests/q/test_odbc.q`: the registry, the refusals, timeout routing and the whole-day conversion, against a double of `odbc.so`                           |
+  | KDB-X, x86_64 under Rosetta, DuckDB driver    | `tests/qrun/test_odbc_parity.py`: `odbc.k` and `odbc.q` give identical output for the same queries, including the refusals and the whole-day case        |
+  | PeachQ, with `odbc.so` doubled                | the same default-lane suite (it needs no `odbc.so`)                                                                                                      |
+  | **not verified**                              | `odbc.so` returning tables to PeachQ: KX's macOS `odbc.so` is x86_64-only, so it needs Linux x86_64. Timeout *expiry*: DuckDB's driver never expires one |
+
+The parity test needs `scripts/dev/odbc_rosetta.sh setup` and
+`scripts/dev/odbc_rosetta.sh fetch-odbc-k` (KX's `odbc.k`, the reference; no
+other part of the tree loads it) and skips, saying which is missing, without
+them.

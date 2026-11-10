@@ -212,7 +212,12 @@
         ".qetl.verify.check_retries[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000]`status";
         ".qetl.verify.check_conflict[`demo_deals_backfill;.qpipe.source.demo_deals.fixture[];2026.09.11D00:00:00.000000000;2026.09.16D00:00:00.000000000]`status";
         ".qetl.verify.check_coverage[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.14D00:00:00.000000000;3]`status";
-        ".qetl.mapped.newest[enlist[`market]!enlist `crypto]");
+        ".qetl.mapped.newest[enlist[`market]!enlist `crypto]";
+        ".odbc.bind[]";
+        ".odbc.open \"DRIVER=DuckDB;Database=:memory:\"";
+        ".odbc.close h";
+        ".odbc.eval[h; \"select 1 as a\"]";
+        ".odbc.tables h");
     reason:(
         "sends .u.upd over a tickerplant handle";
         "sends .u.upd over a tickerplant handle";
@@ -236,7 +241,12 @@
         "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
         "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
         "refuses outside a throwaway q, and this runner holds a coverage ledger; `uqs job check` runs it in its own q (#1851)";
-        "reads the newest partition of the global market_data, which exists only in a process that has loaded an HDB (#2288)"))
+        "reads the newest partition of the global market_data, which exists only in a process that has loaded an HDB (#2288)";
+        "binds KX's odbc.so, which exists only where the ODBC client is installed (#2508)";
+        "opens an ODBC connection, which needs odbc.so and a driver this tree does not require";
+        "closes a handle that .odbc.open returned, which needs odbc.so and a driver";
+        "runs SQL on a handle that .odbc.open returned, which needs odbc.so and a driver";
+        "lists tables on a handle that .odbc.open returned, which needs odbc.so and a driver"))
 
 / Private: drop a trailing prose gloss - "1.016667 (2024 is a leap year)".
 / Both forms are tried by classify below rather than only the stripped one,

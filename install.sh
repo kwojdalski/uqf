@@ -141,7 +141,7 @@ if ((ODBC)); then
         fi
         # KX's client goes into QHOME, which this script never changes.
         if [[ ! -f "${QHOME:-$HOME/.kx}/l64/odbc.so" ]]; then
-            OPTIONAL+=("KX's ODBC client - copy odbc.k and l64/odbc.so from https://github.com/KxSystems/kdb into QHOME (docs/guides/odbc.md)")
+            OPTIONAL+=("KX's native ODBC client - copy l64/odbc.so from https://github.com/KxSystems/kdb into QHOME (docs/guides/odbc.md)")
         fi
     fi
     UNVERIFIED+=("a database's own ODBC driver: per database - docs/guides/odbc.md")
