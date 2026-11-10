@@ -37,6 +37,7 @@ from uqs.cli.shared import (
 )
 from uqs.cli.start_follow import FollowOpt, LevelOpt, StopOnExitOpt
 from uqs.cli.start_override_opts import parsed as _overrides
+from uqs.cli.start_warnings import TraceOpt
 from uqs.cli.start_warnings import running as _running
 from uqs.model import profiles
 from uqs.paths import UqsError, UqsUsageError
@@ -156,6 +157,7 @@ def _launch(
     reason: str | None,
     stop_on_exit: bool = False,
     grace: float = start_check.DEFAULT_GRACE,
+    trace: bool = False,
 ) -> None:
     """`start` and `restart`, which differ only in the torq.sh verb they run."""
     if level is not None and not follow:
@@ -167,14 +169,17 @@ def _launch(
     overrides = _overrides(verb, override, reason, profile=profile, print_only=print_only)
     names = _names_to_start(procs, profile, overrides)
     if print_only:
-        _print_startlines(verb, names, port, profile)
+        _print_startlines(verb, names, port, profile, trace)
         return
     launch = runtime.start if verb == "start" else runtime.restart
     selected = _selected(names, profile)
     kwargs: dict[str, Any] = {"base_port": port, "selected": selected, "skips": overrides}
+    kwargs["trace"] = trace  # -extras -trace on each start line (runtime.TRACE_EXTRAS)
+    untraced = start_warnings.untraced(verb, names, port, _running) if trace else []
     if not follow:
         _launch_checks(verb, names, port, profile)
         _launch_and_confirm(verb, launch, names, port, grace, kwargs)
+        start_warnings.trace_unreached(untraced, port)
         return
     try:
         wanted = start_follow.procnames_started_by(names, port)
@@ -189,6 +194,7 @@ def _launch(
 
     def before() -> None:
         _launch_checks(verb, names, port, profile)
+        start_warnings.trace_unreached(untraced, port)
         start_follow.in_foreground(lambda **kw: launch(_paths(), names, **kwargs, **kw))()
 
     start_follow.follow(wanted, already, before, port, level, stop=stop_on_exit)
@@ -234,6 +240,7 @@ def start(
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
     grace: GraceOpt = start_check.DEFAULT_GRACE,
+    trace: TraceOpt = False,
 ) -> None:
     """Start every startwithall=1 process (or specific process name(s)).
 
@@ -246,11 +253,12 @@ def start(
     running - `start -f`, `start rdb1 fxpositions1 -f`, `start --profile fx -f
     --level WARNING`. `--stop-on-exit` makes it the foreground form `docker
     compose up` is: Ctrl-C then stops what it started, and leaves what was
-    already running.
+    already running. `--trace` turns source-query tracing on in each process
+    it starts, before its first source request, and names any already running.
     """
     _launch(
         "start", procs, port, profile, follow, level, print_only,
-        override, reason, stop_on_exit, grace,
+        override, reason, stop_on_exit, grace, trace,
     )  # fmt: skip
 
 
@@ -266,6 +274,7 @@ def restart(
     override: OverrideOpt = None,
     reason: ReasonOpt = None,
     grace: GraceOpt = start_check.DEFAULT_GRACE,
+    trace: TraceOpt = False,
 ) -> None:
     """Restart every startwithall=1 process (or specific process name(s)).
 
@@ -275,7 +284,7 @@ def restart(
     """
     _launch(
         "restart", procs, port, profile, follow, level, print_only,
-        override, reason, stop_on_exit, grace,
+        override, reason, stop_on_exit, grace, trace,
     )  # fmt: skip
 
 
@@ -348,7 +357,9 @@ def stop(
     _run_streaming(runtime.stop, names, base_port=port)
 
 
-def _print_startlines(verb: str, names: str, port: int | None, profile: str | None) -> None:
+def _print_startlines(
+    verb: str, names: str, port: int | None, profile: str | None, trace: bool = False
+) -> None:
     """`start --dry-run` and `restart --dry-run`: what a restart would stop, then
     each start line - composed, never bootstrapped, so nothing is written here
     or on a server `uqs --target` sent it to (stack/start_lines.py, #1880)."""
@@ -356,7 +367,7 @@ def _print_startlines(verb: str, names: str, port: int | None, profile: str | No
     try:
         stopping = start_follow.procnames_started_by(names, port) if verb == "restart" else []
         result = runtime.print_procs(
-            _paths(), names, base_port=port, selected=_selected(names, profile)
+            _paths(), names, base_port=port, selected=_selected(names, profile), trace=trace
         )
     except UqsError as exc:
         _die(exc)

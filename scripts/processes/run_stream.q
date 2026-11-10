@@ -59,8 +59,10 @@ if[all `job`tp in key .Q.opt .z.x;
 / The parsed command line: -job, -tp, -port, -plant, -feed, -logdir.
 .qproc.standalone.opts:.Q.opt .z.x
 
-/ -verbose switches DEBUG on, the same flag every uqf process script takes.
+/ -verbose switches DEBUG on, and -trace TRACE with DEBUG - the same flags every
+/ uqf process script takes, set before any source is asked for anything.
 if[`verbose in key .qproc.standalone.opts; .qetl.log.debug 1b];
+if[`trace in key .qproc.standalone.opts; .qetl.log.debug 1b; .qetl.log.trace 1b];
 
 / Private: one option's value, or a default. .Q.opt gives a list per key,
 / so a flag given once is a one-element list and a flag given twice is

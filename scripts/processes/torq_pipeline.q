@@ -122,8 +122,9 @@ check_cycles:0W
 / Says so on stdout before and after, with the time it took: .qetl.log is one of
 / the files being loaded, so it cannot report its own load, and a process
 / that dies here otherwise leaves a log with no line from uqf at all. Then
-/ applies -verbose (see apply_verbose) and loads the source settings (see
-/ load_source_settings).
+/ applies -verbose and -trace (see apply_log_flags) and loads the source
+/ settings (see load_source_settings), so a traced process traces its first
+/ source request.
 load_uqf:{[only]
     t0:.z.p;
     / What src/etl/init.q loads: these jobs' declarations and their closure
@@ -138,7 +139,7 @@ load_uqf:{[only]
     system"cd ",cwd;
     if[not outcome~`ok; '"qtorq.load_uqf: could not load uqf and its ETL tree: ",outcome];
     -1 string[.z.p]," | qtorq: uqf tree loaded in ",string[elapsed_ms t0],"ms";
-    apply_verbose[];
+    apply_log_flags .Q.opt .z.x;
     load_source_settings[];
     }
 
@@ -148,14 +149,18 @@ load_uqf:{[only]
 elapsed_ms:{[t0] `long$(.z.p-t0)%1000000}
 
 / Switch DEBUG logging on when this process was started with -verbose, and
-/ say who this process is. Every uqf process script takes the same flag, so
-/ `-extras -verbose` on a start line, or `uqs --debug job backfill`, is one
-/ spelling for all of them. A process already running can be switched too,
-/ without a restart: `uqs query ".qetl.log.debug 1b" --port <port>`.
+/ TRACE with DEBUG when it was started with -trace, then say who this process
+/ is. Every uqf process script takes the same flags, so `-extras -verbose` or
+/ `-extras -trace` on a start line - `uqs --debug job backfill`, `uqs start
+/ --trace` - is one spelling for all of them; -trace brings DEBUG as
+/ torq_backfill.q's does. A process already running can be switched too,
+/ without a restart: `uqs query ".qetl.log.trace 1b" --port <port>`.
+/ @param opts the parsed command line, as .Q.opt returns it
 / @return 1b when debug logging is now on
-apply_verbose:{[]
-    on:`verbose in key .Q.opt .z.x;
+apply_log_flags:{[opts]
+    on:any `verbose`trace in key opts;
     if[on; .qetl.log.debug 1b];
+    if[`trace in key opts; .qetl.log.trace 1b];
     .qetl.log.ch.dbg[`config;"debug logging on";
         `procname`pid`port`cwd!(@[get;`.proc.procname;`];.z.i;system"p";first system"pwd")];
     on}

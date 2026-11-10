@@ -93,10 +93,13 @@ def plan(
     procs: str = "all",
     base_port: int | None = None,
     selected: Sequence[str] | None = None,
+    extras: Sequence[str] = (),
 ) -> list[StartLine]:
     """The lines `torq.sh start procs` would run, as bootstrap would set it up -
     with nothing written. `selected` is a profile start's set, which decides
-    monitor1's connection budget (stack/deployment.py)."""
+    monitor1's connection budget (stack/deployment.py). `extras` is what the
+    start passes torq.sh's `-extras` (runtime.TRACE_EXTRAS), ahead of any an
+    attachment's publisher adds, as start_policy.with_publisher_extras orders them."""
     check_prerequisites(paths)
     torq_launcher(paths)  # refused here as a start refuses it
     args = ["start", procs]
@@ -107,7 +110,7 @@ def plan(
     if attached := attached_publisher.publishers(args):
         how = attached_publisher.auth(paths, attached)
         rows, env = attached_publisher.with_auth(rows, attached, how), {**env, **how.env()}
-    extras = attach_state.publisher_extras(paths, procs)
+    extras = [*extras, *attach_state.publisher_extras(paths, procs)]
     by_name = {r["procname"]: r for r in rows}
     return [
         StartLine(name, _line(by_name[name], env, extras), f"{env['KDBLOG']}/torq{name}.txt")
