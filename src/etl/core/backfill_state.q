@@ -130,8 +130,7 @@
     if[0=count tmp; :1];
     rc:@[{[tmp;path;pid]
           .qetl.job.bounded.state.write_owner_as[tmp;pid];
-          system"perl -e 'exit 1 if -e $ARGV[1]; rename($ARGV[0],$ARGV[1]) or exit 1' ",
-              .qetl.job.bounded.state.shell_word[tmp]," ",.qetl.job.bounded.state.shell_word[path]," 2>/dev/null";
+          system"perl -e 'exit 1 if -e $ARGV[1]; rename($ARGV[0],$ARGV[1]) or exit 1' ",(" " sv .qetl.job.bounded.state.shell_word each (tmp;path))," 2>/dev/null";
           0}[tmp;path];pid;{[e] 1}];
     / Whatever happened the sibling is not wanted; after a successful rename it
     / is already gone, so this is then a no-op.
