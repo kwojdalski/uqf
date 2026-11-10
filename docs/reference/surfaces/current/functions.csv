@@ -461,6 +461,8 @@ qetl.job.stream,end_of_day,function,1,dt
 qetl.job.stream,evict,function,2,table_name mask
 qetl.job.stream,for_procname,function,1,procname
 qetl.job.stream,handler,function,1,job
+qetl.job.stream,hdb_handle,function,1,
+qetl.job.stream,hdb_tops,function,2,before lookback
 qetl.job.stream,horizons,dict,,
 qetl.job.stream,initial,dict,,
 qetl.job.stream,job_root,value,,
@@ -677,6 +679,7 @@ qetl.mapped,depth_at,function,1,arg
 qetl.mapped,depth_reads,value,,
 qetl.mapped,full_check_rows,value,,
 qetl.mapped,gather,function,1,arg
+qetl.mapped,last_tops,function,1,arg
 qetl.mapped,newest,function,1,arg
 qetl.mapped,order,value,,
 qetl.mapped,plain,function,1,x
@@ -1978,11 +1981,14 @@ qpipe.job.posbook,market_data,table,,
 qpipe.job.posbook,mid_history,dict,,
 qpipe.job.posbook,next_book,function,2,book positions
 qpipe.job.posbook,on_batch,function,2,t x
+qpipe.job.posbook,on_replayed,function,1,
 qpipe.job.posbook,position,table,,
 qpipe.job.posbook,position_book,table,,
 qpipe.job.posbook,position_trades,table,,
 qpipe.job.posbook,publish,value,,
 qpipe.job.posbook,reference_max_age,value,,
+qpipe.job.posbook,seed_lookback,value,,
+qpipe.job.posbook,seed_mids,function,1,before
 qpipe.job.rebuild_positions,as_fills,function,1,deals
 qpipe.job.rebuild_positions,handler,function,3,dataset range_from range_to
 qpipe.job.rebuild_positions,side_sign,dict,,

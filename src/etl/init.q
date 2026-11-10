@@ -119,6 +119,7 @@ if[not ()~key `:lib/unparse/unparse.q; system "l lib/unparse/unparse.q"];
 \l src/etl/core/uptime.q
 \l src/etl/core/retention.q
 \l src/etl/core/stream_job.q
+\l src/etl/core/stream_hdb.q
 \l src/etl/core/stream_defaults.q
 \l src/etl/core/stream_replay_guard.q
 \l src/etl/core/stream_outputs.q
