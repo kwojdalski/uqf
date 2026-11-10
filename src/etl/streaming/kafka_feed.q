@@ -134,20 +134,38 @@
 
 / ------------------------------------------------------------ THE LIBRARY
 
+/ kfk.q's text with its libkfk named by absolute path.
+/ .
+/ kfk.q opens libkfk as `:libkfk or `libkfk - a path relative to the working
+/ directory - so the feed used to cd into the library's directory to load it,
+/ which moves every other relative path in the process for the length of the
+/ load. Naming the library absolutely leaves the directory alone (#2653). A kfk.q
+/ with no such reference is returned unchanged: it finds libkfk by the dynamic
+/ loader's own path, which a release sets to the copy it carries.
+/ @param home the directory holding libkfk
+/ @param lines kfk.q's lines
+/ @return the lines, with every `:libkfk and `libkfk spelt (`$":<home>/libkfk")
+/ @eg .qpipe.job.kafka_feed.pin_library["/opt/kfk";enlist "f:`:libkfk 2:(`a;1)"]  ->  enlist "f:(`$\":/opt/kfk/libkfk\") 2:(`a;1)"
+.qpipe.job.kafka_feed.pin_library:{[home;lines]
+    lib:"(`$\":",home,"/libkfk\")";
+    ssr[;"`libkfk";lib] each ssr[;"`:libkfk";lib] each lines}
+
 / Load KX's kfk from $UQF_KFK_HOME and bind the calls the feed makes.
 / .
-/ kfk.q opens libkfk relative to the working directory, so the load happens
-/ there and the directory is put back even when the load throws.
+/ The load runs from a copy of kfk.q that names libkfk absolutely (pin_library),
+/ so the working directory is never changed.
 / @return nothing - .qpipe.job.kafka_feed.api is filled
 / @throws error naming UQF_KFK_HOME and what is missing
 .qpipe.job.kafka_feed.load_library:{[]
     home:getenv `UQF_KFK_HOME;
     if[0=count home; '"kafka_feed: UQF_KFK_HOME is not set - the directory holding kfk.q and libkfk.so (KxSystems/kafka v1.6.6), see docs/services/kafka.md"];
     if[not `kfk.q in key hsym `$home; '"kafka_feed: ",home,"/kfk.q does not exist - UQF_KFK_HOME must hold kfk.q and libkfk.so"];
-    cwd:first system "pwd";
-    system "cd ",home;
-    r:@[{system "l kfk.q"; `ok};::;{x}];
-    system "cd ",cwd;
+    if["\"" in home; '"kafka_feed: UQF_KFK_HOME must not contain a double quote: ",home];
+    tmp:first system "mktemp -d";
+    f:hsym `$tmp,"/kfk.q";
+    f 0: .qpipe.job.kafka_feed.pin_library[home;read0 hsym `$home,"/kfk.q"];
+    r:@[{system "l ",x; `ok};tmp,"/kfk.q";{x}];
+    system "rm -rf ",tmp;
     if[not r~`ok; '"kafka_feed: could not load kfk from ",home,": ",r];
     `.kfk.logcb set .qpipe.job.kafka_feed.on_log;
     / kfk.q hands a message whose topic has no subscribed callback to

@@ -91,6 +91,11 @@
 \l src/etl/core/source_credentials.q
 \l src/etl/core/source_zones.q
 \l src/etl/core/source_local_hdb.q
+/ unparse is vendored and optional: a release carries no lib/, and a tree
+/ without it renders every query as a parse tree (qsql_text.q). It is loaded here
+/ because this plan is what knows the repository root; a declaration loading it
+/ itself would be reading the working directory (#2653).
+if[not ()~key `:lib/unparse/unparse.q; system "l lib/unparse/unparse.q"];
 \l src/etl/core/qsql_text.q
 \l src/etl/core/source_fetch.q
 \l src/etl/core/source_csv.q
