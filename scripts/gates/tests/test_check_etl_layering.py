@@ -112,6 +112,53 @@ def test_the_real_tree_reads_only_the_listed_torq_variables():
     assert layering.unused_env_reads(layering.REPO) == []
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        'system "l lib/thing/thing.q"',
+        'system"l thing.q"',
+        'system "cd ",home',
+        'system "cd /var/data"',
+    ],
+)
+def test_a_relative_load_or_a_cd_is_flagged(tmp_path, line):
+    root = _tree(tmp_path, {"src/etl/core/other.q": f"f:{{[] {line}}}\n"})
+    (hit,) = layering.cwd_reach(root)
+    assert hit.startswith("src/etl/core/other.q:1:") and "working directory" in hit
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        'system "l /abs/path/thing.q"\n',
+        'system "l ",path\n',
+        'p:system "cd"\n',
+        '/ system "l lib/thing.q"\n',
+        "\\l src/etl/core/thing.q\n",
+    ],
+)
+def test_an_absolute_or_built_load_a_pwd_and_a_comment_are_not_flagged(tmp_path, text):
+    root = _tree(tmp_path, {"src/etl/core/other.q": text})
+    assert layering.cwd_reach(root) == []
+
+
+def test_a_cwd_allowance_holds_only_in_its_file_and_a_stale_one_is_reported(tmp_path):
+    file, cmd = next(iter(layering.CWD_CALLS))
+    root = _tree(
+        tmp_path,
+        {file: f'system "{cmd}"\n', "src/etl/core/other.q": f'system "{cmd}"\n'},
+    )
+    (hit,) = layering.cwd_reach(root)
+    assert hit.startswith("src/etl/core/other.q:1:")
+    stale = layering.unused_cwd_calls(root)
+    assert len(stale) == len(layering.CWD_CALLS) - 1
+
+
+def test_the_real_tree_has_only_the_listed_cwd_calls():
+    assert layering.cwd_reach(layering.REPO) == []
+    assert layering.unused_cwd_calls(layering.REPO) == []
+
+
 def test_the_real_tree_is_clean(monkeypatch):
     assert layering.torq_reach(layering.REPO) == []
     monkeypatch.setattr(sys, "argv", ["check_etl_layering.py", "--check"])

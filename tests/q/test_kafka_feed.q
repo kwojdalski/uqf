@@ -126,6 +126,35 @@
     .qunit.assertEquals[k;`consumer`subscribe;"created, then subscribed"];
     .qunit.assertEquals[.qpipe.job.kafka_feed.client;7i;"the client id is kept"]};
 
+/ The .z.exit open installs runs what was there before it, with the same code,
+/ and closes the client (#2653).
+.qt.qpipe.job.kafka_feed.test_the_exit_handler_composes_with_an_existing_one:{[t]
+    `.qpipe.job.kafka_feed.api set .qt.qpipe.job.kafka_feed.fake[];
+    `.qt.qpipe.job.kafka_feed.calls set ();
+    `.qt.qpipe.job.kafka_feed.exits set ();
+    older:@[value;`.z.exit;{(::)}];
+    `.z.exit set {[code] `.qt.qpipe.job.kafka_feed.exits set .qt.qpipe.job.kafka_feed.exits,code};
+    .qpipe.job.kafka_feed.open[(enlist `group.id)!enlist `g;enlist `uqf.client.flow];
+    r:@[{.z.exit 3; `ok};::;{(`failed;x)}];
+    `.z.exit set older;
+    .qunit.assertEquals[r;`ok;"the composed handler does not throw"];
+    .qunit.assertEquals[.qt.qpipe.job.kafka_feed.exits;enlist 3;"the earlier handler still ran, with the exit code"];
+    .qunit.assertTrue[`close in first each .qt.qpipe.job.kafka_feed.calls;"and the client was closed"];
+    .qunit.assertTrue[null .qpipe.job.kafka_feed.client;"so the client is gone"]};
+
+.qt.qpipe.job.kafka_feed.exits:()
+
+.qt.qpipe.job.kafka_feed.test_pin_library_names_libkfk_absolutely:{[t]
+    got:.qpipe.job.kafka_feed.pin_library["/opt/kfk";("f:`:libkfk 2:(`a;1)";"g:`libkfk 2:(`b;1)";"h:1")];
+    .qunit.assertEquals[got;("f:(`$\":/opt/kfk/libkfk\") 2:(`a;1)";"g:(`$\":/opt/kfk/libkfk\") 2:(`b;1)";"h:1");"both spellings, other lines untouched"]};
+
+.qt.qpipe.job.kafka_feed.test_load_library_leaves_the_working_directory_alone:{[t]
+    cwd:first system "pwd";
+    seen:.qt.qpipe.job.kafka_feed.with_stub_kfk {(first system "pwd";string .kfk.libfile)};
+    .qunit.assertEquals[first seen;cwd;"the load did not cd"];
+    .qunit.assertEquals[first system "pwd";cwd;"and left it where it was"];
+    .qunit.assertTrue[(last seen) like ":/*/libkfk";"kfk.q was given the library by absolute path: ",last seen]};
+
 / --- readiness and diagnostics (#1492) --------------------------------------
 
 .qt.qpipe.job.kafka_feed.lines:()
@@ -197,12 +226,12 @@
     home:getenv `UQF_KFK_HOME;
     api:.qpipe.job.kafka_feed.api;
     dir:"/tmp/uqf_test_kfk_",string first 1?0Ng;
-    (hsym `$dir,"/kfk.q") 0: ("\\d .kfk";"logcb:{[level;fac;buf] show -3!(level;fac;buf);}";"consumetopic:(enlist `)!enlist {[msg]}";"consumecb:{[msg] $[(t:msg`topic) in key consumetopic; consumetopic t; consumetopic`] msg}";"\\d .");
+    (hsym `$dir,"/kfk.q") 0: ("\\d .kfk";"logcb:{[level;fac;buf] show -3!(level;fac;buf);}";"consumetopic:(enlist `)!enlist {[msg]}";"consumecb:{[msg] $[(t:msg`topic) in key consumetopic; consumetopic t; consumetopic`] msg}";"libfile:`:libkfk";"libfile:`:libkfk";"\\d .");
     `UQF_KFK_HOME setenv dir;
     r:@[{[f] .qpipe.job.kafka_feed.load_library[]; `.qpipe.job.kafka_feed.api set .qt.qpipe.job.kafka_feed.fake[]; f[]};f;{[e] (`failed;e)}];
     `UQF_KFK_HOME setenv home;
     `.qpipe.job.kafka_feed.api set api;
-    delete logcb, consumetopic, consumecb from `.kfk;
+    delete logcb, consumetopic, consumecb, libfile from `.kfk;
     hdel hsym `$dir,"/kfk.q"; hdel hsym `$dir;
     if[(2=count r) and `failed~first r; 'last r];
     r}
