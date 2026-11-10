@@ -34,7 +34,7 @@
         "`.wdb.movetohdb set value (count \"movetohdb:\")_\"\\n\" sv src i+til 1+j-i;";
         (".wdb.movetohdb[\"",(1_string ` sv st[`wdb],`$string D),"\";\"",(1_string ` sv st[`root],`$string D),"\";",string[D],"];");
         "exit 0");
-    out:system (getenv`QCMD)," ",f," -q 2>&1";
+    out:system "env ",.qt.support.q_interpreter[]," ",f," -q 2>&1";
     out where out like "ERR *"}
 
 / Private: what end of day does after the move - the wdb opens the next day.
