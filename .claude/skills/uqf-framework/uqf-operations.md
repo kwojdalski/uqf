@@ -13,7 +13,7 @@ form is `docs/guides/uqs.md`. `uqs <command> --help` is authoritative for flags.
 ```
 
 Prerequisites: - KDB-X (q 5.0 or later; `QCMD`/`QHOME` when q isn't on PATH); -
-`uv`, `rlwrap` and `envsubst`; - `qlinter`
+`uv` and `envsubst`; - `qlinter`
 (`cargo install --git https://github.com/kwojdalski/q-lint`, at the tag in
 `.qlinter-version`).
 

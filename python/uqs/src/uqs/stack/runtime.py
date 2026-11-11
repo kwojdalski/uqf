@@ -225,7 +225,7 @@ def _bootstrap_and_run(
     else:
         overrides = bootstrap(paths, base_port=base_port, selected=plan)
     # subprocess.run's env= *replaces* the environment rather than extending it - merge onto
-    # the inherited one (PATH, etc.) or envsubst/rlwrap/q stop resolving, though on PATH.
+    # the inherited one (PATH, etc.) or envsubst and q stop resolving, though on PATH.
     env = {**os.environ, **overrides}
     if args and args[0] in start_policy.STARTING_VERBS:
         # What a start or restart loads, converted and proven first - refused before

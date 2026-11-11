@@ -98,9 +98,8 @@ else
         fi
     fi
 fi
-# uqs refuses to start the fleet without these two (uqs.stack.prerequisites.check_prerequisites).
+# uqs refuses to start the fleet without it (uqs.stack.prerequisites.check_prerequisites).
 need envsubst "$(pkg gettext-base gettext)"
-need rlwrap "$(pkg rlwrap rlwrap)"
 if [[ ! -f "${TORQHOME:-$ROOT/lib/torq}/torq.q" ]]; then
     MISSING+=("TorQ - no torq.q in ${TORQHOME:-lib/torq}; set TORQHOME to a TorQ installation")
 fi

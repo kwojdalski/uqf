@@ -121,8 +121,8 @@ class Offline:
             fake = guard / "bin" / tool
             fake.write_text(f'#!/bin/sh\necho "{tool} $*" >> "$UQF_NET_LOG"\nexit 1\n')
             fake.chmod(0o755)
-        # The host contract's tools this machine lacks (macOS has no envsubst,
-        # rlwrap or timeout): the installer checks they are on PATH, and
+        # The host contract's tools this machine lacks (macOS has no envsubst
+        # or timeout): the installer checks they are on PATH, and
         # nothing here runs them. A Linux server's own are preflight's to judge.
         for tool in HOST_TOOLS:
             if not shutil.which(tool):
