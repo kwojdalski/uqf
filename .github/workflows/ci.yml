@@ -176,14 +176,16 @@ jobs:
       #   q-docs-peachq - it would build PeachQ inside the hooks; the PeachQ
       #     Python shards run the docs' q blocks on PeachQ
       #     (tests/qrun/test_doc_blocks.py);
-      #   python-tests - the "PeachQ Python tests" shards run every testpath
-      #     with a q, whenever the change can reach a Python test: the same
-      #     suite plus what needs a q;
       #   doc-links - the "Docs links" job runs it strictly, in parallel; here
       #     it was 37s of the hooks' 49s, and then ran a second time (#1689);
-      #   peachq-push - the early, targeted PeachQ catch before a push (#1965);
-      #     the "PeachQ q tests" job runs the whole suite on PeachQ.
-      SKIP: no-commit-to-branch,branch-naming-with-git-username,q-docs-peachq,python-tests,doc-links,peachq-push
+      #   rendered-diagrams - the "Check the rendered diagrams" step below runs
+      #     the same comparison with --require, which cannot skip (#2721).
+      #
+      # The push hooks (python-tests, q-tests, q-coverage, peachq-push) are
+      # not run here at all (#2721): the first and last run elsewhere - the
+      # "PeachQ Python tests" shards and the "PeachQ q tests" job - and the
+      # other two need KDB-X, which no hosted runner has.
+      SKIP: no-commit-to-branch,branch-naming-with-git-username,q-docs-peachq,doc-links,rendered-diagrams
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -277,21 +279,16 @@ jobs:
           # The same rule pytest's `kdbx` fixture applies, so CI skips exactly when
           # the hook would have nothing to run: $QCMD, else q on PATH.
           if command -v "${QCMD:-q}" >/dev/null; then
-            echo "A q interpreter is available; the q-tests and q-coverage hooks will run." >> "$GITHUB_STEP_SUMMARY"
+            echo "A q interpreter is available; the KDB-X-only hooks will run." >> "$GITHUB_STEP_SUMMARY"
           else
             # the hooks .pre-commit-config.yaml tags `# kdbx-only`: one list, not a copy
             echo "SKIP=$SKIP,$(python3 scripts/gates/check.py hook-scopes --kdbx-only)" >> "$GITHUB_ENV"
             echo "::warning::No q interpreter on this runner. The full qUnit suite, the coverage gate and q-dependent Python IPC tests are not exercised here; static q checks still run, and the portable qUnit suites run on PeachQ further down."
             echo "### Runtime coverage limitation" >> "$GITHUB_STEP_SUMMARY"
-            echo "No q interpreter is installed on this hosted runner. The qUnit, coverage and contract-surface hooks are skipped, and Python tests requiring q skip through their existing fixtures. Static q checks and the remaining Python tests run. Run uv run pytest tests/qrun/test_q_suite.py and uv run pytest -m coverage tests/qrun/test_q_coverage.py locally with KDB-X before merging q changes." >> "$GITHUB_STEP_SUMMARY"
+            echo "No q interpreter is installed on this hosted runner. The KDB-X-only hooks (contract surface among them) are skipped, and Python tests requiring q skip through their existing fixtures. Static q checks and the remaining Python tests run. Run uv run pytest tests/qrun/test_q_suite.py and uv run pytest -m coverage tests/qrun/test_q_coverage.py locally with KDB-X before merging q changes." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Run repository hooks
         run: uv tool run --from pre-commit==4.6.2 pre-commit run --all-files --show-diff-on-failure
-      # The hooks a developer's `git push` runs (#1965): q-tests and q-coverage,
-      # which need a q - skipped above when the runner has none - and the two
-      # this job SKIPs for running elsewhere (python-tests, peachq-push).
-      - name: Run repository push hooks
-        run: uv tool run --from pre-commit==4.6.2 pre-commit run --all-files --hook-stage pre-push --show-diff-on-failure
       # The gates that used to follow here as steps of their own are hooks
       # now, run above by `pre-commit run --all-files` (#1879): the module
       # graph, the ETL layering, the q line budget, the registry enlist
@@ -307,8 +304,8 @@ jobs:
         # notice when d2 is absent or is a different version, since the
         # bytes are only comparable for one renderer (see the script). CI
         # installs the pinned d2 above and passes --require, so here it can
-        # fail but not skip - the one static check this job runs beyond the
-        # hooks, because the rendered-diagrams hook skips without that d2.
+        # fail but not skip. The rendered-diagrams hook, which would make the
+        # same comparison without --require, is in this job's SKIP list.
         if: ${{ !cancelled() }}
         run: python3 scripts/generate/derive.py diagrams --check --require
 
@@ -468,12 +465,69 @@ jobs:
           "$bin" "$RUNNER_TEMP/peachq-smoke.q" -q
           echo "PEACHQ_BIN=$bin" >> "$GITHUB_ENV"
           echo "PeachQ: built from peachq-org/peachq@$(python3 scripts/peachq/resolve.py --commit)" >> "$GITHUB_STEP_SUMMARY"
-      - name: Install what a PeachQ stack needs
+      - name: Pin rlwrap
         # torq.sh needs envsubst and rlwrap (uqs's prerequisite check refuses a
         # start without them); the PeachQ runtime's whole-stack test below
-        # starts one.
+        # starts one. envsubst comes with the runner image (gettext-base);
+        # rlwrap does not, and its apt install failed on DNS twice in one
+        # pull request (#2721). So it is installed as d2 is: the noble .deb,
+        # pinned by version and sha256 (from the archive's Packages index),
+        # cached, fetched from the archive's pool with retries only on a miss,
+        # and checked against the sha256 on a hit as on a miss. Its
+        # dependencies (libc6, libreadline8t64, libtinfo6, perl, python3) are
+        # all in the image.
+        id: rlwrap
         if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
-        run: sudo apt-get install -y --no-install-recommends gettext-base rlwrap
+        shell: bash
+        env:
+          RLWRAP_DEB: rlwrap_0.46.1-1build2_amd64.deb
+          RLWRAP_SHA256: 30d7fca1986522b7479d30f69797b26f156c4f58cad097fe7b6b182585d5b616
+        run: |
+          {
+            echo "deb=$RLWRAP_DEB"
+            echo "sha256=$RLWRAP_SHA256"
+            echo "dir=$HOME/.cache/uqf/tools/rlwrap"
+          } >> "$GITHUB_OUTPUT"
+      - name: Restore rlwrap from the cache
+        id: rlwrap-cache
+        if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.rlwrap.outputs.dir }}
+          key: rlwrap-${{ steps.rlwrap.outputs.sha256 }}-${{ runner.os }}-${{ runner.arch }}
+      - name: Download rlwrap (cache miss)
+        # Retried with curl's exponential backoff on a transient failure.
+        if: ${{ !cancelled() && env.PEACHQ_BIN != '' && steps.rlwrap-cache.outputs.cache-hit != 'true' }}
+        shell: bash
+        env:
+          DEB: ${{ steps.rlwrap.outputs.deb }}
+          SHA256: ${{ steps.rlwrap.outputs.sha256 }}
+          DIR: ${{ steps.rlwrap.outputs.dir }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$DIR"
+          curl -sSfL --retry 5 --retry-connrefused --retry-max-time 180 \
+            "https://archive.ubuntu.com/ubuntu/pool/universe/r/rlwrap/$DEB" -o "$DIR/rlwrap.deb"
+          echo "${SHA256}  $DIR/rlwrap.deb" | sha256sum -c -
+      - name: Save rlwrap to the cache
+        # Straight after the download, as for d2: four shards share the key.
+        if: ${{ !cancelled() && env.PEACHQ_BIN != '' && steps.rlwrap-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.rlwrap.outputs.dir }}
+          key: ${{ steps.rlwrap-cache.outputs.cache-primary-key }}
+      - name: Install what a PeachQ stack needs
+        if: ${{ !cancelled() && env.PEACHQ_BIN != '' }}
+        shell: bash
+        env:
+          SHA256: ${{ steps.rlwrap.outputs.sha256 }}
+          DIR: ${{ steps.rlwrap.outputs.dir }}
+        run: |
+          set -euo pipefail
+          echo "${SHA256}  $DIR/rlwrap.deb" | sha256sum -c -
+          sudo dpkg -i "$DIR/rlwrap.deb"
+          command -v envsubst
+          rlwrap --version
       - name: Run the Python tests that need a q, on PeachQ (blocking)
         # Without KDB-X, every Python test that starts a q skips in the hooks
         # above. With PeachQ as the q they run, held to

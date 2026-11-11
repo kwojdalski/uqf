@@ -38,10 +38,6 @@ SCOPE = (
     "python/uqs/README.md",
 )
 
-#: Never scanned, even inside SCOPE. scripts/torqcode and scripts/torqconfig
-#: are TorQ's own overrides and are single-level anyway.
-EXCLUDED = ("scripts/portable/tests/",)
-
 _NESTED = re.compile(r"^\\d\s+\.[A-Za-z_]\w*\.\S")
 _COMMAND = re.compile(r'system\s*"d\s+\.[A-Za-z_]\w*\.\S')
 _FENCE_OPEN = re.compile(r"^\s*```+\s*q\s*$")
@@ -56,9 +52,7 @@ def files(root: Path, scope: tuple[str, ...] = SCOPE) -> list[Path]:
             out.append(path)
         elif path.is_dir():
             out += sorted(p for p in path.rglob("*") if p.suffix in {".q", ".md", ".qmd"})
-    return [
-        p for p in out if not any(p.relative_to(root).as_posix().startswith(x) for x in EXCLUDED)
-    ]
+    return out
 
 
 def q_lines(path: Path) -> list[tuple[int, str]]:

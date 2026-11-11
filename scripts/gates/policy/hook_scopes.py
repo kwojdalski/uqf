@@ -50,11 +50,6 @@ REPO = Path(__file__).resolve().parents[3]
 #: The hook config, under the root checked.
 CONFIG = Path(".pre-commit-config.yaml")
 
-#: Hooks whose scope is deliberately allowed to match nothing, with a reason.
-#: Keep this empty unless there is a real one - the point of the check is to
-#: refuse dead scopes, not to accumulate exemptions.
-ALLOWED_EMPTY: dict[str, str] = {}
-
 #: Hook ids that constitute the Python lint gate. Every tracked .py file must
 #: be matched by at least one of them.
 LINT_HOOKS = ("ruff", "ruff-format")
@@ -257,7 +252,7 @@ def run(root: Path, kdbx_only: bool = False) -> int:
         status = "ok" if count else "MATCHES NOTHING"
         shown = pattern if not exclude else f"{pattern} less {exclude}"
         print(f"  {hook_id:28} {shown:34} {count:>5} file(s)  {status}")
-        if not count and hook_id not in ALLOWED_EMPTY:
+        if not count:
             dead.append((hook_id, pattern))
 
     # --- coverage: is any tracked Python outside either gate? -----------
@@ -331,8 +326,7 @@ def run(root: Path, kdbx_only: bool = False) -> int:
             print(f"  - {hook_id}: {pattern}", file=sys.stderr)
         print(
             "\nA hook that matches nothing exits zero and reports green, so the commit "
-            "looks gated when it is not. Fix the scope, or add the hook to ALLOWED_EMPTY "
-            "with a reason.",
+            "looks gated when it is not. Fix the scope.",
             file=sys.stderr,
         )
         return 1
