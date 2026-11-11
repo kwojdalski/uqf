@@ -145,6 +145,7 @@ CASES = [
     Case("job receiver stop", ("--attachment", "nosuch")),
     Case("job remove", ("probe_job",), _uqs("job", "new", "probe_job"), own_copy=True),
     Case("job runs upgrade", (), _status),
+    Case("job runs stop", ("demo_deals_backfill", "--attachment", "nosuch")),
     Case("runtime prepare", ()),
     Case("runtime prepare", (), root=("--runtime", "crypto")),
     Case("setup odbc install", ("nosuch", "--home", "/nonexistent/odbc")),
