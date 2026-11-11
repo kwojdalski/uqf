@@ -1,10 +1,10 @@
-/ hdb_sort_lib.q - what a declared sort rule means for a stored partition, and the
+/ sort_lib.q - what a declared sort rule means for a stored partition, and the
 / migration that brings an older one to it (#2288).
 / .
 / Loaded by two scripts and run by neither:
-/   hdb_sort_order.q       the DRY report `uqs data check` prints: which partitions
+/   hdb/sort_order.q       the DRY report `uqs data check` prints: which partitions
 /                          are not in their declared order, with their attribute
-/   hdb_fill.q             the migration (`uqs data check --apply`, after asking)
+/   hdb/fill.q             the migration (`uqs data check --apply`, after asking)
 / .
 / THE RULE. A table that declares a sort rule (src/etl/plant_tables.q `sorting`) is stored
 / sorted by its sort columns, with the declared attribute on each. market_data is sorted by

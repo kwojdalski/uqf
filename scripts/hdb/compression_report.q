@@ -1,6 +1,6 @@
-/ hdb_compression_report.q - what `uqs data compress --report` prints (#2149).
+/ compression_report.q - what `uqs data compress --report` prints (#2149).
 / .
-/ Run as:  q scripts/hdb/hdb_compression_report.q <hdb root> <sort.csv> <top n> <torq home>
+/ Run as:  q scripts/hdb/compression_report.q <hdb root> <sort.csv> <top n> <torq home>
 / .
 / <sort.csv> is `-` when there is none to judge by (#2219): an HDB named by --hdb
 / on a target has no sort.csv this side can know, and the local runtime's is not

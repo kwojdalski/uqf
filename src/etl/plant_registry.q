@@ -19,7 +19,7 @@
 / LOAD THIS FIRST. plant_tables.q calls .qetl.plant.nested, .sorting and
 / .equivalence as it loads, and refuses to load without them; every loader of
 / plant_tables.q loads this file just before it (src/etl/init.q, the plant
-/ schema and contract-surface exporters, scripts/hdb/hdb_sort_lib.q). uqs's
+/ schema and contract-surface exporters, scripts/hdb/sort_lib.q). uqs's
 / schema fingerprint covers both files (uqs.model.plant_metadata), since what
 / the exporter reports depends on both.
 / .
@@ -82,7 +82,7 @@
 / feed handler that fed it) received the event. Both canonical tables,
 / `executions` and `market_data`, carry one per row in `clock`. `unknown is
 / NOT in this list: it is what the history fill writes for a stored row it
-/ cannot attribute (scripts/hdb/hdb_clock_rules.csv), and a measure that
+/ cannot attribute (scripts/hdb/clock_rules.csv), and a measure that
 / compares two clocks must refuse it, not pick one.
 / @eg .qetl.plant.clocks  ->  `venue`receipt
 .qetl.plant.clocks:`venue`receipt

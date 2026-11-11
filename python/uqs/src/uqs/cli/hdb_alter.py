@@ -4,7 +4,7 @@ attribute, cast, or undo one of those - dry run by default (#1755).
 Only partitions holding the table are touched; partitions that disagree on
 its shape are refused before any write; a journal is written beside the HDB
 before the first write and `--undo JOURNAL` reverses the run; every partition
-is read again at the end. All of that is scripts/hdb/hdb_alter.q's
+is read again at the end. All of that is scripts/hdb/alter.q's
 (stack/hdb_alter.py); cli/hdb_scope.py resolves the HDB and runs it.
 """
 
@@ -24,12 +24,12 @@ from uqs.generated.q_facts import Q_ATTRIBUTES
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.hdb_alter import Request
 
-#: What `--attr COL:` takes to clear an attribute - scripts/hdb/hdb_alter.q's word.
+#: What `--attr COL:` takes to clear an attribute - scripts/hdb/alter.q's word.
 CLEAR_ATTRIBUTE = "none"
 
 AlterJson = json_opt(
     '{"ok", "hdb", "resolved_from", "ssh", "warnings", "plan", "result"} - plan and result '
-    "are hdb_alter.q's own: partitions, shapes, steps, journal, final_check"
+    "are hdb/alter.q's own: partitions, shapes, steps, journal, final_check"
 )
 
 
@@ -126,7 +126,7 @@ def _one(flag: str, values: list[str] | None) -> str | None:
 
 def _old_rename(value: str | None) -> str | None:
     """`--rename OLD:NEW`, as `data migrate` spells it (#1856), in the OLD=NEW
-    hdb_alter.q reads. `OLD=NEW`, this command's own spelling before, still
+    hdb/alter.q reads. `OLD=NEW`, this command's own spelling before, still
     parses for one release (cli/rename_expiry.py)."""
     if value is None:
         return None

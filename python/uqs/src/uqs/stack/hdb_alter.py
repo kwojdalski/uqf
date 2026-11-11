@@ -1,4 +1,4 @@
-"""One table's maintenance across an HDB: the front end of scripts/hdb/hdb_alter.q (#1755).
+"""One table's maintenance across an HDB: the front end of scripts/hdb/alter.q (#1755).
 
 `uqs data alter` and `uqs data check --table` are thin: every decision
 about the database - which partitions hold the table, whether they agree, what
@@ -32,7 +32,7 @@ from uqs.stack.runtime import query
 
 #: The script, under scripts/, and the vendored KX dbmaint it loads from
 #: ../../lib/kx-dbmaint: the two files a host without uqf needs.
-SCRIPT = Path("hdb") / "hdb_alter.q"
+SCRIPT = Path("hdb") / "alter.q"
 DBMAINT = Path("lib") / "kx-dbmaint" / "dbmaint.q"
 
 #: The operations that change a table; one per run.
@@ -96,12 +96,12 @@ def parse(result: subprocess.CompletedProcess[str], where: str) -> dict[str, Any
     if not lines:
         said = " ".join(((result.stderr or "") + (result.stdout or "")).strip().splitlines()[-5:])
         raise UqsError(
-            f"hdb_alter.q {where} printed no plan (exit {result.returncode}): {said or 'nothing'}"
+            f"hdb/alter.q {where} printed no plan (exit {result.returncode}): {said or 'nothing'}"
         )
     try:
         doc = json.loads(lines[-1])
     except ValueError:
-        raise UqsError(f"hdb_alter.q {where} printed something other than JSON") from None
+        raise UqsError(f"hdb/alter.q {where} printed something other than JSON") from None
     return {**doc, "exit_code": result.returncode}
 
 
@@ -123,7 +123,7 @@ def run_local(paths: UqsPaths, req: Request, *, apply: bool) -> dict[str, Any]:
             timeout=TIMEOUT_S,
         )
     except subprocess.TimeoutExpired:
-        raise UqsError(f"hdb_alter.q did not finish within {TIMEOUT_S}s") from None
+        raise UqsError(f"hdb/alter.q did not finish within {TIMEOUT_S}s") from None
     return parse(result, "on this machine")
 
 

@@ -1,7 +1,7 @@
-/ hdb_seed.q - copy one runtime's HDB partitions into another's
+/ seed.q - copy one runtime's HDB partitions into another's
 / (#766): `uqs data seed`.
 / .
-/ Run as:  q scripts/hdb/hdb_seed.q <source hdb root> <target hdb root>
+/ Run as:  q scripts/hdb/seed.q <source hdb root> <target hdb root>
 /            <target database.q> <tables, comma-separated, or "-" for all>
 /            <first date or "-"> <last date or "-"> <overwrite: 0 or 1>
 / .

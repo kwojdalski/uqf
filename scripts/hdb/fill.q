@@ -1,7 +1,7 @@
-/ hdb_fill.q - make every HDB partition hold every declared
+/ fill.q - make every HDB partition hold every declared
 / table, so a query that spans them can run at all.
 / .
-/ Run as:  q scripts/hdb/hdb_fill.q <hdb root> <generated database.q>
+/ Run as:  q scripts/hdb/fill.q <hdb root> <generated database.q>
 / .
 / A THIN, SCHEMA-DRIVEN WRAPPER AROUND KX's dbmaint.q (#1423). This script
 / decides WHAT is missing, from database.q; dbmaint does the writing.
@@ -48,7 +48,7 @@
 / A DERIVED DEFAULT, FOR ONE COLUMN (#1925). A column the partition lacks is
 / written as the declared type's null EXCEPT `clock` on `executions` and
 / `market_data`, which is attributed from the rows' own columns by the rules
-/ in scripts/hdb/hdb_clock_rules.csv: whose clock a stored source_time is
+/ in scripts/hdb/clock_rules.csv: whose clock a stored source_time is
 / depends on which feed wrote the row, and the feed is recoverable from
 / (market, source) for a book and from venue for a fill. Anything the rules
 / do not name is `unknown - never a guess, and never null, because null is
@@ -95,12 +95,12 @@
 /              a null there would read as a withdrawn book, and the bootstrap runs on every command
 /   the order  rows sorted by sym, source, source_time with p# on sym (the plant's declared
 /              `sorting`). A rewrite, so it is done in staging and swapped in whole under the HDB
-/              write lock (hdb_sort_lib.q) - stop the stack first, as for any migration
+/              write lock (hdb/sort_lib.q) - stop the stack first, as for any migration
 /   rid        each row's position in that order, assigned with the sort (an older partition that
 /              is already in order only gets the column)
 / .
 / `uqs data check` (dry) lists the partitions that lack the columns or are not in order
-/ (scripts/hdb/hdb_sort_order.q); `uqs data check --apply` asks, then runs this with `migrate`.
+/ (scripts/hdb/sort_order.q); `uqs data check --apply` asks, then runs this with `migrate`.
 / .
 / ADDITIVE, ALWAYS - but for those migrations. A table directory that holds a `.d` is never emptied and a
 / column that exists is never rewritten, whatever is in it. A table or a
@@ -117,7 +117,7 @@
 / WHAT THIS DOES NOT CLAIM. No transaction: a kill between two columns leaves
 / the partitions written so far repaired and the rest not, and the next run
 / finishes the job. No concurrent-writer safety: it takes no HDB write lock,
-/ exactly as before (hdb_lock.q is the migration's, and the bootstrap runs
+/ exactly as before (hdb/lock.q is the migration's, and the bootstrap runs
 / with the stack's writers stopped or not at all). And no reload: a running
 / HDB process must be told to \l . by whoever runs this.
 / .
@@ -154,7 +154,7 @@ system"l ",1_string dbmaint_file;
 / columns, the HDB writer's staging and swap). Only a migration needs them.
 sorted_tables:(`symbol$())!();
 if[migrate;
-    system"l ",script_dir,"hdb_sort_lib.q";
+    system"l ",script_dir,"sort_lib.q";
     load_etl[script_dir,"../../src/etl/"];
     sorted_tables:sort_rules[]];
 
@@ -205,12 +205,12 @@ declared_default:{[root;table_name;col]
     $[11h=abs type empty; (.Q.en[root] flip enlist[`v]!enlist empty)`v; empty]}
 
 / The history-fill rules for `clock` (#1925): one row per (table, market, name)
-/ in scripts/hdb/hdb_clock_rules.csv, found from this script's own path. Read
+/ in scripts/hdb/clock_rules.csv, found from this script's own path. Read
 / only when a clock column has to be filled.
 / @return the rules, columns tbl, market, name, clock
 clock_rules:{[]
-    f:hsym `$script_dir,"hdb_clock_rules.csv";
-    if[()~key f; die "no hdb_clock_rules.csv beside this script - the clock history fill needs it (#1925)"];
+    f:hsym `$script_dir,"clock_rules.csv";
+    if[()~key f; die "no hdb/clock_rules.csv beside this script - the clock history fill needs it (#1925)"];
     ("SSSS";enlist ",") 0: f}
 
 / The columns the FX markout tables gained with the markout contract (#1935) whose

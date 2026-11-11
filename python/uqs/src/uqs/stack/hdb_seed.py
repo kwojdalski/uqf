@@ -3,7 +3,7 @@
 Each runtime keeps its own HDB, and a fresh one holds only the starter pack's
 two sample partitions. Comparing torq against uqf on the same history means
 copying uqf's partitions of the tables both declare. The copying is
-scripts/hdb/hdb_seed.q, which re-enumerates every symbol column
+scripts/hdb/seed.q, which re-enumerates every symbol column
 against the target's sym file - a plain file copy would decode, in the
 target, to whatever its sym file holds at the source's indices.
 """
@@ -19,7 +19,7 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.stack.hdb_fill import fill_hdb_partitions
 
 #: The q that copies, relative to the scripts directory.
-SEED_SCRIPT = "hdb/hdb_seed.q"
+SEED_SCRIPT = "hdb/seed.q"
 
 
 def seed(

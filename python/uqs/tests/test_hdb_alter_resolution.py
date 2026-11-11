@@ -164,7 +164,7 @@ def test_an_unreachable_ssh_destination_is_refused_naming_the_setting(tmp_path):
 
 def test_the_remote_script_carries_both_files_and_cleans_up():
     script = hdb_remote.remote_script(UQF_ROOT, Request("/d/hdb", "pb", "check"), apply=False)
-    assert script.count("base64 -d") == 2, "hdb_alter.q and dbmaint.q, nothing else"
+    assert script.count("base64 -d") == 2, "hdb/alter.q and dbmaint.q, nothing else"
     assert "trap 'rm -rf \"$tmp\"' EXIT" in script
     assert "${QCMD:-q}" in script
     assert "-hdb /d/hdb -table pb -json -q" in script

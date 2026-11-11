@@ -1,7 +1,7 @@
-/ hdb_lock.q - take or give up an HDB root's write lock for a process that is
+/ lock.q - take or give up an HDB root's write lock for a process that is
 / not q (#1168).
 / .
-/ Run as:  q scripts/hdb/hdb_lock.q acquire|release <hdb root> <holder pid>
+/ Run as:  q scripts/hdb/lock.q acquire|release <hdb root> <holder pid>
 / from a directory holding src/etl/core/backfill_state.q and io_hdb.q - the
 / repository root, or for PeachQ, which cannot load their nested \d contexts,
 / a copy uqs has flattened (hdb_migrate._lock_code). Only those two load: the

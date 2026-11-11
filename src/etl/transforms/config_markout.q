@@ -135,7 +135,7 @@
 
 / The snapshot for rows written before snapshots existed (#1999): all that was ever recorded
 / about them is the three fields they repeated, so those are its parameters and everything
-/ else is null or empty, and `legacy` says so. scripts/hdb/hdb_fill.q records one
+/ else is null or empty, and `legacy` says so. scripts/hdb/fill.q records one
 / per distinct triple in an HDB partition when `uqs data check --apply` folds the old columns.
 / @param dataset the dataset the rows are in, a symbol
 / @param cv the contract version the rows carried

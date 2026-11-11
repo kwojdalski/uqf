@@ -177,8 +177,8 @@ def test_the_real_checkout_ships_its_vendored_dbmaint():
     files = payload.tracked_files(ROOT)
     for f in ("dbmaint.q", "dbmaint.md", "LICENSE-kx-kdb", "NOTICE.md"):
         assert f"lib/kx-dbmaint/{f}" in files
-    assert "scripts/hdb/hdb_fill.q" in files
-    assert "scripts/hdb/hdb_alter.q" in files, "`--target` runs `data alter` from the release"
+    assert "scripts/hdb/fill.q" in files
+    assert "scripts/hdb/alter.q" in files, "`--target` runs `data alter` from the release"
     assert not any(f.startswith(("lib/torq", "lib/ml")) for f in files)
 
 

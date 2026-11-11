@@ -1,4 +1,4 @@
-/ torq_pipeline.q - the shared .qtorq block library every scripts/torq_*.q
+/ torq_pipeline.q - the shared .qtorq block library every scripts/processes/torq_*.q
 / feed and ETL process builds on. Created to close the gap those scripts'
 / own header comments kept documenting: "no shared-constant infra exists
 / across scripts/torq_*.q, each defines its own" (torq_markout_etl.q) - so
