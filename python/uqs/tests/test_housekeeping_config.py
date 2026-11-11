@@ -272,3 +272,48 @@ def test_where_replay_cannot_read_gzip_the_directory_is_left_alone(stack):
     lines = run(gz=False)
     assert _listing(old) == before
     assert "REPLAYED 6" in lines, lines
+
+
+# ------------------------------------------------------------- the HDB reload
+
+#: The overlay alone, with TorQ's connection set-up and the reload recorded:
+#: nothing connects as it loads, and `.qtorq.hk.reload` (what `uqs data
+#: compress` sends) connects before it reloads - and still reloads when the
+#: connection set-up fails, the reload reporting what it could not reach.
+_RELOAD = r"""
+.lg.o:{[x;y]}; .lg.w:{[x;y] -1 "W ",y}; .lg.e:{[x;y] -1 "E ",y};
+calls:();
+.servers.startup:{[] calls,:`startup; if[getenv[`FAIL]~enlist "1"; 'nodiscovery]};
+.qtorq.reload_hdb:{[] calls,:`reload; `registered`opened`reloaded!1 1 1};
+\l scripts/processes/uqs_housekeeping_config.q
+-1 "LOADED ",-3!calls;
+-1 "CONNECTIONS ",-3!.servers.CONNECTIONS;
+r:.qtorq.hk.reload[];
+-1 "CALLS ",-3!calls;
+-1 "RELOADED ",string r`reloaded;
+exit 0
+"""
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_the_reload_connects_first_and_nothing_connects_at_load(
+    q_binary, repo_root, tmp_path, fail
+):
+    """#2714: one registration of the HDBs, connected when a reload needs them."""
+    q, env = q_binary
+    paths = _paths(tmp_path)
+    housekeeping.write_housekeeping_config(paths)
+    script = tmp_path / "reload.q"
+    script.write_text(_RELOAD)
+    out = subprocess.run(
+        [q, str(script)], capture_output=True, text=True, timeout=60, cwd=repo_root,
+        env={**env, "TORQDATA": str(paths.torqdata), "FAIL": "1" if fail else "0"},
+    )  # fmt: skip
+    assert out.returncode == 0, out.stdout + out.stderr
+    lines = out.stdout.splitlines()
+    assert "LOADED ()" in lines and "CONNECTIONS ,`hdb" in lines, lines
+    assert "CALLS `startup`reload" in lines and "RELOADED 1" in lines, lines
+    warned = any(
+        x.startswith("W could not register the HDBs to reload: nodiscovery") for x in lines
+    )
+    assert warned == fail, lines
