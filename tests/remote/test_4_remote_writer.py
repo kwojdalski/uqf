@@ -16,7 +16,7 @@ approved there, and the receiver is started by that contract's identity.
 The receiver writes the HDB the attachment pinned from the stack's wdb, and is
 coordinated with that wdb, so it needs one running. TorQ's wdb calls `.Q.chk`
 as it starts, which PeachQ lacks: the stack's PeachQ runtime defines it from
-scripts/peachq_init.q (#1650). A wdb that does not answer fails the scenario,
+scripts/peachq/init.q (#1650). A wdb that does not answer fails the scenario,
 with its own error log, rather than skipping it.
 """
 

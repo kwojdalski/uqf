@@ -4,7 +4,7 @@ Three Linux x86_64 machines from one image (tests/remote/Dockerfile), each with
 its own hostname, filesystem and process table:
 
   uat-stack   the TorQ stack, on PeachQ: discovery, tickerplant, rdb, hdb and wdb
-              (which runs on PeachQ through scripts/peachq_init.q's .Q.chk,
+              (which runs on PeachQ through scripts/peachq/init.q's .Q.chk,
               #1650). Its ports are published to this
               host's 127.0.0.1, so the tests can look at it directly.
   uat-client  the machine `uqs` runs on: the attachment, the publisher, the

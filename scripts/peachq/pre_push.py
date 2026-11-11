@@ -24,14 +24,14 @@ already pays that on KDB-X. One PeachQ process runs them, through
 What fails the push: a test that did not pass and is not listed in
 tests/q/peachq_known_gaps.txt. A listed test that passes here is reported but
 does not fail: the list records CI's platform, and CI enforces that it
-shrinks (scripts/portable/full_suite.py).
+shrinks (scripts/peachq/full_suite.py).
 
 PeachQ is found as the q-docs-peachq hook finds it: $QCMD when it answers as
-PeachQ, else the pinned build from scripts/peachq.json (scripts/peachq.py,
+PeachQ, else the pinned build from scripts/peachq/pin.json (scripts/peachq/resolve.py,
 built into the cache on first use).
 
-    uv run python scripts/dev/peachq_push.py              # what the pre-push hook runs
-    uv run python scripts/dev/peachq_push.py --base REF   # against another base
+    uv run python scripts/peachq/pre_push.py              # what the pre-push hook runs
+    uv run python scripts/peachq/pre_push.py --base REF   # against another base
     SKIP=peachq-push git push                       # push without it
 
 Standard library only. The hook runs it as `uv run python`, the project's
@@ -118,7 +118,7 @@ def select(paths: list[str], root: Path = REPO, examples: bool = False) -> list[
 
 def peachq() -> str:
     """$QCMD when it is PeachQ, else the pinned build - the q-docs-peachq rule."""
-    pq = _load("peachq", "scripts/peachq.py")
+    pq = _load("peachq", "scripts/peachq/resolve.py")
     qcmd = os.environ.get("QCMD")
     if qcmd and pq.identify(qcmd) == "peachq":
         return qcmd
@@ -151,7 +151,7 @@ def run(base: str) -> int:
     if not files:
         print(f"peachq-push: no q test file reached in {base}...HEAD - nothing to run on PeachQ")
         return 0
-    suite = _load("full_suite", "scripts/portable/full_suite.py")
+    suite = _load("full_suite", "scripts/peachq/full_suite.py")
     try:
         q = peachq()
     except Exception as e:  # PeachQError, or a build that could not start

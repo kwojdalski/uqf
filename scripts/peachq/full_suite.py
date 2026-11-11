@@ -1,27 +1,24 @@
 #!/usr/bin/env python3
-"""The whole q suite on PeachQ, flattened, held to a list of known gaps (#863).
+"""The whole q suite on PeachQ, held to a list of known gaps (#863).
 
-PeachQ rejects nested working contexts (`\\d .a.b`), so it cannot load this tree
-as written. flatten_contexts.py rewrites a copy that needs none; this runs the
-full suite - tests/run_tests.q, every suite - on that copy:
+PeachQ rejects nested working contexts (`\\d .a.b`), and src/, scripts/,
+sidecars/ and tests/ open none (check.py nested-contexts), so every file loads
+on PeachQ exactly as written. That is also the nearest executable evidence,
+without a 4.0 binary, that the tests run on 4.0 (#1412). This runs the full
+suite - tests/run_tests.q, every suite:
 
-  1. flatten what still needs it (CONVERTED, now nothing): src/, scripts/,
-     sidecars/ and tests/ open no nested context (check.py nested-contexts), so
-     every file loads on PeachQ exactly as written. That is also the nearest
-     executable evidence, without a 4.0 binary, that the tests run on 4.0
-     (#1412).
-  2. lay the flattened files over a copy of every tracked file - lib/ included
-     as it is, never converted or edited - so the suite runs as in a checkout.
-  3. run the suite there with UQF_TEST_FAILURES set, so it writes the tests
+  1. copy every tracked file - lib/ included as it is - so the suite runs as
+     in a checkout.
+  2. run the suite there with UQF_TEST_FAILURES set, so it writes the tests
      that did not pass, with why, as data.
-  4. compare them with tests/q/peachq_known_gaps.txt, both ways:
+  3. compare them with tests/q/peachq_known_gaps.txt, both ways:
        - a failure not on the list fails the lane: a regression, or a new
          test that does not run on PeachQ and has not said why;
        - a listed test that passed fails the lane too: PeachQ or the code
          improved, and the entry must go. The list only ever shrinks.
 
-    python3 scripts/portable/full_suite.py --q "$PEACHQ_BIN"
-    python3 scripts/portable/full_suite.py --q "$PEACHQ_BIN" --shards 4   # in parallel
+    python3 scripts/peachq/full_suite.py --q "$PEACHQ_BIN"
+    python3 scripts/peachq/full_suite.py --q "$PEACHQ_BIN" --shards 4   # in parallel
     uv run pytest tests/qrun/test_q_suite.py -m peachq   # the same, as a test (#1808)
 
 With `--shards N` (#1694) the suite runs as N PeachQ processes at once, each
@@ -59,15 +56,10 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 GAPS = REPO / "tests" / "q" / "peachq_known_gaps.txt"
-FLATTENER = REPO / "scripts" / "portable" / "flatten_contexts.py"
 BUNDLE_SUITE = REPO / "scripts" / "dev" / "bundle_suite.py"
-#: What is flattened: nothing. src/, scripts/ and sidecars/ open no nested context
-#: (#1411, check.py nested-contexts) and neither does tests/ (#1412); every file loads
-#: on PeachQ as it stands. lib/ is never flattened.
-CONVERTED: tuple[str, ...] = ()
-#: How a reason starts (#986): PeachQ lacks something, this tree relies on
-#: something it should not, or the flattened copy fails on KDB-X too.
-KINDS = ("peachq-lacks: ", "tree-bug: #", "flattening: ")
+#: How a reason starts (#986): PeachQ lacks something, or this tree relies on
+#: something it should not.
+KINDS = ("peachq-lacks: ", "tree-bug: #")
 #: A test's message this long or longer, found in its gap's reason, is a
 #: reason that restates the assertion. Shorter ones are words, not messages.
 MIN_MESSAGE = 16
@@ -155,10 +147,10 @@ def compare(failed: dict[str, str], gaps: dict[str, str]) -> tuple[list[str], li
 
 
 def build_tree(into: Path, bundles: bool = False) -> None:
-    """A runnable copy of the checkout, with CONVERTED flattened.
+    """A runnable copy of the checkout, at into/tree.
     With `bundles`, every bundle under sidecars/ is installed into the copy,
-    its tests included, BEFORE flattening, so its jobs are converted and run
-    like the tree's own (#925). Raises SystemExit when the flattener refuses."""
+    its tests included, so its jobs run like the tree's own (#925). Raises
+    SystemExit when a bundle will not install."""
     tree = into / "tree"
     files = subprocess.run(
         ["git", "-C", str(REPO), "ls-files", "-z"], capture_output=True, check=True
@@ -179,18 +171,6 @@ def build_tree(into: Path, bundles: bool = False) -> None:
         if r.returncode:
             raise SystemExit(f"a bundle would not install:\n{(r.stdout + r.stderr).strip()}")
         print(r.stdout.strip(), flush=True)
-    if not CONVERTED:
-        return
-    flat = into / "flat"
-    r = subprocess.run(
-        [sys.executable, str(FLATTENER), *CONVERTED, "--root", str(tree), "--out", str(flat),
-         "--quiet"],
-        cwd=tree, capture_output=True, text=True, check=False,
-    )  # fmt: skip
-    if r.returncode:
-        tail = "\n".join((r.stdout + r.stderr).strip().splitlines()[-30:])
-        raise SystemExit(f"the flattener refused - the tree must stay convertible:\n{tail}")
-    shutil.copytree(flat, tree, dirs_exist_ok=True)
 
 
 def assign(files: list[str], weights: dict[str, float], count: int) -> list[list[str]]:
@@ -267,7 +247,7 @@ def run(
     with tempfile.TemporaryDirectory() as tmp:
         work = keep or Path(tmp)
         work.mkdir(parents=True, exist_ok=True)
-        print(f"flattening {', '.join(CONVERTED) or 'nothing'} into {work}", flush=True)
+        print(f"copying the tree into {work}", flush=True)
         build_tree(work, bundles)
         if shards > 1:
             env = {**os.environ, "QCMD": q}

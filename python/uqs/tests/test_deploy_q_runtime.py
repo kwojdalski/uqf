@@ -33,7 +33,7 @@ COMMIT = "a872e258f59ae218c8c516485d7d49607e6386ec"
 
 
 def peachq_entry(root: Path, says: str = "peachq", platform: str = "Linux-x86_64") -> Path:
-    """A PeachQ cache entry as scripts/peachq.py publishes one - `q` and its
+    """A PeachQ cache entry as scripts/peachq/resolve.py publishes one - `q` and its
     manifest.json - with a KX licence left beside them, which must not ship."""
     root.mkdir(parents=True, exist_ok=True)
     binary = root / "q"
@@ -137,7 +137,8 @@ def test_a_removed_variable_is_refused_rather_than_bundled(tmp_path):
 
 def test_the_pinned_peachq_comes_from_scripts_peachq(tmp_path):
     entry = peachq_entry(tmp_path / "cache" / "entry")
-    (tmp_path / "peachq.py").write_text(
+    (tmp_path / "peachq").mkdir()
+    (tmp_path / "peachq" / "resolve.py").write_text(
         "class PeachQError(Exception):\n    pass\n"
         f"def resolve(env):\n    return __import__('pathlib').Path({str(entry / 'q')!r})\n"
     )

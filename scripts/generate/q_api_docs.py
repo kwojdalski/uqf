@@ -150,7 +150,7 @@ def q_command() -> tuple[str, dict[str, str]]:
     if exe is None:
         raise GenerationError(
             f"no q interpreter: {name!r} is not runnable. Set $QCMD to a q - KDB-X, or "
-            "the pinned PeachQ that `python3 scripts/peachq.py` prints - or put q on PATH."
+            "the pinned PeachQ that `python3 scripts/peachq/resolve.py` prints - or put q on PATH."
         )
     env.setdefault("QHOME", str(Path.home() / ".kx"))
     return exe, env

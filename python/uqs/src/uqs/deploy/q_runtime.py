@@ -3,8 +3,8 @@
 
     uqs deploy component build q
 
-finds the PeachQ scripts/peachq.json pins - in its cache, or built into it
-(scripts/peachq.py, the same resolver every PeachQ lane uses) - and writes,
+finds the PeachQ scripts/peachq/pin.json pins - in its cache, or built into it
+(scripts/peachq/resolve.py, the same resolver every PeachQ lane uses) - and writes,
 into dist/ (or --output):
 
     q-runtime-peachq-<commit>-<os>-<arch>.tar.gz           the archive
@@ -29,9 +29,9 @@ artifact - any licence file.
 The manifest records where the binary came from: the repository, the commit
 (and, when $UQF_PEACHQ_COMMIT built another, the pinned one), the platform
 and build options, and the .z.K it reported. It is always built from
-scripts/peachq.py's cache, never from $QCMD, a binary of no recorded
+scripts/peachq/resolve.py's cache, never from $QCMD, a binary of no recorded
 provenance: a runtime says what it was built from. RUNTIME_MANIFEST.json,
-installed beside the binary, is how scripts/peachq.py's `is_pinned` knows it
+installed beside the binary, is how scripts/peachq/resolve.py's `is_pinned` knows it
 for the pinned build on the server.
 """
 
@@ -177,7 +177,7 @@ def run_probe(binary: Path) -> str:
 
 def pinned_peachq(scripts_dir: Path, env: Mapping[str, str] | None = None) -> Path:
     """The pinned PeachQ's cache entry - built into the cache if need be - by
-    scripts/peachq.py, loaded by path (uqs.interpreter.peachq_module). Never
+    scripts/peachq/resolve.py, loaded by path (uqs.interpreter.peachq_module). Never
     $QCMD, even when it is PeachQ: a runtime is built from the pin (or
     $UQF_PEACHQ_COMMIT), so its manifest can say what it was built from."""
     source = os.environ if env is None else env
@@ -193,7 +193,7 @@ def pinned_peachq(scripts_dir: Path, env: Mapping[str, str] | None = None) -> Pa
 
 def build_runtime(entry: Path, out_dir: Path, probe: Probe = run_probe) -> QRuntime:
     """The q runtime artifact of a PeachQ cache entry (`entry`/q and
-    `entry`/manifest.json, as scripts/peachq.py publishes them), into
+    `entry`/manifest.json, as scripts/peachq/resolve.py publishes them), into
     `out_dir`. Only the binary is packed: nothing else in `entry` ships."""
     binary = entry / BINARY
     try:

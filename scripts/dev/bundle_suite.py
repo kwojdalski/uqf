@@ -23,7 +23,7 @@ bundle's tests. This does, without touching the checkout:
 
 Run through `uv run pytest tests/qrun/test_bundle_suites.py -m release`, a test
 per bundle (#1808). --install-into is how CI's
-PeachQ lane (scripts/portable/full_suite.py --bundles) puts every bundle and
+PeachQ lane (scripts/peachq/full_suite.py --bundles) puts every bundle and
 its tests into the tree it flattens, so the bundles are tested on every PR
 on the q CI has (#925).
 """

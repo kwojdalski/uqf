@@ -23,7 +23,7 @@ listed here.
 
 Not here, because each already has one home that the others read: qlinter
 (.qlinter-version), d2 (render_diagrams.py's D2_VERSION) and PeachQ
-(scripts/peachq.json). Action SHAs are pinned per use on purpose.
+(scripts/peachq/pin.json). Action SHAs are pinned per use on purpose.
 
 A copy that disappears fails the rule too, unless it is marked optional (a
 passing mention in an agent's notes): a site that stopped matching - a step

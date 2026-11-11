@@ -80,10 +80,10 @@ without it:
 | `UQF_KAFKA_<SETTING>` | `.qpipe.job.kafka_feed.read_env` (`src/etl/streaming/kafka_feed.q`); `BROKERS` and `TOPICS` also `uqs.external.kafka_feed` | `BROKERS` for `kafka_feed1`; the rest no | `BROKERS` (bootstrap servers), `TOPICS` (comma separated; default every declared topic), `GROUP` (default `uqf-kafka-q`), `OFFSET_RESET` (default `earliest`), `SECURITY_PROTOCOL`, `SASL_MECHANISM`, `SASL_USERNAME`, `SSL_CA_LOCATION`, and `SASL_PASSWORD_ENV` -- the NAME of the variable holding the SASL password, which is never itself a setting. `uqs connector start kafka` reads `BROKERS` (unset: `localhost:9092`) and `TOPICS` (unset: every declared topic) after its own options, and never `GROUP`: its group is its own (see [connector configuration](#connector-configuration)) |
 | `QCMD` | `uqs.interpreter.q_command`, `uqs.interpreter.q_impl`, the pytest `kdbx` fixture, `.qt.support.q_interpreter` | no | `q` on `PATH`, as `torq.sh` itself defaults it. The one q interpreter: every q lane, the running stack (`build_env` passes it to `torq.sh`), its HDB filler and the backfill launcher. There is no second fallback (no `~/.kx/bin/q`); set it, with `QHOME`, to choose an interpreter. It replaced `Q`, `QBIN` and `UQFQ` (#414). It reaches every process: `torq.sh` prefers a row's `qcmd` to `QCMD`, so the generated `process.csv` writes it into each row left to the default (an empty `qcmd`, or `q`). A custom interpreter in a row, and an override from `uqs config set <proc> qcmd`, even to bare `q`, still win. It is the ONLY variable that chooses an interpreter (#1753): which implementation it is, KDB-X or PeachQ, is asked of the binary itself, once per binary per process, and a binary that answers neither is refused with what it printed. A PeachQ that is not the pinned build is used, and named in one warning with the pin. The `peachq` runtime sets it, for its own stack only, to `$QCMD` when that is PeachQ, else the pinned build |
 | `UQF_KDB40` | `scripts/portable/tests/test_flatten_contexts.py` | no | unset, and those tests skip. A kdb+ 4.0 binary - the server-equivalent build - that the tree converted by `scripts/portable/flatten_contexts.py` must run on (#856) |
-| `QINIT` | `uqs.stack.env.interpreter_env` | no | unset. q's own: the file q loads before anything else. A PeachQ runtime (`peachq`, `peachq-etl`) sets it, for its own processes only, to `scripts/peachq_init.q`, which defines what TorQ's processes call and PeachQ lacks (`.Q.chk`, which the wdb calls as it starts, #1650). It replaces an operator's `QINIT` for those processes; a KDB-X runtime leaves it alone |
-| `UQF_PEACHQ_COMMIT` | `scripts/peachq.py` | no | the pinned commit. When set, a full 40-character hash of another PeachQ commit, built and cached like the pin, logged on every run and recorded in its cache entry's `manifest.json`, so a binary built from it is never taken for the pinned build. The pinned commit itself, or a short hash, is refused |
+| `QINIT` | `uqs.stack.env.interpreter_env` | no | unset. q's own: the file q loads before anything else. A PeachQ runtime (`peachq`, `peachq-etl`) sets it, for its own processes only, to `scripts/peachq/init.q`, which defines what TorQ's processes call and PeachQ lacks (`.Q.chk`, which the wdb calls as it starts, #1650). It replaces an operator's `QINIT` for those processes; a KDB-X runtime leaves it alone |
+| `UQF_PEACHQ_COMMIT` | `scripts/peachq/resolve.py` | no | the pinned commit. When set, a full 40-character hash of another PeachQ commit, built and cached like the pin, logged on every run and recorded in its cache entry's `manifest.json`, so a binary built from it is never taken for the pinned build. The pinned commit itself, or a short hash, is refused |
 | `KDBX_ATTESTATION_OVERRIDE` | `scripts/gates/check_kdbx_attestation.py` | no; CI sets it from the PR label | the check refuses an unattested tree. CI sets it to `true` when the PR carries the `kdbx-attestation-override` label; the check then passes, with a warning naming the label and the paths (#1543) |
-| `XDG_CACHE_HOME` | `scripts/peachq.py`, `uqs.deploy.fetch` | no | `~/.cache`. Where the pinned PeachQ build is cached, under `uqf/peachq/`, and where `uqs deploy push` downloads an artifact given by tag or URL, under `uqf/releases/` |
+| `XDG_CACHE_HOME` | `scripts/peachq/resolve.py`, `uqs.deploy.fetch` | no | `~/.cache`. Where the pinned PeachQ build is cached, under `uqf/peachq/`, and where `uqs deploy push` downloads an artifact given by tag or URL, under `uqf/releases/` |
 | `GH_TOKEN` | `uqs.deploy.fetch` | no | none. A GitHub token `uqs deploy push` sends when it lists a release's assets by tag or downloads one, for a private repository. Sent only to api.github.com and github.com, and never printed |
 | `GITHUB_TOKEN` | `uqs.deploy.fetch` | no | as `GH_TOKEN`, read when that is unset |
 | `QLINTER` | `scripts/gates/check_q_traps.py` | no | `qlinter` on `PATH`. The [q linter](https://github.com/kwojdalski/q-lint), which the trap hook delegates every correctness rule to, and which must be the version pinned in `.qlinter-version`. Set it to point at a build that is not installed — the same escape hatch `Q` gives for the interpreter. The hook refuses rather than skipping when neither finds it: a hook that reports success over checks that did not run is worse than one that fails |
@@ -97,7 +97,7 @@ without it:
 | `UQF_Q_UNIT_FROM_COVERAGE` | the `q-tests` hook, set by `scripts/dev/attest_kdbx.py` | no | the hook runs the selected q suites itself. `1`, set by `attest_kdbx.py` after the `q-coverage` run passed with every test passing, skips that run - its verdict is the coverage run's (#1704) - and runs only the documented examples and the worked examples (`tests/qrun/test_worked_examples.py`); not one to set by hand |
 | `UQF_ROOT` | `scripts/torq_*.q` | yes | the `\l` of every repository script fails. Set by `build_env`, not by hand |
 | `UQF_STATUS_DIR` | `.qetl.status.status_dir` (`src/etl/core/status.q`) | no | falls back to `$TORQDATA/status`; with neither set it is refused by name (#2653). Every bootstrap records the directory it resolved in the stack's `setenv.sh`, and the frontend reads it from there, through `UQF_FRONTEND_STACK_ROOT` - so a frontend started from another shell reads the directory the workers were started with (#2038) |
-| `UQF_TEST_FAILURES` | `tests/run_tests.q` and `tests/q/run_coverage.q` (`.qt.support.write_outcomes`); set by `scripts/dev/attest_kdbx.py`, `scripts/portable/full_suite.py` and `tests/qrun/test_q_suite.py` | no | nothing is written. A file to write every test that did not pass to: name, status and why, tab-separated; one empty line when all passed |
+| `UQF_TEST_FAILURES` | `tests/run_tests.q` and `tests/q/run_coverage.q` (`.qt.support.write_outcomes`); set by `scripts/dev/attest_kdbx.py`, `scripts/peachq/full_suite.py` and `tests/qrun/test_q_suite.py` | no | nothing is written. A file to write every test that did not pass to: name, status and why, tab-separated; one empty line when all passed |
 | `UQF_TEST_RESULTS` | `tests/run_tests.q` and `tests/q/run_coverage.q` (`.qt.support.write_outcomes`); set by `scripts/dev/attest_kdbx.py` and `tests/qrun/test_q_suite.py` | no | nothing is written. A file to write every test that ran to: suite and name, tab-separated, in run order |
 | `DATABENTO_DATA_DIR` | `.qdata.databentoDir` (`src/integrations/data.q`) | for that path only | `.qdata.cfg` also accepts it from a `.env` file, then throws naming the key. Note this is a *data directory*, not a credential — the no-file rule is about secrets |
 | `UQF_FRONTEND_GATEWAY_USER` | `uqf_frontend.config.Settings.from_env` | no | empty |
@@ -323,8 +323,8 @@ one way, `uqs.interpreter.peachq_binary`:
 3. The pinned build, otherwise.
 
 You need not install PeachQ for that. The pinned build is the commit in
-[`scripts/peachq.json`](../../scripts/peachq.json), fetched on first use,
-checked to be that commit, built and cached. That needs `git`, `make`, a C
+[`scripts/peachq/pin.json`](../../scripts/peachq/pin.json), fetched on first
+use, checked to be that commit, built and cached. That needs `git`, `make`, a C
 compiler and the network once; later runs reuse the cache offline.
 
 - **Cache:** `${XDG_CACHE_HOME:-~/.cache}/uqf/peachq/`, one entry per commit,
@@ -338,8 +338,8 @@ compiler and the network once; later runs reuse the cache offline.
   is used, and named in one warning giving the binary and the pin. The pinned
   build is known by the manifest beside it: the cache entry's `manifest.json`,
   or a deployed q runtime's `RUNTIME_MANIFEST.json`.
-- **Directly:** `python3 scripts/peachq.py` prints the pinned binary's path,
-  building it if needed.
+- **Directly:** `python3 scripts/peachq/resolve.py` prints the pinned binary's
+  path, building it if needed.
 
 PeachQ is never put on `PATH`; only the lanes that run on it are given its path.
 

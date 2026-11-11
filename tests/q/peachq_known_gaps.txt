@@ -1,7 +1,7 @@
 # Tests that cannot pass on PeachQ, each with why (#863).
 #
-# scripts/portable/full_suite.py runs the whole suite on PeachQ after
-# flattening nested contexts, and holds the result to this list both ways: a
+# scripts/peachq/full_suite.py runs the whole suite on PeachQ, and holds
+# the result to this list both ways: a
 # failure not listed here fails CI, and so does a listed test that passes - so
 # this list only shrinks. Format: `.suite.test_name  # reason`.
 #
@@ -10,7 +10,6 @@
 # (#986):
 #   peachq-lacks: <the capability PeachQ lacks, as specifically as known>
 #   tree-bug: #<issue>  - code here that relies on something it should not
-#   flattening: <why the flattened copy fails, on KDB-X too>
 #
 # These are facts about the platform below - CI's PeachQ build. The same pin
 # built elsewhere behaves differently, so on any other platform the lane
@@ -113,9 +112,9 @@ platform: Linux-x86_64
 .qt.qproc.hdbalter.test_reorder_changes_only_the_d_of_partitions_holding_the_table  # peachq-lacks: writing a partitioned HDB natively (the .d amend is 'nyi), so scripts/gates/hdb_alter.q refuses PeachQ before it reads the database (#1755)
 .qt.qproc.hdbalter.test_the_operations_own_mistakes_are_refused  # peachq-lacks: writing a partitioned HDB natively (the .d amend is 'nyi), so scripts/gates/hdb_alter.q refuses PeachQ before it reads the database (#1755)
 .qt.qproc.hdbalter.test_the_plan_names_the_journal_the_touched_and_the_skipped_partitions  # peachq-lacks: writing a partitioned HDB natively (the .d amend is 'nyi), so scripts/gates/hdb_alter.q refuses PeachQ before it reads the database (#1755)
-.qt.qproc.peachq_init.test_it_fills_a_database_as_the_native_chk_does  # peachq-lacks: .Q.chk - this suite holds scripts/peachq_init.q's stand-in to KDB-X's native one, so it needs the native
-.qt.qproc.peachq_init.test_it_leaves_an_interpreter_s_own_chk_alone  # peachq-lacks: .Q.chk - this suite holds scripts/peachq_init.q's stand-in to KDB-X's native one, so it needs the native
-.qt.qproc.peachq_init.test_it_writes_nothing_where_nothing_is_missing  # peachq-lacks: .Q.chk - this suite holds scripts/peachq_init.q's stand-in to KDB-X's native one, so it needs the native
+.qt.qproc.peachq_init.test_it_fills_a_database_as_the_native_chk_does  # peachq-lacks: .Q.chk - this suite holds scripts/peachq/init.q's stand-in to KDB-X's native one, so it needs the native
+.qt.qproc.peachq_init.test_it_leaves_an_interpreter_s_own_chk_alone  # peachq-lacks: .Q.chk - this suite holds scripts/peachq/init.q's stand-in to KDB-X's native one, so it needs the native
+.qt.qproc.peachq_init.test_it_writes_nothing_where_nothing_is_missing  # peachq-lacks: .Q.chk - this suite holds scripts/peachq/init.q's stand-in to KDB-X's native one, so it needs the native
 .qt.qproc.fillhdb.test_fx_markouts_gain_the_contracts_columns_derived_from_the_stored_rows  # peachq-lacks: the amend @[dir;`.d;,;col] by which dbmaint's add1col appends a column to .d ('nyi), and the symbol-vector path it reads .d through (get tabledir,`.d, 'io) - a missing COLUMN is not written, as the filler's own amend failed before it used dbmaint (a missing table is)
 .qt.qproc.fillhdb.test_the_wide_fx_markout_gains_the_same_derived_columns  # peachq-lacks: the amend @[dir;`.d;,;col] by which dbmaint's add1col appends a column to .d ('nyi), and the symbol-vector path it reads .d through (get tabledir,`.d, 'io) - a missing COLUMN is not written, as the filler's own amend failed before it used dbmaint (a missing table is)
 .qt.qproc.fillhdb.test_the_flat_top_the_order_and_the_row_numbers_come_only_when_asked_for  # peachq-lacks: the amend @[dir;`.d;,;col] by which dbmaint's add1col appends a column to .d ('nyi), and the symbol-vector path it reads .d through (get tabledir,`.d, 'io) - the migration adds bid, ask and rid through that amend, and a missing COLUMN is not written, as the filler's own amend failed before it used dbmaint

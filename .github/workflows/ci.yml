@@ -344,7 +344,7 @@ jobs:
         # until someone re-pinned to whatever upstream had published - which
         # makes the pin a formality. A commit hash cannot change under us.
         #
-        # The pin and the build options are scripts/peachq.json, the same
+        # The pin and the build options are scripts/peachq/pin.json, the same
         # file the local lanes build from (#719): moving either is one edit
         # there, and it changes this key. The cache is the resolver's own
         # (~/.cache/uqf/peachq), so a hit is a warm cache and needs no network.
@@ -353,9 +353,9 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/uqf/peachq
-          key: peachq-${{ hashFiles('scripts/peachq.json') }}-${{ runner.os }}-${{ runner.arch }}
+          key: peachq-${{ hashFiles('scripts/peachq/pin.json') }}-${{ runner.os }}-${{ runner.arch }}
       - name: Provide PeachQ beside the tree
-        # scripts/peachq.py reuses the cached build, or fetches the pinned
+        # scripts/peachq/resolve.py reuses the cached build, or fetches the pinned
         # commit, checks it out, verifies the hash, builds it with this
         # platform's options and identifies the result - about 40s, once per
         # pin. It prints an absolute path and puts nothing on PATH: every
@@ -367,17 +367,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bin="$(python3 scripts/peachq.py)"
+          bin="$(python3 scripts/peachq/resolve.py)"
           # A binary that will not even start fails here, by name, rather
           # than as a confusing first lane.
           printf 'exit 0\n' > "$RUNNER_TEMP/peachq-smoke.q"
           "$bin" "$RUNNER_TEMP/peachq-smoke.q" -q
           echo "PEACHQ_BIN=$bin" >> "$GITHUB_ENV"
-          echo "PeachQ: built from peachq-org/peachq@$(python3 scripts/peachq.py --commit)" >> "$GITHUB_STEP_SUMMARY"
-      - name: Run the whole qUnit suite on PeachQ, flattened (blocking)
-        # The q tests CI can hold a merge to. This runner has no KDB-X, and
-        # PeachQ rejects nested contexts, so scripts/portable/full_suite.py
-        # flattens a copy of the tree first (#856) and runs every suite on it.
+          echo "PeachQ: built from peachq-org/peachq@$(python3 scripts/peachq/resolve.py --commit)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Run the whole qUnit suite on PeachQ (blocking)
+        # The q tests CI can hold a merge to. This runner has no KDB-X, so
+        # scripts/peachq/full_suite.py runs every suite on PeachQ, over a copy
+        # of the tree: no file opens a nested context (check.py
+        # nested-contexts), which PeachQ rejects, so none needs flattening.
         # The result is held to tests/q/peachq_known_gaps.txt both ways: a
         # failure not listed fails the build, and so does a listed test that
         # now passes - the list only shrinks (#863).
@@ -437,7 +438,7 @@ jobs:
         # until someone re-pinned to whatever upstream had published - which
         # makes the pin a formality. A commit hash cannot change under us.
         #
-        # The pin and the build options are scripts/peachq.json, the same
+        # The pin and the build options are scripts/peachq/pin.json, the same
         # file the local lanes build from (#719): moving either is one edit
         # there, and it changes this key. The cache is the resolver's own
         # (~/.cache/uqf/peachq), so a hit is a warm cache and needs no network.
@@ -446,9 +447,9 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/uqf/peachq
-          key: peachq-${{ hashFiles('scripts/peachq.json') }}-${{ runner.os }}-${{ runner.arch }}
+          key: peachq-${{ hashFiles('scripts/peachq/pin.json') }}-${{ runner.os }}-${{ runner.arch }}
       - name: Provide PeachQ beside the tree
-        # scripts/peachq.py reuses the cached build, or fetches the pinned
+        # scripts/peachq/resolve.py reuses the cached build, or fetches the pinned
         # commit, checks it out, verifies the hash, builds it with this
         # platform's options and identifies the result - about 40s, once per
         # pin. It prints an absolute path and puts nothing on PATH: every
@@ -460,13 +461,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bin="$(python3 scripts/peachq.py)"
+          bin="$(python3 scripts/peachq/resolve.py)"
           # A binary that will not even start fails here, by name, rather
           # than as a confusing first lane.
           printf 'exit 0\n' > "$RUNNER_TEMP/peachq-smoke.q"
           "$bin" "$RUNNER_TEMP/peachq-smoke.q" -q
           echo "PEACHQ_BIN=$bin" >> "$GITHUB_ENV"
-          echo "PeachQ: built from peachq-org/peachq@$(python3 scripts/peachq.py --commit)" >> "$GITHUB_STEP_SUMMARY"
+          echo "PeachQ: built from peachq-org/peachq@$(python3 scripts/peachq/resolve.py --commit)" >> "$GITHUB_STEP_SUMMARY"
       - name: Install what a PeachQ stack needs
         # torq.sh needs envsubst and rlwrap (uqs's prerequisite check refuses a
         # start without them); the PeachQ runtime's whole-stack test below
@@ -561,7 +562,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/uqf/peachq
-          key: peachq-${{ hashFiles('scripts/peachq.json') }}-${{ runner.os }}-${{ runner.arch }}
+          key: peachq-${{ hashFiles('scripts/peachq/pin.json') }}-${{ runner.os }}-${{ runner.arch }}
       - name: Provide PeachQ for the q API pages
         if: ${{ steps.docs-cache.outputs.cache-hit != 'true' }}
         # Builds the pinned commit on a cold cache (about 40s). Through QCMD
@@ -569,7 +570,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bin="$(python3 scripts/peachq.py)"
+          bin="$(python3 scripts/peachq/resolve.py)"
           echo "QCMD=$bin" >> "$GITHUB_ENV"
       - name: Check every link and anchor in docs/ resolves
         if: ${{ steps.docs-cache.outputs.cache-hit != 'true' }}
