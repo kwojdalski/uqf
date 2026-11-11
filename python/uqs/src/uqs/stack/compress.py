@@ -12,8 +12,9 @@ WHERE .cmp RUNS: housekeeping1. TorQ's own HDB-maintenance process, already in
 every stack with startwithall=1, already loading .cmp with TorQ's common code -
 TorQ's housekeeping.q compresses with `.cmp.compress` itself. It runs
 housekeeping.q unchanged; VENDORED_LOAD_OVERLAY (stack/procs.py) points .cmp
-at the generated policy before it, and loads the wrapper, the survey, the
-coverage ledger's reader and the reload's connection to the HDBs after it. TorQ's
+at the generated policy and connects to the HDBs when it reloads them
+(uqs_housekeeping_config.q's .qtorq.hk.reload) before it, and loads the wrapper,
+the survey and the coverage ledger's reader after it. TorQ's
 `compression` process was the other candidate and is not used: it runs
 `.cmp.compressmaxage` over the whole HDB as it loads and exits, unchecked and
 with discovery switched off - so it can neither show a plan, nor scope a run,
@@ -181,9 +182,10 @@ def _ask(paths: UqsPaths, sc: Scope, expr: str, timeout: int, query: Query | Non
                 f"{PROCESS} (port {port}) is not answering: `uqs start {PROCESS}` - "
                 "TorQ's .cmp runs there"
             ) from None
-        if text.strip().lstrip("'").startswith((".qtorq.compress.", ".cmp.")) and " " not in text:
+        name = text.strip().lstrip("'")
+        if name.startswith((".qtorq.compress.", ".qtorq.hk.", ".cmp.")) and " " not in text:
             raise UqsError(
-                f"{PROCESS} has no .qtorq.compress ({text}): it was started before it "
+                f"{PROCESS} has no {name}: it was started before it "
                 f"loaded one - `uqs restart {PROCESS}`"
             ) from None
         raise UqsError(f"{PROCESS}: {text}") from None
@@ -324,9 +326,10 @@ def run_partition(
 
 
 def reload(paths: UqsPaths, sc: Scope, *, query: Query | None = None) -> dict[str, Any]:
-    """Ask every HDB to reload, once, through housekeeping1's `.qtorq.reload_hdb`
-    (TorQ's (`reload;date) message): how many were registered, opened, reloaded."""
-    return dict(_ask(paths, sc, ".qtorq.reload_hdb[]", 120, query))
+    """Ask every HDB to reload, once, through housekeeping1's `.qtorq.hk.reload` -
+    which connects to them, then sends `.qtorq.reload_hdb`'s (`reload;date) message:
+    how many were registered, opened, reloaded."""
+    return dict(_ask(paths, sc, ".qtorq.hk.reload[]", 120, query))
 
 
 def partitions_to_run(doc: dict[str, Any]) -> list[str]:

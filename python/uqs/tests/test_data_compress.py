@@ -117,7 +117,7 @@ def answers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     def query(expr: str, port: int, timeout: int = 0) -> str:
         asked.append(expr)
-        if "reload_hdb" in expr:
+        if "hk.reload" in expr:
             return json.dumps({"registered": 1, "opened": 1, "reloaded": 1})
         if "apply_partition" in expr:
             day = expr.rsplit('"', 2)[-2]
@@ -232,11 +232,12 @@ def test_a_process_that_is_down_is_named():
         stack_compress._ask(real_paths(), stack_compress.Scope(), "1", 1, down)
 
 
-def test_a_process_started_before_the_wrapper_is_told_to_restart():
+@pytest.mark.parametrize("missing", [".qtorq.compress.survey", ".qtorq.hk.reload"])
+def test_a_process_started_before_the_wrapper_is_told_to_restart(missing):
     def old(*a, **k):
-        raise RuntimeError(".qtorq.compress.survey")
+        raise RuntimeError(missing)
 
-    with pytest.raises(UqsError, match="restart housekeeping1"):
+    with pytest.raises(UqsError, match=f"has no {missing}: .* restart housekeeping1"):
         stack_compress._ask(real_paths(), stack_compress.Scope(), "1", 1, old)
 
 
@@ -403,7 +404,6 @@ def test_housekeeping1_points_cmp_at_the_policy_before_and_loads_the_wrapper_aft
             "torq_pipeline.q",
             "torq_compress.q",
             "torq_compress_survey.q",
-            "uqs_compression_process.q",
         )
     ]
     assert order == sorted(order)
@@ -497,7 +497,7 @@ def test_the_dry_run_says_a_named_day_is_younger_than_the_policy(cli):
 def test_apply_reloads_the_hdbs_once(cli):
     run, asked, _, _ = cli
     assert run("--apply", "--yes").exit_code == 0
-    assert sum("reload_hdb" in a for a in asked) == 1
+    assert sum("hk.reload" in a for a in asked) == 1
 
 
 def test_the_report_takes_no_plan_option_and_the_plan_no_hdb(cli):
