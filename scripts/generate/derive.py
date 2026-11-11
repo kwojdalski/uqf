@@ -301,8 +301,8 @@ def _diagrams_options(parser: argparse.ArgumentParser) -> None:
 
 def _diagrams(args: argparse.Namespace) -> int:
     """docs/diagrams/*.svg, rendered from their .d2 by the pinned d2 - and
-    skipped, saying so, under any other d2 unless --require (render_diagrams)."""
-    diagrams = load("render_diagrams")
+    skipped, saying so, under any other d2 unless --require (diagrams.py)."""
+    diagrams = load("diagrams")
     if args.print_version:
         print(diagrams.D2_VERSION)
         return 0
@@ -325,10 +325,10 @@ def _diagrams(args: argparse.Namespace) -> int:
 def _operational_docs(args: argparse.Namespace) -> int:
     """The process table, the pipeline DAG and load plan q reads, the port
     lock and the uqs guide's profile table - all from the pipeline registry
-    (generate_operational_docs). It refuses, naming them, when the declared
+    (operational_docs.py). It refuses, naming them, when the declared
     dataflow edges disagree with the q scripts."""
     _uqs()
-    docs = load("generate_operational_docs")
+    docs = load("operational_docs")
     files = [text(path, content) for path, content in docs.outputs()]
     return settle(files, check=args.check, hint=_hint("operational-docs"))
 

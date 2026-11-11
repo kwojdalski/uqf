@@ -1,5 +1,5 @@
 """Tests for the `diagrams` target of `scripts/generate/derive.py`, whose renderer
-is `scripts/generate/render_diagrams.py` - and mostly for the two ways it can
+is `scripts/generate/diagrams.py` - and mostly for the two ways it can
 pass while checking nothing.
 
 The gate's whole job is to fail when a committed `.svg` no longer matches
@@ -37,25 +37,25 @@ assert _SPEC and _SPEC.loader
 derive = importlib.util.module_from_spec(_SPEC)
 sys.modules["derive"] = derive
 _SPEC.loader.exec_module(derive)
-render_diagrams = derive.load("render_diagrams")
+diagrams = derive.load("diagrams")
 
 
 def _renderable() -> bool:
     """Whether the d2 on this machine is the one the SVGs were rendered with."""
-    return render_diagrams.installed_version() == render_diagrams.D2_VERSION
+    return diagrams.installed_version() == diagrams.D2_VERSION
 
 
 requires_d2 = pytest.mark.skipif(
     not _renderable(),
-    reason=f"needs d2 {render_diagrams.D2_VERSION} on PATH",
+    reason=f"needs d2 {diagrams.D2_VERSION} on PATH",
 )
 
 
 @pytest.fixture
 def diagram_dir(tmp_path, monkeypatch):
     """A throwaway diagrams directory, so a test never rewrites the real SVG."""
-    monkeypatch.setattr(render_diagrams, "DIAGRAMS", tmp_path)
-    monkeypatch.setattr(render_diagrams, "REPO", tmp_path)
+    monkeypatch.setattr(diagrams, "DIAGRAMS", tmp_path)
+    monkeypatch.setattr(diagrams, "REPO", tmp_path)
     return tmp_path
 
 
@@ -85,7 +85,7 @@ def _write_source(directory: Path, label: str = "one") -> Path:
 @requires_d2
 def test_a_stale_svg_is_reported(diagram_dir, capsys):
     source = _write_source(diagram_dir)
-    render_diagrams.render(source, source.with_suffix(".svg"))
+    diagrams.render(source, source.with_suffix(".svg"))
     # The edit a contributor forgets to re-render.
     _write_source(diagram_dir, label="one, renamed")
     svg = source.with_suffix(".svg")
@@ -107,7 +107,7 @@ def test_a_missing_svg_is_reported(diagram_dir, capsys):
 @requires_d2
 def test_a_matching_svg_passes(diagram_dir):
     source = _write_source(diagram_dir)
-    render_diagrams.render(source, source.with_suffix(".svg"))
+    diagrams.render(source, source.with_suffix(".svg"))
     assert _check() == 0
 
 
@@ -125,7 +125,7 @@ def test_rendering_then_checking_is_clean(diagram_dir):
 
 def test_an_absent_d2_skips_and_says_so(diagram_dir, monkeypatch, capsys):
     _write_source(diagram_dir)
-    monkeypatch.setattr(render_diagrams, "installed_version", lambda: None)
+    monkeypatch.setattr(diagrams, "installed_version", lambda: None)
     assert _check() == 0
     assert "no d2 on PATH" in capsys.readouterr().out
 
@@ -136,31 +136,31 @@ def test_a_different_d2_version_skips_and_names_both(diagram_dir, monkeypatch, c
     between two contributors.
     """
     _write_source(diagram_dir)
-    monkeypatch.setattr(render_diagrams, "installed_version", lambda: "v9.9.9")
+    monkeypatch.setattr(diagrams, "installed_version", lambda: "v9.9.9")
     assert _check() == 0
     out = capsys.readouterr().out
-    assert "v9.9.9" in out and render_diagrams.D2_VERSION in out
+    assert "v9.9.9" in out and diagrams.D2_VERSION in out
 
 
 def test_require_fails_when_d2_is_absent(diagram_dir, monkeypatch, capsys):
     """CI passes --require: a skip there is the gate green over nothing."""
     _write_source(diagram_dir)
-    monkeypatch.setattr(render_diagrams, "installed_version", lambda: None)
+    monkeypatch.setattr(diagrams, "installed_version", lambda: None)
     assert _run("--check", "--require") == 1
     assert "--require needs d2" in capsys.readouterr().err
 
 
 def test_require_fails_on_a_different_d2_version(diagram_dir, monkeypatch, capsys):
     _write_source(diagram_dir)
-    monkeypatch.setattr(render_diagrams, "installed_version", lambda: "v9.9.9")
+    monkeypatch.setattr(diagrams, "installed_version", lambda: "v9.9.9")
     assert _run("--check", "--require") == 1
     err = capsys.readouterr().err
-    assert "v9.9.9" in err and render_diagrams.D2_VERSION in err
+    assert "v9.9.9" in err and diagrams.D2_VERSION in err
 
 
 def test_print_version_is_the_pin(capsys):
     assert _run("--print-version") == 0
-    assert capsys.readouterr().out.strip() == render_diagrams.D2_VERSION
+    assert capsys.readouterr().out.strip() == diagrams.D2_VERSION
 
 
 def test_an_empty_diagram_directory_is_an_error(diagram_dir, capsys):

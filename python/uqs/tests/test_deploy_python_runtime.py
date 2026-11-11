@@ -3,7 +3,7 @@ component build python` makes of the CPython uv installs - every regular file,
 content-addressed, its links left out and listed - and a push with
 `python_mode = "bundled"`: what it holds the runtime to, what it sends the
 server (no uv, .venv by -m venv and pip from the runtime's interpreter) and
-what it records. A release can carry one for scripts/install_release.py.
+what it records. A release can carry one for scripts/deploy/install_release.py.
 
 The installation here is a stand-in laid out as uv lays one out, with an
 interpreter whose bytes ask for glibc symbol versions as an ELF file does. The
@@ -221,7 +221,7 @@ ABSENT = {
     "echo runtime=absent": _done("runtime=absent\n"),
     " -I -c ": _done("UQF_PYTHON 3.14.9 cpython\n"),
     "glibc=$(getconf": _done(SERVER + "glibc=2.35\ndata=present\n"),
-    "deploy_smoke.q": _done("DEPLOY_SMOKE_OK\n"),
+    "deploy/smoke.q": _done("DEPLOY_SMOKE_OK\n"),
     "uqs data check": _done('{"hdb": "/data/hdb", "present": false}\n'),
     "--ports-free": _done(json.dumps({"busy": {}}) + "\nDEPLOY_VERIFY_OK\n"),
     "uqs deploy verify --profile": _verified(True),
@@ -380,7 +380,7 @@ def test_the_host_contract_refuses_a_python3_before_3_8(tmp_path):
 def carrying(tmp_path: Path, rt: python_runtime.PythonRuntime | None) -> Path:
     """A small release of the peachq runtime, carrying `rt` when given."""
     root = tmp_path / "tree"
-    files = ["pyproject.toml", "src/init.q", "scripts/deploy_smoke.q"]
+    files = ["pyproject.toml", "src/init.q", "scripts/deploy/smoke.q"]
     for f in files:
         (root / f).parent.mkdir(parents=True, exist_ok=True)
         (root / f).write_text(f"content of {f}\n")

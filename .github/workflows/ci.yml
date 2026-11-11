@@ -200,7 +200,7 @@ jobs:
         # The rendered-diagrams check compares each committed .svg with a
         # fresh render, and used to skip with "no d2 on PATH" on every CI run
         # because nothing installed it (#1369). The version is read from
-        # render_diagrams.py (D2_VERSION), through `derive.py diagrams
+        # diagrams.py (D2_VERSION), through `derive.py diagrams
         # --print-version`, so it has one home; the sha256 is
         # for that release's linux-amd64 tarball (the release publishes no
         # checksum file), so a bump of D2_VERSION fails here until the hash

@@ -105,7 +105,7 @@ OWN = r"^\.github/workflows/ci\.yml$|^scripts/dev/ci_scope\.py$"
 
 #: The docs job's inputs, beyond docs/ and the Python its tooling imports.
 DOCS_PATHS = re.compile(
-    rf"^docs/|^src/.*\.q$|^scripts/generate/export_api_reference\.q$|^scripts/peachq/pin\.json$|{OWN}"
+    rf"^docs/|^src/.*\.q$|^scripts/generate/export_q_api_docs\.q$|^scripts/peachq/pin\.json$|{OWN}"
 )
 #: The Python the docs job runs: the render's pre-render step and the gate.
 DOCS_ENTRIES = (

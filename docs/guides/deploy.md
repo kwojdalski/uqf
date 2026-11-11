@@ -78,8 +78,8 @@ What a server must still provide when every component that can be bundled is
 bundled: `--torq-mode`, `--q-mode` (PeachQ) and `--python-mode` all `bundled`.
 Each item is checked before anything changes: by preflight
 (`python/uqs/src/uqs/deploy/preflight.py`) for a push, and by
-`scripts/install_release.py` for a release installed by hand. The tools are
-`HOST_TOOLS` in `python/uqs/src/uqs/deploy/artifact.py`, which a test holds
+`scripts/deploy/install_release.py` for a release installed by hand. The tools
+are `HOST_TOOLS` in `python/uqs/src/uqs/deploy/artifact.py`, which a test holds
 equal to the list preflight checks. Every release's manifest records them as
 `host.tools`, for the installer to check.
 
@@ -695,8 +695,8 @@ carries:
 `python/uqs/tests/test_offline_install.py` installs a real artifact with the
 network cut off, twice: once through the push's own server scripts (the
 write-once installs of a bundled Python and a bundled PeachQ, their probes,
-transfer and prepare), and once through `scripts/install_release.py` from the
-unpacked release, on the Python it carries. Each `.venv` must be the bundled
+transfer and prepare), and once through `scripts/deploy/install_release.py` from
+the unpacked release, on the Python it carries. Each `.venv` must be the bundled
 interpreter's and run `uqs --version`.
 
 - **What is real.** The CPython is the one uv installed that runs the tests,
@@ -867,9 +867,9 @@ uqs deploy build --arch x86_64 --python-component dist/python-runtime-3.14.<n>-l
 Unpack the artifact into its own release directory, then, from inside it:
 
 ```bash
-python3 scripts/install_release.py --check              # verify only; writes nothing
-python3 scripts/install_release.py --env-file /opt/efx/uat/uat-runtime.env
-python3 scripts/install_release.py --python /opt/python/3.14/bin/python3   # the site's instead
+python3 scripts/deploy/install_release.py --check              # verify only; writes nothing
+python3 scripts/deploy/install_release.py --env-file /opt/efx/uat/uat-runtime.env
+python3 scripts/deploy/install_release.py --python /opt/python/3.14/bin/python3   # the site's instead
 ```
 
 In order, each step refusing with what to do before the next one writes:
@@ -950,7 +950,7 @@ Each stage stops the deployment if it fails:
   | transfer  | `scp` into `staging/<release>/`; the archive's sha256 is checked **on the server** before it is extracted into `releases/<release>/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
   | prepare   | `releases/<release>/deploy.env` (below), and a release-local `.venv` installed **offline** from the artifact's wheels: the dependencies with their locked hashes required, then `uqs` itself, by uv or, with a bundled Python, by its `-m venv` and pip. `UV_OFFLINE=1` stays set, so nothing later fetches either                                                                                                                                                                                                                                                                                                                                  |
   | kafka     | only for a release built with `--kfk-home`: `kfk.q` is loaded in `$QCMD` from the release's copy, with no broker, so a library that does not resolve on the server fails here, before any process starts                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-  | smoke     | `scripts/deploy_smoke.q` loads the quant library and checks known numbers, then loads the declarations of the processes the deployment starts (theirs only) against the server's `$TORQAPPHOME/database.q`, so a job whose table that schema lacks fails here, naming the job, table and schema path. It must print `DEPLOY_SMOKE_OK` and exit 0 within `--smoke-timeout`                                                                                                                                                                                                                                                                           |
+  | smoke     | `scripts/deploy/smoke.q` loads the quant library and checks known numbers, then loads the declarations of the processes the deployment starts (theirs only) against the server's `$TORQAPPHOME/database.q`, so a job whose table that schema lacks fails here, naming the job, table and schema path. It must print `DEPLOY_SMOKE_OK` and exit 0 within `--smoke-timeout`                                                                                                                                                                                                                                                                           |
   | restart   | with `--restart`, the previous release's processes stop. Their replacements take the same ports, so an upgrade has downtime: `downtime` in the report                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
   | ports     | nothing else listens on the profile's ports                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
   | start     | `uqs start --profile <profile>` from the new release                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |

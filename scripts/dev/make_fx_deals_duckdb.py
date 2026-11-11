@@ -17,7 +17,7 @@ file can assert exact counts. Prices walk from each pair's fixture level in
 small steps, so they stay plausible; nothing else about them is meant to be.
 
 A PEP 723 script rather than a workspace dependency, for the reason
-``dump_databento_duckdb.py`` gives: DuckDB is needed only to build this file.
+``make_databento_duckdb.py`` gives: DuckDB is needed only to build this file.
 
     uv run scripts/dev/make_fx_deals_duckdb.py
     uv run scripts/dev/make_fx_deals_duckdb.py --days 30 --per-day 1000
@@ -59,7 +59,7 @@ NANOS_PER_DAY = 86_400 * 10**9
 
 
 def repo_root() -> Path:
-    """The main checkout's root, even from a git worktree (see dump_databento_duckdb.py)."""
+    """The main checkout's root, even from a git worktree (see make_databento_duckdb.py)."""
     common = subprocess.run(
         ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
         capture_output=True,

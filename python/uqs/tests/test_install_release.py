@@ -1,4 +1,4 @@
-"""scripts/install_release.py: an unpacked release installs itself offline (#1646).
+"""scripts/deploy/install_release.py: an unpacked release installs itself offline (#1646).
 
 The install runs for real: a release directory is made with a manifest, a
 lock and two tiny wheels built here, and the installer creates its .venv with
@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "install_release.py"
+SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "deploy" / "install_release.py"
 _spec = importlib.util.spec_from_file_location("install_release", SCRIPT)
 assert _spec and _spec.loader
 installer = importlib.util.module_from_spec(_spec)
@@ -197,9 +197,9 @@ def test_the_installer_ships_in_every_release():
     """It must be inside the artifact: the server has no uqs to install with."""
     from uqs.deploy import payload
 
-    assert not payload.is_excluded("scripts/install_release.py")
+    assert not payload.is_excluded("scripts/deploy/install_release.py")
     assert any(
-        "scripts/install_release.py".startswith(prefix + "/") for prefix in payload.ALLOWLIST
+        "scripts/deploy/install_release.py".startswith(prefix + "/") for prefix in payload.ALLOWLIST
     )
 
 

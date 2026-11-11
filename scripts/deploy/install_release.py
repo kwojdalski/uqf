@@ -6,7 +6,7 @@ way - unpacked by an external release process into its own directory - needs
 the same preparation without uqs, which is not installed yet. This does it with
 the standard library alone, run by the server's Python from inside the release:
 
-    python3 scripts/install_release.py [--python PATH] [--env-file PATH] [--check]
+    python3 scripts/deploy/install_release.py [--python PATH] [--env-file PATH] [--check]
 
 In order, each step refusing with what to do before the next one writes:
 
@@ -313,7 +313,7 @@ def env_lines(release: Path, manifest: dict, env_file: str | None) -> list[str]:
 
 def write_env(release: Path, lines: list[str]) -> None:
     (release / ENV_FILE).write_text(
-        "# written by scripts/install_release.py: the environment for this release\n"
+        "# written by scripts/deploy/install_release.py: the environment for this release\n"
         + "".join(f"{line}\n" for line in lines)
     )
 
@@ -328,7 +328,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--env-file", help="absolute path of the site file deploy.env loads")
     parser.add_argument("--check", action="store_true", help="verify only; write nothing")
     parser.add_argument(
-        "--release", default=str(Path(__file__).resolve().parents[1]), help=argparse.SUPPRESS
+        "--release", default=str(Path(__file__).resolve().parents[2]), help=argparse.SUPPRESS
     )
     args = parser.parse_args(argv)
     release = Path(args.release)

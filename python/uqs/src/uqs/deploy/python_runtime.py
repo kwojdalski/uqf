@@ -1,6 +1,6 @@
 """The Python runtime artifact (#1557, step 7): a relocatable CPython, for
 `python_mode = "bundled"` and for an offline install with no Python of the
-host's (scripts/install_release.py).
+host's (scripts/deploy/install_release.py).
 
     uqs deploy component build python [--arch x86_64] [--python 3.14]
 
@@ -26,7 +26,7 @@ source that seems newer is compiled again and its .pyc REWRITTEN in place -
 which would change a runtime installed write-once, and have the next push
 refuse it. So the same installation still makes the same bytes, and its .pyc
 files stay valid wherever it is unpacked with its mtimes (tar does that, and so
-does scripts/install_release.py). python-build-standalone does not ship a .pyc
+does scripts/deploy/install_release.py). python-build-standalone does not ship a .pyc
 for every stdlib module, so the first run of one writes it into __pycache__;
 the runtime's check (runtime_install.VERIFY_PY) accepts such a file for a
 source the manifest lists, which CPython checks against that source, and still
@@ -43,7 +43,7 @@ python-build-standalone release (its BUILD file), the platform, the glibc its
 ELF files ask for, the interpreter, and every file's sha256.
 
 A release can also CARRY one (`uqs deploy build --python-component FILE`), at
-CARRIED, for scripts/install_release.py to make the .venv from on a server with
+CARRIED, for scripts/deploy/install_release.py to make the .venv from on a server with
 no Python 3.14.
 """
 
@@ -71,7 +71,7 @@ MANIFEST = "RUNTIME_MANIFEST.json"
 RUNTIMES_DIR = "shared/runtimes/python"
 #: The manifest's mtime: a fixed time, as the other runtimes'.
 MTIME = 315532800  # 1980-01-01
-#: Where a release carries one, for scripts/install_release.py.
+#: Where a release carries one, for scripts/deploy/install_release.py.
 CARRIED = ".release/python-runtime.tar.gz"
 #: uv's name for an installation: cpython-3.14.9-linux-x86_64-gnu.
 UV_KEY = re.compile(r"cpython-(\d+)\.(\d+)\.(\d+)-(linux|macos)-([a-z0-9_]+)-(gnu|none)")
@@ -339,7 +339,7 @@ def _add(tar: tarfile.TarFile, name: str, data: bytes, mode: int, mtime: int) ->
 
 def venv_lines(interpreter: str, py: dict) -> list[str]:
     """prepare's offline install with a bundled Python, run in the release:
-    .venv from `interpreter` by `-m venv`, then - as scripts/install_release.py
+    .venv from `interpreter` by `-m venv`, then - as scripts/deploy/install_release.py
     does - the locked dependencies with their hashes required, and uqs, by pip
     from the release's wheels (`py`, the manifest's python entry). No uv."""
     pip = f"{PIP_ENV} .venv/bin/python -m pip install --quiet --no-index"

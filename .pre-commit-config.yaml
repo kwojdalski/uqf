@@ -427,7 +427,7 @@ repos:
         entry: uv run python scripts/dev/hooks_full.py --hook doc-links -- uv run python scripts/gates/check_doc_links.py --allow-missing
         language: system
         pass_filenames: false
-        files: '^docs/.*\.(md|qmd)$|^docs/_quarto\.yml$|^docs/man\.q$|^scripts/gates/check_doc_links\.py$|^scripts/generate/(q_api_docs\.py|export_api_reference\.q)$'
+        files: '^docs/.*\.(md|qmd)$|^docs/_quarto\.yml$|^docs/man\.q$|^scripts/gates/check_doc_links\.py$|^scripts/generate/(q_api_docs\.py|export_q_api_docs\.q)$'
       - id: contract-surface
         # kdbx-only
         name: Check the committed contract surface matches the tree

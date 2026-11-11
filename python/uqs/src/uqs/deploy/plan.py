@@ -70,7 +70,7 @@ def plan(
         ),
         "hdb       " + facts.get("hdb", "not judged"),
         "smoke     "
-        + " ".join(["q scripts/deploy_smoke.q", *smoke_args(cfg.profile, sel)])
+        + " ".join(["q scripts/deploy/smoke.q", *smoke_args(cfg.profile, sel)])
         + f" (timeout {cfg.smoke_timeout}s)",
         "restart   " + restart,
         "ports     "

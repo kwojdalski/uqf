@@ -2,7 +2,7 @@
 // ODBC.
 //
 // Runs eq_orderbook_backfill over a range of the DuckDB database built by
-// scripts/dev/dump_databento_duckdb.py, then checks what it published against
+// scripts/dev/make_databento_duckdb.py, then checks what it published against
 // DuckDB directly, through a second connection:
 //
 //   - the run completed with no failed window;

@@ -69,7 +69,7 @@ def select_jobs(manifest: dict, wanted: Sequence[str]) -> Selection:
 
 
 def smoke_args(profile: str, sel: Selection) -> list[str]:
-    """deploy_smoke.q's flags: every process the deployment starts, so the
+    """scripts/deploy/smoke.q's flags: every process the deployment starts, so the
     smoke loads exactly their declarations against the server's schema (#902).
     The smoke passes over the names that run no declared job."""
     return ["-procs", *started_by(profile, sel.processes)]

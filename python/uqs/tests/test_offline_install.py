@@ -1,6 +1,6 @@
 """An offline install, end to end (#1557 step 7, #1646): a real artifact,
 carrying a bundled Python, beside a bundled PeachQ, installed with the network
-cut off - by the push's own server scripts, and by scripts/install_release.py.
+cut off - by the push's own server scripts, and by scripts/deploy/install_release.py.
 
 What is real:
 
@@ -308,7 +308,7 @@ def test_the_installer_installs_the_release_offline_on_the_python_it_carries(bui
     release.mkdir(parents=True)
     with tarfile.open(pkg.path) as tar:
         tar.extractall(release, filter="data")
-    r = offline.command([sys.executable, "scripts/install_release.py"], cwd=release)
+    r = offline.command([sys.executable, "scripts/deploy/install_release.py"], cwd=release)
     assert r.returncode == 0, r.stdout + r.stderr
     carried = (release / ".release" / "python" / "bin").resolve()
     assert _venv_home(release) == carried, ".venv is the carried Python's, not the host's"

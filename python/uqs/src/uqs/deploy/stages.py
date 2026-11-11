@@ -245,7 +245,7 @@ class Deployment(Server):
             "the offline smoke test",
             *self.in_release(
                 release,
-                f'timeout {self.cfg.smoke_timeout} "$QCMD" scripts/deploy_smoke.q -q '
+                f'timeout {self.cfg.smoke_timeout} "$QCMD" scripts/deploy/smoke.q -q '
                 + " ".join(q(a) for a in smoke_args(self.cfg.profile, self.selection)),
             ),
             timeout=self.cfg.smoke_timeout + 30,

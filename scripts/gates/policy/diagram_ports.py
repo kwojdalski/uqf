@@ -8,7 +8,7 @@ two, so the next port move would have left the picture showing the wrong
 port while every gate passed (#1369; #890 fixed the names, not the ports).
 
 The authority is read, not copied: the same composed process rows that
-generate_operational_docs.py renders, resolved at the default base port with
+operational_docs.py renders, resolved at the default base port with
 the one port grammar (`uqs.portexpr`). A label whose procname is not a process
 at all fails too - a renamed process whose box was left behind.
 

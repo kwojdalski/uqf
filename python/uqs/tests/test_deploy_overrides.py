@@ -347,7 +347,7 @@ def test_the_platform_is_checked_under_every_override(tmp_path, facts, said):
 @pytest.mark.parametrize(
     ("rules", "stage"),
     [
-        ({"deploy_smoke.q": _done("", rc=1)}, "smoke"),
+        ({"deploy/smoke.q": _done("", rc=1)}, "smoke"),
         ({"uqs deploy verify --profile": _verified(False, "rdb1 did not answer")}, "verify"),
     ],
 )
