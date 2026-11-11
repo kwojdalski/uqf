@@ -591,7 +591,6 @@ OPTIONS = {
     ),
     "--level": Meaning("the lowest log level shown", r"this level and above"),
     "--limit": Meaning("show at most N records", r"(most recent|at most) N"),
-    "--kill": Meaning("SIGKILL what a normal stop has not ended", r"SIGKILL"),
     "--lines": Meaning("how many lines of a log to show", r"^lines (of|per)\b"),
     "--local": Meaning("one process's local port in a tunnel plan", r"this local port"),
     "--local-offset": Meaning("added to each remote port in a tunnel plan", r"each remote port"),

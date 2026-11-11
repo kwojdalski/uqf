@@ -56,7 +56,7 @@ platform: Linux-x86_64
 
 .qt.qpipe.transform.fx_markout.characterization.test_replace_across_midnight_leaves_no_duplicates  # peachq-lacks: the replace spill into the next date partition (write_hdb_keyed swaps partitions in by rename): after the swap the live rows are still on disk in the next day - its column files keep their rows where KDB-X leaves them empty (measured with a scratch writer run, no test involved)
 
-.qt.qpipe.job.eq_markout.test_the_three_early_closes_and_the_ad_hoc_closures  # peachq-lacks: since v0.91, `in` with an empty left side and () on the right gives () where KDB-X gives `boolean$(), so regular_sessions' ?[early;...] for a weekend throws 'type (src/etl/transforms/eq_markout_outputs.q)
+.qt.qpipe.job.eq_markout.test_the_three_early_closes_and_the_ad_hoc_closures  # peachq-lacks: since v0.91, `in` with an empty left side and () on the right gives () where KDB-X gives `boolean$(), so regular_sessions' ?[early;...] for a weekend throws 'type (src/etl/transforms/eq_markout_outputs.q; peachq-org/peachq#124)
 
 .qt.harness.seed.test_reseeding_reproduces_a_known_draw  # peachq-lacks: KDB-X's random generator - a seed is reproducible on PeachQ, but `\S 20260916` then 5?1000 draws 717 47 276 94 179
 

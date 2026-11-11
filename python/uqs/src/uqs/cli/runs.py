@@ -37,6 +37,7 @@ from uqs.cli.shared import (
     job_app,
 )
 from uqs.cli.sorting import ReverseOpt, SortOpt, _sorted_items
+from uqs.cli.stop_options import KillOpt
 from uqs.cli.vocabulary import duration
 from uqs.paths import UqsError
 from uqs.stack import runs as stack_runs
@@ -333,14 +334,7 @@ def stop(
             help="Seconds (a DURATION) to wait for the run to stop at its next window boundary",
         ),
     ] = 60.0,
-    kill: Annotated[
-        bool,
-        typer.Option(
-            "--kill",
-            help="If it has not stopped within --timeout, SIGKILL it. The last resort: the "
-            "window it is in is lost, and its locks are freed by the next run's crash recovery",
-        ),
-    ] = False,
+    kill: KillOpt = False,
     dry_run: DryRunOpt = False,
 ) -> None:
     """Stop a running attached backfill: ask it to, wait, and escalate only with --kill.

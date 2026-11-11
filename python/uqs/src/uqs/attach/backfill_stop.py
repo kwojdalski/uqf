@@ -7,10 +7,10 @@ file that names the attachment's live run and its pid - and does the same three 
   1. ask: write the stop file the lifecycle checks between windows (backfill_run.stop_file_for,
      the path q's `.qetl.job.bounded.stop.path` derives), for that pid and no other;
   2. wait for the run to exit by itself at its window boundary;
-  3. only when the caller says so (`kill`), escalate to SIGKILL.
+  3. only when the caller says so (`kill`), escalate through the one stop policy every stop
+     path shares (process_stop.stop_pids, #2689): SIGTERM, a short grace, then SIGKILL.
 
-Step 3 is `escalate`, a small step of its own on purpose: it is the part a shared
-TERM/wait/confirm/escalate helper (#2689) replaces. A killed run releases nothing itself; its
+A killed run releases nothing itself; its
 locks are the stale-lock recovery's to free on the next run, as after any crash, and its owner
 record names a dead pid, which `backfill_owner.active` does not count.
 """
@@ -18,12 +18,12 @@ record names a dead pid, which `backfill_owner.active` does not count.
 from __future__ import annotations
 
 import os
-import signal
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from uqs import process_stop
 from uqs.attach import backfill_owner, backfill_run
 from uqs.liveness import on_this_host, pid_alive
 from uqs.paths import UqsError
@@ -89,19 +89,17 @@ def stop(
 def escalate(
     pid: int,
     *,
-    wait: float = 5.0,
+    grace: float = 5.0,
     alive: Callable[[int], bool] = pid_alive,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
     send: Callable[[int, int], None] = os.kill,
 ) -> bool:
-    """SIGKILL `pid` and say whether it is gone within `wait` seconds. The one step a shared
-    stop helper (#2689) takes over."""
-    try:
-        send(pid, signal.SIGKILL)
-    except ProcessLookupError:
-        return True
-    return _wait_gone(pid, wait, alive, clock, sleep)
+    """Stop `pid` by the shared policy with SIGKILL allowed, and say whether it is gone."""
+    (out,) = process_stop.stop_pids(
+        [pid], kill=True, grace=grace, running=alive, send=send, clock=clock, sleep=sleep
+    )
+    return out.gone
 
 
 def _wait_gone(

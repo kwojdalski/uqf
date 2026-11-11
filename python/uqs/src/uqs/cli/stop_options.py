@@ -1,9 +1,10 @@
 """The option every stop command shares, declared once (#2689).
 
-`uqs stop`, `uqs job receiver stop`, `uqs job attachment remove` and `uqs
-connector stop` all stop a process by the one policy (uqs/process_stop.py):
-SIGTERM, wait until it is confirmed gone, and report one still running rather
-than call it stopped. `--kill` is the same escalation on each of them, so it is
+`uqs stop`, `uqs job receiver stop`, `uqs job attachment remove`, `uqs
+connector stop` and `uqs job runs stop` (#2690, once its stop file has not
+worked) all stop a process by the one policy (uqs/process_stop.py): SIGTERM,
+wait until it is confirmed gone, and report one still running rather than
+call it stopped. `--kill` is the same escalation on each of them, so it is
 written here and held to one meaning by tests/test_stop_options.py.
 """
 

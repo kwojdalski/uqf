@@ -31,6 +31,7 @@ STOPPERS = (
     ("stop",),
     ("connector", "stop"),
     ("job", "receiver", "stop"),
+    ("job", "runs", "stop"),
     ("job", "attachment", "remove"),
 )
 
