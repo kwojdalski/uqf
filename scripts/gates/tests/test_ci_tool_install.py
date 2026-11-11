@@ -1,4 +1,4 @@
-"""How CI installs its pinned binaries, d2 and qlinter (#2171).
+"""How CI installs its pinned binaries, d2, qlinter and rlwrap (#2171, #2721).
 
 Two runs went red on 2026-11-05 for reasons outside the change under test: a
 504 from GitHub's release download for d2, and a qlinter pin bump that ran CI
@@ -6,6 +6,8 @@ before the q-lint release had uploaded its assets. These hold the shape that
 stops both: each binary comes from the Actions cache keyed by its pin, is
 downloaded with retries only on a miss, is verified by sha256 either way, and
 a missing qlinter asset is one clear error before anything runs without it.
+rlwrap's apt install failed on DNS twice in one pull request, so it is pinned
+the same way, as a .deb, and no workflow step asks apt for anything.
 """
 
 import os
@@ -88,6 +90,35 @@ def test_d2_is_cached_by_version_and_sha256_and_downloaded_with_retries():
     assert "sha256sum -c" in download["run"]
     assert "sha256sum -c" in _named(steps, "Install d2")["run"]
     assert re.fullmatch(r"[0-9a-f]{64}", _named(steps, "Pin d2")["env"]["D2_SHA256"])
+
+
+def test_rlwrap_is_a_cached_deb_pinned_by_sha256_and_downloaded_with_retries():
+    steps = _steps("peachq-python")
+    pin = _named(steps, "Pin rlwrap")
+    restore = _named(steps, "Restore rlwrap from the cache")
+    download = _named(steps, "Download rlwrap (cache miss)")
+    save = _named(steps, "Save rlwrap to the cache")
+    install = _named(steps, "Install what a PeachQ stack needs")
+    assert CACHE_SHA.match(restore["uses"]) and restore["uses"].startswith("actions/cache/restore@")
+    assert CACHE_SHA.match(save["uses"]) and save["uses"].startswith("actions/cache/save@")
+    assert "steps.rlwrap.outputs.sha256" in restore["with"]["key"]
+    assert save["with"]["key"] == "${{ steps.rlwrap-cache.outputs.cache-primary-key }}"
+    for step in (download, save):
+        assert "steps.rlwrap-cache.outputs.cache-hit != 'true'" in step["if"]
+    assert "--retry 5" in download["run"]
+    assert "sha256sum -c" in download["run"] and "sha256sum -c" in install["run"]
+    assert re.fullmatch(r"[0-9a-f]{64}", pin["env"]["RLWRAP_SHA256"])
+    assert re.fullmatch(r"rlwrap_[^/]+_amd64\.deb", pin["env"]["RLWRAP_DEB"])
+
+
+def test_no_workflow_step_installs_from_apt():
+    """A package index fetch on every run is a network dependency the cache avoids."""
+    for path in WORKFLOWS.glob("*.yml"):
+        for job, body in yaml.safe_load(path.read_text())["jobs"].items():
+            for step in body.get("steps", []):
+                assert "apt-get" not in step.get("run", ""), (
+                    f"{path.name} {job}: {step.get('name')}"
+                )
 
 
 def test_a_pin_bump_installs_qlinter_in_scope_first():
