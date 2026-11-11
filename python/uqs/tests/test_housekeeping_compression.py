@@ -19,6 +19,7 @@ import os
 import re
 import subprocess
 import time
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -209,8 +210,10 @@ def stack(q_binary, repo_root, tmp_path):
 
 
 def _day(days_ago: int) -> str:
-    """The partition q's .z.D - days_ago names."""
-    return time.strftime("%Y.%m.%d", time.localtime(time.time() - days_ago * DAY))
+    """The partition q's .z.D - days_ago names: date arithmetic, as q's is.
+    Counting days_ago*24h back in seconds lands on the next day instead when a
+    clock change falls in between and it is the last hour before midnight."""
+    return (date.today() - timedelta(days=days_ago)).strftime("%Y.%m.%d")
 
 
 def _files(lines: list[str], days_ago: int) -> dict[str, str]:
