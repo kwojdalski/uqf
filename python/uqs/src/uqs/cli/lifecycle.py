@@ -20,7 +20,6 @@ import typer
 
 from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
 from uqs.cli import completion, launch_options, start_follow, start_json, start_warnings, vocabulary
-from uqs.cli.force_stop import ForceOpt, _force_stop
 from uqs.cli.launch_options import FollowOpt, LevelOpt, StopOnExitOpt, TraceOpt
 from uqs.cli.safety import ChangesState, Effect, OverrideOpt, ReasonOpt, dry_run_note, marked
 from uqs.cli.shared import (
@@ -37,6 +36,7 @@ from uqs.cli.shared import (
 )
 from uqs.cli.start_override_opts import parsed as _overrides
 from uqs.cli.start_warnings import running as _running
+from uqs.cli.stop_options import KillOpt
 from uqs.model import profiles
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import procs as procs_model
@@ -323,13 +323,17 @@ def stop(
             autocompletion=completion.profiles,
         ),
     ] = None,
-    force: ForceOpt = False,
+    kill: KillOpt = False,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", "-n", help="Name what would be stopped; stop nothing"),
     ] = False,
 ) -> None:
-    """Stop every startwithall=1 process (or specific process name(s), or a profile's)."""
+    """Stop every startwithall=1 process (or specific process name(s), or a profile's).
+
+    Every instance, found by command line, gets SIGTERM and a grace to exit;
+    one still running then is named and the exit is 1, unless `--kill`
+    SIGKILLs it."""
     names = _names_to_stop(procs, profile)
     _reject_unknown(names)
     if dry_run:
@@ -337,12 +341,11 @@ def stop(
             wanted = start_follow.procnames_started_by(names, port)
         except UqsError as exc:
             _die(exc)
-        console.print(f"would {'kill' if force else 'stop'}: {' '.join(wanted)}", markup=False)
+        how = "stop, SIGKILL if need be" if kill else "stop"
+        console.print(f"would {how}: {' '.join(wanted)}", markup=False)
         console.print(dry_run_note())
         return
-    if force:
-        _force_stop(names, port)
-    _run_streaming(runtime.stop, names, base_port=port)
+    _run_streaming(runtime.stop, names, base_port=port, kill=kill)
 
 
 def _print_startlines(

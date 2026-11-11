@@ -21,6 +21,7 @@ from uqs.cli.json_out import emit, json_opt
 from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
+from uqs.cli.stop_options import KillOpt
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.run_modes import READ_ONLY_MODES
 
@@ -141,7 +142,7 @@ ListenPortOpt = Annotated[
 _STARTED = '{"attachment", "dataset", "contract", "port", "hdb_dir", "pid", "log", ...}'
 ReceiverJson = json_opt(_STARTED)
 ReceiveJson = json_opt(_STARTED, 'With --stop, {"stopped": [...]}')
-StoppedJson = json_opt('{"stopped": [{job, pid, ...}], "dry_run"}')
+StoppedJson = json_opt('{"stopped": [{job, pid, outcome, ...}], "still_running": [...], "dry_run"}')
 
 
 @receiver_app.command("start", cls=ChangesState)
@@ -186,6 +187,7 @@ _AttachOpt = attach_opt(
 @receiver_app.command("stop", cls=ChangesState)
 def receiver_stop(
     attach: _AttachOpt,
+    kill: KillOpt = False,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", "-n", help="Name the receivers that would stop; stop nothing"),
@@ -194,17 +196,30 @@ def receiver_stop(
 ) -> None:
     """Stop this machine's receivers for an attachment, so a detach can go ahead.
 
-    An extractor then fails its next window without covering it."""
-    stopped = backfill_remote.stop_receivers(attach, dry_run=dry_run)
-    names = ", ".join(f"{r['worker']} (pid {r['pid']})" for r in stopped) or "none was running"
+    An extractor then fails its next window without covering it. One still
+    running after SIGTERM and its grace keeps its ownership, is named, and the
+    exit is 1 - unless `--kill` SIGKILLs it."""
+    runs = backfill_remote.stop_receivers(attach, dry_run=dry_run, kill=kill)
+    stopped = [r for r in runs if dry_run or r["outcome"] != "still running"]
+    running = [r for r in runs if r not in stopped]
     if as_json:
-        emit({"stopped": stopped, "dry_run": dry_run})
-    elif dry_run:
-        console.print(f"would stop: {names}", markup=False)
-        console.print(dry_run_note())
+        emit({"stopped": stopped, "still_running": running, "dry_run": dry_run})
     else:
-        console.print(f"stopped: {names}", markup=False)
-    raise typer.Exit(code=0)
+        names = ", ".join(_receiver(r) for r in stopped) or "none was running"
+        console.print(f"{'would stop' if dry_run else 'stopped'}: {names}", markup=False)
+        if running:
+            who = ", ".join(_receiver(r) for r in running)
+            console.print(
+                f"still running: {who} - kept as owner; `--kill` SIGKILLs it", markup=False
+            )
+        if dry_run:
+            console.print(dry_run_note())
+    raise typer.Exit(code=1 if running else 0)
+
+
+def _receiver(run: dict) -> str:
+    killed = ", killed" if run.get("outcome") == "killed" else ""
+    return f"{run['worker']} (pid {run['pid']}{killed})"
 
 
 def receive(
@@ -233,7 +248,7 @@ def receive(
     `job receiver stop`."""
     if stop:
         warn_renamed("uqs job receive --stop", "uqs job receiver stop")
-        receiver_stop(attach, dry_run, as_json)
+        receiver_stop(attach, dry_run=dry_run, as_json=as_json)
     _start(attach, contract, port, dry_run, as_json)
 
 

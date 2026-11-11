@@ -30,10 +30,8 @@ approved on the stack's (`uqs job attachment contract approve FILE --attachment 
 
 from __future__ import annotations
 
-import contextlib
 import os
 import re
-import signal
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -55,6 +53,7 @@ from uqs.attach.remote import Ipc
 from uqs.interpreter import q_interpreter
 from uqs.liveness import on_this_host
 from uqs.paths import UqsError, UqsPaths
+from uqs.process_stop import DEFAULT_GRACE_SECONDS, stop_pids
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import runs
 
@@ -323,23 +322,33 @@ def _served(pid, port, dest, contract, binding, co, readers, log) -> dict[str, A
 
 
 def stop_receivers(
-    attachment: str, attach_root: Path | None = None, *, dry_run: bool = False
+    attachment: str,
+    attach_root: Path | None = None,
+    *,
+    dry_run: bool = False,
+    kill: bool = False,
+    grace: float = DEFAULT_GRACE_SECONDS,
 ) -> list[dict[str, Any]]:
     """Stop this machine's receivers for `attachment` (`uqs job receiver stop`), so a
     detach here - which refuses while one runs - can go ahead. An extractor elsewhere
     then fails its next window without covering it, and nothing it sent half-way is
-    written (a staged batch is committed only whole). Returns the receivers stopped."""
-    stopped = []
-    for run in backfill_owner.active(attachment, attach_root):
-        if not str(run.get("worker", "")).endswith(".receiver") or not on_this_host(
-            str(run.get("host", ""))
-        ):
-            continue
-        if dry_run:  # the ones that would stop: nothing signalled, nothing released
-            stopped.append(run)
-            continue
-        with contextlib.suppress(ProcessLookupError):
-            os.kill(int(run["pid"]), signal.SIGTERM)
-        backfill_owner.release(attachment, str(run["worker"]), attach_root)
-        stopped.append(run)
-    return stopped
+    written (a staged batch is committed only whole).
+
+    Each gets the one stop policy (uqs/process_stop.py): SIGTERM, a grace to exit,
+    SIGKILL only with `kill`. Its ownership is released only once it is gone - one
+    still running keeps its record, so a detach still refuses (#2689). Returns each
+    receiver's record with its `outcome`: stopped, killed or still running."""
+    runs = [
+        run
+        for run in backfill_owner.active(attachment, attach_root)
+        if str(run.get("worker", "")).endswith(".receiver")
+        and on_this_host(str(run.get("host", "")))
+    ]
+    if dry_run:  # the ones that would stop: nothing signalled, nothing released
+        return runs
+    done = stop_pids([int(run["pid"]) for run in runs], kill=kill, grace=grace)
+    for run, result in zip(runs, done, strict=True):
+        run["outcome"] = result.verdict
+        if result.gone:
+            backfill_owner.release(attachment, str(run["worker"]), attach_root)
+    return runs

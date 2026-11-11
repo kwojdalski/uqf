@@ -51,7 +51,9 @@ def test_the_receiver_is_stopped_by_its_own_verb_and_a_dry_run_signals_nothing(m
     monkeypatch.setattr(
         backfill_remote,
         "stop_receivers",
-        lambda att, dry_run=False: calls.append(dry_run) or [{"worker": "d.receiver", "pid": 7}],
+        lambda att, dry_run=False, kill=False: (
+            calls.append(dry_run) or [{"worker": "d.receiver", "pid": 7, "outcome": "stopped"}]
+        ),
     )
     dry = runner.invoke(cli.app, ["job", "receiver", "stop", "--attachment", "pb", "-n", "--json"])
     assert dry.exit_code == 0 and json.loads(dry.stdout)["dry_run"] is True

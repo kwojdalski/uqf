@@ -148,7 +148,8 @@ class ExternalFeed:
     name: str
     #: every declared option, defaults applied
     start: Callable[[UqsPaths, Mapping[str, Any]], int]
-    stop: Callable[[UqsPaths], int | None]
+    #: called as stop(paths, kill=...): `kill` SIGKILLs what outlives SIGTERM (#2688)
+    stop: Callable[..., int | None]
     status: Callable[[UqsPaths], dict[str, str]]
     options: tuple[FeedOption, ...] = ()
     #: table -> who feeds it, for the dependency warnings
