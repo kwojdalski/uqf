@@ -1,4 +1,9 @@
-import { createContext, useContext, useEffect, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useLayoutEffect,
+  type ReactNode,
+} from "react";
 import type { Capabilities, Inspection } from "./api/access";
 import { allowRecording } from "./activity";
 import { useResource } from "./useResource";
@@ -78,8 +83,10 @@ export function CapabilitiesProvider({ children }: { children: ReactNode }) {
   const access = fromServer(resource.data);
   const recording = !access.known || access.can("activity", "write");
   // A caller the policy does not let record its history sends none, rather
-  // than having every batch refused.
-  useEffect(() => allowRecording(recording), [recording]);
+  // than having every batch refused. A layout effect, so the permission holds
+  // from the commit that shows the policy's views: a passive effect can run
+  // after that page is visible, and a click in between would be queued (#2716).
+  useLayoutEffect(() => allowRecording(recording), [recording]);
   return (
     <AccessContext.Provider value={access}>{children}</AccessContext.Provider>
   );
