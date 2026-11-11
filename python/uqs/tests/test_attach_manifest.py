@@ -139,6 +139,22 @@ def test_a_manifest_this_uqs_cannot_read_is_refused_not_guessed(att, state):
         Manifest.load("nope", state)
 
 
+def test_a_manifest_written_before_1845_is_refused_naming_the_command(att, state):
+    """One without `registrations` is an older uqs's, and is not read (#2723)."""
+    m = fresh(att, state)
+    m.save()
+    data = json.loads(m.path.read_text())
+    data.pop("registrations")
+    m.path.write_text(json.dumps(data))
+    with pytest.raises(AttachmentError) as caught:
+        Manifest.load("pb-uat", state)
+    assert str(caught.value) == (
+        f"{m.path} was written by an older uqs (no registrations), which this one does not "
+        "read. Plan the attachment again - move that file aside, then "
+        "`uqs job attachment add pb-uat`"
+    )
+
+
 # ------------------------------------------------------------ schema file block
 
 
@@ -190,20 +206,25 @@ def test_writing_twice_adds_one_block(att, schema):
     assert schema.read_text() == once
 
 
-def test_a_block_naming_the_old_commands_is_still_the_attachments_own(att, schema):
+def test_a_block_naming_the_old_commands_is_refused(att, schema):
     """Blocks written before #1885 name `uqs job attach apply|detach`, which never
-    existed; new ones name `uqs job attachment add|remove`. Re-applying compares
-    the block in the file with a fresh rendering, so one already there in the old
-    wording is found, recorded as it is, and left byte for byte."""
+    existed. Such a block is not the attachment's own any more (#2723): applying
+    refuses it, naming the commands that take it away and plan it again."""
     new = persist.render("pb-uat", "tok123", SPECS)
-    assert "`uqs job attachment add`" in new and "job attach apply" not in new
-    old = persist._as_written_before_1885(new)
-    assert "`uqs job attach apply`" in old and "`uqs job attach detach`" in old
+    old = new.replace(
+        "`uqs job attachment add` (#1424); `uqs job attachment remove` removes it.",
+        "`uqs job attach apply` (#1424); `uqs job attach detach` removes it.",
+    )
+    assert old != new
     schema.write_text(schema.read_text() + old)
     before = schema.read_text()
-    record = persist.write(att, "tok123", SPECS, str(schema))
+    with pytest.raises(
+        AttachmentError,
+        match=r"already holds a different uqs-attach block for pb-uat; remove it by hand or "
+        r"with `uqs job attachment remove`, then run `uqs job attachment add` again",
+    ):
+        persist.write(att, "tok123", SPECS, str(schema))
     assert schema.read_text() == before, "nothing rewritten"
-    assert record.block_sha == persist._sha(old), "detach checks the block as it is"
 
 
 def test_a_block_someone_else_wrote_for_this_name_is_refused(att, schema):

@@ -262,7 +262,9 @@ def checks_path(root: Path) -> Path:
 def read_checks(root: Path) -> dict[str, dict[str, dict[str, Any]]]:
     """target -> process -> its last successful check; none when unreadable -
     a lost record makes a mapping unverified, never a plan fail. A target
-    entry or a process record that is not an object is dropped (#2064)."""
+    entry or a process record that is not an object is dropped (#2064), and
+    so is one kept before #2236, with no `reported_process` (#2723): `uqs
+    target tunnel check` verifies that mapping again and records it anew."""
     path = checks_path(root)
     try:
         doc = json.loads(path.read_text())
@@ -272,21 +274,14 @@ def read_checks(root: Path) -> dict[str, dict[str, dict[str, Any]]]:
     if not isinstance(found, dict):
         return {}
     return {
-        target: {proc: _current(rec) for proc, rec in records.items() if isinstance(rec, dict)}
+        target: {
+            proc: rec
+            for proc, rec in records.items()
+            if isinstance(rec, dict) and "reported_process" in rec
+        }
         for target, records in found.items()
         if isinstance(records, dict)
     }
-
-
-def _current(record: dict[str, Any]) -> dict[str, Any]:
-    """A record as this release writes it. One kept before #2236 named the
-    process the port answered as `identity`; the file is persisted, so it is
-    read under the new name and rewritten under it by the next check."""
-    if "identity" not in record:
-        return record
-    renamed = {k: v for k, v in record.items() if k != "identity"}
-    renamed.setdefault("reported_process", record["identity"])
-    return renamed
 
 
 def record_checks(root: Path, target: str, succeeded: Mapping[str, dict[str, Any]]) -> None:

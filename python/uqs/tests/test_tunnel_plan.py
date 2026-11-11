@@ -415,6 +415,10 @@ MALFORMED_CHECKS = {
                                    "local_port": 16002}}},
     "record not a dict": {"prod": {"rdb1": "x"}},
     "target not a dict": {"prod": ["x"]},
+    # kept before #2236, which renamed `identity`: not read (#2723)
+    "identity, not reported_process": {"prod": {"rdb1": {
+        "at": datetime.now(UTC).isoformat(), "identity": "rdb1", "remote_port": 6002,
+        "local_port": 16002}}},
 }  # fmt: skip
 
 
@@ -434,7 +438,8 @@ def test_plan_reads_a_malformed_check_record_as_unverified(root, monkeypatch, ta
 
 
 def test_plan_still_reads_a_recent_check_record_as_verified(root, monkeypatch):
-    record = {"at": datetime.now(UTC).isoformat(), "remote_port": 6002, "local_port": 16002}
+    record = {"at": datetime.now(UTC).isoformat(), "reported_process": "rdb1",
+              "remote_port": 6002, "local_port": 16002}  # fmt: skip
     rdb = _plan_cli(root, monkeypatch, {"prod": {"rdb1": record}})
     assert (rdb["state"], rdb["last_success"]) == ("verified", record)
 
@@ -545,12 +550,11 @@ def test_an_unknown_target_is_a_refusal_not_a_finding(root, server):
         tunnel_check.run("nosuch", root, runner=server.run)
 
 
-def test_a_check_recorded_before_2236_is_read_as_reported_process(root):
+def test_a_check_recorded_before_2236_is_not_read(root):
     """tunnel_checks.json is persisted: a record that named the answering
-    process `identity` reads under the one name the API now uses."""
+    process `identity` is not read (#2723), so its mapping is unverified until
+    `uqs target tunnel check` records it anew."""
     doc = {"prod": {"rdb1": {"at": "2026-01-01T00:00:00+00:00", "identity": "rdb1",
                              "remote_port": 6002, "local_port": 16002}}}  # fmt: skip
     tunnel_plan.checks_path(root).write_text(json.dumps({"targets": doc}))
-    (record,) = tunnel_plan.read_checks(root)["prod"].values()
-    assert record["reported_process"] == "rdb1"
-    assert "identity" not in record
+    assert tunnel_plan.read_checks(root) == {"prod": {}}

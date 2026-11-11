@@ -203,11 +203,45 @@ def test_an_unreadable_attachment_config_refuses_every_start(att, state, damage,
     elif damage == "truncated":
         path.write_text(path.read_text()[:40])
     else:
-        path.write_text(json.dumps({"stack": {"id": STACK}}))
+        path.write_text(
+            json.dumps({"schema": config.SCHEMA_VERSION, "stack": {"base_port": STACK}})
+        )
     for args in (["start", "rdb1"], ["start", "all"], ["restart", PUBLISHER]):
         with pytest.raises(UqsError, match="an attachment cannot be read") as caught:
             start_policy.refuse_start(default_paths(), args, STACK)
         assert "Nothing was started" in str(caught.value) and str(state) in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("written_before", "missing"),
+    [("2122", "stack.base_port, publisher.process"), ("1845", "native")],
+)
+def test_an_attachment_config_an_older_uqs_wrote_refuses_every_start(
+    att, state, written_before, missing
+):
+    """One written before #2122 (`stack.id`, `publisher.procname`) or #1845 (no
+    `native`) is not read (#2723): the refusal names what it lacks and the command
+    that plans it again."""
+    with_state(att, "verified")
+    path = config.directory(att.name) / config.CONFIG_FILE
+    old = json.loads(path.read_text())
+    if written_before == "2122":
+        old["stack"]["id"] = old["stack"].pop("base_port")
+        old["publisher"]["procname"] = old["publisher"].pop("process")
+    else:
+        old.pop("native")
+    path.write_text(json.dumps(old))
+    said = (
+        f"{path} cannot be read: it has no {missing}, which an older uqs did not write. Plan "
+        "the attachment again - move its attachment.json aside, then `uqs job attachment add "
+        "ex-uat --job JOB --base-port PORT`"
+    )
+    with pytest.raises(UqsError) as caught:
+        start_policy.refuse_start(default_paths(), ["start", "rdb1"], STACK)
+    assert said in str(caught.value) and "Nothing was started" in str(caught.value)
+    with pytest.raises(AttachmentError) as loading:
+        config.load(att.name)
+    assert str(loading.value) == said
 
 
 def test_a_folder_that_is_not_an_attachment_stops_nothing(att, state):

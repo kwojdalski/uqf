@@ -277,12 +277,9 @@ def _same_type(have: str, want: str) -> bool:
     """Does a process's `meta` char `have` agree with the spec's `want`?
 
     A nested column (UPPER case) is empty on a fresh table and meta reads an empty
-    `()` as " ", then as its element type once rows arrive; both agree. An untyped
-    spec column (" ") only exists in an attachment saved before #1451 refused it: it
-    matches anything, so that attachment can still be verified and detached, while
-    preflight refuses to apply it again (UNTYPED_COLUMN).
+    `()` as " ", then as its element type once rows arrive; both agree.
     """
-    return have == want or want == MIXED or (want.isupper() and have == MIXED)
+    return have == want or (want.isupper() and have == MIXED)
 
 
 def differences(spec: TableSpec, observed: list[list[str]]) -> list[str]:

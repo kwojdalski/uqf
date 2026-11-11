@@ -107,25 +107,6 @@ _USES_BY = "/ Added by `uqs job attachment add` (#1446): {name} uses these table
 _USES_REMOVED_BY = (
     "/ attachment created; `uqs job attachment remove` removes it. Do not edit it by hand."
 )
-#: The same lines as blocks written before #1885 have them, naming commands
-#: that never existed (`uqs job attach apply|detach`). A block already in a
-#: schema file is the attachment's own as long as it matches either wording:
-#: re-applying compares it with a fresh rendering, and must not mistake the
-#: old comment for a hand edit - nor rewrite a file whose sha detach checks.
-_WORDING_BEFORE_1885 = {
-    _CREATED_BY: "/ Added by `uqs job attach apply` (#1424); `uqs job attach detach` removes it.",
-    _USES_BY.split("{name}")[0]: "/ Added by `uqs job attach apply` (#1446): ",
-    _USES_REMOVED_BY: (
-        "/ attachment created; `uqs job attach detach` removes it. Do not edit it by hand."
-    ),
-}
-
-
-def _as_written_before_1885(block: str) -> str:
-    """`block` with its comments worded as blocks written before #1885 have them."""
-    for now, before in _WORDING_BEFORE_1885.items():
-        block = block.replace(now, before)
-    return block
 
 
 def _block(name: str, token: str, separated: bool, comments: list[str], body: list[str]) -> str:
@@ -293,10 +274,11 @@ def _write(name: str, token: str, rendered: Callable[[bool], str], file: File) -
     if span is not None:
         found = text[span[0] : span[1]]
         separated = _separated(_lines(found))
-        if found not in (rendered(separated), _as_written_before_1885(rendered(separated))):
+        if found != rendered(separated):
             raise AttachmentError(
                 f"{file.label} already holds a different uqs-attach block for {name}; "
-                "remove it by hand or detach first"
+                "remove it by hand or with `uqs job attachment remove`, then run "
+                "`uqs job attachment add` again"
             )
         return BlockRecord(
             file.path, _sha(outside_all(text)), _sha(found), separated, name, file.process

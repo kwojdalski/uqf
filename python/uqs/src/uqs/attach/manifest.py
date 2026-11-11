@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 import secrets
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -84,7 +84,7 @@ class Manifest:
     #: what this attachment wrote into files a TorQ start reads (native.py, #1845):
     #: {"process_row" | "launcher": {path, host, procname, status, text | sha,
     #: previous, at}}. A record, not a marker in the file: `text` is the exact row
-    #: it wrote, so an edit by anyone else is seen. Absent from older manifests.
+    #: it wrote, so an edit by anyone else is seen.
     registrations: dict[str, dict] = field(default_factory=dict)
     path: Path = field(default_factory=Path, repr=False, compare=False)
 
@@ -117,7 +117,16 @@ class Manifest:
         try:
             data = json.loads(path.read_text())
             if data["schema"] != SCHEMA_VERSION:
-                raise AttachmentError(f"{path}: manifest schema {data['schema']!r} is not 1")
+                raise AttachmentError(
+                    f"{path}: manifest schema {data['schema']!r} is not {SCHEMA_VERSION}"
+                )
+            if missing := sorted({f.name for f in fields(cls)} - {"path"} - data.keys()):
+                # a field a later uqs added (registrations, #1845): an older file is not read
+                raise AttachmentError(
+                    f"{path} was written by an older uqs (no {', '.join(missing)}), which this "
+                    f"one does not read. Plan the attachment again - move that file aside, then "
+                    f"`uqs job attachment add {name}`"
+                )
             ops = [Op(**o) for o in data.pop("operations")]
             data.pop("schema")
             return cls(**data, operations=ops, path=path)

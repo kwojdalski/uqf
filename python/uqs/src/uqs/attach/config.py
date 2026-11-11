@@ -21,8 +21,9 @@ back instead of recomputing it:
                   and whether its `start all` starts it (native.py, #1845).
 
 The file spells the stack id `stack.base_port` and the publisher's process
-`publisher.process`, as every --json document does (#2122); a file written
-before says `stack.id` and `publisher.procname`, and still loads.
+`publisher.process`, as every --json document does (#2122). A file without a
+field this uqs always writes - one written before #1845 or #2122 - is refused
+with the command that plans it again, never read (#2723).
 
 A directory per attachment holds `attachment.json` (this) and `manifest.json`
 (manifest.py). The directory is `$UQS_ATTACH_DIR`, else `$UQS_DATA_ROOT` or the
@@ -46,7 +47,7 @@ from uqs.stack import attach_state
 from uqs.stack.attach_state import ATTACH_DIR_ENV as ATTACH_DIR_ENV  # re-exported
 from uqs.stack.attach_state import CONFIG_FILE
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = attach_state.CONFIG_SCHEMA
 #: schema-file: a marked block appended to the tickerplant's schema file from this
 #: machine (`--schema-writer cli`); remote-schema-file: the same block, appended by
 #: the tickerplant itself (`--schema-writer tickerplant`, schema_files.RemoteFile,
@@ -204,38 +205,36 @@ def to_json(att: Attachment) -> dict:
 
 
 def from_json(data: dict) -> Attachment:
-    if data.get("schema") != SCHEMA_VERSION:
+    if problem := attach_state.config_problem(data):
+        name = data.get("name") if isinstance(data, dict) else None
         raise AttachmentError(
-            f"attachment config schema {data.get('schema')!r} is not {SCHEMA_VERSION} - "
-            "written by another uqs; plan it again"
+            f"attachment {name} cannot be read: {problem}. {attach_state.replan(str(name))}"
         )
     stack = dict(data["stack"])
-    stack["id"] = attach_state.stored_base_port(data)
-    stack.pop("base_port", None)
+    stack["id"] = int(stack.pop("base_port"))
     stack["consumers"] = tuple(stack.get("consumers", ()))
     publisher = dict(data["publisher"])
-    publisher["procname"] = attach_state.stored_publisher(data)
-    publisher.pop("process", None)
+    publisher["procname"] = publisher.pop("process")
     if data.get("persist") not in PERSIST_MODES:
         raise AttachmentError(f"persist must be one of {PERSIST_MODES}")
+    tables = tuple(
+        TableSpec(
+            t["name"],
+            tuple((n, c) for n, c in t["columns"]),
+            tuple((n, a) for n, a in t.get("sort", [])),
+        )
+        for t in data["tables"]
+    )
     return Attachment(
         name=data["name"],
         stack=Stack(**stack),
         publisher=Publisher(**publisher),
-        tables=tuple(
-            TableSpec(
-                t["name"],
-                tuple((n, c) for n, c in t["columns"]),
-                tuple((n, a) for n, a in t.get("sort", [])),
-            )
-            for t in data["tables"]
-        ),
+        tables=tables,
         storage=Storage(**data.get("storage", {})),
         persist=data["persist"],
         origin=data.get("origin", {}),
         overrides=tuple(Override(**o) for o in data.get("overrides", [])),
-        # absent from an attachment saved before #1845: not registered
-        native=Native(**data.get("native", {})),
+        native=Native(**data["native"]),
     )
 
 
@@ -265,7 +264,12 @@ def load(name: str, root: Path | None = None) -> Attachment:
             f"`uqs job attachment add {name} --job JOB --base-port PORT` creates one"
         )
     try:
-        return from_json(json.loads(path.read_text()))
+        data = json.loads(path.read_text())
+        try:
+            attach_state.refuse_old_config(data, path)
+        except UqsError as exc:
+            raise AttachmentError(str(exc)) from None
+        return from_json(data)
     except (ValueError, KeyError, TypeError) as exc:
         raise AttachmentError(f"{path} is not a readable attachment config ({exc})") from None
 

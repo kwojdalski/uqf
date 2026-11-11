@@ -225,7 +225,6 @@ def check(att: Attachment, obs: Observation, facts: Facts | None = None) -> list
     out: list[Finding] = []
     if not obs.discovery.up:
         return out  # topology already reported it; nothing else can be asked
-    out += components.untyped_columns(att.tables)
     out += identity(att, obs.discovery)
     for p in obs.procs()[1:]:
         out += [refused(att, p) if p.refused else _down(p)] if not p.up else identity(att, p)

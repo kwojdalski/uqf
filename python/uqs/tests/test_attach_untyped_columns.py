@@ -12,17 +12,11 @@ shows the damage and the refusal on a real wdb.
 
 from __future__ import annotations
 
-import dataclasses
-from pathlib import Path
-
 import pytest
 from attach_support import FakeStack, make_bundle
 
-from uqs.attach import apply as applying
-from uqs.attach import config, facts, overrides, plan, service
+from uqs.attach import facts, plan, service
 from uqs.attach.config import AttachmentError
-from uqs.attach.manifest import Manifest
-from uqs.attach.overrides import OverrideError
 from uqs.attach.schema import (
     SchemaError,
     TableSpec,
@@ -70,45 +64,6 @@ def test_the_fixture_ledger_declares_a_concrete_type_for_every_column(tmp_path):
         "pb-uat", "pb_general_ledger", make_bundle(tmp_path / "b"), 6000, ROOT, runtime_only=True
     )
     assert all(char != " " for _, char in att.tables[0].columns)
-
-
-def legacy(tmp_path: Path) -> config.Attachment:
-    """An attachment saved before the refusal: its config holds a mixed column."""
-    att = service.create(
-        "pb-uat", "pb_general_ledger", make_bundle(tmp_path / "b"), 6000, ROOT, runtime_only=True
-    )
-    t = att.tables[0]
-    old = TableSpec(t.name, (*t.columns[:-1], ("note", " ")))
-    return dataclasses.replace(att, tables=(old,))
-
-
-def test_a_saved_attachment_with_an_untyped_column_is_blocked_by_preflight(tmp_path):
-    fake = FakeStack(6000)
-    p = plan.build(
-        legacy(tmp_path),
-        fake,
-        ROOT,
-        facts.Facts(host=facts.Host(lambda h, p: False, ("testhost",))),
-    )
-    hit = [f for f in p.findings if f.code == "UNTYPED_COLUMN"]
-    assert [f.facts for f in hit] == [{"table": "piggybank_general_ledger", "column": "note"}]
-    assert hit[0].level == "blocker" and not p.ok
-
-
-def test_an_untyped_column_cannot_be_overridden():
-    assert overrides.POLICY["UNTYPED_COLUMN"].overridable is False
-    with pytest.raises(OverrideError, match="UNTYPED_COLUMN cannot be overridden"):
-        overrides.create(["UNTYPED_COLUMN:schema"], "i know", [], "alice")
-
-
-def test_apply_of_such_an_attachment_is_refused_before_any_change(tmp_path):
-    fake, state = FakeStack(6000), tmp_path / "attachments"
-    att = legacy(tmp_path)
-    config.save(att, state)
-    with pytest.raises(applying.ApplyRefused, match="UNTYPED_COLUMN"):
-        applying.apply(att, fake, ROOT, state_dir=state)
-    assert [op for _, op, _ in fake.calls if op != "probe"] == []
-    assert not Manifest.exists("pb-uat", state)
 
 
 # ------------------------------------------------------ a list per row, with its element type
