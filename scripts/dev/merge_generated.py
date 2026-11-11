@@ -30,7 +30,7 @@ Nothing stale reaches master unnoticed: the file the driver kept is checked
 by the gates that always checked it. operational-docs and rendered-diagrams
 run in CI on every file; contract-surface, q-facts and plant-schema are
 KDB-X gates whose scopes take the generated file, so a branch that changed one
-needs them in its attestation (scripts/dev/attest_kdbx.py).
+needs them in its attestation (scripts/dev/kdbx_attestation.py).
 
     python3 scripts/dev/merge_generated.py install
     python3 scripts/dev/merge_generated.py regenerate [--dry-run]

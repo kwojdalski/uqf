@@ -124,7 +124,7 @@ def marked_docs(root: Path = REPO) -> list[str]:
 
     What the q-docs hooks' `files:` scope must name - no more, no fewer -
     so a docs edit that cannot change what q-docs runs does not ask for a
-    KDB-X attestation; scripts/gates/check_hook_scopes.py holds the scope to
+    KDB-X attestation; scripts/gates/policy/hook_scopes.py holds the scope to
     this list.
     """
     return [

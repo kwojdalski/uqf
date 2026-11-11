@@ -41,7 +41,7 @@ def _script(name: str, relpath: str):
     return module
 
 
-RISKY_PARAM_NAMES = _script("check_q_traps", "scripts/gates/check_q_traps.py").RISKY_PARAM_NAMES
+RISKY_PARAM_NAMES = _script("q_traps", "scripts/gates/policy/q_traps.py").RISKY_PARAM_NAMES
 BUILTINS = _script("flatten_contexts", "scripts/portable/flatten_contexts.py").BUILTINS
 
 KEYS = ["dry_run", "backfill_from", "Mixed_Case"]
@@ -125,7 +125,7 @@ def test_the_q_words_are_exactly_what_kdbx_keeps_and_peachqs_own(from_q):
 
 
 def test_the_traps_gate_refuses_every_q_word_and_nothing_else(from_q):
-    """check_q_traps.py's reserved-name-in-embedded-q rule reads
+    """The q-traps rule's reserved-name-in-embedded-q check reads
     RISKY_PARAM_NAMES: a q word missing from it lets `([] word: ...)` reach a
     live process as `'assign`, and a name that is no q word is reported for
     nothing (#1795). It held `fill` and `find`, which are neither."""

@@ -137,9 +137,9 @@ def map_drift(fresh: Path, committed: Path) -> int:
 
 
 def _attest(tree: Path):
-    """The tree's own attest_kdbx.py - outcome_env and unit_verdict."""
+    """The tree's own kdbx_attestation.py - outcome_env and unit_verdict."""
     spec = importlib.util.spec_from_file_location(
-        "attest_kdbx_for_master", tree / "scripts/dev/attest_kdbx.py"
+        "kdbx_attestation_for_master", tree / "scripts/dev/kdbx_attestation.py"
     )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)

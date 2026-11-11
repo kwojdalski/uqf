@@ -47,7 +47,7 @@ push() {
   [ "$(git ls-remote origin "refs/heads/$branch" | cut -f1)" = "$(git rev-parse HEAD)" ] \
     || { echo "$pr: push exited 0 but origin/$branch is not HEAD"; return 1; }
 }
-gate_ok() { uv run python scripts/gates/check_kdbx_attestation.py origin/master HEAD > "$logs/gate.log" 2>&1; }
+gate_ok() { uv run python scripts/dev/kdbx_attestation.py check origin/master HEAD > "$logs/gate.log" 2>&1; }
 # merge-tree exits 1 for a conflict, 0 for a clean merge, >1 for an error
 conflicted() {
   local rc=0
@@ -70,7 +70,7 @@ ci_state() {
 # this is where the rest of the tree is judged. Started on the project's
 # interpreter, not PATH's python3, which may be too old to parse it (#2540);
 # its state lives in the git directory, so it outlives this worktree; --if-new
-# and its lock keep two merges from running it twice. attest_kdbx.py prints
+# and its lock keep two merges from running it twice. kdbx_attestation.py prints
 # its last verdict.
 master_coverage() {
   local state
@@ -92,7 +92,7 @@ for _ in 1 2 3; do
       changed=1
     fi
     if ! gate_ok; then
-      uv run python scripts/dev/attest_kdbx.py > "$logs/attest.log" 2>&1 \
+      uv run python scripts/dev/kdbx_attestation.py attest > "$logs/attest.log" 2>&1 \
         || { echo "$pr: attestation failed"; tail -5 "$logs/attest.log"; exit 1; }
       echo "$pr: attested"
       changed=1

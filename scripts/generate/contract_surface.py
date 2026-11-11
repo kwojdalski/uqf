@@ -68,7 +68,7 @@ Q_EXPORTER = REPO / "scripts" / "generate" / "export_contract_surface.q"
 #: The `diff` subcommand still takes two surface directories, so a comparison
 #: against another checkout remains possible - it simply has no standing
 #: counterpart to compare with. What keeps this file honest today is a
-#: different job it acquired: check_doc_references.py reads functions.csv as
+#: different job it acquired: check.py doc-references reads functions.csv as
 #: its list of the functions that exist.
 #:
 #: A DIRECTORY OF CSVs rather than one JSON file, and the reason is review.

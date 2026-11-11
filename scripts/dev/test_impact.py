@@ -13,12 +13,12 @@ arguments (nothing for ALL, which is the runner without them).
     uv run python scripts/dev/test_impact.py --hook   # the q-tests hook's line
     uv run python scripts/dev/test_impact.py --coverage-hook   # the q-coverage hook's
 
-The q-tests hook and scripts/dev/attest_kdbx.py run what `--hook` (plan())
+The q-tests hook and scripts/dev/kdbx_attestation.py run what `--hook` (plan())
 decides: the suites `origin/master...HEAD`, plus what is being committed,
 reaches - or the whole suite when this says ALL, cannot run, or
 UQF_Q_TESTS_FULL=1 or UQF_HOOKS_FULL=1 is set. An attestation records the
 subset by its digest, and CI's check makes the same selection to verify it
-(scripts/gates/check_kdbx_attestation.py).
+(scripts/dev/kdbx_attestation.py).
 
 Needs a qlinter with `qlinter analyze graph` - scripts/gates/qlint_graph.py
 says which and where it looks - and refuses without one rather than guess.
@@ -853,7 +853,7 @@ def uncommitted(root: Path = REPO) -> list[str]:
 # --------------------------------------------------------------------------
 # The q-tests gate (#1690 step 4)
 # --------------------------------------------------------------------------
-#: What the q-tests hook and scripts/dev/attest_kdbx.py select against: the
+#: What the q-tests hook and scripts/dev/kdbx_attestation.py select against: the
 #: branch's whole change, as CI's KDB-X attestation check reads the PR.
 BASE = "origin/master"
 #: `1` runs the whole q suite whatever changed.
@@ -871,7 +871,7 @@ def full_requested() -> str | None:
     return None
 
 
-#: The decision attest_kdbx.py made, handed to the hook it runs - one
+#: The decision kdbx_attestation.py made, handed to the hook it runs - one
 #: selection per attestation, the one its trailer records, not a second one
 #: worked out inside the hook.
 DECIDED_ENV = "UQF_Q_TESTS_SELECTION"
@@ -961,7 +961,7 @@ def plan(base: str = BASE, root: Path = REPO, *, with_uncommitted: bool = True) 
 
 
 def hook_line(root: Path = REPO) -> Plan:
-    """The q-tests hook's decision: the one attest_kdbx.py handed over, else
+    """The q-tests hook's decision: the one kdbx_attestation.py handed over, else
     plan() - which falls back to the whole suite, never to nothing."""
     decided = os.environ.get(DECIDED_ENV)
     if decided is not None and not full_requested():
@@ -972,7 +972,7 @@ def hook_line(root: Path = REPO) -> Plan:
 # --------------------------------------------------------------------------
 # The q-coverage gate (#1704)
 # --------------------------------------------------------------------------
-#: The decision attest_kdbx.py made for q-coverage, handed to its hook.
+#: The decision kdbx_attestation.py made for q-coverage, handed to its hook.
 COVERAGE_DECIDED_ENV = "UQF_Q_COVERAGE_SELECTION"
 
 #: A change to one of these runs the whole coverage gate, whatever q-tests
@@ -1105,7 +1105,7 @@ def coverage_for(plan_: Plan, changed: Iterable[str], root: Path = REPO) -> Cove
     """What q-coverage runs, given q-tests' plan for the same change.
 
     The suites are q-tests' own - its verdict is read from this run
-    (attest_kdbx.py), so they must all run here - and, for each function the
+    (kdbx_attestation.py), so they must all run here - and, for each function the
     reached modules define, one that enters it per the coverage map (widen).
     The whole suite when q-tests runs it; when no suite reaches the change, or
     no production file - there is then nothing a subset could judge, and a
@@ -1157,7 +1157,7 @@ def parse_coverage_line(line: str) -> CoveragePlan:
 
 
 def coverage_hook_line(root: Path = REPO) -> CoveragePlan:
-    """The q-coverage hook's decision: the one attest_kdbx.py handed over,
+    """The q-coverage hook's decision: the one kdbx_attestation.py handed over,
     else the whole suite under FULL_ENV or HOOKS_FULL_ENV, else coverage_for what `BASE...HEAD`
     and the commit being made reach."""
     decided = os.environ.get(COVERAGE_DECIDED_ENV)

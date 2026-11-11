@@ -31,6 +31,21 @@ _SPEC.loader.exec_module(check)
 
 NAMES = sorted(check.CHECKS)
 
+#: The checks that run the pinned qlinter. Without one they fail, naming the
+#: install - correctly, but not what these tests are about - so they skip
+#: here, as their own tests do; CI's Python jobs install the pin.
+_NEEDS_QLINTER = {"q-traps", "module-deps"}
+_HAS_QLINTER = bool(os.environ.get("QLINTER") or shutil.which("qlinter"))
+RUNNABLE = [
+    pytest.param(
+        name,
+        marks=pytest.mark.skipif(
+            name in _NEEDS_QLINTER and not _HAS_QLINTER, reason="qlinter is not installed"
+        ),
+    )
+    for name in NAMES
+]
+
 
 @pytest.fixture(autouse=True)
 def _no_enclosing_repository(monkeypatch):
@@ -65,7 +80,7 @@ def test_the_checks_are_the_ones_registered_by_hand():
     assert on_disk == rules
 
 
-@pytest.mark.parametrize("name", NAMES)
+@pytest.mark.parametrize("name", RUNNABLE)
 def test_this_checkout_passes_each_check(capsys, name):
     rc, out, err = _main(capsys, name)
     assert rc == 0, err
@@ -102,7 +117,7 @@ def test_a_root_that_is_not_a_checkout_is_refused_not_read_as_empty(capsys, tmp_
 # ------------------------------------------------------- one check, alone
 
 
-@pytest.mark.parametrize("name", NAMES)
+@pytest.mark.parametrize("name", RUNNABLE)
 def test_running_one_check_imports_no_other_check_s_rule(name):
     """Run in a fresh interpreter, so no other test's imports count."""
     probe = (
@@ -200,7 +215,7 @@ _FIXTURE = (
     "python/uqf_frontend/pyproject.toml",
     "python/uqf_frontend/.python-version",
     "python/uqf_airflow_provider/pyproject.toml",
-    "scripts/dev/attest_kdbx.py",
+    "scripts/dev/kdbx_attestation.py",
     "README.md",
     "web/package.json",
     "web/README.md",
@@ -208,6 +223,12 @@ _FIXTURE = (
     "docs/diagrams",
     "scripts/processes/process_ports.csv",
     "lib/torq-finance-starter-pack/appconfig/process.csv",
+    # q-traps: the linter's pin and configuration (module-deps reads src/).
+    ".qlinter-version",
+    ".qlinter.toml",
+    # doc-references: the surface the docs are held to (and docs/, .claude/).
+    "docs/reference/surfaces/current/functions.csv",
+    ".claude/skills",
 )
 
 
@@ -222,7 +243,7 @@ def _snapshot(root: Path) -> dict[str, tuple[int, int, str]]:
     }
 
 
-@pytest.mark.parametrize("name", NAMES)
+@pytest.mark.parametrize("name", RUNNABLE)
 def test_a_check_changes_nothing_in_the_tree_it_reads(capsys, tmp_path, name):
     """Over a copy made read-only: a write would fail the run with an error,
     and the snapshot proves none happened by any other route either."""
@@ -251,3 +272,19 @@ def test_a_check_changes_nothing_in_the_tree_it_reads(capsys, tmp_path, name):
     assert "could not run" not in err, err
     assert rc in (0, 1)
     assert after == before
+
+
+# ------------------------------------------------------------ own options
+
+
+def test_a_check_s_own_option_reaches_its_run(capsys):
+    """hook-scopes' --kdbx-only, as ci.yml passes it: the ids, and nothing else."""
+    rc, out, _ = _main(capsys, "hook-scopes", "--kdbx-only")
+    assert rc == 0
+    assert "q-tests" in out.split(",") and out.count("\n") == 1
+
+
+def test_an_option_is_only_the_check_s_that_declares_it(capsys):
+    rc, out, err = _main(capsys, "q-module-size", "--kdbx-only")
+    assert rc == 2
+    assert "unrecognized arguments: --kdbx-only" in err and out == ""

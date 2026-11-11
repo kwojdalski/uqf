@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Hold the q library's module graph to a reviewed, acyclic edge list (#626).
 
 The library modules under src/ - one file each, or a few files for one
@@ -46,7 +45,7 @@ STRING AND COMMENT AWARE: q-lint reads past strings and comments, so an error
 message or a comment naming another module's function documents it and draws
 no edge.
 
-    python3 scripts/gates/check_module_deps.py
+    python3 scripts/gates/check.py module-deps
 """
 
 from __future__ import annotations
@@ -56,12 +55,14 @@ import re
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parents[2]
+#: This checkout: scripts/gates/policy/<this file>.
+REPO = Path(__file__).resolve().parents[3]
 
 
 def _load_qlint_graph():
+    """scripts/gates/qlint_graph.py, which test_impact.py shares."""
     spec = importlib.util.spec_from_file_location(
-        "qlint_graph", Path(__file__).resolve().parent / "qlint_graph.py"
+        "qlint_graph", Path(__file__).resolve().parents[1] / "qlint_graph.py"
     )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -73,7 +74,7 @@ def _load_qlint_graph():
 qlint_graph = _load_qlint_graph()
 
 #: The library: one module per file directly under these src/ directories.
-#: Not src/etl/ (held by check_etl_layering.py) and not the loaders.
+#: Not src/etl/ (held by `check.py etl-layering`) and not the loaders.
 LIBRARY_DIRS = (
     "foundation",
     "pricing",
@@ -184,7 +185,7 @@ def modules(root: Path = REPO, groups: dict[str, str] = GROUPS) -> dict[str, lis
 def definitions(root: Path = REPO) -> dict[tuple[str, str], list[Path]]:
     """{(namespace, name): the files defining `name:` at column 0 inside it}.
 
-    The same reading docs/man.q and check_doc_references make: a definition is
+    The same reading docs/man.q and the doc-references check make: a definition is
     a fully qualified `.qf.<domain>.name:` at column 0, or (for the one module
     that still opens a context, `.qdata`) `name:` at column 0 between a
     `\\d .ns` line and the next `\\d` line.
@@ -284,7 +285,7 @@ def problems(
         elif edge not in allowed:
             out.append(
                 f"{where}: {edge[0]} -> {edge[1]} is a new module dependency - add it to "
-                "ALLOWED in scripts/gates/check_module_deps.py in the same change, or call "
+                "ALLOWED in scripts/gates/policy/module_deps.py in the same change, or call "
                 "something the module may already depend on"
             )
     for edge in sorted(allowed - set(found)):
@@ -299,20 +300,3 @@ def problems(
         out.append("the module graph has a cycle: " + " -> ".join(loop))
     out.extend(duplicates(root))
     return out
-
-
-def main() -> int:
-    found = problems()
-    for p in found:
-        print(p, file=sys.stderr)
-    if found:
-        return 1
-    print(
-        f"check_module_deps: {len(ALLOWED)} reviewed edges (qlinter analyze graph), acyclic, "
-        "no name defined twice"
-    )
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

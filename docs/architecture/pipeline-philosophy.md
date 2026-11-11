@@ -110,7 +110,7 @@ they disagree with the registry. A hand-drawn diagram goes stale silently; that
 one cannot.
 
 Prose cannot be generated, so it is checked instead --- the split settled:
-generate what is mechanical, check what is not. `check_doc_references.py` reads
+generate what is mechanical, check what is not. `check.py doc-references` reads
 every living document and confirms that each `.q*` function it names exists, and
 that any call it shows passes no more arguments than the function takes. The
 gate's first run found two references left behind by renames: a design note

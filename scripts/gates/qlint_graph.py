@@ -3,7 +3,7 @@
 
 q-lint's file dependency graph - which q file reads a global another defines,
 or loads it by a literal path - read without running anything. Two callers:
-scripts/gates/check_module_deps.py (the library's module edges) and
+scripts/gates/policy/module_deps.py (the library's module edges) and
 scripts/dev/test_impact.py (which q tests a change reaches).
 
 WHICH BINARY. `$UQF_QLINTER` if set, else `qlinter` on PATH. Not `$QLINTER`:

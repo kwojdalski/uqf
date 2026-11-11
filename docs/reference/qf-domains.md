@@ -69,7 +69,7 @@ The domains are not acyclic with respect to each other -- `forwards.q` (`px`)
 uses the shared book maths in `book.q` (`mkt`), and `cross.q` (`mkt`) uses
 `ccy.q` (`px`) -- so the dependency graph is held where it is acyclic, between
 modules (files):
-[`scripts/gates/check_module_deps.py`](../../scripts/gates/check_module_deps.py)
+[`scripts/gates/policy/module_deps.py`](../../scripts/gates/policy/module_deps.py)
 lists every allowed edge, refuses a new one and refuses a cycle.
 
 ## Helpers in a shared namespace
@@ -150,7 +150,7 @@ Two consequences of writing names in full:
    add the `\l` line to `src/init.q` in dependency order and a matching
    `tests/q/test_<module>.q` to `tests/run_tests.q`.
 3. Check the name is free in the whole domain
-   (`uv run python scripts/gates/check_module_deps.py`).
+   (`uv run python scripts/gates/check.py module-deps`).
 4. A cross-file call is a new edge: add it to `ALLOWED` in the same change.
 5. Regenerate the contract surface
    (`uv run python scripts/generate/derive.py contract-surface`).
@@ -188,7 +188,7 @@ with `.qf.util.collect`. Nothing else the library persists names a function.
 
 Every public name the twenty-four namespaces held. Former names are written
 without their leading dot on purpose:
-[`check_doc_references.py`](../../scripts/gates/check_doc_references.py) checks
+[`check.py doc-references`](../../scripts/gates/policy/doc_references.py) checks
 that every dotted `.q*` name in the documentation exists, and a retired name is
 exactly what it must not accept. Prepend a dot to search for one. A private
 helper (`/ @private`) moved with its file under the same name, and is not

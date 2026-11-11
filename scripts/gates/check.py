@@ -3,6 +3,7 @@
 
     python3 scripts/gates/check.py CHECK                # over this checkout
     python3 scripts/gates/check.py CHECK --root DIR     # over another tree
+    python3 scripts/gates/check.py CHECK --help         # its options
     python3 scripts/gates/check.py --help               # the checks
 
 A policy check reads the repository and reports where it breaks a rule the
@@ -32,12 +33,22 @@ WHAT THE COMMAND OWNS, and every check shares:
     could not run, 2 for a usage error. A check that crashes is reported as
     one that could not run - never as one that found nothing.
 
+A check takes `--root` and nothing else, unless it declares `options`: then
+its subcommand gains them and its run is handed the parsed arguments
+(hook-scopes' `--kdbx-only`, which prints the KDB-X-only hook ids instead).
+No check takes a file list - each reads the whole tree, so a rule added today
+flags a file touched last month - and none needs pre-commit's.
+
 Every check is read-only and needs no q, no configuration and no
-credentials. All but diagram-ports need only the standard library; that one
-reads the stack's ports through uqs, so its hook runs it under `uv run`.
-bundle-blocks reads the root's git index, not its working tree. Not every gate
-under scripts/gates/ is one - the HDB utilities there operate on data, and the
-rest have not moved here.
+credentials. All but three need only the standard library: diagram-ports
+reads the stack's ports through uqs, so its hook runs it under `uv run`;
+q-traps and module-deps run the qlinter `.qlinter-version` pins, and fail,
+naming the install, without it. bundle-blocks reads the root's git index,
+not its working tree; hook-scopes and q-traps read what git tracks there.
+Not every gate under scripts/gates/ is one - the HDB utilities there operate
+on data. The doc-links gate (check_doc_links.py) is not one either: it renders
+the docs site with Quarto, which writes into docs/ and leaves the site CI
+publishes, so it is a build that also checks links.
 """
 
 from __future__ import annotations
@@ -59,9 +70,9 @@ PROG = "scripts/gates/check.py"
 
 
 def _repo_command() -> ModuleType:
-    """scripts/repo_command.py: the exit statuses, the loader and the crash
-    guard this command shares with the next repository command (#1804)."""
-    path = HERE.parent / "repo_command.py"
+    """scripts/gates/repo_command.py: the exit statuses, the loader and the
+    crash guard, kept apart from the checks themselves (#1804)."""
+    path = HERE / "repo_command.py"
     loaded = sys.modules.get("repo_command")
     if loaded is not None and Path(getattr(loaded, "__file__", "") or "").resolve() == path:
         return loaded
@@ -201,6 +212,41 @@ def _bundle_blocks(blocks: ModuleType, root: Path) -> int:
     return blocks.run(root)
 
 
+def _module_deps(deps: ModuleType, root: Path) -> int:
+    """The q library's module graph is the reviewed, acyclic edge list (#626)."""
+    return report(
+        "module-deps",
+        deps.problems(root),
+        f"{len(deps.ALLOWED)} reviewed edges (qlinter analyze graph), acyclic, "
+        "no name defined twice",
+    )
+
+
+def _q_traps(traps: ModuleType, root: Path) -> int:
+    """No q file, nor q embedded in Python, sets one of the silent traps (#965).
+    Each finding carries its own reason, so the rule reports them itself."""
+    return traps.run(root)
+
+
+def _doc_references(refs: ModuleType, root: Path) -> int:
+    """Every q function the prose cites exists, and takes the arguments shown."""
+    return refs.run(root)
+
+
+def _hook_scopes(scopes: ModuleType, root: Path, args: argparse.Namespace) -> int:
+    """No pre-commit scope is dead and no tracked Python is ungated - or, with
+    `--kdbx-only`, the ids of the hooks that need a q."""
+    return scopes.run(root, kdbx_only=args.kdbx_only)
+
+
+def _hook_scopes_options(ap: argparse.ArgumentParser) -> None:
+    ap.add_argument(
+        "--kdbx-only",
+        action="store_true",
+        help="print the ids of the hooks tagged `# kdbx-only`, comma-joined, and check nothing",
+    )
+
+
 @dataclass(frozen=True)
 class Check:
     name: str
@@ -208,9 +254,11 @@ class Check:
     #: The rule's module, scripts/gates/policy/<rule>.py - loaded only when
     #: this check runs.
     rule: str
-    #: Runs the check: given its rule module and the repository root, returns
-    #: the exit status.
-    run: Callable[[ModuleType, Path], int]
+    #: Runs the check: given its rule module and the repository root - and,
+    #: when it has `options`, the parsed arguments - returns the exit status.
+    run: Callable[..., int]
+    #: Adds the check's own options to its subcommand, beside `--root`.
+    options: Callable[[argparse.ArgumentParser], None] | None = None
 
 
 #: Every check, by name. Added to by hand: there is no discovery.
@@ -289,6 +337,31 @@ CHECKS: dict[str, Check] = {
             "vendored",
             _vendored,
         ),
+        Check(
+            "module-deps",
+            "the q library's module graph is reviewed and acyclic, and each name is defined once",
+            "module_deps",
+            _module_deps,
+        ),
+        Check(
+            "q-traps",
+            "no q file, nor q built in Python, sets a silent trap the pinned qlinter knows",
+            "q_traps",
+            _q_traps,
+        ),
+        Check(
+            "doc-references",
+            "every q function the docs cite exists and takes the arguments the call shows",
+            "doc_references",
+            _doc_references,
+        ),
+        Check(
+            "hook-scopes",
+            "no pre-commit hook scope matches nothing, and every tracked .py file is gated",
+            "hook_scopes",
+            _hook_scopes,
+            _hook_scopes_options,
+        ),
     )
 }
 
@@ -308,6 +381,8 @@ def parser() -> argparse.ArgumentParser:
             metavar="DIR",
             help="the repository tree to check (default: this checkout)",
         )
+        if check.options is not None:
+            check.options(one)
     return ap
 
 
@@ -318,7 +393,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not (root / "src").is_dir():
         ap.error(f"--root {args.root}: not a checkout of this repository (it has no src/)")
     check = CHECKS[args.check]
-    return kit.guarded(check.name, lambda: check.run(rule(check.rule), root))
+    extra = (args,) if check.options is not None else ()
+    return kit.guarded(check.name, lambda: check.run(rule(check.rule), root, *extra))
 
 
 if __name__ == "__main__":

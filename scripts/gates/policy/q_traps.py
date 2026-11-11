@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The q traps this repository checks for that `qlinter` does not.
 
 Most of them it does. This file used to hold fifteen hand-written rules over
@@ -28,7 +27,9 @@ It is a candidate for upstreaming into the linter - which needs it to scan
 `.py` too - at which point this file becomes a two-line wrapper. Until then
 it is the smaller half of a split, not a duplicate.
 
-Run directly, or via the pre-commit hook. Exits 1 on any finding.
+Run through the pre-commit hook, or directly. Exits 1 on any finding:
+
+    python3 scripts/gates/check.py q-traps
 """
 
 from __future__ import annotations
@@ -43,10 +44,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-# parents[2], not parent.parent: this file sits one level deeper since
-# scripts/ was foldered (#241). Getting it wrong does not raise - it
-# resolves to scripts/ and the checker reports over an empty tree.
-REPO = Path(__file__).resolve().parents[2]
+#: This checkout: scripts/gates/policy/<this file>. The default root; check.py
+#: passes the one it is given.
+REPO = Path(__file__).resolve().parents[3]
 
 #: Vendored trees are not ours to fix, and `build/` is generated.
 EXCLUDED_PREFIXES = ("lib/", "build/")
@@ -56,21 +56,25 @@ EXCLUDED_PREFIXES = ("lib/", "build/")
 #: gives for the q interpreter.
 QLINTER_ENV = "QLINTER"
 
-#: The one place the qlinter version is written (#969). CI and install.sh read
-#: the file; README.md and CLAUDE.md quote it, and a test holds them equal.
-VERSION_FILE = REPO / ".qlinter-version"
+#: The one place the qlinter version is written (#969), under the root. CI and
+#: install.sh read the file; README.md and CLAUDE.md quote it, and a test holds
+#: them equal.
+VERSION_FILE = Path(".qlinter-version")
 
 
-def _pinned_version() -> str:
+def _pinned_version(root: Path = REPO) -> str:
     """The pinned release tag, e.g. `v0.14.14`."""
-    return VERSION_FILE.read_text(encoding="utf-8").strip()
+    return (root / VERSION_FILE).read_text(encoding="utf-8").strip()
 
 
-INSTALL_HINT = (
-    "cargo install --git https://github.com/kwojdalski/q-lint "
-    f"--tag {_pinned_version()} --locked\n"
-    f"    or set ${QLINTER_ENV} to a built binary"
-)
+def install_hint(root: Path = REPO) -> str:
+    """How to install the pinned linter."""
+    return (
+        "cargo install --git https://github.com/kwojdalski/q-lint "
+        f"--tag {_pinned_version(root)} --locked\n"
+        f"    or set ${QLINTER_ENV} to a built binary"
+    )
+
 
 #: q's own words - `.Q.res` and every name in the `.q` context - which the one
 #: rule that reads this, reserved-name-in-embedded-q, refuses as a column name
@@ -107,7 +111,7 @@ class Finding:
     why: str
 
 
-def _tracked_q_files() -> list[Path]:
+def _tracked_q_files(root: Path = REPO) -> list[Path]:
     """Every `.q` file git knows about, TRACKED OR NOT YET ADDED.
 
     `git ls-files` alone was the original implementation, and it skipped
@@ -122,20 +126,20 @@ def _tracked_q_files() -> list[Path]:
     .gitignore, so build output and vendored trees stay out.
     """
     tracked = subprocess.run(
-        ["git", "ls-files", "*.q"], cwd=REPO, capture_output=True, text=True, check=True
+        ["git", "ls-files", "*.q"], cwd=root, capture_output=True, text=True, check=True
     ).stdout.split()
     untracked = subprocess.run(
         ["git", "ls-files", "--others", "--exclude-standard", "*.q"],
-        cwd=REPO,
+        cwd=root,
         capture_output=True,
         text=True,
         check=True,
     ).stdout.split()
     paths = dict.fromkeys(tracked + untracked)
-    return [REPO / p for p in paths if not p.startswith(EXCLUDED_PREFIXES)]
+    return [root / p for p in paths if not p.startswith(EXCLUDED_PREFIXES)]
 
 
-def _python_files() -> list[Path]:
+def _python_files(root: Path = REPO) -> list[Path]:
     """Every `.py` file git knows about, tracked or not yet added.
 
     Same reasoning as `_tracked_q_files`: a brand-new module is where a
@@ -143,17 +147,17 @@ def _python_files() -> list[Path]:
     written.
     """
     tracked = subprocess.run(
-        ["git", "ls-files", "*.py"], cwd=REPO, capture_output=True, text=True, check=True
+        ["git", "ls-files", "*.py"], cwd=root, capture_output=True, text=True, check=True
     ).stdout.split()
     untracked = subprocess.run(
         ["git", "ls-files", "--others", "--exclude-standard", "*.py"],
-        cwd=REPO,
+        cwd=root,
         capture_output=True,
         text=True,
         check=True,
     ).stdout.split()
     paths = dict.fromkeys(tracked + untracked)
-    return [REPO / q for q in paths if not q.startswith(EXCLUDED_PREFIXES)]
+    return [root / q for q in paths if not q.startswith(EXCLUDED_PREFIXES)]
 
 
 #: A q table literal opens with `([` - `([]` unkeyed, `([k:...]` keyed.
@@ -301,7 +305,7 @@ def _qlinter() -> str | None:
     return shutil.which("qlinter")
 
 
-def _linter_findings(binary: str, q_files: list[Path]) -> list[Finding]:
+def _linter_findings(binary: str, q_files: list[Path], root: Path = REPO) -> list[Finding]:
     """Everything `qlinter` reports over `q_files`, the ones the gate counts.
 
     The files themselves, not a few roots: `src tests scripts` left the 53
@@ -318,7 +322,7 @@ def _linter_findings(binary: str, q_files: list[Path]) -> list[Finding]:
     result = subprocess.run(
         [binary, *map(str, q_files), "--format", "json", "--profile", "uqf"]
         + ["--extend-select", ",".join(CORRECTNESS_PREFIXES)],
-        cwd=REPO,
+        cwd=root,
         capture_output=True,
         text=True,
         check=False,
@@ -326,9 +330,7 @@ def _linter_findings(binary: str, q_files: list[Path]) -> list[Finding]:
     # 0 = clean, 1 = findings; anything else is the linter failing rather
     # than the code being wrong, and must not read as a clean run.
     if result.returncode not in (0, 1):
-        raise SystemExit(
-            f"check_q_traps: qlinter failed ({result.returncode}): {result.stderr.strip()}"
-        )
+        raise SystemExit(f"q-traps: qlinter failed ({result.returncode}): {result.stderr.strip()}")
     return [
         Finding(
             path=rel,
@@ -338,7 +340,7 @@ def _linter_findings(binary: str, q_files: list[Path]) -> list[Finding]:
             why=item["why"],
         )
         for item in json.loads(result.stdout or "[]")
-        for rel in [_relative(item["path"])]
+        for rel in [_relative(item["path"], root)]
         if _gated(item["code"]) and not _exempt(item["code"], rel)
     ]
 
@@ -387,7 +389,7 @@ def _catalogue(binary: str) -> list[str]:
     return [line.split()[0] for line in listed.stdout.splitlines() if line.strip()]
 
 
-def _check_version(binary: str) -> str | None:
+def _check_version(binary: str, root: Path = REPO) -> str | None:
     """None when the installed linter is the pinned one, else why not (#969).
 
     Rules change between releases (QB003 at 0.14.6 and 0.14.9, QB010 at
@@ -398,14 +400,14 @@ def _check_version(binary: str) -> str | None:
     out = subprocess.run([binary, "--version"], capture_output=True, text=True, check=False)
     words = out.stdout.split()
     installed = f"v{words[-1]}" if out.returncode == 0 and words else "unknown"
-    pinned = _pinned_version()
+    pinned = _pinned_version(root)
     if installed == pinned:
         return None
     return (
-        f"check_q_traps: {binary} is qlinter {installed}, but this repository pins\n"
+        f"q-traps: {binary} is qlinter {installed}, but this repository pins\n"
         f"{pinned} (.qlinter-version). Rules differ between releases, so this\n"
         "hook and CI would pass and fail different code. Install the pin:\n\n"
-        f"    {INSTALL_HINT}"
+        f"    {install_hint(root)}"
     )
 
 
@@ -422,10 +424,10 @@ def _check_version(binary: str) -> str | None:
 TEST_EXEMPT_CODES = frozenset({"QP002"})
 
 
-def _relative(path: str) -> str:
-    """The linter reports absolute paths; findings here are repo-relative."""
+def _relative(path: str, root: Path = REPO) -> str:
+    """The linter reports absolute paths; findings here are root-relative."""
     try:
-        return str(Path(path).resolve().relative_to(REPO))
+        return str(Path(path).resolve().relative_to(root.resolve()))
     except ValueError:
         return path
 
@@ -434,51 +436,50 @@ def _exempt(code: str, rel: str) -> bool:
     return code in TEST_EXEMPT_CODES and rel.startswith("tests/")
 
 
-def main() -> int:
+def run(root: Path) -> int:
+    """Every tracked or not-yet-added .q file under `root` through the pinned
+    linter, and every .py file through the embedded-q rule; the exit status.
+    Each finding carries its own reason, so the rule reports them itself."""
     binary = _qlinter()
     if binary is None:
         print(
-            "check_q_traps: qlinter is not installed, and it owns all but one of\n"
+            "q-traps: qlinter is not installed, and it owns all but one of\n"
             "the rules this hook checks. Skipping would leave the hook\n"
             "reporting success over checks that did not run.\n\n"
-            f"    {INSTALL_HINT}",
+            f"    {install_hint(root)}",
             file=sys.stderr,
         )
         return 1
-    mismatch = _check_version(binary)
+    mismatch = _check_version(binary, root)
     if mismatch:
         print(mismatch, file=sys.stderr)
         return 1
 
-    q_files = _tracked_q_files()
+    q_files = _tracked_q_files(root)
     if not q_files:
-        print("check_q_traps: no tracked .q files found - refusing to pass vacuously")
+        print("q-traps: no tracked .q files found - refusing to pass vacuously", file=sys.stderr)
         return 1
 
-    findings = _linter_findings(binary, q_files)
+    findings = _linter_findings(binary, q_files, root)
 
     # q does not only live in .q files. The orchestrator and the gateway build
     # q expressions in Python and send them over IPC, and those are invisible
     # both to every .q rule and to the linter, which discovers .q files only.
-    python_files = _python_files()
+    python_files = _python_files(root)
     for path in python_files:
-        rel = str(path.relative_to(REPO))
+        rel = str(path.relative_to(root))
         text = path.read_text(encoding="utf-8", errors="replace")
         findings.extend(rule_reserved_name_in_embedded_q(rel, text))
 
     if findings:
-        print(f"check_q_traps: {len(findings)} finding(s)\n")
+        print(f"q-traps: {len(findings)} finding(s)\n", file=sys.stderr)
         for f in sorted(findings, key=lambda f: (f.path, f.line)):
-            print(f"{f.path}:{f.line}: [{f.rule}] {f.detail}")
-            print(f"    {f.why}\n")
+            print(f"{f.path}:{f.line}: [{f.rule}] {f.detail}", file=sys.stderr)
+            print(f"    {f.why}\n", file=sys.stderr)
         return 1
 
     print(
-        f"check_q_traps: {len(q_files)} .q + {len(python_files)} .py file(s) clean "
+        f"q-traps: {len(q_files)} .q + {len(python_files)} .py file(s) clean "
         f"({sum(map(_gated, _catalogue(binary)))} rules through qlinter, 1 here)"
     )
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

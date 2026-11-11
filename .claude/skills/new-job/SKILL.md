@@ -233,7 +233,7 @@ Write in this order, and run the suite between each:
 q tests/run_tests.q                       # the suite; the scaffolded test must be gone
 uv run pytest tests/qrun/test_documented_examples.py  # every @eg you wrote actually runs
 uv run pytest python/ -q                  # the declaration reads back as a process
-uv run python scripts/gates/check_q_traps.py
+uv run python scripts/gates/check.py q-traps
 ```
 
 Then load the tree on its own, because the unit suite is not the same thing:

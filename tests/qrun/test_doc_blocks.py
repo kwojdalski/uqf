@@ -90,6 +90,6 @@ def test_the_marked_q_blocks_run(
 
 def test_every_marked_document_is_collected() -> None:
     """Discovery parity: a test per document that has a marked block - the
-    same list the q-docs hooks' scope is held to (check_hook_scopes.py)."""
+    same list the q-docs hooks' scope is held to (check.py hook-scopes)."""
     assert DOCS, "nothing in docs/ is marked to run"
     assert [d.as_posix() for d in DOCS] == docex.marked_docs(REPO)

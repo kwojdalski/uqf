@@ -6,7 +6,7 @@ is documented as one list. The list is hand-written, because "optional, and
 here is what happens when it is unset" is a judgement no generator can read
 off a ``os.environ.get`` call. A hand-written list decays, so this gate
 checks it rather than a generator producing it - the same shape as
-``check_hook_scopes.py``, and the settled split: generate what is
+``check.py hook-scopes``, and the settled split: generate what is
 mechanical, check what is not.
 
 Two directions, because each catches a different failure:

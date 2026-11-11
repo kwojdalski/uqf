@@ -44,17 +44,17 @@ import pytest
 # that is mid-import, and fails with a bare "'NoneType' has no attribute
 # '__dict__'" that says nothing about the real cause.
 _SPEC = importlib.util.spec_from_file_location(
-    "check_q_traps", Path(__file__).resolve().parents[3] / "scripts" / "gates" / "check_q_traps.py"
+    "q_traps", Path(__file__).resolve().parents[1] / "policy" / "q_traps.py"
 )
 assert _SPEC and _SPEC.loader
 cqt = importlib.util.module_from_spec(_SPEC)
-sys.modules["check_q_traps"] = cqt
+sys.modules["q_traps"] = cqt
 _SPEC.loader.exec_module(cqt)
 
 QLINTER = os.environ.get("QLINTER") or shutil.which("qlinter")
 needs_linter = pytest.mark.skipif(
     QLINTER is None,
-    reason="qlinter is not installed; see scripts/gates/check_q_traps.py for the install",
+    reason="qlinter is not installed; see scripts/gates/policy/q_traps.py for the install",
 )
 
 
@@ -71,7 +71,7 @@ def _flagged(source: str, code: str, name: str = "t.q") -> list:
     claims while moving it.
     """
     if QLINTER is None:
-        pytest.skip("qlinter is not installed; see scripts/gates/check_q_traps.py")
+        pytest.skip("qlinter is not installed; see scripts/gates/policy/q_traps.py")
     result = subprocess.run(
         [QLINTER, "-", "--stdin-filename", name, "--format", "json", "--profile", "uqf"],
         input=source,
@@ -501,7 +501,7 @@ def test_every_rule_left_here_is_still_called():
 
     defined = {n for n in dir(cqt) if n.startswith("rule_")}
     assert defined == {"rule_reserved_name_in_embedded_q"}, f"unexpected rule(s) here: {defined}"
-    called = inspect.getsource(cqt.main)
+    called = inspect.getsource(cqt.run)
     unwired = {n for n in defined if n not in called}
     assert not unwired, f"defined but never called: {unwired}"
 
@@ -606,19 +606,17 @@ def test_the_type_gate_is_registered_in_the_scope_checker():
     """`ty` must be in the scope checker's gate list, not just in the config.
 
     A hook present in .pre-commit-config.yaml but absent from
-    check_hook_scopes.py is unenforced: it can narrow to a stale path and
+    the hook-scopes rule is unenforced: it can narrow to a stale path and
     nothing complains - which is exactly how 43 of 47 files went unlinted.
     """
-    scope_checker = (
-        Path(__file__).resolve().parents[3] / "scripts" / "gates" / "check_hook_scopes.py"
-    )
+    scope_checker = Path(__file__).resolve().parents[1] / "policy" / "hook_scopes.py"
     text = scope_checker.read_text()
     assert 'TYPE_HOOKS = ("ty",)' in text
     assert '("type", TYPE_HOOKS)' in text
 
 
 @needs_linter
-def test_q_outside_src_tests_and_scripts_is_linted(tmp_path, monkeypatch, capsys):
+def test_q_outside_src_tests_and_scripts_is_linted(tmp_path, capsys):
     """sidecars/ and uqs's attach/q/ were counted clean but never linted (#2538)."""
     for name in (".qlinter-version", ".qlinter.toml"):
         (tmp_path / name).write_text((cqt.REPO / name).read_text())
@@ -630,10 +628,8 @@ def test_q_outside_src_tests_and_scripts_is_linted(tmp_path, monkeypatch, capsys
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text(src)
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-    monkeypatch.setattr(cqt, "REPO", tmp_path)
-    monkeypatch.setattr(cqt, "VERSION_FILE", tmp_path / ".qlinter-version")
-    assert cqt.main() == 1
-    out = capsys.readouterr().out
+    assert cqt.run(tmp_path) == 1
+    out = capsys.readouterr().err
     assert "sidecars/demo/bad.q:1: [QF001" in out
     assert "python/uqs/src/uqs/attach/q/bad.q:1: [QF001" in out
 
@@ -641,7 +637,7 @@ def test_q_outside_src_tests_and_scripts_is_linted(tmp_path, monkeypatch, capsys
 @needs_linter
 def test_the_real_repo_is_clean():
     """The rules hold on every tracked .q file, so the hook is committable."""
-    assert cqt.main() == 0
+    assert cqt.run(cqt.REPO) == 0
 
 
 # ------------------------------------------- q embedded in Python strings

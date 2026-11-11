@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Check that the q functions our prose cites actually exist, and are callable
 with the argument count shown.
 
@@ -60,27 +59,26 @@ A function tagged ``@private`` (#627) is not in the surface - it is plumbing,
 and its refactors are not contract changes - but it exists, and prose may
 explain it. Those names are read from ``src/`` by the rule docs/man.q applies
 (``private_names``), and count as existing with no rank to check calls against.
+
+    python3 scripts/gates/check.py doc-references
 """
 
 from __future__ import annotations
 
-import argparse
 import csv
 import re
 import sys
 from pathlib import Path
 
-# parents[2], not parent.parent: this file sits one level deeper since
-# scripts/ was foldered (#241). Getting it wrong does not raise - it
-# resolves to scripts/ and the checker reports over an empty tree.
-REPO = Path(__file__).resolve().parents[2]
-SURFACE = REPO / "docs" / "reference" / "surfaces" / "current" / "functions.csv"
+#: The contract surface, under the root checked.
+SURFACE = Path("docs") / "reference" / "surfaces" / "current" / "functions.csv"
 
-#: Where living documentation lives. Everything under these roots is checked.
+#: Where living documentation lives, under the root checked. Everything under
+#: these is checked.
 DOC_ROOTS = (
-    REPO / "docs",
-    REPO / ".claude" / "agents",
-    REPO / ".claude" / "skills",
+    Path("docs"),
+    Path(".claude") / "agents",
+    Path(".claude") / "skills",
 )
 
 #: Directories whose contents are deliberately not held to the current code,
@@ -202,21 +200,22 @@ _CALL = re.compile(
 )
 
 
-def load_surface() -> dict[str, dict[str, dict]]:
-    """{namespace: {name: entry}} from the committed contract surface.
+def load_surface(root: Path) -> dict[str, dict[str, dict]]:
+    """{namespace: {name: entry}} from `root`'s committed contract surface.
 
     `rank` is blank for a non-function, which is how the CSV distinguishes a
     value from a niladic function - see contract_surface.write_surface. A
     blank here becomes None, and the arity check skips it rather than
     treating a value as a zero-argument function.
     """
-    if not SURFACE.is_file():
+    surface = root / SURFACE
+    if not surface.is_file():
         sys.exit(
-            f"contract surface not found at {SURFACE} - run "
+            f"contract surface not found at {surface} - run "
             "`uv run python scripts/generate/derive.py contract-surface`"
         )
     out: dict[str, dict[str, dict]] = {}
-    with SURFACE.open(newline="", encoding="utf-8") as handle:
+    with surface.open(newline="", encoding="utf-8") as handle:
         for row in csv.DictReader(handle):
             out.setdefault(row["namespace"], {})[row["name"]] = {
                 "name": row["name"],
@@ -232,7 +231,7 @@ _QDEF = re.compile(r"^((?:\.[A-Za-z][A-Za-z0-9_]*){2,})\s*:")
 _PRIVATE = re.compile(r"^\s*/+\s*@private\b")
 
 
-def private_names(root: Path = REPO / "src") -> dict[str, set[str]]:
+def private_names(root: Path) -> dict[str, set[str]]:
     """{namespace: {name}} for every definition whose qDoc block says @private.
 
     docs/man.q's rule, kept exactly: a definition is `name:` at column 0 in a
@@ -265,14 +264,14 @@ def private_names(root: Path = REPO / "src") -> dict[str, set[str]]:
     return out
 
 
-def doc_files() -> list[Path]:
-    """Every living documentation file, in a stable order."""
+def doc_files(root: Path) -> list[Path]:
+    """Every living documentation file under `root`, in a stable order."""
     out: list[Path] = []
-    for root in DOC_ROOTS:
-        if not root.is_dir():
+    for docs in DOC_ROOTS:
+        if not (root / docs).is_dir():
             continue
-        for path in sorted(root.rglob("*.md")):
-            rel = path.relative_to(REPO)
+        for path in sorted((root / docs).rglob("*.md")):
+            rel = path.relative_to(root)
             if EXCLUDED_DIRS & set(rel.parts):
                 continue
             if path.name in EXCLUDED_FILES:
@@ -312,15 +311,16 @@ def _arg_count(inside: str) -> int:
     return count
 
 
-def check() -> tuple[list[str], dict[str, int]]:
-    """Returns (problems, {unverifiable namespace: how many references}).
+def check(root: Path) -> tuple[list[str], dict[str, int]]:
+    """Returns (problems, {unverifiable namespace: how many references}) for
+    the documents under `root`, against `root`'s surface and src/.
 
     The count matters as much as the names: a blind spot of two references
     is a footnote, and one of two hundred would mean this gate checks far
     less than its passing line implies.
     """
-    surface = load_surface()
-    for ns, names in private_names().items():
+    surface = load_surface(root)
+    for ns, names in private_names(root / "src").items():
         for name in names:
             surface.setdefault(ns, {}).setdefault(
                 name, {"name": name, "kind": "private", "rank": None}
@@ -338,8 +338,8 @@ def check() -> tuple[list[str], dict[str, int]]:
     problems: list[str] = []
     unverifiable: dict[str, int] = {}
 
-    for path in doc_files():
-        rel = str(path.relative_to(REPO))
+    for path in doc_files(root):
+        rel = str(path.relative_to(root))
         text = path.read_text()
 
         for line_no, line in enumerate(text.splitlines(), 1):
@@ -385,29 +385,23 @@ def check() -> tuple[list[str], dict[str, int]]:
     return problems, unverifiable
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--check",
-        action="store_true",
-        help="accepted for symmetry with the other gates; this script only ever checks",
-    )
-    parser.parse_args()
-
-    problems, unverifiable = check()
-    files = doc_files()
-
+def run(root: Path) -> int:
+    """Every living document under `root` against its surface; the exit
+    status. The findings share one piece of advice, and a pass reports what
+    could not be verified, so the rule reports them itself."""
+    problems, unverifiable = check(root)
     if problems:
-        print(f"check_doc_references: {len(problems)} stale reference(s)\n")
+        print(f"doc-references: {len(problems)} stale reference(s)\n", file=sys.stderr)
         for problem in problems:
-            print(f"  {problem}")
+            print(f"  {problem}", file=sys.stderr)
         print(
             "\nFix the prose, or - if the document is better for naming something "
-            "that does not exist - add it to ALLOWED_MISSING with the reason."
+            "that does not exist - add it to ALLOWED_MISSING with the reason.",
+            file=sys.stderr,
         )
         return 1
 
-    print(f"check_doc_references: {len(files)} doc(s) cite only functions that exist")
+    print(f"doc-references: {len(doc_files(root))} doc(s) cite only functions that exist")
     if unverifiable:
         total = sum(unverifiable.values())
         print(
@@ -417,7 +411,3 @@ def main() -> int:
         for ns, count in sorted(unverifiable.items()):
             print(f"    {ns:14} {count}")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

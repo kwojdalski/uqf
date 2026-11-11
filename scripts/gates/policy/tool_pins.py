@@ -5,7 +5,7 @@ written in several files, and the files cannot all read one: a workflow's
 `with:` input is a literal, install.sh is bash, a README is prose. So each
 copy stays where it is, and this rule holds them equal. A version bump that
 misses one copy otherwise leaves CI, a developer's install and
-scripts/dev/attest_kdbx.py running different tools, and nothing says so.
+scripts/dev/kdbx_attestation.py running different tools, and nothing says so.
 
 PINS IS THE ONE LIST. Each pin names its copies in order, and the FIRST copy
 found is the pin's authority: what `pinned()` returns, and what every other
@@ -140,7 +140,7 @@ PINS: tuple[Pin, ...] = (
             Site(CI, _PRE_COMMIT),
             Site(WORKFLOWS, _PRE_COMMIT, required=False),
             Site("install.sh", _PRE_COMMIT),
-            Site("scripts/dev/attest_kdbx.py", _PRE_COMMIT),
+            Site("scripts/dev/kdbx_attestation.py", _PRE_COMMIT),
             Site("scripts/dev/hooks_full.py", _PRE_COMMIT),
             Site(".claude/agents/*.md", _PRE_COMMIT, required=False),
         ),

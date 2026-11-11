@@ -82,7 +82,7 @@ them.
 
 > *2026-09-22.* `docs/prompts/` held three LLM implementation briefs for
 > features since built and tested; deleted, and the `"prompts"` entry in
-> `check_doc_references.py`'s `EXCLUDED_DIRS` with them. `README.md`'s "Further
+> `check.py doc-references`'s `EXCLUDED_DIRS` with them. `README.md`'s "Further
 > reading" was a second copy of `docs/README.md`'s index and had already drifted ---
 > it said five directories where the map said four, and omitted five guides.
 > Collapsed to the four-question table and a link.
@@ -256,7 +256,7 @@ are missing, rather than assuming the reader has them.
 > *2026-09-17.* Two of the Quick start commands were wrong: `query` had its
 > argument form inverted, and the backfill invocation died at
 > `.servers.startup[]` because a backfill registers with discovery and needs the
-> fleet. Neither was catchable by a gate --- `check_doc_references` verifies
+> fleet. Neither was catchable by a gate --- `check.py doc-references` verifies
 > that `.q*` functions exist, not that a shell command works.
 
 ## What is not touched

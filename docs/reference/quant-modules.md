@@ -108,7 +108,7 @@ sign or a drift in the result's columns or types fails it.
 ### What depends on what
 
 The library modules (files) form an acyclic graph, held to it by
-`scripts/gates/check_module_deps.py` in CI (#626): a new edge between modules,
+`scripts/gates/policy/module_deps.py` in CI (#626): a new edge between modules,
 or a cycle, fails until the gate's list of allowed edges says so. The graph is
 between files because the seven domains share them: `forwards.q` (`.qf.px`)
 reads `book.q` (`.qf.mkt`) and `cross.q` (`.qf.mkt`) reads `ccy.q` (`.qf.px`),

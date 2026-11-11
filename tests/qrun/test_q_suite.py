@@ -10,7 +10,7 @@ q-unit, q-order and q-unit-peachq lanes.
                                     `--q-files a.q,b.q`: the suites
                                     scripts/dev/test_impact.py selects for the
                                     change, which the hook passes on and
-                                    attest_kdbx.py records as q-tests=<digest>.
+                                    kdbx_attestation.py records as q-tests=<digest>.
                                     Without it, the whole suite.
   ..._in_reverse_order              the same suites in the opposite order, so a
                                     test that depends on running after another

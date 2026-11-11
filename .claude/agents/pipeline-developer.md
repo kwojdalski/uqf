@@ -188,7 +188,7 @@ Two registry facts that changed under you, and that a job no longer states:
   loads.
 - Then the repository gates, each run individually with its real exit code
   visible --- **never through a pipe**, because `cmd | tail` reports `tail`'s
-  status and a failing gate reads as a pass: `check_q_traps.py`,
+  status and a failing gate reads as a pass: `check.py q-traps`,
   `check.py etl-layering`, `derive.py contract-surface --check`,
   `derive.py operational-docs --check`.
 
