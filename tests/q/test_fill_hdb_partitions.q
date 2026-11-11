@@ -1,4 +1,4 @@
-// test_fill_hdb_partitions.q - scripts/hdb/hdb_fill.q, the HDB
+// test_fill_hdb_partitions.q - scripts/hdb/fill.q, the HDB
 // repair behind `uqs data check --apply` and `uqs deploy push --fix-hdb` (.qt.qproc.fillhdb).
 //
 // The script is a thin schema-driven wrapper around KX's dbmaint.q
@@ -45,7 +45,7 @@
     (read0 hsym `$out;code)}
 
 / The repair, as the CLI runs it.
-.qt.qproc.fillhdb.run:{[root;schema] .qt.qproc.fillhdb.run_script[root;schema;"scripts/hdb/hdb_fill.q"]}
+.qt.qproc.fillhdb.run:{[root;schema] .qt.qproc.fillhdb.run_script[root;schema;"scripts/hdb/fill.q"]}
 
 / The repair with the markout configuration migration asked for (`uqs data check --apply`, #1999),
 / recording its snapshots in `stat`, a status directory.
@@ -57,7 +57,7 @@
     sf:root,".database.q";
     (hsym `$sf) 0: enlist schema;
     out:root,".out.txt";
-    cmd:"env UQF_STATUS_DIR=",stat," ",.qt.support.q_interpreter[]," scripts/hdb/hdb_fill.q ",root," ",sf,
+    cmd:"env UQF_STATUS_DIR=",stat," ",.qt.support.q_interpreter[]," scripts/hdb/fill.q ",root," ",sf,
         " migrate < /dev/null > ",out," 2>&1; echo $?";
     code:"J"$first system cmd;
     (read0 hsym `$out;code)}
@@ -433,7 +433,7 @@
     sf:root,".database.q";
     (hsym `$sf) 0: enlist .qt.qproc.fillhdb.cfg_schema;
     out:root,".out.txt";
-    cmd:"env -u UQF_STATUS_DIR -u TORQDATA ",.qt.support.q_interpreter[]," scripts/hdb/hdb_fill.q ",root," ",sf," migrate < /dev/null > ",out," 2>&1; echo $?";
+    cmd:"env -u UQF_STATUS_DIR -u TORQDATA ",.qt.support.q_interpreter[]," scripts/hdb/fill.q ",root," ",sf," migrate < /dev/null > ",out," 2>&1; echo $?";
     code:"J"$first system cmd;
     .qunit.assertEquals[code;1;"refused"];
     .qunit.assertTrue[any (read0 hsym `$out) like "*set UQF_STATUS_DIR*";"saying what to set"];
@@ -480,15 +480,15 @@
     r:.qt.qproc.fillhdb.run[root;schema];
     .qunit.assertEquals[r 1;0;"the filler has nothing to fill there"];
     .qunit.assertEquals[.qt.qproc.fillhdb.snapshot[root,"/2026.01.02"];before;"the mistyped partition is byte-identical"];
-    / the partitions it reads are named to it: hdb_layout.q's, in `uqs data check` (#1783)
+    / the partitions it reads are named to it: hdb/layout.q's, in `uqs data check` (#1783)
     (hsym `$root,".partitions") 0: (root,"/2026.01.01";root,"/2026.01.02");
-    c:system "env ",.qt.support.q_interpreter[]," scripts/hdb/hdb_column_types.q ",root,
+    c:system "env ",.qt.support.q_interpreter[]," scripts/hdb/column_types.q ",root,
         ".partitions ",root,".database.q -q < /dev/null";
     .qunit.assertTrue[any c like "type_change|",root,"/2026.01.02|book|qty|j|f";
-        "hdb_column_types.q reports it: stored as j, declared f"]};
+        "hdb/column_types.q reports it: stored as j, declared f"]};
 
 .qt.qproc.fillhdb.test_the_destructive_dbmaint_operations_are_not_reachable:{[t]
-    code:" " sv {$[("/"=first x) or 0=count x; ""; x]} each read0 `:scripts/hdb/hdb_fill.q;
+    code:" " sv {$[("/"=first x) or 0=count x; ""; x]} each read0 `:scripts/hdb/fill.q;
     banned:`addtable`addcol`add1table`deletecol`delete1col`castcol`renamecol`rename1col`rentable`ren1table`copycol`copy1col`fncol`fn1col`fixtable`fix1table`reordercols`setattrcol`clearattrcol;
     hit:banned where {[code;b] 0<count ss[code;string b]}[code] each banned;
     .qunit.assertEquals[hit;`symbol$();"the script calls no dbmaint operation that rewrites, drops or blindly adds"];
@@ -497,20 +497,20 @@
 .qt.qproc.fillhdb.test_a_tree_without_the_vendored_dbmaint_is_refused_by_name:{[t]
     tree:.qt.qproc.fillhdb.scratch[];
     system "mkdir -p ",tree,"/scripts/hdb";
-    system "cp scripts/hdb/hdb_fill.q ",tree,"/scripts/hdb/";
+    system "cp scripts/hdb/fill.q ",tree,"/scripts/hdb/";
     root:.qt.qproc.fillhdb.build[];
-    r:.qt.qproc.fillhdb.run_script[root;.qt.qproc.fillhdb.schema;tree,"/scripts/hdb/hdb_fill.q"];
+    r:.qt.qproc.fillhdb.run_script[root;.qt.qproc.fillhdb.schema;tree,"/scripts/hdb/fill.q"];
     .qunit.assertTrue[any (r 0) like "*no dbmaint.q at*";"it says what is missing, rather than failing on an undefined name"];
     .qunit.assertEquals[r 1;1;"and exits 1: a repair that never ran must not read as one that did"]};
 
 .qt.qproc.fillhdb.test_the_repair_loads_dbmaint_from_a_copy_of_the_tree_laid_out_like_a_release:{[t]
     tree:.qt.qproc.fillhdb.scratch[];
     system "mkdir -p ",tree,"/scripts/hdb ",tree,"/lib/kx-dbmaint";
-    system "cp scripts/hdb/hdb_fill.q ",tree,"/scripts/hdb/";
+    system "cp scripts/hdb/fill.q ",tree,"/scripts/hdb/";
     system "cp lib/kx-dbmaint/* ",tree,"/lib/kx-dbmaint/";
     root:.qt.qproc.fillhdb.build[];
     / from a directory that is not the tree: the script finds dbmaint by its own path, not the cwd
-    r:.qt.qproc.fillhdb.run_script[root;"book:([] time:`timestamp$(); sym:`symbol$(); px:`float$())\nnewtab:([] time:`timestamp$())\n";tree,"/scripts/hdb/hdb_fill.q"];
+    r:.qt.qproc.fillhdb.run_script[root;"book:([] time:`timestamp$(); sym:`symbol$(); px:`float$())\nnewtab:([] time:`timestamp$())\n";tree,"/scripts/hdb/fill.q"];
     .qunit.assertEquals[r 1;0;"a release-shaped tree repairs"];
     .qunit.assertEquals[.qt.qproc.fillhdb.cols_of[root;2026.01.01;`newtab];enlist `time;"and writes the table dbmaint's allpaths named"]};
 

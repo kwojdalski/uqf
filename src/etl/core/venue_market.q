@@ -24,7 +24,7 @@
 / cannot tell two markets apart on one venue. The day a venue carries two
 / (a broker routing equity and crypto), the answer is a `market` column on
 / `executions`, stamped by its normalizer as market_data already is (#886) and
-/ added to the HDB partitions by scripts/hdb/hdb_fill.q - and
+/ added to the HDB partitions by scripts/hdb/fill.q - and
 / this file's `market_of` is then the rule that stamps it and fills the history.
 / .
 / Loaded by src/etl/init.q ahead of every declaration; touches nothing else.

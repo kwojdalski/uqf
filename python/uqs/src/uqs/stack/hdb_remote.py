@@ -1,4 +1,4 @@
-"""hdb_alter.q on another machine, over ssh, with that machine's own q (#1755).
+"""hdb/alter.q on another machine, over ssh, with that machine's own q (#1755).
 
 An attached stack's HDB is on the stack's host, and that host need not have
 uqf: a production TorQ server has q and TorQ. So the script and the vendored
@@ -8,7 +8,7 @@ dbmaint.q it loads go there for one run and are gone after it:
      QCMD and PATH - as deploy/remote.py runs its steps), reading a script on
      stdin;
   2. that script makes a temporary directory, writes the files into it in
-     the layout hdb_alter.q finds dbmaint by (scripts/hdb/, lib/kx-dbmaint/),
+     the layout hdb/alter.q finds dbmaint by (scripts/hdb/, lib/kx-dbmaint/),
      runs `$QCMD` (else `q`) on it, and removes the directory on any exit.
 
 The files travel inside the script as base64 heredocs, so nothing but the
@@ -103,7 +103,7 @@ def run_ssh(
             timeout=TIMEOUT_S,
         )
     except subprocess.TimeoutExpired:
-        raise UqsError(f"hdb_alter.q on {destination} did not finish within {TIMEOUT_S}s") from None
+        raise UqsError(f"hdb/alter.q on {destination} did not finish within {TIMEOUT_S}s") from None
     except OSError as exc:
         raise UqsError(f"could not run ssh: {exc}") from None
     if result.returncode == SSH_FAILED:
@@ -115,5 +115,5 @@ def run_ssh(
         )
     if result.returncode in (NO_TEMP, NO_Q):
         said = (result.stderr or "").strip() or "no temporary directory"
-        raise UqsError(f"{destination} cannot run hdb_alter.q: {said}. Nothing was run.")
+        raise UqsError(f"{destination} cannot run hdb/alter.q: {said}. Nothing was run.")
     return parse(result, f"on {destination}")

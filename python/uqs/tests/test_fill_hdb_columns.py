@@ -3,7 +3,7 @@
 `test_hdb_shape.py` covers the DETECTION, over directories it makes with
 mkdir - which is fast, runs anywhere, and proves nothing about whether the
 bytes the filler writes can actually be read back. These drive
-`scripts/hdb/hdb_fill.q` against a database q wrote, and then
+`scripts/hdb/fill.q` against a database q wrote, and then
 ask q to run the query that was failing.
 
 That distinction matters for two things a directory of empty files cannot
@@ -92,7 +92,7 @@ def test_the_query_fails_before_the_repair(drifted_hdb, q_binary, repo_root):
 
 def test_the_repair_makes_the_query_run(drifted_hdb, q_binary, repo_root):
     hdb, schema = drifted_hdb
-    filler = repo_root / "scripts" / "hdb" / "hdb_fill.q"
+    filler = repo_root / "scripts" / "hdb" / "fill.q"
     fixed = _run(q_binary, repo_root, str(filler), str(hdb), str(schema))
     assert fixed.returncode == 0, fixed.stderr
     assert "added 2 column(s)" in fixed.stdout
@@ -117,7 +117,7 @@ def test_the_repair_is_idempotent(drifted_hdb, q_binary, repo_root):
     """Every uqs command bootstraps, so this runs constantly. A second
     run must find nothing rather than appending a column a second time."""
     hdb, schema = drifted_hdb
-    filler = repo_root / "scripts" / "hdb" / "hdb_fill.q"
+    filler = repo_root / "scripts" / "hdb" / "fill.q"
     assert _run(q_binary, repo_root, str(filler), str(hdb), str(schema)).returncode == 0
     again = _run(q_binary, repo_root, str(filler), str(hdb), str(schema))
     assert again.returncode == 0, again.stderr
@@ -132,7 +132,7 @@ def test_an_empty_hdb_is_a_no_op(tmp_path: Path, q_binary, repo_root):
     hdb.mkdir()
     schema = tmp_path / "database.q"
     schema.write_text(SCHEMA)
-    filler = repo_root / "scripts" / "hdb" / "hdb_fill.q"
+    filler = repo_root / "scripts" / "hdb" / "fill.q"
     result = _run(q_binary, repo_root, str(filler), str(hdb), str(schema))
     assert result.returncode == 0, result.stderr
     assert "already rectangular - nothing to do" in result.stdout

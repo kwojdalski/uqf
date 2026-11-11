@@ -1,10 +1,10 @@
-/ hdb_sort_order.q - the HDB partitions that are not in their declared sort order (#2288).
+/ sort_order.q - the HDB partitions that are not in their declared sort order (#2288).
 / .
-/ Run as:  q scripts/hdb/hdb_sort_order.q <hdb root> <partitions file>
+/ Run as:  q scripts/hdb/sort_order.q <hdb root> <partitions file>
 / .
 / The root holds the sym file the enumerated columns are read against. The partitions file names the partitions to read, one directory per line - what
-/ scripts/hdb/hdb_layout.q found, as stack/hdb_layout.py writes it. Reads, writes nothing:
-/ it is the DRY half of the sort migration `uqs data check --apply` runs (hdb_fill.q).
+/ scripts/hdb/layout.q found, as stack/hdb_layout.py writes it. Reads, writes nothing:
+/ it is the DRY half of the sort migration `uqs data check --apply` runs (hdb/fill.q).
 / .
 / A table that declares a sort rule (src/etl/plant_tables.q `sorting`) is stored sorted by its
 / columns with their attributes, and holds its row numbers if it declares a column for them. A
@@ -21,7 +21,7 @@ if[not ()~key ` sv hdb_root,`sym; `sym set get ` sv hdb_root,`sym];
 
 / src/etl, found from this script's own path (scripts/gates/ is two levels below the tree).
 script_dir:{[f] $[0=count i:where "/"=f; ""; (1+last i)#f]} string .z.f;
-system "l ",script_dir,"hdb_sort_lib.q";
+system "l ",script_dir,"sort_lib.q";
 load_etl[script_dir,"../../src/etl/"];
 
 rules:sort_rules[];

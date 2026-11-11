@@ -1,4 +1,4 @@
-// test_hdb_alter.q - scripts/hdb/hdb_alter.q, the standalone script behind
+// test_hdb_alter.q - scripts/hdb/alter.q, the standalone script behind
 // `uqs data alter` and `uqs data check --table` (.qt.qproc.hdbalter, #1755).
 //
 // The script exits when it has run, so each test runs it as a child q over a
@@ -42,7 +42,7 @@
 .qt.qproc.hdbalter.run:{[args]
     out:.qt.qproc.hdbalter.scratch[],"/out.txt";
     / `env` first: q's `system` reads a command starting with a q command letter as its own
-    cmd:"env ",.qt.support.q_interpreter[]," scripts/hdb/hdb_alter.q ",args,
+    cmd:"env ",.qt.support.q_interpreter[]," scripts/hdb/alter.q ",args,
         " -q < /dev/null > ",out," 2>&1; echo $?";
     code:"J"$first system cmd;
     (read0 hsym `$out;code)}

@@ -6,7 +6,7 @@ old table remains beside the HDB as a rollback copy. Backfill writers share
 the root's write lock, and the operator must stop the stack before applying a
 schema migration because TorQ end of day does not take that lock.
 
-The write lock is taken and given up by q (scripts/hdb/hdb_lock.q, #1168), so
+The write lock is taken and given up by q (scripts/hdb/lock.q, #1168), so
 its path, owner record and staleness rule are the q writers' own. It names
 this process as the holder: q writers wait while it runs and break the lock
 once it is gone, however it ended.
@@ -33,8 +33,8 @@ from uqs.stack import converted, qtree
 from uqs.stack.env import with_interpreter
 from uqs.stack.hdb_types import declared_schema
 
-STAGE_SCRIPT = Path("hdb") / "hdb_stage_migration.q"
-LOCK_SCRIPT = Path("hdb") / "hdb_lock.q"
+STAGE_SCRIPT = Path("hdb") / "stage_migration.q"
+LOCK_SCRIPT = Path("hdb") / "lock.q"
 #: What LOCK_SCRIPT loads, relative to its working directory: the lock
 #: protocol and the HDB lock path, and nothing else.
 LOCK_MODULES = ("src/etl/core/backfill_state.q", "src/etl/core/io_hdb.q")

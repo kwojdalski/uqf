@@ -1,6 +1,6 @@
 """The HDB repair, run from what a RELEASE ships rather than from the checkout (#1423).
 
-`scripts/hdb/hdb_fill.q` loads KX's dbmaint.q from `lib/kx-dbmaint`,
+`scripts/hdb/fill.q` loads KX's dbmaint.q from `lib/kx-dbmaint`,
 and a release excludes the rest of `lib/`. The release's file set is therefore
 what has to be enough: these copy exactly the files `uqs deploy build` would
 package (`payload.tracked_files`) into a directory with nothing else of the
@@ -72,7 +72,7 @@ def _q(q_binary, cwd: Path, *argv: str) -> subprocess.CompletedProcess[str]:
 def test_a_release_carries_the_repair_dbmaint_and_the_licence_that_must_travel(tmp_path):
     tree = _release_tree(tmp_path)
     for rel in (
-        "scripts/hdb/hdb_fill.q",
+        "scripts/hdb/fill.q",
         "lib/kx-dbmaint/dbmaint.q",
         "lib/kx-dbmaint/LICENSE-kx-kdb",
         "lib/kx-dbmaint/NOTICE.md",
@@ -97,7 +97,7 @@ def test_the_repair_runs_from_a_release_with_nothing_else_of_the_checkout(tmp_pa
     fixed = _q(
         q_binary,
         tmp_path,
-        str(tree / "scripts/hdb/hdb_fill.q"),
+        str(tree / "scripts/hdb/fill.q"),
         str(hdb_root),
         str(schema),
     )
@@ -124,7 +124,7 @@ def test_a_column_of_another_type_is_reported_and_the_deployment_refuses_it(tmp_
     fixed = _q(
         q_binary,
         tmp_path,
-        str(tree / "scripts/hdb/hdb_fill.q"),
+        str(tree / "scripts/hdb/fill.q"),
         str(hdb_root),
         str(schema),
     )
@@ -135,7 +135,7 @@ def test_a_column_of_another_type_is_reported_and_the_deployment_refuses_it(tmp_
     found = _q(
         q_binary,
         ROOT,
-        str(ROOT / "scripts/hdb/hdb_column_types.q"),
+        str(ROOT / "scripts/hdb/column_types.q"),
         str(listed),
         str(schema),
     )

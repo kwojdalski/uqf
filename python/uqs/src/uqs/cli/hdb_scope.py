@@ -18,7 +18,7 @@ With none of them, this runtime's own HDB - which is what a release runs when
 the same `--hdb`/`--attachment` pair, with this one help (#2237); a command
 that cannot act on an attachment's HDB refuses it saying why (`local_hdb`),
 rather than not knowing the option. Every decision about the database is
-scripts/hdb/hdb_alter.q's (stack/hdb_alter.py); this module resolves the HDB,
+scripts/hdb/alter.q's (stack/hdb_alter.py); this module resolves the HDB,
 shows the plan, asks, checks the writers, runs it and reloads the readers.
 """
 

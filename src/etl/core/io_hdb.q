@@ -38,7 +38,7 @@
 / across dates does not fail on one the backfill created with a single table
 / in it. .Q.chk takes its table list from the most recent partition, which
 / in a running stack is end-of-day's and holds every table; the full,
-/ schema-driven repair (scripts/hdb/hdb_fill.q) runs on every
+/ schema-driven repair (scripts/hdb/fill.q) runs on every
 / uqs command's bootstrap.
 / .
 / WHAT flush DOES, after every window. The same work as finish, for only the
@@ -62,7 +62,7 @@
 / no .Q.chk, so there finish
 / sorts each partition and does neither: no p#sym, no s#time, no filling of
 / missing tables - uqs's bootstrap fills those from the schema instead
-/ (scripts/hdb/hdb_fill.q). With no attribute to read, a
+/ (scripts/hdb/fill.q). With no attribute to read, a
 / partition counts as finished when it is in finish's order.
 
 / Is this PeachQ? The one test this tree uses for it, as uqs's own
@@ -86,7 +86,7 @@
 / ONE PATH PER ROOT, HOWEVER IT IS SPELLED (#1168). A trailing slash put the
 / lock INSIDE the root (`:/data/hdb/ -> /data/hdb/.write.lock), and a relative
 / root left it relative; uqs data migrate takes this lock through q
-/ (scripts/hdb/hdb_lock.q) with the root made absolute, so a writer given
+/ (scripts/hdb/lock.q) with the root made absolute, so a writer given
 / either spelling held a different lock than the migration and neither
 / excluded the other. Nor did `.`, `..` or `//` inside it (#2311): `:/data/hdb/.
 / and `:./hdb each took a lock of their own. So the path is made absolute and

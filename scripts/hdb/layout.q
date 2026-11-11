@@ -1,7 +1,7 @@
-/ hdb_layout.q - the partitions an HDB has and the tables each holds, as q
+/ layout.q - the partitions an HDB has and the tables each holds, as q
 / discovers them: segmented (par.txt) or not (#1783).
 / .
-/ Run as:  q scripts/hdb/hdb_layout.q <hdb root>
+/ Run as:  q scripts/hdb/layout.q <hdb root>
 / .
 / Prints one line, layout|<json>, then DONE. q exits 0 whatever happens while
 / a script runs, so the caller believes DONE, never the exit code - and a run
@@ -49,7 +49,7 @@ if[()~key .qhdblayout.root; .qhdblayout.emit[0b;();();();enlist "no HDB at ",.qh
 
 / PeachQ's `\l` maps no partitioned database, so it would report every HDB
 / as one without partitions: refused, never answered. The probe is
-/ .qetl.io.on_peachq's (src/etl/core/io_hdb.q), as hdb_alter.q's.
+/ .qetl.io.on_peachq's (src/etl/core/io_hdb.q), as hdb/alter.q's.
 if[not -7h=type @[value;`.pq.load_natives;{[e] 0N}];
     .qhdblayout.emit[0b;();();();enlist "KDB-X only: PeachQ's \\l maps no partitioned database, so it cannot say which partitions this one has"]];
 

@@ -26,7 +26,7 @@ ids above). Nothing was edited, reformatted or renamed other than the licence.
 
 ## Why
 
-`scripts/hdb/hdb_fill.q` repairs a historical HDB whose partitions
+`scripts/hdb/fill.q` repairs a historical HDB whose partitions
 predate columns or tables the schema now declares (`uqs data hdb-check --fix`,
 `uqs deploy ... --fix-hdb`). It used to carry its own copy of what dbmaint's
 `add1col` does. It now decides what is missing from the declared schema and

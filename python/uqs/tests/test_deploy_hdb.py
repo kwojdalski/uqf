@@ -142,7 +142,7 @@ def test_the_type_check_finds_a_column_stored_as_another_type(peachq, tmp_path):
         "`:hdb/2026.01.02/book/ set .Q.en[`:hdb] ([] sym:`a`b; px:1 2);\nexit 0\n"
     )
     (tmp_path / "schema.q").write_text("book:([] sym:`symbol$(); px:`float$())\n")
-    # the partitions it reads are named to it - hdb_layout.q's, in `data check`
+    # the partitions it reads are named to it - hdb/layout.q's, in `data check`
     (tmp_path / "partitions.txt").write_text("hdb/2026.01.01\nhdb/2026.01.02\n")
     subprocess.run([str(peachq), "mk.q", "-q"], cwd=tmp_path, check=True, stdin=subprocess.DEVNULL)
     out = subprocess.run(

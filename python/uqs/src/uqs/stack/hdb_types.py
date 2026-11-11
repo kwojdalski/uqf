@@ -2,7 +2,7 @@
 
 `uqs data check` reports what is missing from the partitions q finds
 (stack/hdb_layout.py). A column's TYPE needs q to read, so
-scripts/hdb/hdb_column_types.q does that part, in exactly those partitions,
+scripts/hdb/column_types.q does that part, in exactly those partitions,
 against the schema this runtime declares - the one bootstrap writes, built
 here directly, so a release checked before it ever started judges the HDB by
 its own declarations, not by whatever an earlier release left in the data
@@ -21,7 +21,7 @@ from uqs.model.plant_schema import _generated_schema_content
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.env import with_interpreter
 
-TYPES_SCRIPT = Path("hdb") / "hdb_column_types.q"
+TYPES_SCRIPT = Path("hdb") / "column_types.q"
 DONE = "DONE"
 
 

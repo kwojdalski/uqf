@@ -1,7 +1,7 @@
 """What `uqs data compress --report` reads: the HDB's compression, now (#2149).
 
 Nothing here computes a ratio or walks a partition. scripts/hdb/
-hdb_compression_report.q loads TorQ's own `.cmp` and sort.csv reader and uqf's
+hdb/compression_report.q loads TorQ's own `.cmp` and sort.csv reader and uqf's
 wrapper over them (scripts/processes/torq_compress.q), and prints
 `.qtorq.compress.report` - per table and column the algorithm, block size and
 ratio `-21!` reads, the largest uncompressed partitions, and the partitions not
@@ -19,7 +19,7 @@ not checked (`sort_checked` false, `unsorted` null), never as found valid.
 ON A TARGET, WITHOUT UQF THERE (#2219). `uqs --target T data compress --report
 --hdb DIR` reads a directory on a server that has q and an HDB but need not
 have uqf - an existing TorQ deployment. The same script runs there, by the
-transport stack/hdb_remote.py already uses for hdb_alter.q: one ssh session
+transport stack/hdb_remote.py already uses for hdb/alter.q: one ssh session
 (BatchMode, the target's own ssh, connect timeout and account) runs a bash
 script on stdin that writes the report script, torq_compress.q and TorQ's two
 files it loads (from this checkout's TorQ, the ones a local report loads) into
@@ -46,7 +46,7 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.stack import hdb_remote, source_settings
 from uqs.stack.env import with_interpreter
 
-REPORT_SCRIPT = Path("hdb") / "hdb_compression_report.q"
+REPORT_SCRIPT = Path("hdb") / "compression_report.q"
 #: What the report script loads besides itself, relative to the repository, and
 #: TorQ's own files relative to its home: what a remote run sends.
 WRAPPER = Path("scripts") / "processes" / "torq_compress.q"
