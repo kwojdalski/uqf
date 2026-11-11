@@ -108,7 +108,6 @@ def schema(
     """
     if tunnel is not None and getattr(ctx.get_parameter_source("host"), "name", None) != "DEFAULT":
         _die(UqsError("--tunnel names the machine to read - give --tunnel or --host, not both"))
-        return
     with contextlib.ExitStack() as scope:
         paths = stack_paths.default_paths()
         try:
@@ -134,7 +133,6 @@ def schema(
                 )
         except UqsError as exc:
             _die(exc)
-            return
 
         where = f"{proc}" if port is None else f"port {target}"
         creds = {"user": user, "passwd": passwd}
@@ -160,10 +158,8 @@ def schema(
             )
         except UqsError as exc:
             _die(exc)
-            return
         except Exception as exc:  # kola raises its own connect/query errors
             _die(UqsError(f"could not read the schema from {where} ({target}): {exc}"))
-            return
         # --export writes what it always has: a TABLE's columns, without the table's name
         exported = [{k: v for k, v in r.items() if k != "table"} for r in rows] if table else rows
         if as_json:

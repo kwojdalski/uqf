@@ -337,19 +337,31 @@ def test_the_credential_is_taken_by_the_name_of_its_variable(monkeypatch):
     assert origins == {"tp_credential": "$OPS_TP"}
 
 
+def _recorded_refusals(monkeypatch) -> list[str]:
+    """`_die`'s messages, recorded; like `_die` it never returns."""
+    errors: list[str] = []
+
+    def record(exc: Exception) -> None:
+        errors.append(str(exc))
+        raise SystemExit(1)
+
+    monkeypatch.setattr(cli_external, "_die", record)
+    return errors
+
+
 def test_a_credential_variable_that_is_unset_is_refused_by_name(monkeypatch):
     monkeypatch.delenv("OPS_TP", raising=False)
-    errors: list[str] = []
-    monkeypatch.setattr(cli_external, "_die", lambda exc: errors.append(str(exc)))
-    cli_external._start("crypto", {"tp_credential_env": "OPS_TP"}, dry_run=True)
+    errors = _recorded_refusals(monkeypatch)
+    with pytest.raises(SystemExit):
+        cli_external._start("crypto", {"tp_credential_env": "OPS_TP"}, dry_run=True)
     assert errors == ["--tp-credential-env OPS_TP: $OPS_TP is not set"]
 
 
 def test_a_bad_credential_in_the_named_variable_names_the_variable(monkeypatch):
-    errors: list[str] = []
-    monkeypatch.setattr(cli_external, "_die", lambda exc: errors.append(str(exc)))
+    errors = _recorded_refusals(monkeypatch)
     monkeypatch.setenv("OPS_TP", "nocolon-secret")
-    cli_external._start("crypto", {"tp_credential_env": "OPS_TP"}, dry_run=True)
+    with pytest.raises(SystemExit):
+        cli_external._start("crypto", {"tp_credential_env": "OPS_TP"}, dry_run=True)
     assert errors and "from $OPS_TP" in errors[0] and "nocolon-secret" not in errors[0]
 
 
@@ -366,11 +378,11 @@ def test_the_inline_credential_still_works_for_one_release_and_warns(monkeypatch
 
 def test_the_inline_and_named_credential_together_are_refused(monkeypatch):
     monkeypatch.setenv("OPS_TP", "ops:pw")
-    errors: list[str] = []
-    monkeypatch.setattr(cli_external, "_die", lambda exc: errors.append(str(exc)))
-    cli_external._start(
-        "crypto", {"tp_credential": SECRET, "tp_credential_env": "OPS_TP"}, dry_run=True
-    )
+    errors = _recorded_refusals(monkeypatch)
+    with pytest.raises(SystemExit):
+        cli_external._start(
+            "crypto", {"tp_credential": SECRET, "tp_credential_env": "OPS_TP"}, dry_run=True
+        )
     assert errors == ["give --tp-credential-env or --tp-credential, not both"]
 
 
@@ -435,10 +447,10 @@ def test_status_and_its_json_carry_no_credential(monkeypatch):
 
 
 def test_a_bad_credential_refuses_the_dry_run_without_printing_it(monkeypatch):
-    errors: list[str] = []
-    monkeypatch.setattr(cli_external, "_die", lambda exc: errors.append(str(exc)))
+    errors = _recorded_refusals(monkeypatch)
     monkeypatch.setenv(connection.TP_CREDENTIAL_ENV, "nocolon-secret")
-    cli_external._start("crypto", {}, dry_run=True)
+    with pytest.raises(SystemExit):
+        cli_external._start("crypto", {}, dry_run=True)
     assert errors and "$UQF_TP_CREDENTIAL" in errors[0] and "nocolon-secret" not in errors[0]
 
 
@@ -461,12 +473,13 @@ def test_a_topic_no_decoder_declares_is_refused_naming_the_declared_ones(tmp_pat
 
 
 def test_a_topic_mismatch_stops_start_and_dry_run_before_anything_runs(monkeypatch):
-    errors: list[str] = []
-    monkeypatch.setattr(cli_external, "_die", lambda exc: errors.append(str(exc)))
+    errors = _recorded_refusals(monkeypatch)
     monkeypatch.setattr(kafka_feed, "start_kafka_feed", lambda *a, **k: pytest.fail("started"))
     monkeypatch.setenv(kafka_feed.TOPICS_ENV, "no.such.topic")
-    cli_external._start("kafka", {}, dry_run=True)
-    cli_external._start("kafka", {})
+    with pytest.raises(SystemExit):
+        cli_external._start("kafka", {}, dry_run=True)
+    with pytest.raises(SystemExit):
+        cli_external._start("kafka", {})
     assert len(errors) == 2 and all("no.such.topic is declared by no decoder" in e for e in errors)
 
 

@@ -156,7 +156,6 @@ def replay(
         )
     except UqsError as exc:
         _die(exc)
-        return
 
     line = " ".join([stack_replay.REPLAY_PROCNAME, "-extras", *plan.flags()])
     doc = {
@@ -186,7 +185,6 @@ def replay(
         result = stack_replay.start(_paths(), plan, capture=as_json)
     except UqsError as exc:
         _die(exc)
-        return
     if as_json:
         for said in (result.stdout, result.stderr):
             if said:

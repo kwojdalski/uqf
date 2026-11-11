@@ -54,9 +54,7 @@ from uqs.stack import render as stack_render
 def _exec_qcon(host: str, port: int, user: str, passwd: str) -> None:
     """Replace this process with an interactive qcon session on host:port.
 
-    Returns only on a refusal (qcon not installed, or it would not start),
-    after `_die` has already exited - so a caller's `return` after it is what
-    stops a call that did return from falling through.
+    On a refusal (qcon not installed, or it would not start) `_die` exits.
     """
     if shutil.which("qcon") is None:
         _die(
@@ -66,7 +64,6 @@ def _exec_qcon(host: str, port: int, user: str, passwd: str) -> None:
                 'Without it, `uqs query <name> "<expr>"` still works over IPC.'
             )
         )
-        return
     argv = runtime.qcon_command(host, port, user, passwd, rlwrap=shutil.which("rlwrap") is not None)
     log.debug("exec: {}", " ".join(argv[:-1] + [f"{host}:{port}:{user}:***"]))
     # execvp, not subprocess: qcon owns the terminal from here, and replacing
@@ -266,13 +263,10 @@ def query(
         passwd = q_password(password_env, passwd)
     except UqsError as exc:
         _die(exc)
-        return
     if proc is not None and port is not None:
         _die(UqsUsageError("name the process to query once: PROC or --port N, not both"))
-        return
     if as_json and expr is None:
         _die(UqsError("--json needs an expression whose result it can print"))
-        return
     if proc is None and port is None:
         proc = stack_gateway.DEFAULT_PROC
     raw = not gateway
@@ -284,7 +278,6 @@ def query(
                     "--tunnel names the machine to query - give --tunnel or --host, not both"
                 )
             )
-            return
         try:
             # any q expression, or a q session, may change the server (#2179)
             change = f"`uqs query --tunnel {target}`"
@@ -300,13 +293,11 @@ def query(
         # PROC reads this machine's registry and process list, so on another
         # host both the port and the up/down check would describe the wrong one.
         _die(UqsError("PROC is looked up in this machine's stack - give --port for another host"))
-        return
     if port is None:
         try:
             port = _proc_port(str(proc), base_port)
         except UqsError as exc:
             _die(exc)
-            return
         log.debug("query {} -> {}:{}", proc, host, port)
     _ask(expr, routed, host, port, user, passwd, servers, render, export, as_json=as_json)
 
@@ -330,7 +321,6 @@ def _ask(
     if expr is None:
         if export is not None:
             _die(UqsError("--export needs an expression whose result it can write"))
-            return
         if routed:
             _gateway_session(host, port, user, passwd, servers, render, via)
             return
@@ -356,7 +346,6 @@ def _ask(
             expr = stack_gateway.expression(expr, servers, size)
         except UqsError as exc:
             _die(exc)
-            return
         wrap_size = None
         log.debug("routed through the gateway: {}", expr)
     try:
@@ -364,9 +353,7 @@ def _ask(
     except Exception as exc:  # kola raises its own exception types on connect/query failure
         if via is not None:
             _die(via.failed(exc))
-            return
         _die(UqsError(f"query failed: {exc}"))
-        return
     if as_json:
         _export(result, export)  # first: a result it cannot write is refused alone
         emit({"expression": shown, "result": Verbatim(result)})

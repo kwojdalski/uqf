@@ -50,7 +50,6 @@ def write_bundle_plan(plan: ScaffoldPlan, bundle: Path, *, dry_run: bool) -> Non
         plan = bundle_mod.into_bundle(plan, bundle)
     except UqsError as exc:
         _die(exc)
-        return
     console.print(plan.render())
     if dry_run:
         console.print(dry_run_note())
@@ -59,7 +58,6 @@ def write_bundle_plan(plan: ScaffoldPlan, bundle: Path, *, dry_run: bool) -> Non
         written = write.apply_plan(plan, Path.cwd())
     except UqsError as exc:
         _die(exc)
-        return
     console.print(f"\n[green]scaffolded {len(written)} file(s) into {bundle}[/]")
     for note in plan.notes:
         console.print(f"  [yellow]next[/] {note}")

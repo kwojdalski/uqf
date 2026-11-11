@@ -107,7 +107,6 @@ def list_snapshots(
         )
     except UqsError as exc:
         _die(exc)
-        return
     bad = [r["id"] for r in rows if not r["digest_ok"]]
     _export(rows, export)
     if as_json:
@@ -159,7 +158,6 @@ def show(
         row, fields = snapshots.show(_paths(), snapshot_id)
     except UqsError as exc:
         _die(exc)
-        return
     record = _record(row)
     own = {"snapshot_id", "kind", "digest", "created_at", "actor", "reason"}
     parameters = {f["field"]: f["text"] for f in fields if f["field"] not in own}

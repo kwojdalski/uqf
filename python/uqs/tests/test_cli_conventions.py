@@ -406,7 +406,12 @@ def test_a_data_command_that_cannot_reach_an_attachment_says_why(monkeypatch, mo
     its reason before reaching anything."""
     mod = __import__(f"uqs.cli.{module}", fromlist=["_"])
     died: list[Exception] = []
-    monkeypatch.setattr(mod, "_die", died.append)
+
+    def record(exc: Exception) -> None:
+        died.append(exc)
+        raise SystemExit(1)
+
+    monkeypatch.setattr(mod, "_die", record)
     CliRunner().invoke(app, [*argv, "--attachment", "pb-uat"])
     assert len(died) == 1 and isinstance(died[0], paths.UqsUsageError), died
     assert said in str(died[0])
@@ -416,7 +421,12 @@ def test_a_data_command_that_cannot_reach_an_attachment_says_why(monkeypatch, mo
 def test_hdb_and_attachment_together_are_refused_as_check_refuses_them(monkeypatch, module):
     mod = __import__(f"uqs.cli.{module}", fromlist=["_"])
     died: list[Exception] = []
-    monkeypatch.setattr(mod, "_die", died.append)
+
+    def record(exc: Exception) -> None:
+        died.append(exc)
+        raise SystemExit(1)
+
+    monkeypatch.setattr(mod, "_die", record)
     argv = {
         "replay": ["data", "replay"],
         "migrate": ["data", "migrate", "trade", "--date", "2026-09-13", "--cast", "px"],

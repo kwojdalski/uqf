@@ -65,7 +65,6 @@ def prepare(
         )
     except (BundleError, UqsError) as exc:
         _die(exc)
-        return
     table = Table(title=f"runtime {runtime}", title_justify="left", header_style="bold cyan")
     for col in ("Bundle", "Version", "From", "Jobs", "Tables"):
         table.add_column(col)
@@ -91,7 +90,6 @@ def prepare(
         runtime_bundles.prepare(runtime, members, paths.repo_root)
     except (BundleError, OSError) as exc:
         _die(BundleError(str(exc)))
-        return
     for derived, regen in zip(_DERIVED, _regenerate_derived(paths.repo_root), strict=True):
         if regen.returncode:
             console.print(f"[red]✗ could not regenerate[/] - run `{derived_command(derived)}`")

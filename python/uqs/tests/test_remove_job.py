@@ -475,9 +475,14 @@ def test_a_written_job_is_removed_only_through_the_named_override(tree, monkeypa
     runner = CliRunner()
     monkeypatch.setattr(remove_cli, "_paths", lambda: type("P", (), {"repo_root": tree})())
     errors: list[str] = []
-    monkeypatch.setattr(remove_cli, "_die", lambda exc: errors.append(str(exc)))
+
+    def record(exc: Exception) -> None:
+        errors.append(str(exc))
+        raise SystemExit(1)
+
+    monkeypatch.setattr(remove_cli, "_die", record)
     refused = runner.invoke(cli.app, ["job", "remove", "crypto_markout", "--dry-run"])
-    assert refused.exit_code == 0 and any("no SCAFFOLDED marker left" in e for e in errors)
+    assert refused.exit_code == 1 and any("no SCAFFOLDED marker left" in e for e in errors)
     errors.clear()
     shown = runner.invoke(cli.app, ["job", "remove", "crypto_markout", "--dry-run", *argv])
     assert shown.exit_code == 0 and errors == [], errors

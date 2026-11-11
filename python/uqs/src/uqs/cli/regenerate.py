@@ -132,7 +132,6 @@ def write_plan(plan: ScaffoldPlan, repo_root: Path, *, dry_run: bool) -> None:
         written = write.apply_plan(plan, repo_root)
     except UqsError as exc:
         _die(exc)
-        return
     console.print(f"\n[green]scaffolded {len(written)} file(s)[/]")
     report_regeneration(repo_root)
     for note in plan.notes:

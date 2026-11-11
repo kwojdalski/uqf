@@ -61,7 +61,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar
 
-from uqs.deploy.artifact import ARCH_ALIASES, PLATFORMS, ReleaseError, _sha256, checked_archive
+from uqs.deploy.artifact import ARCH_ALIASES, ReleaseError, _sha256, checked_archive
 from uqs.deploy.payload import Runner
 from uqs.deploy.remote import q
 
@@ -238,8 +238,6 @@ def from_release(release: Path, manifest: dict, out_dir: Path) -> PythonRuntime 
 def fetch(python: str, arch: str, runner: Runner = subprocess.run) -> Path:
     """The CPython uv installs for linux `arch`, Python `python` (X.Y): its
     installation directory under `uv python dir`. Nothing is put on PATH."""
-    if arch not in PLATFORMS:
-        raise ReleaseError("arguments", f"--arch {arch!r} must be one of {', '.join(PLATFORMS)}")
     if not re.fullmatch(r"3\.\d{1,2}", python):
         raise ReleaseError("arguments", f"--python {python!r} must be major.minor, e.g. 3.14")
     key = f"cpython-{python}-linux-{arch}-gnu"

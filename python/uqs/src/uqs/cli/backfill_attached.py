@@ -55,13 +55,11 @@ def run(
     mode = mode or run_modes.DEFAULT_MODE
     if mode not in MODES:
         _die(UqsUsageError(f"--mode {mode!r} is not one of {', '.join(MODES)}"))
-        return
     waived = dict(waived or {})
     try:
         refuse_waivers(waived, mode=mode, writer=writer)
     except UqsError as exc:
         _die(exc)
-        return
     if waived:
         log.warning(
             "{}: {} for this backfill into attachment {} - reason: {}",
@@ -77,7 +75,6 @@ def run(
                 f"log with `{logs_command(attachment, worker)} -f`"
             )
         )
-        return
     if writer is not None:
         backfill_receive.extract(
             attachment, worker, version, bound_from, bound_to,
@@ -140,7 +137,6 @@ def run(
             return
     except UqsError as exc:
         _die(exc)
-        return
     if as_json:
         emit(out)
     else:
@@ -229,7 +225,6 @@ def _execute(
         )
     except UqsError as exc:
         _die(exc)
-        return
     info = {"mode": mode, "job": worker, "plan": plan, **run_.as_dict()}
     if not wait:
         _report(

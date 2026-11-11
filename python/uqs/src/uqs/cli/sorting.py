@@ -86,6 +86,5 @@ def _sorted_items[Row: dict](items: list[Row], sort: str | None, reverse: bool) 
                 f"cannot sort by {sort!r}: no such column. Available: {', '.join(sorted(items[0]))}"
             )
         )
-        return items
     key = _column_key([item.get(column, "") for item in items])
     return sorted(items, key=lambda item: key(item.get(column, "")), reverse=reverse)

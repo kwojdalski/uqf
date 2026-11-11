@@ -53,14 +53,12 @@ def extract(
                 "--fixture is refused with --attachment: a fixture in a native HDB is data"
             )
         )
-        return
     if port is not None:
         _die(
             UqsUsageError(
                 "--base-port is not taken with --writer: the receiver's address is the stack's"
             )
         )
-        return
     if force:
         if on_conflict not in (None, "append"):
             _die(
@@ -69,7 +67,6 @@ def extract(
                     "need to read what the writer holds, and nothing is read there"
                 )
             )
-            return
         on_conflict = "append"
     try:
         paths = _paths()
@@ -92,7 +89,6 @@ def extract(
         )  # fmt: skip
     except UqsError as exc:
         _die(exc)
-        return
     info = {"mode": mode, "job": worker, "writer": writer, "plan": plan, **run_.as_dict()}
     if not wait:
         _report(
@@ -249,7 +245,6 @@ def _start(attach: str, contract: str | None, port: int | None, dry_run: bool, a
                 "--listen-port is required to start a receiver: the port the extractor connects to"
             )
         )
-        return
     if contract is None:
         _die(
             UqsUsageError(
@@ -258,7 +253,6 @@ def _start(attach: str, contract: str | None, port: int | None, dry_run: bool, a
                 f"(`uqs job attachment contract list --attachment {attach}`)"
             )
         )
-        return
     try:
         att = config.load(attach)
         out = backfill_remote.receive(
@@ -266,7 +260,6 @@ def _start(attach: str, contract: str | None, port: int | None, dry_run: bool, a
         )
     except UqsError as exc:
         _die(exc)
-        return
     if as_json:
         emit(out)
     elif dry_run:

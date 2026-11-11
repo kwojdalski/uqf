@@ -132,7 +132,12 @@ def test_a_connector_that_raises_on_import_is_reported_and_the_rest_still_load(
 def test_starting_a_broken_connector_names_it(monkeypatch):
     monkeypatch.setitem(cli_external.BROKEN, "sow", "connector x (bundle sowbank) does not load")
     said: list[str] = []
-    monkeypatch.setattr(cli_external, "_die", lambda exc: said.append(str(exc)))
+
+    def record(exc: Exception) -> None:
+        said.append(str(exc))
+        raise SystemExit(1)
+
+    monkeypatch.setattr(cli_external, "_die", record)
     result = CliRunner().invoke(cli.app, ["connector", "start", "sow", "-n"])
     assert result.exit_code == 1
     assert said == ["connector x (bundle sowbank) does not load"]

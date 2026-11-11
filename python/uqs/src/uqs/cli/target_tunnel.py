@@ -96,7 +96,6 @@ def plan(
         )  # fmt: skip
     except UqsError as exc:
         _die(exc)
-        return
     doc = tunnel_plan.annotate(p, tunnel_plan.read_checks(root).get(p.target, {}))
     if as_json:
         emit(doc)
@@ -138,7 +137,6 @@ def check(
                                   user=user, passwd=passwd, runtime_name=_runtime())  # fmt: skip
     except UqsError as exc:
         _die(exc)
-        return
     if as_json:
         emit(report)
     else:

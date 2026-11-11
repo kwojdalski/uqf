@@ -470,7 +470,12 @@ def test_a_range_off_whole_days_is_refused_before_the_plan(cli, monkeypatch, arg
     run, *_ = cli
     monkeypatch.setattr(data_compress, "plan_and_apply", lambda *a, **k: pytest.fail("planned"))
     refused: list[str] = []
-    monkeypatch.setattr(compress_cmd, "_die", lambda exc: refused.append(str(exc)))
+
+    def record(exc: Exception) -> None:
+        refused.append(str(exc))
+        raise SystemExit(1)
+
+    monkeypatch.setattr(compress_cmd, "_die", record)
     run(*args)
     assert len(refused) == 1
     assert refused[0].startswith("`data compress` compresses whole partitions: ")

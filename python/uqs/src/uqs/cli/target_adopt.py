@@ -108,7 +108,6 @@ def adopt_(
         safety.dry_unless_applied(dry_run, do_it)
     except UqsError as exc:
         _die(exc)
-        return
     root = repo_root()
     try:
         declared = targets.read(root) if targets.declaration_path(root).is_file() else {}
@@ -126,7 +125,6 @@ def adopt_(
         survey = adopt.survey(r, release, launch_python, launch_env_file)
     except UqsError as exc:
         _die(exc)
-        return
     _say(survey, r)
     refused = adopt.problems(survey)
     if refused:
@@ -158,7 +156,6 @@ def adopt_(
         inspection.refuse(root, "`uqs target adopt --apply`", name=name, ssh=ssh, dest=dest)
     except UqsError as exc:
         _die(exc)
-        return
     changes = adopt.server_changes(survey)
     if changes and not yes:
         try:
@@ -173,7 +170,6 @@ def adopt_(
     except (UqsError, DeployError) as exc:
         moved = " - the server WAS changed: current is linked" if changes else ""
         _die(UqsError(f"{exc}{moved}"))
-        return
     current = survey.release_name or os.path.basename(str(survey.current).rstrip("/"))
     history.record_adopted(root, name, r.host, r.dest, r.remote_user, current)
     number = len(target_changelog.read_log(root))

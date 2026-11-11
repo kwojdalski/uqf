@@ -142,7 +142,6 @@ def seed(
             )
     except UqsError as exc:
         _die(exc)
-        return
     if as_json:
         emit({"ok": True, "from_runtime": from_runtime, "on_conflict": on_conflict,
               "applied": apply, "report": report})  # fmt: skip

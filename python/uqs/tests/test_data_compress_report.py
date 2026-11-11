@@ -151,7 +151,12 @@ def test_the_report_reads_an_attachments_hdb_on_this_machine(hdb, monkeypatch):
 def test_the_report_refuses_an_attachments_hdb_on_another_host(hdb, monkeypatch):
     _attached(monkeypatch, hdb, "ops@pb-uat")
     died: list[Exception] = []
-    monkeypatch.setattr(compress_cli, "_die", died.append)
+
+    def record(exc: Exception) -> None:
+        died.append(exc)
+        raise SystemExit(1)
+
+    monkeypatch.setattr(compress_cli, "_die", record)
     run_uqs("data", "compress", "--report", "--attachment", "pb-uat")
     assert len(died) == 1
     assert "--report reads the HDB's files on this machine" in str(died[0])

@@ -116,7 +116,6 @@ def _change(run: Callable[[], target_changes.Result], said: str, dry_run: bool) 
         result = run()
     except (DeployError, UqsError) as exc:
         _die(UqsError(str(exc)))
-        return
     _done(result, said, dry_run)
 
 
@@ -206,7 +205,6 @@ def set_(
         m = _PAIR.fullmatch(pair)
         if m is None:
             _die(UqsError(f"{pair!r}: give KEY=VALUE, the key as the file spells it"))
-            return
         changes[m.group(1)] = target_file.parse_value(m.group(2))
     _change(
         lambda: target_changes.set_keys(
@@ -272,7 +270,6 @@ def check(name: Name = None, as_json: CheckJson = False) -> None:
         release = control.current_release(r)
     except UqsError as exc:
         _die(exc)
-        return
     if as_json:
         emit({
             "ok": True, "target": r.name, "ssh": r.host, "dest": r.dest,
@@ -302,7 +299,6 @@ def shell(
         code = control.run(r, [], tty=True, command=control.shell_command(r))
     except UqsError as exc:
         _die(exc)
-        return
     raise typer.Exit(code=code)
 
 
