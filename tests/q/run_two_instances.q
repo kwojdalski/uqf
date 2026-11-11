@@ -30,7 +30,6 @@
 statusdir:getenv `UQF_STATUS_DIR;
 if[0=count statusdir; '"run_two_instances: set UQF_STATUS_DIR to a fresh directory"];
 system"mkdir -p ",statusdir;
-Q:.qt.support.q_interpreter[];
 
 failures:0;
 check:{[label;ok]
@@ -47,24 +46,14 @@ check:{[label;ok]
 / it is skipped for another.
 port:.qt.support.free_port[];
 log_path:statusdir,"/upstream.log";
-child:"QHOME=",getenv[`QHOME]," ",Q," tests/q/upstream_instance.q -p ",string[port],
-      " < /dev/null > ",log_path," 2>&1 & echo $!";
-pid:"J"$first system child;
+pid:.qt.support.spawn_q["tests/q/upstream_instance.q";port;"";log_path];
 -1 "upstream: pid ",string[pid]," port ",string port;
 
-/ Poll rather than sleep a fixed time: the HDB load takes as long as it
-/ takes, and a fixed wait is either too short on a slow disk or wasted on a
-/ fast one. Ten seconds is far more than it needs.
-ready:0b; tries:0;
-while[(not ready) and tries<50;
-    h:@[{hopen (`$":localhost:",string x;200)};port;{0Ni}];
-    if[not null h; [ready:1b; hclose h]];
-    if[not ready; [system"sleep 0.2"; tries+:1]]];
+/ Ten seconds is far more than the HDB load needs.
+ready:.qt.support.wait_listening[port;50];
 check["the upstream process is listening";ready];
 
-stop_upstream:{[pid] @[{system"kill ",string x};pid;{[e] (::)}];}
-
-if[not ready; [stop_upstream pid; -1 "upstream never came up; log:"; -1 each read0 hsym `$log_path; exit 1]];
+if[not ready; [.qt.support.stop_pid pid; -1 "upstream never came up; log:"; -1 each read0 hsym `$log_path; exit 1]];
 
 / --- point the worker at it through the framework's own credential --------
 
@@ -133,7 +122,7 @@ check["the range reads as covered again";.qetl.coverage.is_covered[`imported_tra
 
 / --- an unreachable upstream is refused, not silently substituted ---------
 
-stop_upstream pid;
+.qt.support.stop_pid pid;
 system"sleep 0.3";
 setenv[`UQF_SOURCE_CRED_UPSTREAM_TRADES;"localhost:",string port];
 err:@[{[a;b] .qpipe.job.upstream_trades_backfill.init[`source_version`range_from`range_to!(`v1;a;b)]; ""}[from_ts];to_ts;{x}];

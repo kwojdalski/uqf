@@ -1,7 +1,7 @@
 """The OpenAPI document, held byte for byte to openapi.json.
 
-Written by scripts/dev/split_frontend.py from the app as it was before its
-routes were split into routes/ and its models into models/ (#2168). That was
+Written from the app as it was before its routes were split into routes/
+and its models into models/ (#2168). That was
 a pure move, so the document the split app serves is the one the single
 file served - down to the order of its paths, which FastAPI lists in the
 order routes are registered: create_app installs the route modules in the

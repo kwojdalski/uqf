@@ -393,6 +393,32 @@
     if[null port; '"free_port: ten ports in a row already answered"];
     port}
 
+// Start `script` in a child q listening on `port`, in the background; its pid.
+//
+// `flags` follow `-p <port>` on its command line (a leading space, or ""), and
+// its stdout and stderr go to the file `out`. stdin is /dev/null, so the child never
+// waits on the terminal, and QHOME is passed on so it finds its licence.
+.qt.support.spawn_q:{[script;port;flags;out]
+    child:"QHOME=",getenv[`QHOME]," ",.qt.support.q_interpreter[]," ",script," -p ",string[port],flags,
+          " < /dev/null > ",out," 2>&1 & echo $!";
+    "J"$first system child}
+
+// Does something answer on `port` within `tries` polls, 0.2s apart?
+//
+// Poll rather than sleep a fixed time: a child takes as long as it takes to
+// load, and a fixed wait is either too short on a slow disk or wasted on a
+// fast one. The probe handle is closed again.
+.qt.support.wait_listening:{[port;tries]
+    ready:0b; n:0;
+    while[(not ready) and n<tries;
+        h:@[{hopen (`$":localhost:",string x;200)};port;{0Ni}];
+        if[not null h; [ready:1b; hclose h]];
+        if[not ready; [system"sleep 0.2"; n+:1]]];
+    ready}
+
+// Stop a child started by spawn_q: SIGTERM, and no error if it has gone.
+.qt.support.stop_pid:{[pid] @[{system"kill ",string x};pid;{[e] (::)}];}
+
 // Every .q file under a directory, recursively.
 //
 // `key` on a directory returns a symbol LIST (11h) and on a file an atom
