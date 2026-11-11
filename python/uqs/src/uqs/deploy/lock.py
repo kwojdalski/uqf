@@ -16,7 +16,9 @@ against itself, never two machines' against each other.
 
 `--override break-lock` removes a lock only when its holder is gone: refused while the
 heartbeat is younger than the holder's stale_after, or while the holder's pid
-is alive on this very machine (from anywhere else, the heartbeat decides). A
+is alive on this very machine (from anywhere else, the heartbeat decides) - unless
+the process with that pid started after the holder recorded itself, so it only
+inherited the number (`uqs.liveness.process_gone`, #2692). A
 lock from before this has no heartbeat; the directory's own age stands in.
 """
 
@@ -28,6 +30,7 @@ import socket
 from collections.abc import Callable
 from datetime import UTC, datetime
 
+from uqs import liveness
 from uqs.deploy.config import Config, DeployError
 from uqs.deploy.remote import Transport, _checked, q, script
 from uqs.logger import get_logger
@@ -110,16 +113,6 @@ def verdict(
     return True, why
 
 
-def _alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
 class Lock:
     """The lock at `path`, taken and released through `remote`."""
 
@@ -144,7 +137,13 @@ class Lock:
                 "--override break-lock --reason REASON removes it - refused while its holder "
                 "still beats",
             )
-        ok, why = verdict(info, socket.gethostname(), _alive, stale_after(self.cfg))
+        here = socket.gethostname()
+        ok, why = verdict(
+            info,
+            here,
+            lambda pid: not liveness.process_gone(here, pid, info.get("started")),
+            stale_after(self.cfg),
+        )
         if not ok:
             raise DeployError(
                 "lock", f"{self.path} is still held, so it was not broken: {why} ({describe(info)})"

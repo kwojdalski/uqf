@@ -47,11 +47,21 @@ def _server(dest: Path, break_lock: bool = False) -> Server:
     return Server(cfg, LocalRemote(), release="20261008T120000Z-0123456789ab")
 
 
-def _held(dest: Path, *, age: int, host: str = "elsewhere", pid: int = 1, limit: int = 300):
+def _held(
+    dest: Path,
+    *,
+    age: int,
+    host: str = "elsewhere",
+    pid: int = 1,
+    limit: int = 300,
+    started: str | None = None,
+):
     """A lock another deployment left, last beating `age` seconds ago."""
     d = dest / "deploy.lock"
     d.mkdir(parents=True)
     fields = f"command=push\nrelease=OLD\nuser=ops\nhost={host}\npid={pid}\nstale_after={limit}\n"
+    if started is not None:
+        fields += f"started={started}\n"
     (d / "owner").write_text("2026-10-08T00:00:00+00:00 push OLD by ops@elsewhere pid 1\n" + fields)
     (d / "heartbeat").write_text(f"{int(time.time()) - age}\n")
 
@@ -148,6 +158,16 @@ def test_break_lock_refuses_a_live_process_on_this_machine_however_old_its_beat(
     _held(dest, age=5000, host=HERE, pid=os.getpid())
     with pytest.raises(DeployError, match="still running on this machine"):
         _server(dest, break_lock=True).take_lock()
+
+
+def test_break_lock_removes_a_lock_whose_pid_now_belongs_to_a_later_process(tmp_path):
+    """#2692: the pid is alive, but its process began after the holder recorded
+    itself - a newcomer given a dead holder's number - so the holder is gone."""
+    dest = tmp_path / "uqf"
+    _held(dest, age=5000, host=HERE, pid=os.getpid(), started="2000-01-01T00:00:00+00:00")
+    s = _server(dest, break_lock=True)
+    s.take_lock()
+    assert s.locker.info()["release"] != "OLD"
 
 
 def test_break_lock_removes_a_stale_lock_and_takes_it(tmp_path, caplog):
