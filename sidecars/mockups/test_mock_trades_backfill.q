@@ -5,12 +5,14 @@
 .qt.qpipe.job.mock_trades_backfill.gen:{[seed;n] .qpipe.source.mock_trades.generate[seed;.qt.qpipe.job.mock_trades_backfill.d[n];.qt.qpipe.job.mock_trades_backfill.d[n+1]]}
 
 .qt.qpipe.job.mock_trades_backfill.setUp_worker:{[]
+    / First: the lock and checkpoint calls below need it, and the harness
+    / restores the environment after every suite (#2716).
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    system "mkdir -p build/test-status";
     .qt.support.reset_coverage_ledger[];
     .qetl.job.bounded.state.release_lock `mock_trades_backfill;
     .qetl.job.bounded.state.clear_checkpoint `mock_trades_backfill;
     `mock_trades set 0#.qpipe.source.mock_trades.fixture[];
-    setenv[`UQF_STATUS_DIR;"build/test-status"];
-    system "mkdir -p build/test-status";
     }
 
 .qt.qpipe.job.mock_trades_backfill.test_the_same_seed_and_window_give_the_same_rows:{[t]

@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from plain_cli import PlainRunner
 from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
@@ -272,7 +273,7 @@ def test_an_out_of_range_limit_is_refused_not_clamped(history, command, limit):
     """`select` clamped --limit to [1, max] in silence: 5000 returned 1000 with
     nothing saying so, and 0 or -3 returned one event (#2469)."""
     db, _ = history
-    result = CliRunner().invoke(app, ["activity", command, "--db", str(db), "--limit", limit])
+    result = PlainRunner().invoke(app, ["activity", command, "--db", str(db), "--limit", limit])
     assert result.exit_code == 2, result.output
     assert "--limit" in result.output and "range" in result.output
 

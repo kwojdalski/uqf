@@ -9,9 +9,10 @@ run's outcome and exit code, exactly as --wait does, and that Ctrl-C ends the st
 from __future__ import annotations
 
 import pytest
-from test_attach_backfill_run import (  # noqa: F401 - the shared world and its fixtures
+from test_attach_backfill_run import (  # noqa: F401 - the shared world, its fixtures and its PeachQ skip
     WORKER,
     _cli,
+    pytestmark,
     upstream,
     world,
 )

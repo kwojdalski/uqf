@@ -6,6 +6,11 @@
     qty:3e6 1e6 2e6; px:1.08 1.09 1.27)}
 
 .qt.qpipe.job.mock_positions.setUp_reaction:{[]
+    / Its own status directory, as test_mock_trades_backfill.q's setUp sets one:
+    / the harness restores the environment after every suite, so one set by a
+    / suite before this is gone, and loading the reaction refuses without it (#2716).
+    setenv[`UQF_STATUS_DIR;"build/test-status"];
+    system "mkdir -p build/test-status";
     / Re-registered: another suite may have reset the reactions.
     system "l src/etl/reactions/mock_positions.q";
     if[`mock_positions in tables `.; delete mock_positions from `.];
