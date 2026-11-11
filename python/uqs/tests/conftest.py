@@ -1,6 +1,6 @@
 """uqs's tests: no q process a test started may outlive the run (#1760).
 
-A receiver (scripts/dev/remote_receiver.q) stops itself only at its -deadline,
+A receiver (scripts/jobs/attached_receiver.q) stops itself only at its -deadline,
 so one a test forgot idles on its port long after pytest is gone - three hundred
 of them once piled up on a developer's machine. Each test that starts one owns it
 (attach_backfill_support.Receivers); this is the backstop that says when one
@@ -55,7 +55,7 @@ def no_receiver_outlives_the_run(tmp_path_factory):
         stop_process(pid)
     if left:
         pytest.fail(
-            f"remote_receiver.q process(es) {left} started under {root} were still running "
+            f"attached_receiver.q process(es) {left} started under {root} were still running "
             "at the end of the run (stopped now): a test started a receiver it did not stop"
         )
 

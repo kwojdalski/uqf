@@ -10,7 +10,7 @@ own `KDBHDB`. A waived end-of-day fence (`--skip-eod-fence`, #1828) is applied b
 fresh admission, not carried over from the plan, and its deadline becomes q's infinite
 timestamp (`NO_DEADLINE`): the completed-history bound is kept.
 
-The runner (scripts/dev/attached_backfill.q) is the bounded-worker lifecycle and the HDB
+The runner (scripts/jobs/attached_backfill.q) is the bounded-worker lifecycle and the HDB
 writer, not a second engine. This module only starts it, owns the attachment while it
 runs (backfill_owner: detach refuses), and follows it to an outcome when asked.
 """
@@ -45,7 +45,7 @@ EXIT_NOT_QUERYABLE = 3
 #: The runner's exit code for a run that stopped on request, between two windows (#2679). q's
 #: own (.qetl.job.bounded.stop.code), so the two cannot disagree.
 EXIT_STOPPED = q_facts.STOP_EXIT_CODE
-RUNNER = Path("scripts") / "dev" / "attached_backfill.q"
+RUNNER = Path("scripts") / "jobs" / "attached_backfill.q"
 LOGS = "logs"
 #: The runner's -deadline when the end-of-day fence is waived: q's infinite timestamp, which
 #: no `.z.p` passes, so io_hdb_scoped's deadline check never fires (#1828).

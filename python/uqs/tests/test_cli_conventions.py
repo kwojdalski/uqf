@@ -1643,11 +1643,11 @@ def test_mode_notes_describe_every_mode():
 
 
 def test_the_receivers_row_limit_is_the_contracts():
-    """scripts/dev/remote_receiver.q's `-max_rows` default is the contract's
+    """scripts/jobs/attached_receiver.q's `-max_rows` default is the contract's
     DEFAULT_MAX_ROWS (#1893): the q receiver cannot import it, so it is held."""
     from uqs.attach.receiver_contract import DEFAULT_MAX_ROWS
 
-    script = (GUIDE.parents[2] / "scripts" / "dev" / "remote_receiver.q").read_text()
+    script = (GUIDE.parents[2] / "scripts" / "jobs" / "attached_receiver.q").read_text()
     assert re.search(rf'"J"\$first o`max_rows; {DEFAULT_MAX_ROWS}\]', script)
     assert f"(default {DEFAULT_MAX_ROWS})" in script
 

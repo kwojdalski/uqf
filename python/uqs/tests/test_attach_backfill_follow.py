@@ -1,7 +1,7 @@
 """`uqs job backfill --attachment NAME --follow` (#2677), on real q processes.
 
 The world is test_attach_backfill_run's: an upstream q process the worker reads, the runner
-(scripts/dev/attached_backfill.q) as a child, and a native-shaped HDB it writes. What is under
+(scripts/jobs/attached_backfill.q) as a child, and a native-shaped HDB it writes. What is under
 test is that --follow streams THIS run's log - the file the launch reports - and ends with the
 run's outcome and exit code, exactly as --wait does, and that Ctrl-C ends the stream only.
 """

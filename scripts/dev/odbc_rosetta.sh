@@ -146,7 +146,7 @@ case "${1:-}" in
         fi
         worker="$1"
         shift
-        run_q "$MAIN_ROOT/scripts/dev/run_backfill.q" -worker "$worker" "$@"
+        run_q "$MAIN_ROOT/scripts/jobs/run_backfill.q" -worker "$worker" "$@"
         ;;
     databento)
         shift

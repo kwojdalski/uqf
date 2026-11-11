@@ -1,7 +1,7 @@
 """`uqs job backfill --attachment NAME --writer HOST:PORT --any-writer`: no receiver, no checks.
 
 What the launcher hands the runner, and what it does NOT refuse. The runner's own forced
-manager (scripts/dev/attached_backfill.q) writes over plain IPC into whatever process listens
+manager (scripts/jobs/attached_backfill.q) writes over plain IPC into whatever process listens
 at HOST:PORT; that half is exercised against a live q in the remote-writer tests.
 """
 

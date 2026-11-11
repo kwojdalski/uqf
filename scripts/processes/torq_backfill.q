@@ -73,11 +73,11 @@
 \d .
 
 / The flags this process reads are parsed by .qetl.job.bounded.spec_from_flags
-/ in src/etl/core/bounded_flags.q - the one parser scripts/dev/run_backfill.q
+/ in src/etl/core/bounded_flags.q - the one parser scripts/jobs/run_backfill.q
 / uses too, so a command line means the same thing to both.
 
 / Refuse a per-run flag that an environment variable would silently outrank
-/ (#1304). Shared with scripts/dev/run_backfill.q (#1319): the logic is
+/ (#1304). Shared with scripts/jobs/run_backfill.q (#1319): the logic is
 / .qetl.job.bounded.runtime.flag_vs_env, this names the launcher in the text.
 / @param k the config key, `mode or `on_conflict
 / @param v the flag's value, a string

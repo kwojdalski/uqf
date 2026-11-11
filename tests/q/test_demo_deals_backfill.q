@@ -417,7 +417,7 @@
         "a run that names no version records coverage under v7"]};
 
 / .qetl.job.bounded.spec_from_flags - the one command-line parser both
-/ launchers (torq_backfill.q and scripts/dev/run_backfill.q) use. They each
+/ launchers (torq_backfill.q and scripts/jobs/run_backfill.q) use. They each
 / had their own until the dev one was found refusing a missing -version the
 / fleet one defaulted.
 .qt.qpipe.job.demo_deals_backfill.flags:{[worker;version;lo;hi]

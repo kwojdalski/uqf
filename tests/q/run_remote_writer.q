@@ -1,7 +1,7 @@
 / run_remote_writer.q - a backfill extracted in THIS process and written by
 / ANOTHER, which owns the HDB (#1650).
 / .
-/ The destination (scripts/dev/remote_receiver.q, as `uqs job receive` starts it) holds the HDB and its
+/ The destination (scripts/jobs/attached_receiver.q, as `uqs job receive` starts it) holds the HDB and its
 / scoped writer; this process runs demo_deals_backfill on its fixture with
 / .qetl.io.remote.manager as its io manager, so every window's batch crosses a
 / real handle and is committed by the destination's receiver. This process
@@ -40,19 +40,19 @@ system"mkdir -p ",root;
 / from 5510+, where TorQ stacks run (#2259); one that already answers - a
 / leftover receiver - is skipped, never tested as this run's receiver.
 port:.qt.support.free_port[];
-log_path:statusdir,"/remote_receiver.log";
+log_path:statusdir,"/attached_receiver.log";
 / the receiver contract the destination's operator approved, derived here from the worker's
 / declarations as `uqs job attachment contract export` derives it (#1717): the receiver loads no worker
 contract_path:statusdir,"/contract.json";
 (hsym `$contract_path) 0: enlist .j.j `contract`binding!(.qetl.io.remote.contract.of `demo_deals_backfill;
     (enlist `conflict_policies)!enlist `append`upsert);
-/ the real receiver (scripts/dev/remote_receiver.q), as `uqs job receive` starts it - no readers
+/ the real receiver (scripts/jobs/attached_receiver.q), as `uqs job receive` starts it - no readers
 / to reload here, the writer allowed as this account, the fence fifteen minutes away: a receiver
 / this run fails to stop still stops itself then, rather than idling on its port (#1760)
 flags:" -contract ",contract_path," -attachment uat -destid rwtest -hdb ",root,
     " -max_date ",string[.z.d-1]," -deadline ",string[.z.p+0D00:15]," -readers _none_ -user nobody",
     " -journal ",statusdir,"/journal -writers ",string .z.u;
-pid:.qt.support.spawn_q["scripts/dev/remote_receiver.q";port;flags;log_path];
+pid:.qt.support.spawn_q["scripts/jobs/attached_receiver.q";port;flags;log_path];
 / whatever way this process ends - a failed check, an error, the end - the receiver ends with it
 .z.exit:{[code] .qt.support.stop_pid pid}
 ready:.qt.support.wait_listening[port;100];
@@ -106,9 +106,9 @@ check["so is a row key that is not the contract's";st like "remote: the batch's 
 check["and nothing more reached the destination";(fixture_rows[d 1;d 4])=rows_on_disk[]];
 
 st:@[h;(`.qetl.io.remote.status;::);{x}];
-check["the gate refuses the receiver's status - it is not an entry point";st~"remote_receiver: not an entry point"];
+check["the gate refuses the receiver's status - it is not an entry point";st~"attached_receiver: not an entry point"];
 st:@[h;(`.qetl.io.remote.forget;`x);{x}];
-check["and the operator's forget";st~"remote_receiver: not an entry point"];
+check["and the operator's forget";st~"attached_receiver: not an entry point"];
 
 -1 "";
 -1 $[failures=0; "remote writer: all checks passed"; "remote writer: ",string[failures]," check(s) FAILED"];

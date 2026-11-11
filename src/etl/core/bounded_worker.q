@@ -1171,7 +1171,7 @@
     / Not on a dry run: a rehearsal's row in etl_runs reads as a run.
     if[not .qetl.job.bounded.runtime.allows`record_run; :(::)];
     / Attached HERE, as init attaches the coverage ledger: a runner that did not
-    / (scripts/dev/run_backfill.q, or any script driving a worker) got a begin
+    / (scripts/jobs/run_backfill.q, or any script driving a worker) got a begin
     / that failed silently, then an end that could not record, and a run that
     / did all its work reported `failed and exited 1.
     @[{[w] cfg:.qetl.job.bounded.def w; s:.qetl.job.bounded.spec w;

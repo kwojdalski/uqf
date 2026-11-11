@@ -10,7 +10,7 @@ nothing else.
 
   export    on the machine with the worker: `uqs job attachment contract export W`. q loads
             the worker and derives the contract from its declarations
-            (scripts/dev/receiver_contract.q, .qetl.io.remote.contract.of), so
+            (scripts/jobs/attached_contract.q, .qetl.io.remote.contract.of), so
             it is never a hand-kept copy; this adds its identity.
   approve   on the stack's machine: `uqs job attachment contract approve FILE --attachment NAME`.
             Validates the contract, checks it against the attachment - which
@@ -55,7 +55,7 @@ from uqs.stack import backfill as stack_backfill
 FORMAT = "uqf-receiver-contract"
 #: The versions this uqs reads; .qetl.io.remote.contract.versions is the receiver's.
 VERSIONS = (1,)
-SCRIPT = Path("scripts") / "dev" / "receiver_contract.q"
+SCRIPT = Path("scripts") / "jobs" / "attached_contract.q"
 #: Approved contracts, one file per identity, in the attachment's directory.
 APPROVED_DIR = "receiver_contracts"
 #: .qetl.io.strategies, read from q (#1893): a strategy q adds is one a

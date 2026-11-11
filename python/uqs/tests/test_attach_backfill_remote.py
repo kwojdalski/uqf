@@ -102,7 +102,7 @@ def receivers(world) -> Iterator[Receivers]:  # noqa: F811
 def _serving(started: dict) -> str:
     """Wait for the receiver `receive` started to say it is serving; its log so far.
 
-    An open port is not that signal: q binds `-p` before it loads remote_receiver.q,
+    An open port is not that signal: q binds `-p` before it loads attached_receiver.q,
     so the port accepts while the script is still loading src/ - and before it has
     printed a line - which under load is long enough to read an empty log (#1746).
     The receiver's own readiness signal is the line it prints once it serves."""
@@ -110,7 +110,7 @@ def _serving(started: dict) -> str:
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         text = log.read_text()
-        if "remote_receiver: serving" in text:
+        if "attached_receiver: serving" in text:
             assert _accepting(started["port"]), text
             return text
         time.sleep(0.1)
@@ -336,12 +336,12 @@ def test_a_receiver_is_never_started_for_a_contract_not_approved_here(world, rec
 
 
 def _checkout_without_jobs(world):  # noqa: F811
-    """A receiving checkout: this tree's src/ and scripts/dev/ with every source,
+    """A receiving checkout: this tree's src/ and scripts/jobs/ with every source,
     transform, worker, streaming job and reaction removed - nothing that could
     define the worker whose rows it is about to write."""
     root = world.tmp / "receiving-checkout"
     shutil.copytree(UQF_ROOT / "src", root / "src")
-    shutil.copytree(UQF_ROOT / "scripts" / "dev", root / "scripts" / "dev")
+    shutil.copytree(UQF_ROOT / "scripts" / "jobs", root / "scripts" / "jobs")
     for kind in ("sources", "transforms", "workers", "streaming", "reactions"):
         shutil.rmtree(root / "src" / "etl" / kind, ignore_errors=True)
     assert not list(root.rglob("upstream_trades*")), "no trace of the job is left"

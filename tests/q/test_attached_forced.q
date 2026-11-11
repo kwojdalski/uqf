@@ -1,11 +1,11 @@
 // test_attached_forced.q - the --any-writer path keeps the completed-history fence (#1866):
-// scripts/dev/attached_forced.q. Load qunit.q and support.q first.
+// scripts/jobs/attached_forced.q. Load qunit.q and support.q first.
 //
 // The writer is a local function that evaluates each message the way the remote q process would,
 // into a directory of its own, so what was and was not sent is read back from disk.
 
-system "l scripts/dev/attached_forced.q";
-system "l scripts/dev/attached_lib.q";
+system "l scripts/jobs/attached_forced.q";
+system "l scripts/jobs/attached_lib.q";
 
 .qt.qetl.attached_forced.root:`:build/test_attached_forced
 

@@ -78,11 +78,11 @@ That wrote the skeleton: a source, a worker, the `trades_copy` table in
   uqs job backfill hdb_transfer_backfill --from 2026-01-05 --to 2026-01-08 --source-version v1 --wait
   ```
 
-- **Without the stack.** `scripts/dev/run_backfill.q` runs the same worker in
+- **Without the stack.** `scripts/jobs/run_backfill.q` runs the same worker in
   one q process. Its `-hdb` flag names the destination directory:
 
   ```bash
-  UQF_SOURCE_CRED_HDB_TRANSFER=/data/source_hdb q scripts/dev/run_backfill.q \
+  UQF_SOURCE_CRED_HDB_TRANSFER=/data/source_hdb q scripts/jobs/run_backfill.q \
       -worker hdb_transfer_backfill -version v1 -from 2026.01.05D00:00 -to 2026.01.08D00:00 \
       -hdb /data/destination_hdb
   ```

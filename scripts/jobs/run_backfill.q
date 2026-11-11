@@ -16,7 +16,7 @@
 //
 // or, when no driver is needed (the fixture path):
 //
-//   q scripts/dev/run_backfill.q -worker crypto_market_data_backfill \
+//   q scripts/jobs/run_backfill.q -worker crypto_market_data_backfill \
 //       -version v2 -from 2026.09.11D21:00 -to 2026.09.11D23:00 -fixture
 //
 // -fixture is what lets a run with no credential write the fixture (#1082);
