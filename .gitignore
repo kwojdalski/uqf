@@ -116,7 +116,7 @@ docs/reference/q-api/
 /python/uqs/bundle_overrides.csv
 
 # The python-tests hook's two records (scripts/dev/python_tests_hook.py):
-# pytest-testmon's, of the code each test runs, and test_reach.py's, of what
+# pytest-testmon's, of the code each test runs, and python_test_reach.py's, of what
 # each test reads, lists and starts. This checkout's, kept current by every
 # hook run and shared between worktrees through git's common directory.
 /.testmondata

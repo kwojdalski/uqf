@@ -7,11 +7,11 @@ trusted. `q tests/run_tests.q -files a.q,b.q` runs the suites those files
 define - every file is still loaded - and `--format args` prints those
 arguments (nothing for ALL, which is the runner without them).
 
-    uv run python scripts/dev/test_impact.py --base origin/master
-    uv run python scripts/dev/test_impact.py src/pricing/forwards.q
-    uv run python scripts/dev/test_impact.py --format json --base origin/master
-    uv run python scripts/dev/test_impact.py --hook   # the q-tests hook's line
-    uv run python scripts/dev/test_impact.py --coverage-hook   # the q-coverage hook's
+    uv run python scripts/dev/q_test_impact.py --base origin/master
+    uv run python scripts/dev/q_test_impact.py src/pricing/forwards.q
+    uv run python scripts/dev/q_test_impact.py --format json --base origin/master
+    uv run python scripts/dev/q_test_impact.py --hook   # the q-tests hook's line
+    uv run python scripts/dev/q_test_impact.py --coverage-hook   # the q-coverage hook's
 
 The q-tests hook and scripts/dev/kdbx_attestation.py run what `--hook` (plan())
 decides: the suites `origin/master...HEAD`, plus what is being committed,
@@ -51,7 +51,7 @@ THE EDGES, beyond the graph's own:
   passthrough). The suites linked are the shell's own direct dependents - the
   walk does not fan out from the shell to every sibling declaration - plus any
   suite naming the symbol the declaration registers (`fx_markout). tests:
-  scripts/dev/tests/test_test_impact.py fails when a declaration calls into
+  scripts/dev/tests/test_q_test_impact.py fails when a declaration calls into
   src/etl/core/ at load through anything else, unless NOT_REGISTRIES says why.
 * Into a suite only by a `.qt` name. A suite is reached from another file only
   through a `.qt.*` name it defines (test_docstring_examples reusing
@@ -680,7 +680,7 @@ def through_shell(tree: Tree, inv: dict[str, set[str]]) -> dict[str, set[str]]:
 
 #: Top-level calls a declaration makes into src/etl/core/ that register
 #: nothing, with the reason - the only hand list here, and
-#: scripts/dev/tests/test_test_impact.py fails on any top-level call that is
+#: scripts/dev/tests/test_q_test_impact.py fails on any top-level call that is
 #: neither an entry point nor in it, so a new registry cannot go unlinked.
 NOT_REGISTRIES = {
     ".qetl.kafka.decoder.init": "seeds a decoder job's own state, under its namespace",
@@ -1218,18 +1218,18 @@ def main(argv: list[str] | None = None) -> int:
         try:
             cov = coverage_hook_line(args.root)
         except ValueError as e:
-            print(f"test_impact: {e}", file=sys.stderr)
+            print(f"q_test_impact: {e}", file=sys.stderr)
             return 2
-        print(f"test_impact: q-coverage: {cov.why}", file=sys.stderr)
+        print(f"q_test_impact: q-coverage: {cov.why}", file=sys.stderr)
         print(cov.line)
         return 0
     if args.hook:
         try:
             decision = hook_line(args.root)
         except ValueError as e:
-            print(f"test_impact: {e}", file=sys.stderr)
+            print(f"q_test_impact: {e}", file=sys.stderr)
             return 2
-        print(f"test_impact: q-tests: {decision.why}", file=sys.stderr)
+        print(f"q_test_impact: q-tests: {decision.why}", file=sys.stderr)
         print(decision.line)
         return 0
     if not args.paths and not args.base:
@@ -1240,7 +1240,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         tree = build(args.root)
     except qlint_graph.GraphUnavailable as e:
-        print(f"test_impact: {e}", file=sys.stderr)
+        print(f"q_test_impact: {e}", file=sys.stderr)
         return 2
     print(render(select(changed, tree), args.format))
     return 0

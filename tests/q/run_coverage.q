@@ -60,7 +60,7 @@ known:.cov.targets (enlist `namespaces)!enlist namespaces;
 
 / A SUBSET (#1719): `-files a.q,b.q -modules src/x.q,...` runs the suites the
 / files define and instruments and judges only the functions the modules
-/ define - what scripts/dev/test_impact.py's coverage_for picks for a change:
+/ define - what scripts/dev/q_test_impact.py's coverage_for picks for a change:
 / q-tests' suites, and for each function judged a file that enters it
 / (tests/q/coverage_map.txt). Both or neither. A function the subset finds
 / newly never entered is not a verdict - the map may be stale - so it exits 3

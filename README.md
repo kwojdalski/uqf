@@ -200,9 +200,9 @@ q.
 
 - **Push hooks.** `python-tests` runs only the Python tests the pushed commits
   reach: testmon's record for a `.py` file, and for anything else a record of
-  what each test reads, lists and starts (`scripts/dev/test_reach.py`) - a `.q`
-  change runs every test that starts a q. `q-tests` and `q-coverage` run the q
-  suites the branch reaches, on KDB-X (`scripts/dev/test_impact.py`).
+  what each test reads, lists and starts (`scripts/dev/python_test_reach.py`) -
+  a `.q` change runs every test that starts a q. `q-tests` and `q-coverage` run
+  the q suites the branch reaches, on KDB-X (`scripts/dev/q_test_impact.py`).
   `peachq-push` runs the `tests/q/test_*.q` files the branch adds or changes,
   and the namesake suite of each changed module, on PeachQ, failing only on a
   test not in `tests/q/peachq_known_gaps.txt` - the early catch for CI's PeachQ

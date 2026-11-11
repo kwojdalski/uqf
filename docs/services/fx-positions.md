@@ -69,13 +69,13 @@ portable rather than a demo of this stack:
 ```bash
 # Everything in one process: plant, feed, normalizer and service. No ports needed.
 # The executions normalizer starts because fx_positions subscribes to its table.
-q scripts/processes/run_stream.q -job fx_positions -feed fx_orders_feed
+q scripts/jobs/run_stream.q -job fx_positions -feed fx_orders_feed
 
 # Or as separate processes, the way it would run for real.
-q scripts/processes/run_stream.q -plant 5010
-q scripts/processes/run_stream.q -job fx_orders_feed -tp 5010
-q scripts/processes/run_stream.q -job executions    -tp 5010
-q scripts/processes/run_stream.q -job fx_positions  -tp 5010 -port 5011
+q scripts/jobs/run_stream.q -plant 5010
+q scripts/jobs/run_stream.q -job fx_orders_feed -tp 5010
+q scripts/jobs/run_stream.q -job executions    -tp 5010
+q scripts/jobs/run_stream.q -job fx_positions  -tp 5010 -port 5011
 ```
 
 Then, from any q session:
@@ -97,7 +97,7 @@ job is TorQ-free code and the runner decides the transport.
   | [`src/etl/core/tick.q`](../../src/etl/core/tick.q)                               | `.qetl.tick`                  | A pub/sub tickerplant in stock kdb+        |
   | [`src/etl/streaming/fx_positions.q`](../../src/etl/streaming/fx_positions.q)     | `.qpipe.job.fx_positions`     | The service                                |
   | [`src/etl/streaming/fx_orders_feed.q`](../../src/etl/streaming/fx_orders_feed.q) | `.qpipe.job.fx_orders_feed`   | Synthetic order flow                       |
-  | [`scripts/processes/run_stream.q`](../../scripts/processes/run_stream.q)         | `.qproc.standalone`           | Runs any registered job with no TorQ       |
+  | [`scripts/jobs/run_stream.q`](../../scripts/jobs/run_stream.q)                   | `.qproc.standalone`           | Runs any registered job with no TorQ       |
 
 ![The FX positions service](../diagrams/fx-positions-service.svg)
 

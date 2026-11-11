@@ -117,7 +117,7 @@ def test_a_change_no_test_reaches_runs_nothing():
         ([("M", "python/conftest.py")], "conftest"),
         ([("M", "pyproject.toml")], "pyproject.toml"),
         ([("M", "uv.lock")], "uv.lock"),
-        ([("M", "scripts/dev/test_reach.py")], "recorder"),
+        ([("M", "scripts/dev/python_test_reach.py")], "recorder"),
         ([], "nothing staged"),
     ],
 )
@@ -192,9 +192,9 @@ _CONFTEST = """
 import importlib.util, sys
 from pathlib import Path
 
-spec = importlib.util.spec_from_file_location("test_reach", {test_reach!r})
+spec = importlib.util.spec_from_file_location("python_test_reach", {python_test_reach!r})
 reach = importlib.util.module_from_spec(spec)
-sys.modules["test_reach"] = reach
+sys.modules["python_test_reach"] = reach
 spec.loader.exec_module(reach)
 reach.REPO = Path(__file__).resolve().parent
 
@@ -261,7 +261,7 @@ def test_a_push_adding_a_file_a_scan_reads_passes_the_first_time(tmp_path, monke
     project = tmp_path / "project"
     (project / "web").mkdir(parents=True)
     (project / "conftest.py").write_text(
-        _CONFTEST.replace("{test_reach!r}", repr(str(hook.HERE / "test_reach.py")))
+        _CONFTEST.replace("{python_test_reach!r}", repr(str(hook.HERE / "python_test_reach.py")))
     )
     (project / "test_web.py").write_text(_TESTS)
     for name in ("a.ts", "b.ts"):
@@ -309,7 +309,7 @@ def test_a_scan_the_push_does_not_reach_is_rerun_before_the_judge(tmp_path, monk
     project = tmp_path / "project"
     (project / "web").mkdir(parents=True)
     (project / "conftest.py").write_text(
-        _CONFTEST.replace("{test_reach!r}", repr(str(hook.HERE / "test_reach.py")))
+        _CONFTEST.replace("{python_test_reach!r}", repr(str(hook.HERE / "python_test_reach.py")))
     )
     (project / "test_web.py").write_text(_TESTS)
     for name in ("a.ts", "b.ts"):

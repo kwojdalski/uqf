@@ -44,7 +44,7 @@ WHAT IS SEEN, through Python's audit hooks (sys.addaudithook):
             taken to reach any file;
     q       a q, qlinter, or a shell (torq.sh starts a q): reaches .q and
             shell files, qlinter's .qlinter* settings, and what a q file names
-            by a path literal (test_impact.q_readers);
+            by a path literal (q_test_impact.q_readers);
     args    a program that reads only the files its arguments name (d2,
             grep, cat, ...; #2660): reaches each repository file named -
             and its siblings, for an import or include beside it - and
@@ -574,7 +574,7 @@ def reached(
 ) -> dict[str, str]:
     """{nodeid: why} for the tests that `changes` - (git status letter, path)
     pairs - reach by the record. A .py path is testmon's, except as a script
-    a test started (`scripts`). `q_reads` is test_impact.q_readers' answer
+    a test started (`scripts`). `q_reads` is q_test_impact.q_readers' answer
     for the non-Python paths: which q files name each."""
     out: dict[str, str] = {}
     for nodeid in record["tests"]:

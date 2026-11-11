@@ -1,5 +1,5 @@
 // test_bench_compression.q - the compression benchmark (.qt.qdev.cbench, #2297):
-// scripts/dev/bench_compression_lib.q, and scripts/dev/bench_compression.q run end to end.
+// scripts/bench/compression_lib.q, and scripts/bench/compression.q run end to end.
 //
 // The pure parts run against in-memory tables and fixed text. The copies and the command run
 // against a small synthetic HDB in a scratch directory, never the stack's; they need -19!,
@@ -7,7 +7,7 @@
 // and algorithms 1 and 2 only: 2^14 is the smallest block size macOS arm64 takes, and 3-5
 // need a shared library on the loader's path.
 
-system "l scripts/dev/bench_compression_lib.q";
+system "l scripts/bench/compression_lib.q";
 
 / A quote-shaped table: p#sym, time sorted within sym, floats, a nested char column.
 .qt.qdev.cbench.table:{[n]
@@ -276,7 +276,7 @@ system "l scripts/dev/bench_compression_lib.q";
 
 / Run the command with arguments; its output lines, then exit=<status>.
 .qt.qdev.cbench.run:{[args]
-    system "(",(first .z.X)," scripts/dev/bench_compression.q ",args," -q 2>&1; echo exit=$?)"}
+    system "(",(first .z.X)," scripts/bench/compression.q ",args," -q 2>&1; echo exit=$?)"}
 
 .qt.qdev.cbench.test_the_command_prints_setting_by_shape_and_never_writes_the_hdb:{[t]
     root:.qt.qdev.cbench.hdb[];

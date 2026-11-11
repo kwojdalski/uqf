@@ -372,8 +372,8 @@ scaffold bug: report it, don't work around it.
 5. Run it for real:
    - `uqs start NAME -f`, which starts it and follows its log;
    - `uqs status`, which should show it `up` and wired;
-   - or on stock kdb+ with `q scripts/processes/run_stream.q -job NAME`, which
-     starts its in-tree producers itself.
+   - or on stock kdb+ with `q scripts/jobs/run_stream.q -job NAME`, which starts
+     its in-tree producers itself.
 
 --------------------------------------------------------------------------------
 

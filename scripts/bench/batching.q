@@ -1,6 +1,6 @@
-// bench_batching.q - compare unbatched, per-symbol and grouped-symbol markout scoring (#1921).
+// batching.q - compare unbatched, per-symbol and grouped-symbol markout scoring (#1921).
 //
-//   q scripts/dev/bench_batching.q [-execs 20000] [-quotes 200] [-groups 2,4] [-reps 3]
+//   q scripts/bench/batching.q [-execs 20000] [-quotes 200] [-groups 2,4] [-reps 3]
 //
 //   -execs   executions in the window (default 20000)
 //   -quotes  quotes per book per symbol (default 200)
@@ -206,7 +206,7 @@ if[not `serve in key .Q.opt .z.x; system "l src/init.q"; system "l src/etl/init.
     attempts:0;
     while[(null h) and attempts<3;
         port:20000+first 1?20000;
-        system (first .z.X)," scripts/dev/bench_batching.q -serve ",dir,"/inputs -p ",string[port]," -q < /dev/null > ",dir,"/server.log 2>&1 &";
+        system (first .z.X)," scripts/bench/batching.q -serve ",dir,"/inputs -p ",string[port]," -q < /dev/null > ",dir,"/server.log 2>&1 &";
         tries:0;
         while[(null h) and tries<150;
             h:@[{hopen (`$"::",string x;2000)};port;{0Ni}];

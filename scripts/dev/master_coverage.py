@@ -2,7 +2,7 @@
 """Run the whole q suite under coverage on master's tip, on KDB-X (#1719).
 
 An attestation runs q-coverage over a SUBSET when the change reaches one
-(scripts/dev/test_impact.py's coverage_for): q-tests' suites and a suite that
+(scripts/dev/q_test_impact.py's coverage_for): q-tests' suites and a suite that
 enters each judged function, judging only the production files the change
 reaches. What that gives up - a function in a module the change does not
 reach that went uncovered, a baseline entry only an outside suite now enters,

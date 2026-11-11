@@ -1,4 +1,4 @@
-/ bench_compression_lib.q - what scripts/dev/bench_compression.q measures, as functions (#2297).
+/ compression_lib.q - what scripts/bench/compression.q measures, as functions (#2297).
 / .
 / The command compresses COPIES of one partition of one table, once per candidate setting,
 / into a temporary directory, and times four query shapes against each copy in a fresh q

@@ -100,7 +100,7 @@ repos:
       #
       # scripts/dev/python_tests_hook.py picks them from two records: testmon's
       # (the Python each test executes) for a staged .py file, and
-      # scripts/dev/test_reach.py's (what each test reads, lists and starts:
+      # scripts/dev/python_test_reach.py's (what each test reads, lists and starts:
       # a q, a gate run as a script) for anything else - a .q runs every test
       # that starts a q. The whole suite only when it cannot decide: no record
       # yet, a conftest, pyproject or uv.lock, nothing staged - or
@@ -334,7 +334,7 @@ repos:
             # --require-q kdbx: without KDB-X every test here would skip, and
             # the hook would pass having run nothing.
             #
-            # Only the suites the change reaches (#1690): test_impact.py reads
+            # Only the suites the change reaches (#1690): q_test_impact.py reads
             # q-lint's dependency graph and selects for origin/master...HEAD
             # plus what is being committed - the branch's whole change, as the
             # KDB-X attestation check reads the PR, not just this commit. It
@@ -363,7 +363,7 @@ repos:
             if [ "${UQF_Q_UNIT_FROM_COVERAGE:-}" = 1 ]; then
               echo "== q-unit: verdict taken from the q-coverage run (kdbx_attestation.py attest) =="
             else
-              selection=$(uv run python scripts/dev/test_impact.py --hook)
+              selection=$(uv run python scripts/dev/q_test_impact.py --hook)
               case "$selection" in
                 ALL) suite=(tests/qrun/test_q_suite.py::test_the_q_suite_passes) ;;
                 NONE) echo "== q-unit: no suite reaches this change - none run ==" ;;
@@ -554,7 +554,7 @@ repos:
             # suite that enters each judged function per
             # tests/q/coverage_map.txt, judging the functions of the
             # production files the change reaches, as
-            # scripts/dev/test_impact.py --coverage-hook says (kdbx_attestation.py attest
+            # scripts/dev/q_test_impact.py --coverage-hook says (kdbx_attestation.py attest
             # hands its own decision over in UQF_Q_COVERAGE_SELECTION). ALL
             # is the whole suite judging every function, as before. A subset
             # that finds a function never entered hands its verdict to a
@@ -570,7 +570,7 @@ repos:
             # commit took 10-30 minutes, so it runs at `git push` (#1965)
             # rather than being dropped: the check is cheap compared to
             # noticing months later that nothing calls a function.
-            selection=$(uv run python scripts/dev/test_impact.py --coverage-hook)
+            selection=$(uv run python scripts/dev/q_test_impact.py --coverage-hook)
             case "$selection" in
               ALL) subset=() ;;
               # -files a.q,b.q -modules src/x.q,...: no spaces in either list

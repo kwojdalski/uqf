@@ -58,7 +58,7 @@ for _name in STATE_LOCATION_VARS:
 
 
 #: The switches that put the commit hooks in full mode (scripts/dev/hooks_full.py,
-#: scripts/dev/test_impact.py). They choose which tests a hook runs, and are
+#: scripts/dev/q_test_impact.py). They choose which tests a hook runs, and are
 #: read before pytest starts; inside it, a test of the selectors that inherited
 #: one from `UQF_HOOKS_FULL=1 git commit` would test full mode instead of
 #: what it means to.
@@ -151,7 +151,7 @@ def pytest_addoption(parser):
         metavar="A.q,B.q",
         help=(
             "run only the qUnit suites these tests/q files define (tests/run_tests.q -files): "
-            "the q-tests hook passes scripts/dev/test_impact.py's selection"
+            "the q-tests hook passes scripts/dev/q_test_impact.py's selection"
         ),
     )
     parser.addoption(
@@ -180,7 +180,7 @@ def pytest_addoption(parser):
         metavar="PATH",
         help=(
             "record what each test reads, lists and starts into PATH, merged with what it "
-            "holds (scripts/dev/test_reach.py)"
+            "holds (scripts/dev/python_test_reach.py)"
         ),
     )
     picked.addoption(
@@ -226,10 +226,10 @@ def pytest_configure(config):
         config.pluginmanager.register(_shards().Recorder(Path(path)), "shard-durations")
     reach = config.getoption("--record-reach")
     if reach:
-        test_reach = _dev_module("test_reach")
+        python_test_reach = _dev_module("python_test_reach")
         worker = getattr(config, "workerinput", {}).get("workerid")
-        recorder = test_reach.Recorder(Path(reach).resolve(), worker)
-        test_reach.install(recorder)
+        recorder = python_test_reach.Recorder(Path(reach).resolve(), worker)
+        python_test_reach.install(recorder)
         recorder.watch_children()
         config.pluginmanager.register(recorder, "test-reach")
 
@@ -257,7 +257,7 @@ def _keep_selected(config, items) -> None:
     if not path:
         return
     wanted = set(Path(path).read_text().split())
-    test_id = _dev_module("test_reach").test_id
+    test_id = _dev_module("python_test_reach").test_id
     keep = [i for i in items if test_id(i.nodeid, i.keywords) in wanted]
     dropped = [i for i in items if test_id(i.nodeid, i.keywords) not in wanted]
     if dropped:

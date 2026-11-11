@@ -221,7 +221,7 @@
 
 / --- a subset: -files (#1690, #1694) ----------------------------------------
 / `q tests/run_tests.q -files a.q,b.q` loads every suite file and runs the
-/ suites the named ones define - what scripts/dev/test_impact.py selects for a
+/ suites the named ones define - what scripts/dev/q_test_impact.py selects for a
 / change, and what a shard of the suite runs.
 
 .qt.harness.layout.test_without_the_option_every_suite_runs:{[t]

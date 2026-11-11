@@ -41,7 +41,7 @@ DOCUMENTED = ["-job", "fx_positions", "-feed", "fx_orders_feed"]
 
 #: Loads the runner under the documented flags, which starts everything, then
 #: fires every job's timer twenty times rather than waiting on q's clock.
-_DRIVER = """\\l scripts/processes/run_stream.q
+_DRIVER = """\\l scripts/jobs/run_stream.q
 system "t 0";
 due:{[] .qproc.standalone.timers:{x[3]:0Np; x} each .qproc.standalone.timers};
 force:{[] due[]; .qproc.standalone.tick[]};
@@ -92,7 +92,7 @@ def test_upstream_is_the_job_graph_and_never_a_feed(tmp_path: Path) -> None:
 #: After the documented command has built a book: end the day in-process,
 #: then do what a restart on the new day does - replay that day's log into a
 #: flat book - and compare it with the book the running process holds (#943).
-_DAY_CHANGE = """\\l scripts/processes/run_stream.q
+_DAY_CHANGE = """\\l scripts/jobs/run_stream.q
 system "t 0";
 due:{[] .qproc.standalone.timers:{x[3]:0Np; x} each .qproc.standalone.timers};
 do[20; due[]; .qproc.standalone.tick[]];
@@ -172,7 +172,7 @@ def test_a_job_with_its_plant_in_another_process_replays_the_plants_log(tmp_path
     publish.write_text(_PUBLISH.format(port=plant_port))
     read = tmp_path / "read.q"
     read.write_text(_READ.format(port=job_port))
-    script = "scripts/processes/run_stream.q"
+    script = "scripts/jobs/run_stream.q"
 
     def start(*args: str) -> subprocess.Popen[bytes]:
         return subprocess.Popen(
@@ -243,7 +243,7 @@ def test_every_job_on_a_remote_plant_gets_its_own_batches_once(tmp_path: Path) -
 
     def start(*args: str) -> subprocess.Popen[bytes]:
         return subprocess.Popen(
-            [q, "scripts/processes/run_stream.q", "-q", *args],
+            [q, "scripts/jobs/run_stream.q", "-q", *args],
             cwd=UQF_ROOT,
             env=env,
             stdin=subprocess.DEVNULL,
@@ -323,7 +323,7 @@ def test_a_job_whose_remote_plant_dies_beats_as_not_subscribed(tmp_path: Path) -
 
     def start(*args: str) -> subprocess.Popen[bytes]:
         return subprocess.Popen(
-            [q, "scripts/processes/run_stream.q", "-q", *args],
+            [q, "scripts/jobs/run_stream.q", "-q", *args],
             cwd=UQF_ROOT,
             env=env,
             stdin=subprocess.DEVNULL,
@@ -366,7 +366,7 @@ def test_a_job_whose_remote_plant_dies_beats_as_not_subscribed(tmp_path: Path) -
                 proc.wait(timeout=10)
 
 
-_PUBLISHER = """\\l scripts/processes/run_stream.q
+_PUBLISHER = """\\l scripts/jobs/run_stream.q
 tr:.qproc.standalone.remote_transport {port};
 tr[`connect][];
 pub:tr[`publisher][];
@@ -393,7 +393,7 @@ def test_a_remote_publish_the_plant_refuses_throws_in_the_publisher(tmp_path: Pa
         # directory, which is the checkout.
         [
             q,
-            "scripts/processes/run_stream.q",
+            "scripts/jobs/run_stream.q",
             "-q",
             "-plant",
             str(port),
@@ -454,7 +454,7 @@ def test_a_bare_plant_rolls_its_log_at_the_date_change(tmp_path: Path) -> None:
     plant = subprocess.Popen(
         [
             q,
-            "scripts/processes/run_stream.q",
+            "scripts/jobs/run_stream.q",
             "-q",
             "-plant",
             str(port),

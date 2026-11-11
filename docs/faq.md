@@ -28,8 +28,8 @@ No, for most of it. Nothing under `src/` loads TorQ: the quant library and the
 ETL framework load in a plain q session (`\l src/init.q`, then
 `\l src/etl/init.q`), and `q tests/run_tests.q` runs the whole unit suite with
 no stack. The streaming jobs themselves run on stock kdb+ through
-`scripts/processes/run_stream.q`, which stands up a bare tickerplant and wires a
-job to it. TorQ is what the *deployed* stack runs on.
+`scripts/jobs/run_stream.q`, which stands up a bare tickerplant and wires a job
+to it. TorQ is what the *deployed* stack runs on.
 
 ## Do I need KDB-X?
 
@@ -102,7 +102,7 @@ count the rows in and out per table.
 with `.qetl.job.stream.wire`, and call `.qpipe.job.<job>.on_batch` with a batch
 you build - the pattern in [the etl scaffolding
 page](scaffolding/etl.md#testing-it-without-a-stack). To run it as a real
-process on stock kdb+, use `scripts/processes/run_stream.q`.
+process on stock kdb+, use `scripts/jobs/run_stream.q`.
 
 **A backfill** has exited by the time you look, so read what it left on disk:
 `uqs job runs list --unfinished` for runs that never finished,
@@ -222,7 +222,7 @@ somewhere you can see:
   | TorQ stack, but the tickerplant is not running               | A streaming job never starts. `.qtorq.subscribe_etl` blocks until the plant is up, and the job's last log line is `waiting for the tickerplant - if this is the last line, it is not running`. Nothing is published, so nothing is lost.                                                                            |
   | Plain q, no TorQ, job not wired                              | `.qtorq` is not loaded at all - nothing under `src/` uses it - and the job's `publish` is still the stub it starts as, which throws `publish: <job> is not wired`. A job that produces rows fails rather than dropping them.                                                                                        |
   | Plain q, job wired to a recorder (`.qetl.job.stream.wire`)   | The rows are wherever the recorder puts them, usually a table in that q session. This is how the tests run.                                                                                                                                                                                                         |
-  | Stock kdb+, `scripts/processes/run_stream.q`                 | `.qetl.tick` stands in for the tickerplant. It stamps `time`, sends each batch to its subscribers, and writes a tick log under `-logdir` (default `tplog/`), which a restarted job replays. There is no RDB, HDB or end-of-day writedown, so rows live in the subscribers' memory and in that log.                  |
+  | Stock kdb+, `scripts/jobs/run_stream.q`                      | `.qetl.tick` stands in for the tickerplant. It stamps `time`, sends each batch to its subscribers, and writes a tick log under `-logdir` (default `tplog/`), which a restarted job replays. There is no RDB, HDB or end-of-day writedown, so rows live in the subscribers' memory and in that log.                  |
   | Plain q, a bounded worker                                    | The default output is `.qetl.io.memory`, so rows land in a table named after the worker's one declared output in that q session. Only a backfill started by `uqs job backfill` writes to the HDB.                                                                                                                   |
 
 The rule underneath: `publish` only reaches a tickerplant when a runner wires it

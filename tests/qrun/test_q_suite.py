@@ -8,7 +8,7 @@ q-unit, q-order and q-unit-peachq lanes.
 
   test_the_q_suite_passes           the q-tests hook's run, on KDB-X. It takes
                                     `--q-files a.q,b.q`: the suites
-                                    scripts/dev/test_impact.py selects for the
+                                    scripts/dev/q_test_impact.py selects for the
                                     change, which the hook passes on and
                                     kdbx_attestation.py records as q-tests=<digest>.
                                     Without it, the whole suite.

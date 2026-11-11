@@ -55,7 +55,7 @@ ignore = ["QS001", "QS008", "QS010"]
 # rolls its log by `.z.D` (#943), recovery falls back to that same clock when a
 # transport cannot say which day its plant is on (#1190), and the tests build
 # their days from the clock the code under test reads. The data stays UTC.
-"scripts/processes/run_stream.q" = ["QP003", "QS006"]
+"scripts/jobs/run_stream.q" = ["QP003", "QS006"]
 "scripts/processes/torq_pipeline.q" = ["QP003"]
 "src/etl/core/stream_carry_recovery.q" = ["QP003"]
 "tests/q/test_endofday.q" = ["QP003"]

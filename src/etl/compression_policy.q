@@ -43,7 +43,7 @@
 / Quotes, the right-hand side of the as-of join over mapped partitions: `time`
 / is the column aj binary-searches, so it is left uncompressed (algorithm 0:
 / held out of the age pass, never decompressed by it). Measured on this HDB
-/ (scripts/dev/bench_compression.q, #2294): aj 18-21% faster and the sweep
+/ (scripts/bench/compression.q, #2294): aj 18-21% faster and the sweep
 / 13-19%, for 17-65% more bytes on disk. The rest of the table takes the default.
 / quote is the vendored starter pack's (.qetl.plant.vendored): a tree loaded
 / without the pack has no quote, and no columns to check an override against.

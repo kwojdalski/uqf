@@ -30,7 +30,7 @@ def _load(name: str):
 
 
 hf = _load("hooks_full")
-ti = _load("test_impact")
+ti = _load("q_test_impact")
 
 HOOKS = {
     h["id"]: h

@@ -8,7 +8,7 @@ whose gap has been closed. scripts/test.py's q-coverage lane until #1808.
 
 Opt-in (`-m coverage`): it runs the whole q suite again, under
 instrumentation, which an ordinary run already runs once. The q-coverage hook
-selects it, with the subset scripts/dev/test_impact.py picks for a change:
+selects it, with the subset scripts/dev/q_test_impact.py picks for a change:
 
   --q-files a.q,b.q --q-modules src/x.q,...
       those suites, judging only the functions those modules define (#1719).

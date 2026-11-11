@@ -16,7 +16,7 @@ diff of any .q adds or removes an `@eg` tag line (#1978) - a failing `@eg`
 was the commonest PeachQ bounce of all (#1961, #1974), and its module's
 namesake suite does not run it. That suite is all-or-nothing: it scans every
 `@eg` under src/ and scripts/ and adds about 2 s on PeachQ. Not the
-full reach scripts/dev/test_impact.py computes: building its graph takes
+full reach scripts/dev/q_test_impact.py computes: building its graph takes
 about 45 s of CPU before any test runs, and the q-tests hook beside this one
 already pays that on KDB-X. One PeachQ process runs them, through
 `tests/run_tests.q -files` - every file is loaded, only those suites run.

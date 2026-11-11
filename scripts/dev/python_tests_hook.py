@@ -13,12 +13,12 @@ gitignored, and a commit runs the union of what they select:
 * testmon's `.testmondata` - the Python each test EXECUTES. When a .py file is
   staged, `pytest --testmon --testmon-forceselect` runs the tests whose
   recorded execution touches what changed (and any new or changed test).
-* `.testreach.json` (scripts/dev/test_reach.py) - what each test READS,
+* `.testreach.json` (scripts/dev/python_test_reach.py) - what each test READS,
   LISTS and STARTS, which testmon cannot see. When anything else is staged -
   a .q, a CSV, a document, a config - the record picks the tests that read
   it, list its directory (when it is added or deleted), or start a process
   that can see it: a q, for a .q file or a file a q file names
-  (scripts/dev/test_impact.py's q_readers, the literal edge of its graph), and
+  (scripts/dev/q_test_impact.py's q_readers, the literal edge of its graph), and
   a Python child or an unknown program, for any file. A .py file testmon has
   no record of - a gate a test runs as a script - picks the tests that start
   a Python child.
@@ -55,7 +55,7 @@ them, it judged the record the push was about to correct: a branch adding a
 web/ file failed the check against a record from before the file existed,
 and an identical second push passed. A scan the push does not reach but
 whose record predates a web/ file the tree now has (one master added) is
-rerun before the judges too (test_reach.stale_scans, #2276).
+rerun before the judges too (python_test_reach.stale_scans, #2276).
 
     uv run python scripts/dev/python_tests_hook.py            # what the hook runs
     uv run python scripts/dev/python_tests_hook.py --dry-run  # say what it would run
@@ -90,12 +90,12 @@ def _sibling(name: str):
 
 _git = _sibling("_git")
 hooks_full = _sibling("hooks_full")
-test_reach = _sibling("test_reach")
+python_test_reach = _sibling("python_test_reach")
 
 #: pytest-testmon's database, at the rootdir it records against.
 TESTMON_DATA = REPO / ".testmondata"
-#: What each test reads, lists and starts (scripts/dev/test_reach.py).
-REACH_DATA = test_reach.RECORD
+#: What each test reads, lists and starts (scripts/dev/python_test_reach.py).
+REACH_DATA = python_test_reach.RECORD
 #: Where the records are shared between worktrees, under git's common directory.
 SHARED = "uqf-test-records"
 
@@ -103,7 +103,7 @@ SHARED = "uqf-test-records"
 SHAPES_EVERY_TEST = {
     "pyproject.toml": "the pytest configuration and the dependencies",
     "uv.lock": "the dependencies",
-    "scripts/dev/test_reach.py": "the recorder this hook selects by",
+    "scripts/dev/python_test_reach.py": "the recorder this hook selects by",
     "scripts/dev/python_tests_hook.py": "this hook",
 }
 
@@ -201,10 +201,10 @@ def decide(
     if other or unseen:
         assert record is not None
         reads = q_readers([p for _, p in other]) if other else {}
-        tests = test_reach.reached(record, other + [(s, p) for s, p in python], reads)
+        tests = python_test_reach.reached(record, other + [(s, p) for s, p in python], reads)
         for path in unseen:
             for kind in ("python", "other"):
-                for nodeid in test_reach.starters(record, kind):
+                for nodeid in python_test_reach.starters(record, kind):
                     tests.setdefault(nodeid, f"starts a child that may run {path}")
     parts = []
     if python:
@@ -324,11 +324,13 @@ def run(decision: Decision, *, dry_run: bool = False) -> int:
 def _stale_scans() -> set[str]:
     """The tests this tree recorded whose scan of JUDGED misses a file it has
     now. Another worktree's are not judged here, so are not rerun either."""
-    record = test_reach.load(REACH_DATA)
+    record = python_test_reach.load(REACH_DATA)
     if record is None:
         return set()
-    files = [f for f in _sibling("test_impact").tracked(REPO) if f.startswith(JUDGED)]
-    return test_reach.stale_scans(record, files, test_reach.recorded_here(record, REPO))
+    files = [f for f in _sibling("q_test_impact").tracked(REPO) if f.startswith(JUDGED)]
+    return python_test_reach.stale_scans(
+        record, files, python_test_reach.recorded_here(record, REPO)
+    )
 
 
 def _run_all(runs: list[list[str]]) -> int:
@@ -354,8 +356,8 @@ def main() -> int:
         staged_changes(),
         full_mode=hooks_full.full(),
         known=testmon_files(),
-        record=test_reach.load(REACH_DATA),
-        q_readers=_sibling("test_impact").q_readers,
+        record=python_test_reach.load(REACH_DATA),
+        q_readers=_sibling("q_test_impact").q_readers,
     )
     print(f"python-tests: {decision.mode} - {decision.why}", flush=True)
     for nodeid, why in list(sorted(decision.tests.items()))[:5]:

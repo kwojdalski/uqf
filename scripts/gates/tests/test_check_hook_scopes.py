@@ -165,7 +165,7 @@ def test_a_hook_calling_python3_from_path_is_caught():
 
 
 def test_no_real_hook_runs_whichever_python_is_first_on_path():
-    """test_impact.py and friends are 3.14 code (ruff's py314 target writes
+    """q_test_impact.py and friends are 3.14 code (ruff's py314 target writes
     `except A, B:`); a python3 from PATH may be 3.12 and fail to parse them."""
     assert _bare_python_hooks((REPO / chs.CONFIG).read_text()) == []
 

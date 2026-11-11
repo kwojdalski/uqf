@@ -2,7 +2,7 @@
 / (.qt.harness.production).
 / .
 / Its own file, not a case of test_suite_layout.q, because it reads every
-/ production file as text: scripts/dev/test_impact.py selects it for any
+/ production file as text: scripts/dev/q_test_impact.py selects it for any
 / change under src/ (#1690), and the suite-layout cases beside it - which
 / load every job suite to check them - have no reason to run then too.
 

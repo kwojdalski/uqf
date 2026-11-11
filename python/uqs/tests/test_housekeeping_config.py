@@ -19,7 +19,7 @@ from uqs.paths import default_paths as real_paths
 from uqs.stack import housekeeping
 from uqs.stack import procs as stack_procs
 
-OVERLAY = "${UQF_SCRIPTS}/processes/uqs_housekeeping.q"
+OVERLAY = "${UQF_SCRIPTS}/processes/uqs_housekeeping_config.q"
 DAY = 24 * 60 * 60
 WINDOW = housekeeping.TPLOG_REPLAY_RETENTION_DAYS
 
@@ -136,7 +136,7 @@ _RUN = r"""
 .timer.rep:{[a;b;c;d;e;f;g]};
 .hk.inputcsv:.proc.getconfigfile "housekeeping.csv";
 .hk.runnow:0b;
-\l scripts/processes/uqs_housekeeping.q
+\l scripts/processes/uqs_housekeeping_config.q
 .qtorq.hk.gzreplayable:{[] getenv[`GZ]~enlist "1"};
 \l lib/torq/code/processes/housekeeping.q
 -1 "INPUTCSV ",inputcsv;
