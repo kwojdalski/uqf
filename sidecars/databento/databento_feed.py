@@ -150,9 +150,9 @@ def start_databento_feed(
     return pid
 
 
-def stop_databento_feed(paths: UqsPaths) -> None:
+def stop_databento_feed(paths: UqsPaths, *, kill: bool = False) -> None:
     """Stop it, and say so when there was nothing to stop."""
-    pid = _process(paths).stop()
+    pid = _process(paths).stop(kill=kill)
     log.info(
         "no databento feed running" if pid is None else f"stopped the databento feed (pid {pid})"
     )
@@ -180,7 +180,7 @@ FEED = ExternalFeed(
     "databento",
     _start,
     # Looked up when called, so what this module holds at call time is what runs.
-    lambda paths: stop_databento_feed(paths),
+    lambda paths, kill=False: stop_databento_feed(paths, kill=kill),
     lambda paths: databento_feed_status(paths),
     options=(
         FeedOption(

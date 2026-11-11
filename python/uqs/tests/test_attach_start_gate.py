@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -35,7 +34,16 @@ from uqs.attach.manifest import Manifest
 from uqs.attach.publisher import UqsPublisher
 from uqs.cli import shared
 from uqs.paths import UqsError, default_paths, repo_root
-from uqs.stack import attach_state, listing, occupancy, qtree, runtime, start_policy
+from uqs.stack import (
+    alive,
+    attach_state,
+    generated,
+    listing,
+    occupancy,
+    qtree,
+    runtime,
+    start_policy,
+)
 
 ROOT = repo_root()
 PUBLISHER = "executions1"
@@ -286,15 +294,13 @@ def test_a_backfill_style_start_is_gated_too(unverified):
         runtime.run_torq_sh(default_paths(), ["start", PUBLISHER, "-extras", "-x"], STACK)
 
 
-def test_stop_is_never_gated(unverified, monkeypatch):
-    seen: list[list[str]] = []
-    monkeypatch.setattr(runtime, "torq_launcher", lambda _p: Path("/bin/true"))
-    monkeypatch.setattr(runtime, "bootstrap", lambda *_a, **_k: {})
-    monkeypatch.setattr(
-        subprocess, "run", lambda cmd, **_k: seen.append(cmd) or subprocess.CompletedProcess(cmd, 0)
-    )
-    runtime.stop(default_paths(), "all")
-    assert seen and seen[0][1:] == ["stop", "all"]
+def test_stop_is_never_gated(unverified, monkeypatch, tmp_path):
+    """A stop runs no launcher at all (stack/stopping.py, #2689): it stops
+    what runs, attached publisher or not."""
+    monkeypatch.setattr(generated, "lock_path", lambda _p: tmp_path / "lifecycle.lock")
+    monkeypatch.setattr(alive, "instances", lambda paths, base_port, *_a, **_k: {PUBLISHER: []})
+    done = runtime.stop(default_paths(), PUBLISHER, base_port=STACK, capture=True)
+    assert done.returncode == 0 and f"{PUBLISHER} is not currently running" in done.stdout
 
 
 def test_list_attachments_shows_a_detaching_state_as_it_is(att, state):

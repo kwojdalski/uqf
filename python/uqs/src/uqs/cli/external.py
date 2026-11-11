@@ -48,6 +48,7 @@ from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, ReadOnly, dry_run_note
 from uqs.cli.shared import _die, _paths, app, console
+from uqs.cli.stop_options import KillOpt
 from uqs.external.feeds import ExternalFeed, FeedOption, check_options, discover
 from uqs.paths import UqsError, UqsUsageError, repo_root
 
@@ -269,13 +270,17 @@ def _would(name: str, action: str) -> None:
 
 
 @connector_app.command("stop", cls=needs_pipelines(_PLANT, ChangesState))
-def stop(name: FeedArg, dry_run: DryRunOpt = False) -> None:
-    """Stop a connector started by `uqs connector start`."""
+def stop(name: FeedArg, kill: KillOpt = False, dry_run: DryRunOpt = False) -> None:
+    """Stop a connector started by `uqs connector start`.
+
+    It is forgotten only once it has exited: one still running after SIGTERM
+    and its grace is named, kept, and still refuses a second start - unless
+    `--kill` SIGKILLs it."""
     if dry_run:
         _would(name, f"stop {name}")
         return
     try:
-        _feed(name).stop(_paths())
+        _feed(name).stop(_paths(), kill=kill)
     except UqsError as exc:
         _die(exc)
     console.print(f"{name} connector stopped")

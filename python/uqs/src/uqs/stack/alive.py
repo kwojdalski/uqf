@@ -28,6 +28,7 @@ import subprocess
 import time
 from collections import defaultdict
 from collections.abc import Iterable
+from pathlib import Path
 
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
@@ -156,16 +157,28 @@ def listeners(ports: Iterable[int], timeout: float | None = None) -> dict[int, l
 
 
 def instances(
-    paths: UqsPaths, base_port: int | None = None, timeout: float | None = None
+    paths: UqsPaths,
+    base_port: int | None = None,
+    timeout: float | None = None,
+    *,
+    own_procfile: bool = False,
 ) -> dict[str, list[int]]:
     """Every local process this stack declares, with EVERY pid whose command
     line matches it, oldest first - a duplicate started by hand included.
-    status_table reports the newest, as torq.sh does; `uqs stop --kill`
-    kills them all (stack/force_stop.py)."""
+    status_table reports the newest, as torq.sh does; `uqs stop` stops them
+    all (stack/stopping.py).
+
+    `own_procfile` keeps only those started from THIS tree's process.csv
+    (`-procfile`, which every start line carries): another checkout, or a
+    test's stack, on the same base port matches -stackid/-procname too, and a
+    stop must never signal it (#2689)."""
     try:
         commands = _command_lines(timeout)
     except subprocess.TimeoutExpired as exc:
         raise UqsError(f"listing processes did not finish within {timeout:g}s") from exc
+    if own_procfile:
+        mine = paths.generated_procs.resolve()
+        commands = [(pid, args) for pid, args in commands if _procfile(args) == mine]
     local = _local_hosts()
     base_port = paths.runtime_declaration.resolve_base_port(base_port)  # torq.sh's -stackid
     found: dict[str, list[int]] = {}
@@ -175,6 +188,15 @@ def instances(
         needle = f"-stackid {base_port} -proctype {row['proctype']} -procname {row['procname']} "
         found[row["procname"]] = [pid for pid, args in commands if needle in args + " "]
     return found
+
+
+def _procfile(args: str) -> Path | None:
+    """The process.csv a start line names with `-procfile`, resolved; None without one."""
+    words = args.split()
+    for flag, value in zip(words, words[1:], strict=False):
+        if flag == "-procfile":
+            return Path(value).resolve()
+    return None
 
 
 def status_table(

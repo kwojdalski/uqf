@@ -70,7 +70,7 @@ FEEDS = (
     ExternalFeed(
         "crypto",
         _start_recorder,
-        lambda paths: crypto.stop_crypto_recorder(paths),
+        lambda paths, kill=False: crypto.stop_crypto_recorder(paths, kill=kill),
         lambda paths: crypto.crypto_recorder_status(paths),
         options=(
             FeedOption(
@@ -109,7 +109,7 @@ FEEDS = (
     ExternalFeed(
         "crypto-fills",
         _start_fills_recorder,
-        lambda paths: crypto.stop_crypto_fills_recorder(paths),
+        lambda paths, kill=False: crypto.stop_crypto_fills_recorder(paths, kill=kill),
         lambda paths: crypto.crypto_fills_recorder_status(paths),
         options=(
             FeedOption(

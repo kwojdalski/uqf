@@ -12,7 +12,7 @@ import shlex
 import shutil
 import socket
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -29,8 +29,8 @@ from uqs.stack import (
     start_lines,
     start_overrides,
     start_policy,
+    stopping,
 )
-from uqs.stack import procs as stack_procs
 from uqs.stack import render as stack_render
 from uqs.stack.compression import write_compression_config
 from uqs.stack.dqe import write_dqe_config
@@ -170,6 +170,7 @@ def run_torq_sh(
     selected: Sequence[str] | None = None,
     skips: start_overrides.Overrides = start_overrides.NONE,
     lock_wait: float | None = None,
+    before: Callable[[], subprocess.CompletedProcess[str]] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Check the TorQ launcher, bootstrap, then run the launcher with *args*
     under the generated env: `$TORQHOME/torq.sh`, or `UQS_TORQ_LAUNCHER`
@@ -194,6 +195,7 @@ def run_torq_sh(
     (stack/generated.py, #2028), so two commands on one stack - `uqs` and the
     frontend, or two tabs - cannot interleave. `lock_wait` is how long to wait
     for another holder: None waits as long as it takes, 0 refuses at once.
+    `before` runs once the lock is held; its non-zero exit is returned, unlaunched.
     """
     start_policy.refuse_start(paths, args, base_port, skips)
     args = start_policy.with_publisher_extras(paths, args)
@@ -201,6 +203,8 @@ def run_torq_sh(
     # and a launcher that is going to be refused must not have had that written for it.
     launcher = torq_launcher(paths)
     with generated.lifecycle_lock(paths, wait=lock_wait):
+        if before is not None and (first := before()).returncode:
+            return first  # `before` failed - restart's stop left one running
         return _bootstrap_and_run(paths, args, launcher, base_port, capture, timeout, selected)
 
 
@@ -278,20 +282,17 @@ def start(
 
 
 def stop(paths: UqsPaths, procs: str = "all", base_port: int | None = None, **kw: Any):
-    stack_procs.assert_known_procnames(paths, procs)  # below every front end (#887)
-    kw.setdefault("capture", False)
-    return run_torq_sh(paths, ["stop", procs], base_port=base_port, **kw)
+    """SIGTERM, confirm, SIGKILL with `kill=True`: stack/stopping.py (#2689)."""
+    return stopping.stop(paths, procs, base_port, **kw)
 
 
-def restart(
-    paths: UqsPaths,
-    procs: str = "all",
-    base_port: int | None = None,
-    trace: bool = False,
-    **kw: Any,
-):
+def restart(paths: UqsPaths, procs: str = "all", base_port: int | None = None, **kw: Any):
+    """torq.sh's restart once the stop policy has confirmed every pid gone -
+    its own stop raced the dying one; a survivor starts nothing (#2689)."""
     kw.setdefault("capture", False)
-    return run_torq_sh(paths, ["restart", procs, *_extras(trace)], base_port=base_port, **kw)
+    first = lambda: stop(paths, procs, base_port, capture=kw["capture"])  # noqa: E731
+    args = ["restart", procs, *_extras(kw.pop("trace", False))]
+    return run_torq_sh(paths, args, base_port=base_port, before=first, **kw)
 
 
 def summary(

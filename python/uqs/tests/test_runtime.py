@@ -150,7 +150,6 @@ def test_a_launcher_that_cannot_run_is_refused(monkeypatch, tmp_path, value, mes
     ("fn", "extra", "argv"),
     [
         (runtime.start, {"procs": "rdb1"}, ["start", "rdb1"]),
-        (runtime.stop, {"procs": "all"}, ["stop", "all"]),
         (runtime.restart, {"procs": "hdb1"}, ["restart", "hdb1"]),
         (runtime.start, {"procs": "rdb1", "trace": True}, ["start", "rdb1", "-extras", "-trace"]),
         (
@@ -161,9 +160,9 @@ def test_a_launcher_that_cannot_run_is_refused(monkeypatch, tmp_path, value, mes
     ],
 )
 def test_each_verb_passes_torq_sh_its_own_arguments(monkeypatch, fn, extra, argv):
+    """A stop runs no torq.sh at all (tests/test_stack_stopping.py, #2689)."""
     seen: dict[str, Any] = {}
     # The paths are fake; the name check has its own tests (test_start_policy).
-    monkeypatch.setattr(runtime.stack_procs, "assert_known_procnames", lambda *_a: None)
     monkeypatch.setattr(
         runtime, "run_torq_sh", lambda paths, args, **kw: seen.update(args=args, **kw)
     )

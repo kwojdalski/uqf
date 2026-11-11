@@ -49,6 +49,7 @@ from uqs.cli.concepts import AttachmentArg
 from uqs.cli.json_out import json_opt
 from uqs.cli.launch_options import FollowOpt, LevelOpt, StopOnExitOpt, TraceOpt
 from uqs.cli.shared import _debug_requested, _paths, log
+from uqs.cli.stop_options import KillOpt
 from uqs.guardrails import spelled
 from uqs.paths import UqsError
 
@@ -327,6 +328,7 @@ def detach(
     ] = False,
     yes: YesOpt = False,
     as_json: JsonOpt = False,
+    kill: KillOpt = False,
 ) -> None:
     """Stop an attachment's publisher and reverse what it created, if that is safe.
 
@@ -351,7 +353,7 @@ def detach(
                 yes=yes,
             )
         result = detaching.detach(
-            att, service.ipc_for(att), publishing.UqsPublisher(_paths()), dry_run=dry_run
+            att, service.ipc_for(att), publishing.UqsPublisher(_paths(), kill=kill), dry_run=dry_run
         )
     except UqsError as exc:
         out.fail(exc)

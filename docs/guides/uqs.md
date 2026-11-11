@@ -492,13 +492,20 @@ as `count t`, is refused.
 
 ### Stopping a process that will not stop
 
-`uqs stop` asks each process to exit (`kill -15`), through the port it listens
-on, so it cannot reach a process stuck before it opened its port, a duplicate
-started by hand, or one that ignores the request. `uqs stop --kill [PROCS]`
-finds every instance by its command line instead and kills it outright
-(SIGKILL), touching nothing outside this stack. It is the last resort: nothing
-shuts down cleanly, and a tickerplant killed mid-write may leave its log's last
-message torn.
+`uqs stop` finds every instance of each process by its command line - a process
+stuck before it opened its port and a duplicate started by hand included, and
+nothing outside this stack - and asks it to exit (SIGTERM). It then waits, up to
+15 seconds, until each one is gone: one still running then is named, and the
+exit is 1, rather than reported stopped. `uqs restart` starts nothing until the
+stop is confirmed. `--kill` sends SIGKILL to whatever is still running after
+that grace. It is the last resort: nothing shuts down cleanly, and a tickerplant
+killed mid-write may leave its log's last message torn.
+
+Every stop command follows the same rule and takes the same `--kill`:
+`uqs connector stop` (a connector still running keeps its pid file, so a second
+`connector start` is still refused), `uqs job receiver stop` (a receiver still
+running keeps its ownership) and `uqs job attachment remove` (which stops the
+publisher).
 
 ### Cleaning up
 

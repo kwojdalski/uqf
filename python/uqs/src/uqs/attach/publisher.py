@@ -47,10 +47,14 @@ def stop_publisher(att: Attachment, publisher: Publisher) -> bool:
 class UqsPublisher:
     """The publisher as `uqs start` / `uqs stop` see it."""
 
-    def __init__(self, paths: UqsPaths, host: Host | None = None, *, trace: bool = False) -> None:
+    def __init__(
+        self, paths: UqsPaths, host: Host | None = None, *, trace: bool = False, kill: bool = False
+    ) -> None:
         """`trace` starts it with `-trace` on its start line, as `uqs start --trace`
-        does (runtime.TRACE_EXTRAS, #2687): its process script reads it."""
-        self._paths, self._host, self._trace = paths, host or Host(), trace
+        does (runtime.TRACE_EXTRAS, #2687): its process script reads it. `kill`
+        stops it as `uqs stop --kill` does: SIGKILL if SIGTERM and the grace
+        leave it running (#2689)."""
+        self._paths, self._host, self._trace, self._kill = paths, host or Host(), trace, kill
 
     def running(self, att: Attachment) -> bool:
         """Listening HERE: the publisher runs where `start` started it, not on
@@ -78,7 +82,11 @@ class UqsPublisher:
     def stop(self, att: Attachment) -> None:
         try:
             done = runtime.stop(
-                self._paths, att.publisher.procname, base_port=att.stack.id, capture=True
+                self._paths,
+                att.publisher.procname,
+                base_port=att.stack.id,
+                kill=self._kill,
+                capture=True,
             )
         except UqsError as exc:
             raise AttachmentError(f"{att.publisher.procname} did not stop: {exc}") from None
