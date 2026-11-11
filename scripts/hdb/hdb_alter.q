@@ -3,8 +3,8 @@
 / before the first write, an undo, and a final check (#1755).
 / .
 / Run as (KDB-X only):
-/   q scripts/gates/hdb_alter.q -hdb DIR -table T [OPERATION] [-apply] [-json]
-/   q scripts/gates/hdb_alter.q -hdb DIR -undo JOURNAL [-apply] [-json]
+/   q scripts/hdb/hdb_alter.q -hdb DIR -table T [OPERATION] [-apply] [-json]
+/   q scripts/hdb/hdb_alter.q -hdb DIR -undo JOURNAL [-apply] [-json]
 / .
 / OPERATION is at most one of:
 /   (none)                 the consistency check alone
@@ -122,7 +122,7 @@ op:$[count chosen; first chosen; `check];
 arg:$[op in `check`fill; ""; opt_text op];
 if[(op in `reorder`rename`attr`cast`undo) and 0=count arg; refuse "-",string[op]," needs a value"];
 
-/ dbmaint.q, found from this script's own path, as fill_hdb_partitions.q finds
+/ dbmaint.q, found from this script's own path, as hdb_fill.q finds
 / it: scripts/gates/ is two levels below the tree holding lib/ in a checkout, a
 / release, and the temporary directory `uqs data alter --attach` copies
 / both into on a stack's host.

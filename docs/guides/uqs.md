@@ -100,16 +100,15 @@ directory that exists is never touched, and a table a partition holds that
 twice changes nothing the second time.
 
 The partitions it judges are the ones q maps: it loads the HDB in one q process
-(`scripts/gates/hdb_layout.q`) and reads `.Q.pv` and `.Q.pd` back. In a
-segmented HDB, whose root holds `par.txt`, each partition is named by the
-segment holding it (`<segment>/<date>`), and a date held by two segments is
-checked in both, as every query reads both. A segment `par.txt` names that does
-not exist or cannot be read, and partition directories in a root beside
-`par.txt`, are refused by name before anything is written - q loads past a
-missing segment without a word. Without a KDB-X q (none on `PATH`, or `$QCMD`
-naming PeachQ, whose `\l` maps no partitioned database) the check reads the
-root's own date directories instead, and refuses a segmented HDB rather than
-judging it by its root (#1783).
+(`scripts/hdb/hdb_layout.q`) and reads `.Q.pv` and `.Q.pd` back. In a segmented
+HDB, whose root holds `par.txt`, each partition is named by the segment holding
+it (`<segment>/<date>`), and a date held by two segments is checked in both, as
+every query reads both. A segment `par.txt` names that does not exist or cannot
+be read, and partition directories in a root beside `par.txt`, are refused by
+name before anything is written - q loads past a missing segment without a word.
+Without a KDB-X q (none on `PATH`, or `$QCMD` naming PeachQ, whose `\l` maps no
+partitioned database) the check reads the root's own date directories instead,
+and refuses a segmented HDB rather than judging it by its root (#1783).
 
 It should rarely be needed by hand, because `bootstrap` now does it on every
 `uqs` command. It is there because the situation is easy to create: each day's
@@ -188,7 +187,7 @@ is: `venue` (the venue stamped it) or `receipt` (this stack stamped it on
 arrival). A partition written before the column existed gets it from
 `uqs data check --apply`, which for this one column **attributes** instead of
 writing null, from the rows' own columns and the rules in
-`scripts/gates/hdb_clock_rules.csv`:
+`scripts/hdb/hdb_clock_rules.csv`:
 
   | Table         | Looked up by       | Rule shipped                                                                               |
   | ---           | ---                | ---                                                                                        |
@@ -398,7 +397,7 @@ None of this coordinates with a native end of day beyond the check above: run it
 outside end of day.
 
 **On the stack's host.** `--attachment` runs the commands where the files are.
-The q script (`scripts/gates/hdb_alter.q`) and the vendored `dbmaint.q` it loads
+The q script (`scripts/hdb/hdb_alter.q`) and the vendored `dbmaint.q` it loads
 are copied to a temporary directory there over one ssh session, run with the
 server's own q (`$QCMD`, else `q`, from the account's login shell), and removed
 afterwards - so the host needs q and nothing of uqf. The destination is the
@@ -409,7 +408,7 @@ destination it cannot reach is refused, naming the setting. The same script runs
 by hand:
 
 ```
-q scripts/gates/hdb_alter.q -hdb /data/hdb -table pb -reorder time,sym,amount,note [-apply]
+q scripts/hdb/hdb_alter.q -hdb /data/hdb -table pb -reorder time,sym,amount,note [-apply]
 ```
 
 KDB-X only: PeachQ cannot write a partitioned HDB natively, and the script
@@ -2587,7 +2586,7 @@ Each command's `--help` names its document. The commands #1731 added:
   | `target check`                              | `{ok, target, ssh, dest, remote_user, release}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
   | `data check`                                | `{ok, hdb, present, segmented, partitions, missing_tables, missing_columns, types_checked, type_changes}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
   | `config sources check SOURCE...`            | `{ok, sources: [{source, status, stage, rows, elapsed_ms, diagnostic}]}` - one document, not a line per source                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-  | `data check --table`, `data alter`          | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/gates/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+  | `data check --table`, `data alter`          | `{ok, hdb, resolved_from, ssh, warnings, plan, result}`: `plan` and `result` are `scripts/hdb/hdb_alter.q`'s own documents - partitions, shapes, steps, journal, final check                                                                                                                                                                                                                                                                                                                                                                                                                                         |
   | `data compress --report`                    | `{hdb, target, present, columns: [{table, column, files, compressed, algos, blocksizes, bytes, raw_bytes, ratio, compressed_ratio}], largest_uncompressed: [{table, partition, files, bytes}], sort_checked, sort_csv, unsorted: [{table, partition, rows, sort_by, sorted, missing_attr, declared_attr}]}`: `unsorted` is null when `sort_checked` is false                                                                                                                                                                                                                                                         |
   | `data compress`                             | `{ok, hdb, process, scope: {tables, older_than_days, days, change}, config, policies: [{table, policy, algo, blocksize, level, minage, columns}], held: [{dataset, date}], partitions: [{table, partition, age, status, policy_minage, early, dir, compress, decompress, skip, compressed, files, bytes_now, bytes_after, bytes_written}], sample, ratios, disk: [{filesystem, needed_bytes, free_bytes, ok}], totals, result}`: `result` is null without `--apply`, else `{partitions: [{partition, tables, files, bytes_before, bytes_after}], failed, reload, audit}`; ok false when a partition failed           |
 

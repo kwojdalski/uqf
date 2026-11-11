@@ -1,7 +1,7 @@
-/ fill_hdb_partitions.q - make every HDB partition hold every declared
+/ hdb_fill.q - make every HDB partition hold every declared
 / table, so a query that spans them can run at all.
 / .
-/ Run as:  q scripts/gates/fill_hdb_partitions.q <hdb root> <generated database.q>
+/ Run as:  q scripts/hdb/hdb_fill.q <hdb root> <generated database.q>
 / .
 / A THIN, SCHEMA-DRIVEN WRAPPER AROUND KX's dbmaint.q (#1423). This script
 / decides WHAT is missing, from database.q; dbmaint does the writing.
@@ -48,7 +48,7 @@
 / A DERIVED DEFAULT, FOR ONE COLUMN (#1925). A column the partition lacks is
 / written as the declared type's null EXCEPT `clock` on `executions` and
 / `market_data`, which is attributed from the rows' own columns by the rules
-/ in scripts/gates/hdb_clock_rules.csv: whose clock a stored source_time is
+/ in scripts/hdb/hdb_clock_rules.csv: whose clock a stored source_time is
 / depends on which feed wrote the row, and the feed is recoverable from
 / (market, source) for a book and from venue for a fill. Anything the rules
 / do not name is `unknown - never a guess, and never null, because null is
@@ -100,7 +100,7 @@
 /              is already in order only gets the column)
 / .
 / `uqs data check` (dry) lists the partitions that lack the columns or are not in order
-/ (scripts/gates/hdb_sort_order.q); `uqs data check --apply` asks, then runs this with `migrate`.
+/ (scripts/hdb/hdb_sort_order.q); `uqs data check --apply` asks, then runs this with `migrate`.
 / .
 / ADDITIVE, ALWAYS - but for those migrations. A table directory that holds a `.d` is never emptied and a
 / column that exists is never rewritten, whatever is in it. A table or a
@@ -130,7 +130,7 @@
 / end the process - q prints the error and waits on stdin, which is closed, and
 / exits 0 - so the caller (hdb_fill.fill_hdb_partitions, which reads the exit
 / code) would be told a repair that never ran had succeeded.
-die:{[msg] -2 "fill_hdb_partitions: ",msg; exit 1}
+die:{[msg] -2 "hdb_fill: ",msg; exit 1}
 
 hdb_root:hsym `$first .z.x;
 schema_file:hsym `$.z.x 1;
@@ -205,7 +205,7 @@ declared_default:{[root;table_name;col]
     $[11h=abs type empty; (.Q.en[root] flip enlist[`v]!enlist empty)`v; empty]}
 
 / The history-fill rules for `clock` (#1925): one row per (table, market, name)
-/ in scripts/gates/hdb_clock_rules.csv, found from this script's own path. Read
+/ in scripts/hdb/hdb_clock_rules.csv, found from this script's own path. Read
 / only when a clock column has to be filled.
 / @return the rules, columns tbl, market, name, clock
 clock_rules:{[]
@@ -519,12 +519,12 @@ patched:sum "j"$count each outcomes where added;
         -1 "  ",part,": added ",string[count grew]," column(s) - ", ", " sv string grew];
     }[parts;outcomes;wrote;added] each partitions;
 if[any skipped;
-    -2 "fill_hdb_partitions: left alone, no .d in: ",", " sv 1_'string dirs where skipped];
+    -2 "hdb_fill: left alone, no .d in: ",", " sv 1_'string dirs where skipped];
 
 / Check the result.
 found:.[{[tb;dr] raze problems_in'[tb;dr]};(tabs;dirs);{[e] die "could not check the result: ",e}];
 if[count found;
-    -2 "fill_hdb_partitions: the database is still not whole:";
+    -2 "hdb_fill: the database is still not whole:";
     -2 each "  ",/:found;
     exit 1];
 

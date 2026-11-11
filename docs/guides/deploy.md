@@ -130,10 +130,10 @@ Inside the artifact:
   repository paths, because the q loaders and `uqs` find each other by layout.
   `lib/kx-dbmaint` is KX's `dbmaint.q` with its Apache-2.0 licence and notice,
   the one part of `lib/` a release carries: the HDB repair below loads it,
-  offline, from `scripts/gates/fill_hdb_partitions.q`'s own location, and the
-  licence has to travel with the copy. Never shipped: the rest of `lib/` (TorQ,
-  the starter pack and the other vendored trees), `.env`, `.envrc`, keys and
-  licences, virtual environments, runtime data, logs, tests, build output, and
+  offline, from `scripts/hdb/hdb_fill.q`'s own location, and the licence has to
+  travel with the copy. Never shipped: the rest of `lib/` (TorQ, the starter
+  pack and the other vendored trees), `.env`, `.envrc`, keys and licences,
+  virtual environments, runtime data, logs, tests, build output, and
   `scripts/torqconfig/permissions/gateway_users.csv`, which holds the demo
   gateway passwords.
 - **`.release/`.** `requirements.txt`, the dependencies of `uqs` pinned with

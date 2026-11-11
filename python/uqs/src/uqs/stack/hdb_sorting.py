@@ -7,11 +7,11 @@ sorted by sym, source, source_time with p# on sym, so a markout's as-of join
 binary-searches the memory-mapped columns instead of copying them - has a third
 way to be wrong: its rows are in another order, or lack the attribute, or its
 row numbers (`rid`) do not hold each row's position. Only q can read the
-columns, so scripts/gates/hdb_sort_order.q does that part, in exactly those
+columns, so scripts/hdb/hdb_sort_order.q does that part, in exactly those
 partitions, against the plant's own declarations.
 
 Dry: it reads and reports. The migration that fixes what it finds is
-scripts/gates/fill_hdb_partitions.q's, run by `uqs data check --apply`, after
+scripts/hdb/hdb_fill.q's, run by `uqs data check --apply`, after
 asking.
 """
 
@@ -26,7 +26,7 @@ from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.env import with_interpreter
 
-SORT_SCRIPT = Path("gates") / "hdb_sort_order.q"
+SORT_SCRIPT = Path("hdb") / "hdb_sort_order.q"
 DONE = "DONE"
 PREFIX = "unsorted|"
 

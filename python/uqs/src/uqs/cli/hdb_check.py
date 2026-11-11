@@ -5,13 +5,13 @@ Two scopes (#1755). Without --table, --attachment or --hdb it judges this
 runtime's own HDB against every table this runtime declares, as it always
 has: stack/hdb_layout.py asks q which partitions there are (in the segments
 par.txt names, for a segmented database - #1783), stack/hdb_shape.py judges
-what they hold, scripts/gates/fill_hdb_partitions.q fills it, and
+what they hold, scripts/hdb/hdb_fill.q fills it, and
 stack/hdb_types.py compares the stored types. With any of them it
 checks ONE table in the HDB they name - an attached stack's, say, where
 filling uqf's whole schema would add tables production never asked for - and
 fills only the partitions lacking it, from this runtime's declaration of the
 table when there is one, else from a partition that holds it
-(scripts/gates/hdb_alter.q -fill, cli/hdb_scope.py).
+(scripts/hdb/hdb_alter.q -fill, cli/hdb_scope.py).
 """
 
 from __future__ import annotations
@@ -213,9 +213,9 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
     console.print(
         "\n[dim]`uqs data check --apply` writes an empty copy of each missing "
         "table, and each missing column as its declared type's null (the `clock` of executions and "
-        "market_data is attributed from the rows by scripts/gates/hdb_clock_rules.csv instead, and "
+        "market_data is attributed from the rows by scripts/hdb/hdb_clock_rules.csv instead, and "
         "the markout contract's columns of fx_markout and fx_markout_wide are derived from the "
-        "stored rows by scripts/gates/fill_hdb_partitions.q), "
+        "stored rows by scripts/hdb/hdb_fill.q), "
         "after asking. Additive: "
         "an existing table directory or column file is never touched, and a column whose "
         "declared TYPE changed is not repaired here.[/]"

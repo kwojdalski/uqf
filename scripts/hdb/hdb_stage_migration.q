@@ -17,7 +17,7 @@
 / guesses: one populated, unreadable or unaccounted-for file refuses it.
 
 args:.z.x;
-if[8>count args; -2 "stage_hdb_migration: needs 8 arguments"; exit 2];
+if[8>count args; -2 "hdb_stage_migration: needs 8 arguments"; exit 2];
 root:hsym `$args 0;
 schema_file:hsym `$args 1;
 part:"D"$args 2;
@@ -28,9 +28,9 @@ old_names:names args 5;
 new_names:names args 6;
 cast_names:names args 7;
 mode:$[8>count args;"migrate";args 8];
-if[not mode in ("migrate";"check";"reset-check";"reset"); -2 "stage_hdb_migration: unknown mode ",mode; exit 2];
+if[not mode in ("migrate";"check";"reset-check";"reset"); -2 "hdb_stage_migration: unknown mode ",mode; exit 2];
 
-fail:{[msg] -2 "stage_hdb_migration: ",msg; exit 1};
+fail:{[msg] -2 "hdb_stage_migration: ",msg; exit 1};
 if[()~key root; fail "no HDB at ",string root];
 if[()~key schema_file; fail "no schema at ",string schema_file];
 if[(count old_names)<>(count new_names); fail "rename lists have different lengths"];

@@ -1,15 +1,15 @@
 / hdb_column_types.q - the HDB columns whose type on disk is not the one
 / database.q declares (#870).
 / .
-/ Run as:  q scripts/gates/hdb_column_types.q <partitions file> <generated database.q>
+/ Run as:  q scripts/hdb/hdb_column_types.q <partitions file> <generated database.q>
 / .
 / The partitions file names the partitions to read, one directory per line -
-/ what scripts/gates/hdb_layout.q found, as stack/hdb_layout.py writes it.
+/ what scripts/hdb/hdb_layout.q found, as stack/hdb_layout.py writes it.
 / This script does not look for partitions itself: q's load finds them, in
 / the segments par.txt names when the database is segmented (#1783), and the
 / check reads exactly those.
 / .
-/ fill_hdb_partitions.q fills what is MISSING - additive, idempotent, safe to
+/ hdb_fill.q fills what is MISSING - additive, idempotent, safe to
 / run on every bootstrap. A column that exists with another type is the one
 / thing it must not touch: "the declaration changed" and "the bytes on disk are
 / wrong" are different claims, and only a person can tell which, so a type

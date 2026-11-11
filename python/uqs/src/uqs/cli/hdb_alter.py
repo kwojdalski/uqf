@@ -4,7 +4,7 @@ attribute, cast, or undo one of those - dry run by default (#1755).
 Only partitions holding the table are touched; partitions that disagree on
 its shape are refused before any write; a journal is written beside the HDB
 before the first write and `--undo JOURNAL` reverses the run; every partition
-is read again at the end. All of that is scripts/gates/hdb_alter.q's
+is read again at the end. All of that is scripts/hdb/hdb_alter.q's
 (stack/hdb_alter.py); cli/hdb_scope.py resolves the HDB and runs it.
 """
 
@@ -24,7 +24,7 @@ from uqs.generated.q_facts import Q_ATTRIBUTES
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.hdb_alter import Request
 
-#: What `--attr COL:` takes to clear an attribute - scripts/gates/hdb_alter.q's word.
+#: What `--attr COL:` takes to clear an attribute - scripts/hdb/hdb_alter.q's word.
 CLEAR_ATTRIBUTE = "none"
 
 AlterJson = json_opt(

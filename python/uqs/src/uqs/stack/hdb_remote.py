@@ -8,7 +8,7 @@ dbmaint.q it loads go there for one run and are gone after it:
      QCMD and PATH - as deploy/remote.py runs its steps), reading a script on
      stdin;
   2. that script makes a temporary directory, writes the files into it in
-     the layout hdb_alter.q finds dbmaint by (scripts/gates/, lib/kx-dbmaint/),
+     the layout hdb_alter.q finds dbmaint by (scripts/hdb/, lib/kx-dbmaint/),
      runs `$QCMD` (else `q`) on it, and removes the directory on any exit.
 
 The files travel inside the script as base64 heredocs, so nothing but the
@@ -65,7 +65,7 @@ def remote_script(repo_root: Path, req: Request, *, apply: bool) -> str:
         "set -u",
         'tmp=$(mktemp -d "${TMPDIR:-/tmp}/uqf-hdb-alter.XXXXXX") || exit ' + str(NO_TEMP),
         "trap 'rm -rf \"$tmp\"' EXIT",
-        'mkdir -p "$tmp/scripts/gates" "$tmp/lib/kx-dbmaint"',
+        'mkdir -p "$tmp/scripts/hdb" "$tmp/lib/kx-dbmaint"',
         *(heredoc(target, data) for target, data in files.items()),
         'q_cmd="${QCMD:-q}"',
         'if ! command -v "${q_cmd%% *}" >/dev/null 2>&1; then',

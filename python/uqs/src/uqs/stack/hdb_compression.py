@@ -1,6 +1,6 @@
 """What `uqs data compress --report` reads: the HDB's compression, now (#2149).
 
-Nothing here computes a ratio or walks a partition. scripts/gates/
+Nothing here computes a ratio or walks a partition. scripts/hdb/
 hdb_compression_report.q loads TorQ's own `.cmp` and sort.csv reader and uqf's
 wrapper over them (scripts/processes/torq_compress.q), and prints
 `.qtorq.compress.report` - per table and column the algorithm, block size and
@@ -46,7 +46,7 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.stack import hdb_remote, source_settings
 from uqs.stack.env import with_interpreter
 
-REPORT_SCRIPT = Path("gates") / "hdb_compression_report.q"
+REPORT_SCRIPT = Path("hdb") / "hdb_compression_report.q"
 #: What the report script loads besides itself, relative to the repository, and
 #: TorQ's own files relative to its home: what a remote run sends.
 WRAPPER = Path("scripts") / "processes" / "torq_compress.q"
@@ -160,7 +160,7 @@ def remote_script(paths: UqsPaths, hdb: str, top: int, sort: str | None, ssh: Ss
         + str(hdb_remote.NO_TEMP),
         "trap 'rm -rf \"$tmp\"' EXIT",
         "trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM",
-        'mkdir -p "$tmp/scripts/gates" "$tmp/scripts/processes" "$tmp/torq/code/common"',
+        'mkdir -p "$tmp/scripts/hdb" "$tmp/scripts/processes" "$tmp/torq/code/common"',
         *(hdb_remote.heredoc(target, data) for target, data in files.items()),
         f"hdb={q_hdb}",
         'if [ ! -d "$hdb" ]; then',

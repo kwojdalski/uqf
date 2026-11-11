@@ -43,8 +43,8 @@ ALLOWLIST = (
 )
 
 #: The one directory of lib/ a release carries (#1423): KX's dbmaint.q, which
-#: scripts/gates/fill_hdb_partitions.q loads for `uqs data check --apply`,
-#: and scripts/gates/hdb_alter.q for `uqs data alter` and `data check
+#: scripts/hdb/hdb_fill.q loads for `uqs data check --apply`,
+#: and scripts/hdb/hdb_alter.q for `uqs data alter` and `data check
 #: --table` (#1755) - so `uqs --target NAME data ...` runs both from the
 #: release - with the Apache-2.0 licence and NOTICE that must travel with it. Every other
 #: lib/ tree is a reference or a runtime installed from elsewhere. Files here

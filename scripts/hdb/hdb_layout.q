@@ -1,7 +1,7 @@
 / hdb_layout.q - the partitions an HDB has and the tables each holds, as q
 / discovers them: segmented (par.txt) or not (#1783).
 / .
-/ Run as:  q scripts/gates/hdb_layout.q <hdb root>
+/ Run as:  q scripts/hdb/hdb_layout.q <hdb root>
 / .
 / Prints one line, layout|<json>, then DONE. q exits 0 whatever happens while
 / a script runs, so the caller believes DONE, never the exit code - and a run
