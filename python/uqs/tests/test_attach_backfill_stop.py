@@ -28,10 +28,11 @@ from test_attach_backfill_follow import (  # noqa: F401 - the follow tests' help
     _launched,
     _restore_loguru,
 )
-from test_attach_backfill_run import (  # noqa: F401 - the shared world and its fixtures
+from test_attach_backfill_run import (  # noqa: F401 - the shared world, its fixtures and its PeachQ skip
     WORKER,
     _lock_dirs,
     _wait_for,
+    pytestmark,
     read_rows,
     upstream,
     world,
