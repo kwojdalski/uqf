@@ -204,19 +204,28 @@ def test_an_unreadable_attachment_config_refuses_every_start(att, state, damage,
         assert "Nothing was started" in str(caught.value) and str(state) in str(caught.value)
 
 
-def test_an_attachment_config_of_an_older_schema_refuses_every_start(att, state):
-    """One written before #2723 (`stack.id`, `publisher.procname`, no `native`) is
-    not read: the refusal names the command that plans it again."""
+@pytest.mark.parametrize(
+    ("written_before", "missing"),
+    [("2122", "stack.base_port, publisher.process"), ("1845", "native")],
+)
+def test_an_attachment_config_an_older_uqs_wrote_refuses_every_start(
+    att, state, written_before, missing
+):
+    """One written before #2122 (`stack.id`, `publisher.procname`) or #1845 (no
+    `native`) is not read (#2723): the refusal names what it lacks and the command
+    that plans it again."""
     with_state(att, "verified")
     path = config.directory(att.name) / config.CONFIG_FILE
     old = json.loads(path.read_text())
-    old["schema"] = 1
-    old["stack"]["id"] = old["stack"].pop("base_port")
-    old["publisher"]["procname"] = old["publisher"].pop("process")
+    if written_before == "2122":
+        old["stack"]["id"] = old["stack"].pop("base_port")
+        old["publisher"]["procname"] = old["publisher"].pop("process")
+    else:
+        old.pop("native")
     path.write_text(json.dumps(old))
     said = (
-        f"{path} cannot be read: it is attachment config schema 1, not 2, which another uqs "
-        "wrote. Plan the attachment again - move that file aside, then `uqs job attachment add "
+        f"{path} cannot be read: it has no {missing}, which an older uqs did not write. Plan "
+        "the attachment again - move its attachment.json aside, then `uqs job attachment add "
         "ex-uat --job JOB --base-port PORT`"
     )
     with pytest.raises(UqsError) as caught:

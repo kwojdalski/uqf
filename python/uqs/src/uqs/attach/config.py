@@ -21,8 +21,9 @@ back instead of recomputing it:
                   and whether its `start all` starts it (native.py, #1845).
 
 The file spells the stack id `stack.base_port` and the publisher's process
-`publisher.process`, as every --json document does (#2122). A file of an older
-schema is refused with the command that plans it again, never read (#2723).
+`publisher.process`, as every --json document does (#2122). A file without a
+field this uqs always writes - one written before #1845 or #2122 - is refused
+with the command that plans it again, never read (#2723).
 
 A directory per attachment holds `attachment.json` (this) and `manifest.json`
 (manifest.py). The directory is `$UQS_ATTACH_DIR`, else `$UQS_DATA_ROOT` or the
@@ -204,12 +205,10 @@ def to_json(att: Attachment) -> dict:
 
 
 def from_json(data: dict) -> Attachment:
-    name = data.get("name")
-    if data.get("schema") != SCHEMA_VERSION:
+    if problem := attach_state.config_problem(data):
+        name = data.get("name") if isinstance(data, dict) else None
         raise AttachmentError(
-            f"attachment config schema {data.get('schema')!r} is not {SCHEMA_VERSION} - "
-            f"written by another uqs; plan it again: move its {CONFIG_FILE} aside, then "
-            f"`uqs job attachment add {name} --job JOB --base-port PORT`"
+            f"attachment {name} cannot be read: {problem}. {attach_state.replan(str(name))}"
         )
     stack = dict(data["stack"])
     stack["id"] = int(stack.pop("base_port"))

@@ -686,8 +686,8 @@ def test_a_reader_row_types_its_ok_and_says_its_outcome_apart():
 
 def test_attachment_json_writes_the_documents_keys_and_refuses_an_older_file(tmp_path):
     """attachment.json is persisted, and `job attachment show --json` prints it:
-    a file says `stack.base_port` and `publisher.process`. One of an older schema
-    - `stack.id`, `publisher.procname` before #2122 - is refused, never read (#2723)."""
+    a file says `stack.base_port` and `publisher.process`. One written before
+    #2122 (`stack.id`, `publisher.procname`) is refused, never read (#2723)."""
     from uqs.attach import config
 
     att = config.Attachment(
@@ -698,20 +698,39 @@ def test_attachment_json_writes_the_documents_keys_and_refuses_an_older_file(tmp
         tables=(),
     )  # fmt: skip
     new = config.to_json(att)
+    assert new["schema"] == 1
     assert new["stack"]["base_port"] == 6000 and "id" not in new["stack"]
     assert new["publisher"]["process"] == "markout1" and "procname" not in new["publisher"]
     assert not _breaches(new)
     assert config.from_json(new) == att
     old = json.loads(json.dumps(new))
-    old["schema"] = 1
     old["stack"]["id"] = old["stack"].pop("base_port")
     old["publisher"]["procname"] = old["publisher"].pop("process")
-    with pytest.raises(
-        config.AttachmentError,
-        match=r"config schema 1 is not 2 - written by another uqs; plan it again: move its "
-        r"attachment\.json aside, then `uqs job attachment add a2122 --job JOB --base-port PORT`",
-    ):
+    with pytest.raises(config.AttachmentError) as caught:
         config.from_json(old)
+    assert str(caught.value) == (
+        "attachment a2122 cannot be read: it has no stack.base_port, publisher.process, which "
+        "an older uqs did not write. Plan the attachment again - move its attachment.json "
+        "aside, then `uqs job attachment add a2122 --job JOB --base-port PORT`"
+    )
+
+
+def test_an_attachment_saved_by_this_uqs_loads_unchanged(tmp_path):
+    """Only an older file is refused (#2723): one the current writer saved loads
+    back equal, and its file is not touched by the load."""
+    from uqs.attach import config
+
+    att = config.Attachment(
+        name="today",
+        stack=config.Stack(id=6000, host="localhost", discovery_host="localhost",
+                           discovery_port=6001, consumers=("rdb1", "wdb1")),
+        publisher=config.Publisher(job="markout", procname="markout1"),
+        tables=(),
+    )  # fmt: skip
+    path = config.save(att, tmp_path)
+    written = path.read_bytes()
+    assert config.load("today", tmp_path) == att
+    assert path.read_bytes() == written
 
 
 def test_an_override_record_written_before_2122_is_not_read(tmp_path):

@@ -32,9 +32,15 @@ log = get_logger()
 
 ATTACH_DIR_ENV = "UQS_ATTACH_DIR"
 CONFIG_FILE = "attachment.json"
-#: attachment.json's schema. 2 since #2723: a file of any other schema - one
-#: written before #1451, #1845 or #2122 among them - is refused, never read.
-CONFIG_SCHEMA = 2
+#: attachment.json's schema; a file of another is refused, never read.
+CONFIG_SCHEMA = 1
+#: What every attachment.json this uqs writes holds. A file without one of them
+#: was written before #1845 (`native`) or #2122 (`stack.base_port`,
+#: `publisher.process`), and is refused, never read (#2723).
+CONFIG_FIELDS = (
+    "name", "stack", "publisher", "tables", "storage", "persist", "origin", "overrides",
+    "native", "stack.base_port", "publisher.process",
+)  # fmt: skip
 MANIFEST_FILE = "manifest.json"
 NAME = re.compile(r"^[a-z][a-z0-9-]{0,47}$")
 #: The only manifest state in which the publisher may start.
@@ -133,17 +139,35 @@ def _scan(root: Path | None = None) -> tuple[list[Published], list[str]]:
 _LOOPBACK = ("localhost", "127.0.0.1", "::1")
 
 
+def config_problem(cfg: object) -> str:
+    """Why `cfg` is not an attachment.json this uqs writes, or "" when it is."""
+    if not isinstance(cfg, dict):
+        return "it is not an object"
+    if cfg.get("schema") != CONFIG_SCHEMA:
+        return f"it is attachment config schema {cfg.get('schema')!r}, not {CONFIG_SCHEMA}"
+    if missing := [f for f in CONFIG_FIELDS if not _has(cfg, f)]:
+        return f"it has no {', '.join(missing)}, which an older uqs did not write"
+    return ""
+
+
+def _has(cfg: dict, field: str) -> bool:
+    head, _, tail = field.partition(".")
+    return head in cfg and (not tail or (isinstance(cfg[head], dict) and tail in cfg[head]))
+
+
+def replan(name: str) -> str:
+    """The remedy for a config this uqs does not read."""
+    return (
+        f"Plan the attachment again - move its {CONFIG_FILE} aside, then "
+        f"`uqs job attachment add {name} --job JOB --base-port PORT`"
+    )
+
+
 def refuse_old_config(cfg: object, path: Path) -> None:
-    """Raise UqsError unless `cfg`, read from `path`, is an attachment.json of
-    CONFIG_SCHEMA. One of another schema is never read: it is planned again."""
-    schema = cfg.get("schema") if isinstance(cfg, dict) else None
-    if schema != CONFIG_SCHEMA:
-        raise UqsError(
-            f"{path} cannot be read: it is attachment config schema {schema!r}, not "
-            f"{CONFIG_SCHEMA}, which another uqs wrote. Plan the attachment again - move that "
-            f"file aside, then `uqs job attachment add {path.parent.name} --job JOB "
-            "--base-port PORT`"
-        )
+    """Raise UqsError unless `cfg`, read from `path`, is an attachment.json this
+    uqs writes: one of an older format is never read, it is planned again."""
+    if problem := config_problem(cfg):
+        raise UqsError(f"{path} cannot be read: {problem}. {replan(path.parent.name)}")
 
 
 def _remote_discovery(cfg: dict) -> str:

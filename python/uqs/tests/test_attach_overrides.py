@@ -266,13 +266,20 @@ def test_an_override_round_trips_with_who_when_why_and_the_facts(bundle, tmp_pat
     assert raw["overrides"][0]["facts"] == {"torq": SITE}
 
 
-def test_an_attachment_saved_before_overrides_existed_still_loads(bundle, tmp_path):
+def test_an_attachment_saved_before_overrides_existed_is_refused(bundle, tmp_path):
+    """Such a file predates #1451 and is not read (#2723)."""
     config.save(att_for(bundle), tmp_path)
     path = tmp_path / "pb-uat" / config.CONFIG_FILE
     data = json.loads(path.read_text())
     data.pop("overrides")
     path.write_text(json.dumps(data))
-    assert config.load("pb-uat", tmp_path).overrides == ()
+    with pytest.raises(config.AttachmentError) as caught:
+        config.load("pb-uat", tmp_path)
+    assert str(caught.value) == (
+        f"{path} cannot be read: it has no overrides, which an older uqs did not write. Plan "
+        "the attachment again - move its attachment.json aside, then `uqs job attachment add "
+        "pb-uat --job JOB --base-port PORT`"
+    )
 
 
 def test_accepting_again_replaces_the_same_code_and_component(bundle):
