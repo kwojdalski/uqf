@@ -1,6 +1,6 @@
-// bench_compression.q - compression settings measured on this HDB's own data (#2297).
+// compression.q - compression settings measured on this HDB's own data (#2297).
 //
-//   q scripts/dev/bench_compression.q -hdb output/uqs/hdb -table quote -partition 2026.10.07
+//   q scripts/bench/compression.q -hdb output/uqs/hdb -table quote -partition 2026.10.07
 //       [-candidates current,policy,none,gzip/17/6,...] [-reps 3] [-points 100] [-probes 1000]
 //       [-range <rows>] [-seed 42] [-tmp DIR] [-keep] [-qbin q]
 //
@@ -11,7 +11,7 @@
 //
 // IT NEVER WRITES TO THE HDB. Each setting is a copy of the one partition in a temporary
 // directory (-tmp, else mktemp -d; refused when inside the HDB), written by
-// bench_compression_lib.q's write_copy with -19! from the HDB's file as the source and checked
+// compression_lib.q's write_copy with -19! from the HDB's file as the source and checked
 // to read back equal; the HDB's sym file is copied beside it. The directory is removed at the
 // end unless -keep.
 //
@@ -25,7 +25,7 @@
 // is listed as unavailable and the rest still run. On macOS with Homebrew,
 // DYLD_LIBRARY_PATH=/opt/homebrew/lib gives q all three; it is passed on to every child.
 //
-// THE SHAPES (bench_compression_lib.q): sweep (every column of the whole day), aj (-probes
+// THE SHAPES (compression_lib.q): sweep (every column of the whole day), aj (-probes
 // rows sampled from the day, aj'd against the mapped day), range (a contiguous block of
 // -range rows, 1% of the day by default, every column), point (-points single-row selects,
 // every column). Each run is a fresh q process that loads the copy with \l and times only the
@@ -43,7 +43,7 @@
 
 opts:.Q.opt .z.x;
 here:{[] f:string .z.f; d:$["/" in f; (last where f="/")#f; "."]; $["/"=first d; d; (first system "pwd"),"/",d]}[];
-system "l ",here,"/bench_compression_lib.q";
+system "l ",here,"/compression_lib.q";
 
 / ------------------------------------------------------------ CHILD
 / One timed query: -child -root R -table T -params P -shape S. Prints result|ms|rows.
@@ -66,7 +66,7 @@ if[`child in key opts;
 fail:{[why] -2 "bench_compression: ",why; exit 1};
 arg:{[k;d] $[k in key opts; first opts k; d]};
 if[count miss:`hdb`table`partition except key opts;
-    fail "missing ",(", " sv "-",/:string miss),"; usage: q scripts/dev/bench_compression.q -hdb DIR -table T -partition P"];
+    fail "missing ",(", " sv "-",/:string miss),"; usage: q scripts/bench/compression.q -hdb DIR -table T -partition P"];
 
 abs_dir:{[d] first system "(cd ",(.qdev.cbench.sh d)," && pwd -P)"};
 hdb_text:@[abs_dir;arg[`hdb;""];{[e] fail "no HDB directory at ",arg[`hdb;""]}];
@@ -136,7 +136,7 @@ logical_src:.qdev.cbench.column_bytes src;
 have:.qdev.cbench.on_path[getenv `PATH] each `strace`dtruss!`strace`dtruss;
 counter:.qdev.cbench.counter[.z.o;"J"$first system "id -u";have];
 env:.qdev.cbench.env_prefix `DYLD_LIBRARY_PATH`LD_LIBRARY_PATH!getenv each `DYLD_LIBRARY_PATH`LD_LIBRARY_PATH;
-script:here,"/bench_compression.q";
+script:here,"/compression.q";
 core:{[root;s] qbin," ",(.qdev.cbench.sh script)," -child -root ",(.qdev.cbench.sh root)," -table ",string[tbl]," -params ",(.qdev.cbench.sh params_file)," -shape ",string[s]," -q"};
 
 / One run: (ms; rows; reads), each null where it failed or was not counted.

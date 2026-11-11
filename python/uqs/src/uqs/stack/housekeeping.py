@@ -14,7 +14,7 @@ the morning after it was written (#2155).
 REPLACE, NEVER EDIT - as reporter1's checks (stack/reporter.py). This tree's
 rules are an explicit list (`housekeeping_rows`); bootstrap writes them into
 TORQDATA, and housekeeping1 is pointed at that copy by
-scripts/processes/uqs_housekeeping.q, loaded BEFORE housekeeping.q
+scripts/processes/uqs_housekeeping_config.q, loaded BEFORE housekeeping.q
 (VENDORED_LOAD_OVERLAY in stack/procs.py) - after every settings layer, so
 neither TorQ's `settings/housekeeping.q` nor a site's can point it back. The
 site's file is never read or written.
@@ -42,7 +42,7 @@ lock, the checked apply, then the HDB reload. Never housekeeping.q's
 `kdbzip`, which hard-codes one algorithm for every file. Which partitions are old
 enough is the policy's `minage`, table by table, so the row itself is not aged:
 `.cmp` leaves the young ones alone. The function and what housekeeping1 loads for
-it are scripts/processes/uqs_housekeeping.q and VENDORED_LOAD_OVERLAY.
+it are scripts/processes/uqs_housekeeping_config.q and VENDORED_LOAD_OVERLAY.
 
 THE SCHEDULE. When housekeeping1 runs its rules is declared here too
 (`HOUSEKEEPING_RUNTIMES`), written beside the rules and read into `.hk.runtimes`
@@ -79,7 +79,7 @@ HOUSEKEEPING_FIELDS = ("function", "path", "match", "exclude", "age", "agemin", 
 TPLOG_REPLAY_RETENTION_DAYS = 7
 
 #: The rule function for tickerplant log directories, defined at the root by
-#: scripts/processes/uqs_housekeeping.q (housekeeping.q runs only functions
+#: scripts/processes/uqs_housekeeping_config.q (housekeeping.q runs only functions
 #: in the root namespace).
 TPLOG_FUNCTION = "tplogzip"
 
@@ -94,7 +94,7 @@ def config_path(paths: UqsPaths) -> Path:
 
 
 #: The rule function for the HDB, defined at the root by
-#: scripts/processes/uqs_housekeeping.q: TorQ's `.cmp` through
+#: scripts/processes/uqs_housekeeping_config.q: TorQ's `.cmp` through
 #: `.qtorq.compress.run_held`, by the declared compression policy.
 COMPRESS_FUNCTION = "hdbcompress"
 
@@ -109,18 +109,18 @@ HDB_DIR_NAME = "hdb"
 #: partition, before the desk is in.
 HOUSEKEEPING_RUNTIMES: tuple[str, ...] = ("02:00:00",)
 
-#: The schedule file's one column, as uqs_housekeeping.q reads it.
+#: The schedule file's one column, as uqs_housekeeping_config.q reads it.
 SCHEDULE_FIELDS = ("runtime",)
 
 #: What housekeeping1 loads BEFORE housekeeping.q (VENDORED_LOAD_OVERLAY in
-#: stack/procs.py): this tree's rules and schedule (uqs_housekeeping.q), then
+#: stack/procs.py): this tree's rules and schedule (uqs_housekeeping_config.q), then
 #: what the compression rule needs - the policy's path set and TorQ's
 #: common/compress.q loaded again to read it (.cmp reads it once, as the common
 #: code loads, before any file named here), and the .qetl.log and .qtorq
 #: reload_hdb torq_compress.q's run uses. Before, not after: housekeeping.q
 #: runs its rules as it loads when given -runnow.
 LOAD_BEFORE = (
-    "${UQF_SCRIPTS}/processes/uqs_housekeeping.q",
+    "${UQF_SCRIPTS}/processes/uqs_housekeeping_config.q",
     "${UQF_SCRIPTS}/processes/uqs_compression_config.q",
     "${KDBCODE}/common/compress.q",
     "${UQF_ROOT}/src/etl/core/log.q",
@@ -182,7 +182,7 @@ def render_housekeeping_csv() -> str:
 
 
 def render_housekeeping_schedule() -> str:
-    """The schedule as uqs_housekeeping.q reads it into `.hk.runtimes`."""
+    """The schedule as uqs_housekeeping_config.q reads it into `.hk.runtimes`."""
     if not HOUSEKEEPING_RUNTIMES:
         raise ValueError("HOUSEKEEPING_RUNTIMES is empty: housekeeping1 would never run")
     for runtime in HOUSEKEEPING_RUNTIMES:

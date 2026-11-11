@@ -1,4 +1,4 @@
-/ uqs_housekeeping.q - point TorQ's housekeeping at the rules uqs generates,
+/ uqs_housekeeping_config.q - point TorQ's housekeeping at the rules uqs generates,
 / and define the one rule function they add.
 / .
 / Loaded by housekeeping1 BEFORE ${KDBCODE}/processes/housekeeping.q

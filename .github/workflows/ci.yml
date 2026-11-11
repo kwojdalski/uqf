@@ -115,7 +115,7 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         # The repository's Python: ci_scope.py reads q_readers from
-        # scripts/dev/test_impact.py, written for 3.14.
+        # scripts/dev/q_test_impact.py, written for 3.14.
         with:
           version: "0.12.14"
           python-version: "3.14"

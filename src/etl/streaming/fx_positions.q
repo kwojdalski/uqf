@@ -8,7 +8,7 @@
 / .
 / Modelled on Data Intellect's TorQ FX positions engine, built on this
 / repository's own machinery instead - and it runs with no TorQ at all,
-/ through .qetl.tick and scripts/processes/run_stream.q.
+/ through .qetl.tick and scripts/jobs/run_stream.q.
 / .
 / WHY IT SNAPSHOTS ON A TIMER RATHER THAN PER BATCH. A position is a
 / STATE, and republishing the whole book on every order would write a
@@ -343,5 +343,5 @@
     1b;
     enlist `fx_limit_breach;
     `state`table!(`positions;`fx_position_open);
-    "net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it";
+    "net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under jobs/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it";
     `positions`limits`alerts)];

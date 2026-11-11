@@ -73,7 +73,7 @@ Derived from `uqs.model.pipelines.PIPELINES` and the vendored
 - **`cryptomock1`** — stands in for cryptorust's two kdb recorders. startwithall:0: start it INSTEAD of them, never as well as - it publishes onto the same two tables, and an invented ladder or fill must not interleave with a real one
 - **`executions1`** — every fill as one tape: trades, crypto_trades and filled orders -> executions
 - **`fxordersfeed1`** — synthetic order flow, most of which never becomes a fill - fxpositions1's input
-- **`fxpositions1`** — net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under processes/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it
+- **`fxpositions1`** — net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under jobs/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it
 - **`upstream_backfill1`** — bounded: reads an upstream q process over IPC
 - **`marketdata1`** — every venue's book in one shape, with source identity and the source's own time: FX from quote and fx_orderbook, crypto from crypto_book. posbook1 marks positions to its level-0 mids, so it starts with the stack; superbook1 merges the FX books by pair for the arbitrage chain, which stays on demand (`uqs start --profile arbitrage`, #285)
 - **`superbook1`** — latest source books merged by pair; stale liquidity expires on a timer. Middle of the marketdata1 chain - see there

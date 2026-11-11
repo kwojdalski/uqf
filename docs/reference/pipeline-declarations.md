@@ -403,11 +403,11 @@ and compares what each publishes by identity (36 rows, USDPLN's two legs
 included). The fixture has no source to read from, so a run on it uses the
 window it fetched.
 
-**What it measured.** `scripts/dev/bench_batching.q` runs
-`hdb_fx_markouts_backfill` end to end into a real HDB root, against **a second q
-process** that serves the window the way an HDB would and counts what it is
-asked. One machine (a busy one), KDB-X, 20,000 executions, fastest of two, stage
-times summed over the run's twelve windows:
+**What it measured.** `scripts/bench/batching.q` runs `hdb_fx_markouts_backfill`
+end to end into a real HDB root, against **a second q process** that serves the
+window the way an HDB would and counts what it is asked. One machine (a busy
+one), KDB-X, 20,000 executions, fastest of two, stage times summed over the
+run's twelve windows:
 
   | 200 quotes a book                | fetch ms | transform ms | publish ms | queries | book rows read | worker peak MB |
   | ---                              | ---      | ---          | ---        | ---     | ---            | ---            |
@@ -468,7 +468,7 @@ context declared for them, produces that group's output whatever other groups
 are in the window. The framework cannot check that; compare a batched with an
 unbatched run, as `tests/q/test_bounded_batching.q` does for
 `hdb_fx_markouts_backfill`. That worker is **not** batched as shipped: enabling
-it is a decision for `scripts/dev/bench_batching.q` on a real HDB.
+it is a decision for `scripts/bench/batching.q` on a real HDB.
 
 ### Run spec
 

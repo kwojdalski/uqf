@@ -32,10 +32,10 @@ every hook, and the whole q suite, as this did before it was scoped. A branch
 that needs none records nothing, and says so.
 
 q-tests runs only the q suites the change reaches (#1690): the selection
-scripts/dev/test_impact.py makes for `base...HEAD` from q-lint's dependency
+scripts/dev/q_test_impact.py makes for `base...HEAD` from q-lint's dependency
 graph, handed to the hook in UQF_Q_TESTS_SELECTION so the hook runs exactly
 what is recorded. `q-tests=<sha256>` records that subset by its digest
-(test_impact.digest: the sorted file names), and CI's check, with the qlinter
+(q_test_impact.digest: the sorted file names), and CI's check, with the qlinter
 .qlinter-version pins, makes the same selection from the PR's diff and
 accepts the trailer only when the digests agree. `q-tests=all` records the
 whole suite, which needs no recomputation: what ran when the selector said
@@ -62,13 +62,13 @@ q-coverage runs only what the change reaches too (#1719): q-tests' suites,
 plus, for each function it judges, a suite file that enters it according to
 tests/q/coverage_map.txt, instrumenting and judging only the functions
 defined in the production files the change reaches
-(test_impact.coverage_for) - or the whole suite, judging every function, when
+(q_test_impact.coverage_for) - or the whole suite, judging every function, when
 q-tests runs the whole suite, when no suite or no production file is reached,
 or when the change touches the coverage tool, its driver or its baseline. A
 subset that finds a judged function never entered is no verdict:
 tests/qrun/test_q_coverage.py then runs the whole suite and its verdict stands,
 so a function only a suite outside the subset enters can never fail a change.
-`q-coverage=<sha256>` records the subset (test_impact.coverage_digest: its
+`q-coverage=<sha256>` records the subset (q_test_impact.coverage_digest: its
 suite files and its modules) and CI's check recomputes it from the same map;
 `q-coverage=all` records a whole run, including one a subset handed its
 verdict to. The whole suite's coverage, judging every function, runs on
@@ -131,9 +131,9 @@ exists to catch. If the base side did touch a judged path, the head is
 refused and the path named: merge the base in and attest again.
 
 q-tests may have run a SUBSET of the q suites (#1690): those
-scripts/dev/test_impact.py selects from q-lint's dependency graph for the
+scripts/dev/q_test_impact.py selects from q-lint's dependency graph for the
 branch's change. The trailer then says `q-tests=<sha256>`, the digest of the
-sorted file names (test_impact.digest), and this check makes the same
+sorted file names (q_test_impact.digest), and this check makes the same
 selection from the PR's diff and the head's tree - with the qlinter
 .qlinter-version pins, which the workflow installs - and accepts the subset
 only when the digests agree. So it depends on nothing but the diff, the tree
@@ -146,8 +146,8 @@ change reach: the full suite still runs on master, and catches it there.
 q-coverage may have run a subset too (#1719): q-tests' suites and, per
 tests/q/coverage_map.txt, a suite entering each function it judges,
 instrumenting and judging only the functions of the production files the
-change reaches. `q-coverage=<sha256>` (test_impact.coverage_digest, over those
-suites and modules) is verified the same way, from test_impact.coverage_for
+change reaches. `q-coverage=<sha256>` (q_test_impact.coverage_digest, over those
+suites and modules) is verified the same way, from q_test_impact.coverage_for
 over this checkout - the head's tree, so the head's map; `all`, and a trailer
 without the field, ran the whole suite. A subset that found a function never
 entered handed its verdict to a whole run, which then records `all`.
@@ -242,14 +242,14 @@ def interpreter() -> str | None:
 _git = _load("_git", "scripts/dev/_git.py")
 
 
-def _test_impact():
-    return _load("test_impact", "scripts/dev/test_impact.py")
+def _q_test_impact():
+    return _load("q_test_impact", "scripts/dev/q_test_impact.py")
 
 
 def q_tests_plan(base: str, full: bool):
-    """What q-tests runs: the whole suite with `full`, else test_impact's plan
+    """What q-tests runs: the whole suite with `full`, else q_test_impact's plan
     for `base...HEAD` - which falls back to the whole suite itself."""
-    impact = _test_impact()
+    impact = _q_test_impact()
     if full:
         return impact.Plan(None, "--all")
     return impact.plan(base, REPO, with_uncommitted=False)
@@ -257,9 +257,9 @@ def q_tests_plan(base: str, full: bool):
 
 def q_coverage_plan(base: str, plan):
     """What q-coverage runs, given q-tests' `plan` for `base...HEAD`:
-    test_impact.coverage_for - q-tests' suites, judging the production files
+    q_test_impact.coverage_for - q-tests' suites, judging the production files
     the change reaches, or the whole suite."""
-    impact = _test_impact()
+    impact = _q_test_impact()
     if plan.files is None:
         return impact.CoveragePlan(None, None, f"q-tests runs the whole suite ({plan.why})")
     return impact.coverage_for(plan, impact.changed_paths(base, REPO), REPO)
@@ -566,8 +566,8 @@ def q_coverage_runs(head: str) -> set[str]:
 
 
 def pr_q_tests_plan(base: str, head: str):
-    """The q suites test_impact.py selects for `base...head` in this checkout
-    (CI checks the head out): a test_impact.Plan, its files None for all."""
+    """The q suites q_test_impact.py selects for `base...head` in this checkout
+    (CI checks the head out): a q_test_impact.Plan, its files None for all."""
     return _plan_for(base, head)
 
 
@@ -575,14 +575,14 @@ def pr_q_tests_plan(base: str, head: str):
 def _plan_for(base: str, head: str):
     # once per PR: q-tests' and q-coverage's checks both need it, and drawing
     # the graph is most of the check's time
-    impact = _test_impact()
+    impact = _q_test_impact()
     return impact.plan_for(impact.changed_paths(base, REPO, head), REPO)
 
 
 def pr_q_coverage_plan(base: str, head: str):
-    """What q-coverage runs for `base...head`: test_impact.coverage_for over
+    """What q-coverage runs for `base...head`: q_test_impact.coverage_for over
     q-tests' plan - a CoveragePlan, its files None for the whole suite."""
-    impact = _test_impact()
+    impact = _q_test_impact()
     return impact.coverage_for(
         pr_q_tests_plan(base, head), impact.changed_paths(base, REPO, head), REPO
     )
@@ -732,7 +732,7 @@ def attest(args: argparse.Namespace) -> int:
     envs: dict[str, dict[str, str]] = {}
     needs_plan = "q-tests" in hooks or "q-coverage" in hooks
     plan = q_tests_plan(args.base, args.all) if needs_plan else None
-    impact = _test_impact()
+    impact = _q_test_impact()
     if "q-tests" in hooks and plan is not None:
         envs["q-tests"] = {impact.DECIDED_ENV: plan.line}
         print(f"attest: q-tests: {plan.why}", flush=True)

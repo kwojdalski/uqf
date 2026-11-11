@@ -1,4 +1,4 @@
-"""scripts/dev/test_impact.py: which q suites a change reaches (#1690).
+"""scripts/dev/q_test_impact.py: which q suites a change reaches (#1690).
 
 The reading of q text is tested on its own. What needs the graph - a tree
 built and walked - runs only where a qlinter with `qlinter analyze graph` is
@@ -19,11 +19,11 @@ import pytest
 REPO = Path(__file__).resolve().parents[3]
 
 _SPEC = importlib.util.spec_from_file_location(
-    "test_impact", REPO / "scripts" / "dev" / "test_impact.py"
+    "q_test_impact", REPO / "scripts" / "dev" / "q_test_impact.py"
 )
 assert _SPEC and _SPEC.loader
 ti = importlib.util.module_from_spec(_SPEC)
-sys.modules["test_impact"] = ti
+sys.modules["q_test_impact"] = ti
 _SPEC.loader.exec_module(ti)
 
 GRAPH = pytest.mark.skipif(

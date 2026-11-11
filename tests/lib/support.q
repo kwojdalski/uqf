@@ -131,7 +131,7 @@
 // still LOADED: a suite may lean on what another file defines (the contract
 // drivers test_job_output_contracts runs, the builders the documentation
 // examples reuse, the scripts a TorQ suite \l's), and loading is cheap
-// next to running. What scripts/dev/test_impact.py selects for a change, and
+// next to running. What scripts/dev/q_test_impact.py selects for a change, and
 // what a shard of the suite runs.
 //
 // An empty list and a name that is no suite file are refused, not skipped:
@@ -187,7 +187,7 @@
 // --- coverage of a subset: -modules (#1719) --------------------------------
 // `q tests/q/run_coverage.q -files a.q,b.q -modules src/x.q,src/y.q` runs the
 // suites those files define and instruments and judges only the functions
-// the named production files define - what scripts/dev/test_impact.py's
+// the named production files define - what scripts/dev/q_test_impact.py's
 // coverage_for picks for a change. A subset that finds a function newly
 // uncovered exits 3 and tests/qrun/test_q_coverage.py hands the verdict to a run
 // of the whole suite; one that finds a baseline entry now entered fails, as
@@ -243,7 +243,7 @@
 
 // --- which test files enter each function: the coverage map (#1719) --------
 // tests/q/coverage_map.txt says, for every function a whole run enters, the
-// suite files whose suites enter it. scripts/dev/test_impact.py's
+// suite files whose suites enter it. scripts/dev/q_test_impact.py's
 // coverage_for adds to a subset a file that enters each function it judges,
 // so a function covered only by a suite outside q-tests' selection is not
 // reported as never entered. `q tests/q/run_coverage.q -map PATH` writes it

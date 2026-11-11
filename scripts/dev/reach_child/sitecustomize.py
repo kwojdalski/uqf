@@ -1,6 +1,6 @@
 """What a Python child of a recorded test reads, lists and starts (#1879).
 
-scripts/dev/test_reach.py records what each test does in its own process. A
+scripts/dev/python_test_reach.py records what each test does in its own process. A
 test that runs a gate as a script, or `uv run uqs ...`, does the rest in a
 child, which that record cannot see. While a run records, this directory is
 put first on PYTHONPATH and UQF_REACH_CHILD names where to write and which

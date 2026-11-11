@@ -115,7 +115,7 @@ _BARE_PYTHON = re.compile(r"(?:^|[\s;&|(])python3?(?=\s)")
 
 
 def test_ship_runs_the_gates_and_coverage_on_the_project_interpreter():
-    """master_coverage.py and test_impact.py are 3.14 code (`except A, B:`); a
+    """master_coverage.py and q_test_impact.py are 3.14 code (`except A, B:`); a
     python3 from PATH may be 3.13, so the post-merge coverage run died and a
     .q branch's gate_ok never passed (#2540)."""
     code = [

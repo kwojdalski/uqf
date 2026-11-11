@@ -60,7 +60,7 @@ REPO = Path(__file__).resolve().parents[3]
 
 
 def _load_qlint_graph():
-    """scripts/gates/qlint_graph.py, which test_impact.py shares."""
+    """scripts/gates/qlint_graph.py, which q_test_impact.py shares."""
     spec = importlib.util.spec_from_file_location(
         "qlint_graph", Path(__file__).resolve().parents[1] / "qlint_graph.py"
     )

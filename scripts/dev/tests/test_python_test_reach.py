@@ -1,4 +1,4 @@
-"""scripts/dev/test_reach.py: what each test reads, lists and starts (#1879).
+"""scripts/dev/python_test_reach.py: what each test reads, lists and starts (#1879).
 
 The record decides which tests a commit of anything but Python runs, so what
 matters is that it charges each sighting to the right owner - the test, the
@@ -19,15 +19,15 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[3]
 
-if "test_reach" in sys.modules:  # loaded by the root conftest already: the same module
-    reach = sys.modules["test_reach"]
+if "python_test_reach" in sys.modules:  # loaded by the root conftest already: the same module
+    reach = sys.modules["python_test_reach"]
 else:
     _SPEC = importlib.util.spec_from_file_location(
-        "test_reach", Path(__file__).resolve().parents[1] / "test_reach.py"
+        "python_test_reach", Path(__file__).resolve().parents[1] / "python_test_reach.py"
     )
     assert _SPEC and _SPEC.loader
     reach = importlib.util.module_from_spec(_SPEC)
-    sys.modules["test_reach"] = reach
+    sys.modules["python_test_reach"] = reach
     _SPEC.loader.exec_module(reach)
 
 
@@ -251,8 +251,8 @@ def test_a_repository_directory_it_names_reaches_everything_under_it(tmp_path):
 
 def test_a_python_file_it_names_is_charged_as_a_script(tmp_path):
     """A .py file testmon never executed is chosen by who may read it."""
-    record = _started(tmp_path, ["cat", "scripts/dev/test_reach.py"])
-    assert reach.reach(record, "t::x")["scripts"] == {"scripts/dev/test_reach.py"}
+    record = _started(tmp_path, ["cat", "scripts/dev/python_test_reach.py"])
+    assert reach.reach(record, "t::x")["scripts"] == {"scripts/dev/python_test_reach.py"}
     assert _picks(_started(tmp_path, ["grep", "-r", "x", "scripts"]), "scripts/gates/x.py")
 
 
@@ -308,7 +308,7 @@ def test_a_record_of_another_version_is_no_record(tmp_path):
 def test_the_suite_records_through_the_root_conftest(tmp_path):
     """--record-reach is the root conftest's option, so a run of any testpath records."""
     out = tmp_path / "reach.json"
-    test = "scripts/dev/tests/test_test_reach.py::test_a_glob_lists_from_its_fixed_prefix"
+    test = "scripts/dev/tests/test_python_test_reach.py::test_a_glob_lists_from_its_fixed_prefix"
     env = {k: v for k, v in os.environ.items() if not k.startswith("PYTEST_")}
     subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "-p", "no:xdist", "-p", "no:cacheprovider",

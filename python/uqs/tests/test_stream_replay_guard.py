@@ -110,7 +110,7 @@ def test_a_poison_batch_mid_log_is_quarantined_and_the_next_ones_are_applied(
 #: Seeds today's plant log the way the standalone plant writes it: a fill, a
 #: batch the job cannot apply (no book, product or side), and another fill.
 _SEED = """\
-\\l scripts/processes/run_stream.q
+\\l scripts/jobs/run_stream.q
 .qproc.standalone.declare_schemas[];
 .qetl.tick.open_log["LOGDIR";`uqflocal;.z.D];
 fill:{[s;px] ([] source_time:enlist .z.p; sym:enlist s; venue:enlist `fx; side:enlist 1;
@@ -123,7 +123,7 @@ exit 0
 """
 
 _RESTART = """\
-\\l scripts/processes/run_stream.q
+\\l scripts/jobs/run_stream.q
 -1 "QUARANTINED:",string count .qetl.job.stream.quarantined;
 -1 "BOOK:",string count .qpipe.job.fx_positions.positions;
 -1 "RUNNING:",", " sv string .qetl.job.stream.running;

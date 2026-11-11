@@ -246,7 +246,7 @@ From the KX compression whitepaper (<https://code.kx.com/q/wp/compress/>):
 
 ### Measured, and what was not adopted (#2294, #2296)
 
-From `scripts/dev/bench_compression.q` on the local HDB (macOS arm64, warm page
+From `scripts/bench/compression.q` on the local HDB (macOS arm64, warm page
 cache, times only: read syscalls cannot be counted there without root). Each row
 is the change against the table's policy, on the same run; the `time` rows are
 from a second run of five repetitions, which reproduced the first within 3%.
@@ -283,10 +283,10 @@ Before changing a declaration, measure it on the table's own data. Run from the
 repository root, on KDB-X:
 
 ```bash
-q scripts/dev/bench_compression.q -hdb output/uqs/hdb -table quote -partition 2026.10.07
-q scripts/dev/bench_compression.q -hdb output/uqs/hdb -table quote -partition 2026.10.07 \
+q scripts/bench/compression.q -hdb output/uqs/hdb -table quote -partition 2026.10.07
+q scripts/bench/compression.q -hdb output/uqs/hdb -table quote -partition 2026.10.07 \
     -candidates current,policy,gzip/16/6,gzip/18/6,zstd/17/3 -reps 5
-q scripts/dev/bench_compression.q -hdb output/uqs/hdb -table quote -partition 2026.10.07 \
+q scripts/bench/compression.q -hdb output/uqs/hdb -table quote -partition 2026.10.07 \
     -candidates policy,gzip/16/6+time=none,gzip/16/6+time=none+sym=gzip/20/6
 ```
 

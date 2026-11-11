@@ -88,7 +88,7 @@ ALL = (True, True, True, True)
         ([("M", "uv.lock")], ALL),
         ([("M", "conftest.py")], ALL),
         ([("M", "python/uqs/tests/conftest.py")], ALL),
-        ([("M", "scripts/dev/test_reach.py")], ALL),
+        ([("M", "scripts/dev/python_test_reach.py")], ALL),
         ([("M", "scripts/dev/python_tests_hook.py")], ALL),
         # -- unknown paths: every group --------------------------------------
         ([("A", "Makefile")], ALL),
@@ -150,7 +150,7 @@ def test_shared_configuration_is_the_python_tests_hook_s_own_list():
 def test_every_tracked_file_is_in_a_known_area():
     """An unknown path runs everything, so a new area must be classified on
     purpose: add it to KNOWN once its groups are clear."""
-    files = scope._test_impact().tracked(REPO)
+    files = scope._q_test_impact().tracked(REPO)
     unknown = [f for f in files if not scope.KNOWN.search(f)]
     assert not unknown, f"not in ci_scope.KNOWN (each would run every group): {unknown[:10]}"
 
@@ -159,7 +159,7 @@ def _reach_record() -> dict | None:
     """This checkout's record of what each Python test reads (the python-tests
     hook writes it; CI has none). Never the clone's shared copy: every
     worktree writes that, so it holds what tests read on other branches (#2276)."""
-    return _load("test_reach").load()
+    return _load("python_test_reach").load()
 
 
 @pytest.mark.judges_reach_record
@@ -179,7 +179,7 @@ def test_the_reach_record_agrees_about_which_web_files_python_reads():
     record = _reach_record()
     if record is None:
         pytest.skip("no .testreach.json: the python-tests hook writes one at commit")
-    web = [f for f in scope._test_impact().tracked(REPO) if f.startswith("web/")]
+    web = [f for f in scope._q_test_impact().tracked(REPO) if f.startswith("web/")]
     for path, specific in _named_reads(record, web, REPO).items():
         s = scope.decide([("M", path)], None)
         assert s.python, f"{path} is read by {specific[:3]}, but CI would skip the Python tests"
@@ -190,12 +190,12 @@ def _named_reads(record: dict, web: list[str], root: Path) -> dict[str, list[str
     what this tree's runs recorded of this tree's files: a test another
     worktree last ran, and a file only another branch has, are not this
     tree's to judge (#2276)."""
-    test_reach = _load("test_reach")
-    here = test_reach.recorded_here(record, root)
-    reads = {t: test_reach.reach(record, t).get("reads", set()) & set(web) for t in here}
+    python_test_reach = _load("python_test_reach")
+    here = python_test_reach.recorded_here(record, root)
+    reads = {t: python_test_reach.reach(record, t).get("reads", set()) & set(web) for t in here}
     named = {}
     for path in web:
-        scan = set(test_reach.scan_of(path, web))
+        scan = set(python_test_reach.scan_of(path, web))
         specific = sorted(t for t, r in reads.items() if path in r and not scan <= r)
         if specific:
             named[path] = specific

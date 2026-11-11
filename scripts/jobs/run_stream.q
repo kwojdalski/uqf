@@ -11,17 +11,17 @@
 / THREE ROLES, chosen by flags, because a tickerplant and a job are
 / different processes in production and the same one in a demo:
 / .
-/   q scripts/processes/run_stream.q -plant 5010
+/   q scripts/jobs/run_stream.q -plant 5010
 /       a bare tickerplant on port 5010, publishing nothing itself.
 / .
-/   q scripts/processes/run_stream.q -job fx_orders_feed -tp 5010
+/   q scripts/jobs/run_stream.q -job fx_orders_feed -tp 5010
 /       run the feed, publishing into the plant at 5010.
 / .
-/   q scripts/processes/run_stream.q -job fx_positions -tp 5010 -port 5011
+/   q scripts/jobs/run_stream.q -job fx_positions -tp 5010 -port 5011
 /       run the service, subscribing to the plant at 5010 and listening on
 /       5011 so a client can query its book.
 / .
-/   q scripts/processes/run_stream.q -job fx_positions -feed fx_orders_feed
+/   q scripts/jobs/run_stream.q -job fx_positions -feed fx_orders_feed
 /       ALL of it, plus the plant, in one process: the feed, the executions
 /       normalizer that turns its filled orders into fills, and the service.
 /       No ports, no sockets, no second terminal. -job takes a comma list.

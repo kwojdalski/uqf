@@ -15,7 +15,7 @@ runs the group COMPLETE - CI never selects single tests (the commit hooks do):
   deletes a path a document names: a link to it would break.
 * "PeachQ q tests" (`q`) runs the whole qUnit suite on PeachQ. It runs when
   the change touches a .q file, a file a q file names by a path literal
-  (scripts/dev/test_impact.py's q_readers - the literal edge of its graph), or
+  (scripts/dev/q_test_impact.py's q_readers - the literal edge of its graph), or
   the job's own tooling (Q_PATHS, and the repository modules its Python
   imports).
 * "Browser application" (`frontend`) checks, tests and builds web/. It runs
@@ -29,7 +29,7 @@ runs the group COMPLETE - CI never selects single tests (the commit hooks do):
   of the API models, and uqf_frontend's tests hold the two to each other.
 
   The commit hooks select by a record of what each test reads, lists and
-  starts (scripts/dev/test_reach.py); this is that record's rule at the
+  starts (scripts/dev/python_test_reach.py); this is that record's rule at the
   granularity of the group, without the record, which CI does not have. By
   the record every web/ file is reached only by tests that read the whole
   tree - a gate run over every file, which "Hooks and static gates" runs
@@ -179,8 +179,8 @@ def _sibling(name: str):
     return module
 
 
-def _test_impact():
-    return _sibling("test_impact")
+def _q_test_impact():
+    return _sibling("q_test_impact")
 
 
 _git = _sibling("_git")
@@ -275,7 +275,7 @@ def named_by_python(paths: Iterable[str], root: Path = REPO) -> dict[str, str]:
     would skip them. Vendored lib/ is not read."""
     files = [
         f
-        for f in _test_impact().tracked(root)
+        for f in _q_test_impact().tracked(root)
         if f.endswith(".py") and not f.startswith("lib/") and f not in _NOT_READERS
     ]
     texts = {f: (root / f).read_text(errors="replace") for f in files}
@@ -371,7 +371,7 @@ def decide(
     docs_py = imported(DOCS_ENTRIES, root)
     q_py = imported(Q_ENTRIES, root)
     paths = [p for _, p in changes]
-    q_reads = _test_impact().q_readers([p for p in paths if not p.endswith(".py")], root)
+    q_reads = _q_test_impact().q_readers([p for p in paths if not p.endswith(".py")], root)
     gone = named_in_docs([p for s, p in changes if s == "D"], root)
     web_named = named_by_python([p for p in paths if FRONTEND.search(p)], root)
     why: dict[str, list[str]] = {g: [] for g in GROUPS}

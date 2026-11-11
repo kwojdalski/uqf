@@ -24,7 +24,7 @@ def _load(name: str, rel: str):
 
 
 ka = _load("kdbx_attestation", SCRIPT)
-impact = _load("test_impact", "scripts/dev/test_impact.py")
+impact = _load("q_test_impact", "scripts/dev/q_test_impact.py")
 #: The repository's Python, from its one authority (#1838).
 PYTHON = _load("tool_pins", "scripts/gates/policy/tool_pins.py").pinned("python")
 
@@ -33,7 +33,7 @@ PYTHON = _load("tool_pins", "scripts/gates/policy/tool_pins.py").pinned("python"
 def _whole_q_suite(monkeypatch):
     """`attest` runs the whole q suite unless a test says otherwise: the
     selector reads a real q tree with a graph-capable qlinter, and these
-    throwaway repositories are neither. Its own tests are test_test_impact.py."""
+    throwaway repositories are neither. Its own tests are test_q_test_impact.py."""
     monkeypatch.setattr(ka, "q_tests_plan", lambda base, full: impact.Plan(None, "test"))
 
 
@@ -746,8 +746,8 @@ def test_attest_all_runs_the_whole_q_suite(repo, monkeypatch):
     assert envs["q-tests"][impact.DECIDED_ENV] == "ALL"
 
 
-def test_the_real_check_selects_with_test_impact(repo, monkeypatch):
-    """pr_q_tests_plan is test_impact's plan_for over the PR's diff."""
+def test_the_real_check_selects_with_q_test_impact(repo, monkeypatch):
+    """pr_q_tests_plan is q_test_impact's plan_for over the PR's diff."""
     seen = {}
     fake = type(
         "M",
@@ -757,7 +757,7 @@ def test_the_real_check_selects_with_test_impact(repo, monkeypatch):
             "plan_for": staticmethod(lambda changed, root: seen.setdefault("c", changed)),
         },
     )
-    monkeypatch.setattr(ka, "_test_impact", lambda: fake)
+    monkeypatch.setattr(ka, "_q_test_impact", lambda: fake)
     ka.pr_q_tests_plan("B", "H")
     assert seen["c"] == ["B...H"]
 
@@ -771,18 +771,18 @@ def test_ci_installs_the_pinned_graph_qlinter_for_the_check():
 def test_the_q_tests_hook_runs_the_selection():
     config = (_ROOT / ".pre-commit-config.yaml").read_text()
     hook = config.split("- id: q-tests", 1)[1].split("- id:", 1)[0]
-    assert "scripts/dev/test_impact.py --hook" in hook
+    assert "scripts/dev/q_test_impact.py --hook" in hook
     assert 'test_the_q_suite_passes --q-files "${selection#-files }"' in hook
 
 
 def test_the_selector_loads_from_a_fresh_interpreter():
-    """As CI and `attest` run it: nothing loaded test_impact beforehand
+    """As CI and `attest` run it: nothing loaded q_test_impact beforehand
     (its @dataclass needs its module registered, which once failed here)."""
     code = (
         "import importlib.util, sys\n"
         f"spec = importlib.util.spec_from_file_location('m', {str(_ROOT / SCRIPT)!r})\n"
         "m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n"
-        "print(m._test_impact().Plan(['test_a.q'], 'x').line)\n"
+        "print(m._q_test_impact().Plan(['test_a.q'], 'x').line)\n"
     )
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "-files test_a.q"
@@ -914,7 +914,7 @@ def test_the_coverage_run_records_outcomes_and_seeds_as_the_plain_run_does():
 
 
 def test_ci_runs_the_check_on_the_repositorys_python():
-    """test_impact.py is 3.14 code (`except A, B:`); the runner's python3 is older."""
+    """q_test_impact.py is 3.14 code (`except A, B:`); the runner's python3 is older."""
     wf = _attestation_workflow()
     assert f'python-version: "{PYTHON}"' in wf
     run = f"uv run --no-project --python {PYTHON} python {SCRIPT} check"
@@ -1063,8 +1063,8 @@ def test_a_whole_coverage_run_needs_no_selection_to_verify(repo, monkeypatch):
     assert ok, why
 
 
-def test_the_real_check_works_coverage_out_with_test_impact(monkeypatch):
-    """pr_q_coverage_plan is test_impact's coverage_for over q-tests' plan
+def test_the_real_check_works_coverage_out_with_q_test_impact(monkeypatch):
+    """pr_q_coverage_plan is q_test_impact's coverage_for over q-tests' plan
     and the PR's diff."""
     plan = impact.Plan(list(SUBSET), "x", MODULES)
     monkeypatch.setattr(ka, "pr_q_tests_plan", lambda b, h: plan)
@@ -1076,14 +1076,14 @@ def test_the_real_check_works_coverage_out_with_test_impact(monkeypatch):
             "coverage_for": staticmethod(impact.coverage_for),
         },
     )
-    monkeypatch.setattr(ka, "_test_impact", lambda: fake)
+    monkeypatch.setattr(ka, "_q_test_impact", lambda: fake)
     assert ka.pr_q_coverage_plan("B", "H").record == COV_RECORD
 
 
 def test_the_q_coverage_hook_runs_the_coverage_selection():
     config = (_ROOT / ".pre-commit-config.yaml").read_text()
     hook = config.split("- id: q-coverage", 1)[1].split("- id:", 1)[0]
-    assert "scripts/dev/test_impact.py --coverage-hook" in hook
+    assert "scripts/dev/q_test_impact.py --coverage-hook" in hook
     assert "ALL) subset=() ;;" in hook
     assert 'subset=(--q-files "${words[1]}" --q-modules "${words[3]}")' in hook
     assert (

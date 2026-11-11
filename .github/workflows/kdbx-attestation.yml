@@ -14,7 +14,7 @@ name: KDB-X attestation
 #
 # q-tests may have run only the q suites the change reaches (#1690), recorded
 # as `q-tests=<sha256 of the sorted file names>`. The check makes the same
-# selection here - scripts/dev/test_impact.py over the PR's diff and the head's
+# selection here - scripts/dev/q_test_impact.py over the PR's diff and the head's
 # tree - with q-lint's `analyze graph`: so this installs the qlinter release
 # .qlinter-version pins (0.14.15, the first with the graph), the one an
 # attestation's selection must have been made with to agree. `q-tests=all`
@@ -54,7 +54,7 @@ jobs:
         run: qlinter analyze graph --help > /dev/null && echo "qlinter draws the graph"
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         # The repository's Python (requires-python >=3.14): the check imports
-        # scripts/dev/test_impact.py, written - and ruff-formatted - for 3.14,
+        # scripts/dev/q_test_impact.py, written - and ruff-formatted - for 3.14,
         # which the runner's own python3 cannot parse (`except A, B:`).
         with:
           version: "0.12.14"

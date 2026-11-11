@@ -20,9 +20,9 @@
 # build on .qtorq (torq_pipeline.q) - and scripts/gates/check.py etl-layering
 # fails the build if anything under src/etl/ reaches for it. So the runners
 # get their own band, and the pipeline's only arrow into the stack leaves
-# from there. run_stream.q sits beside them because it is a runner too, but
-# it runs a streaming job on stock kdb+ against .qetl.tick and never loads
-# lib/torq.
+# from there. run_stream.q (scripts/jobs/) is drawn beside them because it is
+# a runner too, but it runs a streaming job on stock kdb+ against
+# .qetl.tick and never loads lib/torq.
 #
 # THE LIVE FEEDS DO NOT GO THROUGH src/. The cryptorust recorders, the
 # Databento handler and the Kafka consumer are external publishers that uqs
@@ -171,7 +171,7 @@ scripts: "scripts/processes — the only q that knows TorQ" {
   label.near: bottom-right
 
   runners: "TorQ runners, built on .qtorq\ntorq_backfill · torq_stream\ntorq_tap" { class: adapter }
-  standalone: "run_stream.q\nany streaming job\non plain kdb+" { class: fw }
+  standalone: "jobs/run_stream.q\nany streaming job\non plain kdb+" { class: fw }
 }
 
 stack: "Running stack — lib/torq, vendored" {

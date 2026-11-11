@@ -7,7 +7,7 @@ in full on a clean Linux checkout. Each check runs in one place:
 * python-tests, at push (#1965), runs only the Python tests the push reaches
   (scripts/dev/python_tests_hook.py);
 * q-tests and q-coverage, at push, run only the q suites the branch reaches
-  (scripts/dev/test_impact.py);
+  (scripts/dev/q_test_impact.py);
 * doc-links (the Quarto render) and q-docs-peachq (the docs' q blocks on
   PeachQ) do not run at all: CI runs both on master and nightly (#2167).
 
