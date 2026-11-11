@@ -7,7 +7,7 @@ packages, but nothing that runs it. `uqs deploy build --frontend DIST` adds:
                 uvicorn, pydantic, kola, ...), exported from uv.lock beside
                 uqs's (payload.python_payload), so the server installs it
                 offline into the release's .venv after uqs - by the push's
-                prepare, or by scripts/install_release.py. The manifest lists
+                prepare, or by scripts/deploy/install_release.py. The manifest lists
                 it in `python.extra_wheels`.
   the assets    DIST, the app `npm --prefix web run build` wrote (web/dist),
                 copied file for file to web/dist in the release, where

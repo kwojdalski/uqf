@@ -1058,7 +1058,7 @@ budget, so a set too big to start can still be stopped.
 The uqf runtime's profiles, against the community licence's fourteen slots
 (`uqs profile list` reports the same against this machine's licence):
 
-<!-- BEGIN GENERATED profile table - scripts/generate/generate_operational_docs.py; CI runs it with --check, so edit the profiles, not this table -->
+<!-- BEGIN GENERATED profile table - scripts/generate/operational_docs.py; CI runs it with --check, so edit the profiles, not this table -->
 
   | profile     | leaves                                                                                                           | processes | plant slots          |
   | ---         | ---                                                                                                              | ---       | ---                  |

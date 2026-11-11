@@ -51,7 +51,7 @@ OK_MARKER = "DEPLOY_VERIFY_OK"
 FAILED_MARKER = "DEPLOY_VERIFY_FAILED"
 
 IDENTITY_EXPR = ".proc.procname"
-#: The same forward deploy_smoke.q checks offline; 0n where no library is loaded.
+#: The same forward scripts/deploy/smoke.q checks offline; 0n where no library is loaded.
 LIBRARY_EXPR = "@[{.qf.px.fwd_simple[1.1;0.05;0.02;1f]};::;0n]"
 LIBRARY_EXPECTED = 1.1323529411764708
 #: What `.qetl.transform.verify_all[]` said, checked on the process (#1784):

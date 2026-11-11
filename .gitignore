@@ -38,7 +38,7 @@ actual/
 
 # Everything the repository generates at runtime: the stack's data directory
 # (output/uqs - HDB, tickerplant logs, write-down database), the test databases
-# scripts/dev/dump_databento_duckdb.py builds, the ODBC build, and
+# scripts/dev/make_databento_duckdb.py builds, the ODBC build, and
 # scripts/examples/timer_replay_example.q's run artifacts. Large, derived, and
 # rebuilt on demand.
 /output/

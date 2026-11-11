@@ -106,7 +106,7 @@ def _verified(passed: bool, reason: str = "") -> subprocess.CompletedProcess:
 def _artifact(tmp_path: Path, dirty: bool = False, **target) -> Path:
     """A small real artifact: three files, a requirements file and two wheels."""
     root = tmp_path / "tree"
-    files = ["pyproject.toml", "src/init.q", "scripts/deploy_smoke.q"]
+    files = ["pyproject.toml", "src/init.q", "scripts/deploy/smoke.q"]
     for f in files:
         (root / f).parent.mkdir(parents=True, exist_ok=True)
         (root / f).write_text(f"content of {f}\n")
@@ -282,7 +282,7 @@ def test_a_dry_run_changes_nothing_and_shows_the_plan(tmp_path):
 
 _HEALTHY = {
     "uv python find": _done(SERVER + "data=present\n"),
-    "deploy_smoke.q": _done("DEPLOY_SMOKE_OK\n"),
+    "deploy/smoke.q": _done("DEPLOY_SMOKE_OK\n"),
     # a server with no HDB yet: nothing for the release's `uqs data check` to judge (#870)
     "uqs data check": _done('{"hdb": "/data/hdb", "present": false}\n'),
     "--ports-free": _done(json.dumps({"busy": {}}) + "\n" + verify.OK_MARKER + "\n"),
@@ -318,11 +318,11 @@ def test_the_archive_is_checked_on_the_server_before_extraction(tmp_path):
     rules = {"checksum mismatch": _done(rc=1, stderr="checksum mismatch: the archive arrived as x")}
     code, remote, report = _run(tmp_path, rules)
     assert code == 1 and report["stage"] == "transfer"
-    assert not remote.ran("deploy_smoke.q") and not remote.ran(".current.new")
+    assert not remote.ran("deploy/smoke.q") and not remote.ran(".current.new")
 
 
 def test_a_failed_smoke_test_stops_before_anything_starts(tmp_path):
-    code, remote, report = _run(tmp_path, {"deploy_smoke.q": _done("loaded\n")})
+    code, remote, report = _run(tmp_path, {"deploy/smoke.q": _done("loaded\n")})
     assert code == 1 and report["stage"] == "smoke"
     assert not remote.ran("uqs start")
 
@@ -623,7 +623,7 @@ def test_the_resolved_q_is_what_the_release_runs_with(tmp_path):
     assert "export QHOME='/opt/kx home'" in prepare
     assert "export QCMD='/opt/kx home/bin/q'" in prepare
     smoke = next(s for stage, s in remote.scripts if stage == "smoke")
-    assert "source ./deploy.env" in smoke and '"$QCMD" scripts/deploy_smoke.q' in smoke
+    assert "source ./deploy.env" in smoke and '"$QCMD" scripts/deploy/smoke.q' in smoke
 
 
 def test_a_preflight_that_reports_no_q_is_refused(tmp_path):
@@ -1374,23 +1374,23 @@ def test_a_remote_failure_keeps_the_refusal_behind_ssh_warnings():
 
 
 def _smoke(tmp_path: Path, breakage: str) -> subprocess.CompletedProcess[str]:
-    """scripts/deploy_smoke.q, for real, on a release whose src/init.q loads
+    """scripts/deploy/smoke.q, for real, on a release whose src/init.q loads
     this tree's library and then applies `breakage`."""
     qbin = q_interpreter(os.environ)
     if qbin is None:
         pytest.skip("no q interpreter - set $QCMD, or put q on PATH")
     rel = tmp_path / "release"
-    (rel / "scripts").mkdir(parents=True)
+    (rel / "scripts" / "deploy").mkdir(parents=True)
     (rel / "src").mkdir()
-    (rel / "scripts" / "deploy_smoke.q").write_bytes(
-        (ROOT / "scripts" / "deploy_smoke.q").read_bytes()
+    (rel / "scripts" / "deploy" / "smoke.q").write_bytes(
+        (ROOT / "scripts" / "deploy" / "smoke.q").read_bytes()
     )
     (rel / "src" / "init.q").write_text(
         f'system "cd {ROOT}"; system "l src/init.q"; system "cd {rel}";\n{breakage}\n'
     )
     env = {**os.environ, "QHOME": os.environ.get("QHOME", str(Path.home() / ".kx"))}
     return subprocess.run(
-        [str(qbin), "scripts/deploy_smoke.q", "-q"],
+        [str(qbin), "scripts/deploy/smoke.q", "-q"],
         cwd=rel, stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
         timeout=120, check=False,
     )  # fmt: skip

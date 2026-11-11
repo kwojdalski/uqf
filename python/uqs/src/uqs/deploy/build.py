@@ -18,7 +18,7 @@ WHAT IS IN IT:
                 its libraries and notices (uqs.deploy.kafka).
   .release/python-runtime.tar.gz
                 only with --python-component (#1557): a CPython for the target,
-                which scripts/install_release.py makes .venv from.
+                which scripts/deploy/install_release.py makes .venv from.
   web/dist/     only with --frontend (#1646): the built browser app, and
                 uqf-frontend's wheels beside uqs's (uqs.deploy.frontend).
   RELEASE_MANIFEST.json

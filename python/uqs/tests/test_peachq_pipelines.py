@@ -648,7 +648,7 @@ def test_a_sidecar_runs_against_a_managed_schema_without_the_demo_tables(
     # The deploy smoke over this composition, on the tree it started from,
     # passes; one that needs quote fails, naming it.
     tree = repo / "output" / "uqs-peachq-etl" / "qtree"
-    smoke = [str(peachq), "scripts/deploy_smoke.q", "-q", "-procs", "rdb1", "synthfeed1"]
+    smoke = [str(peachq), "scripts/deploy/smoke.q", "-q", "-procs", "rdb1", "synthfeed1"]
     ok = subprocess.run(smoke, cwd=tree, env=env, capture_output=True, text=True, timeout=120)
     assert "DEPLOY_SMOKE_OK" in ok.stdout, ok.stdout + ok.stderr
     assert "synthfeed1" in ok.stdout

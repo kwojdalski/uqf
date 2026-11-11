@@ -120,7 +120,7 @@ class Pipeline:
     extras: str = ""
     note: str = ""  # why this row deviates from the defaults, if it does
 
-    # --- dataflow edges, for scripts/generate/generate_operational_docs.py ---
+    # --- dataflow edges, for scripts/generate/operational_docs.py ---
     # Declared here so a diagram can be DERIVED rather than drawn, and
     # verified: verify_pipeline_edges() below greps each pipeline's own .q
     # script for its `.sub.subscribe`/`.qtorq.subscribe_etl`/`.u.upd` calls

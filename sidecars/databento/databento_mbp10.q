@@ -3,7 +3,7 @@
 / .
 / The first source in this tree reached through ODBC and carrying real market
 / data: Databento's MBP-10 schema (market by price, ten levels) for US
-/ equities, loaded into DuckDB by scripts/dev/dump_databento_duckdb.py. Each row
+/ equities, loaded into DuckDB by scripts/dev/make_databento_duckdb.py. Each row
 / is one book event - an add, cancel or trade - with the book's top ten levels
 / on each side AFTER that event.
 / .

@@ -290,7 +290,7 @@ def release(tmp_path: Path, runtime_name: str = "peachq") -> Path:
     if done:
         return done[0]
     root = tmp_path / "tree"
-    files = ["pyproject.toml", "src/init.q", "scripts/deploy_smoke.q"]
+    files = ["pyproject.toml", "src/init.q", "scripts/deploy/smoke.q"]
     for f in files:
         (root / f).parent.mkdir(parents=True, exist_ok=True)
         (root / f).write_text(f"content of {f}\n")

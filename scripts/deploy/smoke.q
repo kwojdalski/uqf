@@ -1,4 +1,4 @@
-/ deploy_smoke.q - the offline check `uqs deploy push` runs on a release
+/ smoke.q - the offline check `uqs deploy push` runs on a release
 / before it starts anything (#773).
 / .
 / Loads the quant library from the release and checks a few numbers against
@@ -19,7 +19,7 @@
 / anything is stopped or started. Names that run no declared job (rdb1,
 / tpreplay1, ...) load nothing and are passed over.
 / .
-/ Run from the release root: q scripts/deploy_smoke.q -q [-procs p1 p2 ...]
+/ Run from the release root: q scripts/deploy/smoke.q -q [-procs p1 p2 ...]
 
 \d .qdeploysmoke
 
