@@ -105,26 +105,26 @@ OWN = r"^\.github/workflows/ci\.yml$|^scripts/dev/ci_scope\.py$"
 
 #: The docs job's inputs, beyond docs/ and the Python its tooling imports.
 DOCS_PATHS = re.compile(
-    rf"^docs/|^src/.*\.q$|^scripts/generate/export_api_reference\.q$|^scripts/peachq\.json$|{OWN}"
+    rf"^docs/|^src/.*\.q$|^scripts/generate/export_q_api_docs\.q$|^scripts/peachq/pin\.json$|{OWN}"
 )
 #: The Python the docs job runs: the render's pre-render step and the gate.
 DOCS_ENTRIES = (
     "scripts/generate/q_api_docs.py",
     "scripts/gates/check_doc_links.py",
-    "scripts/peachq.py",
+    "scripts/peachq/resolve.py",
 )
 
 #: The q job's inputs, beyond .q files, what q names, and the Python its tooling imports.
 Q_PATHS = re.compile(
-    rf"^scripts/portable/|^scripts/peachq\.json$|^pyproject\.toml$|^uv\.lock$|{OWN}"
+    rf"^scripts/portable/|^scripts/peachq/pin\.json$|^pyproject\.toml$|^uv\.lock$|{OWN}"
 )
-#: The Python the q job runs: pytest's root conftest, the suite's driver, the
-#: flattener, the PeachQ resolver.
+#: The Python the q job runs: pytest's root conftest, the suite's drivers (the
+#: KDB-X one and PeachQ's), the PeachQ resolver.
 Q_ENTRIES = (
     "conftest.py",
     "tests/qrun/test_q_suite.py",
-    "scripts/portable/full_suite.py",
-    "scripts/peachq.py",
+    "scripts/peachq/full_suite.py",
+    "scripts/peachq/resolve.py",
 )
 
 #: The browser application: its own npm package, reading nothing outside it.

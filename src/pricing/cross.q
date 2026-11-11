@@ -10,7 +10,7 @@
 / .
 / Split out of forwards.q (#626), which keeps forward points, outright
 / forwards and broken-date interpolation. What depends on what, held to it by
-/ scripts/gates/check_module_deps.py:
+/ scripts/gates/policy/module_deps.py:
 /   execution.q (cross markouts)  ->  cross.q  ->  book.q (sweep_price, book inversion)
 /   all of them                   ->  foundation (schema, ccy, ...)
 / Nothing here reads execution, so execution analytics can build on it.

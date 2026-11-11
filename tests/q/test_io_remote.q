@@ -248,7 +248,7 @@
 
 / Past the deadline - where the stack's end-of-day fence begins - the receiver's
 / writer refuses the batch, and nothing reaches the HDB or the journal's commits
-/ (#1650). remote_receiver.q also stops itself there, on a one-minute timer.
+/ (#1650). attached_receiver.q also stops itself there, on a one-minute timer.
 .qt.qetl.io.remote.test_past_the_end_of_day_fence_the_receiver_writes_nothing:{[t]
     .qt.qetl.io.remote.reset[];
     root:`$":",first system"mktemp -d";

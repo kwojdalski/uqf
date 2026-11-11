@@ -41,7 +41,7 @@ THE STAGES, in order, each stopping the deployment when it fails:
              stable data directory (UQS_DATA_ROOT), with UV_OFFLINE=1 so
              nothing later fetches either. The ports this profile listens on
              are checked free.
-  smoke      scripts/deploy_smoke.q: the quant library loads and computes known
+  smoke      scripts/deploy/smoke.q: the quant library loads and computes known
              numbers, then the started processes' declarations load - theirs
              alone - against the server's starter-pack schema (#902). Needs
              its success marker AND exit 0, within a timeout.

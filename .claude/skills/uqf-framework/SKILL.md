@@ -205,7 +205,7 @@ Apply the rules below. Each cites the file that holds or enforces it.
   | `docs/reference/environment.md`                                                                                                    | the code reading each variable | checked by `scripts/gates/check.py env-reference`                               |
 
 - **D2** A name or call that docs mention is checked against the q source
-  (`scripts/gates/check_doc_references.py`). Renaming a function means updating
+  (`scripts/gates/policy/doc_references.py`). Renaming a function means updating
   the prose that names it.
 
 ## Configuration and credentials (C)
@@ -368,7 +368,7 @@ scaffold bug: report it, don't work around it.
 3. Write the qDoc blocks, with `@param`, `@return`, `@throws` and an `@eg` that
    runs (V6).
 4. Run `q tests/run_tests.q`, `uv run pytest -q`, `qlinter` on the new files,
-   and `uv run python scripts/gates/check_q_traps.py`.
+   and `uv run python scripts/gates/check.py q-traps`.
 5. Run it for real:
    - `uqs start NAME -f`, which starts it and follows its log;
    - `uqs status`, which should show it `up` and wired;

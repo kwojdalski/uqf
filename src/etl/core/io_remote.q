@@ -449,7 +449,7 @@
     r`rows}
 
 / The receiver's last answer about its readers, for a client that defers coverage
-/ until they show the rows (scripts/dev/attached_backfill.q): outcome `reloaded,
+/ until they show the rows (scripts/jobs/attached_backfill.q): outcome `reloaded,
 / `failed or `none, its error, and `asked, the instant before the call - what a
 / reload it reports can at most have mapped.
 .qetl.io.remote.last_reload:`outcome`error`asked!(`none;"";0Np)

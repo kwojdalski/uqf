@@ -1,4 +1,4 @@
-// test_peachq_init.q - scripts/peachq_init.q, what a PeachQ runtime's processes
+// test_peachq_init.q - scripts/peachq/init.q, what a PeachQ runtime's processes
 // load before torq.q (QINIT, uqs.stack.env.interpreter_env) (.qt.qproc.peachq_init).
 //
 // It defines .Q.chk where the interpreter has none, which TorQ's wdb calls as
@@ -17,10 +17,10 @@
 .qt.qproc.peachq_init.polyfill:{[]
     native:.Q.chk;
     .Q.chk:"absent";
-    ok:@[{system "l ",x; 1b};"scripts/peachq_init.q";{[e] 0b}];
+    ok:@[{system "l ",x; 1b};"scripts/peachq/init.q";{[e] 0b}];
     made:.Q.chk;
     .Q.chk:native;
-    if[not ok; '"peachq_init.q did not load"];
+    if[not ok; '"scripts/peachq/init.q did not load"];
     made}
 
 / A partitioned database three days deep: the newest day lacks `ref` (an
@@ -43,7 +43,7 @@
 
 .qt.qproc.peachq_init.test_it_leaves_an_interpreter_s_own_chk_alone:{[t]
     native:.Q.chk;
-    system "l scripts/peachq_init.q";
+    system "l scripts/peachq/init.q";
     .qunit.assertEquals[.Q.chk;native;"KDB-X's .Q.chk is kept"]}
 
 .qt.qproc.peachq_init.test_it_fills_a_database_as_the_native_chk_does:{[t]

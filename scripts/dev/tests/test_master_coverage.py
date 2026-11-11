@@ -23,7 +23,7 @@ def _load(name: str, rel: str):
 
 
 mc = _load("master_coverage", "scripts/dev/master_coverage.py")
-attest = _load("attest_kdbx_for_tests", "scripts/dev/attest_kdbx.py")
+attest = _load("kdbx_attestation_for_tests", "scripts/dev/kdbx_attestation.py")
 
 
 def _fake_lane(monkeypatch, code: int, failures: str = "", map_text: str | None = "m\n"):

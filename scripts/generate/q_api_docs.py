@@ -2,7 +2,7 @@
 """Render the q API reference - docs/reference/q-api/ - from the qDoc comments.
 
     qDoc comments in src/**/*.q
-            |  docs/man.q reads them (run by export_api_reference.q)
+            |  docs/man.q reads them (run by export_q_api_docs.q)
             v
     one Markdown page per module, and an index
             |
@@ -55,7 +55,7 @@ from pathlib import Path, PurePosixPath
 
 REPO = Path(__file__).resolve().parents[2]
 OUT = REPO / "docs" / "reference" / "q-api"
-EXPORTER = REPO / "scripts" / "generate" / "export_api_reference.q"
+EXPORTER = REPO / "scripts" / "generate" / "export_q_api_docs.q"
 READER = "docs/man.q"
 LEDGER = "src/etl/installed_bundles.json"
 
@@ -150,7 +150,7 @@ def q_command() -> tuple[str, dict[str, str]]:
     if exe is None:
         raise GenerationError(
             f"no q interpreter: {name!r} is not runnable. Set $QCMD to a q - KDB-X, or "
-            "the pinned PeachQ that `python3 scripts/peachq.py` prints - or put q on PATH."
+            "the pinned PeachQ that `python3 scripts/peachq/resolve.py` prints - or put q on PATH."
         )
     env.setdefault("QHOME", str(Path.home() / ".kx"))
     return exe, env

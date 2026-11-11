@@ -23,9 +23,9 @@ selects it, with the subset scripts/dev/test_impact.py picks for a change:
       (scripts/dev/master_coverage.py).
 
 What decided it - `subset`, or `all` when the whole suite ran - is written to
-the file UQF_Q_COVERAGE_RAN names, which scripts/dev/attest_kdbx.py records as
+the file UQF_Q_COVERAGE_RAN names, which scripts/dev/kdbx_attestation.py records as
 q-coverage=. UQF_TEST_RESULTS and UQF_TEST_FAILURES pass through to the run, so
-attest_kdbx.py and master_coverage.py read every test's outcome from it.
+kdbx_attestation.py and master_coverage.py read every test's outcome from it.
 """
 
 from __future__ import annotations

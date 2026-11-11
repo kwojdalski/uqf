@@ -15,7 +15,7 @@ that answers `peachq` is PeachQ too, because someone put it there.
 
 The PeachQ lanes need a PeachQ even when `QCMD` is KDB-X. `peachq_binary` is
 the one place they get it: `QCMD` when it is PeachQ, else the pinned build
-from scripts/peachq.py. A PeachQ that is not the pinned build is used, and
+from scripts/peachq/resolve.py. A PeachQ that is not the pinned build is used, and
 named in one warning.
 
 Three other variables chose these before #1753 (`REMOVED_ENV`). They are
@@ -58,7 +58,7 @@ Q_IMPLS = (KDBX, PEACHQ)
 
 #: The variables that chose an interpreter before #1753, each with what
 #: replaces it. Set at all, each is refused - by uqs, pytest (the root
-#: conftest), scripts/peachq.py (which spells the same list;
+#: conftest), scripts/peachq/resolve.py (which spells the same list;
 #: test_interpreter.py holds the two equal) and deploy's preflight on the
 #: server.
 REMOVED_ENV = {
@@ -75,7 +75,7 @@ REMOVED_ENV = {
 #: A q script printing which implementation runs it. `.pq.load_natives` is
 #: PeachQ's native-library loader (its own qlib/*.q call it first thing);
 #: KDB-X has no such name, so `value` throws and the handler answers null.
-#: scripts/peachq.py restates it, being run by a python3 that cannot import
+#: scripts/peachq/resolve.py restates it, being run by a python3 that cannot import
 #: uqs; test_interpreter.py holds the two equal.
 IDENTIFY_SCRIPT = '-1 $[-7h=type @[value;`.pq.load_natives;{0N}];"kdbx";"peachq"];\nexit 0\n'
 
@@ -242,11 +242,13 @@ def q_impl(env: Mapping[str, str] | None = None) -> str:
 
 
 def peachq_module(scripts_dir: Path | None = None) -> ModuleType:
-    """scripts/peachq.py, the pinned PeachQ's resolver, loaded once per
+    """scripts/peachq/resolve.py, the pinned PeachQ's resolver, loaded once per
     path. Loaded by path rather than imported: it runs under a bare python3
     in CI, and scripts/ is no package. `scripts_dir` defaults to this
     checkout's (or release's)."""
-    return _load_peachq((scripts_dir or repo_root() / "scripts").resolve() / "peachq.py")
+    return _load_peachq(
+        (scripts_dir or repo_root() / "scripts").resolve() / "peachq" / "resolve.py"
+    )
 
 
 @functools.cache
@@ -265,7 +267,7 @@ _WARNED: set[Path] = set()
 
 def warn_if_unpinned(q: Path, scripts_dir: Path | None = None) -> None:
     """One warning, naming the binary and the pin, when `q` is a PeachQ other
-    than the pinned build (scripts/peachq.py `unpinned_warning`). Replaces the
+    than the pinned build (scripts/peachq/resolve.py `unpinned_warning`). Replaces the
     reason an override once had to give: the run goes ahead, and says on
     what."""
     resolved = Path(q).resolve()
@@ -293,7 +295,7 @@ def peachq_binary(
        must identify as PeachQ: an explicit choice that failed is refused,
        never replaced by a guess;
     2. `$QCMD`, when it answers as PeachQ;
-    3. the pinned build, from scripts/peachq.py's cache, built on first use.
+    3. the pinned build, from scripts/peachq/resolve.py's cache, built on first use.
 
     A PeachQ from 1 or 2 that is not the pinned build is named in one
     warning.

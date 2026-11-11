@@ -1,5 +1,5 @@
-"""Tests for `scripts/gates/check_doc_references.py` - that it FIRES, and that it
-stays quiet on the things it must not flag.
+"""Tests for `check.py doc-references` (scripts/gates/policy/doc_references.py) -
+that it FIRES, and that it stays quiet on the things it must not flag.
 
 The must-not-flag half is the important one here. A documentation gate that
 cries wolf gets excluded file by file until it checks nothing, and this one
@@ -27,23 +27,26 @@ REPO = Path(__file__).resolve().parents[3]
 # scripts/ is not a package, so the checker is loaded by path - the same
 # idiom test_check_q_traps.py uses, and for the same reason.
 _SPEC = importlib.util.spec_from_file_location(
-    "check_doc_references", REPO / "scripts" / "gates" / "check_doc_references.py"
+    "doc_references", REPO / "scripts" / "gates" / "policy" / "doc_references.py"
 )
 assert _SPEC and _SPEC.loader
 cdr = importlib.util.module_from_spec(_SPEC)
-sys.modules["check_doc_references"] = cdr
+sys.modules["doc_references"] = cdr
 _SPEC.loader.exec_module(cdr)
 
 
 @pytest.fixture
-def scan(tmp_path, monkeypatch):
-    """Run the checker over one markdown file of our choosing."""
+def scan(tmp_path):
+    """Run the checker over one markdown file of our choosing, against this
+    checkout's contract surface and src/."""
+    (tmp_path / "src").symlink_to(REPO / "src")
+    surface = tmp_path / cdr.SURFACE
+    surface.parent.mkdir(parents=True)
+    surface.symlink_to(REPO / cdr.SURFACE)
 
     def run(markdown: str):
-        (tmp_path / "doc.md").write_text(markdown)
-        monkeypatch.setattr(cdr, "DOC_ROOTS", (tmp_path,))
-        monkeypatch.setattr(cdr, "REPO", tmp_path)
-        return cdr.check()
+        (tmp_path / "docs" / "doc.md").write_text(markdown)
+        return cdr.check(tmp_path)
 
     return run
 
@@ -165,7 +168,7 @@ def test_nested_modules_and_their_containers_are_verified(scan):
 def test_the_repository_passes_its_own_gate():
     # The gate is only worth having if it runs green on the tree it guards;
     # a checker committed red teaches everyone to ignore its output.
-    problems, _ = cdr.check()
+    problems, _ = cdr.check(REPO)
     assert problems == [], "\n".join(problems)
 
 
@@ -173,7 +176,7 @@ def test_the_gate_actually_reads_documents():
     # The failure mode this repository has hit three times: a check scoped so
     # narrowly it matches almost nothing and passes for that reason. A floor,
     # not an exact count, so adding a document does not edit this test.
-    assert len(cdr.doc_files()) >= 20
+    assert len(cdr.doc_files(REPO)) >= 20
 
 
 def test_every_allowed_missing_entry_names_a_real_file():
@@ -189,7 +192,7 @@ def test_every_allowed_missing_entry_is_still_needed():
     saved = dict(cdr.ALLOWED_MISSING)
     try:
         cdr.ALLOWED_MISSING.clear()
-        problems, _ = cdr.check()
+        problems, _ = cdr.check(REPO)
     finally:
         cdr.ALLOWED_MISSING.update(saved)
     still_firing = {p.split(":")[0] + "|" + p.split(" ")[1] for p in problems}
@@ -205,7 +208,7 @@ def test_every_allowed_missing_entry_is_still_needed():
 def test_a_private_helper_exists_though_the_surface_omits_it(scan):
     """@private takes a helper out of functions.csv, not out of existence:
     prose explaining it is not a stale reference."""
-    assert "side_cols" not in cdr.load_surface().get("qf.mkt", {})
+    assert "side_cols" not in cdr.load_surface(REPO).get("qf.mkt", {})
     problems, _ = scan("`.qf.mkt.side_cols` names the columns a side reads.\n")
     assert problems == []
 

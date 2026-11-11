@@ -1,7 +1,7 @@
 """Running a backfill into an attached stack's HDB (#1454, part 3), on real q processes.
 
 The stack is scripted (attach_backfill_support.HdbStack) but the rest is real: an upstream q
-process the worker reads over IPC, the runner (scripts/dev/attached_backfill.q) as a child
+process the worker reads over IPC, the runner (scripts/jobs/attached_backfill.q) as a child
 process, and a native-shaped HDB directory it writes. What is under test is where the rows go
 and where they do not, what the run leaves behind, and who owns the attachment while it runs.
 """

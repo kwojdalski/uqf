@@ -188,7 +188,7 @@ no processes/IPC/tables).
   former `.q<abbrev>` name. There is no intermediate public namespace (no
   `.qf.px.options`). `src/integrations/data.q` is `.qdata`, out of scope for
   this library, see below. A domain is shared, so: a name is defined by ONE of
-  its files (`check_module_deps.py` fails a second `name:`, because load order
+  its files (`check.py module-deps` fails a second `name:`, because load order
   would silently pick the winner); another file's function is always called
   fully qualified (`.qf.px.ccy_pair_legs`, never a bare name), which is also how
   that gate sees the dependency; and a private helper (`/ @private`) lives in

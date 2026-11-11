@@ -705,7 +705,9 @@ exit 0
 
 
 def _peachq_module():
-    spec = importlib.util.spec_from_file_location("peachq", REPO / "scripts" / "peachq.py")
+    spec = importlib.util.spec_from_file_location(
+        "peachq", REPO / "scripts" / "peachq" / "resolve.py"
+    )
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -992,3 +994,20 @@ def test_quiet_prints_nothing_but_the_report(tmp_path, capsys):
     )
     cap = capsys.readouterr()
     assert cap.err == "" and json.loads(cap.out)["status"] == "ok"
+
+
+def test_the_test_tree_needs_no_context_conversion(tmp_path):
+    """#1412: a suite defines everything from the root, so the converter that
+    rewrites nested contexts for kdb+ 4.0 has nothing to do under tests/. This
+    is the executable half of "the migrated tests run on q 4.0 without context
+    conversion" that needs no 4.0 binary: it fails the day a test file enters a
+    nested namespace (`\\d .qt.a.b`), which 4.0 rejects."""
+    r = subprocess.run(
+        [sys.executable, str(REPO / "scripts" / "portable" / "flatten_contexts.py"), "tests",
+         "--root", str(REPO), "--out", str(tmp_path / "flat"), "--dry-run", "--quiet"],
+        capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    report = json.loads(r.stdout[r.stdout.index("{") :])
+    assert report["status"] == "ok", report["refusals"]
+    changed = [f["path"] for f in report["files"] if f["action"] != "unchanged"]
+    assert not changed, f"these need context conversion: {changed}"

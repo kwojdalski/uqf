@@ -36,7 +36,7 @@
 #   scripts/dev/odbc_rosetta.sh databento <q args...>
 #       as `q`, with UQF_SOURCE_CRED_DATABENTO_MBP10 pointing at
 #       output/duckdb/databento.duckdb (build it with
-#       scripts/dev/dump_databento_duckdb.py)
+#       scripts/dev/make_databento_duckdb.py)
 #   scripts/dev/odbc_rosetta.sh fxdeals <q args...>
 #       as `q`, with UQF_SOURCE_CRED_DUCKDB_DEALS pointing at
 #       output/duckdb/fx_deals.duckdb (build it with
@@ -146,13 +146,13 @@ case "${1:-}" in
         fi
         worker="$1"
         shift
-        run_q "$MAIN_ROOT/scripts/dev/run_backfill.q" -worker "$worker" "$@"
+        run_q "$MAIN_ROOT/scripts/jobs/run_backfill.q" -worker "$worker" "$@"
         ;;
     databento)
         shift
         db="$MAIN_ROOT/output/duckdb/databento.duckdb"
         if [ ! -f "$db" ]; then
-            echo "no $db - build it with: uv run scripts/dev/dump_databento_duckdb.py --source <parquet dir>" >&2
+            echo "no $db - build it with: uv run scripts/dev/make_databento_duckdb.py --source <parquet dir>" >&2
             exit 1
         fi
         export UQF_SOURCE_CRED_DATABENTO_MBP10="DRIVER=DuckDB;Database=$db;access_mode=READ_ONLY"

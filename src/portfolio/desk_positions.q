@@ -153,7 +153,7 @@
     / global at the ROOT, where no flat_tolerance exists. The constant is
     / risk.q's - this file used to keep an alias of it, which became the same
     / name twice in one namespace when the two merged (#1411) - so it is named
-    / in full, which is also how check_module_deps.py sees the dependency.
+    / in full, which is also how the module-deps check sees the dependency.
     tol:.qf.port.flat_tolerance;
     update break_even:?[tol>abs base_qty; 0n; (neg quote_qty)%base_qty] from book}
 

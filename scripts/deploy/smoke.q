@@ -1,0 +1,60 @@
+/ smoke.q - the offline check `uqs deploy push` runs on a release
+/ before it starts anything (#773).
+/ .
+/ Loads the quant library from the release and checks a few numbers against
+/ values computed independently: a forward, a discount factor, the normal
+/ CDF, a Garman-Kohlhagen call and a pip factor. Enough to prove the release
+/ is complete and the interpreter is a working, licensed q - not a test suite.
+/ .
+/ Prints DEPLOY_SMOKE_OK and exits 0 only when every check passes. Anything
+/ else - a failed load, a wrong number, an error - prints DEPLOY_SMOKE_FAILED
+/ and the reason on stderr, and exits 1. deploy.py requires the marker AND the
+/ exit code, so a q that dies quietly part-way cannot pass.
+/ .
+/ THEN THE ETL COMPOSITION (#902), when -procs names the processes the
+/ deployment will start: their declarations, and only theirs, are loaded
+/ against this server's starter-pack schema ($TORQAPPHOME/database.q) - the
+/ load each of those processes does at startup. A job whose table that schema
+/ lacks fails here, naming the job, the table and the schema's path, before
+/ anything is stopped or started. Names that run no declared job (rdb1,
+/ tpreplay1, ...) load nothing and are passed over.
+/ .
+/ Run from the release root: q scripts/deploy/smoke.q -q [-procs p1 p2 ...]
+
+\d .qdeploysmoke
+
+/ One check: a numeric atom within 1e-6 of the expected value, or say which
+/ and what it gave. A null is refused explicitly: it compares below every
+/ number, so `1e-6>abs 0n-want` is 1b (#2441). A list or a non-number is
+/ refused too, with this message rather than a 'type.
+/ @param name what is checked
+/ @param got the library's value
+/ @param want the expected value
+/ @return 1b when it matches
+expect:{[name;got;want]
+    ok:$[(type got) within -9 -5h; $[null got; 0b; 1e-6>abs got-want]; 0b];
+    if[not ok; -2 "DEPLOY_SMOKE_FAILED: ",name," gave ",(.Q.s1 got),", expected ",.Q.s1 want];
+    ok}
+
+/ Every check. The expected values were computed outside q: the GK call with
+/ the same Abramowitz-Stegun normal CDF the library uses.
+/ @return a boolean per check
+checks:{[]
+    (expect["fwd_simple";.qf.px.fwd_simple[1.1;0.05;0.02;1f];1.1323529411764708];
+     expect["df_cont";.qf.px.df_cont[0.05;2f];0.9048374180359595];
+     expect["ncdf at 0";.qf.math.ncdf 0f;0.5];
+     expect["gk_call at the money";.qf.px.gk_call[1.1;1.1;0.05;0.02;0.1;1f];0.06018482163918004];
+     expect["pip_factor USDJPY";"f"$.qf.px.pip_factor`USDJPY;100f])}
+
+\d .
+
+@[system;"l src/init.q";{[e] -2 "DEPLOY_SMOKE_FAILED: could not load the quant library: ",e; exit 1}];
+.qdeploysmoke.results:@[.qdeploysmoke.checks;::;{[e] -2 "DEPLOY_SMOKE_FAILED: a check threw: ",e; exit 1}];
+if[not all .qdeploysmoke.results; exit 1];
+if[`procs in key .Q.opt .z.x;
+    system"l src/etl/generated/load_plan.q";
+    .qetl.load.only:p where (p:`$(.Q.opt .z.x)`procs) in key .qetl.load.procs;
+    @[system;"l src/etl/init.q";{[e] -2 "DEPLOY_SMOKE_FAILED: the ETL composition does not load: ",e; exit 1}];
+    -1 "deploy smoke: ETL composition loaded for ",$[count .qetl.load.only;", " sv string .qetl.load.only;"no job (infrastructure only)"]];
+-1 "DEPLOY_SMOKE_OK";
+exit 0

@@ -233,7 +233,7 @@
 / A d2 diagram of the whole graph, as a newline-joined string.
 / .
 / d2, and not mermaid, because every committed diagram in this repository is
-/ d2 under docs/diagrams/, rendered by scripts/generate/render_diagrams.py and
+/ d2 under docs/diagrams/, rendered by scripts/generate/diagrams.py and
 / held to its source by a --check gate. Emitting the other language would mean
 / output that cannot be dropped into that directory without being redrawn, and
 / two diagram languages for a reader to know.

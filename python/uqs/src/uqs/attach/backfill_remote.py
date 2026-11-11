@@ -10,13 +10,13 @@ credentials must stay somewhere else, the two halves run apart:
             - never the worker, whose code that machine need not have - and admits
             its destination exactly as an attached backfill does: the verified
             attachment, its pinned HDB, the live stack's writers, readers and
-            end-of-day fence. Starts scripts/dev/remote_receiver.q, which grants that
+            end-of-day fence. Starts scripts/jobs/attached_receiver.q, which grants that
             one (attachment; dataset) under the contract and commits every batch
             through the fenced HDB writer (.qetl.io.hdb_scoped). It stops at the fence.
   extract   on the SOURCE's machine: `uqs job backfill W --attachment NAME --writer HOST:P`.
             Resolves the same attachment WITHOUT the HDB (it is the stack's), plans
             the windows against this machine's coverage, and starts
-            scripts/dev/attached_backfill.q with -writer: each window's batch goes to
+            scripts/jobs/attached_backfill.q with -writer: each window's batch goes to
             the receiver, and coverage here moves only once the receiver committed
             it - and is released as queryable only once its readers reloaded.
 
@@ -58,7 +58,7 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import runs
 
-RECEIVER = Path("scripts") / "dev" / "remote_receiver.q"
+RECEIVER = Path("scripts") / "jobs" / "attached_receiver.q"
 #: How the runner is handed the password it reaches the receiver with.
 WRITER_PASSWORD_ENV = "UQF_ATTACH_WRITER_PASSWORD"
 #: The receiver's batch journal and access file, in the destination's state directory.

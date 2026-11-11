@@ -63,12 +63,12 @@
           .qproc.backfill.use_on_conflict enlist[`on_conflict]!enlist enlist "replace")}];
     .qunit.assertEquals[r;(`plan;`replace);"with a clean environment the flags are what runs"]}
 
-/ --- scripts/dev/run_backfill.q (#1319) ---------------------------------
+/ --- scripts/jobs/run_backfill.q (#1319) ---------------------------------
 / The dev launcher promises torq_backfill.q's flags unchanged, and read
 / neither -mode nor -on_conflict: -mode plan wrote rows into the -hdb root.
 / It starts a process and exits, so these run it as one, in a scratch root.
 
-/ Run scripts/dev/run_backfill.q for the demo worker with extra flags, with
+/ Run scripts/jobs/run_backfill.q for the demo worker with extra flags, with
 / no UQF_MODE / UQF_ON_CONFLICT in its environment unless given.
 / @param extra the flags after the range, as one string
 / @param envs "VAR=value " prefixes for the child's environment
@@ -85,7 +85,7 @@
     root:first system "mktemp -d";
     cmd:"env -u UQF_MODE -u UQF_ON_CONFLICT ",envs,"UQF_STATUS_DIR=",root,"/st ",
         $[""~getenv `QCMD; "q"; getenv `QCMD],
-        " scripts/dev/run_backfill.q -worker ",wk," -version v2 -from ",start," -to 2026.09.14D00:00:00.000000000 -fixture ",
+        " scripts/jobs/run_backfill.q -worker ",wk," -version v2 -from ",start," -to 2026.09.14D00:00:00.000000000 -fixture ",
         extra," -hdb ",root,"/hdb < /dev/null > ",root,"/out.txt 2>&1; echo $?";
     code:"J"$first system cmd;
     / the child's own logging goes to the file: q's stdout capture misses it

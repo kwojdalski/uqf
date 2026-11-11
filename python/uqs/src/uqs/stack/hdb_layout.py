@@ -8,7 +8,7 @@ partitions live in the segment directories it names, and the listing found
 none - so the check reported a database whole without reading any of it.
 
 The authority on which partitions a database has is q's load, so this asks it:
-scripts/gates/hdb_layout.q loads the root and reads `.Q.pv` and `.Q.pd` back,
+scripts/hdb/hdb_layout.q loads the root and reads `.Q.pv` and `.Q.pd` back,
 in ONE q process whatever the number of partitions, and prints them as JSON.
 Nothing here restates q's segmented-database rules. A date held by two
 segments is two partitions to q - every query reads both - so it is two here,
@@ -39,7 +39,7 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.stack import hdb_shape
 from uqs.stack.env import with_interpreter
 
-SCRIPT = Path("gates") / "hdb_layout.q"
+SCRIPT = Path("hdb") / "hdb_layout.q"
 DONE = "DONE"
 PREFIX = "layout|"
 

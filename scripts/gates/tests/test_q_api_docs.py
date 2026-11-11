@@ -21,7 +21,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[3]
 
 # scripts/ is not a package, so the script is loaded by path - the same
-# idiom test_render_diagrams.py uses.
+# idiom test_diagrams.py uses.
 _SPEC = importlib.util.spec_from_file_location(
     "q_api_docs", REPO / "scripts" / "generate" / "q_api_docs.py"
 )

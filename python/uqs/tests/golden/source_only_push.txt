@@ -208,7 +208,7 @@ if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; 
 set -euo pipefail
 cd /opt/uqf/releases/20261007T000000Z-0123456789ab
 source ./deploy.env
-timeout 120 "$QCMD" scripts/deploy_smoke.q -q -procs discovery1 stp1 rdb1 hdb1 wdb1 sort1 sortworker1 gateway1 monitor1 housekeeping1 sctp1 metrics1 reporter1 tpreplay1
+timeout 120 "$QCMD" scripts/deploy/smoke.q -q -procs discovery1 stp1 rdb1 hdb1 wdb1 sort1 sortworker1 gateway1 monitor1 housekeeping1 sctp1 metrics1 reporter1 tpreplay1
 
 =====
 [lock]

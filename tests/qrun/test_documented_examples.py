@@ -1,7 +1,7 @@
 """Every documented `@eg` under src/ and scripts/ runs (tests/q/run_examples.q).
 
 scripts/test.py's q-examples lane until #1808, and now this module alone. The
-q-tests hook runs it on KDB-X (`--require-q kdbx`), under attest_kdbx.py too:
+q-tests hook runs it on KDB-X (`--require-q kdbx`), under kdbx_attestation.py too:
 when the q-unit verdict comes from the q-coverage run, the hook still runs this
 and the worked examples.
 

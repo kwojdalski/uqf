@@ -8,7 +8,7 @@
 / ------------------------------------------------- A RUN FROM A COMMAND LINE
 / .
 / ONE PARSER FOR EVERY LAUNCHER. scripts/processes/torq_backfill.q (the fleet
-/ path, `uqs job backfill`) and scripts/dev/run_backfill.q (the TorQ-free dev
+/ path, `uqs job backfill`) and scripts/jobs/run_backfill.q (the TorQ-free dev
 / path) each kept their own, and they drifted: the dev one refused a run with
 / no -version while the fleet one fell back to the worker's declared default,
 / so a command line did not move between them unchanged, as run_backfill.q

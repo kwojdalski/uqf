@@ -32,7 +32,7 @@
 //
 //      Because a domain is shared, a name must be defined by ONE file of it:
 //      two files defining `foo:` leave the winner to load order, and
-//      scripts/gates/check_module_deps.py fails the second. A call from one
+//      scripts/gates/policy/module_deps.py fails the second. A call from one
 //      file to another is always fully qualified (`.qf.px.pip_factor`, not
 //      `pip_factor`), which is also what lets that gate see the dependency.
 //
@@ -44,7 +44,7 @@
 //      knows the nesting, and every tool that lists namespaces goes through it.
 //
 //   2. The modules (files) form an ACYCLIC graph, and CI holds them to it:
-//      scripts/gates/check_module_deps.py lists every allowed edge between
+//      scripts/gates/policy/module_deps.py lists every allowed edge between
 //      modules and refuses a new one, or a cycle, until the list says so
 //      (#626). Pricing and execution used to depend on each other; now
 //      execution builds on synthetic cross pricing (cross.q), both use the

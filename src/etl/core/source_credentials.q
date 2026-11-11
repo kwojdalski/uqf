@@ -219,7 +219,7 @@
 / `env_var`, not `var`: var is a q BUILTIN (variance), so assigning it as a
 / lambda LOCAL throws `assign at load time and aborts the rest of the file.
 / Sixth reserved-name collision here, and the first as a local rather than a
-/ parameter - check_q_traps.py now covers both.
+/ parameter - the q-traps check now covers both.
 .qetl.source.require_credentials:{[source]
     .qetl.source.def source;
     env_var:.qetl.source.credential_var[source];

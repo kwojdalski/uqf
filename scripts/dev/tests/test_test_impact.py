@@ -377,7 +377,7 @@ def test_the_cli_prints_the_runner_arguments(capsys):
     assert out.startswith("-files ") and "test_forwards.q" in out
 
 
-# --- the q-tests gate: what the hook and attest_kdbx.py run (step 4) ---------
+# --- the q-tests gate: what the hook and kdbx_attestation.py run (step 4) ---------
 
 
 def _git(root: Path, *args: str) -> str:

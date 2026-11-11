@@ -49,7 +49,7 @@ technical writing here:
 
 **While writing --- verify, do not recall:**
 
-- Every `.q*` function you name must exist. `check_doc_references.py` checks
+- Every `.q*` function you name must exist. `check.py doc-references` checks
   this, but run it yourself rather than discovering it in CI.
 - **Every command you document must be run.** Two Quick start commands in this
   repository were wrong in ways no gate could catch --- a CLI argument form that
@@ -73,7 +73,7 @@ append a rule you inferred; only ones the maintainer actually stated.
   built on. A documentation change that contradicts one of them is usually the
   change that is wrong, not the position.
 - **The gates that touch docs**, so you know what will fail:
-  `check_doc_references.py`, `derive.py operational-docs --check`,
+  `check.py doc-references`, `derive.py operational-docs --check`,
   `check.py env-reference`. `docs/man.q` needs none: it reads the qDoc comments
   in `src/` when it loads.
 

@@ -191,6 +191,9 @@ testpaths = [
     "scripts/gates/tests",
     # scripts/portable/'s converter, tested beside it for the same reason.
     "scripts/portable/tests",
+    # scripts/peachq/: the pinned PeachQ's resolver, its full-suite lane and
+    # its pre-push hook, tested beside them for the same reason.
+    "scripts/peachq/tests",
     # scripts/dev/bundle_suite.py, which runs sidecar bundles' own tests.
     "scripts/dev/tests",
     # The q scripts run as tests - worked examples, the docs' q blocks - and

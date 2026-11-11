@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Check that every relative link and cross-reference in ``docs/`` resolves.
 
-The gap this closes. ``check_doc_references.py`` holds the prose to the q
+The gap this closes. ``check.py doc-references`` holds the prose to the q
 functions it names; ``check.py declaration-reference`` holds the declaration
 page to the declared keys; ``generate_*.py --check`` hold the generated
 artifacts to their sources. Nothing held a *link* to anything. A page could
 point at ``../guides/gone.md`` and every gate passed, because a path that
 appears in no generated artifact has nothing to disagree with - the same
-shape of hole that ``check_doc_references.py`` was written to close for
+shape of hole that ``check.py doc-references`` was written to close for
 function names.
 
 WHY QUARTO RATHER THAN A REGEX. A regex over ``](...)`` finds a missing

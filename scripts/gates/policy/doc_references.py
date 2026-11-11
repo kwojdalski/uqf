@@ -1,0 +1,413 @@
+"""Check that the q functions our prose cites actually exist, and are callable
+with the argument count shown.
+
+There were already gates keeping the DERIVED documentation honest -
+``docs/man.q`` reads the qDoc blocks when it loads, and
+``check.py env-reference`` holds the environment page to the code that reads
+each variable. Nothing held the *prose* to anything. A guide could name
+``.qetl.coverage.stage_coverage``, a function that has never existed, and every gate
+would pass: the name appears in no generated artifact, so no generator
+disagrees with it.
+
+That is the failure this closes. A reader who types a documented call and
+gets ``'stage_coverage`` learns that the documentation is untrustworthy, and
+from then on reads all of it with suspicion - which costs far more than the
+one wrong line.
+
+Two checks, because they fail differently:
+
+* **Unknown name** - the namespace exists and the name in it does not. Almost
+  always a rename the prose did not follow, which is exactly what rots
+  quietly.
+* **Too many arguments** - the call shown passes more values than the
+  function takes, so it would throw ``'rank`` if anyone ran it. Passing
+  FEWER is not flagged: a partially applied q function is a projection, and a
+  legitimate thing to write down.
+
+WHAT IS DELIBERATELY NOT CHECKED
+
+*Namespaces this tree does not own.* The pattern only matches a lowercase
+``.q``-prefixed namespace, which is this repository's own convention.
+TorQ's ``.servers``/``.hb``/``.u``/``.proc``/``.lg``, kdb's ``.Q``/``.z``/
+``.j``, and Python references are all out of scope, because their surface is
+not ours to verify and a gate that guesses about someone else's API is a
+gate people learn to ignore.
+
+*Namespaces absent from the contract surface.* ``.qtorq`` lives in
+``scripts/`` rather than ``src/`` and the exporter does not carry it, so its
+names cannot be confirmed OR denied here. Those are reported as skipped
+rather than silently passed, so the blind spot stays visible. That holds only
+for a ROOT the surface never carries (``.qtorq``, ``.qunit``): an unknown
+namespace under one it does carry - ``.qetl.coverag``, ``.qetl.job.boundd`` -
+is a typo or a stale name after a move, and is reported as one (#1337). The
+exception is ``.qpipe``, whose namespaces each declaration names
+(``DECLARED_ROOT``).
+
+*Documents about things that do not exist yet or no longer do.* Plans,
+proposals, agent run output and the generated decision pages are excluded by
+directory below, each for a stated reason. A roadmap naming an unwritten
+function is doing its job.
+
+SOURCE OF TRUTH
+
+``docs/reference/surfaces/current/functions.csv``, which is itself held
+current by ``derive.py contract-surface --check``. Reading it rather than launching q
+keeps this gate fast enough for a pre-commit hook; the cost is that a stale
+surface would make this check wrong, which is why that gate runs too.
+
+A function tagged ``@private`` (#627) is not in the surface - it is plumbing,
+and its refactors are not contract changes - but it exists, and prose may
+explain it. Those names are read from ``src/`` by the rule docs/man.q applies
+(``private_names``), and count as existing with no rank to check calls against.
+
+    python3 scripts/gates/check.py doc-references
+"""
+
+from __future__ import annotations
+
+import csv
+import re
+import sys
+from pathlib import Path
+
+#: The contract surface, under the root checked.
+SURFACE = Path("docs") / "reference" / "surfaces" / "current" / "functions.csv"
+
+#: Where living documentation lives, under the root checked. Everything under
+#: these is checked.
+DOC_ROOTS = (
+    Path("docs"),
+    Path(".claude") / "agents",
+    Path(".claude") / "skills",
+)
+
+#: Directories whose contents are deliberately not held to the current code,
+#: each for a different reason. Excluding a directory is a claim that its
+#: documents are not describing the system as it is now.
+EXCLUDED_DIRS = {
+    # Generated from the GitHub issues that are the authority; a decision page
+    # records what was decided, including about code since changed.
+    "decisions",
+    # Agent output, dated and append-only. A record of a run, not a
+    # description of the system.
+    "drift-reports",
+    # Plans written BEFORE the work, kept afterwards as the reasoning. They
+    # name things that did not exist when written, which is the point.
+    "migrations",
+    # docs/reference/q-api/: written from the qDoc blocks themselves at render
+    # time and gitignored (scripts/generate/q_api_docs.py), so a stale local
+    # copy from an earlier render would be checked against today's code.
+    "q-api",
+}
+
+#: Individual files excluded, with the reason each is exempt.
+#:
+#: Empty, and worth keeping that way. The one entry was ROADMAP.md - a plan,
+#: so naming an unwritten function was the document working correctly - and it
+#: went when that file was retired into issues. A document that has to be
+#: exempted from "the functions you name exist" is usually a document making a
+#: promise rather than a description, and an issue is the better home for a
+#: promise.
+EXCLUDED_FILES: dict[str, str] = {}
+
+#: References that are deliberately not real, with why. A reference only
+#: belongs here if the document is BETTER for naming something non-existent -
+#: an illustration of what not to write, or a name being discussed rather
+#: than used. Anything else should be fixed in the prose instead.
+#: A selector a process SETS before loading src/etl/init.q: defining it in q
+#: would itself be a selection (test_q_names.SET_BY_CALLER).
+_CALLER_SET = "set by the caller before src/etl/init.q loads; never defined in q"
+
+ALLOWED_MISSING = {
+    (
+        ".claude/skills/uqf-framework/SKILL.md",
+        ".qetl.load.only",
+    ): _CALLER_SET,
+    (
+        ".claude/skills/uqf-framework/uqf-architecture.md",
+        ".qetl.load.only",
+    ): _CALLER_SET,
+    (
+        ".claude/skills/uqf-framework/uqf-architecture.md",
+        ".qetl.load.only_sources",
+    ): _CALLER_SET,
+    (
+        ".claude/skills/uqf-framework/uqf-q-traps.md",
+        ".qetl.load.only",
+    ): _CALLER_SET,
+    (
+        ".claude/agents/uqf-quant-developer.md",
+        ".qf.px.options",
+    ): "the intermediate public namespace the rule forbids, named as the example",
+    (
+        ".claude/skills/kdb-q-conventions/SKILL.md",
+        ".qf.px.options",
+    ): "the intermediate public namespace the rule forbids, named as the example",
+    (
+        "docs/reference/qf-domains.md",
+        ".qf.px.options",
+    ): "the intermediate public namespace the page says does not exist",
+    (
+        ".claude/agents/uqf-quant-developer.md",
+        ".qf.px.sub",
+    ): "the same nested-namespace illustration, in the rule that forbids it",
+    (
+        ".claude/agents/extension-brainstormer.md",
+        ".qf.px.sub",
+    ): "the same nested-namespace illustration",
+    (
+        ".claude/agents/extension-brainstormer.md",
+        ".qf.mkt.example_fn",
+    ): "a placeholder in the template an idea must fill in, not a real name",
+    # These two are the examples of what this gate catches, quoted in the
+    # philosophy note. Both MUST stay non-existent: the sentence is about the
+    # fact that they do not exist, so fixing them would delete the point.
+    (
+        "docs/architecture/pipeline-philosophy.md",
+        ".qf.mkt.require_sorted_tape",
+    ): "quoted as a reference this gate caught - the real name is require_tape",
+    (
+        "docs/architecture/pipeline-philosophy.md",
+        ".qetl.coerce.coerce",
+    ): "quoted as a reference this gate caught - the real name is coerce_column",
+}
+
+#: The root whose namespaces each DECLARATION names: `.qpipe.job.<job>`,
+#: `.qpipe.source.<source>`, `.qpipe.transform.<transform>`, and the custom
+#: homes `.qpipe.io.<name>` and `.qpipe.reaction.<name>`. A guide walking
+#: through a new job names one that does not exist yet (`fx_rates_backfill`,
+#: `spreadmon`) - that is the guide working - so a namespace under it that the
+#: surface does not carry stays unverifiable. Under every OTHER root the
+#: surface carries, a namespace it does not carry is a typo or a stale name
+#: after a move, and is a problem (#1337).
+DECLARED_ROOT = "qpipe"
+
+#: A reference to this tree's own namespaces: a lowercase `.q` prefix, then a
+#: name. The namespace part may itself be dotted, because worker instances
+#: nest (`.qpipe.job.demo_deals_backfill.run`); without that, the middle segment
+#: was read as the FUNCTION and every worker reference in every document
+#: landed in the unverifiable bucket rather than being checked.
+#: The NAMESPACE must be lowercase - `.Q.` is kdb's own and not ours to
+#: verify - but the NAME may carry uppercase, because `src/integrations/data.q`
+#: is deliberately left in its original camelCase (`.qdata.databentoDir`) and
+#: a lowercase-only name pattern silently truncated it to `.qdata.databento`,
+#: reporting a function that does exist as missing.
+_REF = re.compile(r"\.q([a-z][a-z0-9]*(?:\.[a-z][a-z0-9_]*)*)\.([a-zA-Z_][a-zA-Z0-9_]*)")
+
+#: The same, followed by a bracketed argument list, for the arity check.
+_CALL = re.compile(
+    r"\.q([a-z][a-z0-9]*(?:\.[a-z][a-z0-9_]*)*)\.([a-zA-Z_][a-zA-Z0-9_]*)\[([^\[\]]*)\]"
+)
+
+
+def load_surface(root: Path) -> dict[str, dict[str, dict]]:
+    """{namespace: {name: entry}} from `root`'s committed contract surface.
+
+    `rank` is blank for a non-function, which is how the CSV distinguishes a
+    value from a niladic function - see contract_surface.write_surface. A
+    blank here becomes None, and the arity check skips it rather than
+    treating a value as a zero-argument function.
+    """
+    surface = root / SURFACE
+    if not surface.is_file():
+        sys.exit(
+            f"contract surface not found at {surface} - run "
+            "`uv run python scripts/generate/derive.py contract-surface`"
+        )
+    out: dict[str, dict[str, dict]] = {}
+    with surface.open(newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            out.setdefault(row["namespace"], {})[row["name"]] = {
+                "name": row["name"],
+                "kind": row["kind"],
+                "rank": int(row["rank"]) if row["rank"] else None,
+            }
+    return out
+
+
+_NSLINE = re.compile(r"^\\d\s+((?:\.[A-Za-z][A-Za-z0-9_]*)+)\s*$")
+_DEF = re.compile(r"^([A-Za-z][A-Za-z0-9_]*)\s*:")
+_QDEF = re.compile(r"^((?:\.[A-Za-z][A-Za-z0-9_]*){2,})\s*:")
+_PRIVATE = re.compile(r"^\s*/+\s*@private\b")
+
+
+def private_names(root: Path) -> dict[str, set[str]]:
+    """{namespace: {name}} for every definition whose qDoc block says @private.
+
+    docs/man.q's rule, kept exactly: a definition is `name:` at column 0 in a
+    `\\d .ns` file or a qualified `.ns.name:`; a run of definitions with no
+    blank line between them shares the comment block above the run.
+    """
+    out: dict[str, set[str]] = {}
+    for path in sorted(root.rglob("*.q")):
+        lines = path.read_text(errors="replace").splitlines()
+        cur = ""
+        defs: list[tuple[int, str, str]] = []
+        for i, line in enumerate(lines):
+            if m := _NSLINE.match(line):
+                cur = m.group(1)
+            elif m := _QDEF.match(line):
+                ns, _, name = m.group(1).rpartition(".")
+                defs.append((i, ns, name))
+            elif (m := _DEF.match(line)) and cur:
+                defs.append((i, cur, m.group(1)))
+        at = {i for i, _, _ in defs}
+        for i, ns, name in defs:
+            j = i - 1
+            while j >= 0 and j in at:
+                j -= 1
+            while j >= 0 and lines[j].lstrip().startswith("/") and lines[j].strip() != "\\":
+                if _PRIVATE.match(lines[j]):
+                    out.setdefault(ns.lstrip("."), set()).add(name)
+                    break
+                j -= 1
+    return out
+
+
+def doc_files(root: Path) -> list[Path]:
+    """Every living documentation file under `root`, in a stable order."""
+    out: list[Path] = []
+    for docs in DOC_ROOTS:
+        if not (root / docs).is_dir():
+            continue
+        for path in sorted((root / docs).rglob("*.md")):
+            rel = path.relative_to(root)
+            if EXCLUDED_DIRS & set(rel.parts):
+                continue
+            if path.name in EXCLUDED_FILES:
+                continue
+            out.append(path)
+    return out
+
+
+def _arg_count(inside: str) -> int:
+    """How many arguments a bracketed q argument list passes.
+
+    `[]` is a niladic call, not one empty argument - so an empty or
+    whitespace-only body counts as zero rather than one. Only a top-level `;`
+    separates arguments: one inside `(...)` separates list items, and one
+    inside a `"..."` string is a character (#2412).
+    """
+    body = inside.strip()
+    if not body:
+        return 0
+    count, depth, in_string, escaped = 1, 0, False, False
+    for ch in body:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        elif ch == '"':
+            in_string = True
+        elif ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth = max(0, depth - 1)
+        elif ch == ";" and depth == 0:
+            count += 1
+    return count
+
+
+def check(root: Path) -> tuple[list[str], dict[str, int]]:
+    """Returns (problems, {unverifiable namespace: how many references}) for
+    the documents under `root`, against `root`'s surface and src/.
+
+    The count matters as much as the names: a blind spot of two references
+    is a footnote, and one of two hundred would mean this gate checks far
+    less than its passing line implies.
+    """
+    surface = load_surface(root)
+    for ns, names in private_names(root / "src").items():
+        for name in names:
+            surface.setdefault(ns, {}).setdefault(
+                name, {"name": name, "kind": "private", "rank": None}
+            )
+    # A module reference such as .qetl.cfg is a namespace, not a missing
+    # function named cfg on .qetl. Include container ancestors too.
+    namespaces = {
+        ".".join(parts[:depth])
+        for namespace in surface
+        for parts in [namespace.split(".")]
+        for depth in range(1, len(parts) + 1)
+    }
+    #: roots the surface carries: under these, an unknown namespace is wrong
+    roots = {namespace.split(".")[0] for namespace in surface} - {DECLARED_ROOT}
+    problems: list[str] = []
+    unverifiable: dict[str, int] = {}
+
+    for path in doc_files(root):
+        rel = str(path.relative_to(root))
+        text = path.read_text()
+
+        for line_no, line in enumerate(text.splitlines(), 1):
+            for match in _REF.finditer(line):
+                ns, name = match.group(1), match.group(2)
+                ref = f".q{ns}.{name}"
+                if (rel, ref) in ALLOWED_MISSING:
+                    continue
+                if ref[1:] in namespaces:
+                    continue
+                if f"q{ns}" not in surface:
+                    if f"q{ns}" not in namespaces and f"q{ns}".split(".")[0] in roots:
+                        problems.append(
+                            f"{rel}:{line_no}: {ref} does not exist - namespace .q{ns} "
+                            "does not exist"
+                        )
+                        continue
+                    unverifiable[f".q{ns}"] = unverifiable.get(f".q{ns}", 0) + 1
+                    continue
+                if name not in surface[f"q{ns}"]:
+                    problems.append(
+                        f"{rel}:{line_no}: {ref} does not exist - namespace .q{ns} has no {name}"
+                    )
+
+            for match in _CALL.finditer(line):
+                ns, name, inside = match.group(1), match.group(2), match.group(3)
+                ref = f".q{ns}.{name}"
+                if (rel, ref) in ALLOWED_MISSING or f"q{ns}" not in surface:
+                    continue
+                entry = surface[f"q{ns}"].get(name)
+                if entry is None or entry.get("kind") != "function":
+                    continue
+                rank = entry.get("rank")
+                if rank is None:
+                    continue
+                passed = _arg_count(inside)
+                if passed > rank:
+                    problems.append(
+                        f"{rel}:{line_no}: {ref}[...] is shown with {passed} argument(s) "
+                        f"but takes {rank} - this call would throw 'rank"
+                    )
+
+    return problems, unverifiable
+
+
+def run(root: Path) -> int:
+    """Every living document under `root` against its surface; the exit
+    status. The findings share one piece of advice, and a pass reports what
+    could not be verified, so the rule reports them itself."""
+    problems, unverifiable = check(root)
+    if problems:
+        print(f"doc-references: {len(problems)} stale reference(s)\n", file=sys.stderr)
+        for problem in problems:
+            print(f"  {problem}", file=sys.stderr)
+        print(
+            "\nFix the prose, or - if the document is better for naming something "
+            "that does not exist - add it to ALLOWED_MISSING with the reason.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"doc-references: {len(doc_files(root))} doc(s) cite only functions that exist")
+    if unverifiable:
+        total = sum(unverifiable.values())
+        print(
+            f"  {total} reference(s) across {len(unverifiable)} namespace(s) could not be "
+            "verified - not carried by the contract surface:"
+        )
+        for ns, count in sorted(unverifiable.items()):
+            print(f"    {ns:14} {count}")
+    return 0

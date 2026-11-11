@@ -61,7 +61,7 @@ def test_only_the_peachq_runtime_gets_an_interpreter_of_its_own(pinned):
     assert stack_env.interpreter_env(stack_paths.paths_for_root(ROOT, "torq")) == {}
     assert stack_env.interpreter_env(stack_paths.paths_for_root(ROOT, "peachq")) == {
         "QCMD": str(pinned),
-        "QINIT": str(ROOT / "scripts" / "peachq_init.q"),
+        "QINIT": str(ROOT / "scripts" / "peachq" / "init.q"),
     }
 
 

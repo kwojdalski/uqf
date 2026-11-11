@@ -1,7 +1,7 @@
 # A machine of its own for the remote-stack tests (uv run pytest tests/remote -m docker).
 #
 # Linux x86_64, as the servers a stack runs on are, with PeachQ built from the
-# pin (scripts/peachq.json): there is no Linux KDB-X here, and PeachQ needs no
+# pin (scripts/peachq/pin.json): there is no Linux KDB-X here, and PeachQ needs no
 # licence. The checkout is COPIED in, last, rather than bind-mounted: the point
 # of the container is a machine that shares no filesystem with the one driving
 # it, so a path that happens to exist on both can never make a check pass. A
@@ -38,8 +38,8 @@ RUN uv python install "$UV_PYTHON"
 # PeachQ from the pin, into the resolver's own cache: the layer is reused until
 # the pin or the builder changes.
 WORKDIR /uqf
-COPY scripts/peachq.py scripts/peachq.json scripts/
-RUN uv run --no-project scripts/peachq.py
+COPY scripts/peachq/resolve.py scripts/peachq/pin.json scripts/peachq/
+RUN uv run --no-project scripts/peachq/resolve.py
 
 # uqs's dependencies, before the tree, so an edit to the tree reuses them.
 COPY pyproject.toml uv.lock ./
@@ -54,7 +54,7 @@ COPY . /uqf
 # starts its receiver with. Every runtime's data lives under /data.
 RUN uv sync --package uqs \
     && ln -s /opt/venv/bin/uqs /usr/local/bin/uqs \
-    && ln -s "$(uv run --no-project scripts/peachq.py)" /usr/local/bin/peachq \
+    && ln -s "$(uv run --no-project scripts/peachq/resolve.py)" /usr/local/bin/peachq \
     && mkdir -p /data
 ENV QCMD=/usr/local/bin/peachq \
     UQS_DATA_ROOT=/data

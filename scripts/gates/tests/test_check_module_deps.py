@@ -1,4 +1,6 @@
-"""check_module_deps.py: the library's module graph is reviewed and acyclic (#626).
+"""`check.py module-deps`: the library's module graph is reviewed and acyclic (#626).
+
+The rule is scripts/gates/policy/module_deps.py.
 
 Since #1411 the modules load into seven `.qf.<domain>` namespaces, so a module is
 a source file (or a few files grouped by concern) and an edge is found by asking
@@ -18,11 +20,11 @@ REPO = Path(__file__).resolve().parents[3]
 # scripts/ is not a package, so the gate is loaded by path, as the other gate
 # tests load theirs.
 _SPEC = importlib.util.spec_from_file_location(
-    "check_module_deps", REPO / "scripts" / "gates" / "check_module_deps.py"
+    "module_deps", REPO / "scripts" / "gates" / "policy" / "module_deps.py"
 )
 assert _SPEC and _SPEC.loader
 cmd = importlib.util.module_from_spec(_SPEC)
-sys.modules["check_module_deps"] = cmd
+sys.modules["module_deps"] = cmd
 _SPEC.loader.exec_module(cmd)
 
 # Every edge comes from `qlinter analyze graph`, so a test that draws edges
@@ -87,7 +89,7 @@ def test_a_new_edge_fails_naming_its_file(tmp_path):
     out = cmd.problems(root, frozenset())
     assert out == [
         "src/pricing/b.q: b -> a is a new module dependency - add it to ALLOWED in "
-        "scripts/gates/check_module_deps.py in the same change, or call something the "
+        "scripts/gates/policy/module_deps.py in the same change, or call something the "
         "module may already depend on"
     ]
 

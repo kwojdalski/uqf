@@ -333,8 +333,8 @@
 //                      is the SET of these, comparable by diff, not by total.
 //   UQF_TEST_FAILURES  every test that did not pass: name, status and why,
 //                      tab-separated; one empty line when all passed. Read by
-//                      scripts/portable/full_suite.py (PeachQ) and by
-//                      scripts/dev/attest_kdbx.py, which takes q-tests'
+//                      scripts/peachq/full_suite.py (PeachQ) and by
+//                      scripts/dev/kdbx_attestation.py, which takes q-tests'
 //                      verdict from the coverage run (#1704).
 // Each is written only when its variable names a file.
 .qt.support.write_outcomes:{[res]

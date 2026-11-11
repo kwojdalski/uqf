@@ -1,4 +1,4 @@
-"""Guards on `scripts/generate/generate_operational_docs.py`, the generator of
+"""Guards on `scripts/generate/operational_docs.py`, the generator of
 derive.py's `operational-docs` target.
 
 The decision those questions record: operational docs are generated at
@@ -22,7 +22,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 DERIVE = REPO / "scripts" / "generate" / "derive.py"
-GENERATOR = REPO / "scripts" / "generate" / "generate_operational_docs.py"
+GENERATOR = REPO / "scripts" / "generate" / "operational_docs.py"
 GENERATED = REPO / "docs" / "reference" / "processes.md"
 
 _spec = importlib.util.spec_from_file_location("derive", DERIVE)
@@ -31,7 +31,7 @@ derive = importlib.util.module_from_spec(_spec)
 sys.modules["derive"] = derive
 _spec.loader.exec_module(derive)
 # Through derive.load, so a test that patches it patches what the target runs.
-gen = derive.load("generate_operational_docs")
+gen = derive.load("operational_docs")
 
 from uqs.model.pipelines import PIPELINE_OFFSETS  # noqa: E402
 from uqs.model.registry import DEFAULT_BASE_PORT, PIPELINES  # noqa: E402

@@ -108,14 +108,14 @@ PythonRuntimeSha256 = Annotated[
     ),
 ]
 #: `uqs deploy build --python-component`: carried in the release, for
-#: scripts/install_release.py on a server with no Python of the release's version.
+#: scripts/deploy/install_release.py on a server with no Python of the release's version.
 CarriedPythonRuntime = Annotated[
     str | None,
     typer.Option(
         "--python-component",
         metavar="FILE",
         help="Carry this CPython (`uqs deploy component build python`) in the release, for "
-        "scripts/install_release.py, or a push with --python-mode bundled, to make .venv "
+        "scripts/deploy/install_release.py, or a push with --python-mode bundled, to make .venv "
         "from; built for --arch and --python",
     ),
 ]

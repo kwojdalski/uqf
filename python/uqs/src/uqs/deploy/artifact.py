@@ -30,7 +30,7 @@ WHEEL_DIR = f"{RELEASE_DIR}/wheels"
 #: How a release is packaged (#1646): its dependencies inside it, as wheels.
 PACKAGING_MODE = "offline"
 #: The stdlib-only script that installs an unpacked release in place, offline.
-INSTALLER = "scripts/install_release.py"
+INSTALLER = "scripts/deploy/install_release.py"
 #: The host contract's tools (docs/guides/deploy.md, "The minimum host
 #: contract"): what the push's own server steps run - tar and the gzip it
 #: unpacks with, timeout, find, sed, python3 - and what torq.sh runs - its start

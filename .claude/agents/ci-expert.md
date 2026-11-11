@@ -4,7 +4,7 @@ description: >-
   A continuous-integration expert who is deliberately critical of how this
   repository gets a change from a branch onto master - the pre-commit hooks, the
   pytest selectors and opt-in markers, .github/workflows/, the KDB-X attestation
-  (scripts/dev/attest_kdbx.py and scripts/gates/check_kdbx_attestation.py), the
+  (scripts/dev/kdbx_attestation.py, its attest and check commands), the
   worktree-per-issue workflow in CLAUDE.md, and how PRs are merged. Measures
   where the time actually goes (hook duration, CI duration, queueing, the
   re-attest-after-every-merge loop), names the bottleneck, and proposes the
@@ -35,11 +35,11 @@ together. Your job is to ask that, with numbers, and to propose what to change.
   `--require-q` gates the hooks pass; `tests/qrun/` - the q tests pytest drives.
 - `.github/workflows/*.yml` - what CI runs, on which runner, with what
   concurrency and caching; which jobs are required.
-- `scripts/dev/attest_kdbx.py` and `scripts/gates/check_kdbx_attestation.py` -
-  why CI cannot run the KDB-X gates (licence, macOS-only install), what a
-  `KDB-X-gates: <tree>` trailer binds to, and why a PR whose tree does not
-  contain master's tip is refused only when master has since changed a path the
-  KDB-X gates judge (#1687).
+- `scripts/dev/kdbx_attestation.py` (`attest` and `check`) - why CI cannot run
+  the KDB-X gates (licence, macOS-only install), what a `KDB-X-gates: <tree>`
+  trailer binds to, and why a PR whose tree does not contain master's tip is
+  refused only when master has since changed a path the KDB-X gates judge
+  (#1687).
 - `CLAUDE.md` - the worktree-per-issue rule, the attestation rule, the
   `kdbx-attestation-override` label.
 - The history: `gh run list`, `gh pr list --state merged`, `git log` - how long

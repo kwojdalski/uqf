@@ -254,7 +254,7 @@ an idempotent replace in the HDB.
 FX's own sit between them. Both workers declare `revision` 1, so every window is
 planned again under `<release>@r1` and the new columns are written.
 
-History is filled, not recomputed. `fill_hdb_partitions.q` (the repair behind
+History is filled, not recomputed. `hdb_fill.q` (the repair behind
 `uqs data check --apply`) adds each missing column to every partition and
 derives what the stored rows already say: `clock` is `unknown` (no stored fill
 says whose clock it was scored on), `quote_ccy` is the pair's quote leg, `move`

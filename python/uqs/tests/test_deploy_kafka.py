@@ -250,7 +250,7 @@ def test_the_extra_is_declared_in_uqs_and_locked():
 
 def _kafka_artifact(tmp_path: Path) -> Path:
     root = tmp_path / "tree"
-    files = ["pyproject.toml", "src/init.q", "scripts/deploy_smoke.q"]
+    files = ["pyproject.toml", "src/init.q", "scripts/deploy/smoke.q"]
     for f in files:
         (root / f).parent.mkdir(parents=True, exist_ok=True)
         (root / f).write_text(f"content of {f}\n")

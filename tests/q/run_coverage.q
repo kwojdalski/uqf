@@ -18,7 +18,7 @@
 /   q tests/q/run_coverage.q
 
 / Seeded and sized as tests/run_tests.q is, so the tests run on the same
-/ random draws there and here: attest_kdbx.py reads a pass here as a pass of
+/ random draws there and here: kdbx_attestation.py reads a pass here as a pass of
 / the plain run (#1704). test_seed.q says why the runner seeds. The size is
 / not cosmetic: -3! truncates to the console width, and at the default 80
 / columns two .qt.man.examples tests failed here and passed there - the only
@@ -89,7 +89,7 @@ judged:.qt.support.defined_in[known;modules];
 
 / The run's test outcomes are kept, not discarded: with UQF_TEST_RESULTS and
 / UQF_TEST_FAILURES set they are written as tests/run_tests.q writes them,
-/ and scripts/dev/attest_kdbx.py takes q-tests' q-unit verdict from them
+/ and scripts/dev/kdbx_attestation.py takes q-tests' q-unit verdict from them
 / rather than running the suite a second time (#1704). This exit code does
 / not change: it is the coverage gate's, and a failing test fails q-tests.
 / A subset whose modules define no function still runs its suites, for

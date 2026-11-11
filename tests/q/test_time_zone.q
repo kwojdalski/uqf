@@ -10,7 +10,7 @@
 // exactly one day wide across a DST transition.
 //
 // The cast tests deliberately CONSTRUCT q datetimes, which
-// scripts/gates/check_q_traps.py forbids in src/. That is the one legitimate place
+// scripts/gates/policy/q_traps.py forbids in src/. That is the one legitimate place
 // for the type: a test that proves the trap exists has to build the value
 // the trap needs. The checker is scoped to non-test files for exactly this.
 //
@@ -109,7 +109,7 @@
     .qunit.assertEquals[count got;2;"the filter runs and returns a believable answer, so nothing upstream of the contract will notice the type"]};
 
 / Guard 1 of 3 against recurrence (register's time_column type check is 2,
-/ check_q_traps.py is 3): a source whose time column arrives as a datetime
+/ the q-traps check is 3): a source whose time column arrives as a datetime
 / fails the contract, on the same code path the fixture goes through.
 .qt.qetl.time_zone.test_a_datetime_time_column_is_refused_by_the_contract:{[t]
     bad:([] ts:enlist "z"$2026.09.11D09:00:00.000000000; px:enlist 1.5);

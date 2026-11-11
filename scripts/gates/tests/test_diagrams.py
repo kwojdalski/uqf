@@ -1,0 +1,179 @@
+"""Tests for the `diagrams` target of `scripts/generate/derive.py`, whose renderer
+is `scripts/generate/diagrams.py` - and mostly for the two ways it can
+pass while checking nothing.
+
+The gate's whole job is to fail when a committed `.svg` no longer matches
+its `.d2`, and it has two deliberate escape hatches: no `d2` on PATH, and a
+`d2` whose version is not the one the SVGs were rendered with. Both are
+right - the bytes are only comparable for one renderer - and both turn the
+gate off. An escape hatch nobody checks is how a gate ends up green over
+code it has stopped reading, which is the failure this repository keeps
+finding (`docs/man.q` called itself generated while covering 78 of 348
+functions).
+
+So the cases below are: it FIRES on a stale render, it PASSES on a matching
+one, each skip path is taken only for its own reason and says so, and an
+empty source directory is an error rather than a quiet success.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+import pytest
+
+REPO = Path(__file__).resolve().parents[3]
+
+# scripts/ is not a package, so the script is loaded by path - the same
+# idiom test_check_doc_references.py uses, and for the same reason. The
+# renderer is loaded through derive.load, so a test patches the very module
+# the target uses.
+_SPEC = importlib.util.spec_from_file_location(
+    "derive", REPO / "scripts" / "generate" / "derive.py"
+)
+assert _SPEC and _SPEC.loader
+derive = importlib.util.module_from_spec(_SPEC)
+sys.modules["derive"] = derive
+_SPEC.loader.exec_module(derive)
+diagrams = derive.load("diagrams")
+
+
+def _renderable() -> bool:
+    """Whether the d2 on this machine is the one the SVGs were rendered with."""
+    return diagrams.installed_version() == diagrams.D2_VERSION
+
+
+requires_d2 = pytest.mark.skipif(
+    not _renderable(),
+    reason=f"needs d2 {diagrams.D2_VERSION} on PATH",
+)
+
+
+@pytest.fixture
+def diagram_dir(tmp_path, monkeypatch):
+    """A throwaway diagrams directory, so a test never rewrites the real SVG."""
+    monkeypatch.setattr(diagrams, "DIAGRAMS", tmp_path)
+    monkeypatch.setattr(diagrams, "REPO", tmp_path)
+    return tmp_path
+
+
+def _check() -> int:
+    """Run the gate in check mode.
+
+    One helper for every mode, so a test cannot hand the target a different
+    mode by accident - which would read as the gate being wrong rather than
+    the test.
+    """
+    return _run("--check")
+
+
+def _run(*args: str) -> int:
+    return derive.main(["diagrams", *args])
+
+
+def _write_source(directory: Path, label: str = "one") -> Path:
+    source = directory / "sample.d2"
+    source.write_text(f'a: "{label}"\nb: "two"\na -> b\n')
+    return source
+
+
+# --------------------------------------------------------------- it fires
+
+
+@requires_d2
+def test_a_stale_svg_is_reported(diagram_dir, capsys):
+    source = _write_source(diagram_dir)
+    diagrams.render(source, source.with_suffix(".svg"))
+    # The edit a contributor forgets to re-render.
+    _write_source(diagram_dir, label="one, renamed")
+    svg = source.with_suffix(".svg")
+    committed = svg.read_bytes()
+
+    assert _check() == 1
+    assert "sample.d2 has changed since it was rendered" in capsys.readouterr().err
+    assert svg.read_bytes() == committed, "--check rewrote the stale SVG"
+
+
+@requires_d2
+def test_a_missing_svg_is_reported(diagram_dir, capsys):
+    _write_source(diagram_dir)
+    assert _check() == 1
+    assert "is missing" in capsys.readouterr().err
+    assert not (diagram_dir / "sample.svg").exists(), "--check rendered into the tree"
+
+
+@requires_d2
+def test_a_matching_svg_passes(diagram_dir):
+    source = _write_source(diagram_dir)
+    diagrams.render(source, source.with_suffix(".svg"))
+    assert _check() == 0
+
+
+@requires_d2
+def test_rendering_then_checking_is_clean(diagram_dir):
+    """Render mode must produce something check mode accepts, or the fix the
+    failure message tells you to run does not fix it."""
+    _write_source(diagram_dir)
+    assert _run() == 0
+    assert _check() == 0
+
+
+# ------------------------------------------------- and the ways it goes quiet
+
+
+def test_an_absent_d2_skips_and_says_so(diagram_dir, monkeypatch, capsys):
+    _write_source(diagram_dir)
+    monkeypatch.setattr(diagrams, "installed_version", lambda: None)
+    assert _check() == 0
+    assert "no d2 on PATH" in capsys.readouterr().out
+
+
+def test_a_different_d2_version_skips_and_names_both(diagram_dir, monkeypatch, capsys):
+    """Not a failure: a different renderer emits different, equally correct
+    bytes, and reporting that as a stale diagram would start a re-render war
+    between two contributors.
+    """
+    _write_source(diagram_dir)
+    monkeypatch.setattr(diagrams, "installed_version", lambda: "v9.9.9")
+    assert _check() == 0
+    out = capsys.readouterr().out
+    assert "v9.9.9" in out and diagrams.D2_VERSION in out
+
+
+def test_require_fails_when_d2_is_absent(diagram_dir, monkeypatch, capsys):
+    """CI passes --require: a skip there is the gate green over nothing."""
+    _write_source(diagram_dir)
+    monkeypatch.setattr(diagrams, "installed_version", lambda: None)
+    assert _run("--check", "--require") == 1
+    assert "--require needs d2" in capsys.readouterr().err
+
+
+def test_require_fails_on_a_different_d2_version(diagram_dir, monkeypatch, capsys):
+    _write_source(diagram_dir)
+    monkeypatch.setattr(diagrams, "installed_version", lambda: "v9.9.9")
+    assert _run("--check", "--require") == 1
+    err = capsys.readouterr().err
+    assert "v9.9.9" in err and diagrams.D2_VERSION in err
+
+
+def test_print_version_is_the_pin(capsys):
+    assert _run("--print-version") == 0
+    assert capsys.readouterr().out.strip() == diagrams.D2_VERSION
+
+
+def test_an_empty_diagram_directory_is_an_error(diagram_dir, capsys):
+    """A moved directory must fail loudly rather than gate nothing - the same
+    refusal the etl-layering check makes over an empty namespace set."""
+    assert _check() == 1
+    assert "no .d2 sources" in capsys.readouterr().err
+
+
+# --------------------------------------------------- the committed diagram
+
+
+@requires_d2
+def test_the_repositorys_own_svg_is_current():
+    """The gate, run for real. This is the assertion CI makes."""
+    assert _check() == 0

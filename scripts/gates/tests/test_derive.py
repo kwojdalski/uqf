@@ -22,7 +22,7 @@ REPO = Path(__file__).resolve().parents[3]
 SCRIPT = REPO / "scripts" / "generate" / "derive.py"
 
 # scripts/ is not a package, so the script is loaded by path - the idiom
-# test_render_diagrams.py uses, and for the same reason.
+# test_diagrams.py uses, and for the same reason.
 _SPEC = importlib.util.spec_from_file_location("derive", SCRIPT)
 assert _SPEC and _SPEC.loader
 derive = importlib.util.module_from_spec(_SPEC)
@@ -212,8 +212,8 @@ def _imports_after(*argv: str) -> set[str]:
 #: Each target's generator: the domain module it asks for its outputs.
 GENERATORS = {
     "table-properties": "uqs.stack.gateway_access",
-    "diagrams": "render_diagrams",
-    "operational-docs": "generate_operational_docs",
+    "diagrams": "diagrams",
+    "operational-docs": "operational_docs",
     "contract-surface": "contract_surface",
     "q-facts": "q_facts",
     "plant-schema": "uqs.model.plant_metadata_gen",

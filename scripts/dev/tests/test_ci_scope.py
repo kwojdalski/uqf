@@ -58,7 +58,7 @@ ALL = (True, True, True, True)
             [("M", "python/uqf_frontend/src/uqf_frontend/models/query.py")],
             (False, False, False, True),
         ),
-        ([("M", "scripts/gates/check_hook_scopes.py")], (False, False, False, True)),
+        ([("M", "scripts/gates/policy/hook_scopes.py")], (False, False, False, True)),
         # -- q: the q suite, and the Python tests that start a q ----------
         ([("M", "src/pricing/forwards.q")], (True, True, False, True)),
         ([("M", "tests/q/test_forwards.q")], (False, True, False, True)),
@@ -74,7 +74,7 @@ ALL = (True, True, True, True)
         # the render's tooling
         ([("M", "scripts/generate/q_api_docs.py")], (True, False, False, True)),
         ([("M", "scripts/gates/check_doc_links.py")], (True, False, False, True)),
-        ([("M", "scripts/peachq.json")], (True, True, False, True)),
+        ([("M", "scripts/peachq/pin.json")], (True, True, False, True)),
         # -- deletions -------------------------------------------------------
         # a deletion a document links to
         ([("D", "scripts/dev/odbc_rosetta.sh")], (True, True, False, True)),
