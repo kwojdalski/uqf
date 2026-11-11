@@ -158,7 +158,7 @@
     / "D". Normalise the separators rather than branching on format, so a
     / mixed source does not need two code paths.
     normalised:ssr[ssr[first zoned;"T";"D"];"-";"."];
-    parsed:@[{"P"$x};normalised;{0Np}];
+    parsed:"P"$normalised;
     if[not .qetl.coerce.clock_in_range normalised; :0Np];
     parsed - last zoned}
 
@@ -235,7 +235,7 @@
     trimmed:trim str;
     if[not .qetl.coerce.is_date_only trimmed; :0Np];
     if[any trimmed="/"; :0Np];
-    d:@[{"D"$x};ssr[trimmed;"-";"."];{0Nd}];
+    d:"D"$ssr[trimmed;"-";"."];
     if[null d; :0Np];
     p:`timestamp$d;
     $[p in -0W 0Wp; 0Np; p]}

@@ -36,7 +36,7 @@
 / Private: is odbc.so bound in this process? Loading src/etl/core/odbc.q is not
 / enough - it binds nothing until first use - so this asks for the natives.
 / @private
-.qetl.io.odbc.loaded:{[] @[{0<count .odbc.natives};::;{0b}]}
+.qetl.io.odbc.loaded:{[] 0<count .odbc.natives}
 
 / Bind KX's odbc.so through our odbc.q wrapper (loaded by src/etl/init.q), once,
 / and report whether it is usable.

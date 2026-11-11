@@ -327,10 +327,9 @@
 .qetl.dag.external_ref:{[source;table_name] `$(string table_name),"@",string source}
 
 / Register every bounded worker into the job graph, from .qetl.job.bounded's own registry.
-/ @return the worker names registered, empty when .qetl.job.bounded is not loaded
+/ @return the worker names registered
 / @eg .qetl.dag.adopt_workers[]
 .qetl.dag.adopt_workers:{[]
-    if[not `worker_cfg in key @[value;`.qetl.job.bounded;{()}]; :`$()];
     ws:.qetl.job.bounded.defined[];
     {[w]
         cfg:.qetl.job.bounded.def w;
@@ -346,7 +345,6 @@
 / is why there is no coverage ledger on that path - so it declares
 / no inputs and appears as a root.
 .qetl.dag.adopt_feeders:{[]
-    if[not `feeds in key @[value;`.qetl.job.continuous;{()}]; :`$()];
     fs:key .qetl.job.continuous.feeds;
     {[f] .qetl.dag.register[f;`kind`inputs`outputs!(`continuous; `$(); .qetl.job.continuous.feeds f)]} each fs;
     fs}
@@ -360,10 +358,9 @@
 / .
 / `first` because each declaration is stored ENLISTED - see .qetl.job.stream.jobs
 / on the same-keyed-dicts trap.
-/ @return the job names registered, empty when .qetl.job.stream is not loaded
+/ @return the job names registered
 / @eg .qetl.dag.adopt_streams[]
 .qetl.dag.adopt_streams:{[]
-    if[not `jobs in key @[value;`.qetl.job.stream;{()}]; :`$()];
     js:key .qetl.job.stream.jobs;
     norms:@[{key .qetl.job.stream.normalizer.registry};::;{`$()}];
     {[norms;j]
@@ -402,10 +399,9 @@
 / The job name is `<dataset>~<reaction>`: a reaction name is unique per
 / dataset rather than globally, so the dataset has to be part of the node's
 / identity or two reactions called `rebuild` would collapse into one node.
-/ @return the job names registered, empty when .qetl.reaction is not loaded
+/ @return the job names registered
 / @eg .qetl.dag.adopt_reactions[]
 .qetl.dag.adopt_reactions:{[]
-    if[not `reactions in key @[value;`.qetl.reaction;{()}]; :`$()];
     raze {[ds]
         rs:.qetl.reaction.for_dataset ds;
         {[ds;name;outs]
@@ -442,7 +438,6 @@
 / presenting all of them as equally checked.
 / @return a table of dataset, reaction, outputs, derived
 .qetl.dag.reaction_edges:{[]
-    if[not `reactions in key @[value;`.qetl.reaction;{()}]; :([] dataset:`symbol$(); reaction:`symbol$(); outputs:(); derived:`boolean$())];
     raze {[ds]
         rs:.qetl.reaction.for_dataset ds;
         ([] dataset:count[rs]#ds; reaction:rs`name; outputs:rs`outputs; derived:rs`derived)

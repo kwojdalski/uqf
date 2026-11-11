@@ -247,13 +247,11 @@
 / Private: the dry_run flag, failing CLOSED (#2303). A value that is neither a truthy nor a
 / falsy spelling - UQF_DRY_RUN=tru - is refused, not read as false: .qetl.cfg.get_flag notes it
 / and returns 0b, and nothing enforced the note, so a typo in the flag that asks for a
-/ rehearsal published for real. Only a loader without .qetl.cfg reads it as unset; an error
-/ reading it otherwise is not turned into "run".
+/ rehearsal published for real.
 / @return 1b for a dry run
 / @throws error naming the value and the accepted spellings
 / @private
 .qetl.job.bounded.runtime.dry_run_flag:{[]
-    if[not @[{`raw in key x};`.qetl.cfg;{[e] 0b}]; :0b];
     v:lower .qetl.cfg.raw `dry_run;
     $[0=count v; 0b;
       any v ~/: .qetl.cfg.truthy; 1b;
@@ -270,9 +268,7 @@
 / @throws a mode not in modes, or `run together with the dry_run flag
 / @eg .qetl.job.bounded.runtime.mode[]  ->  `run
 .qetl.job.bounded.runtime.mode:{[]
-    / Protected like the flag: a loader without .qetl.cfg has no mode set,
-    / which is not the same as a mode set wrongly.
-    m:@[{.qetl.cfg.raw `mode};::;{[e] ""}];
+    m:.qetl.cfg.raw `mode;
     dry:.qetl.job.bounded.runtime.dry_run_flag[];
     if[0=count m; :$[dry; `dry_run; `run]];
     m:`$lower m;
@@ -633,7 +629,7 @@
         :`];
     if[null decl`partition;
         '"define: ",string[worker],"'s partition_column needs a partition - with none declared there is no value for the column to hold"];
-    out:cols (.qetl.transform.def decl`transform)`output;
+    out:cols (.qetl.transform.def["define: ",string worker;decl`transform])`output;
     if[not c in out;
         '"define: ",string[worker],"'s partition_column ",string[c]," is not among transform ",
          string[decl`transform],"'s output columns (",(", " sv string out),")"];

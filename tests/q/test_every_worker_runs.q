@@ -62,7 +62,7 @@
     setenv[`$.qetl.source.credential_var cfg`source;""];
     .qetl.job.bounded.state.release_lock w;
     .qetl.job.bounded.state.clear_checkpoint w;
-    (cfg`dataset) set 0#(.qetl.transform.def cfg`transform)`output;
+    (cfg`dataset) set 0#(.qetl.transform.def["test";cfg`transform])`output;
     / The primary input's rows: a source with supporting inputs returns them
     / all from its fixture as a dict of name -> table (#617).
     ts:(.qetl.source.primary[cfg`source;(src`fixture)[]]) src`time_column;
@@ -302,7 +302,7 @@
     r:{[w]
         cfg:.qetl.job.bounded.def w;
         $[cfg[`dataset] in .qetl.plant.names[];
-          $[0<count d:.qt.qpipe.worker_runs.departure[(.qetl.transform.def cfg`transform)`output;cfg`dataset]; (string w),": ",d; ""];
+          $[0<count d:.qt.qpipe.worker_runs.departure[(.qetl.transform.def["test";cfg`transform])`output;cfg`dataset]; (string w),": ",d; ""];
           ""]} each .qt.qpipe.worker_runs.workers[];
     r where 0<count each r}
 

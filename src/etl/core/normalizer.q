@@ -93,9 +93,7 @@
 / Private: one source's transform, held to the canonical output.
 / @private
 .qetl.job.stream.normalizer.check_source:{[who;out;src;xf]
-    if[not xf in .qetl.transform.defined[];
-        'who,": source ",string[src]," maps through transform ",string[xf],", which is not registered - a mapping is a declared transform, so its examples are verified"];
-    d:.qetl.transform.def xf;
+    d:.qetl.transform.def[who,": source ",string[src];xf];
     if[1<>count d`inputs;
         'who,": source ",string[src],"'s transform ",string[xf]," takes ",string[count d`inputs]," inputs - a mapping reads one source"];
     p:.qetl.transform.problems[out;d`output;1b];
@@ -137,7 +135,7 @@
     if[not src in key srcs;
         '"normalize: ",string[src]," is not a source of ",string[name]," - its sources are ",", " sv string key srcs];
     xf:srcs src;
-    ins:.qetl.transform.def[xf]`inputs;
+    ins:.qetl.transform.def["normalizer";xf]`inputs;
     want:cols first value ins;
     .qf.util.require_cols[`normalize;`$(string src)," batch for ",string name;batch;want];
     .qetl.transform.apply[xf;(enlist first key ins)!enlist want#batch]}

@@ -111,9 +111,7 @@
         'who,"'s width ",string[decl`width]," does not divide a day - a window would straddle midnight, and end of day would close it early"];
     if[not $[-16h=type decl`lateness; 0D<=decl`lateness; 0b];
         'who,"'s lateness must be a timespan, 0D for none"];
-    if[not (decl`transform) in .qetl.transform.defined[];
-        'who,"'s transform ",string[decl`transform]," is not registered - it is the job's contract, so it is declared first"];
-    t:.qetl.transform.def decl`transform;
+    t:.qetl.transform.def[who;decl`transform];
     if[1<>count t`inputs; 'who,"'s transform takes ",string[count t`inputs]," inputs - it takes one: the events plus bar_start"];
     d:`by`event_time!(enlist `sym;`time);
     d:d,decl,enlist[`by]!enlist (),$[`by in key decl; decl`by; `sym];

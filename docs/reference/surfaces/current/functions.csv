@@ -1038,7 +1038,7 @@ qetl.tick,subscribers,table,,
 qetl.tick,unsubscribe,function,1,sink
 qetl.transform,apply,function,2,name given
 qetl.transform,apply_as_of,function,3,name given as_of
-qetl.transform,def,function,1,name
+qetl.transform,def,function,2,who name
 qetl.transform,define,function,2,name decl
 qetl.transform,defined,function,1,
 qetl.transform,float_tolerance,value,,

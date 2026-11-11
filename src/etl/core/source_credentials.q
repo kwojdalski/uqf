@@ -265,10 +265,9 @@
 / simply missing, so the first live run after one was provisioned found the
 / range done and fetched nothing. Writing a fixture is now something asked
 / for. validate, plan and dry_run read it freely: they write nothing.
-/ Protected like the run mode: a loader without .qetl.cfg has no flag set.
 / @return 1b when fixture writes were asked for, else 0b
 / @eg .qetl.source.fixture_writes_allowed[]
-.qetl.source.fixture_writes_allowed:{[] @[{.qetl.cfg.get_flag `fixture_writes};::;{0b}]}
+.qetl.source.fixture_writes_allowed:{[] .qetl.cfg.get_flag `fixture_writes}
 
 / Refuse a run that would write `source`'s fixture unless that was asked for.
 / @param who the caller, leading the message

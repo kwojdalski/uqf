@@ -65,7 +65,7 @@
     cfg:.qetl.job.bounded.def worker;
     if[not (::)~cfg`io;
         '"contract: ",string[worker]," declares its own IO manager, which would write where it likes"];
-    out:(.qetl.transform.def cfg`transform)`output;
+    out:(.qetl.transform.def["contract: ",string worker;cfg`transform])`output;
     / a nested column is () in the output; its element type is the plant's (.qetl.plant.nested)
     t:.qetl.io.remote.contract.element[cfg`dataset]'[cols out;exec t from meta out];
     if[count bad:cols[out] where " "=t;

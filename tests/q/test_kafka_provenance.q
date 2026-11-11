@@ -111,7 +111,7 @@
 
 .qt.qetl.kafka.provenance.test_a_declared_mapping_returns_the_payload_columns_only:{[t]
     reg:0!.qetl.kafka.topic.registry;
-    got:{cols (.qetl.transform.def x)`output} each reg`mapping;
+    got:{cols (.qetl.transform.def["test";x])`output} each reg`mapping;
     want:{cols .qetl.kafka.topic.payload_schema[x]} each reg`output;
     .qunit.assertTrue[0<count reg;"there are mappings"];
     .qunit.assertTrue[got~want;"no mapping builds a provenance column"]};
@@ -197,7 +197,7 @@
 
 .qt.qetl.kafka.provenance.test_every_mapping_leads_with_message_index:{[t]
     reg:0!.qetl.kafka.topic.registry;
-    got:{first cols (.qetl.transform.def x)`output} each reg`mapping;
+    got:{first cols (.qetl.transform.def["test";x])`output} each reg`mapping;
     .qunit.assertTrue[0<count reg;"there are mappings"];
     .qunit.assertTrue[all got=\:`message_index;"one-to-one and expanding alike"];
     pub:.qetl.plant.published `client_flow;
