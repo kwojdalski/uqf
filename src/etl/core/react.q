@@ -339,11 +339,9 @@
 /   .qetl.reaction.on[`demo_deals;`positions_backfill;{[ds;f;t] ...}]
 / .
 / @param dataset the published dataset
-/ @return the job names that declared it as an input, empty when .qetl.dag is
-/   not loaded or nothing reads it
+/ @return the job names that declared it as an input, empty when nothing reads it
 / @eg .qetl.reaction.dag_consumers `demo_deals
 .qetl.reaction.dag_consumers:{[dataset]
-    if[not `jobs in key @[value;`.qetl.dag;{()}]; :`$()];
     @[{.qetl.dag.consumers x};dataset;{[e] `$()}]}
 
 / Which registered reactions have no job in the graph behind them, and which
@@ -362,7 +360,7 @@
 /   (dataset~reaction names whose output is a claim)
 .qetl.reaction.audit:{[]
     reacting:key .qetl.reaction.reactions;
-    datasets:distinct reacting,$[`jobs in key @[value;`.qetl.dag;{()}]; raze {(.qetl.dag.def x)`outputs} each .qetl.dag.defined[]; `$()];
+    datasets:distinct reacting,raze {(.qetl.dag.def x)`outputs} each .qetl.dag.defined[];
     / Empty in the healthy case - every dataset has a reaction - where
     / (!). flip () is a 'type; so the empty dict is built, not derived.
     pairs:{[d] (d;.qetl.reaction.dag_consumers[d])} each datasets where 0=count each .qetl.reaction.for_dataset each datasets;

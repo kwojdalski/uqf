@@ -64,7 +64,7 @@
 / the books move from 4.0 to 5.5 through EURUSD inverted and EURPLN): the core's rows carry
 / FX's leg columns on the leg rows, and long_rows turns them into the stored long rows.
 .qt.qpipe.transform.fx_domain.test_the_core_under_the_fx_domain_carries_the_legs_and_long_rows_add_the_pips:{[tc]
-    ex:((.qetl.transform.def[`fx_markout_calc])`examples) 1;
+    ex:((.qetl.transform.def["test";`fx_markout_calc])`examples) 1;
     sp:.qpipe.transform.fx_markout.require_spec .qpipe.transform.fx_markout.default_spec;
     got:.qpipe.transform.markout_core.score[.qpipe.transform.fx_domain.domain;sp;ex[`inputs]`executions;ex[`inputs]`market_data];
     h:got where (got`horizon)=0D00:00:01;

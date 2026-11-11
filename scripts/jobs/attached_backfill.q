@@ -262,7 +262,7 @@ if[not (::)~decl`io;
 remote:`writer in key o;
 forced:remote and `force in key o;
 .qdev.attached.dataset:decl`dataset;
-.qdev.attached.shape:.qdev.attached.shape_of (.qetl.transform.def decl`transform)`output;
+.qdev.attached.shape:.qdev.attached.shape_of (.qetl.transform.def["attached backfill";decl`transform])`output;
 $[remote;
     [bounds:enlist[`destination]!enlist `$first o`destid;
      call:@[.qdev.attached.writer_call;o;{[e] -1 e; exit 2}];

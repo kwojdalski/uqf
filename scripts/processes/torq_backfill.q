@@ -121,15 +121,12 @@
     r}
 
 / How many windows [range_from;range_to) cuts into at the worker's width, for
-/ the log only - so a reader can see progress against a total. Null when the
-/ width is not a timespan rather than failing the run over a log line.
+/ the log only - so a reader can see progress against a total.
 / @param spec the run specification
 / @param width the worker's declared window width
-/ @return the window count, or 0N
+/ @return the window count
 .qproc.backfill.window_count:{[spec;width]
-    .[{[spec;width] `long$ceiling (spec[`range_to]-spec`range_from)%width};
-      (spec;width);
-      {[e] 0N}]}
+    `long$ceiling (spec[`range_to]-spec`range_from)%width}
 
 / The HDB this backfill writes into: $KDBHDB, which uqs sets for every
 / process it starts (python/uqs/src/uqs/stack/env.py). Refused when unset

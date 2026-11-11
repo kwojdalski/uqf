@@ -153,7 +153,6 @@
 / worker cannot be missing from monitoring by being forgotten here - the
 / same reason .qetl.dag adopts rather than asking anyone to re-declare.
 .qetl.hb.never_started:{[]
-    if[not `worker_cfg in key @[value;`.qetl.job.bounded;{()}]; :`$()];
     ws:.qetl.job.bounded.defined[];
     ws where not .qetl.hb.has_beaten each ws}
 

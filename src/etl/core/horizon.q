@@ -226,9 +226,7 @@
         'who,"'s horizon must be a positive timespan - how long an event waits before it is scored"];
     if[$[`max_age in key decl; not $[-16h=type decl`max_age; 0D<=decl`max_age; 0b]; 0b];
         'who,"'s max_age must be a timespan, the oldest a reference row may be at a horizon and still count"];
-    if[not (decl`transform) in .qetl.transform.defined[];
-        'who,"'s transform ",string[decl`transform]," is not registered - it is the job's contract, so it is declared first"];
-    ins:.qetl.transform.def[decl`transform]`inputs;
+    ins:.qetl.transform.def[who;decl`transform]`inputs;
     if[2<>count ins;
         'who,"'s transform ",string[decl`transform]," takes ",string[count ins]," inputs - it takes two: the events, then the reference"];
     d:.qetl.job.stream.horizons.normalise[who;decl;ins];
@@ -364,7 +362,7 @@
     why:.qetl.job.stream.horizons.why_not_ready[d;get hq;pending;now];
     mask:0=count each why;
     if[any mask;
-        ins:key .qetl.transform.def[d`transform]`inputs;
+        ins:key .qetl.transform.def["horizon job ",string name;d`transform]`inputs;
         ready:pending where mask;
         out:.qetl.transform.apply[d`transform;ins!(ready;get hq)];
         (get ` sv ns,`publish)[first d`outputs;out];

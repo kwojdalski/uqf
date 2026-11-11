@@ -192,5 +192,5 @@
     .qunit.assertEquals[0;count .qetl.transform.differences[redone;`bar_start`sym`source`req_size xasc .qt.qpipe.job.book_liquidity_1m.published[]];"and in any arrival order"]};
 
 .qt.qpipe.job.book_liquidity_1m.test_the_transform_output_is_the_published_plant_shape:{[t]
-    out:.qetl.transform.apply[`book_liquidity_1m;first[(.qetl.transform.def `book_liquidity_1m)`examples]`inputs];
+    out:.qetl.transform.apply[`book_liquidity_1m;first[(.qetl.transform.def["test";`book_liquidity_1m])`examples]`inputs];
     .qunit.assertEquals[0#out;.qetl.plant.published `book_liquidity_1m;"the transform's output is the plant table, minus time"]};

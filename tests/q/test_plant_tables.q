@@ -194,7 +194,7 @@
 .qt.qetl.plant.input_disagreements:{[]
     plant:.qetl.plant.names[];
     raze {[plant;tr]
-        ins:(.qetl.transform.def tr)`inputs;
+        ins:(.qetl.transform.def["test";tr])`inputs;
         named:(key ins) where (key ins) in plant;
         {[tr;ins;n]
             dm:exec c!t from meta ins n;
@@ -215,7 +215,7 @@
     / Without this the test above passes the day transforms stop being named
     / after plant tables, having checked nothing.
     plant:.qetl.plant.names[];
-    named:raze {[plant;tr] k where (k:key (.qetl.transform.def tr)`inputs) in plant}[plant] each .qetl.transform.defined[];
+    named:raze {[plant;tr] k where (k:key (.qetl.transform.def["test";tr])`inputs) in plant}[plant] each .qetl.transform.defined[];
     .qunit.assertTrue[`fx_orderbook in named;"cross_quotes' fx_orderbook input is among those checked"]};
 
 / Inputs whose columns are exactly a plant table's, under another name: a hand
@@ -223,7 +223,7 @@
 .qt.qetl.plant.misnamed_inputs:{[]
     shapes:{cols .qetl.plant.shape x} each plant!plant:.qetl.plant.names[];
     raze {[shapes;tr]
-        ins:(.qetl.transform.def tr)`inputs;
+        ins:(.qetl.transform.def["test";tr])`inputs;
         raze {[shapes;tr;ins;n]
             same:where shapes~\:cols ins n;
             $[count[same] and not n in same;

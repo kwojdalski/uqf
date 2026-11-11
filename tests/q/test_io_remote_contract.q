@@ -29,7 +29,7 @@
 .qt.qetl.io.remote.contract.test_a_contract_is_derived_from_the_workers_declarations:{[t]
     c:.qetl.io.remote.contract.of `demo_deals_backfill;
     cfg:.qetl.job.bounded.def `demo_deals_backfill;
-    out:(.qetl.transform.def cfg`transform)`output;
+    out:(.qetl.transform.def["test";cfg`transform])`output;
     .qunit.assertEquals[c`dataset;`demo_deals;"the worker's dataset"];
     .qunit.assertEquals[`$first each c`columns;cols out;"the transform's output columns"];
     .qunit.assertEquals[raze last each c`columns;exec t from meta out;"in its types"];
@@ -55,7 +55,7 @@
     .qunit.assertEquals[k`dataset;`demo_deals;"through JSON and back"];
     .qunit.assertEquals[k`row_key;enlist `deal_id;"a one-column key stays a list"];
     .qunit.assertEquals[meta .qetl.io.remote.contract.schema k;
-        meta 0#(.qetl.transform.def (.qetl.job.bounded.def `demo_deals_backfill)`transform)`output;
+        meta 0#(.qetl.transform.def["test";(.qetl.job.bounded.def `demo_deals_backfill)`transform])`output;
         "its schema is the transform's output"]};
 
 / --- malformed and unsupported ----------------------------------------------------------

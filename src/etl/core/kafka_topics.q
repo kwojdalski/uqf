@@ -203,7 +203,7 @@
 / @throws error when the input is not coordinates followed by typed fields
 / @private
 .qetl.kafka.topic.input_of:{[who;mapping]
-    d:.qetl.transform.def mapping;
+    d:.qetl.transform.def[who;mapping];
     if[1<>count d`inputs;
         'who,": transform ",string[mapping]," takes ",string[count d`inputs]," inputs - a mapping reads the one record"];
     tbl:first value d`inputs;
@@ -285,14 +285,12 @@
     .qetl.kafka.topic.require_free[who;topic;owner];
     if[not fmt in key .qetl.kafka.decoders;
         'who," declares format ",string[fmt],", which has no decoder - known: ",", " sv string key .qetl.kafka.decoders];
-    if[not (decl`mapping) in .qetl.transform.defined[];
-        'who," maps through transform ",string[decl`mapping],", which is not registered - a mapping is a declared transform, so its examples are verified"];
     .qetl.kafka.topic.input_of[who;decl`mapping];
     out:decl`output;
     if[not out in .qetl.plant.names[];
         'who," publishes to ",string[out],", which the plant does not define"];
     .qetl.kafka.topic.require_provenance[who;out;expand];
-    p:.qetl.transform.problems[.qetl.kafka.topic.payload_schema[out];(.qetl.transform.def decl`mapping)`output;1b];
+    p:.qetl.transform.problems[.qetl.kafka.topic.payload_schema[out];(.qetl.transform.def[who;decl`mapping])`output;1b];
     if[count p; 'who,": transform ",string[decl`mapping]," does not return the payload columns of ",string[out],": ","; " sv p];
     `.qetl.kafka.topic.registry upsert (topic;decl`mapping;out;fmt;owner;expand);
     topic}
