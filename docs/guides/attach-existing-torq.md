@@ -760,7 +760,7 @@ uqs job backfill piggybank_ledger_backfill --attachment pb-uat \
 `validate` resolves the destination offline; `plan` also asks the stack
 read-only questions and reports what a run would do. `dry-run` and `run` (the
 default) admit **afresh** (everything `plan` checks, again, immediately before
-anything starts) and then start the runner, `scripts/dev/attached_backfill.q`.
+anything starts) and then start the runner, `scripts/jobs/attached_backfill.q`.
 It is the bounded-worker lifecycle and the HDB writer, not a second engine: a
 window's rows are published, then its coverage is recorded, then the checkpoint
 saved, and a killed run leaves an under-claim that the next run redoes.
@@ -845,7 +845,7 @@ uqs job backfill piggybank_ledger_backfill --attachment pb-uat --writer uat-host
 #### The receiver contract
 
 `uqs job attachment contract export WORKER` runs a q that loads the worker
-(`scripts/dev/receiver_contract.q`) and derives the contract from its
+(`scripts/jobs/attached_contract.q`) and derives the contract from its
 declarations (`.qetl.io.remote.contract.of`). It is never written by hand:
 
   | Field                                                       | From                                                                                                                       |
@@ -887,7 +887,7 @@ refused by `receive` until the contract is approved again.
 `receive --contract ID` reads the approved record, never a worker. It checks
 everything a local attached run checks: the verified attachment, its pinned HDB,
 the stack's writers and readers, and the end-of-day fence. It then starts
-`scripts/dev/remote_receiver.q`, which loads no declaration at all: what the
+`scripts/jobs/attached_receiver.q`, which loads no declaration at all: what the
 batches look like comes from the contract (`.qetl.io.remote.contract.read`). The
 receiver writes through `.qetl.io.hdb_scoped`, so the lock, the date bounds, the
 fence and recovery are those of a direct write. It reloads the readers as rows

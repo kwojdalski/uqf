@@ -199,7 +199,7 @@
 / upsert onto a splayed table appends column by column, so a batch with one
 / column of another type threw part-way and left the partition's columns of
 / different lengths; on PeachQ, whose append rewrites the partition whole,
-/ it retyped the rows already there. scripts/dev/attached_forced.q makes the
+/ it retyped the rows already there. scripts/jobs/attached_forced.q makes the
 / same check for its writer (#2208). Every column the partition has must be
 / in the batch with its type; a general-list column on disk takes anything.
 / Read through read_part on PeachQ, which cannot take `meta` of a directory.

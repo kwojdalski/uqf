@@ -1,6 +1,6 @@
 """The backstop against leaked receivers finds this run's and no one else's (#1760).
 
-conftest.no_receiver_outlives_the_run fails the session if a remote_receiver.q
+conftest.no_receiver_outlives_the_run fails the session if a attached_receiver.q
 under the run's tmp directory is still alive; these prove the search it relies on
 (attach_backfill_support.receivers_under) and the stop it applies, with a stand-in
 process whose command line looks like a receiver's - so no q is needed.
@@ -17,7 +17,7 @@ from attach_backfill_support import RECEIVER_SCRIPT, Receivers, receivers_under,
 
 
 def _stand_in(root, *, ignore_term: bool = False) -> subprocess.Popen:
-    """A process whose command line names remote_receiver.q and a path under `root`."""
+    """A process whose command line names attached_receiver.q and a path under `root`."""
     body = "import signal, time\n"
     if ignore_term:
         body += "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"

@@ -50,12 +50,12 @@
 .qetl.io.calendar:""
 
 / How a calendar is put in force and asked: hooks the launcher scripts fill in, because TorQ's .eodtime is not
-/ src/'s to read (check.py etl-layering). scripts/dev/attached_lib.q loads TorQ's own eodtime.q over the
+/ src/'s to read (check.py etl-layering). scripts/jobs/attached_lib.q loads TorQ's own eodtime.q over the
 / two adjustments and answers with .eodtime.getday; with no calendar loaded, adopting one is refused.
 / @param offset_ns the stack's rolltimeoffset, nanoseconds
 / @param adj_ns the roll zone's adjustment, nanoseconds
 .qetl.io.calendar_adopter:{[offset_ns;adj_ns]
-    '"calendar: no native calendar is loaded - load scripts/dev/attached_lib.q"}
+    '"calendar: no native calendar is loaded - load scripts/jobs/attached_lib.q"}
 
 / The hook's partner: the stack's getday over a list of UTC instants.
 / @param times a timestamp or a list of them
@@ -97,7 +97,7 @@
 
 / Refuse rows dated after the destination's completed history. The one bound no waiver lifts
 / (#1828, #1866): scoped_check applies it after the deadline, and the --any-writer path of
-/ scripts/dev/attached_backfill.q, which checks nothing else, applies this alone.
+/ scripts/jobs/attached_backfill.q, which checks nothing else, applies this alone.
 / @param bounds dict with at least max_date (the last date that may be written) and destination (for messages)
 / @param partition_col the manager's partition column
 / @param target the table

@@ -161,7 +161,7 @@ def evaluate(
     range_to: datetime,
     on_conflict: str | None,
 ) -> dict[str, Any]:
-    """Run scripts/dev/attached_plan.q against the destination's state directory.
+    """Run scripts/jobs/attached_plan.q against the destination's state directory.
 
     A short-lived q that loads the worker and asks `plan_only` what a run would
     fetch. It is given the status directory (to read coverage and the

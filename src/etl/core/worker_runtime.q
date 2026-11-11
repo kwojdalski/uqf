@@ -286,7 +286,7 @@
 / overrides > yaml > default, so an exported UQF_MODE or UQF_ON_CONFLICT would
 / win over an explicit -mode plan: the run would write to the HDB when a
 / read-only plan was asked for. A variable that agrees with the flag is fine.
-/ Shared by both launchers (torq_backfill.q and scripts/dev/run_backfill.q),
+/ Shared by both launchers (torq_backfill.q and scripts/jobs/run_backfill.q),
 / which differ only in the name the refusal carries.
 / @param who the launcher's name, for the refusal text
 / @param k the config key, `mode or `on_conflict

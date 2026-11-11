@@ -1,7 +1,7 @@
 / io_remote_contract.q - what a remote receiver is approved to write, as data (#1717).
 / .
 / WHY. A receiver (io_remote.q's .qetl.io.remote.serve, started by
-/ scripts/dev/remote_receiver.q) must know the batches it may take: their
+/ scripts/jobs/attached_receiver.q) must know the batches it may take: their
 / dataset, columns and types, the timestamp column the HDB partitions by, the
 / row key and the conflict policies. Until this file it found them by loading
 / the worker that produces them, so the stack's machine needed the job's

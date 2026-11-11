@@ -1,6 +1,6 @@
-// remote_receiver.q - the destination side of a backfill extracted on another machine (#1650).
+// attached_receiver.q - the destination side of a backfill extracted on another machine (#1650).
 //
-//   q scripts/dev/remote_receiver.q -p PORT -contract RECORD -attachment NAME -destid ID \
+//   q scripts/jobs/attached_receiver.q -p PORT -contract RECORD -attachment NAME -destid ID \
 //       -hdb /path/to/native/hdb -max_date 2026.10.15 -deadline 2026.10.16D23:00 \
 //       -readers name@host:port,... -user U -journal /path/to/journal -writers alice,bob [-max_rows N]
 //
@@ -30,7 +30,7 @@
 //                .qetl.io.remote.chunk_rows; a larger window arrives in chunks of
 //                chunk_rows, staged and committed whole (src/etl/core/io_remote_chunks.q)
 //   -max_staged_rows  the most rows held staged across batches in flight (default 5000000)
-//   the rest     as scripts/dev/attached_backfill.q; the readers' password is $UQF_ATTACH_REACH_PASSWORD
+//   the rest     as scripts/jobs/attached_backfill.q; the readers' password is $UQF_ATTACH_REACH_PASSWORD
 //
 // THE GATE. .z.pg admits the receiver's entry points with plain-data arguments and nothing else
 // (.qetl.io.remote.permitted); .z.ps refuses everything. Authentication is q's own: start it with
@@ -39,14 +39,14 @@
 // It stops itself at the deadline: past the end-of-day fence the writer refuses every batch anyway.
 
 if[not all `contract`attachment in key opts:.Q.opt .z.x;
-    -1 "remote_receiver: -contract and -attachment are required";
+    -1 "attached_receiver: -contract and -attachment are required";
     exit 2];
 
 \l src/init.q
 / no declarations at all: the contract says what the batches are
 .qetl.load.only:`symbol$()
 \l src/etl/init.q
-\l scripts/dev/attached_lib.q
+\l scripts/jobs/attached_lib.q
 
 \d .
 
@@ -84,14 +84,14 @@ if[not all `contract`attachment in key opts:.Q.opt .z.x;
 
 o:opts;
 if[count missing:.qdev.receiver.required except key o;
-    -1 "remote_receiver: missing ",", " sv "-",/:string missing; exit 2];
-if[not system"p"; -1 "remote_receiver: start it with -p PORT - the extractor connects to it"; exit 2];
-contract:@[.qetl.io.remote.contract.read;hsym `$first o`contract;{[e] -1 "remote_receiver: ",e; exit 2}];
+    -1 "attached_receiver: missing ",", " sv "-",/:string missing; exit 2];
+if[not system"p"; -1 "attached_receiver: start it with -p PORT - the extractor connects to it"; exit 2];
+contract:@[.qetl.io.remote.contract.read;hsym `$first o`contract;{[e] -1 "attached_receiver: ",e; exit 2}];
 root:hsym `$first o`hdb;
 col:contract`time_column;
 bounds:(`max_date`deadline`destination!("D"$first o`max_date;"P"$first o`deadline;`$first o`destid)),.qetl.io.calendar_bound o;
-if[any null bounds`max_date`deadline; -1 "remote_receiver: bad -max_date or -deadline"; exit 2];
-mgr:.[.qetl.io.hdb_scoped;(root;col;bounds);{[e] -1 "remote_receiver: ",e; exit 2}];
+if[any null bounds`max_date`deadline; -1 "attached_receiver: bad -max_date or -deadline"; exit 2];
+mgr:.[.qetl.io.hdb_scoped;(root;col;bounds);{[e] -1 "attached_receiver: ",e; exit 2}];
 .qdev.attached.readers_named:.qdev.attached.readers o;
 .qdev.attached.dataset:contract`dataset;
 .qdev.attached.reach_user:first o`user;
@@ -102,7 +102,7 @@ max_rows:$[`max_rows in key o; "J"$first o`max_rows; 100000];
 / the extractor chunks at chunk_rows, not at this limit: under it, every window
 / larger than max_rows would be refused whole or chunk by chunk (#2610)
 if[not max_rows>=.qetl.io.remote.chunk_rows;
-    -1 "remote_receiver: -max_rows ",string[max_rows]," is under ",string[.qetl.io.remote.chunk_rows],
+    -1 "attached_receiver: -max_rows ",string[max_rows]," is under ",string[.qetl.io.remote.chunk_rows],
      ", the rows an extractor puts in one chunk - no window larger than it could be written"; exit 2];
 / a window larger than one message arrives in chunks (io_remote_chunks.q): how many rows may wait
 if[`max_staged_rows in key o; .qetl.io.remote.max_staged_rows:"J"$first o`max_staged_rows];
@@ -111,14 +111,14 @@ if[`max_staged_rows in key o; .qetl.io.remote.max_staged_rows:"J"$first o`max_st
     mgr,enlist[`on_ready]!enlist .qdev.receiver.on_ready;contract`dataset;schema;max_rows;`$"," vs first o`writers;contract)];
 
 .z.pg:{[m]
-    if[not .qetl.io.remote.permitted m; '"remote_receiver: not an entry point"];
+    if[not .qetl.io.remote.permitted m; '"attached_receiver: not an entry point"];
     value m}
-.z.ps:{[m] '"remote_receiver: asynchronous messages are refused"}
+.z.ps:{[m] '"attached_receiver: asynchronous messages are refused"}
 / past the end-of-day fence nothing is admitted: stop rather than refuse every batch
-.z.ts:{[ignored] if[.z.p>bounds`deadline; -1 "remote_receiver: the end-of-day fence began - stopping"; exit 0]}
+.z.ts:{[ignored] if[.z.p>bounds`deadline; -1 "attached_receiver: the end-of-day fence began - stopping"; exit 0]}
 \t 60000
 
--1 "remote_receiver: serving ",string[contract`dataset]," of attachment ",(first o`attachment),
+-1 "attached_receiver: serving ",string[contract`dataset]," of attachment ",(first o`attachment),
     " under contract ",string[contract`identity],
     " (",(", " sv string contract`conflict_policies),")",
     " into ",(1_string root)," on port ",string[system"p"],

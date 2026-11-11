@@ -1,6 +1,6 @@
 / attached_forced.q - the --any-writer writer of an attached backfill (#1650, split out for #1866).
 / .
-/ Loaded by scripts/dev/attached_backfill.q, and by its test, so the forced manager can be run without
+/ Loaded by scripts/jobs/attached_backfill.q, and by its test, so the forced manager can be run without
 / running a backfill. NOTHING is checked on the writer's side, but the manager itself refuses a batch
 / with a row after the completed history (-max_date), with .qetl.io.scoped_check_date - the check the
 / scoped writer makes, which no waiver lifts - before any row is sent.

@@ -34,7 +34,7 @@
 \d .
 
 / The most rows a client puts in one message; a larger batch is chunked. At or
-/ under the receiver's max_rows (remote_receiver.q's -max_rows, 100000 by default).
+/ under the receiver's max_rows (attached_receiver.q's -max_rows, 100000 by default).
 .qetl.io.remote.chunk_rows:50000
 
 / The most rows a receiver holds staged across every batch in flight.

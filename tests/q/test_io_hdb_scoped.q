@@ -5,7 +5,7 @@
 / back: "preserved" means the same bytes on disk, not the same count.
 
 
-system "l scripts/dev/attached_lib.q";
+system "l scripts/jobs/attached_lib.q";
 
 .qt.qetl.hdb_scoped.bounds:{[] `max_date`deadline`destination!(2026.01.31;2099.01.01D00:00:00.000000000;`dest_test)}
 

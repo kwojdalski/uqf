@@ -200,11 +200,11 @@ DYNAMIC_REVIEWED: dict[str, tuple[str, str]] = {
         "the .qetl.plant registries (elements, sort_rules, equivalence_of) and vendored tables",
     ),
     "src/namespaces.q": ("reflective", "walks every live namespace to list what is defined"),
-    "scripts/dev/attached_lib.q": (
+    "scripts/jobs/attached_lib.q": (
         "data",
         "TorQ's eodtime settings and the timezone table, set by name, and the file it loads",
     ),
-    "scripts/dev/attached_forced.q": ("data", "a partition's column files, read to compare types"),
+    "scripts/jobs/attached_forced.q": ("data", "a partition's column files, read to compare types"),
     "scripts/dev/coverage.q": ("reflective", "instruments every function it finds by name"),
 }
 

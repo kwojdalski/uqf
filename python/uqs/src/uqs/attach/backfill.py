@@ -59,7 +59,7 @@ from uqs.stack.attach_state import VERIFIED
 
 #: The q script that evaluates a plan, and the subdirectory (of the status
 #: directory) attached runs keep their state in.
-PLAN_SCRIPT = Path("scripts") / "dev" / "attached_plan.q"
+PLAN_SCRIPT = Path("scripts") / "jobs" / "attached_plan.q"
 STATE_SUBDIR = backfill_status.STATE_SUBDIR
 #: How an unpinned HDB gets pinned, said wherever its absence refuses a run.
 _PIN = (

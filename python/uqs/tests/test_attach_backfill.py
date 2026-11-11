@@ -2,7 +2,7 @@
 planning against it, read-only (#1454, part 1).
 
 The stack is scripted (attach_backfill_support.HdbStack, plus an HDB reader that answers
-`hdb_reader`); the plan itself is evaluated by a real q (scripts/dev/attached_plan.q)
+`hdb_reader`); the plan itself is evaluated by a real q (scripts/jobs/attached_plan.q)
 against a state directory this test owns. What is under test is what is refused,
 what is reported, and that nothing - on disk or on the stack - changes.
 """

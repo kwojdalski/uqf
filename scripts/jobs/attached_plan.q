@@ -1,7 +1,7 @@
 // attached_plan.q - what a bounded worker WOULD do over a range, as one JSON
 // line, for `uqs job backfill --attach NAME --mode plan` (#1454).
 //
-//   q scripts/dev/attached_plan.q -worker demo_deals_backfill -version v1 \
+//   q scripts/jobs/attached_plan.q -worker demo_deals_backfill -version v1 \
 //       -from 2026.09.11D00:00 -to 2026.09.13D00:00 [-on_conflict replace] -q
 //
 // UQF_STATUS_DIR must name the attachment's own state directory (the one

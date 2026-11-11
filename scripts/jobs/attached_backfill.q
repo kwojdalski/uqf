@@ -1,6 +1,6 @@
 // attached_backfill.q - run one bounded worker into an ATTACHED native stack's HDB (#1454).
 //
-//   q scripts/dev/attached_backfill.q -worker W -version V -from F -to T \
+//   q scripts/jobs/attached_backfill.q -worker W -version V -from F -to T \
 //       -hdb /path/to/native/hdb -destid <identity> -attachment <name> \
 //       -max_date 2026.10.15 -deadline 2026.10.16D23:00 [-mode dry_run] [-on_conflict replace]
 //
@@ -26,7 +26,7 @@
 // Or, when the HDB is on another machine (#1650), in place of -hdb, -max_date, -deadline, -readers
 // and -user:
 //
-//   -writer      host:port of the destination's receiver (scripts/dev/remote_receiver.q), which
+//   -writer      host:port of the destination's receiver (scripts/jobs/attached_receiver.q), which
 //                admits each batch, commits it through its own fenced HDB writer and reloads the
 //                readers; this process extracts, files coverage here and writes no HDB
 //   -writer_user the user the receiver is reached as; its password is $UQF_ATTACH_WRITER_PASSWORD
@@ -143,9 +143,9 @@ if[not `worker in key opts:.Q.opt .z.x;
 / ------------------------------------------------------------ READERS
 / .
 / Naming the readers, asking each to reload, the reload state, and TorQ's calendar:
-/ scripts/dev/attached_lib.q, which the destination's receiver (scripts/dev/remote_receiver.q,
+/ scripts/jobs/attached_lib.q, which the destination's receiver (scripts/jobs/attached_receiver.q,
 / #1650) loads too.
-system"l scripts/dev/attached_lib.q";
+system"l scripts/jobs/attached_lib.q";
 
 / The writer's on_ready: reload the named readers when .qetl.io.due says so, and release coverage to the
 / readers only when every one acknowledged with nothing open. A reader that failed is asked again at the
@@ -189,7 +189,7 @@ system"l scripts/dev/attached_lib.q";
 / ------------------------------------------------------------ REMOTE WRITER (#1650)
 / .
 / With -writer host:port the run extracts here and the destination's receiver
-/ (scripts/dev/remote_receiver.q) commits every batch through its own HDB writer and tells
+/ (scripts/jobs/attached_receiver.q) commits every batch through its own HDB writer and tells
 / the readers, so this machine needs neither the HDB nor the readers. Coverage is filed
 / here, deferred as above, and released only when the receiver says its readers reloaded.
 
@@ -205,8 +205,8 @@ system"l scripts/dev/attached_lib.q";
 / ------------------------------------------------------------ FORCED WRITER
 / .
 / -force: the lambdas the writer evaluates, the manager that sends them, and the one check it keeps
-/ (completed history): scripts/dev/attached_forced.q.
-system"l scripts/dev/attached_forced.q";
+/ (completed history): scripts/jobs/attached_forced.q.
+system"l scripts/jobs/attached_forced.q";
 
 / The remote manager's on_ready: the receiver has told its readers already; release coverage
 / when it reports they reloaded, and keep it owed when they did not.
@@ -298,7 +298,7 @@ result:.Q.trp[{[ns;spec;w;ignored] (` sv ns,`init)[spec]; .qdev.attached.catch_u
         `state`error!(`failed;e)}];
 / An idle run never finishes its store, so what catch_up took on is asked here; a run that wrote has
 / already asked and released, or failed to.
-/ Remotely, the receiver's finish asks its readers whatever it finished (remote_receiver.q).
+/ Remotely, the receiver's finish asks its readers whatever it finished (attached_receiver.q).
 if[count .qetl.coverage.unready;
     $[remote; [.qetl.io.finish .qetl.io.default]; .qdev.attached.on_ready `finished`pending`final!(0;0;1b)]];
 .qdev.attached.release o;

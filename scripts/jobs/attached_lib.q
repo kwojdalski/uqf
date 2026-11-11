@@ -1,8 +1,8 @@
 / attached_lib.q - what both attached launchers load: the destination's HDB readers and TorQ's
 / own calendar (#1454, #1650, #2193).
 / .
-/ Loaded by scripts/dev/attached_backfill.q, which writes the destination itself, and by
-/ scripts/dev/remote_receiver.q, which writes it for a backfill extracted on another machine:
+/ Loaded by scripts/jobs/attached_backfill.q, which writes the destination itself, and by
+/ scripts/jobs/attached_receiver.q, which writes it for a backfill extracted on another machine:
 / both tell the same verified readers, in the same way, once rows are finished, and both name a
 / row's partition by the stack's own calendar. The --any-writer path (attached_forced.q, #1866)
 / and the planner (attached_plan.q, its own process) stay separate files.
