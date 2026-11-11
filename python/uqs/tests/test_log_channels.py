@@ -185,11 +185,11 @@ def test_a_negative_line_count_is_refused_not_read_as_skip_the_first(paths, line
 
 
 def test_the_cli_refuses_a_negative_lines_as_a_usage_error(paths):
-    from typer.testing import CliRunner
+    from plain_cli import PlainRunner
 
     from uqs import cli
 
-    result = CliRunner().invoke(cli.app, ["logs", "rdb1", "-l", "-1"])
+    result = PlainRunner().invoke(cli.app, ["logs", "rdb1", "-l", "-1"])
     assert result.exit_code == 2
     assert "--lines" in result.output
 
