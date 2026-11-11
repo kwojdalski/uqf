@@ -17,7 +17,6 @@ and a fake would accept a call loguru itself would reject.
 from __future__ import annotations
 
 import functools
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -25,13 +24,6 @@ import pytest
 from loguru import logger
 
 from uqs.logger import decorators, utils
-
-
-@pytest.fixture(autouse=True)
-def _restore_loguru():
-    yield
-    logger.remove()
-    logger.add(sys.stderr)
 
 
 def capture(level: str = "DEBUG") -> list[tuple[str, str]]:

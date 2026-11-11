@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import io
 import json
-import sys
 
 import pytest
 from loguru import logger
@@ -28,13 +27,6 @@ from uqs.logger import core as logcore
 from uqs.logger.highlight import highlight
 
 hl = highlight
-
-
-@pytest.fixture(autouse=True)
-def _restore_loguru():
-    yield
-    logger.remove()
-    logger.add(sys.stderr)
 
 
 def _render(message: str, *, colorize: bool, template: str = "<level>{message}</level>") -> str:

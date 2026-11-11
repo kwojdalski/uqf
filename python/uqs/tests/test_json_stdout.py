@@ -32,13 +32,6 @@ from uqs.cli import json_out, shared
 from uqs.logger import core as logcore
 
 
-@pytest.fixture(autouse=True)
-def _restore_loguru():
-    yield
-    logger.remove()
-    logger.add(sys.stderr)
-
-
 def _uqs(tmp_path, *argv: str) -> subprocess.CompletedProcess[str]:
     env = os.environ | {"UQS_ATTACH_DIR": str(tmp_path / "attachments")}
     env.pop("LOG_REGEX", None)
