@@ -4,7 +4,7 @@
 / THESE ARE q TABLES, AND THIS IS WHERE THEY LIVE. They used to be Python
 / string literals in uqs/model/schemas.py, which meant q source that
 / no q parser ever read until stp1 started: a typo surfaced as a failed
-/ tickerplant rather than a failed commit, check_q_traps.py never scanned
+/ tickerplant rather than a failed commit, the q-traps check never scanned
 / them (it globs `git ls-files '*.q'`), and the contract surface listed four
 / tables when the system had thirteen.
 / .

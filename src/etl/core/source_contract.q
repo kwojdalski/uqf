@@ -103,7 +103,7 @@
 /     registration failure; (2) validate/validate_live compare declared type
 /     characters against `meta`, so a source that silently changes a column
 /     from p to z fails on both the fixture and the live path; (3)
-/     scripts/gates/check_q_traps.py forbids the q datetime type in src/ outright -
+/     scripts/gates/policy/q_traps.py forbids the q datetime type in src/ outright -
 /     the cast direction is not statically decidable, but the type's
 /     PRESENCE is, and this tree has no legitimate use for it.
 / .

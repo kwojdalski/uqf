@@ -98,7 +98,7 @@
 / `seen`, not `prior`: prior is a q BUILTIN (in key `.q), so assigning it as
 / a lambda local throws at LOAD time and aborts the rest of the file - the
 / eighth reserved-name collision in this repository, after desc, tables, sv,
-/ load, var, save, get and the `_` parameter. check_q_traps did not have it.
+/ load, var, save, get and the `_` parameter. The q-traps check did not have it.
 .qetl.hb.beat:{[worker;state]
     .qetl.hb.init_table[];
     seen:$[worker in key .qetl.hb.ledger[]; first (),(.qetl.hb.ledger[])[(enlist worker)]`windows; 0j];
