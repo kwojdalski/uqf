@@ -105,7 +105,7 @@ class Runtime:
             "runtime": self.directory(dest),
             "starter_pack_version": self.manifest["trees"]["torq-finance-starter-pack"]["version"],
             "install": install,
-            "requires": ["envsubst and rlwrap, for torq.sh"],
+            "requires": ["envsubst, for torq.sh"],
         }
 
 

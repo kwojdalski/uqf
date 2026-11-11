@@ -55,9 +55,8 @@ echo "os=$(uname -s)"
 echo "arch=$(uname -m)"
 # The host contract (docs/guides/deploy.md): the push's own steps (tar and
 # the gzip it unpacks with, timeout, find, sed, python3) and what torq.sh runs -
-# its start (awk, grep, pgrep, hostname, nohup, envsubst) and stop (lsof) -
-# and rlwrap, which uqs checks for before torq.sh is run.
-for tool in bash envsubst rlwrap tar gzip timeout python3 awk sed grep pgrep lsof hostname nohup \
+# its start (awk, grep, pgrep, hostname, nohup, envsubst) and stop (lsof).
+for tool in bash envsubst tar gzip timeout python3 awk sed grep pgrep lsof hostname nohup \
   find; do
   command -v "$tool" >/dev/null || fail "$tool is not on PATH - the release needs it"
 done

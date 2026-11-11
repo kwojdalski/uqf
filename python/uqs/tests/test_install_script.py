@@ -51,7 +51,6 @@ esac
     "q": 'read -r line; if [ -z "$FAKE_Q_BROKEN" ]; then echo UQF_Q_OK; fi',
     "node": 'echo "${FAKE_NODE:-v22.14.0}"',
     "envsubst": "",
-    "rlwrap": "",
     "npm": "",
     "git": "",
     "pre-commit": "",
@@ -130,7 +129,7 @@ def test_check_changes_nothing(repo: Path) -> None:
     assert [c for c in calls if not c.startswith(("q ", "node "))] == []
 
 
-@pytest.mark.parametrize("tool", ["rlwrap", "envsubst", "uv"])
+@pytest.mark.parametrize("tool", ["envsubst", "uv"])
 def test_a_missing_required_tool_stops_before_any_change(repo: Path, tool: str) -> None:
     code, out, calls = run(repo, missing=(tool,))
     assert code == 1

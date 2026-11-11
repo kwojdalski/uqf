@@ -81,7 +81,7 @@ def q_port(start_q, tmp_path_factory) -> Any:
 
 def test_run_torq_sh_extends_the_environment_rather_than_replacing_it(monkeypatch):
     """subprocess.run's env= REPLACES the environment. Passing only the
-    generated variables would lose PATH, and envsubst, rlwrap and q would
+    generated variables would lose PATH, and envsubst and q would
     stop resolving though they are on PATH in the calling shell."""
     monkeypatch.delenv("UQS_TORQ_LAUNCHER", raising=False)
     seen: dict[str, Any] = {}

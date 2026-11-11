@@ -49,9 +49,9 @@ copies the app's sample `hdb/`/`dqe/` data into it. Logs, tickerplant logs, the
 write-down database and every process's reads and writes stay inside it, never
 inside `lib/`. `uqs clean` wipes it (see [Cleaning up](#cleaning-up)).
 
-Requires KDB-X (`q` on `PATH`), plus `envsubst` and `rlwrap`, which TorQ's
-`torq.sh` needs (on macOS: `brew install gettext rlwrap`). See
-[Installing](#installing) for tab completion and reinstalling after a rename.
+Requires KDB-X (`q` on `PATH`), plus `envsubst`, which TorQ's `torq.sh` needs
+(on macOS: `brew install gettext`). See [Installing](#installing) for tab
+completion and reinstalling after a rename.
 
 ## Reading the database's shape
 

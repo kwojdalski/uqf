@@ -44,7 +44,7 @@ BY_NAME = {p.procname: p for p in PIPELINES}
 def fake_paths(tmp_path: Path) -> UqsPaths:
     """A minimal stand-in for lib/torq + lib/torq-finance-starter-pack, so
     bootstrap()'s process.csv/env generation can be tested without touching
-    the real vendored trees or needing envsubst/rlwrap on PATH.
+    the real vendored trees or needing envsubst on PATH.
     """
     torqhome = tmp_path / "lib" / "torq"
     torqapphome = tmp_path / "lib" / "torq-finance-starter-pack"
