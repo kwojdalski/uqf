@@ -1,4 +1,4 @@
-/ scripts/peachq_init.q - what TorQ's processes call and PeachQ does not define.
+/ scripts/peachq/init.q - what TorQ's processes call and PeachQ does not define.
 / .
 / A PeachQ runtime's processes start with QINIT naming this file
 / (uqs.stack.env.interpreter_env), so it loads before torq.q in every one of

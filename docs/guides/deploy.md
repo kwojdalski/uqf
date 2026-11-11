@@ -567,8 +567,8 @@ its path on the server, and whether this push installed or reused it.
 ### A bundled q
 
 With `q_mode = "bundled"`, the push ships the q too: the PeachQ that
-`scripts/peachq.json` pins, in a runtime artifact of its own. KX's q (KDB-X or
-kdb+) is licensed to the server it runs on, so it is never bundled. It stays
+`scripts/peachq/pin.json` pins, in a runtime artifact of its own. KX's q (KDB-X
+or kdb+) is licensed to the server it runs on, so it is never bundled. It stays
 `existing`, with its licence in `QHOME`.
 
 ```bash
@@ -579,7 +579,7 @@ uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
   --q-mode bundled --q-component dist/q-runtime-peachq-<commit>-linux-x86_64.tar.gz
 ```
 
-- **Built from the pin.** The build takes the binary `scripts/peachq.py`
+- **Built from the pin.** The build takes the binary `scripts/peachq/resolve.py`
   resolves: its cache, or a fresh build of the pinned commit into it. It never
   takes `QCMD`, even a PeachQ one, whose binary has no recorded origin. A
   `UQF_PEACHQ_COMMIT` build is recorded in the manifest as unpinned. The binary

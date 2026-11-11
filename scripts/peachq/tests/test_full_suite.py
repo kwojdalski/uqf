@@ -1,7 +1,7 @@
-"""scripts/portable/full_suite.py (#863): the PeachQ lane's list of known gaps,
+"""scripts/peachq/full_suite.py (#863): the PeachQ lane's list of known gaps,
 and the comparison that holds the suite to it both ways.
 
-The lane itself - flattening, then the whole suite on PeachQ - takes a PeachQ
+The lane itself - the whole suite on PeachQ - takes a PeachQ
 binary and about a minute and a half; CI runs it. These pin the parts a wrong
 edit could quietly loosen: the file's format, and what counts as a regression.
 """
@@ -9,8 +9,6 @@ edit could quietly loosen: the file's format, and what counts as a regression.
 from __future__ import annotations
 
 import importlib.util
-import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -18,7 +16,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[3]
 _SPEC = importlib.util.spec_from_file_location(
-    "full_suite", REPO / "scripts" / "portable" / "full_suite.py"
+    "full_suite", REPO / "scripts" / "peachq" / "full_suite.py"
 )
 assert _SPEC and _SPEC.loader
 fs = importlib.util.module_from_spec(_SPEC)
@@ -46,23 +44,6 @@ def test_every_listed_test_exists_in_the_suite():
                     defined.add(name)
     missing = sorted(set(fs.read_gaps()) - defined)
     assert not missing, f"listed in {fs.GAPS.name} but not in tests/q: {missing}"
-
-
-def test_the_test_tree_needs_no_context_conversion(tmp_path):
-    """#1412: a suite defines everything from the root, so the converter that
-    rewrites nested contexts for kdb+ 4.0 has nothing to do under tests/. This
-    is the executable half of "the migrated tests run on q 4.0 without context
-    conversion" that needs no 4.0 binary: it fails the day a test file enters a
-    nested namespace (`\\d .qt.a.b`), which 4.0 rejects."""
-    r = subprocess.run(
-        [sys.executable, str(fs.FLATTENER), "tests", "--root", str(REPO), "--out",
-         str(tmp_path / "flat"), "--dry-run", "--quiet"],
-        capture_output=True, text=True, check=False,
-    )  # fmt: skip
-    report = json.loads(r.stdout[r.stdout.index("{") :])
-    assert report["status"] == "ok", report["refusals"]
-    changed = [f["path"] for f in report["files"] if f["action"] != "unchanged"]
-    assert not changed, f"these need context conversion: {changed}"
 
 
 def test_an_entry_without_a_reason_is_refused(tmp_path):
@@ -119,9 +100,8 @@ def test_a_reason_without_its_kind_is_refused(tmp_path, reason):
 
 def test_each_kind_is_accepted(tmp_path):
     p = tmp_path / "gaps.txt"
-    p.write_text(".a.test_x  # peachq-lacks: on-disk attributes\n.a.test_y  # tree-bug: #985\n"
-                 ".a.test_z  # flattening: reads the source as text\n")  # fmt: skip
-    assert len(fs.read_gaps(p)) == 3
+    p.write_text(".a.test_x  # peachq-lacks: on-disk attributes\n.a.test_y  # tree-bug: #985\n")
+    assert len(fs.read_gaps(p)) == 2
 
 
 def _suite(tmp_path):

@@ -10,7 +10,7 @@ procs -> runtime -> procs a cycle.
 Pure: no filesystem writes. bootstrap() calls it and then writes; everything
 else calls it and only reads. A runtime on PeachQ also needs its binary, which
 comes from uqs.interpreter.peachq_binary - $QCMD when it is PeachQ, else
-scripts/peachq.py's cache, or a build into that cache when cold - so that is
+scripts/peachq/resolve.py's cache, or a build into that cache when cold - so that is
 interpreter_env, which only what starts q calls:
 bootstrap (for torq.sh and setenv.sh) and the HDB filler.
 """
@@ -33,7 +33,7 @@ DEPLOYMENT_ENV = "UQF_DEPLOYMENT_FILE"
 #: The file q loads before anything else (q's own QINIT), and the one a PeachQ
 #: runtime names in it: what TorQ's processes call and PeachQ lacks.
 QINIT_ENV = "QINIT"
-PEACHQ_INIT = "peachq_init.q"
+PEACHQ_INIT = "peachq/init.q"
 
 
 def build_env(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
@@ -109,7 +109,7 @@ def interpreter_env(paths: UqsPaths) -> dict[str, str]:
     see for it, never the operator's shell, and nothing goes on PATH. A
     KDB-X runtime gets {}: the operator's own QCMD stands, as it always has.
 
-    QINIT names scripts/peachq_init.q, so every q the runtime starts defines
+    QINIT names scripts/peachq/init.q, so every q the runtime starts defines
     what TorQ needs and PeachQ does not have; it replaces an operator's QINIT
     for this runtime's processes only.
     """

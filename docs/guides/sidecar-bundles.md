@@ -292,8 +292,8 @@ Before a backfill starts on `peachq-etl`, uqs asks the PeachQ binary what it
 supports. Today that is one thing: whether it can load a shared library (`2:`).
 A worker whose source uses ODBC needs a driver, which is a shared library, so it
 is refused on a build that cannot load one, naming the reason. The pinned build
-(`scripts/peachq.py`) can; a static download cannot. `--mode validate` and
-`plan` open no source, so they need nothing.
+(`scripts/peachq/resolve.py`) can; a static download cannot. `--mode validate`
+and `plan` open no source, so they need nothing.
 
 Bounded workers still never start on their own. Installing, preparing and
 starting the stack run no backfill.

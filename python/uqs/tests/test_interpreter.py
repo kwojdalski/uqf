@@ -36,13 +36,15 @@ from uqs.paths import UqsError
 from uqs.stack import listing
 
 SCRIPTS = Path(__file__).resolve().parents[3] / "scripts"
-#: scripts/peachq.py, which runs under a bare python3 and cannot import uqs.
-_spec = importlib.util.spec_from_file_location("uqf_peachq_interp", SCRIPTS / "peachq.py")
+#: scripts/peachq/resolve.py, which runs under a bare python3 and cannot import uqs.
+_spec = importlib.util.spec_from_file_location(
+    "uqf_peachq_interp", SCRIPTS / "peachq" / "resolve.py"
+)
 assert _spec and _spec.loader
 peachq_script = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(peachq_script)
 
-PIN = json.loads((SCRIPTS / "peachq.json").read_text())["commit"]
+PIN = json.loads((SCRIPTS / "peachq" / "pin.json").read_text())["commit"]
 
 
 def _fake_q(tmp_path: Path, answer: str, impl: str | None = None) -> Path:
@@ -156,7 +158,7 @@ def test_each_removed_variable_is_refused_naming_its_replacement(tmp_path, name,
 
 
 def test_scripts_spell_the_removed_variables_as_uqs_does():
-    """scripts/peachq.py cannot import uqs, and restates the refusal and the
+    """scripts/peachq/resolve.py cannot import uqs, and restates the refusal and the
     question a binary is asked."""
     assert peachq_script.REMOVED_ENV == REMOVED_ENV
     assert peachq_script.IDENTIFY_SCRIPT == interpreter.IDENTIFY_SCRIPT
@@ -231,7 +233,7 @@ def test_the_pinned_peachq_is_used_without_a_word(tmp_path, warnings):
 
 @pytest.fixture
 def resolver(monkeypatch, tmp_path) -> Path:
-    """scripts/peachq.py's resolve, answering the pinned build as if cached,
+    """scripts/peachq/resolve.py's resolve, answering the pinned build as if cached,
     for uqs."""
     (tmp_path / "cache").mkdir()
     cached = _pinned(_fake_q(tmp_path / "cache", "peachq"))

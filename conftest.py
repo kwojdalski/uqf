@@ -130,7 +130,7 @@ def pytest_addoption(parser):
         metavar="PATH",
         help=(
             "the PeachQ binary for the tests that run on PeachQ (the `peachq` fixture); "
-            "default: $QCMD if it is PeachQ, else the pinned build (scripts/peachq.py)"
+            "default: $QCMD if it is PeachQ, else the pinned build (scripts/peachq/resolve.py)"
         ),
     )
     parser.addoption(

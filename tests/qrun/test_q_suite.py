@@ -19,7 +19,7 @@ q-unit, q-order and q-unit-peachq lanes.
                                     `-m release`.
   test_the_q_suite_holds_to_its_peachq_gaps
                                     the whole suite on PeachQ through
-                                    scripts/portable/full_suite.py, held to
+                                    scripts/peachq/full_suite.py, held to
                                     tests/q/peachq_known_gaps.txt both ways -
                                     what CI's PeachQ q job blocks on.
 
@@ -98,9 +98,9 @@ def test_the_q_suite_passes_in_reverse_order(kdbx: Path, tmp_path: Path) -> None
 
 
 def _full_suite():
-    """scripts/portable/full_suite.py, loaded by path (scripts/ is no package)."""
+    """scripts/peachq/full_suite.py, loaded by path (scripts/ is no package)."""
     spec = importlib.util.spec_from_file_location(
-        "uqf_full_suite", REPO / "scripts/portable/full_suite.py"
+        "uqf_full_suite", REPO / "scripts/peachq/full_suite.py"
     )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -124,10 +124,10 @@ def test_the_q_suite_holds_to_its_peachq_gaps(peachq: Path, request: pytest.Fixt
         pytest.skip(f"no verdict on {here}: the known gaps are {recorded}'s (CI's)")
     shards = str(min(4, os.cpu_count() or 1))
     run = run_process(
-        [sys.executable, "scripts/portable/full_suite.py", "--q", str(peachq), "--bundles",
+        [sys.executable, "scripts/peachq/full_suite.py", "--q", str(peachq), "--bundles",
          "--shards", shards],
         cwd=REPO, env=q_env(peachq), timeout=SUITE_TIMEOUT, q_errors=False,
     )  # fmt: skip
-    assert_passed(run, "scripts/portable/full_suite.py")
+    assert_passed(run, "scripts/peachq/full_suite.py")
     if "NOT COMPARABLE" in run.output:
         pytest.skip(next(line for line in run.output.splitlines() if "NOT COMPARABLE" in line))

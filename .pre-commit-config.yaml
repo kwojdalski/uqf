@@ -400,7 +400,7 @@ repos:
       # every pull request (the PeachQ Python shards run tests/qrun/), so at
       # commit it runs only in full mode, UQF_HOOKS_FULL=1 (#1879). PeachQ is
       # $QCMD when it is PeachQ, else the pinned build from
-      # scripts/peachq.json, built into ~/.cache/uqf/peachq on first use; when
+      # scripts/peachq/pin.json, built into ~/.cache/uqf/peachq on first use; when
       # neither can be had this fails, rather than skipping.
       - id: q-docs-peachq
         name: Run the q blocks in docs/ on PeachQ too (UQF_HOOKS_FULL=1; CI runs it)
@@ -595,7 +595,7 @@ repos:
       # Push without it: SKIP=peachq-push git push.
       - id: peachq-push
         name: Run the q test files this branch changes on PeachQ (CI runs them all)
-        entry: uv run python scripts/dev/peachq_push.py
+        entry: uv run python scripts/peachq/pre_push.py
         language: system
         files: '\.q$'
         pass_filenames: false

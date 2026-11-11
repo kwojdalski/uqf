@@ -2868,7 +2868,7 @@ def _stand_in_q(tmp_path, answer: str):
     q = tmp_path / f"q_{answer}"
     q.write_text(f"#!/bin/sh\necho '{answer}'\n")
     q.chmod(0o755)
-    pin = json.loads((stack_paths.repo_root() / "scripts" / "peachq.json").read_text())
+    pin = json.loads((stack_paths.repo_root() / "scripts" / "peachq" / "pin.json").read_text())
     (tmp_path / "manifest.json").write_text(json.dumps({"commit": pin["commit"]}))
     return q
 

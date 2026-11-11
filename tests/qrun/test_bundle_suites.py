@@ -5,7 +5,7 @@ installs the bundle with the real installer, runs the bundle's Python tests and
 then the WHOLE q suite in the copy - which also proves the installed bundle
 leaves every other test passing. A bundle's tests never enter the tree, so
 nothing else runs them on KDB-X (CI's PeachQ q job installs every bundle into
-the tree it runs, scripts/portable/full_suite.py --bundles).
+the tree it runs, scripts/peachq/full_suite.py --bundles).
 
 scripts/test.py's bundles lane until #1808: part of its release run `all`, and
 so `-m release` here - a whole q suite per bundle is minutes each. One test per

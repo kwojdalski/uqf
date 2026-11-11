@@ -10,12 +10,12 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[3]
-_spec = importlib.util.spec_from_file_location("peachq_push", REPO / "scripts/dev/peachq_push.py")
+_spec = importlib.util.spec_from_file_location("peachq_push", REPO / "scripts/peachq/pre_push.py")
 assert _spec and _spec.loader
 pp = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(pp)
 
-suite = pp._load("full_suite", "scripts/portable/full_suite.py")
+suite = pp._load("full_suite", "scripts/peachq/full_suite.py")
 KNOWN_GAP = next(iter(suite.read_gaps()))
 
 

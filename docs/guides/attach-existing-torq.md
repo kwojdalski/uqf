@@ -1211,7 +1211,7 @@ from the pin.
 - `uat-stack` runs discovery, the tickerplant, rdb1, hdb1 and wdb1
   (`uqs --runtime peachq start`). Its ports are published to this host. TorQ's
   wdb calls `.Q.chk` as it starts, which PeachQ lacks; a PeachQ runtime's
-  processes load `scripts/peachq_init.q` first (`QINIT`), which defines it.
+  processes load `scripts/peachq/init.q` first (`QINIT`), which defines it.
 - `uat-client` runs `uqs`: the attachment, the publisher and the extractor.
 - `uat-laptop` is on a network of its own and reaches the stack only through
   this host, so the stack cannot resolve its name.

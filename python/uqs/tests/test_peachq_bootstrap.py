@@ -1,4 +1,4 @@
-"""Tests for scripts/peachq.py, the resolver that provides PeachQ to the lanes
+"""Tests for scripts/peachq/resolve.py, the resolver that provides PeachQ to the lanes
 that must pass on it: the cache, then a build of the pinned commit - and the
 variables that once chose another binary, refused (#1753).
 
@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-SCRIPT = ROOT / "scripts" / "peachq.py"
+SCRIPT = ROOT / "scripts" / "peachq" / "resolve.py"
 
 _spec = importlib.util.spec_from_file_location("uqf_peachq_under_test", SCRIPT)
 assert _spec and _spec.loader
@@ -114,7 +114,7 @@ def test_the_shipped_pin_is_a_full_commit_with_options_per_platform():
 def test_ci_reads_the_pin_rather_than_restating_it():
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
     assert peachq.load_pin()["commit"] not in ci
-    assert "scripts/peachq.py" in ci
+    assert "scripts/peachq/resolve.py" in ci
     assert "RAY_MARCH" not in ci
 
 

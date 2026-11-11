@@ -18,7 +18,7 @@ build, in this order:
      starting together build once; a failed or interrupted build publishes
      nothing, and the next run starts it again.
 
-The pin and the build options live in scripts/peachq.json, which CI reads
+The pin and the build options live in scripts/peachq/pin.json, which CI reads
 through this same module - there is no second copy of either.
 
 Building another commit is an override:
@@ -43,8 +43,8 @@ Standard library only: CI runs it under a bare python3 that cannot import
 uqs, before the workspace exists.
 
 Usage:
-    python3 scripts/peachq.py            # print the binary's path, building if needed
-    python3 scripts/peachq.py --commit   # print the pinned commit
+    python3 scripts/peachq/resolve.py            # print the binary's path, building if needed
+    python3 scripts/peachq/resolve.py --commit   # print the pinned commit
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ import tempfile
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 
-PIN_FILE = Path(__file__).resolve().with_name("peachq.json")
+PIN_FILE = Path(__file__).resolve().with_name("pin.json")
 COMMIT_ENV = "UQF_PEACHQ_COMMIT"
 #: The variables that chose an interpreter before #1753, each with what
 #: replaces it, refused when set. uqs.interpreter.REMOVED_ENV spells the same

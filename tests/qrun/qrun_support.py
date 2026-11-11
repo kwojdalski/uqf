@@ -109,7 +109,7 @@ def run_process(
 ) -> QRun:
     """Run `argv` from `cwd` as `run_q` runs q: its own process group, stopped
     whole at `timeout` or on any way out. `q_errors=False` for a driver whose
-    output quotes q runs it judged itself (scripts/portable/full_suite.py)."""
+    output quotes q runs it judged itself (scripts/peachq/full_suite.py)."""
     read_fd = write_fd = -1
     if stdin_open:
         read_fd, write_fd = os.pipe()

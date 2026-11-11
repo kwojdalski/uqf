@@ -74,7 +74,7 @@ ALL = (True, True, True, True)
         # the render's tooling
         ([("M", "scripts/generate/q_api_docs.py")], (True, False, False, True)),
         ([("M", "scripts/gates/check_doc_links.py")], (True, False, False, True)),
-        ([("M", "scripts/peachq.json")], (True, True, False, True)),
+        ([("M", "scripts/peachq/pin.json")], (True, True, False, True)),
         # -- deletions -------------------------------------------------------
         # a deletion a document links to
         ([("D", "scripts/dev/odbc_rosetta.sh")], (True, True, False, True)),
