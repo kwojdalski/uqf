@@ -54,7 +54,6 @@ def scaffold_reaction(
                 "table or schedule of its own"
             )
         )
-        return
     repo_root = _paths().repo_root
     try:
         with planning_root(repo_root, bundle) as root:
@@ -68,7 +67,6 @@ def scaffold_reaction(
             )
     except UqsError as exc:
         _die(exc)
-        return
     if bundle is not None:
         write_bundle_plan(plan, bundle, dry_run=dry_run)
         return

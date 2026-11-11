@@ -216,7 +216,6 @@ def backfill(
         waived = safety.given("job backfill", override, reason)
     except UqsError as exc:
         _die(exc)
-        return
     # `--override any-writer` (a bare --any-writer until #1852) is the writer's,
     # not a coordination waiver: it travels as `force`.
     why = waived.pop(ANY_WRITER, None)
@@ -231,14 +230,12 @@ def backfill(
                 "is not"
             )
         )
-        return
     if mode == "dry-run" and not dry_run:  # one spelling of a dry run (#1858)
         warn_renamed("--mode dry-run", "--dry-run")
         dry_run = True
     if dry_run:
         if mode not in (None, "dry-run"):
             _die(UqsError(f"--dry-run is --mode dry-run: not with --mode {mode}"))
-            return
         mode = "dry-run"
     if force and writer is None:
         _die(
@@ -246,18 +243,15 @@ def backfill(
                 "--override any-writer is for --writer: it writes through the process at HOST:PORT"
             )
         )
-        return
     if writer is not None and attach is None:
         _die(
             UqsUsageError(
                 "--writer is for --attachment: it names the receiver of an attached destination"
             )
         )
-        return
     refused = launch_options.refusal(follow=follow, level=level, stop_on_exit=stop_on_exit)
     if refused is not None:
         _die(refused)
-        return
     if follow and attach is None:
         _die(
             UqsUsageError(
@@ -265,27 +259,21 @@ def backfill(
                 "--wait, and follow its log with `uqs logs <process> -f`"
             )
         )
-        return
     if follow and as_json:  # stdout is one JSON document (#1685); a stream is not one
         _die(UqsUsageError(f"{launch_options.FOLLOW_NOT_WITH_JSON}: use --wait --json"))
-        return
     if follow and mode in run_modes.READ_ONLY_MODES:
         _die(UqsError(f"--follow has nothing to follow with --mode {mode}: it starts no run"))
-        return
     if wait and mode in run_modes.READ_ONLY_MODES:
         _die(UqsError(f"--wait has nothing to wait for with --mode {mode}: it writes no status"))
-        return
     try:
         bound_from, bound_to = timerange.resolve(range_from, range_to, day, last).bounds
     except UqsError as exc:
         _die(exc)
-        return
     if attach is not None:
         try:
             resolved = stack_backfill.resolve_version(worker, version)
         except UqsError as exc:
             _die(exc)
-            return
         backfill_attached.run(
             attach,
             worker,
@@ -348,7 +336,6 @@ def backfill(
         )
     except UqsError as exc:
         _die(exc)
-        return
     if as_json:
         emit({**started, **backfill_attached.outcome(state, code), "error": error})
         raise typer.Exit(code=code)

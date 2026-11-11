@@ -95,7 +95,6 @@ def sources_check(
         results = live_check.check(_paths(), sources, timeout=timeout, window=window, odbc_env=env)
     except UqsError as exc:
         _die(exc)
-        return
     ok = live_check.passed(results)
     if as_json:
         emit({"ok": ok, "sources": results})

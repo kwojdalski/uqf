@@ -42,7 +42,6 @@ def dry_run(
         lines = start_lines.plan(_paths(), names, port, selected, extras=extras)
     except UqsError as exc:
         _die(exc)
-        return
     emit(
         {
             "dry_run": True,
@@ -70,7 +69,6 @@ def launch(
         wanted = start_follow.procnames_started_by(names, port)
     except UqsError as exc:
         _die(exc)
-        return
     try:
         up = running(port) if verb == "start" else set()
     except (UqsError, OSError) as exc:  # not knowing: none is reported as already up
@@ -92,7 +90,6 @@ def launch(
         result = run(_paths(), names, capture=True)
     except UqsError as exc:
         _die(exc)
-        return
     doc["output"] = ((result.stdout or "") + (result.stderr or "")).splitlines()
     if result.returncode:
         emit({**doc, "ok": False, "exit_code": result.returncode})

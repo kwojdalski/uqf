@@ -29,7 +29,6 @@ def _force_stop(names: str, port: int | None) -> None:
         results = force_stop.kill(_paths(), names, base_port=port)
     except UqsError as exc:
         _die(exc)
-        return
     if not results:
         console.print("nothing to kill: none of them is running")
     for r in results:

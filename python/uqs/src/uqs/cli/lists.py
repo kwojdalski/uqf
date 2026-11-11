@@ -95,7 +95,6 @@ def _print(kind, base_port, export, sort, reverse, interactive, as_json, rows=No
         items = rows() if rows else listing.list_items(_paths(), kind, base_port=base_port)
     except UqsError as exc:
         _die(exc)
-        return
     if kind == "targets" and not items and not as_json:
         console.print(
             f"no targets in {targets.declaration_path(_paths().repo_root)} - add one with "
@@ -327,7 +326,6 @@ def list_items(
         return
     if kind in REFUSED:
         _die(UqsUsageError(f"`uqs list {kind}` is `{REFUSED[kind]}`"))
-        return
     if kind in MOVED:
         warn_renamed(f"uqs list {kind}", MOVED[kind])
     _print(kind, port, export, sort, reverse, interactive, as_json)

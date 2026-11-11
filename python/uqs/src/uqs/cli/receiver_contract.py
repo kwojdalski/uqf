@@ -81,7 +81,6 @@ def export(
         contract = receiver_contract.export(_paths(), worker)
     except UqsError as exc:
         _die(exc)
-        return
     if output is None:
         typer.echo(contract.text(), nl=False)
     else:
@@ -156,7 +155,6 @@ def approve(
         )  # fmt: skip
     except UqsError as exc:
         _die(exc)
-        return
     if as_json:
         emit(record)
         return
@@ -198,7 +196,6 @@ def list_(
         rows = _sorted_items([_row(r) for r in found], sort, reverse)
     except UqsError as exc:
         _die(exc)
-        return
     _export(rows, export)
     if as_json:
         order = {row["identity"]: i for i, row in enumerate(rows)}

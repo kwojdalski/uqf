@@ -71,7 +71,6 @@ def log_(
         pending = target_changelog.pending_outside_edit(root)
     except DeployError as exc:
         _die(UqsError(str(exc)))
-        return
     found = [(n, e) for n, e in enumerate(entries, 1) if name is None or _about(e, name)]
     if name is not None and not found:
         # an unknown name is a refusal; a known target with no change, an empty log (#1885)
@@ -79,10 +78,8 @@ def log_(
             declared = _declared(root)
         except DeployError as exc:
             _die(UqsError(str(exc)))
-            return
         if name not in declared:
             _die(target_keys.unknown_target(name, declared, targets.declaration_path(root)))
-            return
     changes: list[dict[str, Any]] = [
         {
             "number": n,
@@ -101,7 +98,6 @@ def log_(
         changes = _sorted_items(changes, sort, reverse)
     except UqsError as exc:
         _die(exc)
-        return
     _export([{k: v for k, v in c.items() if k not in ("tables", "diff")} for c in changes], export)
     if as_json:
         emit({"changes": changes, "edited_outside": pending is not None})

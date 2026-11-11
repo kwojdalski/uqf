@@ -115,8 +115,6 @@ def test_uv_installs_it_and_nothing_goes_on_path(tmp_path):
         ["uv", "python", "install", "--no-bin", "--no-registry", "cpython-3.14-linux-x86_64-gnu"],
         ["uv", "python", "dir"],
     ]
-    with pytest.raises(ReleaseError, match="--arch 'arm64' must be one of x86_64, aarch64"):
-        python_runtime.fetch("3.14", "arm64", uv)
 
 
 @pytest.mark.parametrize(

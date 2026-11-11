@@ -73,7 +73,6 @@ def edit(
         at = targets.line_of(original, f"{targets.TARGETS}.{name}")
         if at is None:
             _die(_not_a_table(original, name, path))
-            return
     text, problem = original, None
     with tempfile.TemporaryDirectory(prefix="uqs-target-edit-") as scratch:
         copy = Path(scratch) / path.name
@@ -89,7 +88,6 @@ def edit(
                 done = subprocess.run([*editor, *where, str(copy)], check=False)
             except OSError as exc:
                 _die(UqsError(f"could not run the editor ({exc}) - set $VISUAL or $EDITOR"))
-                return
             if done.returncode:
                 _die(UqsError(f"the editor exited {done.returncode} - {path} is unchanged"))
             text = _strip_note(copy.read_text())
@@ -106,7 +104,6 @@ def edit(
                 )
             except target_changes.Conflict as exc:
                 _die(UqsError(str(exc)))
-                return
             except DeployError as exc:
                 problem = str(exc)
                 console.print(f"[red]✗[/] {problem}", highlight=False)
@@ -139,7 +136,6 @@ def remove(
             )
         except (DeployError, UqsError) as exc:
             _die(UqsError(str(exc)))
-            return
         if planned.entry is not None:
             console.print(planned.entry["diff"].rstrip("\n"), markup=False, highlight=False)
             try:

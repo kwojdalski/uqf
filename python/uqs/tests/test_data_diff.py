@@ -303,7 +303,12 @@ def test_a_command_that_names_nothing_to_compare_is_refused(monkeypatch, extra, 
     fake_q(monkeypatch, report("equal_in_sample"))
     monkeypatch.setattr(diff_endpoints, "reach", _reached)
     died: list[UqsError] = []
-    monkeypatch.setattr(diff_cli, "_die", died.append)
+
+    def record(exc: UqsError) -> None:
+        died.append(exc)
+        raise SystemExit(1)
+
+    monkeypatch.setattr(diff_cli, "_die", record)
     runner.invoke(cli.app, ["data", "diff", *extra, "--table", "demo_deals", *WINDOW])
     assert len(died) == 1 and isinstance(died[0], UqsUsageError) and said in str(died[0])
 

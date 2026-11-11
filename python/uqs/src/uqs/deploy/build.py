@@ -59,7 +59,6 @@ from uqs.deploy.artifact import (
     INSTALLER,
     MANIFEST,
     PACKAGING_MODE,
-    PLATFORMS,
     REQUIREMENTS,
     WHEEL_DIR,
     Artifact,
@@ -306,8 +305,6 @@ def build(
     runtime = runtime or DEFAULT_RUNTIME
     members = composition_members(runtime, root, bundles)
     output = Path(output) if output is not None else root / DEFAULT_OUTPUT
-    if arch not in PLATFORMS:
-        raise ReleaseError("arguments", f"--arch {arch!r} must be one of {', '.join(PLATFORMS)}")
     if python is not None and not _PYTHON.fullmatch(python):
         raise ReleaseError("arguments", f"--python {python!r} must be major.minor, e.g. 3.14")
     rev, dirty = revision(root, runner)

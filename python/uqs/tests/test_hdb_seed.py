@@ -229,7 +229,12 @@ def seeded(monkeypatch, tmp_path):
     monkeypatch.setattr(
         cli_seed, "warn_renamed", lambda old, new: seen["renamed"].append((old, new))
     )
-    monkeypatch.setattr(cli_seed, "_die", lambda exc: seen.setdefault("refused", str(exc)))
+
+    def refuse(exc: Exception) -> None:
+        seen["refused"] = str(exc)
+        raise SystemExit(1)
+
+    monkeypatch.setattr(cli_seed, "_die", refuse)
 
     def seed(target, source, tables, first, last, overwrite, dry_run=False, hdb=None):
         seen.update(source=source.runtime, first=first, last=last, hdb=hdb)

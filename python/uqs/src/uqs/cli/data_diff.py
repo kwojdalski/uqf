@@ -167,7 +167,6 @@ def diff(
         )  # fmt: skip
     except UqsError as exc:
         _die(exc)
-        return
     if as_json:
         # a table's rows are its own columns' - data, not keys the document spells
         tables = [t | {"rows": Verbatim(t["rows"])} if "rows" in t else t for t in report["tables"]]

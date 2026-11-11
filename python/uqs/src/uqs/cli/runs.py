@@ -171,7 +171,6 @@ def list_runs(
         rows = _sorted_items(rows, sort, reverse)
     except UqsError as exc:
         _die(exc)
-        return
     _export([_record(r, _RUN_COLUMNS) for r in rows], export)
     if as_json:
         emit({"runs": [_record(r, _RUN_COLUMNS) for r in rows]})
@@ -216,7 +215,6 @@ def upgrade(
         upgraded = stack_runs.migrate(_paths(), dry_run)
     except UqsError as exc:
         _die(exc)
-        return
     if dry_run:
         console.print(f"would upgrade {upgraded} run(s)", markup=False)
         console.print(dry_run_note())
@@ -239,10 +237,8 @@ def show(
         run, facts = stack_runs.show(_paths(), run_id, **_where(attach))
     except UqsError as exc:
         _die(exc)
-        return
     if not run:
         _die(UqsError(f"no run {run_id} in the ledger"))
-        return
     if as_json:
         emit({
             "run": _record(run[0], _RUN_COLUMNS),
@@ -311,7 +307,6 @@ def audit(
         rows = stack_runs.audit(_paths(), dataset, *window.bounds)
     except UqsError as exc:
         _die(exc)
-        return
     if as_json:
         emit({"facts": [_record(r, _FACT_COLUMNS) for r in rows]})
         return

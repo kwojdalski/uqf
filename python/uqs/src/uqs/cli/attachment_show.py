@@ -42,7 +42,6 @@ def show(name: NameArg, as_json: ShowJson = False) -> None:
         att = config.load(name)
     except UqsError as exc:
         _die(exc)
-        return
     rows = attach_state.inventory(repo=_paths().repo_root)
     state = next((r for r in rows if r["attachment"] == name), {})
     record, waivers = backfill_audit.of_attachment(_paths(), name)

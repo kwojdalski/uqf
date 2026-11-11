@@ -129,7 +129,6 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
         layout = hdb_layout.inspect(paths, hdb_root)
     except UqsError as exc:
         _die(exc)
-        return
     if apply:
         try:
             handle = resolve(None, None)
@@ -141,7 +140,6 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
                     yes=yes, as_json=as_json)  # fmt: skip
         except UqsError as exc:
             _die(exc)
-            return
         # what bootstrap writes, so the filler fills from THIS release's schema
         paths.generated_schema.parent.mkdir(parents=True, exist_ok=True)
         paths.generated_schema.write_text(schema)
@@ -150,7 +148,6 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
             layout = hdb_layout.inspect(paths, hdb_root)
         except UqsError as exc:
             _die(exc)
-            return
     declared = hdb_shape.declared_columns(paths)
     expected = set(declared)
     short, thin = hdb_shape.shape_gaps(layout.listing, declared)
@@ -161,12 +158,10 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
             changed = hdb_types.type_changes(paths, schema_file, layout.dirs)
         except UqsError as exc:
             _die(exc)
-            return
     try:
         unordered = hdb_sorting.unsorted(paths, hdb_root, layout.dirs)
     except UqsError as exc:
         _die(exc)
-        return
     if as_json:
         emit({
             "ok": not (short or thin or changed or unordered),

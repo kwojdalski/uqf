@@ -40,10 +40,15 @@ def tree_files():
 def _job_new(argv: list[str], monkeypatch) -> tuple[str, list[str]]:
     """Run `uqs job new`; return its output and any refusal it raised."""
     refused: list[str] = []
+
+    def record(exc: Exception) -> None:
+        refused.append(str(exc))
+        raise SystemExit(1)
+
     for module in (create, create_bundle, create_reaction):
-        monkeypatch.setattr(module, "_die", lambda exc: refused.append(str(exc)))
+        monkeypatch.setattr(module, "_die", record)
     result = CliRunner().invoke(cli.app, ["job", "new", *argv])
-    assert result.exception is None, result.exception
+    assert refused or result.exception is None, result.exception
     return result.stdout, refused
 
 

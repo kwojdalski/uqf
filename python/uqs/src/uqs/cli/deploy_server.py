@@ -329,7 +329,6 @@ def verify_cmd(
         )
     except UqsError as exc:  # an unknown profile or process
         _die(exc)
-        return
     except SystemExit as exc:  # a profile process with no port: verify's own refusal
         if not as_json:
             raise

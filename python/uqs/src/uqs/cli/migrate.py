@@ -96,7 +96,6 @@ def migrate(
         safety.dry_unless_applied(dry_run, apply)
     except UqsError as exc:
         _die(exc)
-        return
     try:
         root = local_hdb(attach, hdb, command="data migrate", why=_NO_ATTACHMENT)
         if all(v is None for v in (day, range_from, range_to, last)):
@@ -141,7 +140,6 @@ def migrate(
             )
     except UqsError as exc:
         _die(exc)
-        return
     if as_json:
         emit({"ok": True, "table": table, "partition": f"{partition:%Y.%m.%d}",
               "applied": apply, "report": report})  # fmt: skip

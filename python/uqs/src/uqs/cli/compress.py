@@ -267,7 +267,6 @@ def compress(
             shown = str(root)
     except UqsError as exc:
         _die(exc)
-        return
     target = handle.target.name if handle.target else None
     if as_json:
         unsorted = r["unsorted"]

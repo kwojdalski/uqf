@@ -65,7 +65,6 @@ def runtime_diff(
         sections = runtime_report.diff(_paths().repo_root, a, b, pipelines_only())
     except UqsError as exc:
         _die(exc)
-        return
     if as_json:
         emit(sections)
         return

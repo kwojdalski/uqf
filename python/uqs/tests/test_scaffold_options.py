@@ -214,7 +214,12 @@ def test_raw_input_for_a_source_that_already_exists_is_refused():
 
 def _refusals(monkeypatch, *argv: str) -> list[str]:
     refused: list[str] = []
-    monkeypatch.setattr(create, "_die", lambda exc: refused.append(str(exc)))
+
+    def record(exc: Exception) -> None:
+        refused.append(str(exc))
+        raise SystemExit(1)
+
+    monkeypatch.setattr(create, "_die", record)
     CliRunner().invoke(cli.app, ["job", "new", *argv, "--dry-run"])
     return refused
 

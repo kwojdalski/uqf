@@ -116,7 +116,6 @@ def clean(match: MatchOpt = None, dry_run: DryRunOpt = False, yes: YesOpt = Fals
         targets = stack_clean.clean(_paths(), match=match, dry_run=dry_run)
     except UqsError as exc:
         _die(exc)
-        return
     if not targets:
         console.print("[dim]nothing to remove[/]")
     else:
@@ -162,7 +161,6 @@ def remove_checkpoint(
         path = stack_backfill.clear_checkpoint(_paths(), worker, dry_run)
     except UqsError as exc:
         _die(exc)
-        return
     if path is None:
         console.print(f"{worker} has no checkpoint - nothing to clear", markup=False)
     elif dry_run:

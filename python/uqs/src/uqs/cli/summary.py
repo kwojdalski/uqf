@@ -238,7 +238,6 @@ def summary(
         gathered = gather(port, needed, timeout, probe_timeout, sort_column, reverse)
     except UqsError as exc:
         _die(exc)
-        return
     result, rows = gathered.result, gathered.rows
     heartbeats, silent, failing = gathered.heartbeats, gathered.silent, gathered.failing
     paths = _paths()

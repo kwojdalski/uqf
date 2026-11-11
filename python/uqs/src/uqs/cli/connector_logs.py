@@ -32,11 +32,9 @@ def _log_path(name: str) -> Path:
     log = _feed(name).status(_paths()).get("log")
     if not log:
         _die(UqsError(f"connector {name} names no log in its status"))
-        raise typer.Exit(code=1)
     path = Path(log)
     if not path.is_file():
         _die(UqsError(f"no {name} log yet at {path} - has it been started?"))
-        raise typer.Exit(code=1)
     return path
 
 
@@ -91,7 +89,6 @@ def logs(
     """
     if as_json and follow:
         _die(UqsUsageError("--json prints the history: --follow does not apply with it"))
-        return
     path = _log_path(name)
     if follow:
         try:

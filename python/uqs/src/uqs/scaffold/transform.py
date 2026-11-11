@@ -68,7 +68,6 @@ def worker_transform(
 / .qetl.transform.registry[`{name}]`inputs.
 """
         return "", after, name
-    check_mode(mode)
     if mode == "passthrough":
         # The source's own worker (NAME_backfill on source NAME) names it after
         # the source; any other worker - a second slice or target over a

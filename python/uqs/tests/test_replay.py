@@ -214,7 +214,12 @@ def test_a_range_that_is_not_one_whole_day_is_refused(monkeypatch, given):
     is read off the error it was handed."""
     refused = []
     monkeypatch.setattr(replay, "plan", lambda **kw: refused.append("planned"))
-    monkeypatch.setattr(cli_replay, "_die", lambda exc: refused.append(str(exc)))
+
+    def record(exc: Exception) -> None:
+        refused.append(str(exc))
+        raise SystemExit(1)
+
+    monkeypatch.setattr(cli_replay, "_die", record)
     runner.invoke(cli.app, ["data", "replay", *given])
     assert refused and refused[0].startswith("data replay replays one whole day")
 

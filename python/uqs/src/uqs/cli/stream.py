@@ -115,7 +115,6 @@ def preview(
         if not as_json:
             _print_trace(getattr(exc, "trace", []))
         _die(exc)
-        return
     if as_json:
         traced = [{"level": lv, "source": src, "message": m} for lv, src, m in r.get("trace", [])]
         # the sampled rows are the tables' own: data, not keys the document spells

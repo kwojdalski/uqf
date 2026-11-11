@@ -56,7 +56,6 @@ def deploy_history(
         entries = history.read(root)
     except DeployError as exc:
         _die(UqsError(str(exc)))
-        return
     defaults = history.defaults(root)
     found = [
         (i, e)
@@ -72,7 +71,6 @@ def deploy_history(
         rows = _sorted_items(rows, sort, reverse)
     except UqsError as exc:
         _die(exc)
-        return
     _export(rows, export)
     if as_json:
         # the time ISO-8601 with its offset, as every document's (#1882)
