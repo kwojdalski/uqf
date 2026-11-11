@@ -148,5 +148,5 @@
     .qunit.assertEquals[first first (first shapes)`bid_prices;62002f;"the tie at one source_time goes to the greater content"]};
 
 .qt.qpipe.job.crypto_book_1s.test_the_live_example_runs_through_the_published_shape:{[t]
-    out:.qetl.transform.apply[`crypto_book_1s;first[(.qetl.transform.def `crypto_book_1s)`examples]`inputs];
+    out:.qetl.transform.apply[`crypto_book_1s;first[(.qetl.transform.def["test";`crypto_book_1s])`examples]`inputs];
     .qunit.assertEquals[0#out;.qetl.plant.published `crypto_book_1s;"the transform's output is the plant table, minus time"]};

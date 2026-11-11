@@ -14,7 +14,7 @@ import os
 from collections.abc import Callable, Sequence
 from importlib.metadata import version as installed_version
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, NoReturn
 
 import typer
 from rich.table import Table
@@ -166,7 +166,6 @@ def _configure(
         stack_paths.runtime_from_env()
     except UqsError as exc:
         _die(exc)
-        return
     # main() has already configured logging from the environment so that
     # anything logged during Typer's own startup lands somewhere. Re-running
     # it here is what makes --debug take effect, and the flag wins over the
@@ -270,7 +269,6 @@ def _export(rows, export: Path | None) -> None:
         table_export.export_table(rows, export)
     except UqsError as exc:
         _die(exc)
-        return
     if json_requested():  # stdout is the one JSON document
         log.info("exported to {}", export)
         return
@@ -311,7 +309,7 @@ EXIT_PARTIAL = 3
 EXIT_STOPPED = q_facts.STOP_EXIT_CODE
 
 
-def _die(exc: UqsError) -> None:
+def _die(exc: UqsError) -> NoReturn:
     log.error("{}", exc)
     details = getattr(exc, "json_details", None)
     json_refusal(str(exc), details() if callable(details) else None)
@@ -335,7 +333,6 @@ def _run_streaming(result_fn, *args, **kwargs) -> None:
         result = result_fn(_paths(), *args, capture=False, **kwargs)
     except UqsError as exc:
         _die(exc)
-        return
     raise typer.Exit(code=result.returncode)
 
 

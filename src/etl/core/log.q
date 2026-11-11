@@ -211,7 +211,7 @@
 / against TorQ's real .lg definitions and noticing the line had three
 / fields where TorQ's format has six.
 / @private
-.qetl.log.torq_loaded:{[] @[{`l in key x};`.lg;{0b}]}
+.qetl.log.torq_loaded:{[] `l in key `.lg}
 
 / The name a record gives as the process that wrote it when TorQ gives none:
 / the runner script's file name without `.q` (run_backfill.q -> `run_backfill),

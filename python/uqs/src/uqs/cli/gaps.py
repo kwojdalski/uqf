@@ -141,7 +141,6 @@ def gaps(
         holes, twins, sessions = stack_uptime.gaps(_paths(), job, bound_from, bound_to)
     except UqsError as exc:
         _die(exc)
-        return
     if as_json:
         found, cut = refills(holes, twins)
         emit({

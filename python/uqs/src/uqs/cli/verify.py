@@ -141,7 +141,6 @@ def check(
         )
     except UqsError as exc:
         _die(exc)
-        return
     worst = dataset_verify.worst(report)
     failed = (
         worst == "FAIL" or (fail_unverified and worst == "UNVERIFIED") or not report["readonly"]

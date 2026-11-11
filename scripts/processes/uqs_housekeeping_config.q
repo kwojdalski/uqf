@@ -17,11 +17,26 @@
 .hk.inputcsv:hsym `$getenv[`TORQDATA],"/housekeeping.csv";
 .hk.runtimes:exec runtime from (enlist "T";enlist ",") 0: hsym `$getenv[`TORQDATA],"/housekeeping_schedule.csv";
 
-/ hdbcompress's reload finds the HDBs among the servers TorQ knows, and TorQ
-/ registers only the process types a process names here; housekeeping names
-/ none. It connects when it compresses (.qtorq.hk.compress), not at startup:
-/ no handle held to an HDB all day for a rule that runs once.
+/ The HDB reload (.qtorq.reload_hdb) finds the HDBs among the servers TorQ
+/ knows, and TorQ registers only the process types a process names here;
+/ housekeeping names none. It connects when it reloads (.qtorq.hk.connect) -
+/ hdbcompress's run and `uqs data compress`'s reload (.qtorq.hk.reload) -
+/ not at startup: no handle held to an HDB all day for a rule that runs once.
+/ `hdb is .qtorq.hdb_type, written out: torq_pipeline.q defines that after this loads.
 .servers.CONNECTIONS:distinct @[value;`.servers.CONNECTIONS;`symbol$()],`hdb;
+
+/ Register and open the HDBs named above. TorQ makes no connection at startup
+/ unless asked (.servers.STARTUP), so each reload asks first; one it cannot
+/ reach is the reload's to report, as it does.
+/ @return ::
+.qtorq.hk.connect:{[]
+  @[.servers.startup;::;{[e] .lg.w[`housekeeping;"could not register the HDBs to reload: ",e]}];
+  };
+
+/ Ask every HDB to reload, connecting first: what `uqs data compress` sends
+/ once, after the last partition it compressed (stack/compress.py, #2147).
+/ @return `registered`opened`reloaded - .qtorq.reload_hdb's counts
+.qtorq.hk.reload:{[] .qtorq.hk.connect[]; .qtorq.reload_hdb[]};
 
 / Whether TorQ's replay reads a gzipped log on this host: tickerlogreplay.q's
 / replayinner refuses one off Linux and before kdb+ 4.0.
@@ -74,10 +89,7 @@ tplogzip:{[dir]
 .qtorq.hk.compress:{[dir]
   conf:.cmp.inputcsv;
   conf:$[10h=type conf;conf;string conf];
-  / TorQ makes no connection at startup unless asked (.servers.STARTUP); this
-  / registers the HDBs for the reload, and one it cannot reach is the reload's
-  / to report, as it does.
-  @[.servers.startup;::;{[e] .lg.w[`housekeeping;"could not register the HDBs to reload: ",e]}];
+  .qtorq.hk.connect[];
   .lg.o[`housekeeping;"compressing ",dir," to the compression policy ",conf];
   .qtorq.compress.run_held[hsym `$dir;conf]};
 

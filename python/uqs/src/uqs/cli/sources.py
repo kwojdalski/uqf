@@ -42,7 +42,6 @@ def sources_show(ctx: typer.Context) -> None:
         path, rows = source_settings.describe(paths, transports.names())
     except UqsError as exc:
         _die(exc)
-        return
     searched = ", ".join(str(p) for p in source_settings.layers(paths))
     if path is None:
         console.print(

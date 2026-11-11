@@ -108,9 +108,9 @@
     .qetl.transform.define[`regtest_clocked;`inputs`output`fn`examples`as_of!(
         (enlist `i)!enlist .qt.qetl.registries.empty_in;.qt.qetl.registries.empty_in;{[i;a] i};
         enlist `inputs`expected`as_of!((enlist `i)!enlist .qt.qetl.registries.rows_in;.qt.qetl.registries.rows_in;2026.01.01D00:00:00);1b)];
-    .qunit.assertEquals[.qetl.transform.def[`regtest_plain]`as_of;0b;
+    .qunit.assertEquals[.qetl.transform.def["test";`regtest_plain]`as_of;0b;
         "an undeclared as_of is FALSE, not a null - normalising means choosing the default explicitly"];
-    .qunit.assertEquals[.qetl.transform.def[`regtest_clocked]`as_of;1b;"and a declared one survives"];
+    .qunit.assertEquals[.qetl.transform.def["test";`regtest_clocked]`as_of;1b;"and a declared one survives"];
     .qt.qetl.registries.forget[`.qetl.transform.registry;`regtest_plain`regtest_clocked]};
 
 .qt.qetl.registries.test_an_allocation_method_without_a_description_does_not_gain_a_null:{[t]

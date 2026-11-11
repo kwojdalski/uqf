@@ -211,7 +211,7 @@
 / @throws error naming every missing or malformed field at once
 .qetl.job.stream.define:{[job;decl]
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
-    if[job in @[{.qetl.job.bounded.defined[]};::;{[e] `symbol$()}];
+    if[job in .qetl.job.bounded.defined[];
         '"define: ",string[job]," is already a bounded job - job names must be unique across execution modes"];
     if[not 99h=type decl; '"define: ",string[job],"'s declaration must be a dictionary"];
     .qetl.job.stream.refuse_publishes["define: ",string job;decl];

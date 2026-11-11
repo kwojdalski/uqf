@@ -61,12 +61,10 @@ def install(
 ) -> None:
     if mode is Mode.SYMLINK:
         _die(bundles.BundleError("a bundle installs as copies only - drop --link"))
-        return
     try:
         plan = bundles.plan(bundles.read_bundle(folder), root)
     except bundles.BundleError as exc:
         _die(exc)
-        return
     console.print(_summary(plan, root))
     if plan.tests:
         console.print(f"[dim]not installed (q tests): {', '.join(p.name for p in plan.tests)}[/]")
@@ -88,7 +86,6 @@ def install(
         entry = bundles.install(plan, root, runtime)
     except (bundles.BundleError, OSError) as exc:
         _die(bundles.BundleError(str(exc)))
-        return
     console.print(
         f"[green]✓[/] bundle {plan.bundle.name} {entry['version']}: "
         f"{len(entry['files'])} job file(s), {len(entry['tables'])} table(s), "

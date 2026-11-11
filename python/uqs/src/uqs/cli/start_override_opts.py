@@ -45,4 +45,3 @@ def parsed(command: str, names: list[str] | None, reason: str | None, **kw) -> O
         return overrides_from(command, names, reason, **kw)
     except UqsError as exc:
         _die(exc)
-        raise  # unreachable: _die exits

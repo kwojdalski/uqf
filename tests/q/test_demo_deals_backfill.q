@@ -1188,7 +1188,7 @@
         "what reaches the target is the transform's output, not the fetched batch"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_a_throwing_transform_fails_the_window_and_publishes_nothing:{[t]
-    .qt.support.put_row[`.qetl.transform.registry;`ddbftest_throws;.qetl.transform.def `demo_deals_passthrough];
+    .qt.support.put_row[`.qetl.transform.registry;`ddbftest_throws;.qetl.transform.def["test";`demo_deals_passthrough]];
     .qt.support.set_field[`.qetl.transform.registry;`ddbftest_throws;`fn;{[batch] '"boom"}];
     .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`xf2;1;4]];
     r:.qt.qpipe.job.demo_deals_backfill.with_transform[`ddbftest_throws;{.qpipe.job.demo_deals_backfill.run[]}];

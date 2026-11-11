@@ -229,18 +229,21 @@
         {[batch] batch};
         enlist `inputs`expected!((enlist input_name)!enlist rows;rows))]}
 
-/ A transform's declaration, or an error naming it.
+/ A transform's declaration, or an error naming it and the caller.
+/ @param who the caller, for the message - the job or step that needs the transform
+/ @param name the transform's name
+/ @return the transform's declaration
 / @throws error when no such transform is registered
-.qetl.transform.def:{[name]
+.qetl.transform.def:{[who;name]
     if[not name in .qetl.transform.defined[];
-        '"transform ",string[name]," is not registered - declare it with .qetl.transform.define"];
+        'who,": transform ",string[name]," is not registered - declare it with .qetl.transform.define"];
     .qetl.transform.registry name}
 
 / The input names a transform reads, in the order its fn takes them.
-.qetl.transform.input_names:{[name] key (.qetl.transform.def[name])`inputs}
+.qetl.transform.input_names:{[name] key (.qetl.transform.def["input_names";name])`inputs}
 
 / The empty output table a transform produces.
-.qetl.transform.output_schema:{[name] (.qetl.transform.def[name])`output}
+.qetl.transform.output_schema:{[name] (.qetl.transform.def["output_schema";name])`output}
 
 / --------------------------------------------------------------- APPLYING
 
@@ -257,7 +260,7 @@
 / @eg .qetl.transform.define[`eg_mid;`inputs`output`fn`examples!(enlist[`q]!enlist ([] sym:`symbol$(); bid:`float$(); ask:`float$()); ([] sym:`symbol$(); mid:`float$()); {[q] select sym, mid:(bid+ask)%2 from q}; enlist `inputs`expected!(enlist[`q]!enlist ([] sym:enlist `EURUSD; bid:1.1; ask:1.2); ([] sym:enlist `EURUSD; mid:1.15)))];
 /   .qetl.transform.apply[`eg_mid;enlist[`q]!enlist ([] sym:`EURUSD`GBPUSD; bid:1.10 1.25; ask:1.12 1.27)]  ->  ([] sym:`EURUSD`GBPUSD; mid:1.11 1.26)
 .qetl.transform.apply:{[name;given]
-    d:.qetl.transform.def[name];
+    d:.qetl.transform.def["apply";name];
     if[d`as_of; '"apply: transform ",string[name]," takes as_of - use .qetl.transform.apply_as_of"];
     .qetl.transform.run[name;d;given;()]}
 
@@ -268,7 +271,7 @@
 / @return the output table
 / @throws error when an input or the output does not match the declaration
 .qetl.transform.apply_as_of:{[name;given;as_of]
-    d:.qetl.transform.def[name];
+    d:.qetl.transform.def["apply_as_of";name];
     if[not d`as_of; '"apply_as_of: transform ",string[name]," takes no as_of - use .qetl.transform.apply"];
     if[not -12h=type as_of; '"apply_as_of: as_of must be a timestamp"];
     .qetl.transform.run[name;d;given;enlist as_of]}
@@ -300,7 +303,7 @@
 /   per example plus one for the empty case
 / @eg .qetl.transform.verify `mid_quotes
 .qetl.transform.verify:{[name]
-    d:.qetl.transform.def[name];
+    d:.qetl.transform.def["verify";name];
     exs:d`examples;
     rows:.qetl.transform.verify_example[name;d] each exs;
     empty_inputs:{0#x} each d`inputs;

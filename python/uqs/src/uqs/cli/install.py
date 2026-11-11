@@ -288,7 +288,6 @@ def install_jobs(
         items = stack_install.plan(sidecar, repo_root)
     except (FileNotFoundError, UqsError) as exc:
         _die(UqsError(str(exc)))
-        return
 
     console.print(
         Panel(
@@ -334,7 +333,6 @@ def install_jobs(
     if mode is None:
         if yes:
             _die(UqsUsageError("--yes asks nothing, so it needs --link or --copy"))
-            return
     try:  # every question below refuses, naming --yes, with no terminal to ask on
         mode = mode or _ask_mode()
         replace = _resolve_conflicts(items, overwrite, yes, repo_root)
@@ -345,7 +343,6 @@ def install_jobs(
         safety.confirm(f"Install {len(todo)} file(s) as {mode.value}?", yes=yes)
     except UqsError as exc:
         _die(exc)
-        return
 
     for item in todo:
         try:

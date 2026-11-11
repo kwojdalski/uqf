@@ -153,9 +153,7 @@
         'who,"'s lateness must be a timespan, 0D for none"];
     if[not $[-16h=type decl`period; 0D<decl`period; 0b];
         'who,"'s period must be a positive timespan"];
-    if[not (decl`transform) in .qetl.transform.defined[];
-        'who,"'s transform ",string[decl`transform]," is not registered - it is the job's contract, so it is declared first"];
-    t:.qetl.transform.def decl`transform;
+    t:.qetl.transform.def[who;decl`transform];
     if[1<>count t`inputs; 'who,"'s transform takes ",string[count t`inputs]," inputs - it takes one: the events plus window, as_of and inside"];
     d:`by`event_time!(enlist `sym;`time);
     d:d,decl,`by`windows!(((),$[`by in key decl; decl`by; `sym]);asc distinct ws);
@@ -247,7 +245,7 @@
 / @eg count .qetl.job.stream.rolling.compute[`order_quality;([] source_time:enlist 2026.10.09D10:00:30; source:enlist `a; request_id:enlist `r1; outcome:enlist `filled; book:enlist `london);2026.10.09D10:01:00;0Np]  ->  3
 .qetl.job.stream.rolling.compute:{[name;rows;as_of;covered_from]
     d:.qetl.job.stream.rolling.def[name];
-    t:.qetl.transform.def d`transform;
+    t:.qetl.transform.def["rolling job ",string name;d`transform];
     reach:last d`windows;
     lengths:(d`windows) where $[null covered_from; (count d`windows)#1b; covered_from<=as_of-d`windows];
     tagged:.qetl.job.stream.rolling.tag[d`event_time;reach;lengths;as_of;(d`kept)#rows];
@@ -263,7 +261,7 @@
 / @return the outputs of compute at each, stacked
 / @eg count .qetl.job.stream.rolling.series[`order_quality;([] source_time:enlist 2026.10.09D10:00:30; source:enlist `a; request_id:enlist `r1; outcome:enlist `filled; book:enlist `london);2026.10.09D10:01:00 2026.10.09D10:02:00]  ->  6
 .qetl.job.stream.rolling.series:{[name;rows;as_ofs]
-    t:.qetl.transform.def (.qetl.job.stream.rolling.def[name])`transform;
+    t:.qetl.transform.def["rolling job ",string name;(.qetl.job.stream.rolling.def[name])`transform];
     outs:{[name;rows;a] .qetl.job.stream.rolling.compute[name;rows;a;0Np]}[name;rows] each as_ofs;
     $[count outs; raze outs; 0#t`output]}
 

@@ -99,10 +99,8 @@ _START = renamed(
 def _feed(name: str) -> ExternalFeed:
     if name in BROKEN:
         _die(UqsError(BROKEN[name]))
-        raise typer.Exit(code=1)
     if name not in FEEDS:
         _die(UqsError(f"no connector {name!r} - the connectors are {', '.join(FEEDS)}"))
-        raise typer.Exit(code=1)
     return FEEDS[name]
 
 
@@ -195,19 +193,16 @@ def _start(name: str, options: dict[str, Any], dry_run: bool = False, verb: str 
         given, origins = _secrets_from_env(options)
     except UqsError as exc:
         _die(exc)
-        return
     own = {option.name: option for option in feed.options}
     for option in given:
         if option not in own:
             _die(UqsUsageError(f"--{option.replace('_', '-')} does not apply to connector {name}"))
-            return
     try:
         # Bindings first (#1786), dry run or not: a topic or table that binds
         # to nothing is refused here, not left to the detached process's log.
         resolved = feed.check_bindings(_paths(), given, origins)
     except UqsError as exc:
         _die(exc)
-        return
     if dry_run:
         _would(name, f"{verb} {name} with {_settings(feed, given, origins)}")
         return
@@ -215,7 +210,6 @@ def _start(name: str, options: dict[str, Any], dry_run: bool = False, verb: str 
         pid = feed.start(_paths(), resolved)
     except UqsError as exc:
         _die(exc)
-        return
     console.print(feed.started(pid))
 
 
@@ -270,7 +264,6 @@ def _would(name: str, action: str) -> None:
         running = _feed(name).status(_paths()).get("running") == "True"
     except UqsError as exc:
         _die(exc)
-        return
     console.print(f"would {action} - it is {'running' if running else 'not running'}", markup=False)
     console.print(dry_run_note())
 
@@ -285,7 +278,6 @@ def stop(name: FeedArg, dry_run: DryRunOpt = False) -> None:
         _feed(name).stop(_paths())
     except UqsError as exc:
         _die(exc)
-        return
     console.print(f"{name} connector stopped")
 
 
@@ -314,7 +306,6 @@ def restart(name: str, dry_run: bool = False, **options: Any) -> None:
             console.print(f"{name} connector stopped")
     except UqsError as exc:
         _die(exc)
-        return
     _start(name, options)
 
 

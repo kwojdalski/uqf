@@ -197,7 +197,6 @@ def list_(
         events = _sorted_items(events, sort, reverse)
     except UqsError as exc:
         _die(exc)
-        return
     _export([activity_export.flat(e) for e in events], export)
     if as_json:
         emit({"db": str(path), "events": events, "drops": drops})
@@ -286,7 +285,6 @@ def export_(
         _, events, drops = _read(db, q, activity_log.EXPORT_MAX + 1)
     except UqsError as exc:
         _die(exc)
-        return
     truncated = len(events) > limit
     events = events[:limit]
     body = activity_export.render(

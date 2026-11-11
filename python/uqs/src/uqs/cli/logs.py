@@ -194,12 +194,10 @@ def logs(
         for option, used in live.items():
             if used:
                 _die(UqsUsageError(f"--json prints the history: {option} does not apply with it"))
-                return
     if attach is None:
         for option, used in {"--worker": worker, "--stamp": run}.items():
             if used is not None:
                 _die(UqsUsageError(f"{option} needs --attachment"))
-                return
     else:
         clash = {
             "a process name": bool(procs),
@@ -214,7 +212,6 @@ def logs(
                         f"{option} does not apply with --attachment, which reads one run's log"
                     )
                 )
-                return
         try:
             if as_json:
                 _json_lines(attached_logs.recent(
@@ -234,12 +231,10 @@ def logs(
                 _die(
                     UqsUsageError(f"{option} does not apply with --subscribe, which is always live")
                 )
-                return
     try:
         channels = list(stack_logs.channel_names(channels))
     except UqsError as exc:
         _die(exc)
-        return
     given = {
         "--stream": stream is not None,
         "--pane-columns": pane_columns is not None,
@@ -255,7 +250,6 @@ def logs(
         if used:
             relation = "does not apply with" if multitail else "needs"
             _die(UqsError(f"{option} {relation} --multitail"))
-            return
     try:
         if subscribe:
             stack_channel.follow_channel(

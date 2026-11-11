@@ -43,6 +43,10 @@
 / failed check - so a change to either is a change to that contract, and
 / fails here first. python/uqs/tests/test_deploy_verify_contract.py runs the
 / expression itself (#1784).
+.qt.qetl.transform.test_an_unregistered_transform_is_refused_naming_the_caller:{[t]
+    .qunit.assertThrows[.qetl.transform.def["define: bars job demo"];`no_such_transform;"define: bars job demo: transform no_such_transform is not registered*";
+        "the one check def makes keeps the caller's name"]};
+
 .qt.qetl.transform.test_verify_all_answers_the_columns_deploy_check_reads:{[t]
     r:.qetl.transform.verify_all[];
     .qunit.assertEquals[exec c!t from meta r;`example`passed`detail`transform!"sbCs";
@@ -217,7 +221,7 @@
 / the transform mutate a global, so the rebuild has to agree with folding
 / the same fills through .qf.port directly.
 .qt.qetl.transform.test_next_book_matches_folding_the_fills_through_qpos:{[t]
-    ex:first (.qetl.transform.def `position)`examples;
+    ex:first (.qetl.transform.def["test";`position])`examples;
     i:ex`inputs;
     out:.qetl.transform.apply[`position;i];
     book:.qpipe.job.posbook.next_book[i`book;out];

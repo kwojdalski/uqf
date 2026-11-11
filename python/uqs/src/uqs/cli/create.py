@@ -285,14 +285,12 @@ def new_job(
     # Options that shape one kind only are refused on the others, not ignored.
     if refusal := misplaced(kind, used):
         _die(UqsError(refusal))
-        return
     # One flag, what the job type does with it differing: a streaming job publishes
     # them, a backfill fills the one (#2102).
     publishes = outputs
     dataset = outputs
     if kind == "backfill" and outputs and "," in outputs:
         _die(UqsUsageError("--kind backfill fills exactly one dataset: give --outputs one table"))
-        return
 
     def _plan(root: Path):
         """The plan, read against `root`: the tree, or the tree with --bundle installed."""
@@ -393,7 +391,6 @@ def new_job(
             cycles.refuse_cycles(root, plan)
     except UqsError as exc:
         _die(exc)
-        return
     if bundle is not None:
         write_bundle_plan(plan, bundle, dry_run=dry_run)
         return

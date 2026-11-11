@@ -215,7 +215,7 @@
 / @throws error naming every missing or malformed field at once
 .qetl.job.bounded.define:{[worker;decl]
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
-    if[worker in key @[value;`.qetl.job.stream.jobs;{()}];
+    if[worker in key .qetl.job.stream.jobs;
         '"define: ",string[worker]," is already a streaming job - job names must be unique across execution modes"];
     / `dataset` is retired, and require_outputs says so with a migration message of
     / its own: it is left out of the unknown-key check so that message is the one raised.
@@ -344,7 +344,7 @@
     who:"define: ",string[worker];
     if[not -11h=type cfg`transform;
         'who,"'s transform must be the name of a .qetl.transform transform"];
-    d:.qetl.transform.def cfg`transform;
+    d:.qetl.transform.def[who;cfg`transform];
     src:.qetl.source.def cfg`source;
     several:0<count src`supporting;
     if[(not several) and not 1=count d`inputs;
@@ -385,7 +385,7 @@
     if[not 11h=abs type k;
         '"define: ",string[worker],"'s target_key must be a symbol or symbol vector naming output columns"];
     k:(),k;
-    out:cols (.qetl.transform.def decl`transform)`output;
+    out:cols (.qetl.transform.def["define: ",string worker;decl`transform])`output;
     absent:k where not k in out;
     if[count absent;
         '"define: ",string[worker],"'s ",$[`target_key in key decl;"target_key";"source row_key"],
@@ -407,7 +407,7 @@
 / @throws error when a declared window_column is not a symbol naming an output column
 / @private
 .qetl.job.bounded.require_window_column:{[worker;decl]
-    out:cols (.qetl.transform.def decl`transform)`output;
+    out:cols (.qetl.transform.def["define: ",string worker;decl`transform])`output;
     if[`window_column in key decl;
         c:decl`window_column;
         if[not -11h=type c;
@@ -726,8 +726,6 @@
     .qetl.coverage.require_interval[run_spec`range_from;run_spec`range_to]; .qetl.job.bounded.runtime.require_aligned[worker;cfg;run_spec`range_from;run_spec`range_to];
 
     .qetl.job.bounded.state.register[worker;cfg`ns];
-    .qetl.job.bounded.state.require_contract worker;
-    .qetl.log.ch.dbg[`config;"init: worker contract satisfied";(enlist[`worker]!enlist worker),enlist[`ns]!enlist cfg`ns];
 
     .qetl.source.validate_fixture cfg`source;
     .qetl.log.ch.dbg[`config;"init: source fixture satisfies the contract";(enlist[`worker]!enlist worker),enlist[`source]!enlist cfg`source];

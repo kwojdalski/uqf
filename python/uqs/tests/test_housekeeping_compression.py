@@ -315,6 +315,16 @@ def test_housekeeping_q_reads_the_generated_rules_schedule_and_policy(stack):
     assert "CONNECTIONS ,`hdb" in lines
 
 
+def test_housekeeping1_connects_to_no_hdb_until_a_rule_reloads(stack):
+    """#2714: the HDBs are registered once, and connected when the compression
+    rule runs - not as the overlay files load."""
+    run, _paths_, _tpold, _tprecent = stack
+    lines = run()
+    loaded = lines.index("CONNECTIONS ,`hdb")
+    starts = [i for i, x in enumerate(lines) if x.startswith("SERVERS STARTUP ")]
+    assert starts and min(starts) > loaded, lines
+
+
 def test_old_partitions_are_compressed_through_cmp_and_the_hdb_reloaded(stack):
     run, _paths_, _tpold, _tprecent = stack
     lines = run()

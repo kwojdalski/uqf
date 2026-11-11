@@ -33,8 +33,9 @@ COMPRESSION_CONFIG = Path("torqconfig") / "compressionconfig.csv"
 #: copy of the policy. AFTER it: the coverage ledger's reader, as gateway1 loads
 #: it, and log.q, which the HDB reload logs through; io_hdb.q, for the HDB write
 #: lock the scheduled run holds (.qetl.io.locked, #2176); torq_pipeline.q, for
-#: .qtorq.reload_hdb; the wrapper over .cmp; the survey that scopes a run; and the
-#: HDB connections the reload needs (uqs_compression_process.q).
+#: .qtorq.reload_hdb; the wrapper over .cmp; and the survey that scopes a run. The
+#: HDB connection the reload needs is housekeeping.LOAD_BEFORE's
+#: (uqs_housekeeping_config.q's .qtorq.hk.connect), made when it reloads.
 CMP_PROCESS_LOAD = (
     ("${UQF_SCRIPTS}/processes/uqs_compression_config.q",),
     (
@@ -47,7 +48,6 @@ CMP_PROCESS_LOAD = (
         "${UQF_SCRIPTS}/processes/torq_pipeline.q",
         "${UQF_SCRIPTS}/processes/torq_compress.q",
         "${UQF_SCRIPTS}/processes/torq_compress_survey.q",
-        "${UQF_SCRIPTS}/processes/uqs_compression_process.q",
     ),
 )
 

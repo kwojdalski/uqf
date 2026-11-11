@@ -68,7 +68,6 @@ def worker_transform(
 / .qetl.transform.registry[`{name}]`inputs.
 """
         return "", after, name
-    check_mode(mode)
     if mode == "passthrough":
         # The source's own worker (NAME_backfill on source NAME) names it after
         # the source; any other worker - a second slice or target over a
@@ -262,7 +261,7 @@ def streaming_test(name: str, namespace: str, mode: str, sub: str, pub: str) -> 
 {ns}.test_derived_rows_reach_{pub}:{{[t]
     {ns}.wired[];
     .qpipe.job.{name}.on_batch[`{sub};{ns}.batch[]];
-    want:(first .qetl.transform.def[`{xf}]`examples)`expected;
+    want:(first .qetl.transform.def["scaffold";`{xf}]`examples)`expected;
     .qunit.assertEquals[{ns}.recorded[;0];enlist `{pub};"one batch, published to {pub}"];
     .qunit.assertEquals[first {ns}.recorded[;1];want;"the example's expected rows"]}};
 """

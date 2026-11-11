@@ -83,14 +83,12 @@ def _call(work: Callable[[Any], dict[str, Any]], name: str) -> dict[str, Any]:
         declared = targets.read(root) if targets.declaration_path(root).is_file() else {}
     except DeployError as exc:
         _die(UqsError(str(exc)))
-        raise AssertionError from None  # _die exits
     if name not in declared:
         _die(target_keys.unknown_target(name, declared, targets.declaration_path(root)))
     try:
         return work(control.remote_from(name, declared[name]))
     except (FrontendError, UqsError) as exc:
         _die(UqsError(str(exc)))
-        raise AssertionError from None
 
 
 def _short(sha: str | None) -> str:
@@ -138,7 +136,6 @@ def history(
         rows = _sorted_items(rows, sort, reverse)
     except UqsError as exc:
         _die(exc)
-        return
     _export(rows, export)
     if as_json:
         emit({k: answer[k] for k in ("dest", "pushes", "total", "truncated", "pruned")}
@@ -256,7 +253,6 @@ def restore(
         max_kept, retention_days = config.history_bound()
     except ValueError as exc:
         _die(UqsError(str(exc)))
-        return
     user = getpass.getuser()
 
     def ask(dry: bool) -> Callable[[Any], dict[str, Any]]:
@@ -288,7 +284,6 @@ def restore(
         )
     except UqsError as exc:
         _die(exc)
-        return
     answer = _call(ask(False), name)
     for result in answer["results"]:
         said = "ok" if result["outcome"] == "succeeded" else f"FAILED: {result['error']}"

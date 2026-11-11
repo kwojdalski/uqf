@@ -78,7 +78,6 @@ def install(
         version = odbc_home.install(home, package, managed, dry_run)
     except UqsError as exc:
         _die(exc)
-        return
     if dry_run:
         console.print(f"would install {version.name} into {home} and make it current")
         console.print(dry_run_note())
@@ -99,7 +98,6 @@ def rollback(
         version = odbc_home.rollback(home, dry_run)
     except UqsError as exc:
         _die(exc)
-        return
     if dry_run:
         console.print(f"would make {version.name} current again")
         console.print(dry_run_note())
@@ -117,7 +115,6 @@ def status(home: Home, as_json: StatusJson = False) -> None:
         found = odbc_home.status(home)
     except OSError as exc:
         _die(UqsError(f"cannot read {home}: {exc}"))
-        return
     if as_json:
         emit(found)
         return
@@ -141,5 +138,4 @@ def env(home: Home) -> None:
     version = odbc_home.current(home)
     if version is None:
         _die(UqsError(f"{home} has no current version - `uqs setup odbc install` first"))
-        return
     print((version / odbc_home.ENV_FILE).read_text(), end="")

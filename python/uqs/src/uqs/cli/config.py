@@ -73,13 +73,11 @@ def config_get(
         row = stack_procs.get_process_config(_paths(), procname, base_port=port, resolve=not raw)
     except UqsError as exc:
         _die(exc)
-        return
     if field is not None:
         try:
             value = site_fields.field_value(row, field)
         except UqsError as exc:
             _die(exc)
-            return
     if as_json and field is not None:
         emit({"process": procname, "field": field, "value": value})
         return
@@ -128,7 +126,6 @@ def config_set(
                 stack_procs.set_process_config(_paths(), procname, field, value, False)
     except UqsError as exc:
         _die(exc)
-        return
     for field, value in settings:
         verb = "would set" if dry_run else "set"
         console.print(f"{verb} {procname}.{field} = {value}", markup=False)
@@ -176,7 +173,6 @@ def config_unset(
         process_unset.unset_process_config(_paths(), procname, fields, dry_run)
     except UqsError as exc:
         _die(exc)
-        return
     verb = "would unset" if dry_run else "unset"
     console.print(f"{verb} {procname}.{', '.join(fields)}", markup=False)
     if dry_run:

@@ -68,7 +68,6 @@ def _resolve_profiles(
         members, what = start_policy.resolve_profiles(_paths(), names, extra or [], overrides)
     except UqsError as exc:
         _die(exc)
-        raise  # unreachable: _die exits. Keeps the type checker honest.
     console.print(
         f"[dim]{what}: {len(members)} process(es), "
         f"{profiles.plant_slots(members)}/{profiles.allowance() or 'no cap'} plant slots[/]"
@@ -191,7 +190,6 @@ def _launch(
         wanted = start_follow.procnames_started_by(names, port)
     except UqsError as exc:
         _die(exc)
-        return
     try:
         already: set[str] | None = _running(port)
     except (UqsError, OSError) as exc:  # not knowing only widens the stop
@@ -218,7 +216,6 @@ def _launch_and_confirm(
         result = launch(_paths(), names, capture=False, **kwargs)
     except UqsError as exc:
         _die(exc)
-        return
     if result.returncode:
         raise typer.Exit(code=result.returncode)
     failed = start_check.confirm(
@@ -309,7 +306,6 @@ def _names_to_stop(procs: list[str] | None, profile: str | None) -> str:
         members, _ = start_policy.profile_members(_paths(), profile, procs or [])
     except UqsError as exc:
         _die(exc)
-        raise  # unreachable: _die exits
     return " ".join(members)
 
 
@@ -341,7 +337,6 @@ def stop(
             wanted = start_follow.procnames_started_by(names, port)
         except UqsError as exc:
             _die(exc)
-            return
         console.print(f"would {'kill' if force else 'stop'}: {' '.join(wanted)}", markup=False)
         console.print(dry_run_note())
         return
@@ -363,7 +358,6 @@ def _print_startlines(
         )
     except UqsError as exc:
         _die(exc)
-        return
     if stopping:
         console.print(f"would stop: {' '.join(stopping)}", markup=False)
     console.print(result.stdout.rstrip("\n"), markup=False, highlight=False)
@@ -382,7 +376,6 @@ def _exec(ctx: typer.Context, port: BasePortOpt = None) -> None:
         result = runtime.run_torq_sh(_paths(), ctx.args, base_port=port, capture=False)
     except UqsError as exc:
         _die(exc)
-        return
     raise typer.Exit(code=result.returncode)
 
 

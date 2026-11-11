@@ -75,7 +75,6 @@ def remove_job(
         removal = plan_removal(repo_root, name, force=force)
     except UqsError as exc:
         _die(exc)
-        return
     console.print(removal.render())
     if dry_run:
         if strict and removal.references:
@@ -89,12 +88,10 @@ def remove_job(
                 f"{removal.name} - edit them, then run it again"
             )
         )
-        return
     try:
         safety.confirm("Remove these?", yes=yes)
     except UqsError as exc:
         _die(exc)
-        return
     removal.apply(repo_root)
     console.print(f"\n[green]removed {removal.name}[/]")
     report_regeneration(repo_root)

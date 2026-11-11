@@ -191,12 +191,10 @@ def graph(
         info = {r["procname"]: r for r in listing.list_items(paths, "processes", base_port=port)}
     except UqsError as exc:
         _die(exc)
-        return
     edges = process_graph.edges()
     known = set(info) | {e.producer for e in edges} | {e.consumer for e in edges}
     if proc is not None and proc not in known:
         _die(stack_procs.unknown_processes(proc))
-        return
     status = {} if offline else live_status(port)
     direction: Direction = "upstream" if upstream else "downstream"
     if as_json:
@@ -209,7 +207,6 @@ def graph(
         return
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         _die(UqsError("--interactive needs a terminal; drop it to print the graph"))
-        return
     from uqs.cli.graph_browser import browser
 
     chosen = browser(list(info), edges, status, info, direction, proc).run()
