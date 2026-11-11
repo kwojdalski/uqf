@@ -250,8 +250,6 @@ _WEB_WORD = re.compile(r"[\"'/]web[\"'/]")
 _NOT_READERS = {
     "scripts/dev/ci_scope.py",
     "scripts/dev/tests/test_ci_scope.py",
-    # the one-shot split of api.ts (#2168), whose rules name the old paths
-    "scripts/dev/split_frontend.py",
 }
 
 

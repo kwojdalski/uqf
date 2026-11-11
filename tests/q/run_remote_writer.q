@@ -24,7 +24,6 @@
 statusdir:getenv `UQF_STATUS_DIR;
 if[0=count statusdir; '"run_remote_writer: set UQF_STATUS_DIR to a fresh directory"];
 system"mkdir -p ",statusdir;
-Q:.qt.support.q_interpreter[];
 
 failures:0;
 check:{[label;ok]
@@ -53,18 +52,13 @@ contract_path:statusdir,"/contract.json";
 flags:" -contract ",contract_path," -attachment uat -destid rwtest -hdb ",root,
     " -max_date ",string[.z.d-1]," -deadline ",string[.z.p+0D00:15]," -readers _none_ -user nobody",
     " -journal ",statusdir,"/journal -writers ",string .z.u;
-child:"QHOME=",getenv[`QHOME]," ",Q," scripts/dev/remote_receiver.q -p ",string[port],flags,
-      " < /dev/null > ",log_path," 2>&1 & echo $!";
-pid:"J"$first system child;
-stop:{[pid] @[{system"kill ",string x};pid;{[e] (::)}];}
+pid:.qt.support.spawn_q["scripts/dev/remote_receiver.q";port;flags;log_path];
 / whatever way this process ends - a failed check, an error, the end - the receiver ends with it
-.z.exit:{[code] stop pid}
-ready:0b; tries:0;
-while[(not ready) and tries<100;
-    h:@[{hopen (`$":localhost:",string x;200)};port;{0Ni}];
-    if[not null h; ready:1b];
-    if[not ready; [system"sleep 0.2"; tries+:1]]];
+.z.exit:{[code] .qt.support.stop_pid pid}
+ready:.qt.support.wait_listening[port;100];
 if[not check["the receiver is listening";ready]; [-1 each read0 hsym `$log_path; exit 1]];
+/ the writer's handle to the receiver, for the whole run
+h:hopen `$":localhost:",string port;
 
 / demo_deals rows on the receiver's disk, read from the files as any reader would
 rows_on_disk:{[]

@@ -5,15 +5,15 @@
 # ///
 """Load Databento MBP-10 parquet files into a DuckDB database.
 
-The source for testing the ETL framework against real market data: the
-masters_thesis project keeps one parquet file per symbol per trading day,
+The source for testing the ETL framework against real market data: a
+directory (``--source``) of one parquet file per symbol per trading day,
 ``<SYM>/<SYM>_<YYYY-MM-DD>_raw_mbp-10_us_hours.parquet``, straight from
 Databento's MBP-10 schema. This copies them into one table, ``mbp10``, so a
 pipeline can read windows of it the way it would read a real database.
 
 A PEP 723 script rather than a workspace dependency: DuckDB is needed only to
 build this test database, so it stays out of the shared lockfile. Run it with
-``uv run scripts/dev/dump_databento_duckdb.py``.
+``uv run scripts/dev/dump_databento_duckdb.py --source <dir>``.
 
 Timestamps are the one deliberate change. Databento stamps ``ts_event`` and
 ``ts_recv`` in nanoseconds, and DuckDB reads a timezone-aware parquet
@@ -56,9 +56,9 @@ def repo_root() -> Path:
     """The main checkout's root, even when run from a git worktree.
 
     ``--git-common-dir`` names the shared ``.git`` of the main checkout, so
-    the default paths below resolve the same from any worktree - a worktree's
+    the default ``--out`` resolves the same from any worktree - a worktree's
     own top level lives under ``.claude/worktrees/`` and would put the
-    database, and the sibling-project lookup, somewhere nobody looks.
+    database somewhere nobody looks.
     """
     common = subprocess.run(
         ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -76,7 +76,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--source",
         type=Path,
-        default=root.parent / "masters_thesis" / "data" / "raw" / "stocks" / "daily",
+        required=True,
         help="directory of <SYM>/<SYM>_<day>_raw_mbp-10_us_hours.parquet files",
     )
     parser.add_argument(

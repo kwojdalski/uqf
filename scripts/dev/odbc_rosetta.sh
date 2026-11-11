@@ -152,7 +152,7 @@ case "${1:-}" in
         shift
         db="$MAIN_ROOT/output/duckdb/databento.duckdb"
         if [ ! -f "$db" ]; then
-            echo "no $db - build it with: uv run scripts/dev/dump_databento_duckdb.py" >&2
+            echo "no $db - build it with: uv run scripts/dev/dump_databento_duckdb.py --source <parquet dir>" >&2
             exit 1
         fi
         export UQF_SOURCE_CRED_DATABENTO_MBP10="DRIVER=DuckDB;Database=$db;access_mode=READ_ONLY"
