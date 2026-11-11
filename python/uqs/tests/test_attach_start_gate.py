@@ -195,11 +195,36 @@ def test_an_unreadable_attachment_config_refuses_every_start(att, state, damage,
     elif damage == "truncated":
         path.write_text(path.read_text()[:40])
     else:
-        path.write_text(json.dumps({"stack": {"id": STACK}}))
+        path.write_text(
+            json.dumps({"schema": config.SCHEMA_VERSION, "stack": {"base_port": STACK}})
+        )
     for args in (["start", "rdb1"], ["start", "all"], ["restart", PUBLISHER]):
         with pytest.raises(UqsError, match="an attachment cannot be read") as caught:
             start_policy.refuse_start(default_paths(), args, STACK)
         assert "Nothing was started" in str(caught.value) and str(state) in str(caught.value)
+
+
+def test_an_attachment_config_of_an_older_schema_refuses_every_start(att, state):
+    """One written before #2723 (`stack.id`, `publisher.procname`, no `native`) is
+    not read: the refusal names the command that plans it again."""
+    with_state(att, "verified")
+    path = config.directory(att.name) / config.CONFIG_FILE
+    old = json.loads(path.read_text())
+    old["schema"] = 1
+    old["stack"]["id"] = old["stack"].pop("base_port")
+    old["publisher"]["procname"] = old["publisher"].pop("process")
+    path.write_text(json.dumps(old))
+    said = (
+        f"{path} cannot be read: it is attachment config schema 1, not 2, which another uqs "
+        "wrote. Plan the attachment again - move that file aside, then `uqs job attachment add "
+        "ex-uat --job JOB --base-port PORT`"
+    )
+    with pytest.raises(UqsError) as caught:
+        start_policy.refuse_start(default_paths(), ["start", "rdb1"], STACK)
+    assert said in str(caught.value) and "Nothing was started" in str(caught.value)
+    with pytest.raises(AttachmentError) as loading:
+        config.load(att.name)
+    assert str(loading.value) == said
 
 
 def test_a_folder_that_is_not_an_attachment_stops_nothing(att, state):

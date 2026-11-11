@@ -32,6 +32,9 @@ log = get_logger()
 
 ATTACH_DIR_ENV = "UQS_ATTACH_DIR"
 CONFIG_FILE = "attachment.json"
+#: attachment.json's schema. 2 since #2723: a file of any other schema - one
+#: written before #1451, #1845 or #2122 among them - is refused, never read.
+CONFIG_SCHEMA = 2
 MANIFEST_FILE = "manifest.json"
 NAME = re.compile(r"^[a-z][a-z0-9-]{0,47}$")
 #: The only manifest state in which the publisher may start.
@@ -104,11 +107,16 @@ def _scan(root: Path | None = None) -> tuple[list[Published], list[str]]:
             # read, not is_file first: is_file says False for a folder this
             # user may not enter, which would make that attachment invisible
             cfg = json.loads(cfg_path.read_text())
-            procname, stack_id = stored_publisher(cfg), stored_base_port(cfg)
+            refuse_old_config(cfg, cfg_path)
+            procname, stack_id = cfg["publisher"]["process"], int(cfg["stack"]["base_port"])
             if not isinstance(procname, str) or not procname:
-                raise ValueError(f"publisher.procname is {procname!r}")
+                raise ValueError(f"publisher.process is {procname!r}")
         except FileNotFoundError, NotADirectoryError:
             continue  # not an attachment: config.save writes attachment.json first
+        except UqsError as exc:
+            log.warning("attachment {}: {}", folder.name, exc)
+            broken.append(str(exc))
+            continue
         except (OSError, ValueError, KeyError, TypeError) as exc:
             log.warning("attachment {}: {} cannot be read: {}", folder.name, cfg_path, exc)
             broken.append(f"{cfg_path} cannot be read ({exc})")
@@ -125,18 +133,17 @@ def _scan(root: Path | None = None) -> tuple[list[Published], list[str]]:
 _LOOPBACK = ("localhost", "127.0.0.1", "::1")
 
 
-def stored_base_port(cfg: dict) -> int:
-    """An attachment.json's stack base port: `stack.base_port`, or `stack.id` in a
-    file written before #2122."""
-    stack = cfg["stack"]
-    return int(stack["base_port"] if "base_port" in stack else stack["id"])
-
-
-def stored_publisher(cfg: dict) -> str:
-    """An attachment.json's publisher process: `publisher.process`, or
-    `publisher.procname` in a file written before #2122."""
-    pub = cfg["publisher"]
-    return pub["process"] if "process" in pub else pub["procname"]
+def refuse_old_config(cfg: object, path: Path) -> None:
+    """Raise UqsError unless `cfg`, read from `path`, is an attachment.json of
+    CONFIG_SCHEMA. One of another schema is never read: it is planned again."""
+    schema = cfg.get("schema") if isinstance(cfg, dict) else None
+    if schema != CONFIG_SCHEMA:
+        raise UqsError(
+            f"{path} cannot be read: it is attachment config schema {schema!r}, not "
+            f"{CONFIG_SCHEMA}, which another uqs wrote. Plan the attachment again - move that "
+            f"file aside, then `uqs job attachment add {path.parent.name} --job JOB "
+            "--base-port PORT`"
+        )
 
 
 def _remote_discovery(cfg: dict) -> str:

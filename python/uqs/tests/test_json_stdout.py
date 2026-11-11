@@ -684,12 +684,11 @@ def test_a_reader_row_types_its_ok_and_says_its_outcome_apart():
     assert not _breaches({"ok": True, "result": {"readers": list(rows.values())}})
 
 
-def test_attachment_json_writes_the_documents_keys_and_reads_an_older_files(tmp_path):
+def test_attachment_json_writes_the_documents_keys_and_refuses_an_older_file(tmp_path):
     """attachment.json is persisted, and `job attachment show --json` prints it:
-    a new file says `stack.base_port` and `publisher.process`, and one written
-    before #2122 (`stack.id`, `publisher.procname`) still loads, the same."""
+    a file says `stack.base_port` and `publisher.process`. One of an older schema
+    - `stack.id`, `publisher.procname` before #2122 - is refused, never read (#2723)."""
     from uqs.attach import config
-    from uqs.stack import attach_state
 
     att = config.Attachment(
         name="a2122",
@@ -702,26 +701,39 @@ def test_attachment_json_writes_the_documents_keys_and_reads_an_older_files(tmp_
     assert new["stack"]["base_port"] == 6000 and "id" not in new["stack"]
     assert new["publisher"]["process"] == "markout1" and "procname" not in new["publisher"]
     assert not _breaches(new)
+    assert config.from_json(new) == att
     old = json.loads(json.dumps(new))
+    old["schema"] = 1
     old["stack"]["id"] = old["stack"].pop("base_port")
     old["publisher"]["procname"] = old["publisher"].pop("process")
-    assert config.from_json(old) == config.from_json(new) == att
-    for cfg in (old, new):
-        assert attach_state.stored_base_port(cfg) == 6000
-        assert attach_state.stored_publisher(cfg) == "markout1"
+    with pytest.raises(
+        config.AttachmentError,
+        match=r"config schema 1 is not 2 - written by another uqs; plan it again: move its "
+        r"attachment\.json aside, then `uqs job attachment add a2122 --job JOB --base-port PORT`",
+    ):
+        config.from_json(old)
 
 
-def test_an_override_record_written_before_2122_reads_as_one_written_now(tmp_path):
+def test_an_override_record_written_before_2122_is_not_read(tmp_path):
     """backfill_overrides.jsonl is persisted and `attachment show` prints it: an
-    entry that says `worker`, `range: {from, to}` and `stack_id` reads with the
-    keys every document uses."""
+    entry that says `worker`, `range: {from, to}` or `stack_id` is skipped with a
+    warning naming the line, and stays in the file as written (#2723)."""
     from uqs.attach import backfill_audit
 
     log = tmp_path / backfill_audit.OVERRIDES_LOG
     old = {"event": "override", "worker": "w", "destination": {"stack_id": 6000},
            "range": {"from": "a", "to": "b", "half_open": "[from, to)"}}  # fmt: skip
-    log.write_text(json.dumps(old) + "\n")
-    [entry] = backfill_audit.read(log)
-    assert entry == {"event": "override", "job": "w", "destination": {"base_port": 6000},
-                     "range_from": "a", "range_to": "b"}  # fmt: skip
-    assert not _breaches(entry)
+    now = {"event": "override", "job": "w", "destination": {"base_port": 6000},
+           "range_from": "a", "range_to": "b"}  # fmt: skip
+    log.write_text(json.dumps(old) + "\n" + json.dumps(now) + "\n")
+    lines: list[str] = []
+    sink = logger.add(lambda m: lines.append(str(m)), level="WARNING", format="{message}")
+    try:
+        assert backfill_audit.read(log) == [now]
+    finally:
+        logger.remove(sink)
+    assert [line.strip() for line in lines] == [
+        f"{log}:1 was written by a uqs before #2122 and is not read; the line stays in the "
+        "file, and `uqs job attachment show` lists the others"
+    ]
+    assert json.loads(log.read_text().splitlines()[0]) == old

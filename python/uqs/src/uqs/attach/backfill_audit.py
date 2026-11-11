@@ -140,34 +140,37 @@ def outcome(path: Path | None, run: str, **facts: Any) -> None:
 
 
 def read(path: Path) -> list[dict[str, Any]]:
-    """Every entry, oldest first; a line that is not one is skipped, never fatal."""
+    """Every entry, oldest first; a line that is not one is skipped, never fatal. So is a line
+    written before #2122 (`worker`, `range: {from, to}`, `destination.stack_id`): it is not
+    read, and stays in the file as it was written (#2723)."""
     if not path.is_file():
         return []
     out = []
-    for line in path.read_text().splitlines():
+    for n, line in enumerate(path.read_text().splitlines(), 1):
         try:
             entry = json.loads(line)
         except ValueError:
             continue
-        if isinstance(entry, dict):
-            out.append(_current(entry))
+        if not isinstance(entry, dict):
+            continue
+        if _written_before_2122(entry):
+            log.warning(
+                "{}:{} was written by a uqs before #2122 and is not read; the line stays in "
+                "the file, and `uqs job attachment show` lists the others",
+                path, n,
+            )  # fmt: skip
+            continue
+        out.append(entry)
     return out
 
 
-def _current(entry: dict[str, Any]) -> dict[str, Any]:
-    """`entry` as this uqs writes one: a line written before #2122 says `worker`, gives its
-    range as `range: {from, to, half_open}` and its destination's base port as `stack_id`."""
-    entry = dict(entry)
-    if "worker" in entry and "job" not in entry:
-        entry["job"] = entry.pop("worker")
-    rng = entry.pop("range", None)
-    if isinstance(rng, dict):
-        entry.setdefault("range_from", rng.get("from"))
-        entry.setdefault("range_to", rng.get("to"))
+def _written_before_2122(entry: dict[str, Any]) -> bool:
     dest = entry.get("destination")
-    if isinstance(dest, dict) and "stack_id" in dest and "base_port" not in dest:
-        entry["destination"] = {("base_port" if k == "stack_id" else k): v for k, v in dest.items()}
-    return entry
+    return (
+        "worker" in entry
+        or isinstance(entry.get("range"), dict)
+        or (isinstance(dest, dict) and "stack_id" in dest)
+    )
 
 
 def of_attachment(paths: UqsPaths, attachment: str) -> tuple[Path | None, list[dict[str, Any]]]:
