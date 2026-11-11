@@ -79,7 +79,7 @@ if[not `nested in key `.qetl.plant; '"plant_tables.q: load src/etl/plant_registr
 / which is all a feed with no exchange timestamp has. Every mapping stamps it,
 / because the mapping is the only place that knows; the normalizer's check
 / refuses anything else, null and `unknown included. `unknown is what the
-/ history fill (scripts/gates/hdb_clock_rules.csv) writes for a stored row it
+/ history fill (scripts/hdb/hdb_clock_rules.csv) writes for a stored row it
 / cannot attribute, so a measure that needs a clock refuses it rather than
 / guess. The column is LAST, so a partition filled afterwards has the same
 / column order as one written from this declaration, and a positional reader
@@ -229,7 +229,7 @@ if[not `nested in key `.qetl.plant; '"plant_tables.q: load src/etl/plant_registr
 / POLLED feed trails the trade by up to a poll interval. It is null where the
 / recorder predates the column or the venue gave no time - and in every HDB
 / partition written before it existed: the history fill adds the column as null
-/ (scripts/gates/fill_hdb_partitions.q), never as a copy of `time`, because a
+/ (scripts/hdb/hdb_fill.q), never as a copy of `time`, because a
 / receipt time written into a venue-time column is exactly the lie the clock
 / rule (#1923) refuses. The executions mapping reads a null source_time as
 / "no venue stamp" and falls back to `time` on the `receipt clock.

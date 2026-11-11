@@ -102,9 +102,9 @@ are listed, not accepted, in `lib/.vendored/<tree>.drift.tsv`.
   combine with this repository's MIT code; Apache 2.0 asks that its licence
   travel with redistributed copies, and release artifacts carry it explicitly
   (the one part of `lib/` they include). KX's partitioned-database maintenance
-  utility, loaded by `scripts/gates/fill_hdb_partitions.q` for
-  `uqs data check --apply`; provenance in `lib/kx-dbmaint/NOTICE.md`. Distinct
-  from the unmodified fixture copy inside `lib/torq`, which nothing here uses.
+  utility, loaded by `scripts/hdb/hdb_fill.q` for `uqs data check --apply`;
+  provenance in `lib/kx-dbmaint/NOTICE.md`. Distinct from the unmodified fixture
+  copy inside `lib/torq`, which nothing here uses.
 - `lib/torq-finance-starter-pack/`, vendored from
   [DataIntellectTech/TorQ-Finance-Starter-Pack](https://github.com/DataIntellectTech/TorQ-Finance-Starter-Pack)
   at commit `50fcd5a`, distributed under the MIT License (full text at

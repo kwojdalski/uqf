@@ -1,4 +1,4 @@
-"""One table's maintenance across an HDB: the front end of scripts/gates/hdb_alter.q (#1755).
+"""One table's maintenance across an HDB: the front end of scripts/hdb/hdb_alter.q (#1755).
 
 `uqs data alter` and `uqs data check --table` are thin: every decision
 about the database - which partitions hold the table, whether they agree, what
@@ -32,7 +32,7 @@ from uqs.stack.runtime import query
 
 #: The script, under scripts/, and the vendored KX dbmaint it loads from
 #: ../../lib/kx-dbmaint: the two files a host without uqf needs.
-SCRIPT = Path("gates") / "hdb_alter.q"
+SCRIPT = Path("hdb") / "hdb_alter.q"
 DBMAINT = Path("lib") / "kx-dbmaint" / "dbmaint.q"
 
 #: The operations that change a table; one per run.

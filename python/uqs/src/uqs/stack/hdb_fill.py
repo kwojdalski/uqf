@@ -1,5 +1,5 @@
 """The HDB partition filler's subprocess boundary: run
-scripts/gates/fill_hdb_partitions.q over the runtime's HDB, and never let it
+scripts/hdb/hdb_fill.q over the runtime's HDB, and never let it
 fail or stall a bootstrap. Split from stack/runtime.py, which every `uqs`
 command bootstraps through and which calls this on each one."""
 
@@ -22,7 +22,7 @@ log = get_logger()
 #: because both have to be written with their schema and enumerated against
 #: the HDB's sym file; a directory of the right name is not a table, a file
 #: of the right name is not a column. Loads KX's dbmaint.q (lib/kx-dbmaint).
-FILL_HDB_SCRIPT = "gates/fill_hdb_partitions.q"
+FILL_HDB_SCRIPT = "hdb/hdb_fill.q"
 
 #: How long the filler may run before bootstrap gives up on it, in seconds.
 #: Generous, because a real repair writes one column file per partition per

@@ -1,7 +1,7 @@
-/ seed_hdb_partitions.q - copy one runtime's HDB partitions into another's
+/ hdb_seed.q - copy one runtime's HDB partitions into another's
 / (#766): `uqs data seed`.
 / .
-/ Run as:  q scripts/gates/seed_hdb_partitions.q <source hdb root> <target hdb root>
+/ Run as:  q scripts/hdb/hdb_seed.q <source hdb root> <target hdb root>
 /            <target database.q> <tables, comma-separated, or "-" for all>
 /            <first date or "-"> <last date or "-"> <overwrite: 0 or 1>
 / .
@@ -37,7 +37,7 @@
 / table for is skipped, unless overwrite is 1.
 
 args:.z.x;
-if[7>count args; -2 "seed_hdb_partitions: needs 7 arguments - see the header"; exit 2];
+if[7>count args; -2 "hdb_seed: needs 7 arguments - see the header"; exit 2];
 src_root:hsym `$args 0;
 dst_root:hsym `$args 1;
 schema_file:hsym `$args 2;
@@ -48,7 +48,7 @@ first_date:$[none args 4; 0Nd; "D"$args 4];
 last_date:$[none args 5; 0Nd; "D"$args 5];
 overwrite:(args 6)~(),"1";
 
-fail:{[msg] -2 "seed_hdb_partitions: ",msg; exit 1};
+fail:{[msg] -2 "hdb_seed: ",msg; exit 1};
 
 if[()~key src_root; fail "no source HDB at ",string src_root];
 if[()~key dst_root; fail "no target HDB at ",string dst_root];

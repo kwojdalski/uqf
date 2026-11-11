@@ -1,10 +1,10 @@
 / hdb_sort_order.q - the HDB partitions that are not in their declared sort order (#2288).
 / .
-/ Run as:  q scripts/gates/hdb_sort_order.q <hdb root> <partitions file>
+/ Run as:  q scripts/hdb/hdb_sort_order.q <hdb root> <partitions file>
 / .
 / The root holds the sym file the enumerated columns are read against. The partitions file names the partitions to read, one directory per line - what
-/ scripts/gates/hdb_layout.q found, as stack/hdb_layout.py writes it. Reads, writes nothing:
-/ it is the DRY half of the sort migration `uqs data check --apply` runs (fill_hdb_partitions.q).
+/ scripts/hdb/hdb_layout.q found, as stack/hdb_layout.py writes it. Reads, writes nothing:
+/ it is the DRY half of the sort migration `uqs data check --apply` runs (hdb_fill.q).
 / .
 / A table that declares a sort rule (src/etl/plant_tables.q `sorting`) is stored sorted by its
 / columns with their attributes, and holds its row numbers if it declares a column for them. A
