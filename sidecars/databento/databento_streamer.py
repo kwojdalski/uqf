@@ -28,9 +28,9 @@ WHAT A REAL RECORD CARRIES, AND WHAT THE PLANT TABLE WANTS (#2190)
                 id has no mapping is refused with a reason, never published
                 with a null sym.
 
-And the row goes to `.u.upd` as a LIST of typed columns, not a dict: the
-segmented tickerplant prepends its `time` with `(enlist ...),x`, which a
-dictionary does not accept (kafka_streamer.publish_message, #1492).
+And the row goes to the plant (`ACCEPT_Q`, which wraps `.u.upd`) as a LIST of
+typed columns, not a dict: the segmented tickerplant prepends its `time` with
+`(enlist ...),x`, which a dictionary does not accept (kafka_streamer.publish_message, #1492).
 """
 
 from __future__ import annotations
@@ -44,6 +44,9 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 import polars as pl
+
+from uqs.external.kafka_streamer import ACCEPT_Q
+from uqs.paths import UqsError
 
 #: Databento always sends ten levels. A thin book (an opening auction, an
 #: illiquid name) fills the empty ones with `UNDEF_PRICE` and size 0, and
@@ -207,7 +210,11 @@ def publish(
     rec: Any,
     log: Callable[[str], None],
 ) -> bool:
-    """Send one record to the tickerplant; True when a row went out.
+    """Send one record to the tickerplant; True when the plant stored a row.
+
+    Sent through `ACCEPT_Q`, raising unless the plant STORED it: a bare
+    `.u.upd` answers success for a row the tickerplant sent to its error log
+    (#2698), so a refused row would be reported as published and lost.
 
     A refused record is logged with its reason and skipped: the feed stays up
     for the instruments it can name, and the log says which it cannot.
@@ -219,7 +226,9 @@ def publish(
         return False
     if row is None:
         return False
-    q.sync(".u.upd", table, columns([row], decoder.fields))
+    answer = q.sync(ACCEPT_Q, table, columns([row], decoder.fields))
+    if isinstance(answer, str):
+        raise UqsError(f"the tickerplant refused the {table} row - NOT stored: {answer}")
     return True
 
 
