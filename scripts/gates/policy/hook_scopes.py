@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Fail if a pre-commit scope is dead, or if tracked Python is ungated.
 
 Two distinct failures, and only the first is obvious:
@@ -31,7 +30,10 @@ finally being pointed at the code.
 
 Run standalone to audit, or as a pre-commit hook to enforce:
 
-    python3 scripts/gates/check_hook_scopes.py
+    python3 scripts/gates/check.py hook-scopes
+
+`--kdbx-only` prints, instead, the ids of the hooks tagged `# kdbx-only`,
+comma-joined, for ci.yml's no-q SKIP list.
 """
 
 from __future__ import annotations
@@ -41,10 +43,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-# parents[2], not parent.parent: this file sits one level deeper since
-# scripts/ was foldered (#241). Getting it wrong does not raise - it
-# resolves to scripts/ and the checker reports over an empty tree.
-CONFIG = Path(__file__).resolve().parents[2] / ".pre-commit-config.yaml"
+#: This checkout: scripts/gates/policy/<this file>. Its doc_examples.py is the
+#: one that reads the documents.
+REPO = Path(__file__).resolve().parents[3]
+
+#: The hook config, under the root checked.
+CONFIG = Path(".pre-commit-config.yaml")
 
 #: Hooks whose scope is deliberately allowed to match nothing, with a reason.
 #: Keep this empty unless there is a real one - the point of the check is to
@@ -72,7 +76,7 @@ TYPE_HOOKS = ("ty",)
 #: exactly the documents that carry a `q-example:` marker among the files
 #: scripts/dev/doc_examples.py reads - a narrower scope would leave a marked
 #: block unrun on a docs edit, a wider one asks a KDB-X attestation of a docs
-#: edit that cannot change what runs (scripts/dev/attest_kdbx.py).
+#: edit that cannot change what runs (scripts/dev/kdbx_attestation.py).
 DOC_HOOKS = ("q-docs", "q-docs-peachq")
 
 #: Path prefixes exempt from needing lint coverage, each with its reason.
@@ -83,13 +87,13 @@ LINT_EXEMPT: dict[str, str] = {
 }
 
 
-def tracked_files() -> list[str]:
+def tracked_files(root: Path) -> list[str]:
     out = subprocess.run(
         ["git", "ls-files"],
         capture_output=True,
         text=True,
         check=True,
-        cwd=CONFIG.parent,
+        cwd=root,
     )
     return out.stdout.splitlines()
 
@@ -97,7 +101,7 @@ def tracked_files() -> list[str]:
 def _doc_examples():
     import importlib.util
 
-    path = CONFIG.parent / "scripts" / "dev" / "doc_examples.py"
+    path = REPO / "scripts" / "dev" / "doc_examples.py"
     spec = importlib.util.spec_from_file_location("doc_examples", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -107,10 +111,10 @@ def _doc_examples():
     return module
 
 
-def doc_files_and_marked() -> tuple[set[str], set[str]]:
-    """(every document doc_examples.py reads, the ones with a q-example marker)."""
+def doc_files_and_marked(root: Path) -> tuple[set[str], set[str]]:
+    """(every document doc_examples.py reads under `root`, the ones with a
+    q-example marker)."""
     docex = _doc_examples()
-    root = CONFIG.parent
     docs = {f.relative_to(root).as_posix() for f in docex._doc_files(root)}
     return docs, set(docex.marked_docs(root))
 
@@ -121,7 +125,7 @@ def doc_scope_drift(
     """What is wrong with each DOC_HOOKS scope, one line per problem.
 
     A hook is judged only when the config has it; a q-docs hook dropped from
-    the config is check_kdbx_attestation.py's to refuse, not this.
+    the config is `kdbx_attestation.py check`'s to refuse, not this.
     """
     problems: list[str] = []
     for hook_id, pattern, exclude in hooks:
@@ -137,7 +141,7 @@ def doc_scope_drift(
 
 
 #: The comment that marks a KDB-X-only hook: on the line right under its
-#: `- id:`. The one place the set is written (#2170): attest_kdbx.HOOKS, CI's
+#: `- id:`. The one place the set is written (#2170): kdbx_attestation.HOOKS, CI's
 #: no-q SKIP list and their tests all read it from here.
 KDBX_ONLY_TAG = "# kdbx-only"
 
@@ -207,28 +211,32 @@ def scoped_hooks(config_text: str) -> list[tuple[str, str, str | None]]:
     return hooks
 
 
-def main() -> int:
-    if sys.argv[1:] == ["--kdbx-only"]:
-        # comma-joined, for ci.yml's SKIP: `SKIP=$SKIP,$(... --kdbx-only)`
-        print(",".join(kdbx_only_hooks(CONFIG.read_text())))
-        return 0
-    if not CONFIG.is_file():
-        print(f"no pre-commit config at {CONFIG}", file=sys.stderr)
+def run(root: Path, kdbx_only: bool = False) -> int:
+    """`root`'s hook scopes against its tracked files; the exit status. With
+    `kdbx_only`, print the `# kdbx-only` hook ids instead. The findings are a
+    per-hook table and per-gate counts, so the rule reports them itself."""
+    config = root / CONFIG
+    if not config.is_file():
+        print(f"no pre-commit config at {config}", file=sys.stderr)
         return 1
+    if kdbx_only:
+        # comma-joined, for ci.yml's SKIP: `SKIP=$SKIP,$(... --kdbx-only)`
+        print(",".join(kdbx_only_hooks(config.read_text())))
+        return 0
 
-    files = tracked_files()
-    hooks = scoped_hooks(CONFIG.read_text())
+    files = tracked_files(root)
+    hooks = scoped_hooks(config.read_text())
     if not hooks:
         # A regex that matches nothing would make this check pass vacuously -
         # the exact failure mode it exists to prevent.
         print(
-            "check_hook_scopes: parsed no scoped hooks, which cannot be right",
+            "hook-scopes: parsed no scoped hooks, which cannot be right",
             file=sys.stderr,
         )
         return 1
 
     dead: list[tuple[str, str]] = []
-    print(f"check_hook_scopes: {len(hooks)} path-scoped hook(s) in {CONFIG.name}")
+    print(f"hook-scopes: {len(hooks)} path-scoped hook(s) in {CONFIG}")
     for hook_id, pattern, exclude in hooks:
         try:
             matcher = re.compile(pattern)
@@ -290,7 +298,7 @@ def main() -> int:
             if not any(m.search(f) and not (x and x.search(f)) for m, x in scopes)
         ]
         print(
-            f"check_hook_scopes: {len(py_files) - len(missed)}/{len(py_files)} "
+            f"hook-scopes: {len(py_files) - len(missed)}/{len(py_files)} "
             f"tracked .py file(s) covered by the {gate_name} gate {gate_hooks}"
         )
         for f in missed:
@@ -309,7 +317,7 @@ def main() -> int:
 
     drift: list[str] = []
     if any(hook_id in DOC_HOOKS for hook_id, _, _ in hooks):
-        drift = doc_scope_drift(hooks, *doc_files_and_marked())
+        drift = doc_scope_drift(hooks, *doc_files_and_marked(root))
         for problem in drift:
             print(f"  DOC SCOPE  {problem}", file=sys.stderr)
 
@@ -352,7 +360,3 @@ def main() -> int:
         return 1
 
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

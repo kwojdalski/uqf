@@ -5,8 +5,8 @@
 #
 # A hook that needs a q, which hosted CI has none of, carries `# kdbx-only` on
 # the line under its `- id:` (#2170). That tag is the one place the set is
-# written: attest_kdbx.HOOKS and ci.yml's no-q SKIP list read it
-# (scripts/gates/check_hook_scopes.py --kdbx-only).
+# written: kdbx_attestation.HOOKS and ci.yml's no-q SKIP list read it
+# (scripts/gates/check.py hook-scopes --kdbx-only).
 repos:
   # Basic file hygiene
   #
@@ -58,7 +58,7 @@ repos:
   #                 second formatter touches that file. One owner per file.
   #
   # Style lives in .panache.toml so a manual `panache format` matches the
-  # hook. scripts/gates/check_hook_scopes.py fails a scope that matches
+  # hook. `scripts/gates/check.py hook-scopes` fails a scope that matches
   # nothing, so both paths above have to stay real.
   - repo: https://github.com/jolars/panache-pre-commit
     rev: v3.12.0
@@ -78,7 +78,7 @@ repos:
       # uqs/ and uqf_frontend/, so 43 of 47 tracked .py files
       # were never linted, and nothing complained because the scope was
       # still valid, merely too narrow. Matching all Python and excluding
-      # lib/ cannot drift that way. scripts/gates/check_hook_scopes.py enforces it.
+      # lib/ cannot drift that way. `scripts/gates/check.py hook-scopes` enforces it.
       - id: ruff
         name: ruff (all python)
         args: ['--fix']
@@ -122,7 +122,7 @@ repos:
 
       - id: check-hook-scopes
         name: Check pre-commit hook scopes cover the code
-        entry: uv run python scripts/gates/check_hook_scopes.py
+        entry: uv run python scripts/gates/check.py hook-scopes
         language: system
         pass_filenames: false
         always_run: true
@@ -136,7 +136,7 @@ repos:
       # staged ones - a rule added today should flag a file touched last
       # month.
       # The TYPE gate. Scoped like the lint and test gates - all Python,
-      # vendored excluded - and enforced by check_hook_scopes.py so it
+      # vendored excluded - and enforced by `check.py hook-scopes` so it
       # cannot narrow silently the way the lint hook once did.
       #
       # pass_filenames is false because ty type-checks a PROJECT, not a file
@@ -154,7 +154,7 @@ repos:
 
       - id: q-traps
         name: Check q files for silent-failure traps
-        entry: uv run python scripts/gates/check_q_traps.py
+        entry: uv run python scripts/gates/check.py q-traps
         language: system
         pass_filenames: false
         always_run: true
@@ -171,7 +171,7 @@ repos:
 
       # A tool version written in several files - uv, pre-commit, Quarto,
       # Python, ruff, Node - is held equal across them (#1838): a bump that
-      # missed one copy left CI, install.sh and attest_kdbx.py running
+      # missed one copy left CI, install.sh and kdbx_attestation.py running
       # different tools. always_run because the copies are listed once, in
       # scripts/gates/policy/tool_pins.py; a `files:` scope here would be a
       # second list of them, free to drift from the first.
@@ -214,10 +214,10 @@ repos:
 
       - id: module-deps
         name: Check the q library's module graph is acyclic and reviewed
-        entry: uv run python scripts/gates/check_module_deps.py
+        entry: uv run python scripts/gates/check.py module-deps
         language: system
         pass_filenames: false
-        files: '\.q$|^scripts/gates/check_module_deps\.py$'
+        files: '\.q$|^scripts/gates/(check|qlint_graph|policy/module_deps)\.py$'
 
       - id: q-module-size
         name: Check q modules stay under their line budget
@@ -265,7 +265,7 @@ repos:
 
       - id: doc-references
         name: Check the docs cite functions that exist
-        entry: uv run python scripts/gates/check_doc_references.py
+        entry: uv run python scripts/gates/check.py doc-references
         language: system
         pass_filenames: false
         always_run: true
@@ -315,7 +315,7 @@ repos:
 
       # At `git push`, not at commit (#1965), with q-coverage and
       # python-tests: the three that run test suites made a commit take 10-30
-      # minutes under load. attest_kdbx.py runs them by id, at their stage.
+      # minutes under load. kdbx_attestation.py attest runs them by id, at their stage.
       - id: q-tests
         # kdbx-only
         name: Run qUnit tests for uqf
@@ -340,12 +340,12 @@ repos:
             # KDB-X attestation check reads the PR, not just this commit. It
             # prints ALL - and the whole suite runs - when it says so, when it
             # cannot run (no graph-capable qlinter; see .qlinter-version),
-            # or when UQF_Q_TESTS_FULL=1 or UQF_HOOKS_FULL=1. attest_kdbx.py hands its own
+            # or when UQF_Q_TESTS_FULL=1 or UQF_HOOKS_FULL=1. kdbx_attestation.py attest hands its own
             # decision over in UQF_Q_TESTS_SELECTION, so the run is the one
             # its trailer records. The selection reaches tests/run_tests.q as
             # --q-files. The full suite still runs on master.
             #
-            # In an attestation the suite runs ONCE (#1704): attest_kdbx.py
+            # In an attestation the suite runs ONCE (#1704): kdbx_attestation.py attest
             # runs q-coverage first, which executes every test, reads the
             # outcomes it records, and fails q-tests itself on any test that
             # did not pass. It then sets UQF_Q_UNIT_FROM_COVERAGE=1 and only
@@ -361,7 +361,7 @@ repos:
             # unreshaped.
             suite=()
             if [ "${UQF_Q_UNIT_FROM_COVERAGE:-}" = 1 ]; then
-              echo "== q-unit: verdict taken from the q-coverage run (attest_kdbx.py) =="
+              echo "== q-unit: verdict taken from the q-coverage run (kdbx_attestation.py attest) =="
             else
               selection=$(uv run python scripts/dev/test_impact.py --hook)
               case "$selection" in
@@ -379,10 +379,10 @@ repos:
       # same lane on PeachQ (q-docs-peachq below), so here is where KDB-X
       # checks them. Its own hook, not a line of q-tests, so a docs edit asks
       # only for this lane - and only a doc that HAS a marked block: the scope
-      # names those documents, and scripts/gates/check_hook_scopes.py fails
+      # names those documents, and `scripts/gates/check.py hook-scopes` fails
       # when it names one more or one fewer than scripts/dev/doc_examples.py
       # finds. Every other .md cannot change what q-docs runs, so it needs no
-      # KDB-X attestation (scripts/dev/attest_kdbx.py).
+      # KDB-X attestation (scripts/dev/kdbx_attestation.py).
       - id: q-docs
         # kdbx-only
         name: Run the q blocks in docs/ on KDB-X
@@ -413,7 +413,7 @@ repos:
         name: Check every link and anchor in docs/ resolves (UQF_HOOKS_FULL=1; CI runs it)
         # Asks Quarto to resolve each link the way a reader's browser will,
         # then checks the #fragment Quarto ignores. Nothing else covered
-        # either: check_doc_references.py holds the prose to the q FUNCTIONS
+        # either: `check.py doc-references` holds the prose to the q FUNCTIONS
         # it names, and a path that appears in no generated artifact had
         # nothing to disagree with.
         #
@@ -543,7 +543,7 @@ repos:
             set -euo pipefail
             # Runs the suite again at commit, under .cov's in-memory
             # instrumentation (in an attestation, the only time:
-            # attest_kdbx.py takes q-tests' q-unit verdict from this run's
+            # kdbx_attestation.py attest takes q-tests' q-unit verdict from this run's
             # outcomes, #1704), and fails when the set of functions nothing
             # enters differs from tests/q/coverage_baseline.txt - in either
             # direction. A new blind spot is a failure; so is a baseline
@@ -554,7 +554,7 @@ repos:
             # suite that enters each judged function per
             # tests/q/coverage_map.txt, judging the functions of the
             # production files the change reaches, as
-            # scripts/dev/test_impact.py --coverage-hook says (attest_kdbx.py
+            # scripts/dev/test_impact.py --coverage-hook says (kdbx_attestation.py attest
             # hands its own decision over in UQF_Q_COVERAGE_SELECTION). ALL
             # is the whole suite judging every function, as before. A subset
             # that finds a function never entered hands its verdict to a

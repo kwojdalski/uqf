@@ -7,7 +7,7 @@ description: >-
   problems, which are false positives, and which are style the tree has chosen
   not to follow. Applies the setup as it is: `.qlinter-version` (the pinned
   release), `.qlinter.toml` (ignored rules and per-file ignores, with their
-  reasons), and `scripts/gates/check_q_traps.py` (which codes the pre-commit
+  reasons), and `scripts/gates/policy/q_traps.py` (which codes the pre-commit
   hook gates on, and its test-only exemptions). So the report also says whether
   a finding would fail a commit. A finding is never accepted because the linter
   said so: each verdict cites the code at file:line, and where it turns on q's
@@ -45,7 +45,7 @@ this file would be wrong.
   one has a comment with its reason. `[per-file-ignores]` turns rules off for
   named files, and `exclude` skips whole directories. A bare `qlinter <path>`
   run from the repository root already applies all of this.
-- **`scripts/gates/check_q_traps.py`.** This is the pre-commit `q-traps` hook.
+- **`scripts/gates/policy/q_traps.py`.** This is the pre-commit `q-traps` hook.
   It runs
   `qlinter <every tracked .q file outside lib/> --format json --profile uqf`. It
   fails a commit only on codes that start with `CORRECTNESS_PREFIXES` or appear

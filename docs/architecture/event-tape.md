@@ -57,7 +57,7 @@ existing markout family keeps working on it. Two divergences, both deliberate:
   shorthand `{A,C,T}`. A single character is an **atom** in q, so a `"A"` column
   is a char vector whose elements do not compare against a one-element string ---
   a trap this repository has hit repeatedly (see `docs/…` and
-  `scripts/gates/check_q_traps.py`). Symbols cost nothing, grep cleanly, and
+  `scripts/gates/policy/q_traps.py`). Symbols cost nothing, grep cleanly, and
   cannot silently fail to match.
 
 ### Columns, and two easy to mistake

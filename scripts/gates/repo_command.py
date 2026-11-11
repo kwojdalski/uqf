@@ -1,8 +1,8 @@
-"""The plumbing a repository command shares with the next one (#1806, #1804).
+"""The plumbing of scripts/gates/check.py, kept apart from its checks (#1806, #1804).
 
 Not a command itself: a module that `scripts/gates/check.py` loads by path
-(scripts/ is not a package), and that `scripts/generate/derive.py` can load
-the same way. It holds only what both genuinely do alike:
+(scripts/ is not a package), and its only user. It holds what is not about
+any one check:
 
   - the exit statuses: 0 when the target passed, 1 when it found a problem or
     could not run, 2 for a usage error (argparse's own);

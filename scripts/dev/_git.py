@@ -1,6 +1,6 @@
 """The git calls scripts/dev's commands share: one runner, one changed-paths read.
 
-ci_scope.py, peachq_push.py, python_tests_hook.py, attest_kdbx.py and
+ci_scope.py, peachq_push.py, python_tests_hook.py, kdbx_attestation.py and
 master_coverage.py each ran `git` through subprocess themselves, and three of
 them parsed `git diff`'s list of changed paths, each its own way. They load
 this file by path, as scripts/dev's modules load each other (scripts/ is not

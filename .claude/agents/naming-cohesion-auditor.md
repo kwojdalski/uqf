@@ -92,7 +92,7 @@ Check:
   in `.qf.mkt`, is the `px`/`mkt` boundary crossed). Also look hard at any pair
   where one namespace is a **prefix of another** --- that is a real hazard when
   reading a call site, not a style nit. Report prefix-collisions as HIGH. A name
-  defined in two files of one domain is a finding too (`check_module_deps.py`
+  defined in two files of one domain is a finding too (`check.py module-deps`
   fails it).
 - **Test pairing.** Every `src/<area>/<module>.q` should have
   `tests/q/test_<module>.q`, which is how qUnit discovers it. Note that `src/`

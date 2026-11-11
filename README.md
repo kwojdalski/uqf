@@ -248,7 +248,8 @@ q.
   points at master's `ci.yml` from before the change.
 
 - **KDB-X attestation.** The KDB-X gates run locally
-  (`uv run python scripts/dev/attest_kdbx.py`), and CI checks the trailer.
+  (`uv run python scripts/dev/kdbx_attestation.py attest`), and CI checks the
+  trailer.
 
 **Full mode is one switch away on both sides.**
 

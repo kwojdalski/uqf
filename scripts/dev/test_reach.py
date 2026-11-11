@@ -433,7 +433,7 @@ def scratch_dir(path: Path) -> Path:
     """Where a whole new copy of `path` is written before it replaces it: the
     git directory of the work tree `path` sits at the root of, so a write cut
     short leaves nothing in the work tree for `git status` to show (#2273) -
-    an untracked file there made attest_kdbx.py refuse the tree. Beside `path`
+    an untracked file there made kdbx_attestation.py refuse the tree. Beside `path`
     when it is not at a work tree's root, or the git directory is on another
     file system (os.replace cannot cross one)."""
     parent = path.parent

@@ -143,7 +143,7 @@ def overview(port: int, host: str = "localhost", **creds: Any) -> list[dict[str,
     healthy one in every other view.
     """
     # `ncols`, not `cols`: `cols` is a q BUILTIN, and using it as a column
-    # name in a table literal throws 'assign. The repository's check_q_traps
+    # name in a table literal throws 'assign. The repository's q-traps check
     # has a rule for exactly this, but it globs `git ls-files '*.q'` - q
     # embedded in a Python string is invisible to it, which is how this one
     # got as far as a live process before failing.

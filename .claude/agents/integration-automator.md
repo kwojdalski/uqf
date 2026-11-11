@@ -141,7 +141,8 @@ Argue against your own change when it would make things worse:
   `SKIP=q-tests,rendered-diagrams,no-commit-to-branch,q-coverage QLINTER=$HOME/.cargo/bin/qlinter uv tool run --from pre-commit==4.6.2 pre-commit run --all-files`.
   Never `--no-verify`. Run a generator's `--check` after regenerating. Run
   `qlinter` on any q you touch before running the tests. If the change touches
-  q, run `uv run python scripts/dev/attest_kdbx.py` after the last rebase.
+  q, run `uv run python scripts/dev/kdbx_attestation.py attest` after the last
+  rebase.
 - **Documentation follows.** A doc table that restated the fact is either
   generated now or points at the authority; say which in the commit.
 

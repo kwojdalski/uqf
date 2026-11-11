@@ -111,7 +111,7 @@ library, deliberately left in its original camelCase, don't touch it.
   workers under `.qpipe.job`, sources under `.qpipe.source`; those are the
   exceptions, and they are not yours.)
 - A name is defined by ONE file of a domain. Files share the namespace, so two
-  `name:` lines are a silent load-order winner; `check_module_deps.py` fails the
+  `name:` lines are a silent load-order winner; `check.py module-deps` fails the
   second. Call another file's function fully qualified (`.qf.px.pip_factor`),
   never bare, and give a private helper a descriptive, domain-unique name.
 - Don't silently swallow structural errors in a protected-eval wrapper meant
@@ -120,7 +120,7 @@ library, deliberately left in its original camelCase, don't touch it.
 - Don't hardcode `pip_factor` or a fixed output column name inside a function
   body --- `pip_factor` is always caller-supplied, and the output timestamp
   column is `time`, leading (a markout's columns are `.qf.exec.markout_cols`).
-- Respect the module graph: `scripts/gates/check_module_deps.py` lists the
+- Respect the module graph: `scripts/gates/policy/module_deps.py` lists the
   allowed edges between namespaces (#626). A new cross-module call is a new
   edge, added to that list in the same change.
 - If adding a module, wire it into `src/init.q` in correct dependency order and

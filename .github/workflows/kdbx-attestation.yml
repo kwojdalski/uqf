@@ -1,8 +1,8 @@
 name: KDB-X attestation
 
 # Blocking (#1014, #1543): hosted CI has no KDB-X, so whether the KDB-X
-# hooks (HOOKS in scripts/dev/attest_kdbx.py) passed on a PR's tree is known
-# only where they ran. attest_kdbx.py runs the ones whose scope the branch
+# hooks (HOOKS in scripts/dev/kdbx_attestation.py) passed on a PR's tree is known
+# only where they ran. Its `attest` runs the ones whose scope the branch
 # touches and records them as a `KDB-X-gates: <tree> hooks=<ids>` trailer;
 # this fails a PR unless the head's exact tree carries trailers covering
 # every hook whose scope the PR's diff (from the merge base) touches. A head
@@ -65,4 +65,4 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
           KDBX_ATTESTATION_OVERRIDE: ${{ contains(github.event.pull_request.labels.*.name, 'kdbx-attestation-override') }}
-        run: uv run --no-project --python 3.14 python scripts/gates/check_kdbx_attestation.py "$BASE" "$HEAD" "$GITHUB_STEP_SUMMARY"
+        run: uv run --no-project --python 3.14 python scripts/dev/kdbx_attestation.py check "$BASE" "$HEAD" "$GITHUB_STEP_SUMMARY"

@@ -58,7 +58,7 @@ ALL = (True, True, True, True)
             [("M", "python/uqf_frontend/src/uqf_frontend/models/query.py")],
             (False, False, False, True),
         ),
-        ([("M", "scripts/gates/check_hook_scopes.py")], (False, False, False, True)),
+        ([("M", "scripts/gates/policy/hook_scopes.py")], (False, False, False, True)),
         # -- q: the q suite, and the Python tests that start a q ----------
         ([("M", "src/pricing/forwards.q")], (True, True, False, True)),
         ([("M", "tests/q/test_forwards.q")], (False, True, False, True)),

@@ -105,7 +105,7 @@ Never propose any of these, and say why if asked:
   `min`, `var`, `get`, `set`, `save`, `load`, `desc`, `sv`, `prior`, `deltas`
   and ~170 more. Shadowing one as a name throws at LOAD time or on APPLICATION ---
   this repository has lost eight names to that trap.
-  `scripts/gates/check_q_traps.py` carries the list it knows about.
+  `scripts/gates/policy/q_traps.py` carries the list it knows about.
 - **A word that names a type.** `to_timestamp`, `to_float`, `to_symbol`.
 - **A namespace or filename.** The convention ties `src/<area>/<module>.q` to
   its test file and a `.qf.<domain>` domain, so renaming a domain means every

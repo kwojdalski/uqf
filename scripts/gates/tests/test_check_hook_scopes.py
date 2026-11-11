@@ -1,4 +1,4 @@
-"""Tests for `scripts/gates/check_hook_scopes.py`'s coverage half.
+"""Tests for `check.py hook-scopes` (scripts/gates/policy/hook_scopes.py), its coverage half.
 
 The gate exists to fail on a hook that is valid but too narrow. It read only
 each gate hook's `files:`, so an `exclude:` that took nearly all Python out
@@ -17,13 +17,13 @@ from pathlib import Path
 import pytest
 import yaml
 
+REPO = Path(__file__).resolve().parents[3]
 _SPEC = importlib.util.spec_from_file_location(
-    "check_hook_scopes",
-    Path(__file__).resolve().parents[3] / "scripts" / "gates" / "check_hook_scopes.py",
+    "hook_scopes", REPO / "scripts" / "gates" / "policy" / "hook_scopes.py"
 )
 assert _SPEC and _SPEC.loader
 chs = importlib.util.module_from_spec(_SPEC)
-sys.modules["check_hook_scopes"] = chs
+sys.modules["hook_scopes"] = chs
 _SPEC.loader.exec_module(chs)
 
 FILES = [
@@ -45,11 +45,9 @@ def _config(exclude: str) -> str:
 @pytest.fixture
 def run(tmp_path, monkeypatch, capsys):
     def go(config_text: str) -> tuple[int, str]:
-        config = tmp_path / ".pre-commit-config.yaml"
-        config.write_text(config_text)
-        monkeypatch.setattr(chs, "CONFIG", config)
-        monkeypatch.setattr(chs, "tracked_files", lambda: FILES)
-        code = chs.main()
+        (tmp_path / chs.CONFIG).write_text(config_text)
+        monkeypatch.setattr(chs, "tracked_files", lambda root: FILES)
+        code = chs.run(tmp_path)
         out = capsys.readouterr()
         return code, out.out + out.err
 
@@ -101,7 +99,7 @@ def test_a_top_level_files_narrows_every_hook():
 
 def test_the_real_config_gates_all_tracked_python():
     """The repository's own config passes, so the hook is committable."""
-    assert chs.main() == 0
+    assert chs.run(REPO) == 0
 
 
 # --- the q-docs scopes name exactly the documents with q-example blocks ----
@@ -134,9 +132,9 @@ def test_a_doc_scope_taking_an_unmarked_document_is_reported():
 
 
 def test_the_real_doc_scopes_match_the_marked_documents():
-    hooks = chs.scoped_hooks(chs.CONFIG.read_text())
+    hooks = chs.scoped_hooks((REPO / chs.CONFIG).read_text())
     assert {h for h, _, _ in hooks} >= set(chs.DOC_HOOKS)
-    assert chs.doc_scope_drift(hooks, *chs.doc_files_and_marked()) == []
+    assert chs.doc_scope_drift(hooks, *chs.doc_files_and_marked(REPO)) == []
 
 
 # --- every hook runs the project's interpreter, not PATH's (#2449) ----------
@@ -169,4 +167,17 @@ def test_a_hook_calling_python3_from_path_is_caught():
 def test_no_real_hook_runs_whichever_python_is_first_on_path():
     """test_impact.py and friends are 3.14 code (ruff's py314 target writes
     `except A, B:`); a python3 from PATH may be 3.12 and fail to parse them."""
-    assert _bare_python_hooks(chs.CONFIG.read_text()) == []
+    assert _bare_python_hooks((REPO / chs.CONFIG).read_text()) == []
+
+
+def test_kdbx_only_prints_the_tagged_hooks_and_checks_nothing(tmp_path, monkeypatch, capsys):
+    """ci.yml reads stdout as its SKIP list, so it is the ids alone."""
+    (tmp_path / chs.CONFIG).write_text(
+        "repos:\n  - repo: local\n    hooks:\n"
+        "      - id: a\n        # kdbx-only\n        files: 'nothing-matches'\n"
+        "      - id: b\n        files: '.'\n"
+        "      - id: c\n        # kdbx-only\n"
+    )
+    monkeypatch.setattr(chs, "tracked_files", lambda root: pytest.fail("read the tree"))
+    assert chs.run(tmp_path, kdbx_only=True) == 0
+    assert capsys.readouterr().out == "a,c\n"
