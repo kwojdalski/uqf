@@ -167,6 +167,24 @@
         "its holder is a predecessor whose pid was reused by this process, so the lock is broken and retaken"];
     .qetl.job.bounded.state.release_lock[`lock_reused]};
 
+/ #2692: the reused number can belong to any process, not only this one - a
+/ sibling worker, a shell. pid 1 is alive and began after 2000, so a lock it
+/ "holds" from 2000 is a dead holder's; one recorded now is pid 1's own.
+.qt.qetl.job.bounded.state.test_a_lock_naming_another_live_pid_that_began_after_it_is_broken:{[t]
+    path:.qt.qetl.job.bounded.state.plant_lock[`lock_newcomer;1;string .z.h];
+    .qunit.assertFalse[.qetl.job.bounded.state.lock_is_stale[path];
+        "recorded after pid 1 began: pid 1 is the holder, alive, so the lock is live"];
+    (hsym `$path,"/owner") 0: enlist .j.j `pid`started`host!(1;2000.01.01D00:00:00;string .z.h);
+    .qunit.assertTrue[.qetl.job.bounded.state.lock_is_stale[path];
+        "recorded before pid 1 began: the holder is gone and pid 1 only has its number"];
+    .qetl.job.bounded.state.release_lock[`lock_newcomer]};
+
+.qt.qetl.job.bounded.state.test_pid_started_reads_a_live_process_and_not_a_dead_one:{[t]
+    began:.qetl.job.bounded.state.pid_started[.z.i];
+    .qunit.assertTrue[(not null began) and began<=.z.p;"this process began, in UTC, no later than now"];
+    .qunit.assertTrue[null .qetl.job.bounded.state.pid_started[.qt.qetl.job.bounded.state.dead_pid];
+        "a pid with no process has no start, so nothing is judged from it"]};
+
 .qt.qetl.job.bounded.state.test_a_lock_from_another_host_is_never_broken:{[t]
     / A dead pid, but not ours to judge: pids are meaningless across hosts.
     .qt.qetl.job.bounded.state.plant_lock[`lock_otherhost;.qt.qetl.job.bounded.state.dead_pid;"some-other-host"];

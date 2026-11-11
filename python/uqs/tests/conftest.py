@@ -10,6 +10,8 @@ xdist worker, per run - so another session's run, or a stack, never trips it.
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 from attach_backfill_support import receivers_under, stop_process
 
@@ -29,6 +31,28 @@ def own_lifecycle_lock(tmp_path, monkeypatch):
 
     lock = tmp_path / generated.LOCK_NAME
     monkeypatch.setattr(generated, "lock_path", lambda paths: lock)
+
+
+@pytest.fixture(autouse=True)
+def loguru_sinks_end_with_the_test():
+    """After every test, loguru writes to stderr again and to nothing else (#2700).
+
+    A sink is bound to the stream it was given when it was added, and several
+    paths add one onto whatever sys.stdout or sys.stderr is at the time:
+    `uqs logs` and `start -f` (stack/logs.log_sink), `--debug`, setup_logging.
+    In a test that stream is capsys's or a CliRunner's, and it closes with the
+    test - so the sink outlived it, and the next test on that xdist worker to
+    log wrote "I/O operation on closed file" into its own output. Each file
+    that knew this kept its own reset; one that did not (test_core's
+    print_recent_logs) broke whichever test followed it. Autouse here, so it
+    is set up before - and torn down after - the fixtures a test asks for,
+    capsys among them.
+    """
+    from loguru import logger
+
+    yield
+    logger.remove()
+    logger.add(sys.stderr)
 
 
 @pytest.fixture(autouse=True)

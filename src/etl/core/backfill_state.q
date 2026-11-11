@@ -230,6 +230,38 @@
     started:@["P"$;o`started;{[e] 0Np}];
     $[null started; 0b; started<.qetl.job.bounded.state.loaded_at]}
 
+/ Private: when the process now numbered `pid` started, in UTC, or 0Np when
+/ that cannot be read - no `ps`, a `ps` without `lstart`, or no such process.
+/ `ps` rather than /proc so it reads the same on macOS. `lstart` is local
+/ time truncated to the second, so never later than the real start: compared
+/ with a lock's `started` it can only err towards "the same process". The
+/ q side of `uqs.liveness.process_started`.
+/ @private
+.qetl.job.bounded.state.pid_started:{[pid]
+    out:@[system;"LC_ALL=C ps -o lstart= -p ",string["j"$pid]," 2>/dev/null";{[e] ()}];
+    w:" " vs " " sv out;
+    w:w where 0<count each w;
+    if[5<>count w; :0Np];
+    m:1+("Jan";"Feb";"Mar";"Apr";"May";"Jun";"Jul";"Aug";"Sep";"Oct";"Nov";"Dec")?w 1;
+    if[12<m; :0Np];
+    local:"P"$w[4],".",(-2#"0",string m),".",(-2#"0",w 2),"D",w 3;
+    $[null local; 0Np; gtime local]}
+
+/ Private: does a lock owner name a live pid on this host that started AFTER
+/ the owner was recorded? That process is a newcomer given the dead holder's
+/ number - after a container restart, a sibling worker or anything else
+/ (#2692). `held_by_predecessor` is the same test where the newcomer is the
+/ process asking; this one reads the newcomer's start from `ps`, as
+/ `uqs.liveness.process_gone` does. Either time unreadable: not judged, so
+/ the holder stays live.
+/ @private
+.qetl.job.bounded.state.held_by_newcomer:{[o]
+    if[not `started in key o; :0b];
+    recorded:@["P"$;o`started;{[e] 0Np}];
+    if[null recorded; :0b];
+    began:.qetl.job.bounded.state.pid_started[o`pid];
+    $[null began; 0b; began>recorded]}
+
 / Is this lock left behind by a process that is gone?
 / .
 / Four ways to answer no, and every one of them is the safe direction:
@@ -240,11 +272,13 @@
 /                       to judge
 /   another host        a pid is meaningless off the machine that issued it;
 /                       compared without case, since .z.h is lower-case on
-/                       macOS and a non-q writer's hostname need not be (#726)
-/   the pid is running  it holds the lock, or a reused number does, and
-/                       neither is ours to break - unless the number is
-/                       this process's own and the lock is older than this
-/                       process, when the holder is certainly gone (#2497)
+/                       macOS and a non-q writer's hostname need not be (#726);
+/                       once that host's holder is known dead, remove the
+/                       lock directory by hand - nothing here can prove it
+/   the pid is running  it holds the lock - unless the process now carrying
+/                       that number began after the lock was taken, when the
+/                       holder is gone and only its number was reused: this
+/                       process's own (#2497), or any other (#2692)
 / @param path the lock directory
 / @return 1b when the recorded holder is gone from this host
 / @eg .qetl.job.bounded.state.lock_is_stale["/tmp/nonexistent.lock"]  ->  0b
@@ -254,7 +288,8 @@
       not all `pid`host in key o;    0b;
       not lower[o`host]~lower string .z.h; 0b;
       .qetl.job.bounded.state.held_by_predecessor[o]; 1b;
-      not .qetl.job.bounded.state.pid_alive o`pid]}
+      not .qetl.job.bounded.state.pid_alive o`pid; 1b;
+      .qetl.job.bounded.state.held_by_newcomer[o]]}
 
 / Break a stale lock, if it is still stale - without ever removing a live one.
 / .

@@ -25,19 +25,6 @@ from uqs.cli.shared import EXIT_PARTIAL, EXIT_REFUSED, EXIT_USAGE
 from uqs.stack import attached_logs
 
 
-@pytest.fixture(autouse=True)
-def _restore_loguru():
-    """--follow points the shared loguru sink at this test's captured stream, which closes with
-    the test: a later test's log line would land on it and fail there."""
-    from loguru import logger
-
-    yield
-    logger.remove()
-    import sys
-
-    logger.add(sys.stderr)
-
-
 def _flat(text: str) -> str:
     return " ".join(text.split())
 
