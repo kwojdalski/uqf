@@ -65,10 +65,6 @@ LEDGERS = {
 #: (where, the old spelling as written) -> why it is named there on purpose.
 #: `where` is a file under the tree, or `uqs <path> --help` for help text.
 KEPT = {
-    ("python/uqs/src/uqs/attach/persist.py", "job attach"): (
-        "the marker comments written into an attached stack's own files: an "
-        "existing attachment is re-applied by finding its block by this text"
-    ),
     ("python/uqs/src/uqs/cli/backfill_receive.py", "job receive"): (
         "`job receive --stop`'s own notice that it is `job receiver stop` now (#1858)"
     ),

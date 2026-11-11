@@ -10,7 +10,7 @@
  * policy does not grant, a stale one, one that would leave no administrator,
  * and anything its own models do not accept - whatever this form allowed.
  */
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import Form from "@rjsf/core";
 import type { IChangeEvent } from "@rjsf/core";
 import type { RJSFSchema } from "@rjsf/utils";
@@ -60,7 +60,10 @@ function nameControls(root: HTMLElement, prefix: string) {
 
 function useNamedControls(prefix: string) {
   const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
+  // A layout effect, so the controls are named in the commit that shows them:
+  // a passive effect can run after the form is visible, and a click in between
+  // would be recorded without a name (as #2716 was for the permission).
+  useLayoutEffect(() => {
     const root = ref.current;
     if (!root) return;
     nameControls(root, prefix);

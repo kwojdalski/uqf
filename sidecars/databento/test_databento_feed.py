@@ -37,6 +37,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.cli import external as cli_external
+from uqs.external.kafka_streamer import ACCEPT_Q
 from uqs.external.lifecycle import process_identity
 from uqs.paths import TABLES_FILE, UqsError, UqsPaths, repo_root
 
@@ -123,9 +124,11 @@ class RecordingQ:
 
     def __init__(self) -> None:
         self.calls: list[tuple] = []
+        self.answer: object = True
 
     def sync(self, *args):
         self.calls.append(args)
+        return self.answer
 
 
 def _stream(records, *, client_map=None) -> tuple[RecordingQ, list[str]]:
@@ -141,7 +144,7 @@ def _published_row(q: RecordingQ) -> dict:
     """The one row `q` was sent, by field name."""
     assert len(q.calls) == 1
     fn, table, cols = q.calls[0]
-    assert (fn, table) == (".u.upd", "databento_mbp10")
+    assert (fn, table) == (ACCEPT_Q, "databento_mbp10")
     return {name: col.to_list()[0] for name, col in zip(_fields(), cols, strict=True)}
 
 
@@ -302,6 +305,18 @@ def test_records_that_are_not_book_events_publish_nothing():
     ts_event; before #2190 every one went out as a row of nulls."""
     q, log = _stream([_mapping(), dbn.SystemMsg(ts_event=TS_EVENT, msg="Heartbeat")])
     assert q.calls == [] and log == []
+
+
+def test_a_row_the_plant_refuses_is_not_reported_as_published():
+    """A bare `.u.upd` answers success for a row the STP sent to its error log
+    (#2698); `ACCEPT_Q` answers the error text, and publish must raise on it
+    rather than return True."""
+    q = RecordingQ()
+    decoder = streamer.RecordDecoder(_fields(), {AAPL: "AAPL"})
+    assert streamer.publish(q, "databento_mbp10", decoder, _mbp10(), pytest.fail) is True
+    q.answer = "type"
+    with pytest.raises(UqsError, match="refused the databento_mbp10 row - NOT stored: type"):
+        streamer.publish(q, "databento_mbp10", decoder, _mbp10(), pytest.fail)
 
 
 def test_a_gateway_error_is_logged_not_published():

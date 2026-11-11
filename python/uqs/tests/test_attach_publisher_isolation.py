@@ -260,8 +260,9 @@ def test_stopping_the_publisher_needs_no_auth_and_no_stack_preparation(site, mon
     monkeypatch.delenv(attached_publisher.KDBSECURE_ENV)
     saved()
     UqsPublisher(site.paths()).stop(config.load("ex-site"))
-    [(argv, _env)] = site.launched
-    assert argv[1:] == ["stop", PUBLISHER] and site.whole == []
+    # Found by command line and signalled directly (stack/stopping.py, #2689): no
+    # launcher runs, and nothing of the stack is prepared for it.
+    assert site.launched == [] and site.whole == []
 
 
 # ------------------------------------------------------- `job attachment add`

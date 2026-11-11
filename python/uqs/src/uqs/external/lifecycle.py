@@ -40,15 +40,14 @@ forgotten - its pid file stays and the operator decides.
 from __future__ import annotations
 
 import os
-import signal
 import subprocess
-import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.logger import get_logger
 from uqs.paths import UqsError
+from uqs.process_stop import stop_pids
 
 log = get_logger()
 
@@ -283,14 +282,18 @@ class DetachedProcess:
         self.pid_path.write_text(f"{process.pid}\n{identity or ''}\n")
         return process.pid
 
-    def stop(self, *, missing_ok: bool = True) -> int | None:
-        """SIGTERM the process and forget its pid; return the pid stopped.
+    def stop(self, *, missing_ok: bool = True, kill: bool = False) -> int | None:
+        """SIGTERM the process, wait until it is gone, then forget its pid;
+        return the pid stopped.
 
         SIGTERM, not SIGKILL, so a streamer's `finally` runs - a Kafka
         consumer leaves its group cleanly instead of holding its partitions
         until the broker's session timeout. It waits for the process to exit
         (STOP_GRACE_SECONDS), so a restart does not start the next consumer
-        while the old one is still leaving (#2629).
+        while the old one is still leaving (#2629). One still running then is
+        SIGKILLed with `kill`; without it - or if even that fails - the pid
+        file is KEPT and this raises: forgetting a live process made `running`
+        say False and the next start run a second one beside it (#2688).
         """
         pid = self.pid()
         if pid is None:
@@ -321,22 +324,14 @@ class DetachedProcess:
             # dead pid is still reported as stopped, as the recorders always did.)
             self.pid_path.unlink(missing_ok=True)
             return None
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
+        [done] = stop_pids([pid], kill=kill, grace=STOP_GRACE_SECONDS, running=self._alive)
+        if not done.gone:
+            raise UqsError(
+                f"{self.label}: pid {pid} is still running {STOP_GRACE_SECONDS:g}s after "
+                + ("SIGTERM and SIGKILL" if done.killed else "SIGTERM - --kill SIGKILLs it")
+                + f"; its pid file {self.pid_path} is kept, so a start is still refused"
+            )
         self.pid_path.unlink(missing_ok=True)
-        deadline = time.monotonic() + STOP_GRACE_SECONDS
-        while self._alive(pid):
-            if time.monotonic() >= deadline:
-                log.warning(
-                    "{}: pid {} is still exiting {:g}s after SIGTERM",
-                    self.label,
-                    pid,
-                    STOP_GRACE_SECONDS,
-                )
-                break
-            time.sleep(0.05)
         return pid
 
     def status(self, **extra: str) -> dict[str, str]:

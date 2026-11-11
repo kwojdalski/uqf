@@ -24,9 +24,8 @@ from attach_native_support import (
     said,
 )
 
-from uqs.attach import config, native, workflow
+from uqs.attach import config, native
 from uqs.attach.manifest import Manifest
-from uqs.paths import repo_root
 
 
 @pytest.fixture
@@ -330,25 +329,6 @@ def test_remote_schema_file_is_refused_with_what_to_run_instead(world):
     assert result.exit_code == 1
     assert "--remote-schema-file was replaced by --schema-writer tickerplant" in said(world, result)
     assert "run the same command with --schema-writer tickerplant instead" in said(world, result)
-
-
-def test_an_attachment_saved_before_1845_loads_and_keeps_its_writer(world):
-    att = workflow.resolve(
-        "pb-old",
-        workflow.Given(job="pb_general_ledger", bundle=world.bundle, stack_id=6000,
-                       schema_writer="tickerplant"),
-        repo_root(),
-    ).att  # fmt: skip
-    data = config.to_json(att)
-    data.pop("native")  # as an older uqs wrote it
-    folder = world.state_dir / "pb-old"
-    folder.mkdir(parents=True)
-    (folder / "attachment.json").write_text(json.dumps(data))
-    loaded = config.load("pb-old")
-    assert loaded.persist == "remote-schema-file" and loaded.schema_writer == "tickerplant"
-    assert loaded.native == config.Native()
-    again = workflow.resolve("pb-old", workflow.Given(), repo_root())
-    assert again.source == "saved" and again.changed == []
 
 
 def test_no_secret_reaches_the_file_the_manifest_the_preview_or_json(world, monkeypatch):

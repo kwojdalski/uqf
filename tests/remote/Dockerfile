@@ -12,13 +12,12 @@
 # never enter it.
 FROM --platform=linux/amd64 debian:bookworm-slim
 
-# gcc/make/git build PeachQ; gettext-base (envsubst) and rlwrap are what
-# torq.sh needs, and uqs's prerequisite check refuses a start without them;
-# procps for ps, which uqs reads to find its processes; lsof, which torq.sh
+# gcc/make/git build PeachQ; gettext-base (envsubst) is what torq.sh needs,
+# and uqs's prerequisite check refuses a start without it; procps for ps, which uqs reads to find its processes; lsof, which torq.sh
 # stops a process with.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates git make gcc g++ libc6-dev gettext-base rlwrap procps \
+        ca-certificates git make gcc g++ libc6-dev gettext-base procps \
         iproute2 netcat-openbsd lsof \
     && rm -rf /var/lib/apt/lists/*
 

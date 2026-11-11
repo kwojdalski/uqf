@@ -523,6 +523,8 @@ OPTIONS = {
     # the frontend's activity history (#2000): one filter each, on list and export alike
     "--action": Meaning("an activity action, or its dotted prefix", r"dotted prefix"),
     "--db": Meaning("the activity history's SQLite file", r"activity history's SQLite file"),
+    # every stop command's escalation (cli/stop_options.py, #2689)
+    "--kill": Meaning("SIGKILL what outlives SIGTERM and its grace", r"^SIGKILL whatever is still"),
     "--outcome": Meaning("how an activity event ended", r"^only events that ended so"),
     "--recorded-by": Meaning("the browser or the server's audit", r"^only events recorded by"),
     "--request": Meaning("one operation's request id", r"correlated by this request id"),

@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import sys
 import threading
 import time
 from pathlib import Path
 
 import pytest
-from loguru import logger
 from typer.testing import CliRunner
 
 from uqs import cli
@@ -21,15 +19,6 @@ INFO = f"2026.10.27D13:04:26.688546389|INFO|{WORKER}|window 1 of 3 fetched rows=
 DEBUG = "2026.10.27D13:04:26.700000000|DEBUG|attached_backfill|flags parsed"
 ERROR = '2026.10.27D13:04:27.100000000|ERROR|attached_backfill|run failed error="\'type"'
 RESULT = 'RESULT {"worker":"piggybank_ledger_backfill","state":"failed","outcome":"failed"}'
-
-
-@pytest.fixture(autouse=True)
-def _restore_loguru():
-    """`uqs logs` replaces the shared sink with one on this test's captured stream, which
-    closes with the test: a later test's log line would land on it and fail there."""
-    yield
-    logger.remove()
-    logger.add(sys.stderr)
 
 
 @pytest.fixture

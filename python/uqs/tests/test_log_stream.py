@@ -31,13 +31,6 @@ from uqs import cli
 from uqs.cli import shared
 
 
-@pytest.fixture(autouse=True)
-def _restore_loguru():
-    yield
-    logger.remove()
-    logger.add(sys.stderr)
-
-
 def _env(root: Path) -> dict[str, str]:
     env = {
         k: v

@@ -232,7 +232,7 @@ def test_the_derived_leaves_equal_the_hand_kept_list_they_replaced():
     assert LEAVES == {
         "duration", "activity_log", "activity_export", "cells", "paths", "logger", "interpreter",
         "runtimes", "timefmt", "timerange", "liveness", "portexpr", "guardrails",
-        "renamed_env",
+        "renamed_env", "process_stop",
     }  # fmt: skip
 
 

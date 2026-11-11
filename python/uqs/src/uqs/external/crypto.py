@@ -190,12 +190,12 @@ def start_crypto_recorder(
     return pid
 
 
-def stop_crypto_recorder(paths: UqsPaths) -> None:
+def stop_crypto_recorder(paths: UqsPaths, *, kill: bool = False) -> None:
     # SIGTERM, not the ManagedService graceful-shutdown path (that only fires
     # on SIGINT/ctrl_c) - fine here: on_stop is a no-op, and an unhandled
     # SIGTERM just terminates the process, dropping its kdb+ IPC socket,
     # which stp1 sees as an ordinary disconnect. No pid file is an error here.
-    pid = _recorder(paths).stop(missing_ok=False)
+    pid = _recorder(paths).stop(missing_ok=False, kill=kill)
     log.info("stopped cryptorust kdb-market-data-recorder (pid {})", pid)
 
 
@@ -326,8 +326,8 @@ def start_crypto_fills_recorder(
     return pid
 
 
-def stop_crypto_fills_recorder(paths: UqsPaths) -> None:
-    pid = _fills_recorder(paths).stop(missing_ok=False)
+def stop_crypto_fills_recorder(paths: UqsPaths, *, kill: bool = False) -> None:
+    pid = _fills_recorder(paths).stop(missing_ok=False, kill=kill)
     log.info("stopped cryptorust kdb-fills-recorder (pid {})", pid)
 
 

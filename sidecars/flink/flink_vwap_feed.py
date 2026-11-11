@@ -57,8 +57,8 @@ def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
     )
 
 
-def stop(paths: UqsPaths) -> int | None:
-    return _process(paths).stop()
+def stop(paths: UqsPaths, *, kill: bool = False) -> int | None:
+    return _process(paths).stop(kill=kill)
 
 
 def status(paths: UqsPaths) -> dict[str, str]:

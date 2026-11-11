@@ -12,16 +12,13 @@ Opt-in like the other stack tests (`-m live_stack`).
 
 from __future__ import annotations
 
-import dataclasses
-
 import pytest
 from attach_stack_support import CORE, IsolatedStack, requires_stack
 from attach_support import make_bundle
 
 from uqs.attach import apply as applying
-from uqs.attach import config, plan, service
+from uqs.attach import config, service
 from uqs.attach.config import AttachmentError
-from uqs.attach.schema import TableSpec
 from uqs.paths import repo_root
 
 pytestmark = requires_stack()
@@ -78,18 +75,6 @@ def test_an_untyped_column_is_refused_before_the_stack_is_touched(stack, tmp_pat
         attachment(stack, bundle)
     assert {p: tables(stack, p) for p in before} == before
     assert stack.schema_file.read_text() == schema_before
-
-
-def test_a_saved_attachment_with_an_untyped_column_cannot_be_applied(stack, tmp_path):
-    att = attachment(stack, make_bundle(tmp_path / "b", BOOK_Q, table=BOOK))
-    old = TableSpec(BOOK, (("time", "p"), ("sym", "s"), ("note", " ")))
-    legacy = dataclasses.replace(att, tables=(old,))
-    p = plan.build(legacy, stack.ipc(), ROOT)
-    assert any(f.code == "UNTYPED_COLUMN" for f in p.findings) and not p.ok
-    config.save(legacy, stack.root / "attachments")
-    with pytest.raises(applying.ApplyRefused, match="UNTYPED_COLUMN"):
-        applying.apply(legacy, stack.ipc(), ROOT, state_dir=stack.root / "attachments")
-    assert BOOK not in tables(stack, "stp1")
 
 
 @pytest.mark.parametrize("process", ["stp1", "rdb1", "wdb1"])

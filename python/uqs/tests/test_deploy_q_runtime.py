@@ -348,7 +348,7 @@ def test_preflight_looks_for_no_q_on_the_server(tmp_path):
     _, remote, _ = push(tmp_path, rt)
     (preflight,) = [s for s in remote.stage("preflight") if "uv python find" in s]
     assert "QHOME is not set" not in preflight and "DEPLOY_Q_OK" not in preflight
-    assert "envsubst rlwrap" in preflight and 'if [ -n "$odbc_home" ]' in preflight
+    assert "bash envsubst tar" in preflight and 'if [ -n "$odbc_home" ]' in preflight
 
 
 def test_the_q_is_installed_checked_and_run_before_the_release_arrives(tmp_path):

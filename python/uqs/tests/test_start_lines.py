@@ -18,8 +18,8 @@ from uqs.paths import paths_for_root, repo_root
 from uqs.stack import runtime, start_lines
 
 needs_tools = pytest.mark.skipif(
-    any(shutil.which(t) is None for t in ("bash", "envsubst", "rlwrap")),
-    reason="torq.sh needs bash, envsubst and rlwrap",
+    any(shutil.which(t) is None for t in ("bash", "envsubst")),
+    reason="torq.sh needs bash and envsubst",
 )
 
 

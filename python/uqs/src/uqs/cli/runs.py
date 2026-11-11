@@ -18,13 +18,14 @@ from rich.table import Table
 
 from uqs import timerange
 from uqs.cli import completion
-from uqs.cli.concepts import attach_opt
+from uqs.cli.concepts import attach_opt, job_arg
 from uqs.cli.json_out import emit, json_opt, utc_times
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.renames import ATTACHMENT, renamed
-from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
+from uqs.cli.safety import ChangesState, DryRunOpt, ReadOnly, dry_run_note
 from uqs.cli.shared import (
+    EXIT_STOPPED,
     JOB_OPERATIONS_PANEL,
     ExportOpt,
     InteractiveOpt,
@@ -36,6 +37,8 @@ from uqs.cli.shared import (
     job_app,
 )
 from uqs.cli.sorting import ReverseOpt, SortOpt, _sorted_items
+from uqs.cli.stop_options import KillOpt
+from uqs.cli.vocabulary import duration
 from uqs.paths import UqsError
 from uqs.stack import runs as stack_runs
 
@@ -45,9 +48,10 @@ _LEDGER = "reads this tree's run ledger"
 runs_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="The run ledger: list, show, audit, upgrade.\n\n"
+    help="The run ledger: list, show, audit, upgrade, stop.\n\n"
     "List every run (or the unfinished ones), show one run's facts, "
-    "audit one window across runs, upgrade a ledger an older uqs wrote.",
+    "audit one window across runs, upgrade a ledger an older uqs wrote, "
+    "stop an attached backfill that is running.",
 )
 job_app.add_typer(runs_app, name="runs", rich_help_panel=JOB_OPERATIONS_PANEL)
 
@@ -311,3 +315,59 @@ def audit(
         emit({"facts": [_record(r, _FACT_COLUMNS) for r in rows]})
         return
     _print(f"{dataset} {window}", rows, _FACT_COLUMNS, "no facts for that window")
+
+
+_StopJob = job_arg("The bounded worker whose running backfill to stop")
+_StopAttach = attach_opt(
+    "The attachment whose destination the backfill is running into", required=True
+)
+
+
+@runs_app.command("stop", cls=ChangesState)
+def stop(
+    job: _StopJob,
+    attach: _StopAttach,
+    timeout: Annotated[
+        float,
+        duration(
+            "--timeout",
+            help="Seconds (a DURATION) to wait for the run to stop at its next window boundary",
+        ),
+    ] = 60.0,
+    kill: KillOpt = False,
+    dry_run: DryRunOpt = False,
+) -> None:
+    """Stop a running attached backfill: ask it to, wait, and escalate only with --kill.
+
+    Writes the run's stop file, which it checks between windows: the window it is in
+    completes or fails as it would anyway, it releases its locks, records `stopped` and
+    exits. Without --kill a run that has not stopped by --timeout is reported as still
+    running and left alone; a re-run of the same command completes the range.
+
+    Exits 4 when the run stopped (or was killed), 1 when it is still running.
+    """
+    from uqs.attach import backfill as attached
+    from uqs.attach import backfill_stop
+
+    try:
+        record = backfill_stop.find(attach, job)
+        state_dir = attached.state_dir_of(_paths(), attach)
+        if dry_run:
+            console.print(
+                f"would stop {job} (pid {record['pid']}) into {attach}"
+                + (f", killing it after {timeout:g}s" if kill else ""),
+                markup=False,
+            )
+            console.print(dry_run_note())
+            return
+        result = backfill_stop.stop(record, state_dir, timeout=timeout, kill=kill)
+    except UqsError as exc:
+        _die(exc)
+    if result.state == backfill_stop.STOPPED:
+        console.print(f"{job} (pid {result.pid}): stopped at a window boundary", markup=False)
+    elif result.state == backfill_stop.KILLED:
+        console.print(f"{job} (pid {result.pid}): killed after {timeout:g}s", markup=False)
+    else:
+        hint = "" if kill else "; its stop request stands - add --kill to end it now"
+        console.print(f"{job} (pid {result.pid}): still running{hint}", markup=False)
+    raise typer.Exit(code=1 if result.state == backfill_stop.RUNNING else EXIT_STOPPED)

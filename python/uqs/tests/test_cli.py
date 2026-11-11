@@ -443,7 +443,7 @@ def test_start_and_restart_take_one_option_set_and_stop_its_selection():
     assert _options("start") == _options("restart")
     selection = {"procs", "port", "profile"}
     assert selection <= _options("stop") and selection <= _options("start")
-    assert _options("stop") - selection == {"force", "dry_run"}
+    assert _options("stop") - selection == {"kill", "dry_run"}
 
 
 def test_restart_with_a_profile_hands_torq_its_set(monkeypatch):

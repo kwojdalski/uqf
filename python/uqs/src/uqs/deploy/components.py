@@ -129,7 +129,7 @@ def observed(
             "version": None,
             "requires": [
                 "TorQ and the finance starter pack on the server",
-                "envsubst and rlwrap, for torq.sh",
+                "envsubst, for torq.sh",
             ],
         },
         "python": {

@@ -81,7 +81,7 @@ def q_port(start_q, tmp_path_factory) -> Any:
 
 def test_run_torq_sh_extends_the_environment_rather_than_replacing_it(monkeypatch):
     """subprocess.run's env= REPLACES the environment. Passing only the
-    generated variables would lose PATH, and envsubst, rlwrap and q would
+    generated variables would lose PATH, and envsubst and q would
     stop resolving though they are on PATH in the calling shell."""
     monkeypatch.delenv("UQS_TORQ_LAUNCHER", raising=False)
     seen: dict[str, Any] = {}
@@ -150,7 +150,6 @@ def test_a_launcher_that_cannot_run_is_refused(monkeypatch, tmp_path, value, mes
     ("fn", "extra", "argv"),
     [
         (runtime.start, {"procs": "rdb1"}, ["start", "rdb1"]),
-        (runtime.stop, {"procs": "all"}, ["stop", "all"]),
         (runtime.restart, {"procs": "hdb1"}, ["restart", "hdb1"]),
         (runtime.start, {"procs": "rdb1", "trace": True}, ["start", "rdb1", "-extras", "-trace"]),
         (
@@ -161,9 +160,9 @@ def test_a_launcher_that_cannot_run_is_refused(monkeypatch, tmp_path, value, mes
     ],
 )
 def test_each_verb_passes_torq_sh_its_own_arguments(monkeypatch, fn, extra, argv):
+    """A stop runs no torq.sh at all (tests/test_stack_stopping.py, #2689)."""
     seen: dict[str, Any] = {}
     # The paths are fake; the name check has its own tests (test_start_policy).
-    monkeypatch.setattr(runtime.stack_procs, "assert_known_procnames", lambda *_a: None)
     monkeypatch.setattr(
         runtime, "run_torq_sh", lambda paths, args, **kw: seen.update(args=args, **kw)
     )

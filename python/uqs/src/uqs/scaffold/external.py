@@ -265,8 +265,8 @@ def start(paths: UqsPaths, options: Mapping[str, Any]) -> int:
     return _process(paths).start(cmd, cwd=paths.repo_root, env=env)
 
 
-def stop(paths: UqsPaths) -> int | None:
-    return _process(paths).stop()
+def stop(paths: UqsPaths, *, kill: bool = False) -> int | None:
+    return _process(paths).stop(kill=kill)
 
 
 def status(paths: UqsPaths) -> dict[str, str]:

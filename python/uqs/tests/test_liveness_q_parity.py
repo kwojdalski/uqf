@@ -11,10 +11,12 @@ and Python went on reading that predecessor as alive.
 The two rules look from different places. q's live process is the one
 asking, so it compares the record with its own start (`loaded_at`); a Python
 reader is never the recorded process, so it compares the record with the
-start of whatever process now has the number (`ps -o lstart`). The table
-below makes them meet: q writes each lock owner and judges it, and while
-that q is still running - so "this pid, alive" is true for both - Python
-reads the same owner files and judges them too.
+start of whatever process now has the number (`ps -o lstart`). q reads that
+too when the live pid is another process's (#2692): a sibling or a shell
+given a dead holder's number. The table below makes them meet: q writes
+each lock owner and judges it, and while that q is still running - so "this
+pid, alive" is true for both - Python reads the same owner files and judges
+them too.
 
 Not compared: a `started` between the q process's real start and the moment
 it loaded backfill_state.q, where q's `loaded_at` and `ps`'s second-truncated
@@ -40,28 +42,32 @@ from uqs.interpreter import q_interpreter
 UQF_ROOT = Path(__file__).resolve().parents[3]
 
 HOSTS = ("same", "other")
-PIDS = ("dead", "self")
+PIDS = ("dead", "self", "other")
 STARTED = ("before", "after", "missing")
 
 #: The verdict both rules must reach: gone on this host when the pid is dead,
-#: or when it is alive but started after the record.
+#: or when it is alive but started after the record - this q's own pid or
+#: another process's.
 EXPECTED = {
     (host, pid, started): host == "same" and (pid == "dead" or started == "before")
     for host, pid, started in itertools.product(HOSTS, PIDS, STARTED)
 }
 
 #: q writes each owner as write_owner_as would, but with the case's host,
-#: pid and `started` - `before` an hour before this process loaded the
-#: rule, `after` now - judges every one, and then stays alive for Python.
+#: pid (`other` a process started before q was) and `started` - `before` an
+#: hour before this process loaded the rule, `after` now - judges every one,
+#: and then stays alive for Python.
 _SCRIPT = """
 \\l src/init.q
 \\l src/etl/core/backfill_state.q
 dir:"{dir}";
 dead:{dead};
+other:{other};
 own:{{[name;host;pid;started]
     p:dir,"/",name,".lock";
     system "mkdir -p ",p;
-    d:`pid`host!("j"$$[pid~`self;.z.i;dead];$[host~`same;string .z.h;"elsewhere.example"]);
+    num:$[pid~`self;.z.i;pid~`other;other;dead];
+    d:`pid`host!("j"$num;$[host~`same;string .z.h;"elsewhere.example"]);
     before:.qetl.job.bounded.state.loaded_at-0D01;
     if[not started~`missing; d[`started]:$[started~`before;before;.z.p]];
     (hsym `$.qetl.job.bounded.state.owner_file p) 0: enlist .j.j d;
@@ -96,9 +102,12 @@ def test_q_and_python_judge_one_table_of_owners_alike():
     if q is None:
         pytest.skip("no q interpreter - set $QCMD, or put q on PATH")
     env = {**os.environ, "QHOME": os.environ.get("QHOME", str(Path.home() / ".kx"))}
+    other = subprocess.Popen(["sleep", "300"])
     with tempfile.TemporaryDirectory() as tmp:
         script = Path(tmp) / "parity.q"
-        script.write_text(_SCRIPT.format(dir=tmp, dead=_dead_pid(), cases=_q_cases()))
+        script.write_text(
+            _SCRIPT.format(dir=tmp, dead=_dead_pid(), other=other.pid, cases=_q_cases())
+        )
         proc = subprocess.Popen(
             [str(q), str(script), "-q"],
             cwd=UQF_ROOT,
@@ -127,6 +136,8 @@ def test_q_and_python_judge_one_table_of_owners_alike():
         finally:
             proc.kill()
             proc.wait()
+            other.kill()
+            other.wait()
     expected = {_name(c): gone for c, gone in EXPECTED.items()}
     assert q_verdicts == expected, "q's rule is not the one this table states"
     assert python_verdicts == expected, "Python's rule is not the one this table states"

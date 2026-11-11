@@ -15,7 +15,6 @@ test_logger_helpers.py.
 
 from __future__ import annotations
 
-import sys
 import threading
 import time
 from pathlib import Path
@@ -36,13 +35,6 @@ from uqs.stack import log_follow, logs
 if TYPE_CHECKING:
     # Not exported by loguru at runtime; see logger/core.py.
     from loguru import Record
-
-
-@pytest.fixture(autouse=True)
-def _restore_loguru():
-    yield
-    logger.remove()
-    logger.add(sys.stderr)
 
 
 def _capture() -> list[str]:

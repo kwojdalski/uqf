@@ -84,9 +84,7 @@ def check_prerequisites(paths: UqsPaths) -> None:
             f"{paths.torqapphome} not found or missing database.q - "
             f"is lib/torq-finance-starter-pack vendored, or {TORQAPPHOME_ENV} set to one?"
         )
-    for tool in ("envsubst", "rlwrap"):
-        if shutil.which(tool) is None:
-            raise UqsError(
-                f"'{tool}' not found on PATH - torq.sh needs it "
-                "(macOS: brew install gettext rlwrap)"
-            )
+    if shutil.which("envsubst") is None:
+        raise UqsError(
+            "'envsubst' not found on PATH - torq.sh needs it (macOS: brew install gettext)"
+        )

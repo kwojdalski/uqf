@@ -169,7 +169,7 @@ def start_kafka_feed(
     return pid
 
 
-def stop_kafka_feed(paths: UqsPaths) -> None:
+def stop_kafka_feed(paths: UqsPaths, *, kill: bool = False) -> None:
     """Stop it, and say so when there was nothing to stop.
 
     SIGTERM rather than SIGKILL so the streamer's `finally` reaches
@@ -177,7 +177,7 @@ def stop_kafka_feed(paths: UqsPaths) -> None:
     cleanly - a killed member holds its partitions until the broker's session
     timeout, and a restart inside that window gets none of them.
     """
-    pid = _process(paths).stop()
+    pid = _process(paths).stop(kill=kill)
     log.info("no kafka feed running" if pid is None else f"stopped the kafka feed (pid {pid})")
 
 
@@ -207,7 +207,7 @@ FEED = ExternalFeed(
     "kafka",
     _start,
     # Looked up when called, so what this module holds at call time is what runs.
-    lambda paths: stop_kafka_feed(paths),
+    lambda paths, kill=False: stop_kafka_feed(paths, kill=kill),
     lambda paths: kafka_feed_status(paths),
     options=(
         FeedOption(

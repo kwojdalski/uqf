@@ -9,6 +9,7 @@ import time
 from collections.abc import Iterator
 
 import pytest
+from stop_children import IGNORES, SLOW
 
 from uqs.external import lifecycle
 from uqs.external.lifecycle import DetachedProcess, process_identity
@@ -333,3 +334,33 @@ def test_a_zombie_someone_else_has_not_reaped_reads_as_dead(proc, stranger, monk
 def test_a_pid_file_naming_a_process_group_is_never_alive(proc):
     proc.pid_path.write_text("0\n\n")
     assert not proc.running() and not proc._alive(0) and not proc._alive(-1)
+
+
+def _start_ready(proc: DetachedProcess, script: str) -> int:
+    """Start `script` (stop_children's) detached and wait for its "ready" in the log."""
+    pid = proc.start([sys.executable, "-c", script], cwd=proc.pid_path.parent)
+    deadline = time.monotonic() + 10
+    while "ready" not in proc.log_path.read_text():
+        assert time.monotonic() < deadline, "the child never said it was ready"
+        time.sleep(0.02)
+    return pid
+
+
+def test_a_connector_that_survives_sigterm_is_kept_and_a_duplicate_refused(proc, monkeypatch):
+    """#2688: stop unlinked the pid file before the wait, warned after it, and
+    returned - so `running` said False and a second start ran beside it."""
+    monkeypatch.setattr(lifecycle, "STOP_GRACE_SECONDS", 0.5)
+    pid = _start_ready(proc, IGNORES)
+    with pytest.raises(UqsError, match=rf"pid {pid} is still running 0.5s after SIGTERM - --kill"):
+        proc.stop()
+    assert proc.pid() == pid and proc.running(), "not forgotten"
+    with pytest.raises(UqsError, match="already running - stop it first"):
+        proc.start(SLEEP, cwd=proc.pid_path.parent)
+    assert proc.stop(kill=True) == pid
+    assert not proc.running() and not proc.pid_path.exists(), "forgotten once it is gone"
+
+
+def test_a_connector_slow_to_exit_is_waited_for_and_then_forgotten(proc):
+    pid = _start_ready(proc, SLOW)
+    assert proc.stop() == pid
+    assert not proc.pid_path.exists()
