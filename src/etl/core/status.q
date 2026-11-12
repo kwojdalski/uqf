@@ -236,8 +236,7 @@
     / what it last wrote.
     .qetl.status.require_transition[.qetl.status.previous_state[instance_id];state];
     dir:.qetl.status.status_dir[];
-    / mkdir -p is idempotent, and cheaper than checking first.
-    system"mkdir -p ",.qetl.job.bounded.state.shell_word dir;
+    .qetl.job.bounded.state.ensure_dir dir;
     run:@[{.qetl.run.current[]};::;{0Ng}];
     / one value per .qetl.status.fields, in its order
     values_:(worker;instance_id;state;spec`source_version;

@@ -129,7 +129,7 @@
 / @param rows the page's row count, every table together
 / @return the path written
 .qetl.job.stream.delivery.mark:{[name;from;to;rows]
-    system"mkdir -p ",.qetl.job.bounded.state.shell_word .qetl.job.bounded.state.lock_dir[];
+    .qetl.job.bounded.state.ensure_dir .qetl.job.bounded.state.lock_dir[];
     .qetl.job.bounded.state.durable_set[.qetl.job.stream.delivery.marker_path[name];`from`to`rows`at!(from;to;rows;.z.p)]}
 
 / Remove the marker, once the cursor past its page is saved.
