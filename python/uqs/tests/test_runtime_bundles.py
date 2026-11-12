@@ -211,6 +211,17 @@ def test_prepare_says_nothing_was_started(
     assert bundles.read_ledger(repo)["pb"]["runtimes"] == ["uqf"]
 
 
+def test_prepare_refuses_a_development_checkout(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, log_text
+) -> None:
+    make_bundle(tmp_path / "pb", "pb")
+    (repo / ".git").mkdir()
+    result = _cli(repo, monkeypatch, "--bundle", str(tmp_path / "pb"))
+    assert result.exit_code == 1
+    assert "is a development checkout" in log_text()
+    assert not (repo / LEDGER).exists()
+
+
 # ------------------------------------------------------------ membership
 
 

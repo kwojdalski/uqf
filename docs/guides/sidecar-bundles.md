@@ -3,7 +3,7 @@
 A **bundle** is a versioned folder of jobs kept apart from the tree's own, plus
 the plant tables, catalog entries and process overrides they need. It can live
 outside this repository or under `sidecars/` in it. The same installer puts it
-into a checkout (`uqs job install`) or a release (`uqs deploy build --bundle`).
+into an instance (`uqs job install`) or a release (`uqs deploy build --bundle`).
 A deployment starts only the jobs you name. Bundles are installed as copies, so
 a release runs on a clean server with no workstation or Git checkout behind it.
 
@@ -112,11 +112,21 @@ run with pytest against the installed connectors, its `test_*.q` files are added
 to the suite, and the whole q suite runs there. The checkout is never written
 to.
 
-## Install into a checkout
+## Install into an instance
+
+An install writes tracked files, so it is refused in a development checkout: a
+git checkout of this repository, or any worktree of one (#2732). Every session
+sharing that checkout would otherwise inherit the bundle. Test a bundle with
+`bundle_suite.py` (above) and ship one with `uqs deploy build --bundle`. To run
+one, use a separate clone and mark it as an instance with an untracked
+`.uqf-instance` file. A worktree is refused even with the marker. `--dry-run`
+works anywhere.
 
 ```bash
-uqs job install ../piggybank --dry-run   # the plan
-uqs job install ../piggybank --yes
+git clone https://github.com/kwojdalski/uqf ~/uqf-instances/demo
+cd ~/uqf-instances/demo && touch .uqf-instance
+uqs job install ~/src/piggybank --dry-run   # the plan
+uqs job install ~/src/piggybank --yes
 ```
 
 The q additions go between `/ BEGIN bundle <name>` and `/ END bundle <name>` in

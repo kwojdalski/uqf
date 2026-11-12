@@ -48,7 +48,9 @@ no flags. Running the same query against both shows whether a problem is TorQ's
 or this tree's. Runtimes are declared in
 [`python/uqs/src/uqs/runtimes.py`](../../python/uqs/src/uqs/runtimes.py), and
 [sidecar bundles](sidecar-bundles.md#bundles-a-runtime-declares) covers the
-bundles `runtime prepare` installs.
+bundles `runtime prepare` installs. It and `uqs job install` refuse to install
+a bundle into a development checkout or worktree: run them in a separate clone
+marked with `.uqf-instance` ([instances](sidecar-bundles.md#install-into-an-instance)).
 
 Each runtime declares its own profiles. `--profile` takes only those, and
 `uqs profile list` shows only the selected runtime's. Start `crypto`, `fx` and
