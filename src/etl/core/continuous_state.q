@@ -105,7 +105,7 @@
 / Written through durable_lines, never 0: onto the file: 0: truncates first,
 / so a kill mid-write left a file load_cursor could not read.
 .qetl.job.continuous.save_cursor:{[worker;cursor]
-    system"mkdir -p ",.qetl.job.bounded.state.shell_word[.qetl.job.bounded.state.lock_dir[]];
+    .qetl.job.bounded.state.ensure_dir .qetl.job.bounded.state.lock_dir[];
     .qetl.job.bounded.state.durable_lines[.qetl.job.continuous.cursor_path[worker];enlist .j.j `cursor`saved_at!(cursor;.z.p)]}
 
 / Forget a feeder's saved cursor, so its next run starts from the source's
@@ -149,7 +149,7 @@
 / @param cursor the cursor, e.g. `time`securityId`priceBookType!(...)
 / @return the path written
 .qetl.job.continuous.save_cursor_value:{[worker;cursor]
-    system"mkdir -p ",.qetl.job.bounded.state.shell_word[.qetl.job.bounded.state.lock_dir[]];
+    .qetl.job.bounded.state.ensure_dir .qetl.job.bounded.state.lock_dir[];
     .qetl.job.bounded.state.durable_set[.qetl.job.continuous.cursor_value_path[worker];cursor]}
 
 / Is `proposed` strictly after `current`, comparing the fields `ks` in order?

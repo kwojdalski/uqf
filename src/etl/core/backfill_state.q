@@ -107,6 +107,12 @@
 / @eg .qetl.job.bounded.state.shell_word "/a b/c.lock"  ->  "'/a b/c.lock'"
 .qetl.job.bounded.state.shell_word:{[path] "'",ssr[path;"'";"'\\''"],"'"}
 
+/ mkdir -p, unless `key` finds the directory: each `system` forks this process (#2729).
+/ @param dir a directory, as a string
+/ @return dir
+/ @eg .qetl.job.bounded.state.ensure_dir "/tmp/uqf_ensure_dir_eg"  ->  "/tmp/uqf_ensure_dir_eg"
+.qetl.job.bounded.state.ensure_dir:{[dir] if[()~key hsym `$dir; system"mkdir -p ",.qetl.job.bounded.state.shell_word dir]; dir}
+
 / Private: take one lock directory, atomically WITH its owner record - 0 when
 / this call made the lock, 1 when it exists already (or cannot be made).
 / .
@@ -117,7 +123,9 @@
 / The owner is written inside a fresh sibling directory, which is then
 / renamed into the lock path: rename is atomic, so the lock exists complete or
 / not at all. An interrupt before the rename leaves only the sibling
-/ (`<lock>.XXXXXX`), which is not a lock and which nothing reads.
+/ (`<lock>.<pid>.<n>`), which is not a lock and which nothing reads.
+/ Only the rename forks (#2729): the owner write makes the sibling, and a
+/ refused one is removed in-process, as nothing reads it.
 / .
 / The rename refuses to replace anything already at the path, so an existing
 / lock - live or not - is left alone exactly as mkdir's failure left it. (A
@@ -126,15 +134,12 @@
 / only racy against that older version.)
 / @private
 .qetl.job.bounded.state.try_take:{[path;pid]
-    tmp:@[{first system"mktemp -d ",.qetl.job.bounded.state.shell_word[x,".XXXXXX"]};path;{[e] ""}];
-    if[0=count tmp; :1];
+    tmp:path,".",string[.z.i],".",string "j"$.z.p;
     rc:@[{[tmp;path;pid]
           .qetl.job.bounded.state.write_owner_as[tmp;pid];
           system"perl -e 'exit 1 if -e $ARGV[1]; rename($ARGV[0],$ARGV[1]) or exit 1' ",(" " sv .qetl.job.bounded.state.shell_word each (tmp;path))," 2>/dev/null";
           0}[tmp;path];pid;{[e] 1}];
-    / Whatever happened the sibling is not wanted; after a successful rename it
-    / is already gone, so this is then a no-op.
-    .qetl.job.bounded.state.rm_lock[tmp];
+    if[rc<>0; {@[hdel;x;{[e] ::}]} each hsym `$(.qetl.job.bounded.state.owner_file tmp;tmp)];
     rc}
 
 / Private: remove a lock directory and everything in it.
@@ -342,17 +347,15 @@
 / and the cost - no horizontal scaling of a single worker - costs nothing on
 / a single-host deployment.
 / .
-/ Uses mkdir as the atomic primitive rather than a file existence check.
-/ `if[not exists; create]` is a race: two workers starting together can both
-/ see no lock and both proceed. mkdir either succeeds or fails atomically on
-/ every POSIX filesystem, so exactly one wins.
+/ try_take's rename is the atomic step, not `if[not exists; create]`, a race
+/ two workers starting together could both win: exactly one rename succeeds.
 / @param worker the worker's name
 / @return the lock path
 / @throws error if another instance already holds the lock
 / @eg .qetl.job.bounded.state.acquire_lock[`markout_backfill]
 .qetl.job.bounded.state.acquire_lock:{[worker]
     dir:.qetl.job.bounded.state.lock_dir[];
-    system"mkdir -p ",.qetl.job.bounded.state.shell_word[dir];
+    .qetl.job.bounded.state.ensure_dir dir;
     path:.qetl.job.bounded.state.lock_path[worker];
     rc:.qetl.job.bounded.state.try_take[path;.z.i];
     / A lock whose recorded holder is gone from this host is BROKEN AND
@@ -366,7 +369,7 @@
                 (worker;"breaking a stale lock - its holder is gone";
                  `path`holder!(path;.qetl.job.bounded.state.owner_desc[path]));::];
             .qetl.job.bounded.state.break_stale[path];
-            / Retake it through the same atomic mkdir. Losing THIS race means
+            / Retake it through the same atomic take. Losing THIS race means
             / another process got in first, and the refusal below - now
             / describing that live holder - is the right answer.
             rc:.qetl.job.bounded.state.try_take[path;.z.i]]];
@@ -416,9 +419,7 @@
 / critical section that several processes legitimately contend for, so it
 / WAITS instead.
 / .
-/ mkdir is the atomic primitive here for the same reason it is there:
-/ `if[not exists; create]` is a race two processes can both win, while mkdir
-/ either succeeds or fails atomically on every POSIX filesystem.
+/ try_take is the atomic step here for the same reason it is there.
 / .
 / ARGS ARE A SEPARATE PARAMETER, and that is not stylistic. The obvious
 / spelling - with_file_lock[name] {[x] ...}[value] - defers nothing: a
@@ -438,7 +439,7 @@
 / @throws error when the lock cannot be taken within file_lock_wait
 / @eg .qetl.job.bounded.state.with_file_lock[`etl_coverage;{[n] n};enlist 1]
 .qetl.job.bounded.state.with_file_lock:{[name;f;args]
-    system"mkdir -p ",.qetl.job.bounded.state.shell_word[.qetl.job.bounded.state.lock_dir[]];
+    .qetl.job.bounded.state.ensure_dir .qetl.job.bounded.state.lock_dir[];
     .qetl.job.bounded.state.with_lock_at[.qetl.job.bounded.state.file_lock_path[name];.qetl.job.bounded.state.file_lock_wait;f;args]}
 
 / Take the lock at path for a holder, waiting up to wait while a live one
@@ -575,11 +576,11 @@
 .qetl.job.bounded.state.durable_replace:{[path;write]
     tmp:path,".tmp";
     write tmp;
-    / Each path one shell word: unquoted, a status directory with a space in
-    / it split these, and the write threw 'os with only the .tmp written (#2324).
+    / One shell, as each `system` forks (#2729); each path one shell word, as
+    / unquoted a space split them and left only the .tmp written (#2324).
     w:.qetl.job.bounded.state.shell_word;
-    if[not ()~key hsym `$path; system"ln -f ",w[path]," ",w path,".bak"];
-    system"mv -f ",w[tmp]," ",w path;
+    bak:$[()~key hsym `$path; ""; "ln -f ",w[path]," ",w[path,".bak"]," && "];
+    system bak,"mv -f ",w[tmp]," ",w path;
     path}
 
 / Delete a durably written file AND its previous generation.
@@ -590,7 +591,7 @@
 / @param path the file, as a string
 / @return path
 / @eg .qetl.job.bounded.state.durable_remove "/tmp/durable_remove_eg"
-.qetl.job.bounded.state.durable_remove:{[path] system"rm -f "," " sv .qetl.job.bounded.state.shell_word each path,/:("";".bak";".tmp"); path}
+.qetl.job.bounded.state.durable_remove:{[path] {if[not ()~key f:hsym `$x; hdel f]} each path,/:("";".bak";".tmp"); path}
 
 / Read a file durable_set wrote, falling back to the previous generation.
 / .
@@ -665,7 +666,7 @@
 /   starts at it, so a row timed exactly at the cursor is the next window's
 / @return the path written
 .qetl.job.bounded.state.save_checkpoint:{[worker;spec;cursor]
-    system"mkdir -p ",.qetl.job.bounded.state.shell_word[.qetl.job.bounded.state.lock_dir[]];
+    .qetl.job.bounded.state.ensure_dir .qetl.job.bounded.state.lock_dir[];
     path:.qetl.job.bounded.state.checkpoint_path[worker];
     payload:`source_version`range_from`range_to`cursor`saved_at!
             (spec`source_version;spec`range_from;spec`range_to;cursor;.z.p);

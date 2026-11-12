@@ -420,7 +420,7 @@
 / lock at all - not an ownerless one that reads as live forever.
 .qt.qetl.job.bounded.state.test_an_interrupt_while_taking_the_lock_leaves_no_ownerless_lock:{[t]
     path:.qetl.job.bounded.state.file_lock_path[`ledger_crash];
-    system"rm -rf ",path," ",path,".??????";
+    system"rm -rf ",path," ",path,".*";
     / The interrupt: the owner write throws, as 'os does when SIGTERM lands in it.
     real:.qetl.job.bounded.state.write_owner_as;
     `.qetl.job.bounded.state.write_owner_as set {[p;i] '"os"};
@@ -428,7 +428,7 @@
     `.qetl.job.bounded.state.write_owner_as set real;
     .qunit.assertEquals[r;1;"the interrupted take reports that it did not get the lock"];
     .qunit.assertEquals[key hsym `$path;();"and there is no lock directory, ownerless or otherwise"];
-    .qunit.assertEquals[count system"ls -d ",path,".?????? 2>/dev/null || true";0;"and no half-made sibling is left"];
+    .qunit.assertEquals[count system"ls -d ",path,".* 2>/dev/null || true";0;"and no half-made sibling is left"];
     .qunit.assertEquals[.qetl.job.bounded.state.with_file_lock[`ledger_crash;{[n] n};enlist 7];7;
         "the next run takes the lock"];
     .qunit.assertEquals[key hsym `$path;();"and releases it"]};
@@ -436,7 +436,7 @@
 .qt.qetl.job.bounded.state.test_a_sibling_left_by_a_killed_take_is_not_a_lock:{[t]
     / SIGKILL between the owner write and the rename leaves the sibling.
     path:.qetl.job.bounded.state.file_lock_path[`ledger_sibling];
-    system"rm -rf ",path," ",path,".??????";
+    system"rm -rf ",path," ",path,".*";
     sib:path,".AbCdEf";
     system"mkdir -p ",sib;
     .qetl.job.bounded.state.write_owner_as[sib;.z.i];
@@ -452,7 +452,7 @@
     .qunit.assertEquals["j"$o`pid;"j"$.z.i;"with its holder already recorded"];
     .qunit.assertEquals[.qetl.job.bounded.state.try_take[path;.z.i];1;"a second take is refused, as mkdir refused it"];
     .qunit.assertEquals[.qetl.job.bounded.state.read_owner[path]~o;1b;"and leaves the holder's record as it was"];
-    .qunit.assertEquals[count system"ls -d ",path,".?????? 2>/dev/null || true";0;"the refused take cleans up its sibling"];
+    .qunit.assertEquals[count system"ls -d ",path,".* 2>/dev/null || true";0;"the refused take cleans up its sibling"];
     system"rm -rf ",path};
 
 .qt.qetl.job.bounded.state.test_the_refusal_names_the_holder_it_found:{[t]

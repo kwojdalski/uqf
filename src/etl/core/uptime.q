@@ -72,7 +72,7 @@
 / @param job the streaming job's name
 / @return the session id
 .qetl.uptime.begin:{[job]
-    system"mkdir -p ",.qetl.job.bounded.state.shell_word .qetl.job.bounded.state.lock_dir[];
+    .qetl.job.bounded.state.ensure_dir .qetl.job.bounded.state.lock_dir[];
     / mint, not `first 1?0Ng`: that is the same guid in every fresh process (run.q)
     id:.qetl.run.mint[];
     now:.z.p;
