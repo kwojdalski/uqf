@@ -31,7 +31,6 @@ STRICT = {"core/io_hdb.q", "core/compression.q"}
 # by the number of unquoted calls. Only ever lower these.
 BASELINE = {
     "core/verify_behaviour.q": 1,
-    "core/backfill_state.q": 2,
     "core/react.q": 1,
     "core/worker_runtime.q": 1,
     "core/tick.q": 1,
