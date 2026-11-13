@@ -17,8 +17,11 @@ ssh when `stack.host` IS this machine and no destination is set.
 
 Before a change is written: no attached backfill may own the attachment
 (backfill_owner), and no wdb writing that HDB may report an end-of-day reload
-in progress (`writer_state`). After: each HDB reader serving the directory is
-asked to reload (`hdb_reload`), and the ones that did not are reported.
+in progress or be within an attached backfill's end-of-day fence of its roll
+(`writer_state`, #2740): TorQ's end of day takes no lock, and a partition it
+writes during a change would be left in the old shape. After: each HDB reader
+serving the directory is asked to reload (`hdb_reload`), and the ones that did
+not are reported.
 """
 
 from __future__ import annotations
@@ -30,6 +33,8 @@ from typing import Any
 
 from uqs.attach import backfill_owner, config
 from uqs.attach.backfill import canonical
+from uqs.attach.backfill_coordination import EOD_GUARD
+from uqs.attach.backfill_fence import fence
 from uqs.attach.backfill_plan import readers_of
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Host
@@ -130,7 +135,8 @@ def resolve(name: str, ipc: Ipc, root: Path | None = None, host: Host = HOST) ->
 
 def refuse_running_writers(where: AttachedHdb, ipc: Ipc, root: Path | None = None) -> None:
     """Refuse while an attached backfill owns the attachment, or a wdb writing
-    this HDB reports an end-of-day reload in progress."""
+    this HDB reports an end-of-day reload in progress, or its clock is within
+    EOD_GUARD of a roll - or it does not report its clock."""
     backfill_owner.refuse_while_active(where.att.name, root)
     if where.observation is None or not where.observation.discovery.up:
         raise AttachmentError(
@@ -151,6 +157,14 @@ def refuse_running_writers(where: AttachedHdb, ipc: Ipc, root: Path | None = Non
             raise AttachmentError(
                 f"{proc.procname} reports an end-of-day reload in progress: run this once "
                 "its end of day has finished"
+            )
+        found: list = []
+        fence(state, [], EOD_GUARD, found)
+        timing = [f.message for f in found if f.code in ("eod-fence", "clock-unknown")]
+        if timing:
+            raise AttachmentError(
+                f"{timing[0]}. An end of day during the change would write a partition in the "
+                "old shape, so nothing is written: run this away from end of day"
             )
 
 

@@ -145,9 +145,12 @@ attribute, or renames the column back, and is a preview until you add `--apply`.
 A completed cast is undone by a cast back, which is exact only for a lossless
 cast.
 
-Run these commands outside end of day, and while no backfill writes the table.
-With `--hdb`, writers are not checked, and the plan prints the reload command
-for you to run.
+An applied run holds the HDB's write lock, which backfills, `data migrate` and
+compression also take, on the host where it writes. While one run is alive, a
+second is refused, naming it. A run whose ssh session was interrupted can still
+be running on the stack's host. With `--attachment`, a run is refused within an
+hour of the stack's end of day. With `--hdb`, end of day is not checked, and the
+plan prints the reload command for you to run.
 
 ### On production
 

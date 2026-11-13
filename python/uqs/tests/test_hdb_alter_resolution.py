@@ -115,6 +115,31 @@ def test_an_end_of_day_reload_in_progress_is_refused(stack):
     hdb_where.refuse_running_writers(where, fake)
 
 
+@pytest.mark.parametrize(
+    ("now", "said"),
+    [
+        ("2026.10.16D23:30:00.000000000", "30 minutes away"),
+        ("2026.10.16D00:20:00.000000000", "last end of day was 20 minutes ago"),
+    ],
+)
+def test_a_change_near_end_of_day_is_refused(stack, now, said):
+    fake, hdb = stack
+    save_attachment("pb", hdb)
+    where = hdb_where.resolve("pb", fake)
+    fake.state_over["wdb1"] = {"now": now}
+    with pytest.raises(AttachmentError, match=said):
+        hdb_where.refuse_running_writers(where, fake)
+
+
+def test_a_writer_that_does_not_report_its_clock_is_refused(stack):
+    fake, hdb = stack
+    save_attachment("pb", hdb)
+    where = hdb_where.resolve("pb", fake)
+    fake.state_over["wdb1"] = {"next_roll": ""}
+    with pytest.raises(AttachmentError, match="does not report its clock"):
+        hdb_where.refuse_running_writers(where, fake)
+
+
 class ReloadingStack(HdbStack):
     """hdb1 answers, and reloads when asked."""
 
@@ -162,12 +187,42 @@ def test_an_unreachable_ssh_destination_is_refused_naming_the_setting(tmp_path):
     assert "Nothing was run" in said
 
 
-def test_the_remote_script_carries_both_files_and_cleans_up():
+def test_the_remote_script_carries_its_files_and_cleans_up():
     script = hdb_remote.remote_script(UQF_ROOT, Request("/d/hdb", "pb", "check"), apply=False)
-    assert script.count("base64 -d") == 2, "hdb/alter.q and dbmaint.q, nothing else"
+    assert script.count("base64 -d") == 4, "hdb/alter.q, dbmaint.q and the two lock files"
+    for f in ("src/etl/core/backfill_state.q", "src/etl/core/io_hdb.q"):
+        assert f'> "$tmp/{f}"' in script, f
     assert "trap 'rm -rf \"$tmp\"' EXIT" in script
     assert "${QCMD:-q}" in script
     assert "-hdb /d/hdb -table pb -json -q" in script
+
+
+@pytest.mark.parametrize(
+    ("raised", "said"),
+    [
+        (KeyboardInterrupt(), "interrupted"),
+        (subprocess.TimeoutExpired("ssh", 1), "did not finish"),
+    ],
+)
+def test_an_interrupted_apply_says_the_remote_run_may_still_hold_the_lock(raised, said):
+    def interrupted(argv, **kw):
+        raise raised
+
+    req = Request("/data/hdb", "pb", "reorder")
+    with pytest.raises(UqsError) as caught:
+        hdb_remote.run_ssh("torq@prod", "ssh", UQF_ROOT, req, apply=True, runner=interrupted)
+    assert said in str(caught.value)
+    assert "may still be running on torq@prod" in str(caught.value)
+    assert "write lock" in str(caught.value)
+
+
+def test_an_interrupted_plan_says_nothing_was_written():
+    def interrupted(argv, **kw):
+        raise KeyboardInterrupt
+
+    req = Request("/data/hdb", "pb", "check")
+    with pytest.raises(UqsError, match="nothing was written"):
+        hdb_remote.run_ssh("torq@prod", "ssh", UQF_ROOT, req, apply=False, runner=interrupted)
 
 
 # ------------------------------------------------------------------ handles

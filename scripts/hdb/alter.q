@@ -50,9 +50,17 @@
 / FINAL CHECK. After the last write every partition holding the table is read
 / again; the run exits 1 naming each that does not have the target shape.
 / .
+/ WRITE LOCK. With -apply the run holds the HDB root's write lock - the one
+/ every uqf writer of the root takes (.qetl.io.hdb_lock: a backfill, `uqs data
+/ migrate`, compression) - from before it reads a journal until it exits, on
+/ whichever host it runs (#2740). A second run while this one is alive is
+/ refused, naming it; one killed part way leaves a lock the next run breaks
+/ as stale, and only then is its "started" journal resumed. TorQ's own end of
+/ day takes no such lock: `uqs` checks for that before it runs this.
+/ .
 / NOT HERE: deleting columns or tables, re-enumerating symbols (a -cast to or
-/ from symbol is refused), coordination with running writers and reloading
-/ readers - the uqs front end checks the first and does the second.
+/ from symbol is refused), the end-of-day and backfill checks, and reloading
+/ readers - the uqs front end does the last two.
 / .
 / -journal PATH names the journal a new run writes (default: a timestamped
 / file in <hdb>.uqf-alter/); `uqs` passes the one its dry run showed.
@@ -109,6 +117,9 @@ fail:{[msg]
 if[not `hdb in key opts; refuse "-hdb DIR is required"];
 hdb_text:opt_text`hdb;
 if[()~key hsym `$hdb_text; refuse "no HDB at ",hdb_text];
+/ As given, for the write lock: the writers compute its path from the root
+/ they were given, not a resolved one.
+given_hdb:hsym `$hdb_text;
 / Absolute and without symlinks: the journal sits beside it, and names it.
 / "(" first, so q's system does not read a leading `cd` as its own \cd.
 hdb_text:first system "(cd '",hdb_text,"' && pwd -P)";
@@ -135,6 +146,24 @@ system"l ",1_string dbmaint_file;
 / so this script is KDB-X only, and says so rather than failing half way.
 / The probe is .qetl.io.on_peachq's (src/etl/core/io_hdb.q).
 if[not -7h=type @[value;`.pq.load_natives;{[e] 0N}]; refuse "KDB-X only: PeachQ cannot write a partitioned HDB"];
+
+/ ------------------------------------------------------------- write lock
+
+/ The lock protocol and the lock's path, which need nothing else in the tree
+/ (as hdb/lock.q loads them): from a checkout, a release, or the temporary
+/ directory `uqs data alter --attachment` copies them into.
+lock_files:hsym `$script_dir,/:("../../src/etl/core/backfill_state.q";"../../src/etl/core/io_hdb.q");
+lock_path:"";
+if[applying;
+    if[count missing:lock_files where ()~/:key each lock_files; refuse "no ",1_string first missing];
+    {[f] system"l ",1_string f} each lock_files;
+    lock_path:.qetl.io.hdb_lock given_hdb;
+    / No wait: a live holder is a writer still running, and the operator is
+    / told who; a dead holder's lock is broken and taken.
+    taken:@[{[p] .qetl.job.bounded.state.take_lock_at[p;0D;.z.i]; 1b};lock_path;{[e] e}];
+    if[not 1b~taken; refuse "the HDB write lock is held - ",taken];
+    / Given up on every exit: a refusal, a failure, a completed run.
+    .z.exit:{[code] @[.qetl.job.bounded.state.release_lock_at[;.z.i];lock_path;{[e] -2 "hdb_alter: ",e}];}];
 
 / The HDB's symbol domain, so enumerated columns can be read and a template
 / taken from a partition carries its enumeration.
