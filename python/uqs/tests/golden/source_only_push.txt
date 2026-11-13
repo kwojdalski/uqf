@@ -288,4 +288,6 @@ rm -rf /opt/uqf/staging/20261007T000000Z-0123456789ab
 =====
 [lock]
 set -euo pipefail
-rm -rf /opt/uqf/deploy.lock
+
+if [ "$(cat /opt/uqf/deploy.lock/owner 2>/dev/null || true)" = <owner> ]; then rm -rf /opt/uqf/deploy.lock
+elif [ -d /opt/uqf/deploy.lock ]; then echo "kept=$(head -n 1 /opt/uqf/deploy.lock/owner 2>/dev/null || echo unknown)"; fi

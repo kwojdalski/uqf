@@ -1447,3 +1447,27 @@ def test_a_failed_extraction_leaves_no_release_and_can_be_retried(tmp_path):
     release = Deployment(cfg, _BashRemote()).transfer(pkg, pkg.release)
     assert (Path(release) / "RELEASE_MANIFEST.json").is_file()
     assert sorted(p.name for p in (dest / "releases").iterdir()) == [pkg.release]
+
+
+def test_a_failed_push_beats_between_its_rollback_steps(tmp_path):
+    """#2741: stopping the new release, restarting the previous one and
+    verifying it each run up to their timeouts, past the lock's stale_after
+    together - so the rollback beats between them, as the push does."""
+    previous = json.dumps({"profile": "fx", "processes": [{"process": "rdb1"}]})
+    remote = Interrupted(
+        {
+            **_HEALTHY,
+            "uv python find": _done(SERVER + "data=present\ncurrent=OLD\n"),
+            "deploy-report.json\n": _done(previous),
+            "readlink": _done("current=OLD\n"),
+            "uqs deploy verify --profile": _verified(True),
+        }
+    )
+    cfg = parse_args(_args(_artifact(tmp_path), "--restart"))
+    with pytest.raises(KeyboardInterrupt):
+        driver.deploy(cfg, remote, out=io.StringIO())
+    steps = [i for i, (stage, _) in enumerate(remote.scripts) if stage == "rollback"]
+    assert len(steps) == 3, "stop the new, start the previous, verify it"
+    beat = "date +%s > /opt/uqf/deploy.lock/heartbeat; fi"
+    for a, b in zip(steps, steps[1:], strict=False):
+        assert any(beat in s for _, s in remote.scripts[a + 1 : b]), remote.scripts[a][1]

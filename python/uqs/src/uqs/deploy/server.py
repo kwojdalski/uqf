@@ -307,7 +307,8 @@ class Server:
             log.warning("could not remove the staging directory: {}", redact(str(exc)))
 
     def release_lock(self) -> None:
+        """Remove deploy.lock if this run still holds it (uqs.deploy.lock)."""
         try:
-            self.remote.run(script(f"rm -rf {q(self.lock)}"), self.cfg.command_timeout, "lock")
+            self.locker.release()
         except DeployError as exc:
             log.warning("could not release {}: {}", self.lock, redact(str(exc)))

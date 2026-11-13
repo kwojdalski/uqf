@@ -202,3 +202,64 @@ def _lock_lines() -> str:
 
     start = PREFLIGHT.index('if [ -d "$lock" ]; then')
     return PREFLIGHT[start:]
+
+
+# ------------------------------------------------------------------ removal (#2741)
+
+
+def test_a_release_removes_the_lock_this_run_holds(tmp_path):
+    dest = tmp_path / "uqf"
+    s = _server(dest)
+    s.take_lock()
+    s.release_lock()
+    assert not (dest / "deploy.lock").exists()
+
+
+def test_a_release_leaves_a_lock_broken_and_taken_by_another_run(tmp_path, log_text):
+    """The old run's `finally` once removed whatever lock stood there - the
+    newcomer's, after a legitimate break-lock - and a third run went ahead."""
+    dest = tmp_path / "uqf"
+    old = _server(dest)
+    old.take_lock()
+    subprocess.run(["rm", "-rf", str(dest / "deploy.lock")], check=True)
+    _held(dest, age=0)  # broken, and taken by another deployment
+    old.release_lock()
+    assert old.locker.info()["release"] == "OLD", "the newcomer still holds it"
+    held_by = "is no longer this run's, so it was left to 2026-10-08T00:00:00+00:00 push OLD"
+    assert held_by in log_text()
+
+
+class TakenMeanwhile(LocalRemote):
+    """Another deployment releases the judged lock and takes it again between
+    the break's judgement and its removal."""
+
+    def __init__(self, dest: Path) -> None:
+        super().__init__()
+        self.dest = dest
+
+    def run(self, script: str, timeout: int, stage: str, as_login: bool = False):
+        if "cksum <" in script and "rm -rf" in script:
+            subprocess.run(["rm", "-rf", str(self.dest / "deploy.lock")], check=True)
+            _held(self.dest, age=0, host="newcomer")
+        return super().run(script, timeout, stage, as_login)
+
+
+def test_a_break_removes_only_the_lock_it_judged(tmp_path):
+    dest = tmp_path / "uqf"
+    _held(dest, age=5000)
+    s = _server(dest, break_lock=True)
+    s.remote = s.locker.remote = TakenMeanwhile(dest)
+    with pytest.raises(DeployError, match="another deployment took .* as it was broken"):
+        s.take_lock()
+    assert s.locker.info()["host"] == "newcomer", "the lock taken meanwhile is left standing"
+
+
+def test_a_break_of_a_lock_with_no_owner_file_still_removes_it(tmp_path):
+    """A holder that died between its mkdir and its owner record: an empty
+    checksum is what is judged, and what is compared again."""
+    dest = tmp_path / "uqf"
+    (dest / "deploy.lock").mkdir(parents=True)
+    (dest / "deploy.lock" / "heartbeat").write_text(f"{int(time.time()) - 5000}\n")
+    s = _server(dest, break_lock=True)
+    s.take_lock()
+    assert s.locker.info()["host"] == HERE

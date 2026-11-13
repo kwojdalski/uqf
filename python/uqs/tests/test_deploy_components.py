@@ -38,11 +38,12 @@ def _push(tmp_path: Path, *extra: str, facts: str = "") -> tuple[FakeRemote, dic
 
 def _normalised(remote: FakeRemote) -> str:
     """Every script the server ran, with what differs by run - the artifact's
-    sha256, the lock's owner (who, where, when) and the report's body, which
-    is data - masked."""
+    sha256, the lock's owner (who, where, when) as written and as compared on
+    release, and the report's body, which is data - masked."""
     s = "\n=====\n".join(f"[{stage}]\n{script}" for stage, script in remote.scripts)
     s = re.sub(r"\b[0-9a-f]{64}\b", "<sha256>", s)
     s = re.sub(r"printf '%s\\n' '[^']*' > (\S+/owner)", r"printf '%s\\n' <owner> > \1", s)
+    s = re.sub(r"(/owner 2>/dev/null \|\| true\)\" = )'[^']*'", r"\1<owner>", s)
     body = r"<<'DEPLOYREPORT'\n.*?\nDEPLOYREPORT\n"
     s = re.sub(body, "<<'DEPLOYREPORT'\n<report>\nDEPLOYREPORT\n", s, flags=re.S)
     return s.rstrip("\n") + "\n"

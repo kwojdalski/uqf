@@ -304,7 +304,8 @@ def _now() -> str:
 
 def _rollback(dep, release, started, stopped_previous, previous, prev) -> str:
     """Stop what the failed release started, and bring the previous one back:
-    its profile and the sidecar processes it ran beside it (`prev`)."""
+    its profile and the sidecar processes it ran beside it (`prev`). It beats
+    between steps, as the push does, so a slow rollback never looks dead."""
     prev_profile, prev_extra = prev
     notes = []
     if started and release:
@@ -314,6 +315,7 @@ def _rollback(dep, release, started, stopped_previous, previous, prev) -> str:
             notes.append("stopped the new release's processes")
         except DeployError as exc:
             notes.append(f"FAILED to stop the new release's processes: {exc}")
+        dep.beat()
     if stopped_previous and previous and prev_profile:
         prev_release = f"{dep.releases}/{previous}"
         try:
@@ -329,6 +331,7 @@ def _rollback(dep, release, started, stopped_previous, previous, prev) -> str:
         except DeployError as exc:
             notes.append(f"FAILED to restart release {previous}: {exc}")
         else:
+            dep.beat()
             # A start command that returned is not a recovery: the previous
             # release's own verifier, with its own deploy.env, must pass.
             try:
