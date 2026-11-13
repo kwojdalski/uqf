@@ -34,6 +34,11 @@ from uqs.stack.runtime import query
 #: ../../lib/kx-dbmaint: the two files a host without uqf needs.
 SCRIPT = Path("hdb") / "alter.q"
 DBMAINT = Path("lib") / "kx-dbmaint" / "dbmaint.q"
+#: What hdb/alter.q loads to take the HDB write lock (#2740), as hdb/lock.q does.
+LOCK_FILES = (
+    Path("src") / "etl" / "core" / "backfill_state.q",
+    Path("src") / "etl" / "core" / "io_hdb.q",
+)
 
 #: The operations that change a table; one per run.
 CHANGES = ("reorder", "rename", "attr", "cast")

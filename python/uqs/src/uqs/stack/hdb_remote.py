@@ -1,15 +1,22 @@
 """hdb/alter.q on another machine, over ssh, with that machine's own q (#1755).
 
 An attached stack's HDB is on the stack's host, and that host need not have
-uqf: a production TorQ server has q and TorQ. So the script and the vendored
-dbmaint.q it loads go there for one run and are gone after it:
+uqf: a production TorQ server has q and TorQ. So the script, the vendored
+dbmaint.q it loads and the two files of the HDB write lock it takes there
+(#2740) go there for one run and are gone after it:
 
   1. one ssh session, a login shell (`bash -l -s`, the account's own QHOME,
      QCMD and PATH - as deploy/remote.py runs its steps), reading a script on
      stdin;
   2. that script makes a temporary directory, writes the files into it in
-     the layout hdb/alter.q finds dbmaint by (scripts/hdb/, lib/kx-dbmaint/),
-     runs `$QCMD` (else `q`) on it, and removes the directory on any exit.
+     the layout hdb/alter.q finds them by (scripts/hdb/, lib/kx-dbmaint/,
+     src/etl/core/), runs `$QCMD` (else `q`) on it, and removes the directory
+     on any exit.
+
+Interrupting the local side (Ctrl-C, the timeout) ends the ssh client only:
+with no terminal, the q on the stack's host is not told and runs on, holding
+the HDB's write lock. The refusal says so, and a second run is refused by
+that lock until the first ends.
 
 The files travel inside the script as base64 heredocs, so nothing but the
 fixed ssh command line is parsed by the remote login shell before bash reads
@@ -28,7 +35,7 @@ from pathlib import Path
 from typing import Any
 
 from uqs.paths import UqsError
-from uqs.stack.hdb_alter import DBMAINT, SCRIPT, TIMEOUT_S, Request, args, parse
+from uqs.stack.hdb_alter import DBMAINT, LOCK_FILES, SCRIPT, TIMEOUT_S, Request, args, parse
 
 #: What ssh exits with when it, rather than the remote command, failed.
 SSH_FAILED = 255
@@ -54,6 +61,7 @@ def remote_script(repo_root: Path, req: Request, *, apply: bool) -> str:
     files = {
         f"scripts/{SCRIPT.as_posix()}": (repo_root / "scripts" / SCRIPT).read_bytes(),
         DBMAINT.as_posix(): (repo_root / DBMAINT).read_bytes(),
+        **{f.as_posix(): (repo_root / f).read_bytes() for f in LOCK_FILES},
     }
     if req.schema is not None:
         files[SCHEMA_NAME] = req.schema.read_bytes()
@@ -65,7 +73,7 @@ def remote_script(repo_root: Path, req: Request, *, apply: bool) -> str:
         "set -u",
         'tmp=$(mktemp -d "${TMPDIR:-/tmp}/uqf-hdb-alter.XXXXXX") || exit ' + str(NO_TEMP),
         "trap 'rm -rf \"$tmp\"' EXIT",
-        'mkdir -p "$tmp/scripts/hdb" "$tmp/lib/kx-dbmaint"',
+        'mkdir -p "$tmp/scripts/hdb" "$tmp/lib/kx-dbmaint" "$tmp/src/etl/core"',
         *(heredoc(target, data) for target, data in files.items()),
         'q_cmd="${QCMD:-q}"',
         'if ! command -v "${q_cmd%% *}" >/dev/null 2>&1; then',
@@ -74,6 +82,17 @@ def remote_script(repo_root: Path, req: Request, *, apply: bool) -> str:
         f'$q_cmd "$tmp/scripts/{SCRIPT.as_posix()}" {quoted} < /dev/null',
     ]
     return "\n".join(body) + "\n"
+
+
+def still_running(destination: str, apply: bool) -> str:
+    """What an interrupted run may have left on the stack's host."""
+    if not apply:
+        return "It was a plan: nothing was written."
+    return (
+        f"Only the ssh client was stopped: hdb/alter.q may still be running on {destination}, "
+        "holding the HDB write lock. Running it again is refused while it does; once it has "
+        "ended, the same command resumes an unfinished run."
+    )
 
 
 def run_ssh(
@@ -103,7 +122,10 @@ def run_ssh(
             timeout=TIMEOUT_S,
         )
     except subprocess.TimeoutExpired:
-        raise UqsError(f"hdb/alter.q on {destination} did not finish within {TIMEOUT_S}s") from None
+        late = f"hdb/alter.q on {destination} did not finish within {TIMEOUT_S}s"
+        raise UqsError(f"{late}. {still_running(destination, apply)}") from None
+    except KeyboardInterrupt:
+        raise UqsError(f"interrupted. {still_running(destination, apply)}") from None
     except OSError as exc:
         raise UqsError(f"could not run ssh: {exc}") from None
     if result.returncode == SSH_FAILED:

@@ -212,11 +212,8 @@ def apply_plan(
         assert handle.where is not None
         hdb_where.refuse_running_writers(handle.where, service.ipc_for(handle.where.att))
     confirm(handle, what, yes=yes, as_json=as_json)
-    if handle.kind == "runtime":
-        with hdb_alter.write_lock(handle.paths):
-            result = handle.run(req, apply=True)
-    else:
-        result = handle.run(req, apply=True)
+    # hdb/alter.q takes the HDB write lock itself, on whichever host it runs (#2740)
+    result = handle.run(req, apply=True)
     result["readers"] = readers(handle) if result.get("status") == "applied" else []
     return result
 

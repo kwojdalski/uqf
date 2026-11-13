@@ -215,6 +215,51 @@
         .qunit.assertEquals[.qt.qproc.hdbalter.status[root];"completed";"and the journal it resumed is completed"]
         } each ("-reorder n,amt,sym,time";"-rename amt=amount";"-cast n:long";"-attr sym:g")};
 
+/ --- the write lock (#2740) ------------------------------------------------------
+
+/ Take or give up an HDB root's write lock for a holder pid, through
+/ hdb/lock.q, as `uqs data migrate` does.
+/ @return the exit code
+.qt.qproc.hdbalter.lock:{[action;root;pid]
+    "J"$first system "env ",.qt.support.q_interpreter[]," scripts/hdb/lock.q ",action," ",root," ",string[pid],
+        " -q < /dev/null > /dev/null 2>&1; echo $?"}
+
+/ The lock beside a fixture HDB.
+.qt.qproc.hdbalter.lock_path:{[root] hsym `$root,".write.lock"}
+
+.qt.qproc.hdbalter.test_a_run_is_refused_while_a_live_writer_holds_the_lock:{[t]
+    root:.qt.qproc.hdbalter.build[];
+    before:.qt.qproc.hdbalter.snapshot[root];
+    .qunit.assertEquals[.qt.qproc.hdbalter.lock["acquire";root;.z.i];0;"this process holds the lock"];
+    r:.qt.qproc.hdbalter.on[root;"-reorder n,amt,sym,time -apply"];
+    .qt.qproc.hdbalter.lock["release";root;.z.i];
+    .qunit.assertEquals[r 1;1;"the run is refused"];
+    .qunit.assertTrue[.qt.qproc.hdbalter.says[r;"write lock is held"];"saying the lock is held"];
+    .qunit.assertTrue[.qt.qproc.hdbalter.says[r;string .z.i];"and by which process"];
+    .qunit.assertEquals[.qt.qproc.hdbalter.snapshot[root];before;"and nothing was written"];
+    .qunit.assertEquals[.qt.qproc.hdbalter.journals[root];`symbol$();"not even a journal"]};
+
+.qt.qproc.hdbalter.test_a_dead_holders_lock_is_broken_and_an_applied_run_gives_it_up:{[t]
+    root:.qt.qproc.hdbalter.build[];
+    dead:"J"$first system "sh -c 'echo $$'";
+    .qunit.assertEquals[.qt.qproc.hdbalter.lock["acquire";root;dead];0;"a lock left by a process that is gone"];
+    r:.qt.qproc.hdbalter.on[root;"-reorder n,amt,sym,time -apply"];
+    .qunit.assertTrue[(0=r 1) and .qt.qproc.hdbalter.says[r;"final check clean"];"the run breaks it and completes"];
+    .qunit.assertTrue[()~key .qt.qproc.hdbalter.lock_path root;"and gives the lock up when it ends"]};
+
+.qt.qproc.hdbalter.test_a_refused_run_gives_the_lock_up:{[t]
+    root:.qt.qproc.hdbalter.build[];
+    r:.qt.qproc.hdbalter.on[root;"-attr sym:s -apply"];
+    .qunit.assertEquals[r 1;1;"refused after it took the lock"];
+    .qunit.assertTrue[()~key .qt.qproc.hdbalter.lock_path root;"and the lock is not left behind"]};
+
+.qt.qproc.hdbalter.test_a_dry_run_takes_no_lock:{[t]
+    root:.qt.qproc.hdbalter.build[];
+    .qunit.assertEquals[.qt.qproc.hdbalter.lock["acquire";root;.z.i];0;"this process holds the lock"];
+    r:.qt.qproc.hdbalter.on[root;"-reorder n,amt,sym,time"];
+    .qt.qproc.hdbalter.lock["release";root;.z.i];
+    .qunit.assertEquals[r 1;0;"a plan is read under a held lock"]};
+
 / --- refusals ----------------------------------------------------------------------
 
 .qt.qproc.hdbalter.test_partitions_that_disagree_are_refused_before_any_write_naming_each_shape:{[t]
