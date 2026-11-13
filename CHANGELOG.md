@@ -2,6 +2,47 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-11-13
+
+**Overview.** Four days of hardening what uqs does to a remote target and how
+jobs run. Deploys got an owner-checked lock, a free-space floor and a safer HDB
+alter. Jobs can now declare which q they run on, sidecar bundles are kept out of
+development checkouts, and the stop path became one policy. The scripts tree was
+reorganised by purpose, and the PeachQ pin moved to v0.91.
+
+**Changes by area** - **Deploy and HDB (`python/uqs/src/uqs/deploy`,
+`scripts/hdb`).** The deploy lock is released or broken only while its owner is
+the expected one, and rollback beats through its steps (#2741). Push refuses a
+target below a free-space floor and warns when no `keep` is set (#2743).
+`hdb/alter.q` holds the HDB write lock on whichever host it writes (#2740).
+Housekeeping registers its HDBs once (#2714). - **Jobs and the ETL framework
+(`src/etl`).** - A job may declare the q interpreters it runs on, and
+`uqs start` and `deploy push` refuse any other (#2747). - A transform logs
+`rows_in` as a scalar total (#2750). - Streaming declarations are stored
+normalised (#2657), and readiness derives from the resolved io manager (#2658). -
+`.qetl.venue` owns which market an execution belongs to (#2650, #2651). -
+posbook seeds its mid history from the HDB after a restart (#2460). - Ledger
+writes fork a shell once or twice instead of five to seven times (#2729). -
+**Stopping and attached backfills.** There is now one stop policy for every stop
+path (#2689, #2688). `uqs job runs stop` and `--kill` stop an attached backfill
+(#2690), and a bounded run stops cleanly with a stop file (#2679). `--follow`
+was added to attached backfills (#2677), and `--trace` traces live jobs' source
+queries from startup (#2675). - **Sidecar bundles.** Installing a bundle into a
+development checkout is refused (#2732), and a Claude hook blocks it (#2731). A
+design note covers loading installed bundles from an overlay outside the tracked
+tree (#2733). - **Scripts and tooling (`scripts/`).** `scripts/` is regrouped by
+purpose: `deploy`, `hdb`, `jobs`, `peachq` and `bench` (#2704--#2713). There is
+one KDB-X attestation command, more gates moved under `check.py` (#2706), and
+the CLI redesign's old spellings are retired (#2649). - **Interop.** uqf vendors
+its own `odbc.q` over KX's `odbc.so` (#2508). Databento rows go through ACCEPT_Q
+(#2698), and cwd-relative loads are taken out of `src/` and gated (#2653). -
+**Docs and agents.** The guides were restructured: `uqs.md` became six pages and
+deploy/attach were cut to a third. A `security-auditor` agent was added for what
+runs on a target host. - **Pins.** PeachQ is now v0.91, which closes 30 known
+gaps (#2717), and q-lint is v0.14.21 (#2727).
+
+**Files changed:** 643 files changed, 14725 insertions(+), 13418 deletions(-).
+
 ## stable/2026-11-09
 
 **Overview.** Eleven days, about 300 merged PRs and 1,255 commits. The bulk is
