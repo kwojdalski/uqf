@@ -81,6 +81,7 @@ SAMPLES: dict[str, Any] = {
     "soak": 45,
     "break_lock": "the holder's machine died",
     "allow_low_disk": "old releases are pruned next",
+    "accept_job_q": "the job's PeachQ gap does not affect this site",
 }
 
 #: What an override needs beside it, or it is refused for relaxing nothing (#1557).

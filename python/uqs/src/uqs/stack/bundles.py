@@ -45,6 +45,7 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from uqs.model import q_support
 from uqs.model.declarations import read_file
 from uqs.model.pipeline import PipelineKind
 from uqs.paths import BUNDLE_LEDGER, CATALOG_FILE, TABLES_FILE
@@ -405,7 +406,9 @@ def install(p: Plan, root: Path, runtime: str | None = None) -> dict:
 
 
 def jobs(p: Plan) -> list[dict[str, str]]:
-    """Each installed job's identity: name, kind, procname and file."""
+    """Each installed job's identity: name, kind, procname and file, and the q
+    interpreters it runs on when it declares them (its `q` key, #2747) - what
+    a release's preflight holds the server's q to."""
     found = []
     for item in p.jobs:
         if item.kind in (Kind.SOURCE, Kind.REACTION):
@@ -413,12 +416,13 @@ def jobs(p: Plan) -> list[dict[str, str]]:
             found.append({"kind": item.kind.value, "file": item.destination.name})
             continue
         for d in read_file(item.source):
-            found.append(
-                {
-                    "name": d.name,
-                    "kind": "worker" if d.kind is PipelineKind.BACKFILL else "streaming",
-                    "procname": d.procname,
-                    "file": item.source.name,
-                }
-            )
+            job = {
+                "name": d.name,
+                "kind": "worker" if d.kind is PipelineKind.BACKFILL else "streaming",
+                "procname": d.procname,
+                "file": item.source.name,
+            }
+            if d.q:
+                job["q"] = q_support.text(d.q)
+            found.append(job)
     return found

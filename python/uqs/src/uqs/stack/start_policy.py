@@ -6,8 +6,9 @@ refusals used to live in the CLI, so the other two started what the CLI
 refused - a misspelt name exited 0 and the HTTP route answered `ok: true`.
 They live here now, below every front end:
 
-  - a name that is not a process, a q too old for the tree, and ports another
-    stack holds are refused by refuse_start, which `runtime.run_torq_sh`
+  - a name that is not a process, a q too old for the tree, a q a started
+    job's `q` key does not name (#2747), and ports another stack holds are
+    refused by refuse_start, which `runtime.run_torq_sh`
     applies to every `start` and `restart` - so neither a front end nor
     another launcher of q processes (`uqs job backfill`, `uqs replay`, `uqs exec`)
     can skip them (#964); `stop` refuses an unknown name itself;
@@ -19,17 +20,19 @@ about unfed inputs and the connection cap for a positional start, which is
 the operator's call rather than this tree's mistake (see resolve_profiles).
 
 Two refusals may be skipped for one start, by name and with a reason
-(stack/start_overrides.py, #1643): the q-version refusal and the profile's
-connection-budget estimate. The default skips nothing, so a front end that
-passes no overrides keeps every refusal.
+(stack/start_overrides.py, #1643): the q-version refusals (the tree's, and a
+job's `q`) and the profile's connection-budget estimate. The default skips
+nothing, so a front end that passes no overrides keeps every refusal.
 """
 
 from __future__ import annotations
 
 import itertools
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
-from uqs.model import profiles
+from uqs.interpreter import q_impl, q_interpreter, q_version
+from uqs.model import profiles, q_support
+from uqs.model.declarations import read_declarations
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import attach_state, occupancy, qtree, runtime_profiles, start_overrides
 from uqs.stack import procs as stack_procs
@@ -60,9 +63,43 @@ def refuse_start(
     procs = started_procs(args)
     stack_procs.assert_known_procnames(paths, procs)
     if not start_overrides.skipped(paths, overrides, "q_version", args[0], procs):
-        qtree.refuse_unloadable(paths, with_interpreter(paths))
+        env = with_interpreter(paths)
+        qtree.refuse_unloadable(paths, env)
+        refuse_unsupported(paths, procs, env)
     occupancy.refuse_if_taken(paths, base_port, procs)
     attach_state.refuse_unverified_start(paths, procs, base_port)
+
+
+def refuse_unsupported(paths: UqsPaths, procs: str, env: Mapping[str, str]) -> None:
+    """Refuse a start whose q a started job's `q` key does not name (#2747).
+
+    `procs` is torq.sh's selector: process names, or `all` - the rows that
+    start with the stack. Only the jobs that declare a `q` are asked about,
+    and the interpreter is asked which q it is only when one does. No q at
+    all is torq.sh's to report, in its own words."""
+    declaring = [d for d in read_declarations(paths.repo_root) if d.q]
+    if not declaring:
+        return
+    if procs.strip() == "all":
+        started = {r["procname"] for r in stack_procs.effective_process_rows(paths)
+                   if r.get("startwithall") == "1"}  # fmt: skip
+    else:
+        started = set(procs.split())
+    declared = {d.name: d.q for d in declaring if d.procname in started}
+    if not declared or (q := q_interpreter(env)) is None:
+        return
+    impl = q_impl(env)
+    version = q_version(str(q))
+    if found := q_support.unsupported(declared, impl, version):
+        raise UqsError(
+            q_support.problem(
+                found,
+                impl,
+                version,
+                "set QCMD to a q it names, or start it with --skip-q-version-check "
+                "--reason REASON. Nothing was started",
+            )
+        )
 
 
 def with_publisher_extras(paths: UqsPaths, args: Sequence[str]) -> list[str]:

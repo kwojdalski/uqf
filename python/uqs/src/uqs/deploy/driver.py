@@ -91,6 +91,7 @@ def deploy(
     shipped = bundled.records(dep)
     report.components = components.observed(cfg, facts, python, f"{dep.releases}/{rid}", shipped)
     exceptions += overrides.for_q(cfg, facts.get("qversion", ""))
+    exceptions += overrides.for_job_q(cfg, dep.selection, facts)
     exceptions += overrides.for_disk(cfg, facts, pkg.path.stat().st_size)
     report.exceptions = exceptions
     for e in exceptions:

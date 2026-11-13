@@ -46,8 +46,10 @@ GUARDRAILS = {
         "q-version-check",
         _START,
         "start on a q older than the KDB-X 5.0 the tree as written needs, without "
-        "converting the tree; only the q-version refusal is lifted",
-        risk="processes may die on their first nested context, the failure only in their logs",
+        "converting the tree, or on a q a started job's `q` does not name (#2747); only "
+        "the q-version refusals are lifted",
+        risk="processes may die on their first nested context or on what their q lacks, "
+        "the failure only in their logs",
         action="check each started process came up and stayed up (`uqs status`, `uqs logs PROC`)",
         skip_flag=True,
     ),

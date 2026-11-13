@@ -1881,7 +1881,7 @@
 
 / A valid value for each passthrough key. check and on_fail only validate
 / together, so each is declared with its partner.
-.qt.qetl.job.stream.passthrough_values:`start_with_all`note`on_start`check`on_fail!(1b;"a note";{[] };.qt.qetl.job.stream.neg_check;`hold)
+.qt.qetl.job.stream.passthrough_values:`start_with_all`note`on_start`check`on_fail`q!(1b;"a note";{[] };.qt.qetl.job.stream.neg_check;`hold;"kdbx>=4.1 peachq")
 
 / The declaration extras that exercise key k.
 .qt.qetl.job.stream.passthrough_extra:{[k] $[k in `check`on_fail; `check`on_fail#.qt.qetl.job.stream.passthrough_values; enlist[k]#.qt.qetl.job.stream.passthrough_values]}
@@ -1937,4 +1937,6 @@
         .qunit.assertThrows[.qt.qetl.job.stream.kind_declare[kind;nm;];enlist[`on_fail]!enlist `drop;
             "*on_fail without a check*";string[kind]," is refused by define, not by its own copy"];
         .qunit.assertThrows[.qt.qetl.job.stream.kind_declare[kind;nm;];enlist[`note]!enlist 5;
-            "*note must be a string*";string[kind]," note"]} each .qt.qetl.job.stream.passthrough_kinds};
+            "*note must be a string*";string[kind]," note"];
+        .qunit.assertThrows[.qt.qetl.job.stream.kind_declare[kind;nm;];enlist[`q]!enlist "kdbx>=4.x";
+            "*q holds kdbx>=4.x, which is not kdbx*";string[kind]," q (#2747)"]} each .qt.qetl.job.stream.passthrough_kinds};

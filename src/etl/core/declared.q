@@ -30,6 +30,14 @@
 / else, so a declaration checks arity when `lambda` says it can and accepts
 / the rest on trust (react.q, transform.q).
 / .
+/ WHICH Q (#2747). A job may say which q interpreters it runs on, as a `q`
+/ key: one string of space-separated terms, `kdbx` (any kdb+ or KDB-X),
+/ `kdbx>=4.1` (a minimum), `kdbx=4` (a version prefix, so every 4.x) and
+/ `peachq`. Absent, the job runs on every q. Streaming jobs and bounded
+/ workers take it alike, so its form is checked here, once. q only checks the
+/ form: uqs reads the key as text and refuses a start or a push on a q it
+/ does not name (uqs.model.q_support), where the interpreter is known.
+/ .
 / Nothing here knows any declaration; the library's own .qf.exec.define
 / (src/portfolio) cannot call .qetl and keeps its own rule.
 
@@ -74,3 +82,56 @@
 .qetl.declared.require_callable:{[who;name;v;shape]
     if[not .qetl.declared.callable v;
         'who,"'s ",string[name]," must be ",shape]}
+
+/ The interpreters a `q` term may name (#2747).
+.qetl.declared.q_impls:("kdbx";"peachq")
+
+/ Is this text a version a `q` term may name: dot-separated digits?
+/ @param v a string
+/ @return 1b when every part is one or more digits
+/ @eg .qetl.declared.q_version "4.1"  ->  1b
+/ @eg .qetl.declared.q_version "4."  ->  0b
+.qetl.declared.q_version:{[v]
+    parts:"." vs v;
+    $[0=count v; 0b; all {[p] (0<count p) and all p in .Q.n} each parts]}
+
+/ Is this one term of a `q` key: kdbx, kdbx>=VERSION, kdbx=VERSION or peachq?
+/ @param t a string
+/ @return 1b when it is one of those forms
+/ @eg .qetl.declared.q_term "kdbx>=4.1"  ->  1b
+/ @eg .qetl.declared.q_term "peachq>=1"  ->  0b
+.qetl.declared.q_term:{[t]
+    $[any t~/:.qetl.declared.q_impls; 1b;
+      t like "kdbx>=*"; .qetl.declared.q_version[6_t];
+      t like "kdbx=*"; .qetl.declared.q_version[5_t];
+      0b]}
+
+/ Refuse a malformed `q` key: the q interpreters a job runs on.
+/ @param who the message prefix, e.g. "define: demo"
+/ @param v the value declared under `q`
+/ @return v
+/ @throws error when v is not a string, names no term, or holds a term that
+/   is not kdbx, kdbx>=VERSION, kdbx=VERSION or peachq
+/ @eg .qetl.declared.require_q["define: x";"kdbx>=4.1 peachq"]  ->  "kdbx>=4.1 peachq"
+.qetl.declared.require_q:{[who;v]
+    if[not 10h=type v;
+        'who,"'s q must be a string naming the q interpreters it runs on, e.g. \"kdbx>=4.1 peachq\""];
+    words:" " vs v;
+    terms:words where 0<count each words;
+    if[0=count terms;
+        'who,"'s q names no interpreter - drop the key to run on every q"];
+    bad:terms where not .qetl.declared.q_term each terms;
+    if[count bad;
+        'who,"'s q holds ",(", " sv bad),", which is not kdbx, kdbx>=VERSION, kdbx=VERSION or peachq"];
+    v}
+
+/ A bounded worker's `q` as worker_cfg stores it: "" for every q, which is also
+/ what a stored declaration carries back, so it declares again as it was.
+/ Resolved before storage, as its note is: the table's rows share one shape.
+/ @param who the message prefix, e.g. "define: demo_backfill"
+/ @param decl the worker's declaration
+/ @return the declared q, checked, or ""
+/ @eg .qetl.declared.stored_q["define: x";`a`q!(1;"peachq")]  ->  "peachq"
+/ @eg .qetl.declared.stored_q["define: x";enlist[`a]!enlist 1]  ->  ""
+.qetl.declared.stored_q:{[who;decl]
+    $[$[`q in key decl; not ""~decl`q; 0b]; .qetl.declared.require_q[who;decl`q]; ""]}

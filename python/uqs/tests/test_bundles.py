@@ -134,6 +134,19 @@ def test_a_reaction_is_installed_beside_the_tree_s_reactions(bundle: Path, repo:
     assert {"kind": "reaction", "file": "piggy_rollup.q"} in entry["jobs"]
 
 
+def test_a_job_s_declared_q_is_recorded_for_the_release(bundle: Path, repo: Path) -> None:
+    """#2747: the ledger, and so a release's manifest, carries the q interpreters
+    a job declares, which push's preflight holds the server's q to."""
+    (bundle / "piggy_spread.q").write_text(
+        STREAM.replace("outputs!(", "outputs`q!(").replace(
+            "piggy_tape)]", 'piggy_tape;"kdbx>=4.1 peachq")]'
+        )
+    )
+    entry = _install(bundle, repo)
+    (spread,) = [j for j in entry["jobs"] if j.get("name") == "piggy_spread"]
+    assert spread["q"] == "kdbx>=4.1 peachq"
+
+
 def test_secrets_and_tests_never_enter_the_tree(bundle: Path, repo: Path) -> None:
     entry = _install(bundle, repo)
     assert not list(repo.rglob(".env"))

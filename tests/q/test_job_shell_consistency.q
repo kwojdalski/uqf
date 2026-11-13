@@ -106,7 +106,10 @@
 / A shipped job's declaration as its kind accepts it (the registry also holds the defaults define filled in).
 .qt.qetl.job.consistency.clone:{[kind;nm]
     k:.qt.qetl.job.consistency.kinds[] kind;
-    d:((k`required),(k`optional) except `on_start`check`on_fail)#(k`def) k`shipped;
+    / Only keys the shipped job declares: `#` on an absent key yields a null,
+    / which an optional key's check then refuses (`q`, #2747).
+    s:(k`def) k`shipped;
+    d:(key[s] inter (k`required),(k`optional) except `on_start`check`on_fail)#s;
     @[d;`procname;:;`$string[nm],"1"]}
 
 .qt.qetl.job.consistency.test_every_event_time_kind_spells_the_bound_lateness:{[t]
