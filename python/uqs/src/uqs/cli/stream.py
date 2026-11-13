@@ -2,7 +2,7 @@
 
 It fetches and normalizes one page of a polling feed and says what it
 would publish and where its cursor would move, publishing nothing and saving
-nothing. It is not `uqs job backfill --mode dry-run`: that rehearses a bounded
+nothing. It is not `uqs job backfill --dry-run`: that rehearses a bounded
 range; this looks at the one page a running feed would take next.
 """
 
@@ -19,7 +19,6 @@ from uqs.cli.concepts import job_arg
 from uqs.cli.json_out import Verbatim, emit, json_opt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.renames import renamed
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
@@ -65,11 +64,7 @@ _JobOpt = job_arg("A polling feed - a streaming job that declares poll", complet
 @job_app.command(
     "preview",
     rich_help_panel=JOB_OPERATIONS_PANEL,
-    cls=renamed(
-        # --sample: how many records to show is `--limit` (#1857)
-        {"--sample": "--limit"},
-        needs_pipelines("previews this tree's streaming jobs", ReadOnly),
-    ),
+    cls=needs_pipelines("previews this tree's streaming jobs", ReadOnly),
 )
 def preview(
     job: _JobOpt,

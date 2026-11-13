@@ -194,7 +194,7 @@ def test_follow_without_an_attachment_is_refused(monkeypatch):
 
 
 def test_wait_says_it_is_waiting_not_following(world):  # noqa: F811
-    result = _cli("--mode", "dry-run", "--wait")
+    result = _cli("--dry-run", "--wait")
     out = _flat(result.output)
     assert result.exit_code == 0, result.output
     assert f"waiting for {WORKER} (pid" in out and "Ctrl-C stops waiting, not the run" in out

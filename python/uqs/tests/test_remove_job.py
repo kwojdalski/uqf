@@ -457,16 +457,9 @@ def test_removing_an_exempt_process_named_like_a_profile_drops_only_its_exemptio
     assert after == before
 
 
-@pytest.mark.parametrize(
-    "argv",
-    [
-        ["--override", "even-if-edited", "--reason", "rewriting it from scratch"],
-        ["--even-if-edited"],  # the old flag, for one release (#1852)
-    ],
-)
-def test_a_written_job_is_removed_only_through_the_named_override(tree, monkeypatch, argv):
-    """#1852: the bypass is `--override even-if-edited --reason`, as every other is;
-    the old spellings still reach it."""
+def test_a_written_job_is_removed_only_through_the_named_override(tree, monkeypatch):
+    """#1852: the bypass is `--override even-if-edited --reason`, as every other is."""
+    argv = ["--override", "even-if-edited", "--reason", "rewriting it from scratch"]
     from typer.testing import CliRunner
 
     from uqs import cli

@@ -14,10 +14,9 @@ from typing import Annotated
 
 import typer
 
-from uqs.cli import completion, safety
+from uqs.cli import completion
 from uqs.cli.hdb_scope import ApplyOpt, AttachOpt, HdbOpt, YesOpt, _table, resolve, run_scoped
 from uqs.cli.json_out import json_opt
-from uqs.cli.renames import ATTACHMENT, renamed, warn_renamed
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, data_app
 from uqs.generated.q_facts import Q_ATTRIBUTES
@@ -33,7 +32,7 @@ AlterJson = json_opt(
 )
 
 
-@data_app.command("alter", cls=renamed(ATTACHMENT, ConfirmsOnServer))
+@data_app.command("alter", cls=ConfirmsOnServer)
 def hdb_alter(
     table: Annotated[
         str | None,
@@ -77,7 +76,6 @@ def hdb_alter(
         typer.Option("--undo", help="A run's journal (as the plan names it): reverse that run"),
     ] = None,
     apply: ApplyOpt = False,
-    dry_run: safety.DefaultDryRunOpt = False,
     yes: YesOpt = False,
     as_json: AlterJson = False,
 ) -> None:
@@ -94,7 +92,7 @@ def hdb_alter(
     try:
         given = {
             "reorder": reorder,
-            "rename": _old_rename(_one("--rename", rename)),
+            "rename": _rename(_one("--rename", rename)),
             "attr": _one("--attr", attr),
             "cast": _one("--cast", cast),
             "undo": undo,
@@ -105,7 +103,6 @@ def hdb_alter(
                 "give one operation: --reorder, --rename, --attr, --cast or --undo"
                 + (f" (not {len(chosen)})" if chosen else "")
             )
-        safety.dry_unless_applied(dry_run, apply)
         (op, value), *_ = chosen.items()
         handle = resolve(attach, hdb)
         name = _table(handle, table, required=op != "undo")
@@ -124,16 +121,11 @@ def _one(flag: str, values: list[str] | None) -> str | None:
     return values[0] if values else None
 
 
-def _old_rename(value: str | None) -> str | None:
+def _rename(value: str | None) -> str | None:
     """`--rename OLD:NEW`, as `data migrate` spells it (#1856), in the OLD=NEW
-    hdb/alter.q reads. `OLD=NEW`, this command's own spelling before, still
-    parses for one release (cli/rename_expiry.py)."""
+    hdb/alter.q reads."""
     if value is None:
         return None
-    if ":" not in value and "=" in value:
-        old, _, new = value.partition("=")
-        warn_renamed(f"--rename {value}", f"--rename {old}:{new}")
-        return value
     old, sep, new = value.partition(":")
     if not sep or not old or not new:
         raise UqsError(f"--rename {value!r} must be OLD:NEW")

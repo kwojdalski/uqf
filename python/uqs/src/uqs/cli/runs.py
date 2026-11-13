@@ -22,7 +22,6 @@ from uqs.cli.concepts import attach_opt, job_arg
 from uqs.cli.json_out import emit, json_opt, utc_times
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.renames import ATTACHMENT, renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     EXIT_STOPPED,
@@ -133,7 +132,7 @@ def _print(
     _show(table, interactive)
 
 
-@runs_app.command("list", cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER, ReadOnly)))
+@runs_app.command("list", cls=needs_pipelines(_LEDGER, ReadOnly))
 def list_runs(
     interactive: InteractiveOpt = False,
     attach: AttachOpt = None,
@@ -228,7 +227,7 @@ def upgrade(
         console.print("the run ledger is already current - nothing to do", markup=False)
 
 
-@runs_app.command("show", cls=renamed(ATTACHMENT, needs_pipelines(_LEDGER, ReadOnly)))
+@runs_app.command("show", cls=needs_pipelines(_LEDGER, ReadOnly))
 def show(
     run_id: Annotated[
         str, typer.Argument(metavar="RUN", help="A run id, from `uqs job runs list`")

@@ -180,8 +180,8 @@ range are `uqs job backfill` options, and the live smoke check's sources are
 `uqs.stack.env.build_env` computes these from `UqsPaths` and hands them to
 `torq.sh`; `process.csv`'s `${VAR}` and `{VAR}+N` placeholders resolve against
 the same dict. Setting one in your shell does not override anything ---
-`build_env` wins --- but it will make `uqs list` and the running stack disagree
-about where data lives, which is a confusing way to spend an afternoon.
+`build_env` wins --- but it will make `uqs config env` and the running stack
+disagree about where data lives, which is a confusing way to spend an afternoon.
 
 `TORQHOME` and `TORQAPPHOME` are the exception. `UqsPaths` itself reads them,
 along with `UQS_DATA_ROOT`, so they move the trees everything else is built from

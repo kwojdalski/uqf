@@ -19,7 +19,6 @@ from uqs.cli import deploy_output as deploy_out
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.concepts import ComponentArg
 from uqs.cli.deploy import DEFAULT_ARCH, deploy_app
-from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import console
 from uqs.deploy import python_runtime, q_runtime, torq_runtime
@@ -44,8 +43,6 @@ deploy_app.add_typer(component_app, name="component")
 KX_NAMES = frozenset({KDBX, "kx", "kdb", "kdb+"})
 
 
-#: A directory written into is `--output-dir`; `--output` is a FILE (#1857).
-OUTPUT_DIR = {"--output": "--output-dir"}
 Component = ComponentArg
 Output = Annotated[
     Path | None,
@@ -63,7 +60,7 @@ Python = Annotated[
 ]
 
 
-@component_app.command("build", cls=renamed(OUTPUT_DIR, ChangesState))
+@component_app.command("build", cls=ChangesState)
 def build(
     component: Component,
     output: Output = None,

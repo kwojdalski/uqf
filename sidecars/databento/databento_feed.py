@@ -187,7 +187,6 @@ FEED = ExternalFeed(
             "databento_dataset",
             "Databento dataset, e.g. XNAS.ITCH",
             default=DEFAULT_DATASET,
-            aliases=("--dataset",),  # renamed in #1739; goes in the release after
         ),
         FeedOption(
             "api_key",

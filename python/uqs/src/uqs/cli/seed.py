@@ -12,7 +12,6 @@ from uqs.cli.choices import ChoiceOpt
 from uqs.cli.hdb_scope import AttachOpt, HdbOpt, local_hdb, tables_given
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.range_options import DateOpt, DayFromOpt, DayLastOpt, DayToOpt
-from uqs.cli.renames import old_spelling, renamed, warn_renamed
 from uqs.cli.safety import ConfirmsOnServer, dry_run_note
 from uqs.cli.shared import (
     _die,
@@ -43,13 +42,10 @@ _NO_ATTACHMENT = (
 )
 
 
-#: A conflict policy is `--on-conflict` on every command (#1857); `--overwrite`
-#: was this one's, and is `--on-conflict replace` now. Tables are chosen one
-#: way on every command: a repeatable `--table` (#1856).
 SeedJson = json_opt('{"ok", "from_runtime", "on_conflict", "applied", "report"}')
 
 
-@data_app.command("seed", cls=renamed({"--tables": "--table"}, ConfirmsOnServer))
+@data_app.command("seed", cls=ConfirmsOnServer)
 def seed(
     from_runtime: Annotated[
         str | None,
@@ -76,11 +72,9 @@ def seed(
     hdb: HdbOpt = None,
     attach: AttachOpt = None,
     on_conflict: _OnConflictOpt = "ignore",
-    overwrite: Annotated[bool, old_spelling("--on-conflict replace", "--overwrite")] = False,
     apply: safety.ApplyOpt = False,
     yes: safety.ApplyYesOpt = False,
     as_json: SeedJson = False,
-    dry_run: safety.RefusedDryRunOpt = False,
 ) -> None:
     """Copy another runtime's HDB partitions into this runtime's HDB.
 
@@ -100,11 +94,7 @@ def seed(
 
     e.g. `uqs --runtime torq data seed --from-runtime uqf --from 2026-09-01 --to 2026-10-01`
     """
-    if overwrite:
-        warn_renamed("--overwrite", "--on-conflict replace")
-        on_conflict = "replace"
     try:
-        safety.refuse_dry_run("data seed", dry_run)
         if from_runtime is None:
             raise UqsUsageError(
                 f"name the runtime to copy from: --from-runtime, one of {', '.join(RUNTIMES)}"

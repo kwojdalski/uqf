@@ -18,7 +18,7 @@ from uqs.checks.schema_view import DEFAULT_PROC
 from uqs.cli import completion
 from uqs.cli.concepts import target_opt
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.q_login import DEFAULT_USER, QPasswdOpt, QPasswordEnvOpt, QUserOpt, q_password
+from uqs.cli.q_login import DEFAULT_USER, QPasswordEnvOpt, QUserOpt, q_password
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import (
     ExportOpt,
@@ -89,7 +89,6 @@ def schema(
     ] = None,
     user: QUserOpt = DEFAULT_USER,
     password_env: QPasswordEnvOpt = None,
-    passwd: QPasswdOpt = None,
     export: ExportOpt = None,
     interactive: InteractiveOpt = False,
     every: EveryOpt = SCHEMA_REFRESH_SECONDS,
@@ -112,7 +111,7 @@ def schema(
         paths = stack_paths.default_paths()
         try:
             proc, table = _proc_first(proc, table, port is not None)
-            passwd = q_password(password_env, passwd)
+            passwd = q_password(password_env)
             proc = proc or DEFAULT_PROC
             if tunnel is not None:
                 via = scope.enter_context(

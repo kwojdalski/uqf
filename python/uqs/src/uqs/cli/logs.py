@@ -18,7 +18,7 @@ from typer._click.exceptions import UsageError
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit, json_opt, records
-from uqs.cli.renames import ATTACHMENT, refused, renamed
+from uqs.cli.renames import refused
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import ProcsArg, _die, _paths, _procs, app, console
 from uqs.paths import UqsError, UqsUsageError
@@ -93,15 +93,7 @@ _AttachOpt = attach_opt(
 )
 
 
-@app.command(
-    cls=renamed(
-        {
-            "--run": "--stamp",  # a log's stamp, not the run_id "run" means (#1890)
-            **ATTACHMENT,
-        },
-        _LogsCommand,
-    )
-)
+@app.command(cls=_LogsCommand)
 def logs(
     procs: ProcsArg = None,
     follow: Annotated[

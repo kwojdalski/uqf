@@ -11,7 +11,6 @@ from typing import Annotated
 import typer
 
 from uqs.cli import safety
-from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import _die, console
 from uqs.cli.target import _ACCOUNT, RemoteUser, Ssh, _command, _reach, target_app
@@ -53,9 +52,7 @@ def _say(s: adopt.Survey, r: control.Remote) -> None:
         console.print(f"  python       {p.source}: {where} - {verdict}", highlight=False)
 
 
-#: `--release` is a release's name (`deploy rollback --release`); the copied tree
-#: here is a directory, `--release-dir` (#1855).
-@target_app.command("adopt", cls=renamed({"--release": "--release-dir"}, ChangesState))
+@target_app.command("adopt", cls=ChangesState)
 def adopt_(
     name: Annotated[
         str, typer.Argument(metavar="TARGET", help="What to call it: `uqs --target TARGET ...`")
@@ -95,7 +92,6 @@ def adopt_(
             "target; without it, a dry run that changes nothing on either side",
         ),
     ] = False,
-    dry_run: safety.DefaultDryRunOpt = False,
     yes: safety.ApplyYesOpt = False,
 ) -> None:
     """Adopt a release copied onto a server by hand (scp, rsync).
@@ -104,10 +100,6 @@ def adopt_(
     what the server holds, how it would launch uqs and the target it would
     save. --apply links it as DEST/current, saves the target - checked by
     reaching it - and records it in `uqs deploy history`."""
-    try:
-        safety.dry_unless_applied(dry_run, do_it)
-    except UqsError as exc:
-        _die(exc)
     root = repo_root()
     try:
         declared = targets.read(root) if targets.declaration_path(root).is_file() else {}

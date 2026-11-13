@@ -92,10 +92,6 @@ SchemaWriterOpt = ChoiceOpt(
     f"saved choice, else {config.DEFAULT_SCHEMA_WRITER}.",
     notes=config.SCHEMA_WRITER_NOTES,
 )
-RetiredRemoteSchemaOpt = Annotated[
-    bool,
-    typer.Option("--remote-schema-file", hidden=True, help="Retired: --schema-writer tickerplant"),
-]
 ProcessFileOpt = Annotated[
     Path | None,
     typer.Option(
@@ -171,10 +167,3 @@ StartOpt = Annotated[
         "Changes only this run's start, never the saved --start-with-all.",
     ),
 ]
-
-#: What `--remote-schema-file` became (#1845), said when the retired option is given.
-REMOTE_SCHEMA_RETIRED = (
-    "--remote-schema-file was replaced by --schema-writer tickerplant (#1845): run the same "
-    "command with --schema-writer tickerplant instead. A saved attachment that used it keeps "
-    "it - re-running `uqs job attachment add NAME` with neither option is enough"
-)

@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import backfill_remote
-from uqs.cli import target_edit
+from uqs.cli import shared, target_edit
 from uqs.paths import UqsPaths
 from uqs.stack import procs as stack_procs
 
@@ -36,14 +36,15 @@ def test_config_set_takes_several_field_value_pairs_and_unset_removes_one(monkey
     assert refused.exit_code == 1
 
 
-def test_the_old_two_word_config_set_still_sets(monkeypatch):
+def test_the_old_two_word_config_set_is_refused(monkeypatch):
     seen = []
     monkeypatch.setattr(stack_procs, "set_process_config", lambda *a: seen.append(a[1:4]))
     said = []
-    monkeypatch.setattr("uqs.cli.config.warn_renamed", lambda o, n: said.append(n))
-    assert runner.invoke(cli.app, ["config", "set", "rdb1", "startwithall", "1"]).exit_code == 0
-    assert seen[-1] == ("rdb1", "startwithall", "1")
-    assert said == ["config set PROC startwithall=1"]
+    errors = type("Errors", (), {"error": staticmethod(lambda f, *a: said.append(f.format(*a)))})
+    monkeypatch.setattr(shared, "log", errors())
+    result = runner.invoke(cli.app, ["config", "set", "rdb1", "startwithall", "1"])
+    assert result.exit_code != 0 and seen == []
+    assert said == ["'startwithall' is not FIELD=VALUE"]
 
 
 def test_the_receiver_is_stopped_by_its_own_verb_and_a_dry_run_signals_nothing(monkeypatch):
@@ -57,8 +58,7 @@ def test_the_receiver_is_stopped_by_its_own_verb_and_a_dry_run_signals_nothing(m
     )
     dry = runner.invoke(cli.app, ["job", "receiver", "stop", "--attachment", "pb", "-n", "--json"])
     assert dry.exit_code == 0 and json.loads(dry.stdout)["dry_run"] is True
-    old = runner.invoke(cli.app, ["job", "receive", "--attach", "pb", "--stop"])
-    assert old.exit_code == 0 and calls == [True, False]
+    assert calls == [True]
 
 
 def test_target_edit_name_opens_the_file_at_that_targets_table(monkeypatch, tmp_path):

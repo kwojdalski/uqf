@@ -23,7 +23,7 @@ from uqs.cli.create_kinds import DEFAULT_KIND, KindOpt, for_kinds, given_options
 from uqs.cli.create_plant import plant_shapes
 from uqs.cli.create_reaction import TriggeredByOpt, scaffold_reaction
 from uqs.cli.regenerate import write_plan
-from uqs.cli.renames import SLICE, SLICE_COLUMN, refused, renamed
+from uqs.cli.renames import SLICE, SLICE_COLUMN, refused
 from uqs.cli.shared import (
     JOB_AUTHORING_PANEL,
     _die,
@@ -43,10 +43,6 @@ from uqs.scaffold import worker as worker_mod
 app.add_typer(job_app, name="job")
 
 
-#: --procname: a process is PROC, or `--proc` as an option, on every command (#1857)
-_RENAMES = {"--procname": "--proc"}
-
-
 _TransformOpt = ChoiceOpt(
     transform_mod.MODES,
     "--transform",
@@ -57,7 +53,7 @@ _TransformOpt = ChoiceOpt(
 @job_app.command(
     "new",
     rich_help_panel=JOB_AUTHORING_PANEL,
-    cls=renamed(_RENAMES, refused({**SLICE, **SLICE_COLUMN}, safety.ChangesState)),
+    cls=refused({**SLICE, **SLICE_COLUMN}, safety.ChangesState),
 )
 def new_job(
     ctx: typer.Context,

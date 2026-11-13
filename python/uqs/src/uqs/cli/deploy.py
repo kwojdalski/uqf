@@ -27,7 +27,6 @@ from uqs.cli import deploy_output as deploy_out
 from uqs.cli import deploy_policy as policy
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.concepts import profile_opt
-from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, OverrideOpt, ReasonOpt
 from uqs.cli.shared import app
 from uqs.deploy import build as release_build
@@ -68,20 +67,7 @@ ArchOpt = ChoiceOpt(
 log = get_logger()
 
 
-#: `--output` is a FILE, as `contract export -o` writes one; a directory is
-#: `--output-dir` (#1857).
-_BUILD_RENAMES = {
-    "--output": "--output-dir",
-    # KFK is KX's client library, which UQF_KFK_HOME names; the only --with-*
-    # flag is a --x/--no-x pair like every other (#1890)
-    "--kafka-home": "--kfk-home",
-    "--with-kafka-connector": "--kafka-connector",
-    **policy.BUILD_OLD_SPELLINGS,
-    **components.BUILD_OLD_SPELLINGS,
-}
-
-
-@deploy_app.command("build", cls=renamed(_BUILD_RENAMES, ChangesState))
+@deploy_app.command("build", cls=ChangesState)
 def build(
     output: Annotated[
         Path | None,
@@ -171,11 +157,10 @@ def build(
     print(artifact.path)
 
 
-_PUSH_RENAMES = policy.OLD_SPELLINGS | components.OLD_Q_SPELLINGS | components.OLD_SPELLINGS
 _ProfileOpt = profile_opt("The uqs profile to start, e.g. essential")
 
 
-@deploy_app.command("push", cls=renamed(_PUSH_RENAMES, ChangesState))
+@deploy_app.command("push", cls=ChangesState)
 def push(
     ctx: typer.Context,
     artifact: Annotated[

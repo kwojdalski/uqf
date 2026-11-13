@@ -157,8 +157,9 @@ def test_the_record_names_the_override_who_when_where_and_what_it_accepted(world
     assert (e["requested"], e["needed"]) == (True, True)
     assert e["effect"] == backfill_policy.EOD_BYPASSED
     assert e["operator"] == getpass.getuser() and e["host"] and e["at"]
+    how = "--dry-run" if mode == "dry-run" else f"--mode {mode}"
     assert e["command"] == (
-        f"uqs job backfill {WORKER} --attachment pb-uat --mode {mode} --from "
+        f"uqs job backfill {WORKER} --attachment pb-uat {how} --from "
         f"{plan['range_from']} --to {plan['range_to']} --source-version v1 "
         "--override eod-fence"
     )

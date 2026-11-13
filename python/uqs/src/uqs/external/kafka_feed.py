@@ -222,8 +222,6 @@ FEED = ExternalFeed(
             metavar="TOPIC,...",
             env=TOPICS_ENV,
             default_help="every topic a decoder job declares",
-            # plural, as every comma-separated option is (#1890)
-            aliases=("--topic",),
         ),
         FeedOption(
             "group",

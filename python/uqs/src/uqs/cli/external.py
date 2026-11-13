@@ -27,8 +27,7 @@ noun, then verb. Its log is one plain file, not a TorQ out_/err_ pair.
 A secret option - the tickerplant credential, an API key - is never taken on
 the command line (#1853), where `ps`, shell history and the connector's pid
 file would show it: `start` takes the NAME of the variable holding it,
-`--<option>-env NAME`. The inline spelling still parses for one release,
-hidden, and warns.
+`--<option>-env NAME`.
 """
 
 from __future__ import annotations
@@ -41,11 +40,10 @@ from typing import Annotated, Any
 import typer
 from rich.table import Table
 
-from uqs.cli import completion, renames
+from uqs.cli import completion
 from uqs.cli.choices import alternatives
 from uqs.cli.json_out import emit, json_opt, snake
 from uqs.cli.pipelines import needs_pipelines
-from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, DryRunOpt, ReadOnly, dry_run_note
 from uqs.cli.shared import _die, _paths, app, console
 from uqs.cli.stop_options import KillOpt
@@ -85,16 +83,8 @@ FeedArg = Annotated[
 #: What every `connector` command needs: a runtime without it refuses them.
 _PLANT = "publishes this tree's tables into the plant"
 
-#: `start` and `restart`'s class: each option's old spellings, for their
-#: one-release window (cli/renames.py, #1729), and their mark (#1780).
-_START = renamed(
-    {
-        alias: option.flag
-        for option, _takers in check_options(FEEDS).values()
-        for alias in option.aliases
-    },
-    needs_pipelines(_PLANT, ChangesState),
-)
+#: `start` and `restart`'s class: their mark (#1780).
+_START = needs_pipelines(_PLANT, ChangesState)
 
 
 def _feed(name: str) -> ExternalFeed:
@@ -126,9 +116,8 @@ def _start_signature() -> inspect.Signature:
     declares - one CLI option per name, its help naming the feeds that take
     it - then --dry-run. Typer reads this, so the options are the feeds'.
 
-    A secret option is two parameters (#1853): `--<option>-env NAME`, the
-    variable holding it, and the inline `--<option>`, hidden - kept for one
-    release (cli/rename_expiry.py), warning when used."""
+    A secret option is `--<option>-env NAME`, the variable holding it, and
+    never the value itself (#1853)."""
     kind = inspect.Parameter.POSITIONAL_OR_KEYWORD
     params = [inspect.Parameter("name", kind, annotation=FeedArg)]
     for name, (option, takers) in check_options(FEEDS).items():
@@ -151,13 +140,13 @@ def _start_signature() -> inspect.Signature:
             params.append(
                 inspect.Parameter(name + ENV_SUFFIX, kind, default=None, annotation=named)
             )
+            continue
         help_ = f"{described} ({feeds})"
         typed = Annotated[
             option.type | None,
             typer.Option(
                 help=help_,
                 show_default=False,
-                hidden=option.secret,
                 rich_help_panel=panel,
                 metavar=option.shown_as,
             ),
@@ -216,11 +205,7 @@ def _start(name: str, options: dict[str, Any], dry_run: bool = False, verb: str 
 
 def _secrets_from_env(options: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
     """The options given, each secret read from the variable its
-    `--<option>-env NAME` names, and {option: "$NAME"} for those (#1853).
-
-    An inline secret still works for its one release, warning that it is in
-    `ps` and shell history; given with its `-env` form too, it is refused
-    rather than one silently winning."""
+    `--<option>-env NAME` names, and {option: "$NAME"} for those (#1853)."""
     secrets = {name for name, (option, _) in check_options(FEEDS).items() if option.secret}
     named = {name: options.get(name + ENV_SUFFIX) for name in secrets}
     given: dict[str, Any] = {
@@ -232,11 +217,7 @@ def _secrets_from_env(options: dict[str, Any]) -> tuple[dict[str, Any], dict[str
     for key, variable in named.items():
         flag = "--" + key.replace("_", "-")
         if variable is None:
-            if key in given:
-                renames.warn_secret_argv(flag, f"{flag}-env NAME")
             continue
-        if key in given:
-            raise UqsUsageError(f"give {flag}-env or {flag}, not both")
         value = os.environ.get(variable, "")
         if not value.strip():
             raise UqsError(f"{flag}-env {variable}: ${variable} is not set")

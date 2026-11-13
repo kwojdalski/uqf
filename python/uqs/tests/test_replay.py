@@ -365,11 +365,10 @@ def test_without_apply_it_prints_the_plan_and_starts_nothing(monkeypatch):
     assert "dry run: nothing was changed. Run it again with --apply" in said
 
 
-def test_dry_run_is_refused_naming_apply(monkeypatch, log_text):
+def test_dry_run_is_no_option(monkeypatch):
     monkeypatch.setattr(replay, "start", _explode)
     result = runner.invoke(cli.app, ["data", "replay", "--dry-run", *AIMED])
-    assert result.exit_code == 2
-    assert "`data replay` is a dry run unless --apply: drop --dry-run" in log_text()
+    assert result.exit_code == 2 and "No such option: --dry-run" in result.output
 
 
 def test_apply_asks_and_without_a_terminal_refuses_naming_yes(monkeypatch, log_text):

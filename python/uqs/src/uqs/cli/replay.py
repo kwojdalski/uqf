@@ -22,7 +22,6 @@ from uqs.cli import completion, safety
 from uqs.cli.hdb_scope import AttachOpt, HdbOpt, local_hdb, tables_given
 from uqs.cli.json_out import emit, json_opt
 from uqs.cli.range_options import DateOpt, DayFromOpt, DayLastOpt, DayToOpt
-from uqs.cli.renames import renamed
 from uqs.cli.safety import ConfirmsOnServer, dry_run_note
 from uqs.cli.shared import (
     BasePortOpt,
@@ -51,15 +50,6 @@ def _day(
     return window.day("data replay replays").strftime("%Y.%m.%d")
 
 
-#: `--schema` is a table's columns (`job new --schema`); a schema FILE is
-#: `--schema-file`, as `job attachment add` names it (#1855).
-#: The TorQ files are spelt as `job attachment add` spells them (#1890).
-_RENAMES = {
-    "--schema": "--schema-file",
-    "--dir": "--tplogdir",
-}
-
-
 #: Why `data replay --attachment` is refused (#2237).
 _NO_ATTACHMENT = (
     "a replay runs this machine's TorQ tickerlogreplay over a log here, and cannot check or "
@@ -72,7 +62,7 @@ ReplayJson = json_opt(
 )
 
 
-@data_app.command("replay", cls=renamed(_RENAMES, ConfirmsOnServer))
+@data_app.command("replay", cls=ConfirmsOnServer)
 def replay(
     proc: Annotated[
         str | None,
@@ -115,7 +105,6 @@ def replay(
     apply: safety.ApplyOpt = False,
     yes: safety.ApplyYesOpt = False,
     as_json: ReplayJson = False,
-    dry_run: safety.RefusedDryRunOpt = False,
 ) -> None:
     """Replay a tickerplant log into the HDB, aimed by what is running.
 
@@ -141,7 +130,6 @@ def replay(
     e.g. `uqs data replay --date 2026-09-22 --table quote --table trade`
     """
     try:
-        safety.refuse_dry_run("data replay", dry_run)
         hdb_dir = local_hdb(attach, hdb, command="data replay", why=_NO_ATTACHMENT)
         plan = stack_replay.plan(
             procname=proc,

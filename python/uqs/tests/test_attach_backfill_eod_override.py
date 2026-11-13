@@ -329,7 +329,7 @@ def test_cli_plan_json_carries_the_override_record(world, monkeypatch):
 def test_cli_run_threads_the_waiver_to_the_launch(world, monkeypatch, launcher):
     _, started = launcher
     _in_fence(world)
-    result = _cli(monkeypatch, "--mode", "dry-run", "--skip-eod-fence", "--reason", REASON)
+    result = _cli(monkeypatch, "--dry-run", "--skip-eod-fence", "--reason", REASON)
     assert result.exit_code == 0, result.output
     assert BYPASSED in " ".join(result.output.split())
     [argv] = started
@@ -350,7 +350,7 @@ def test_cli_run_threads_the_waiver_to_the_launch(world, monkeypatch, launcher):
             "--skip-eod-fence is not supported with --writer",
         ),
         (
-            ["--writer", "stackhost:7000", "--any-writer", "--override", "eod-fence",
+            ["--writer", "stackhost:7000", "--override", "any-writer", "--override", "eod-fence",
              "--reason", REASON],
             "--skip-eod-fence is not supported with --writer",
         ),

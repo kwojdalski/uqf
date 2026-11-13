@@ -20,7 +20,6 @@ from rich.table import Table
 
 from uqs.cli import completion
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.renames import warn_renamed
 from uqs.cli.safety import ChangesState, ReadOnly, dry_run_note
 from uqs.cli.shared import (
     BasePortOpt,
@@ -134,13 +133,7 @@ def config_set(
 
 
 def _pairs(words: list[str]) -> list[tuple[str, str]]:
-    """FIELD=VALUE words as (field, value); `FIELD VALUE`, the old two-word
-    form (#1858), as one pair, warned."""
-    if len(words) == 2 and "=" not in words[0]:
-        warn_renamed(
-            f"config set PROC {words[0]} {words[1]}", f"config set PROC {words[0]}={words[1]}"
-        )
-        return [(words[0], words[1])]
+    """FIELD=VALUE words as (field, value)."""
     out = []
     for word in words:
         field, sep, value = word.partition("=")

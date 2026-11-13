@@ -356,7 +356,7 @@ def test_cli_run_of_an_unconfigured_source_is_refused_before_anything_starts(wor
     """run is admitted like plan: the fixture that would be written is a refusal, and
     no process, directory or owner record exists afterwards."""
     before = snapshot(world.hdb, world.status, world.attach_dir)
-    for extra in ([], ["--mode", "run"], ["--mode", "dry-run"]):
+    for extra in ([], ["--mode", "run"], ["--dry-run"]):
         result = invoke(*COMMON, *extra)
         assert result.exit_code != 0
         assert "has no credential configured" in world.errors[-1]

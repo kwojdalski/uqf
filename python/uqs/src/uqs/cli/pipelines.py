@@ -32,8 +32,7 @@ def needs_pipelines(reason: str, base: type[TyperCommand] = TyperCommand) -> typ
     command states it once, where it is declared: `pipelines_only()` reads
     it off the tree, and test_runtime_declarations.py finds a command that
     reaches the pipelines' modules unmarked. Compose it with an Effect -
-    `needs_pipelines(WHY, ReadOnly)` - and inside `renames.renamed(...,
-    mark)`; an alias passes the same `cls=` as its new name."""
+    `needs_pipelines(WHY, ReadOnly)`."""
 
     def parse_args(self: Any, ctx: Any, args: list[str]) -> list[str]:
         # completion and target_confirm's parse are resilient: they run nothing

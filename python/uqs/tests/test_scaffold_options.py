@@ -17,7 +17,6 @@ import re
 from pathlib import Path
 
 import pytest
-import rename_support
 from typer.testing import CliRunner
 
 from uqs import cli
@@ -375,16 +374,15 @@ def test_a_backfill_into_a_vendored_table_does_not_redefine_it():
 
 
 @pytest.mark.parametrize(
-    ("argv", "given", "renames"),
+    ("argv", "given"),
     [
-        (["--schema", "a:float"], ("a:float", None), []),
-        (["--schema-from", "quote"], (None, "quote"), []),
+        (["--schema", "a:float"], ("a:float", None)),
+        (["--schema-from", "quote"], (None, "quote")),
     ],
 )
-def test_a_new_tables_shape_is_schema(monkeypatch, argv, given, renames):
+def test_a_new_tables_shape_is_schema(monkeypatch, argv, given):
     """#1739: --columns is which columns of a table to show (`status`), so a
     new table's shape is --schema."""
-    said = rename_support.said(monkeypatch)
     seen = []
 
     def resolve_shape(columns, columns_from, definitions):
@@ -394,7 +392,6 @@ def test_a_new_tables_shape_is_schema(monkeypatch, argv, given, renames):
     monkeypatch.setattr(create.columns_mod, "resolve_shape", resolve_shape)
     _refusals(monkeypatch, "x", "--outputs", "x", *argv)
     assert seen == [given]
-    assert said == [rename_support.renamed(*r) for r in renames]
 
 
 def test_a_new_tables_catalog_entry_says_whether_it_is_read_bounded():

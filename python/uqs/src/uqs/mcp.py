@@ -170,7 +170,7 @@ def uqs_query(
         if proc not in ports:
             raise stack_procs.unknown_processes(str(proc))
         port = int(ports[str(proc)])
-    passwd = q_password(password_env, None)
+    passwd = q_password(password_env)
     result = runtime.query(expr, port, host=host, user=user, passwd=passwd)
     return {"expression": expr, "result": plain(result)}
 
@@ -246,7 +246,7 @@ def _lister(kind: str, path: str) -> None:
 #: that is no list - `graph --upstream --offline` - has a tool of its own or none.
 LISTS = {
     kind: command.removeprefix("uqs ")
-    for kind, command in cli_lists.MOVED.items()
+    for kind, command in cli_lists.NOUN_LISTS.items()
     if not any(word.startswith("-") for word in command.split())
 }
 for _kind, _path in LISTS.items():

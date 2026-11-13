@@ -64,8 +64,6 @@ class FeedOption:
     default: Any = None  # applied by the feed when the option is not given
     many: bool = False  # comma-separated -> tuple[str, ...]
     secret: bool = False  # masked as *** in a dry run
-    #: old spellings kept for one release after a rename (#1738 rule 6, cli/renames.py)
-    aliases: tuple[str, ...] = ()
     #: the environment variable that supplies it when it is not given ("" for none)
     env: str = ""
     #: called with (value, where it came from) before a start or a dry run;

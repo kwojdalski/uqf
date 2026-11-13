@@ -13,7 +13,6 @@ import subprocess
 from datetime import UTC, datetime, timedelta
 
 import pytest
-import rename_support
 import typer
 from plain_cli import PlainRunner
 from typer.testing import CliRunner
@@ -744,7 +743,6 @@ def test_a_dry_run_names_the_checkpoint_and_deletes_nothing(status):
 def test_the_source_release_is_source_version(monkeypatch):
     """#1739: `uqs --version` prints uqs's version, so the source release a
     backfill records coverage under is --source-version."""
-    said = rename_support.said(monkeypatch)
     seen = {}
 
     def fake(paths, worker, version, *a, **k):
@@ -764,4 +762,3 @@ def test_the_source_release_is_source_version(monkeypatch):
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
     assert seen["version"] == "v7"
-    assert said == []

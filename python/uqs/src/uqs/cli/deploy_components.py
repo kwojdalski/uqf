@@ -16,19 +16,6 @@ from uqs.cli.choices import ChoiceOpt, alternatives
 from uqs.deploy import portable
 from uqs.deploy.components import BUNDLED, EXISTING, MODES
 
-#: "runtime" names a uqs runtime (`uqs --runtime`, `uqs runtime list`) and
-#: nothing else (#1855): what `uqs deploy component build` makes is a
-#: component, on every command that takes one.
-OLD_SPELLINGS = {
-    f"--{c}-runtime{sha}": f"--{c}-component{sha}"
-    for c in ("q", "torq", "python")
-    for sha in ("", "-sha256")
-}
-#: `deploy build`'s: `--q-target` named a kdb+ version where "target" is a
-#: deploy target (#1855); the kdb+ version is `--q-version`, as on `deploy push`.
-BUILD_OLD_SPELLINGS = {"--q-target": "--q-version", "--python-runtime": "--python-component"}
-
-
 DEFAULT = EXISTING
 
 
@@ -44,7 +31,7 @@ def _mode(component: str, existing: str, bundled: str) -> Any:
 
 QMode = _mode(
     "q",
-    "the q of --qcmd/--qhome",
+    "the q of --q-cmd/--q-home",
     "the PeachQ of --q-component, installed once under shared/runtimes/q/ (never KX's q)",
 )
 TorqMode = _mode(
@@ -119,8 +106,6 @@ CarriedPythonRuntime = Annotated[
         "from; built for --arch and --python",
     ),
 ]
-#: q's paths are spelt as TorQ's are, `--torq-home`: `--q-cmd`, `--q-home` (#1857).
-OLD_Q_SPELLINGS = {"--qcmd": "--q-cmd", "--qhome": "--q-home"}
 Qcmd = Annotated[
     str | None,
     typer.Option(

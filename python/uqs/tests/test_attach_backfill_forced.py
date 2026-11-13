@@ -1,4 +1,5 @@
-"""`uqs job backfill --attachment NAME --writer HOST:PORT --any-writer`: no receiver, no checks.
+"""`uqs job backfill --attachment NAME --writer HOST:PORT --override any-writer`: no receiver,
+no checks.
 
 What the launcher hands the runner, and what it does NOT refuse. The runner's own forced
 manager (scripts/jobs/attached_backfill.q) writes over plain IPC into whatever process listens
@@ -116,7 +117,8 @@ def test_force_without_a_writer_is_refused(world, monkeypatch):
     result = CliRunner().invoke(
         cli.app,
         ["job", "backfill", WORKER, "--attachment", "pb-uat", "--from", "2015-01-07",
-         "--to", "2015-01-08", "--source-version", "v1", "--any-writer"],
+         "--to", "2015-01-08", "--source-version", "v1", "--override", "any-writer",
+         "--reason", "a test"],
         catch_exceptions=False,
     )  # fmt: skip
     assert result.exit_code != 0
@@ -129,8 +131,8 @@ def test_force_refuses_any_strategy_but_append(world, monkeypatch):
     result = CliRunner().invoke(
         cli.app,
         ["job", "backfill", WORKER, "--attachment", "pb-uat", "--from", "2015-01-07",
-         "--to", "2015-01-08", "--source-version", "v1", "--writer", "uat-box:6055", "--any-writer",
-         "--on-conflict", "upsert"],
+         "--to", "2015-01-08", "--source-version", "v1", "--writer", "uat-box:6055",
+         "--override", "any-writer", "--reason", "a test", "--on-conflict", "upsert"],
         catch_exceptions=False,
     )  # fmt: skip
     assert result.exit_code != 0

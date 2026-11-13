@@ -59,8 +59,9 @@ def command_of(worker: str, attachment: str, plan: dict[str, Any], mode: str, ve
     """The command, rebuilt from the run's own arguments - never argv, which a caller could
     have given anything - with each waiver as `--override NAME`; the reason is its own field."""
     waivers = "".join(f" --override {o['override']}" for o in plan.get("overrides", []))
+    how = "--dry-run" if mode == "dry-run" else f"--mode {mode}"  # one spelling (#1858)
     return (
-        f"uqs job backfill {worker} --attachment {attachment} --mode {mode} "
+        f"uqs job backfill {worker} --attachment {attachment} {how} "
         f"--from {plan['range_from']} --to {plan['range_to']} --source-version {version}{waivers}"
     )
 

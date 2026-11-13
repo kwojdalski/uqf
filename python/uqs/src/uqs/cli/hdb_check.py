@@ -35,7 +35,6 @@ from uqs.cli.hdb_scope import (
     tables_given,
 )
 from uqs.cli.json_out import Verbatim, emit, json_opt
-from uqs.cli.renames import ATTACHMENT, renamed
 from uqs.cli.safety import ConfirmsOnServer
 from uqs.cli.shared import _die, _paths, console, data_app
 from uqs.paths import UqsError
@@ -52,7 +51,7 @@ CheckJson = json_opt(
 )
 
 
-@data_app.command("check", cls=renamed(ATTACHMENT, ConfirmsOnServer))
+@data_app.command("check", cls=ConfirmsOnServer)
 def hdb_check(
     table: Annotated[
         list[str] | None,

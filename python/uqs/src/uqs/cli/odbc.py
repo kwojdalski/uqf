@@ -17,7 +17,6 @@ import typer
 from rich.table import Table
 
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, Effect, ReadOnly, dry_run_note, marked
 from uqs.cli.shared import _die, app, console
 from uqs.paths import UqsError
@@ -48,12 +47,9 @@ Home = Annotated[
         help="A private ODBC setup: the directory its versions are installed in",
     ),
 ]
-#: The ODBC home is `--odbc-home` on every command, and QHOME `--q-home` beside
-#: `--torq-home` (#1857).
-_RENAMES = {"--home": "--odbc-home", "--qhome": "--q-home"}
 
 
-@odbc_app.command("install", cls=renamed(_RENAMES, ChangesState))
+@odbc_app.command("install", cls=ChangesState)
 def install(
     package: Annotated[
         Path, typer.Argument(metavar="PACKAGE", help="The package, a .tar.gz with package.json")
@@ -85,7 +81,7 @@ def install(
     console.print(f"installed {version.name}; load it with: . {home}/current/{odbc_home.ENV_FILE}")
 
 
-@odbc_app.command("rollback", cls=renamed(_RENAMES, ChangesState))
+@odbc_app.command("rollback", cls=ChangesState)
 def rollback(
     home: Home,
     dry_run: Annotated[
@@ -108,7 +104,7 @@ def rollback(
 StatusJson = json_opt('{"home", "current", "previous", "versions": [name, ...]}')
 
 
-@odbc_app.command("status", cls=renamed(_RENAMES, ReadOnly))
+@odbc_app.command("status", cls=ReadOnly)
 def status(home: Home, as_json: StatusJson = False) -> None:
     """Show the installed versions, and which is current and previous."""
     try:
@@ -131,7 +127,7 @@ def status(home: Home, as_json: StatusJson = False) -> None:
 
 @odbc_app.command(
     "env",
-    cls=renamed(_RENAMES, marked(Effect.READ_ONLY, own_output="prints shell exports, for eval")),
+    cls=marked(Effect.READ_ONLY, own_output="prints shell exports, for eval"),
 )
 def env(home: Home) -> None:
     """Print the current version's variables, as shell exports."""

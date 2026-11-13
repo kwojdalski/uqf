@@ -131,7 +131,7 @@ def check(
     hides no other. A mapping that passes is recorded with when, for the
     plan's `last success`. Exits non-zero when any endpoint fails."""
     try:
-        passwd = q_password(password_env, None)
+        passwd = q_password(password_env)
         pairs = tunnel_plan.parse_local(local or ())
         report = tunnel_check.run(name, repo_root(), procs or (), pairs, offset,
                                   user=user, passwd=passwd, runtime_name=_runtime())  # fmt: skip

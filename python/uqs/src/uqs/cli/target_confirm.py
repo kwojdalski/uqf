@@ -2,9 +2,8 @@
 (#956, #1780).
 
 Every command states what it may do where it is declared: its Click class
-carries a `safety.Effect` - read-only, confirms-on-server, or changes-state -
-and an alias takes its new name's (`renames.alias_command`). This reads that
-mark from the local CLI tree, so a new command is classified by declaring it,
+carries a `safety.Effect` - read-only, confirms-on-server, or changes-state.
+This reads that mark from the local CLI tree, so a new command is classified by declaring it,
 and one nobody marked asks: `test_every_command_is_marked` names it.
 
 The command line is parsed by the command's own Click parser, as the server's
@@ -29,7 +28,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from uqs.cli.renames import QUIET_KEY, _rewrite_renamed
 from uqs.cli.safety import Effect
 from uqs.paths import UqsError, UqsUsageError
 
@@ -67,25 +65,15 @@ def find(path: Sequence[str], root: Any = None) -> Any:
     return cmd
 
 
-def canonical(cmd: Any, root: Any = None) -> tuple[Any, tuple[str, ...] | None]:
-    """(the command an alias stands for, its path), or `cmd` itself and None."""
-    path, seen = None, set()
-    while (alias := getattr(cmd, "alias_of", None)) is not None and alias not in seen:
-        seen.add(alias)
-        path, cmd = alias, find(alias, root)
-    return cmd, path
+def effect_of(cmd: Any) -> Effect | None:
+    """`cmd`'s mark."""
+    return getattr(cmd, "effect", None)
 
 
-def effect_of(cmd: Any, root: Any = None) -> Effect | None:
-    """`cmd`'s mark: an alias's is its new name's, so the two cannot differ."""
-    return getattr(canonical(cmd, root)[0], "effect", None)
-
-
-def trait_of(cmd: Any, name: str, root: Any = None) -> str:
+def trait_of(cmd: Any, name: str) -> str:
     """One of `safety.marked`'s traits on `cmd` (`dry_run_starts`, `acts_when`,
-    `own_output`, `no_dry_run`), "" when it has none; an alias's is its new
-    name's (#1893)."""
-    return getattr(canonical(cmd, root)[0], name, "") or ""
+    `own_output`, `no_dry_run`), "" when it has none (#1893)."""
+    return getattr(cmd, name, "") or ""
 
 
 def unmarked(root: Any = None) -> list[str]:
@@ -96,7 +84,7 @@ def unmarked(root: Any = None) -> list[str]:
     def walk(cmd: Any, path: tuple[str, ...]) -> None:
         subs = subcommands(cmd)
         if not subs and path:
-            if effect_of(cmd, root) is None:
+            if effect_of(cmd) is None:
                 out.append(" ".join(path))
         for name, sub in subs.items():
             walk(sub, (*path, name))
@@ -109,7 +97,7 @@ def unmarked(root: Any = None) -> list[str]:
 class Parsed:
     """A command line as the command's own parser reads it."""
 
-    #: the command's path, an alias's as its new name's
+    #: the command's path
     path: tuple[str, ...]
     #: the command it names; None when it names a group and no command in it
     command: Any
@@ -133,9 +121,6 @@ def _tokenizes(cmd: Any, ctx: Any, args: list[str]) -> None:
     The resilient parse swallows these and stops where they happen, so a word
     after one could be read as a flag the server reads as a value. Values are
     not converted here: a missing or invalid one the server refuses itself."""
-    renames = getattr(cmd, "renames", None)
-    if renames is not None:  # renames.renamed: as its own parse_args does
-        args = _rewrite_renamed(list(args), renames, quiet=True)
     probe = cmd.context_class(
         cmd, info_name=ctx.info_name, parent=ctx.parent, resilient_parsing=False
     )  # a child inherits its parent's resilience unless told: the parent's is True
@@ -150,7 +135,6 @@ def _walk(args: Sequence[str]) -> list[Any]:
     checked to tokenize. Raises for anything that does not parse."""
     root = root_command()
     ctx = root.make_context("uqs", list(args), resilient_parsing=True)
-    ctx.meta[QUIET_KEY] = True  # renames.renamed: rewrite old spellings, say nothing
     _tokenizes(root, ctx, list(args))
     contexts, cmd = [ctx], root
     while subcommands(cmd):
@@ -184,10 +168,8 @@ def parse(args: Sequence[str]) -> Parsed | None:
     root, leaf = contexts[0], contexts[-1]
     asked_help = any(_asked_for(c, "help") for c in contexts) or _asked_for(root, "version")
     path = tuple(c.info_name for c in contexts[1:])
-    command, alias = canonical(leaf.command)
-    if subcommands(leaf.command):
-        command = None
-    return Parsed(alias or path, command, leaf, asked_help)
+    command = None if subcommands(leaf.command) else leaf.command
+    return Parsed(path, command, leaf, asked_help)
 
 
 def _dry_by_default(command) -> bool:

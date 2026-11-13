@@ -21,7 +21,6 @@ from uqs.cli.concepts import profile_opt
 from uqs.cli.deploy import deploy_app
 from uqs.cli.hdb_scope import tables_given
 from uqs.cli.json_out import emit, emit_line, json_opt
-from uqs.cli.renames import renamed
 from uqs.cli.safety import ChangesState, OverrideOpt, ReadOnly, ReasonOpt, YesOpt
 from uqs.cli.shared import _die, json_refusal
 from uqs.cli.vocabulary import duration
@@ -94,7 +93,7 @@ def status_cmd(
     raise typer.Exit(code=1 if failing else 0)
 
 
-@deploy_app.command("rollback", cls=renamed(policy.ROLLBACK_OLD_SPELLINGS, ChangesState))
+@deploy_app.command("rollback", cls=ChangesState)
 def rollback_cmd(
     ctx: typer.Context,
     target: conn.NamedTarget = None,
@@ -260,20 +259,10 @@ VerifyJson = json_opt(
 )
 
 
-#: The readiness wait is `--verify-timeout`, as `deploy push` and `rollback`
-#: name it, and a process beyond the profile `--proc`, repeatable (#1857).
-#: `deploy push` asks the release which it takes (deploy/selection.py).
-_CHECK_RENAMES = {
-    "--deadline": "--verify-timeout",
-    "--procs": "--proc",
-    "--tables": "--table",  # tables are a repeatable --table on every command (#1856)
-}
-
-
 _ProfileOpt = profile_opt("The profile the release started", required=True)
 
 
-@deploy_app.command("check", cls=renamed(_CHECK_RENAMES, ReadOnly))
+@deploy_app.command("check", cls=ReadOnly)
 def verify_cmd(
     profile: _ProfileOpt,
     deadline: Annotated[float, conn.verify_timeout_option()] = config.DEFAULT_VERIFY_TIMEOUT,

@@ -150,7 +150,7 @@ def test_plan_dry_run_run_query_and_a_safe_retry_without_restarting_anything(wor
     before = snapshot(hdb)
 
     # ---- dry run: reads the source, writes nothing
-    dry = backfill(stack, "--mode", "dry-run", "--wait", "--json")
+    dry = backfill(stack, "--dry-run", "--wait", "--json")
     assert dry.returncode == 0, dry.stdout + dry.stderr
     assert json.loads(dry.stdout[dry.stdout.index("{") :])["result"]["outcome"] == "dry_run"
     assert snapshot(hdb) == before
