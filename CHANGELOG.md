@@ -41,6 +41,13 @@ deploy/attach were cut to a third. A `security-auditor` agent was added for what
 runs on a target host. - **Pins.** PeachQ is now v0.91, which closes 30 known
 gaps (#2717), and q-lint is v0.14.21 (#2727).
 
+- **CLI: old spellings removed (#2752).** The 85 old spellings stable/2026-11-09
+  shipped are gone, including `uqs list ...`, `uqs job receive`,
+  `--dry-run`/`-n` on the `data` and `target adopt` commands, which now show the
+  plan by default and write only with `--apply`, and the renamed `deploy`,
+  `data`, `job` and `setup odbc` options. A few refuse and name the new
+  spelling.
+
 **Files changed:** 643 files changed, 14725 insertions(+), 13418 deletions(-).
 
 ## stable/2026-11-09
