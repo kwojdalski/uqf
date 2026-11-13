@@ -337,6 +337,31 @@ def plan(bundle: Bundle, root: Path) -> Plan:
     return Plan(bundle, items, tests, tables, table_body, catalog_body, overrides, stale, feeds)
 
 
+#: An untracked file at the root of a separate clone that declares it an
+#: instance bundles may be installed into (#2732).
+INSTANCE_MARKER = ".uqf-instance"
+
+
+def refuse_development_checkout(root: Path) -> None:
+    """Refuse to install into a git checkout of this repository (#2732).
+
+    An install writes tracked files, so the checkout drifts from master and
+    every session sharing it inherits the bundle. A linked worktree (`.git`
+    is a file) is never an instance; a separate clone is one only when it
+    holds INSTANCE_MARKER. A tree with no `.git` - a staged build, CI's
+    throwaway copies - is not a checkout and is never refused."""
+    git = root / ".git"
+    if not git.exists() or (git.is_dir() and (root / INSTANCE_MARKER).is_file()):
+        return
+    raise BundleError(
+        f"{root} is a development checkout: installing a bundle writes tracked files "
+        "and every session sharing the checkout inherits it. Test a bundle with "
+        "`uv run python scripts/dev/bundle_suite.py <bundle>`, ship one with "
+        "`uqs deploy build --bundle <bundle>`, or run one from a separate clone "
+        f"(`git clone <repo> <dir> && touch <dir>/{INSTANCE_MARKER}`)"
+    )
+
+
 def install(p: Plan, root: Path, runtime: str | None = None) -> dict:
     """Write the plan into the tree at `root`; return the ledger entry.
 

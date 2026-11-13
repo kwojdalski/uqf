@@ -36,6 +36,10 @@ actual/
 # release. A gigabyte of it, unnoticed for a month behind this line.
 /dist/
 
+# A separate clone's declaration that bundles may be installed into it
+# (uqs.stack.bundles.INSTANCE_MARKER, #2732): never a commit of this repository.
+/.uqf-instance
+
 # Everything the repository generates at runtime: the stack's data directory
 # (output/uqs - HDB, tickerplant logs, write-down database), the test databases
 # scripts/dev/make_databento_duckdb.py builds, the ODBC build, and

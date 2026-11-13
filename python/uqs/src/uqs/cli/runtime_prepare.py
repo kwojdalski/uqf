@@ -25,7 +25,7 @@ from uqs.cli.runtime_diff import runtime_app
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import _die, _paths, console
 from uqs.paths import UqsError
-from uqs.stack import qtree, runtime_bundles
+from uqs.stack import bundles, qtree, runtime_bundles
 from uqs.stack.bundle_blocks import BundleError
 
 
@@ -87,6 +87,7 @@ def prepare(
         console.print(dry_run_note())
         return
     try:
+        bundles.refuse_development_checkout(paths.repo_root)
         runtime_bundles.prepare(runtime, members, paths.repo_root)
     except (BundleError, OSError) as exc:
         _die(BundleError(str(exc)))

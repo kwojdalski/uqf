@@ -71,6 +71,10 @@ def install(
     if dry_run:
         console.print(dry_run_note())
         return
+    try:
+        bundles.refuse_development_checkout(root)
+    except bundles.BundleError as exc:
+        _die(exc)
     copies = [(s, root / INSTALLED_CONNECTORS / plan.bundle.name / s.name) for s in plan.connectors]
     changes = (
         any(i.status is not Status.SAME for i in plan.jobs)

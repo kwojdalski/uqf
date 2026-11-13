@@ -347,6 +347,43 @@ def test_cli_refuses_symlink_for_a_bundle(bundle: Path, cli_repo: Path) -> None:
     assert not (cli_repo / LEDGER).exists()
 
 
+# ------------------------------------------- development checkouts (#2732)
+
+
+def test_cli_refuses_a_git_checkout(bundle: Path, cli_repo: Path, log_text) -> None:
+    (cli_repo / ".git").mkdir()
+    code, _out = _run(str(bundle), "--yes")
+    assert code == 1
+    assert "is a development checkout" in log_text()
+    assert not (cli_repo / LEDGER).exists()
+    assert not (cli_repo / STREAM_DIR / "piggy_spread.q").exists()
+
+
+def test_cli_refuses_a_worktree_even_with_the_marker(
+    bundle: Path, cli_repo: Path, log_text
+) -> None:
+    (cli_repo / ".git").write_text("gitdir: /elsewhere/.git/worktrees/x\n")
+    (cli_repo / bundles.INSTANCE_MARKER).touch()
+    code, _out = _run(str(bundle), "--yes")
+    assert code == 1
+    assert "is a development checkout" in log_text()
+
+
+def test_cli_installs_into_a_clone_marked_as_an_instance(bundle: Path, cli_repo: Path) -> None:
+    (cli_repo / ".git").mkdir()
+    (cli_repo / bundles.INSTANCE_MARKER).touch()
+    code, out = _run(str(bundle), "--yes")
+    assert code == 0, out
+    assert (cli_repo / LEDGER).is_file()
+
+
+def test_cli_dry_run_in_a_checkout_still_reports(bundle: Path, cli_repo: Path) -> None:
+    (cli_repo / ".git").mkdir()
+    code, out = _run(str(bundle), "--dry-run")
+    assert code == 0, out
+    assert "dry run: nothing was changed" in out
+
+
 # ----------------------------------------------- shadowing (#1545)
 
 TRANSFORM = ".qetl.transform.define[`{name};`inputs`output`fn`examples!()]\n"
