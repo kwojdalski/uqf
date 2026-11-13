@@ -17,6 +17,8 @@ optional keys, validated by the q function that takes them:
                 jobs only: a bounded worker never starts with the stack.
     note        why the process is deployed the way it is, for processes.md.
     procname    a job's process; defaults to `<job>1` in both shells, as in q (#2115).
+    q           the q interpreters it runs on, e.g. "kdbx>=4.1 peachq"; absent
+                means every q (model/q_support.py, #2747).
 
 READ AS TEXT, never by running q. Nothing in this package may need a q
 interpreter to know which processes exist. So this is a small parser for the
@@ -27,9 +29,10 @@ q strings and brackets, because a note is prose and prose contains `;`.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
+from uqs.model import q_support
 from uqs.model.kinds import DECLARATION_VERBS
 from uqs.model.pipeline import PipelineKind
 from uqs.model.q_source import call_body, split_top_level, strip_q_comments
@@ -65,6 +68,8 @@ class Declaration:
     #: The registered transform the job or worker declares it applies, "" when
     #: it declares none. A streaming job's is what its twin applies (#884).
     transform: str = ""
+    #: The q interpreters it runs on (its `q` key, #2747); empty for every q.
+    q: tuple[q_support.Term, ...] = ()
 
     @property
     def worker(self) -> str | None:
@@ -172,14 +177,26 @@ def _boolean(value: str, where: str) -> bool:
     return value == "1b"
 
 
-def _string(value: str, where: str) -> str:
+def _string(value: str, where: str, key: str = "note") -> str:
     if not (len(value) >= 2 and value.startswith('"') and value.endswith('"')):
-        raise UqsError(f"{where}: note must be a q string literal, not {value!r}")
+        raise UqsError(f"{where}: {key} must be a q string literal, not {value!r}")
     escapes = {"n": "\n", "t": "\t"}
     return re.sub(r"\\(.)", lambda m: escapes.get(m.group(1), m.group(1)), value[1:-1])
 
 
 def _declaration(fn: str, name: str, fields: dict[str, str], path: Path) -> Declaration:
+    declared = _declared(fn, name, fields, path)
+    if "q" not in fields:
+        return declared
+    where = f"{path.name}: {name}"
+    try:
+        q = q_support.parse(_string(fields["q"], where, "q"), f"{where}'s q")
+    except ValueError as exc:
+        raise UqsError(str(exc)) from None
+    return replace(declared, q=q)
+
+
+def _declared(fn: str, name: str, fields: dict[str, str], path: Path) -> Declaration:
     where = f"{path.name}: {name}"
     note = _string(fields["note"], where) if "note" in fields else ""
     if fn == "qetl.job.bounded.define":

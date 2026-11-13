@@ -72,7 +72,7 @@
 / the names are .qetl.job.bounded.defined.
 .qetl.job.bounded.worker_cfg:([name:`symbol$()] source:`symbol$(); dataset:`symbol$(); width:`timespan$();
     transform:`symbol$(); ns:`symbol$(); partition:`symbol$(); procname:`symbol$(); note:();
-    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$(); partition_column:`symbol$(); revision:`long$(); align:`timespan$(); batching:(); pin:(); twin_of:`symbol$(); twin_calculation:`symbol$())
+    on_conflict:`symbol$(); source_version:`symbol$(); target_key:(); check:(); io:(); facts:(); window_column:`symbol$(); partition_column:`symbol$(); revision:`long$(); align:`timespan$(); batching:(); pin:(); twin_of:`symbol$(); twin_calculation:`symbol$(); q:())
 
 / Every defined worker's name.
 / @return a symbol vector, empty when no worker has been defined
@@ -211,7 +211,7 @@
 /   require_window_column), partition_column (the output column holding the partition, #1476) and
 /   source_version (the default release a run records coverage under; none
 /   by default, so a run must name one), revision (the output logic's, #1097), align (bar width; an unaligned run is refused, #1303) and
-/   batching (compute batching inside a window, off unless declared - bounded_batching.q, #1921) pin (a niladic function recording the configuration snapshot its rows name - bounded_pin.q), and `twin_of with `twin_calculation (the streaming job it repairs, held to its output, contract and calculation whenever both load - twin.q, #2103)
+/   batching (compute batching inside a window, off unless declared - bounded_batching.q, #1921) pin (a niladic function recording the configuration snapshot its rows name - bounded_pin.q), and `twin_of with `twin_calculation (the streaming job it repairs, held to its output, contract and calculation whenever both load - twin.q, #2103), and q (the q interpreters it runs on, e.g. "kdbx>=4.1 peachq" - declared.q, #2747)
 / @throws error naming every missing or malformed field at once
 .qetl.job.bounded.define:{[worker;decl]
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
@@ -281,7 +281,7 @@
     note:$[`note in key decl; decl`note; ""];
     if[not 10h=type note;
         '"define: ",string[worker],"'s note must be a string"];
-    decl[`note]:note;
+    decl[`note]:note; decl[`q]:.qetl.declared.stored_q["define: ",string worker;decl];
     / What a write does with a row whose row_key is already there. Resolved
     / before storage for the reason partition is, and checked here so a typo
     / fails the declaration rather than the first window.

@@ -70,7 +70,7 @@
 / iterates kinds x this list. A kind that must refuse one says so, with the
 / reason, in that test. `ephemeral` is not here: only horizon, which keeps
 / state it does not replay, has a use for it.
-.qetl.job.stream.passthrough_keys:`start_with_all`note`on_start`check`on_fail
+.qetl.job.stream.passthrough_keys:`start_with_all`note`on_start`check`on_fail`q
 
 / The keys `define` reads besides required_declarations, and so the only others
 / it takes (#2112). A key outside both is refused by name: `start_with_al`,
@@ -113,7 +113,7 @@
     if[(`start_with_all in key decl) and not -1h=type decl`start_with_all;
         '"define: ",string[job],"'s start_with_all must be a boolean, 1b to start with the stack"];
     if[(`note in key decl) and not 10h=type decl`note;
-        '"define: ",string[job],"'s note must be a string"];
+        '"define: ",string[job],"'s note must be a string"]; if[`q in key decl; .qetl.declared.require_q["define: ",string job;decl`q]];
     / What the job does when the plant's day ends (#943): roll, snapshot or
     / reset whatever state it carries. Called with the date that ended.
     if[(`on_endofday in key decl) and not .qetl.declared.callable decl`on_endofday;
@@ -203,7 +203,7 @@
 /   start_with_all (a boolean, default 0b), note (a string), transform
 /   (the registered transform it applies, which its backfill twin applies
 /   too - #884), on_endofday (a function of the date that ended, #943),
-/   on_start (a niladic function start calls first, #1112), and
+/   on_start (a niladic function start calls first, #1112), q (declared.q), and
 /   check with on_fail (a quality gate on what is published, #944), and
 /   state (a symbol list of the job's private variables, #967: their values
 /   as the job's file leaves them are what `reset` restores)

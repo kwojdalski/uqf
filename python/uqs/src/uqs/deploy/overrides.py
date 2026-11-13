@@ -17,9 +17,11 @@ until #1852, each now a named override with a recorded reason:
     --override fix-hdb               fill the shared HDB's missing tables and columns
     --override break-lock            remove a deploy lock whose holder stopped beating
 
-and preflight's free-space floor (#2743) has its own:
+and preflight's free-space floor (#2743) and a sidecar job's declared q
+(#2747) have theirs:
 
     --override allow-low-disk        push onto a filesystem with less free than it needs
+    --override accept-job-q          start a --jobs job on a q its `q` key does not name
 
 and `deploy build --q-version`'s `--override allow-computed-names` is the
 converter's own (deploy/portable.py).
@@ -42,7 +44,10 @@ from __future__ import annotations
 from uqs.deploy import preflight
 from uqs.deploy.artifact import Artifact, meets
 from uqs.deploy.config import Config, DeployError
+from uqs.deploy.selection import Selection
 from uqs.guardrails import Guardrail
+from uqs.interpreter import KDBX
+from uqs.model import q_support
 
 ACCEPT_DIGEST = "accept-digest"
 ACCEPT_Q_VERSION = "accept-q-version"
@@ -52,6 +57,7 @@ ALLOW_DIRTY = "allow-dirty"
 FIX_HDB = "fix-hdb"
 BREAK_LOCK = "break-lock"
 ALLOW_LOW_DISK = "allow-low-disk"
+ACCEPT_JOB_Q = "accept-job-q"
 
 _PUSH = ("deploy push",)
 #: The overrides that were option-per-override before #1732, each then taking
@@ -106,6 +112,13 @@ GUARDRAILS = (
         f"{preflight.DISK_MARGIN >> 30} GiB margin",
         risk="the filesystem fills, taking down the processes - and anything else - writing to it",
         action="free space there, or `uqs deploy prune` the old releases",
+    ),
+    Guardrail(
+        ACCEPT_JOB_Q,
+        _PUSH,
+        "start a --jobs job on a server q its `q` key does not name; the q found is recorded",
+        risk="the job's process dies on what that q lacks, the failure only in its log",
+        action="check the job came up and stayed up (`uqs status`, `uqs logs PROC`)",
     ),
 )
 #: {name: what it relaxes} for `deploy push`'s overrides: make_config's fields,
@@ -199,6 +212,31 @@ def for_q(cfg: Config, observed: str) -> list[dict]:
     if cfg.accept_q_version is None:
         return []
     return [_entry(ACCEPT_Q_VERSION, cfg.accept_q_version, cfg.q_version, seen, not ok)]
+
+
+def for_job_q(cfg: Config, selection: Selection, facts: dict[str, str]) -> list[dict]:
+    """Each --jobs job's declared q (its `q` key, #2747) against the q preflight
+    found - its .z.K, and PeachQ when the release bundles one: refused unless
+    --override accept-job-q relaxes it, else the exceptions requested. A
+    version preflight could not read meets no version a job names."""
+    if not selection.q:
+        return []
+    impl, version = facts.get("qimpl") or KDBX, facts.get("qversion", "")
+    declared = {name: q_support.parse(text) for name, text in selection.q.items()}
+    found = q_support.unsupported(declared, impl, version)
+    if found and cfg.accept_job_q is None:
+        raise DeployError(
+            "preflight",
+            q_support.problem(
+                found, impl, version,
+                "deploy without those jobs, or pass --override accept-job-q --reason REASON",
+            ),
+        )  # fmt: skip
+    if cfg.accept_job_q is None:
+        return []
+    requirement = "; ".join(f'{n}: q "{t}"' for n, t in sorted(selection.q.items()))
+    observed = q_support.described(impl, version)
+    return [_entry(ACCEPT_JOB_Q, cfg.accept_job_q, requirement, observed, bool(found))]
 
 
 def for_disk(cfg: Config, facts: dict[str, str], artifact_bytes: int) -> list[dict]:

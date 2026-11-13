@@ -162,8 +162,13 @@ qetl.dag,to_json,function,1,
 qetl.dag,topological,function,1,
 qetl.declared,callable,function,1,v
 qetl.declared,lambda,function,1,v
+qetl.declared,q_impls,value,,
+qetl.declared,q_term,function,1,t
+qetl.declared,q_version,function,1,v
 qetl.declared,refuse_unknown,function,4,who kind decl allowed
 qetl.declared,require_callable,function,4,who name v shape
+qetl.declared,require_q,function,2,who v
+qetl.declared,stored_q,function,2,who decl
 qetl.enrich,add,function,2,state refs
 qetl.enrich,lookup,function,3,state events spec
 qetl.enrich,new,function,1,spec

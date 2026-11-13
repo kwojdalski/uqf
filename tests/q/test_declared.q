@@ -87,6 +87,37 @@
     .qunit.assertThrows[.qetl.transform.define[`zz_xf;];`inputs`output`fn`examples`transfrom!(()!();([] a:`long$());{x};();1b);
         "*declares transfrom, which a transform does not take*";"a transform"]};
 
+/ --- WHICH Q: the `q` key a streaming job and a bounded worker take (#2747) ---
+
+.qt.qetl.declared.test_each_q_term_form_is_accepted:{[t]
+    .qunit.assertEquals[.qetl.declared.q_term each ("kdbx";"peachq";"kdbx>=4.1";"kdbx=4";"kdbx=4.1.2");
+        11111b; "an interpreter, a minimum and a version prefix"];
+    .qunit.assertEquals[.qetl.declared.require_q["define: x";"kdbx>=4.1  peachq"]; "kdbx>=4.1  peachq";
+        "the value is returned as declared, spaces and all"]};
+
+.qt.qetl.declared.test_a_malformed_q_term_is_refused_naming_it:{[t]
+    .qunit.assertEquals[.qetl.declared.q_term each ("kdbx>=";"kdbx=4.";"kdbx>=4.x";"peachq>=1";"q5";"KDBX");
+        000000b; "a missing or broken version, a version on peachq, an unknown interpreter, a capital"];
+    .qunit.assertThrows[.qetl.declared.require_q["define: x"];"kdbx q5 peachq";
+        "define: x's q holds q5, which is not kdbx, kdbx>=VERSION, kdbx=VERSION or peachq";"the bad term, by name"]};
+
+.qt.qetl.declared.test_a_q_that_is_not_a_string_or_names_nothing_is_refused:{[t]
+    .qunit.assertThrows[.qetl.declared.require_q["define: x"];`kdbx;"define: x's q must be a string*";"a symbol"];
+    .qunit.assertThrows[.qetl.declared.require_q["define: x"];"  ";
+        "define: x's q names no interpreter - drop the key to run on every q";"blanks"]};
+
+.qt.qetl.declared.test_a_bounded_worker_stores_its_q_and_refuses_a_bad_one:{[t]
+    row:first .qt.qetl.declared.function_declarations[] where `.qetl.job.bounded.define=.qt.qetl.declared.function_declarations[][;`define];
+    .qunit.assertEquals[.qt.qetl.declared.attempt[row;row[`base],enlist[`q]!enlist "kdbx=4 peachq"]; ""; "declared"];
+    .qunit.assertEquals[(.qetl.job.bounded.def row`name)`q; "kdbx=4 peachq"; "stored as declared"];
+    .qt.qetl.declared.forget[row];
+    .qunit.assertEquals[.qt.qetl.declared.attempt[row;row`base]; ""; "undeclared"];
+    .qunit.assertEquals[(.qetl.job.bounded.def row`name)`q; ""; "stored as every q"];
+    .qt.qetl.declared.forget[row];
+    .qunit.assertTrue[.qt.qetl.declared.has[.qt.qetl.declared.attempt[row;row[`base],enlist[`q]!enlist "peachq=5"];
+        "zz_decl_worker's q holds peachq=5"]; "a bad one is refused by name"];
+    .qt.qetl.declared.forget[row]};
+
 / --- GATE: every function-valued key goes through the shared predicate -------
 
 / A valid declaration for each define that takes functions, so spoiling ONE key

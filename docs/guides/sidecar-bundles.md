@@ -77,6 +77,35 @@ with its options, and the dependency warnings know what it feeds.
 `uqs job new NAME --kind connector --bundle FOLDER` writes `NAME_feed.py`,
 `NAME_streamer.py` and their test into the bundle, and nothing into `uqs`.
 
+## Which q a job runs on
+
+The tree runs on kdb+ 4.0, KDB-X 5 and PeachQ. A job that needs something only
+some of them have (an ODBC source, a KDB-X module, a primitive PeachQ lacks)
+names the ones it runs on in its declaration's `q` key. Every streaming kind and
+`.qetl.job.bounded.define` take it:
+
+```q
+.qetl.job.stream.define[`piggy_spread;`procname`subscribe_to`outputs`on_batch`q!(
+    `piggy_spread1; enlist `quote; enlist `piggy_tape; {[t;x] ...}; "kdbx>=4.1 peachq")];
+```
+
+  | Term        | Runs on                               |
+  | ----------- | ------------------------------------- |
+  | `kdbx`      | any kdb+ or KDB-X                     |
+  | `kdbx>=4.1` | that `.z.K` or later                  |
+  | `kdbx=4`    | that version prefix: `4` is every 4.x |
+  | `peachq`    | PeachQ                                |
+
+Leave the key out and the job runs on every q. q refuses a malformed value when
+the file loads. The q a job does not name is refused here:
+
+- **`uqs start`**: starting the job's process when `$QCMD` is a q it does not
+  name. `--skip-q-version-check --reason R` starts it anyway.
+- **`uqs deploy push --jobs`**: the release records each bundle job's `q`, and
+  preflight refuses a job the server's q does not support. A bundled q counts as
+  PeachQ. `--override accept-job-q --reason R` deploys it anyway, and the report
+  records the override.
+
 ## Scaffold a bundle job
 
 `uqs job new` takes `--bundle FOLDER` for every kind of job. Into

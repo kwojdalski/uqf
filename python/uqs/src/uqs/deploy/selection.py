@@ -25,6 +25,9 @@ class Selection:
     workers: list[str] = field(default_factory=list)
     #: name -> version and revision, for the report
     bundles: dict[str, dict] = field(default_factory=dict)
+    #: each asked-for job that declares the q interpreters it runs on -> that
+    #: declaration (#2747), held to the server's q by overrides.for_job_q
+    q: dict[str, str] = field(default_factory=dict)
 
 
 def select_jobs(manifest: dict, wanted: Sequence[str]) -> Selection:
@@ -63,6 +66,8 @@ def select_jobs(manifest: dict, wanted: Sequence[str]) -> Selection:
                 f"it - run `uqs job backfill {name}` from the release when you mean to",
             )
         sel.jobs.append(name)
+        if job.get("q"):
+            sel.q[name] = job["q"]
         sel.processes += [job["procname"], *job.get("needs", [])]
     sel.processes = list(dict.fromkeys(sel.processes))
     return sel
