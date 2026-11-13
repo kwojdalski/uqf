@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from uqs.deploy import bundled, components, converted_override, fetch, hdb, overrides
 from uqs.deploy.artifact import Artifact, ReleaseError, release_runtime
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
-from uqs.deploy.plan import plan
+from uqs.deploy.plan import no_keep, plan
 from uqs.deploy.prune import prune_locked
 from uqs.deploy.remote import Transport
 from uqs.deploy.report import Report
@@ -91,11 +91,14 @@ def deploy(
     shipped = bundled.records(dep)
     report.components = components.observed(cfg, facts, python, f"{dep.releases}/{rid}", shipped)
     exceptions += overrides.for_q(cfg, facts.get("qversion", ""))
+    exceptions += overrides.for_disk(cfg, facts, pkg.path.stat().st_size)
     report.exceptions = exceptions
     for e in exceptions:
         if e["applied"]:
             log.warning("--{}: {} found, {} required: {}", e["override"], e["observed"],
                         e["requirement"], e["reason"])  # fmt: skip
+    if cfg.keep is None:
+        log.warning("{}", no_keep(cfg))
     if cfg.dry_run:
         facts = {**facts, "hdb": hdb.planned(dep, pkg.manifest)}
         print(plan(cfg, pkg, rid, facts, dep, exceptions, report.components), file=out)

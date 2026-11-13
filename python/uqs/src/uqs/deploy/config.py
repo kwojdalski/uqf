@@ -173,6 +173,9 @@ class Config:
     soak: int | None = None
     #: --override break-lock's reason: remove a lock whose holder died (#867)
     break_lock: str | None = None
+    #: --override allow-low-disk's reason: push onto a filesystem with less free
+    #: than preflight.DISK_FACTOR times the artifact plus DISK_MARGIN (#2743)
+    allow_low_disk: str | None = None
 
     @property
     def data_root(self) -> str:
@@ -280,6 +283,7 @@ def make_config(
     keep: int | None = None,
     soak: int | None = None,
     break_lock: str | None = None,
+    allow_low_disk: str | None = None,
 ) -> Config:
     """A Config from `uqs deploy push`'s options - each value checked, since
     every one of them ends up inside a script the server's shell runs."""
@@ -384,4 +388,5 @@ def make_config(
         keep=keep,
         soak=soak,
         break_lock=break_lock,
+        allow_low_disk=allow_low_disk,
     )

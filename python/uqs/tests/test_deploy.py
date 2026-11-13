@@ -22,7 +22,7 @@ from typer.main import get_group
 from uqs.cli import deploy_policy
 from uqs.cli.deploy import deploy_app
 from uqs.cli.deploy_connection import config_options
-from uqs.deploy import artifact, driver, verify
+from uqs.deploy import artifact, driver, preflight, verify
 from uqs.deploy import build as release_build
 from uqs.deploy import remote as remote_mod
 from uqs.deploy.config import Config, DeployError, make_config, redact
@@ -1471,3 +1471,99 @@ def test_a_failed_push_beats_between_its_rollback_steps(tmp_path):
     beat = "date +%s > /opt/uqf/deploy.lock/heartbeat; fi"
     for a, b in zip(steps, steps[1:], strict=False):
         assert any(beat in s for _, s in remote.scripts[a + 1 : b]), remote.scripts[a][1]
+
+
+# --- free space and keep (#2743) ------------------------------------------------
+
+
+def _disk(free_kb: int, mount: str = "/opt") -> str:
+    """Preflight's free-space facts: --dest and the data directory on `mount`."""
+    return f"disk_dest={free_kb} {mount}\ndisk_data={free_kb} {mount}\n"
+
+
+def _floor_kb(path: Path) -> int:
+    return (preflight.DISK_FACTOR * path.stat().st_size + preflight.DISK_MARGIN) // 1024
+
+
+def test_a_filesystem_below_the_free_space_floor_is_refused(tmp_path):
+    path = _artifact(tmp_path)
+    facts = SERVER + "data=present\n" + _disk(_floor_kb(path) - 1, "/srv")
+    with pytest.raises(DeployError) as err:
+        driver.deploy(
+            parse_args(_args(path, "--dry-run")),
+            FakeRemote({"uv python find": _done(facts)}),
+            out=io.StringIO(),
+        )
+    said = str(err.value)
+    assert err.value.stage == "preflight"
+    assert "the filesystem /srv (holding /opt/uqf) has 1.0 GiB free" in said, said
+    assert said.count("the filesystem /srv") == 1, "one filesystem is judged once"
+    assert "needs 1.0 GiB free: 3 times the artifact's" in said and "1.0 GiB margin" in said
+    assert "--override allow-low-disk --reason REASON" in said
+
+
+def test_a_full_data_filesystem_is_named_apart_from_dest(tmp_path):
+    path = _artifact(tmp_path)
+    facts = SERVER + f"data=present\ndisk_dest={_floor_kb(path) + 1} /opt\ndisk_data=2048 /data\n"
+    with pytest.raises(DeployError, match=r"^the filesystem /data \(holding /opt/uqf/shared/data\)"
+                       r" has 2.0 MiB free, and this push needs"):  # fmt: skip
+        driver.deploy(
+            parse_args(_args(path, "--dry-run")),
+            FakeRemote({"uv python find": _done(facts)}),
+            out=io.StringIO(),
+        )
+
+
+def test_a_filesystem_above_the_floor_passes(tmp_path):
+    path = _artifact(tmp_path)
+    facts = SERVER + "data=present\n" + _disk(_floor_kb(path) + 1)
+    out = io.StringIO()
+    driver.deploy(
+        parse_args(_args(path, "--dry-run")), FakeRemote({"uv python find": _done(facts)}), out=out
+    )
+    assert "EXCEPTIONS" not in out.getvalue()
+
+
+def test_allow_low_disk_pushes_below_the_floor_and_is_recorded(tmp_path):
+    path = _artifact(tmp_path)
+    facts = SERVER + "data=present\n" + _disk(4, "/srv")
+    args = _args(path, "--dry-run", "--override", "allow-low-disk", "--reason", "pruning next")
+    out = io.StringIO()
+    driver.deploy(parse_args(args), FakeRemote({"uv python find": _done(facts)}), out=out)
+    said = out.getvalue()
+    assert "--override allow-low-disk: 1.0 GiB free: 3 times the artifact's" in said, said
+    assert "the filesystem /srv (holding /opt/uqf) has 4.0 KiB free found; reason: pruning" in said
+
+
+def test_preflight_reports_free_space_on_the_nearest_existing_directory(tmp_path):
+    """PREFLIGHT's df step alone, run here: a --dest not made yet is judged
+    by the filesystem it would be made on."""
+    start = PREFLIGHT.index("disk() {")
+    body = PREFLIGHT[start : PREFLIGHT.index('if [ -L "$current" ]')]
+    script = (
+        f"dest={q(str(tmp_path / 'not' / 'yet'))}\ndata={q(str(tmp_path))}\n"
+        'fail() { echo "$*" >&2; exit 1; }\n' + body
+    )
+    r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False)
+    assert r.returncode == 0, r.stderr
+    facts = dict(line.split("=", 1) for line in r.stdout.splitlines())
+    (free_kb, mount), (_, data_mount) = (facts[k].split(" ", 1) for k in ("disk_dest", "disk_data"))
+    assert int(free_kb) > 0 and Path(mount).is_dir() and mount == data_mount
+
+
+def test_a_push_with_no_keep_warns_that_nothing_is_pruned(tmp_path, log_text):
+    out = io.StringIO()
+    remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
+    driver.deploy(parse_args(_args(_artifact(tmp_path), "--dry-run")), remote, out=out)
+    said = "no keep is set, so old releases - each with its own .venv - are never pruned"
+    assert said in log_text() and f"prune     nothing - {said}; pass --keep N" in out.getvalue()
+
+
+def test_a_push_with_keep_does_not_warn(tmp_path, log_text):
+    out = io.StringIO()
+    remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
+    driver.deploy(
+        parse_args(_args(_artifact(tmp_path), "--dry-run", "--keep", "3")), remote, out=out
+    )
+    assert "no keep is set" not in log_text() + out.getvalue()
+    assert "prune     all but the newest 3 releases" in out.getvalue()

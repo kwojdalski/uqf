@@ -113,7 +113,7 @@ def plan(
                 "a rollback returns to, or one still running"
             ]
             if cfg.keep is not None
-            else []
+            else [f"prune     nothing - {no_keep(cfg)}"]
         ),
     ]
     size = pkg.path.stat().st_size
@@ -138,6 +138,17 @@ def plan(
             *[f"  {s}" for s in steps],
         ]
     )
+
+
+def no_keep(cfg: Config) -> str:
+    """The warning for a push that sets no keep (#2743): each release keeps
+    its own .venv, and none is ever removed."""
+    how = (
+        f"set `keep = N` in {cfg.target}'s deploy_targets.toml entry, or pass --keep N"
+        if cfg.target
+        else "pass --keep N"
+    )
+    return f"no keep is set, so old releases - each with its own .venv - are never pruned; {how}"
 
 
 def _source_lines(cfg: Config) -> list[str]:

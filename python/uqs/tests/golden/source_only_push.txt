@@ -112,6 +112,18 @@ if [ -n "$torq_app_home" ]; then
   done
 fi
 if [ -d "$data" ]; then echo "data=present"; else echo "data=absent"; fi
+# Free space where the release lands and where its processes write (#2743),
+# from the nearest directory that exists: kB available, then the mount point,
+# as POSIX df prints them. The caller judges them against the artifact.
+disk() {
+  p=$2
+  until [ -e "$p" ]; do p=$(dirname "$p"); done
+  line=$(df -Pk "$p" 2>/dev/null | awk 'NR == 2 { print $4, $6 }')
+  [ -n "$line" ] || fail "df -Pk cannot read the filesystem holding $p"
+  echo "disk_$1=$line"
+}
+disk dest "$dest"
+disk data "$data"
 if [ -L "$current" ]; then echo "current=$(basename "$(readlink "$current")")"; fi
 if [ -n "$release_dir" ] && [ -e "$release_dir" ]; then echo "release_exists=yes"; fi
 if [ -d "$lock" ]; then

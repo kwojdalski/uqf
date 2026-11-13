@@ -17,6 +17,10 @@ until #1852, each now a named override with a recorded reason:
     --override fix-hdb               fill the shared HDB's missing tables and columns
     --override break-lock            remove a deploy lock whose holder stopped beating
 
+and preflight's free-space floor (#2743) has its own:
+
+    --override allow-low-disk        push onto a filesystem with less free than it needs
+
 and `deploy build --q-version`'s `--override allow-computed-names` is the
 converter's own (deploy/portable.py).
 
@@ -35,6 +39,7 @@ the same list.
 
 from __future__ import annotations
 
+from uqs.deploy import preflight
 from uqs.deploy.artifact import Artifact, meets
 from uqs.deploy.config import Config, DeployError
 from uqs.guardrails import Guardrail
@@ -46,6 +51,7 @@ ACCEPT_CONVERTED = "accept-converted-release"
 ALLOW_DIRTY = "allow-dirty"
 FIX_HDB = "fix-hdb"
 BREAK_LOCK = "break-lock"
+ALLOW_LOW_DISK = "allow-low-disk"
 
 _PUSH = ("deploy push",)
 #: The overrides that were option-per-override before #1732, each then taking
@@ -91,6 +97,15 @@ GUARDRAILS = (
         ("deploy push", "deploy rollback"),
         "remove a deploy lock whose holder stopped beating; still refused while it beats",
         risk="a deployment that is only slow, not dead, loses its lock",
+    ),
+    Guardrail(
+        ALLOW_LOW_DISK,
+        _PUSH,
+        "push onto a filesystem holding --dest or the data directory with less free than "
+        f"{preflight.DISK_FACTOR} times the artifact plus a "
+        f"{preflight.DISK_MARGIN >> 30} GiB margin",
+        risk="the filesystem fills, taking down the processes - and anything else - writing to it",
+        action="free space there, or `uqs deploy prune` the old releases",
     ),
 )
 #: {name: what it relaxes} for `deploy push`'s overrides: make_config's fields,
@@ -184,6 +199,49 @@ def for_q(cfg: Config, observed: str) -> list[dict]:
     if cfg.accept_q_version is None:
         return []
     return [_entry(ACCEPT_Q_VERSION, cfg.accept_q_version, cfg.q_version, seen, not ok)]
+
+
+def for_disk(cfg: Config, facts: dict[str, str], artifact_bytes: int) -> list[dict]:
+    """The free-space floor for the filesystems preflight found holding --dest
+    and the data directory (its disk_dest and disk_data: kB free, then the
+    mount point), each judged once: refused unless --override allow-low-disk
+    relaxes it, else the exceptions requested."""
+    need = preflight.DISK_FACTOR * artifact_bytes + preflight.DISK_MARGIN
+    short, seen = [], set()
+    for key, path in (("disk_dest", cfg.dest), ("disk_data", cfg.data_root)):
+        if key not in facts:
+            continue
+        free_kb, _, mount = facts[key].partition(" ")
+        if mount in seen:
+            continue
+        seen.add(mount)
+        free = int(free_kb) * 1024
+        if free < need:
+            short.append(f"the filesystem {mount} (holding {path}) has {_size(free)} free")
+    requirement = (
+        f"{_size(need)} free: {preflight.DISK_FACTOR} times the artifact's "
+        f"{_size(artifact_bytes)}, plus a {_size(preflight.DISK_MARGIN)} margin"
+    )
+    if short and cfg.allow_low_disk is None:
+        raise DeployError(
+            "preflight",
+            f"{'; '.join(short)}, and this push needs {requirement} - free space there "
+            "(`uqs deploy prune` removes old releases), or pass "
+            "--override allow-low-disk --reason REASON to deploy anyway",
+        )
+    if cfg.allow_low_disk is None:
+        return []
+    observed = "; ".join(short) or "enough free"
+    return [_entry(ALLOW_LOW_DISK, cfg.allow_low_disk, requirement, observed, bool(short))]
+
+
+def _size(n: float) -> str:
+    """`n` bytes, in the largest binary unit it is at least one of."""
+    for unit in ("B", "KiB", "MiB"):
+        if n < 1024:
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} GiB"
 
 
 def for_flags(cfg: Config, dirty: bool) -> list[dict]:
