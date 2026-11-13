@@ -89,6 +89,19 @@ master and the nightly schedule. A generated file never stops a merge:
 hooks with `pre-commit install`. README's Testing section says where each check
 runs.
 
+## Never install a sidecar bundle into this checkout
+
+`uqs job install <bundle>` and `uqs runtime prepare` write tracked files: job
+files under `src/etl/`, `/ BEGIN bundle` blocks in `plant_tables.q` and
+`uqs_catalog.q`, and `installed_bundles.json`. The main checkout and its
+worktrees are shared by several sessions, so a bundle installed in one changes
+what every other session's tests and gates see. Never run either command here or
+in a worktree; `--dry-run` is fine. Instead, test a bundle with
+`uv run python scripts/dev/bundle_suite.py <bundle>`, which installs it into a
+throwaway copy, ship one with `uqs deploy build --bundle <bundle>`, or run one
+from a separate clone holding an untracked `.uqf-instance` file.
+`.claude/hooks/no_bundle_install.py` blocks the commands (#2731).
+
 ## Working on a GitHub issue: always in a new worktree
 
 Several Claude Code sessions work in this repository at once. Whenever you pick
