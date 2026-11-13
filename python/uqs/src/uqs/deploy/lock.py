@@ -20,6 +20,13 @@ is alive on this very machine (from anywhere else, the heartbeat decides) - unle
 the process with that pid started after the holder recorded itself, so it only
 inherited the number (`uqs.liveness.process_gone`, #2692). A
 lock from before this has no heartbeat; the directory's own age stands in.
+
+Removing a lock - releasing it, or breaking it - compares deploy.lock/owner in
+the same server script that removes it (#2741). A release removes only the
+lock whose owner is still the record this run wrote: a run whose lock was
+broken, and taken by another, must not delete the newcomer's in its `finally`.
+A break removes only the lock whose owner is still the one it judged gone,
+so a lock released and taken again meanwhile is left to its new holder.
 """
 
 from __future__ import annotations
@@ -42,13 +49,28 @@ MARGIN = 60
 
 #: What a lock holds, as name=value lines, then `age` - seconds since its last
 #: beat on the server's clock (the directory's age for a lock without one).
-#: Prints nothing when there is no lock.
+#: `owner_sum` is the owner file's checksum, empty when it has none: what a
+#: break compares again before it removes the lock. Prints nothing when there
+#: is no lock.
 INFO = r"""
 if [ -d {lock} ]; then
   {{ cat {lock}/owner 2>/dev/null || true; }} | tail -n +2
+  echo "owner_sum=$( {{ cksum < {lock}/owner; }} 2>/dev/null || true)"
   hb=$(cat {lock}/heartbeat 2>/dev/null || stat -c %Y {lock} 2>/dev/null || true)
   case "$hb" in ''|*[!0-9]*) echo "age=unknown";; *) echo "age=$(( $(date +%s) - hb ))";; esac
 fi
+"""
+
+#: Remove the lock only while its owner file's checksum is still {judged}.
+BREAK = r"""
+if [ "$( {{ cksum < {lock}/owner; }} 2>/dev/null || true)" = {judged} ]; then rm -rf {lock}; fi
+"""
+
+#: Remove the lock only while its owner file still holds {owner}, this run's
+#: record; otherwise print `kept=` and the holder's first line.
+RELEASE = r"""
+if [ "$(cat {lock}/owner 2>/dev/null || true)" = {owner} ]; then rm -rf {lock}
+elif [ -d {lock} ]; then echo "kept=$(head -n 1 {lock}/owner 2>/dev/null || echo unknown)"; fi
 """
 
 
@@ -118,6 +140,8 @@ class Lock:
 
     def __init__(self, cfg: Config, remote: Transport, path: str) -> None:
         self.cfg, self.remote, self.path = cfg, remote, path
+        #: the owner record this run wrote, once it holds the lock
+        self.owner: str | None = None
 
     def info(self) -> dict[str, str]:
         r = self.remote.run(
@@ -149,7 +173,8 @@ class Lock:
                 "lock", f"{self.path} is still held, so it was not broken: {why} ({describe(info)})"
             )
         log.warning("breaking {}: {} ({})", self.path, why, describe(info))
-        self.remote.run(script(f"rm -rf {q(self.path)}"), self.cfg.command_timeout, "lock")
+        judged = BREAK.format(lock=q(self.path), judged=q(info.get("owner_sum", "")))
+        self.remote.run(script(judged), self.cfg.command_timeout, "lock")
         if not self._mkdir(owner_record(self.cfg, command, release)):
             raise DeployError("lock", f"another deployment took {self.path} as it was broken")
 
@@ -167,7 +192,25 @@ class Lock:
         if r.returncode == 3:
             return False
         _checked(r, "lock", "taking the deployment lock")
+        self.owner = owner
         return True
+
+    def release(self) -> None:
+        """Remove the lock if this run still holds it. One broken and taken
+        by another is left to its holder, said in a warning: the run's own
+        outcome is what it reports, not this."""
+        if self.owner is None:
+            return
+        r = self.remote.run(
+            script(RELEASE.format(lock=q(self.path), owner=q(self.owner))),
+            self.cfg.command_timeout,
+            "lock",
+        )
+        out = _checked(r, "lock", "releasing the deploy lock")
+        self.owner = None
+        if out.startswith("kept="):
+            holder = out.strip().removeprefix("kept=")
+            log.warning("{} is no longer this run's, so it was left to {}", self.path, holder)
 
     def beat(self) -> None:
         """Refresh the heartbeat between stages. Never fails a deployment: a

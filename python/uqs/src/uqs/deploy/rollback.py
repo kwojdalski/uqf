@@ -87,6 +87,7 @@ def _start_and_verify(dep: Deployment, release: str, report: dict, what: str) ->
             path, "rollback", f"starting {what}", "start", "--profile", report["profile"],
             *report["extra_processes"],
         )  # fmt: skip
+        dep.beat()
         return dep.verify(
             path, report["profile"], "rollback", Selection(processes=report["extra_processes"])
         )
@@ -182,6 +183,7 @@ def _restore(dep: Deployment, plan: dict, now: dict, then: dict, *, stop_target:
         except DeployError as exc:
             log.error("stopping release {}'s processes failed: {}; restoring anyway", target,
                       redact(str(exc)))  # fmt: skip
+        dep.beat()
     restored = _start_and_verify(dep, current, now, f"release {current} again")
     return "restored" if restored.get("passed") else "NOT restored - check by hand"
 

@@ -339,3 +339,25 @@ def test_the_cli_refuses_a_to_that_is_not_a_release_id():
         ["deploy", "rollback", "--ssh", "h", "--dest", "/opt/uqf", "--release", "../etc;rm -rf /"],
     )
     assert result.exit_code == 2
+
+
+BEAT = "date +%s > /opt/uqf/deploy.lock/heartbeat; fi"
+
+
+def test_a_rollback_and_its_restore_beat_between_steps():
+    """#2741: stop, start, verify and restore each run up to their timeouts,
+    and the lock's stale_after is one step's worth - so a rollback silent
+    across them looked dead, and invited a break-lock mid-run."""
+    remote = _server(target_verifies=False)
+    assert _roll(remote)[0] == 1
+    steps = [
+        remote.index(f"cd /opt/uqf/releases/{NEW}\n", ".venv/bin/uqs stop"),
+        remote.index(f"cd /opt/uqf/releases/{OLD}\n", ".venv/bin/uqs start --profile fx"),
+        remote.index("uqs deploy verify --profile fx"),
+        remote.index(f"cd /opt/uqf/releases/{OLD}\n", ".venv/bin/uqs stop"),
+        remote.index(f"cd /opt/uqf/releases/{NEW}\n", ".venv/bin/uqs start --profile essential"),
+        remote.index("uqs deploy verify --profile essential"),
+    ]
+    assert steps == sorted(steps)
+    for a, b in zip(steps, steps[1:], strict=False):
+        assert any(BEAT in s for _, s in remote.scripts[a + 1 : b]), remote.scripts[a][1]
