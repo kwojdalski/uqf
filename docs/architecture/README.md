@@ -14,7 +14,7 @@ another is the easiest way to be misled by this directory.
   | Kind                                   | What it is for                                                                                                      | Pages                                                                                                                                                                                                                             |
   | ---                                    | ---                                                                                                                 | ---                                                                                                                                                                                                                               |
   | **Positions**                          | the beliefs the code is arranged around, still held                                                                 | [`pipeline-philosophy.md`](pipeline-philosophy.md)                                                                                                                                                                                |
-  | **Design notes, kept after the build** | written *before* the work and kept for the reasoning, not as a statement of what is missing                         | [`event-tape.md`](event-tape.md), [`query-policies.md`](query-policies.md), [`zero-downtime.md`](zero-downtime.md) (not built), [`markout-contract.md`](markout-contract.md) (proposed), [`markout-memory.md`](markout-memory.md) |
+  | **Design notes, kept after the build** | written *before* the work and kept for the reasoning, not as a statement of what is missing                         | [`event-tape.md`](event-tape.md), [`query-policies.md`](query-policies.md), [`zero-downtime.md`](zero-downtime.md) (not built), [`markout-contract.md`](markout-contract.md) (proposed), [`markout-memory.md`](markout-memory.md), [`bundle-overlay.md`](bundle-overlay.md) (not built) |
   | **One decision**                       | a single yes/no, with the reason it went that way                                                                   | [`cryptorust-discovery.md`](cryptorust-discovery.md)                                                                                                                                                                              |
   | **Synthesis**                          | the implemented pieces seen as one system                                                                           | [`pipeline-architecture-example.md`](pipeline-architecture-example.md)                                                                                                                                                            |
   | **The running stack**                  | what runs, how it is wired, and why not all of it starts - its process names checked against the registry by a test | [`stack.md`](stack.md)                                                                                                                                                                                                            |
@@ -31,6 +31,7 @@ another is the easiest way to be misled by this directory.
   | [`query-policies.md`](query-policies.md)                               | per-table query policies on the gateway's data-access API, and who is held to them                                  |
   | [`zero-downtime.md`](zero-downtime.md)                                 | upgrading without an outage: the switch, and the single writers it must hand over (a design, not built)             |
   | [`markout-contract.md`](markout-contract.md)                           | one cross-asset markout core: columns, resolver, clocks, conversion, versioning (proposed, #1923)                   |
+  | [`bundle-overlay.md`](bundle-overlay.md) | installing sidecar bundles outside the tracked tree and loading them at start (a design, not built, #2733) |
   | [`markout-memory.md`](markout-memory.md)                               | markouts over tens of terabytes of market data: mapped, never copied, with the measurements                         |
 
 ## Which pages state a status
@@ -45,6 +46,8 @@ built --- or, worse, rebuild it:
   each upgrade's `downtime` in its deploy report.
 - **`markout-contract.md`** --- proposed, awaiting approval (#1923); the issues
   that implement it are #1924 to #1939.
+- **`bundle-overlay.md`** --- not built (#2733). Installing a bundle still
+  writes tracked source.
 
 The others carry no status and should not: positions are held until they are
 argued out of, a single decision is true or it is revisited, and a synthesis or
