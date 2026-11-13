@@ -186,7 +186,7 @@ def spelling(param: Any) -> str:  # a click Parameter (typer vendors its own cli
 
 
 #: Rule 4's verbs (#2170: declared here, held over the command tree by
-#: test_cli_conventions.py and over docs/guides/uqs.md's verb table by
+#: test_cli_conventions.py and over docs/reference/cli.md's verb table by
 #: test_the_guide_lists_the_same_vocabulary). The core verbs, each meaning one thing (#1733).
 CORE_VERBS = {
     "status": "the state of something running or installed",

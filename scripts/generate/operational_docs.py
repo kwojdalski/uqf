@@ -82,8 +82,8 @@ OUT = REPO / "docs" / "reference" / "processes.md"
 DAG_OUT = REPO / "src" / "etl" / "generated" / "pipeline_dag.q"
 PLAN_OUT = REPO / load_plan.PLAN_FILE
 PORTS_OUT = REPO / PROCESS_PORTS_FILE
-#: The uqs guide, whose profile table is a block this script owns (#822).
-GUIDE = REPO / "docs" / "guides" / "uqs.md"
+#: The guide whose profile table is a block this script owns (#822).
+GUIDE = REPO / "docs" / "guides" / "runtimes-and-profiles.md"
 PROFILE_BEGIN = (
     "<!-- BEGIN GENERATED profile table - scripts/generate/operational_docs.py; "
     "CI runs it with --check, so edit the profiles, not this table -->"

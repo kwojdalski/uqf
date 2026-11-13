@@ -76,7 +76,7 @@ def test_the_cli_takes_exactly_the_channels_q_declares():
 
 
 def test_the_docs_table_lists_every_channel_and_only_those():
-    text = (REPO / "docs/guides/uqs.md").read_text()
+    text = (REPO / "docs/guides/logs.md").read_text()
     section = text.split("### Channels: which subsystem a line concerns", 1)[1].split("\n### ", 1)[
         0
     ]
@@ -85,7 +85,7 @@ def test_the_docs_table_lists_every_channel_and_only_those():
 
 
 def test_the_docs_say_a_channel_filters_the_view_and_does_not_stop_generation():
-    text = (REPO / "docs/guides/uqs.md").read_text()
+    text = (REPO / "docs/guides/logs.md").read_text()
     assert "`--channel` filters what you view. It does not stop a record being generated" in text
 
 

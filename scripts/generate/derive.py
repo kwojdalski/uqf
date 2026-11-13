@@ -324,7 +324,7 @@ def _diagrams(args: argparse.Namespace) -> int:
 
 def _operational_docs(args: argparse.Namespace) -> int:
     """The process table, the pipeline DAG and load plan q reads, the port
-    lock and the uqs guide's profile table - all from the pipeline registry
+    lock and the runtimes guide's profile table - all from the pipeline registry
     (operational_docs.py). It refuses, naming them, when the declared
     dataflow edges disagree with the q scripts."""
     _uqs()
@@ -486,7 +486,7 @@ TARGETS: dict[str, Target] = {
         Target(
             "operational-docs",
             "processes.md, the pipeline DAG, the load plan, the port lock and the "
-            "uqs guide's profile table, from the pipeline registry",
+            "runtimes guide's profile table, from the pipeline registry",
             _operational_docs,
         ),
         Target(

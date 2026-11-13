@@ -211,8 +211,8 @@ result:
 ## TorQ DQE integration
 
 The stack wires this in. DQE itself stays off with `uqs start`, for the reason
-[uqs.md](uqs.md#what-actually-starts) gives, so start it when you want the
-metatables built:
+[the runtimes guide](runtimes-and-profiles.md#what-actually-starts) gives, so
+start it when you want the metatables built:
 
 ```sh
 uqs start dqe1 dqedb1

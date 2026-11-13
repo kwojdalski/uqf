@@ -86,6 +86,10 @@ website:
       - section: "Guides"
         contents:
           - guides/uqs.md
+          - guides/runtimes-and-profiles.md
+          - guides/logs.md
+          - guides/connecting.md
+          - guides/hdb.md
           - guides/when-it-breaks.md
           - guides/new-pipeline.md
           - guides/config-audit.md
@@ -126,16 +130,26 @@ website:
           - architecture/pipeline-philosophy.md
           - architecture/stack.md
           - architecture/pipeline-architecture-example.md
-          - architecture/event-tape.md
           - architecture/cryptorust-discovery.md
-          - architecture/markout-contract.md
+          # Designs kept for the reasoning. architecture/README.md says
+          # which of them state a status.
+          - section: "Design notes"
+            contents:
+              - architecture/event-tape.md
+              - architecture/query-policies.md
+              - architecture/zero-downtime.md
+              - architecture/markout-contract.md
+              - architecture/markout-memory.md
       - section: "Reference"
         contents:
+          - reference/cli.md
           - reference/quant-modules.md
           - reference/qf-domains.md
           - reference/environment.md
           - reference/processes.md
           - reference/pipeline-declarations.md
+          - reference/compression-policy.md
+          - reference/book-liquidity.md
           # Generated before every render (project.pre-render above) from the
           # qDoc comments: one page per src/ module, gitignored.
           - section: "q API"
