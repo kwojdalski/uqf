@@ -122,23 +122,6 @@ def backfill_workers() -> list[str]:
     return sorted(backfill.backfill_workers())
 
 
-@_never_raises
-def list_kinds() -> list[str]:
-    return sorted(listing.LISTABLE_KINDS)
-
-
-@_never_raises
-def list_columns(ctx: typer.Context) -> list[str]:
-    """The columns `--sort` can take, which differ by kind - so they are read
-    off the kind's own rows. Nothing when there are no rows to read them off."""
-    typed = _typed(ctx, "kind")
-    kind = typed[0] if isinstance(typed, tuple) else typed
-    if kind not in listing.LISTABLE_KINDS:
-        return []
-    rows = listing.list_items(stack_paths.default_paths(), kind)
-    return list(rows[0]) if rows else []
-
-
 def columns_of(kind: str) -> Callable[..., Candidates]:
     """`--sort`'s completer for a list of one fixed `kind` (`uqs target list`)."""
 

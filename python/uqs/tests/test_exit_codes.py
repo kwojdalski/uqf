@@ -173,7 +173,7 @@ EMPTY = {
     "logs": ["logs"],
     "logs PROC": ["logs", "rdb1"],
     "job attachment list": ["job", "attachment", "list"],
-    "list backfills": ["list", "backfills"],
+    "job attachment status": ["job", "attachment", "status"],
     "deploy history": ["deploy", "history"],
     "data check": ["data", "check"],
     "job checkpoint remove": ["job", "checkpoint", "remove", "demo_deals_backfill", "--yes"],

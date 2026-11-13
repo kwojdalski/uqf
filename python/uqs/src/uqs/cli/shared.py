@@ -173,14 +173,12 @@ def _configure(
     if debug:
         configure_logging(component="uqs", level="DEBUG")
     # Kept for commands that do more than log louder in debug mode - `status`
-    # adds a section. `uqs status --debug`, the old spelling, sets it too
-    # (renamed()).
+    # adds a section.
     ctx.obj = {"debug": debug}
 
 
 def _debug_requested(ctx: typer.Context) -> bool:
-    """Whether debug was asked for: the global `--debug` (which a command's
-    own `--debug`, its old spelling, sets too) or LOG_LEVEL=DEBUG."""
+    """Whether debug was asked for: the global `--debug` or LOG_LEVEL=DEBUG."""
     root = ctx.find_root().obj
     return bool((root or {}).get("debug")) or _env_log_level() == "DEBUG"
 

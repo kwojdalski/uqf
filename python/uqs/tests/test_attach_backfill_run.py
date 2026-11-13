@@ -631,7 +631,7 @@ def test_cli_run_with_wait_follows_the_run_and_exits_with_its_outcome(world):
 
 
 def test_cli_run_without_wait_returns_at_once_and_the_run_finishes_on_its_own(world):
-    result = _cli("--mode", "dry-run")
+    result = _cli("--dry-run")
     assert result.exit_code == 0, result.output
     assert "started upstream_trades_backfill (pid" in " ".join(result.output.split())
     for _ in range(300):

@@ -26,7 +26,7 @@ from uqs.attach.findings import Finding
 from uqs.attach.manifest import Manifest
 from uqs.attach.overrides import OverrideError
 from uqs.cli import shared
-from uqs.paths import UqsError, repo_root
+from uqs.paths import UqsError, UqsUsageError, repo_root
 
 ROOT = repo_root()
 TABLE = "piggybank_general_ledger"
@@ -548,7 +548,7 @@ def plan_args(bundle: Path) -> list[str]:
 def overrides_args() -> list[str]:
     args = []
     for spec in ALL_FOUR:
-        args += ["--override", spec]
+        args += ["--override", spec.replace("TORQ_VERSION", "torq-version")]
     return [*args, "--reason", "Validated against the site's TorQ 4.2.0 build"]
 
 
@@ -569,16 +569,16 @@ def test_a_dry_run_without_the_override_is_blocked_and_with_it_shows_the_accepte
 
 
 def test_an_override_needs_a_reason_a_known_code_and_an_overridable_one(world, bundle):
-    no_reason = invoke(*plan_args(bundle), "--override", "TORQ_VERSION:stp1", "--dry-run")
+    no_reason = invoke(*plan_args(bundle), "--override", "torq-version:stp1", "--dry-run")
     # #1852: refused as every command's --override is (safety.given)
     assert no_reason.exit_code != 0 and any("needs --reason" in m for m in world.errors)
-    unknown = invoke(*plan_args(bundle), "--override", "NOPE:stp1", "--reason", "x", "--dry-run")
+    unknown = invoke(*plan_args(bundle), "--override", "nope:stp1", "--reason", "x", "--dry-run")
     assert unknown.exit_code != 0 and any(
         "`uqs job attachment add` has no override 'NOPE:stp1'" in m for m in world.errors
     )
     world.named("stp1")["multilog"] = "singular"
     fixed = invoke(
-        *plan_args(bundle), "--override", "LOGGING_MODE:stp1", "--reason", "x", "--dry-run"
+        *plan_args(bundle), "--override", "logging-mode:stp1", "--reason", "x", "--dry-run"
     )
     assert fixed.exit_code != 0 and any("is never overridden" in m for m in world.errors)
 
@@ -698,15 +698,18 @@ def test_wire_faults_in_a_plan_do_not_leak_into_overrides(bundle):
 
 
 def test_attachment_add_checks_its_overrides_as_every_command_does():
-    """#1852: `--override CODE:COMPONENT` goes through safety.given, as every other
-    command's --override does; a code is matched in upper case, as before."""
+    """#1852: `--override NAME:COMPONENT` goes through safety.given, as every other
+    command's --override does; NAME is the guardrail's spelling, never the finding
+    code's (#1884, #2752)."""
     from uqs.cli.attach import waivers
 
-    assert waivers(["torq_version:stp1"], "known") == ["TORQ_VERSION:stp1"]
     assert waivers(None, "") == []
-    assert waivers(["torq-version:stp1"], "known") == ["TORQ_VERSION:stp1"]  # #1884
+    assert waivers(["torq-version:stp1"], "known") == ["TORQ_VERSION:stp1"]
+    for code in ("torq_version", "TORQ_VERSION"):
+        with pytest.raises(UqsUsageError, match=f"--override {code}: spell it torq-version"):
+            waivers([f"{code}:stp1"], "known")
     with pytest.raises(UqsError, match="give torq-version:COMPONENT"):
-        waivers(["TORQ_VERSION"], "x")
+        waivers(["torq-version"], "x")
     with pytest.raises(UqsError, match="--reason says why an --override is acceptable"):
         waivers(None, "a reason for nothing")
 

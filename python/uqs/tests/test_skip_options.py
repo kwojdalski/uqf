@@ -21,9 +21,8 @@ from plain_cli import PlainRunner
 from typer.core import TyperGroup
 
 from uqs import cli
-from uqs.cli import renames, safety, skip_options
+from uqs.cli import safety, skip_options
 from uqs.cli import target as target_cli
-from uqs.cli.renames import renamed
 from uqs.deploy import config, control, targets
 from uqs.guardrails import Guardrail
 from uqs.paths import UqsError
@@ -61,9 +60,9 @@ def declared(monkeypatch):
 
 
 def _app() -> typer.Typer:
-    """A small tree on the real command classes: `job run` marked
-    ChangesState, `job other` through renamed(...) with an old spelling. Each
-    prints what safety.given returns, or its refusal."""
+    """A small tree on the real command classes: `job run` and `job other`,
+    each marked ChangesState. Each prints what safety.given returns, or its
+    refusal."""
     app, job = typer.Typer(), typer.Typer()
     app.add_typer(job, name="job")
 
@@ -78,7 +77,7 @@ def _app() -> typer.Typer:
     def run(override: safety.OverrideOpt = None, reason: safety.ReasonOpt = None) -> None:
         report("job run", override, reason)
 
-    @job.command("other", cls=renamed({"--old": "--new"}, safety.ChangesState))
+    @job.command("other", cls=safety.ChangesState)
     def other(
         new: str = typer.Option("", "--new"),
         override: safety.OverrideOpt = None,
@@ -207,18 +206,6 @@ def test_both_spellings_together_are_one_request(declared):
     )
 
 
-def test_the_old_spellings_and_the_skips_parse_together(declared, monkeypatch):
-    """renamed(...) rewrites first, then the generated options parse."""
-    warned = []
-    monkeypatch.setattr(renames, "warn_renamed", lambda old, new: warned.append((old, new)))
-    result = runner.invoke(
-        _app(), ["job", "other", "--old", "x", "--skip-other-guard", "--reason", "r"]
-    )
-    assert result.exit_code == 0, result.output
-    assert result.output.splitlines() == ["new=x", '{"other-guard": "r"}']
-    assert warned == [("--old", "--new")]
-
-
 def test_nothing_given_is_nothing(declared):
     assert _given("job", "run") == {}
 
@@ -341,27 +328,6 @@ def test_the_real_tree_takes_a_declared_skip(monkeypatch):
     assert "--skip-test-guard" not in runner.invoke(cli.app, ["stop", "--help"]).output
 
 
-def test_an_old_skip_spelling_blocks_a_generated_one_of_the_same_name(monkeypatch):
-    """A renamed old spelling is parsed before Click sees it (renames.py): a
-    generated flag of that name would be read as it, so it is refused."""
-    clash = dataclasses.replace(GUARD, commands=("job old",))
-    monkeypatch.setattr(safety, "registry", lambda: (clash,))
-    app, job = typer.Typer(), typer.Typer()
-    app.add_typer(job, name="job")
-
-    @job.command("old", cls=renamed({"--skip-test-guard": "--new"}, safety.ChangesState))
-    def old(
-        new: bool = typer.Option(False, "--new"),
-        override: safety.OverrideOpt = None,
-        reason: safety.ReasonOpt = None,
-    ) -> None:
-        pass
-
-    result = runner.invoke(app, ["job", "old", "--help"])
-    assert isinstance(result.exception, ValueError)
-    assert "`uqs job old` already has --skip-test-guard" in str(result.exception)
-
-
 # ------------------------------------------------- the shipped aliases (#1918)
 
 #: Every shipped generated option: (guardrail id, its commands).
@@ -426,7 +392,7 @@ def test_the_attachment_aliases_say_the_finding_stays_and_accept_risks_is_still_
 
 def test_the_start_aliases_say_only_their_check_is_lifted():
     helps = _shipped_help(["start"])
-    assert "only the q-version refusal is lifted" in (helps["--skip-q-version-check"][0] or "")
+    assert "only the q-version refusals are lifted" in (helps["--skip-q-version-check"][0] or "")
     assert "the licence's own limit is still q's to enforce" in (
         helps["--skip-profile-budget-check"][0] or ""
     )

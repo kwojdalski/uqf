@@ -217,18 +217,15 @@ def test_a_source_with_no_hdb_is_refused_naming_it(tmp_path):
         hdb_seed.seed(_paths(tmp_path, "torq"), _paths(tmp_path, "uqf"))
 
 
-# --- the command's range (#1735) and its renamed spellings (#1738 rule 6) -----
+# --- the command's range (#1735) ----------------------------------------------
 
 
 @pytest.fixture
 def seeded(monkeypatch, tmp_path):
-    """What `data seed` hands hdb_seed.seed, and the renames it warned of."""
-    seen: dict = {"renamed": []}
+    """What `data seed` hands hdb_seed.seed."""
+    seen: dict = {}
     monkeypatch.setattr(cli_seed, "_paths", lambda: _paths(tmp_path, "torq"))
     monkeypatch.setattr(cli_seed.runtime, "bootstrap", lambda p: None)
-    monkeypatch.setattr(
-        cli_seed, "warn_renamed", lambda old, new: seen["renamed"].append((old, new))
-    )
 
     def refuse(exc: Exception) -> None:
         seen["refused"] = str(exc)
@@ -262,7 +259,6 @@ def seeded(monkeypatch, tmp_path):
 def test_the_partitions_are_the_dates_in_the_range(seeded, argv, want):
     seen = seeded("--from-runtime", "uqf", *argv)
     assert (seen["source"], seen["first"], seen["last"]) == ("uqf", *want)
-    assert seen["renamed"] == []
 
 
 @pytest.mark.parametrize(
@@ -317,9 +313,9 @@ def test_without_apply_it_names_the_partitions_and_writes_nothing(copying):
     assert "Run it again with --apply" in result.output
 
 
-def test_dry_run_is_refused_naming_apply(copying, log_text):
-    assert _seed("--dry-run").exit_code == 2
-    assert "`data seed` is a dry run unless --apply: drop --dry-run" in log_text()
+def test_dry_run_is_no_option(copying):
+    result = _seed("--dry-run")
+    assert result.exit_code == 2 and "No such option: --dry-run" in result.output
     assert copying == []
 
 

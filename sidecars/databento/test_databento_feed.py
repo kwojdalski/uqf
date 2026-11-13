@@ -32,7 +32,6 @@ from pathlib import Path
 import databento_dbn as dbn
 import polars as pl
 import pytest
-import rename_support  # python/uqs/tests' helper: bundle_suite.py runs this from there
 from typer.testing import CliRunner
 
 from uqs import cli
@@ -473,17 +472,14 @@ def _patch(monkeypatch, name: str, result=None):
     return calls
 
 
-@pytest.mark.parametrize("option", ["--databento-dataset", "--dataset"])
-def test_databento_start_takes_its_dataset(monkeypatch, option):
+def test_databento_start_takes_its_dataset(monkeypatch):
     """#1739: --dataset is the dataset a bounded worker fills (`job new`), so
-    the Databento one is --databento-dataset; --dataset is its old spelling."""
-    renames = rename_support.said(monkeypatch)
+    the Databento one is --databento-dataset."""
     calls = _patch(monkeypatch, "start_databento_feed", result=7)
-    result = runner.invoke(cli.app, ["connector", "start", "databento", option, "GLBX.MDP3"])
+    argv = ["connector", "start", "databento", "--databento-dataset", "GLBX.MDP3"]
+    result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
     assert calls[0]["dataset"] == "GLBX.MDP3"
-    old = option == "--dataset"
-    assert renames == ([rename_support.renamed("--dataset", "--databento-dataset")] if old else [])
 
 
 def test_databento_starts_with_its_own_defaults(monkeypatch):

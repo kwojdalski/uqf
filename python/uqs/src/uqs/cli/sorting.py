@@ -67,7 +67,7 @@ def _sorted_items[Row: dict](items: list[Row], sort: str | None, reverse: bool) 
     processes` has procname/proctype/port/startwithall, `list env` has
     name/value, `status` has Process/Status/PID/... - so there is no fixed
     set to validate against and an unknown name has to name the real ones
-    back. Shared by `uqs list --sort` and `uqs status --sort`.
+    back. Shared by every noun's `list --sort` and `uqs status --sort`.
 
     Numeric columns sort numerically. `port` is a string like "6051", and
     lexicographically "6100" sorts before "659" - which looks like the sort

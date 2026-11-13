@@ -54,9 +54,7 @@ from uqs.cli import (
     create_backfill,
     json_out,
     lifecycle,
-    lists,
     pipelines,
-    renames,
     safety,
     shared,
     sorting,
@@ -93,7 +91,7 @@ from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
 from uqs.stack import render as stack_render
-from uqs.stack.listing import LISTABLE_KINDS, SUMMARY_COLUMNS, SUMMARY_GRAPH_COLUMNS
+from uqs.stack.listing import SUMMARY_COLUMNS, SUMMARY_GRAPH_COLUMNS
 
 runner = CliRunner()
 
@@ -1184,18 +1182,6 @@ def test_query_password_is_never_an_argument(monkeypatch):
     assert any("$UQS_TEST_Q_PW is not set" in m for m in errors.messages), errors.messages
 
 
-@pytest.mark.parametrize("command", [["query", "1"], ["schema"]])
-def test_the_inline_passwd_still_parses_for_one_release_and_warns(monkeypatch, command):
-
-    said: list[tuple[str, str]] = []
-    monkeypatch.setattr(renames, "warn_secret_argv", lambda old, new: said.append((old, new)))
-    rec = _patch(monkeypatch, runtime, "query", result="RESULT")
-    monkeypatch.setattr(schema_view, "overview", lambda *a, **k: rec(*a, **k) or [])
-    runner.invoke(cli.app, [*command, "--port", "6052", "--passwd", "p"])
-    assert said == [("--passwd", "--password-env NAME")]
-    assert rec.kwargs["passwd"] == "p"
-
-
 def test_query_turns_a_driver_error_into_an_exit_code(monkeypatch):
     """kola raises its own exception types, which are NOT UqsError. The
     command catches Exception for that reason, and this pins it: a connect
@@ -1344,9 +1330,7 @@ def test_config_set_refuses_a_comma_before_writing(monkeypatch):
     """#777: refused by the real setter, so nothing reaches the overrides file."""
     monkeypatch.setattr(stack_procs, "list_process_names", lambda _p: ["fxfeed1"])
     write = _patch(monkeypatch, stack_procs, "_write_overrides")
-    result = runner.invoke(
-        cli.app, ["config", "set", "fxfeed1", "extras", "--", "-pairs EURUSD,USDJPY"]
-    )
+    result = runner.invoke(cli.app, ["config", "set", "fxfeed1", "extras=-pairs EURUSD,USDJPY"])
     assert result.exit_code == 1
     assert write.calls == []
 
@@ -1358,7 +1342,7 @@ def test_config_set_refuses_a_character_torq_sh_s_eval_acts_on(monkeypatch, ch):
     monkeypatch.setattr(stack_procs, "list_process_names", lambda _p: ["fxfeed1"])
     write = _patch(monkeypatch, stack_procs, "_write_overrides")
     errors = _error_log(monkeypatch)
-    result = runner.invoke(cli.app, ["config", "set", "fxfeed1", "extras", "--", f"-note a{ch}b"])
+    result = runner.invoke(cli.app, ["config", "set", "fxfeed1", f"extras=-note a{ch}b"])
     assert result.exit_code == 1
     assert any(f"shell metacharacters {ch!r}" in m for m in errors.messages), errors.messages
     assert write.calls == []
@@ -1369,23 +1353,11 @@ def test_config_set_refusal_exits_one(monkeypatch):
     assert runner.invoke(cli.app, ["config", "set", "rdb1", "nope=1"]).exit_code == 1
 
 
-def test_list_with_no_kind_shows_the_kinds_rather_than_failing(monkeypatch):
-    result = runner.invoke(cli.app, ["list"])
-    assert result.exit_code == 0
-    for kind in LISTABLE_KINDS:
-        assert (kind in result.stdout) is (kind not in lists.MOVED and kind not in lists.REFUSED)
-
-
 def test_list_renders_the_items_of_a_kind(monkeypatch):
     _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1", "port": "6052"}])
     result = runner.invoke(cli.app, ["process", "list"])
     assert result.exit_code == 0
     assert "rdb1" in result.stdout
-
-
-def test_an_unknown_kind_exits_one(monkeypatch):
-    _patch(monkeypatch, listing, "list_items", raises=UqsError("unknown kind"))
-    assert runner.invoke(cli.app, ["list", "bogus"]).exit_code == 1
 
 
 # -------------------------------------------------------- list --sort
@@ -1745,7 +1717,9 @@ def test_connector_restart_refuses_another_feeds_option_before_stopping(monkeypa
     _crypto_running(monkeypatch, True)
     start = _patch(monkeypatch, crypto, "start_crypto_recorder", result=7)
     _patch(monkeypatch, crypto, "stop_crypto_recorder")
-    assert runner.invoke(cli.app, ["connector", "restart", "crypto", "--topic", "t"]).exit_code == 2
+    assert (
+        runner.invoke(cli.app, ["connector", "restart", "crypto", "--topics", "t"]).exit_code == 2
+    )
     assert start.calls == []
 
 
@@ -1848,7 +1822,7 @@ def test_kafka_starts_with_its_own_defaults(monkeypatch):
     for name in ("UQF_KAFKA_BROKERS", "UQF_KAFKA_TOPICS", "UQF_TP_CREDENTIAL"):
         monkeypatch.delenv(name, raising=False)
     kafka = _patch(monkeypatch, kafka_feed, "start_kafka_feed", result=7)
-    argv = ["connector", "start", "kafka", "--topic", "uqf.client.flow"]
+    argv = ["connector", "start", "kafka", "--topics", "uqf.client.flow"]
     assert runner.invoke(cli.app, argv).exit_code == 0
     assert kafka.kwargs == {
         "brokers": kafka_feed.DEFAULT_BROKERS,

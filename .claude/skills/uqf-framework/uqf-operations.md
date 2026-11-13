@@ -30,7 +30,7 @@ Prerequisites: - KDB-X (q 5.0 or later; `QCMD`/`QHOME` when q isn't on PATH); -
   | a q expression on a process                            | `uqs query PROC "expr"` / `uqs query PROC` (interactive)                                                                          |
   | a table's columns in a running process                 | `uqs schema`                                                                                                                      |
   | logs                                                   | `uqs logs NAME --level ERROR`, `-f`, `--multitail`                                                                                |
-  | list processes, profiles, env; runtimes; config set's  | `uqs list KIND` (no argument lists the kinds); `uqs runtime list`, `uqs config list`                                              |
+  | list processes, profiles, env; runtimes; config set's  | `uqs process list`, `uqs profile list`, `uqs config env`; `uqs runtime list`, `uqs config list`                                   |
   | a bounded worker over a range                          | `uqs [--debug] job backfill WORKER --from T --to T --source-version V [--wait] [--trace]`                                         |
   | runs: unfinished, one run, one window                  | `uqs job runs list --unfinished`, `uqs job runs show RUN_ID`, `uqs job runs list`                                                 |
   | holes in a streaming job's output, and refill commands | `uqs job gaps JOB --from T --to T`                                                                                                |

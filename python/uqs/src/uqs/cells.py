@@ -1,6 +1,6 @@
 """A listed row's values: typed for `--json`, rendered once for a table (#1882).
 
-A row a list command produces (`uqs list processes`, `uqs runtime list`, ...)
+A row a list command produces (`uqs process list`, `uqs runtime list`, ...)
 holds what each field IS - a port is an int, a flag a bool, the tables a
 process reads a list - so `--json` prints that, and `jq '.processes[].port'`
 reads a number rather than the text a table cell showed. `cell` is the one

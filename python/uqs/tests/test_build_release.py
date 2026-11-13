@@ -190,7 +190,9 @@ def test_only_tracked_files_under_the_allowlist_are_listed():
 def test_uncommitted_changes_are_refused_unless_allowed(tmp_path):
     with pytest.raises(artifact.ReleaseError, match="uncommitted"):
         _build(tmp_path, dirty=" M src/init.q")
-    art, _ = _build(tmp_path, "--allow-dirty", dirty=" M src/init.q")
+    art, _ = _build(
+        tmp_path, "--override", "allow-dirty", "--reason", "a test", dirty=" M src/init.q"
+    )
     assert art.manifest["dirty"] is True
 
 

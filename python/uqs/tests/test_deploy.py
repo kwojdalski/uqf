@@ -1030,27 +1030,23 @@ def test_a_dirty_artifact_is_refused_unless_allowed(tmp_path):
         driver.deploy(parse_args(_args(path, "--dry-run")), FakeRemote(), out=io.StringIO())
     remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
     out = io.StringIO()
-    assert (
-        capture.deploy(parse_args(_args(path, "--dry-run", "--allow-dirty")), remote, out=out) == 0
-    )
+    allowed = ("--override", "allow-dirty", "--reason", "a test")
+    assert capture.deploy(parse_args(_args(path, "--dry-run", *allowed)), remote, out=out) == 0
     assert "(with uncommitted changes)" in out.getvalue()
 
 
 def test_allow_dirty_is_an_override_whose_reason_the_plan_records(tmp_path):
     """#1852: a bare --allow-dirty recorded no reason; --override allow-dirty does, in the
-    plan's EXCEPTIONS, and the old flag alone records that it gave none."""
+    plan's EXCEPTIONS."""
     path = _artifact(tmp_path, dirty=True)
-    for argv, said in (
-        (["--override", "allow-dirty", "--reason", "hotfix rehearsal"], "hotfix rehearsal"),
-        (["--allow-dirty"], "given as --allow-dirty, which records no reason"),
-    ):
-        remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
-        out = io.StringIO()
-        cfg = parse_args(_args(path, "--dry-run", *argv))
-        assert cfg.allow_dirty == said
-        assert capture.deploy(cfg, remote, out=out) == 0
-        plan = out.getvalue()
-        assert "EXCEPTIONS" in plan and "--override allow-dirty: " in plan and said in plan
+    said = "hotfix rehearsal"
+    remote = FakeRemote({"uv python find": _done(SERVER + "data=present\n")})
+    out = io.StringIO()
+    cfg = parse_args(_args(path, "--dry-run", "--override", "allow-dirty", "--reason", said))
+    assert cfg.allow_dirty == said
+    assert capture.deploy(cfg, remote, out=out) == 0
+    plan = out.getvalue()
+    assert "EXCEPTIONS" in plan and "--override allow-dirty: " in plan and said in plan
 
 
 def test_a_dirty_artifact_is_refused_before_the_server_is_touched(tmp_path):

@@ -22,7 +22,6 @@ from uqs.cli.json_out import JSON_HELP, emit
 from uqs.cli.launch_options import FollowOpt, LevelOpt, StopOnExitOpt, TraceOpt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
-from uqs.cli.renames import ATTACHMENT, bypass_flag, renamed, warn_renamed
 from uqs.cli.shared import (
     JOB_OPERATIONS_PANEL,
     BasePortOpt,
@@ -58,18 +57,12 @@ _AttachOpt = attach_opt(
 @job_app.command(
     "backfill",
     rich_help_panel=JOB_OPERATIONS_PANEL,
-    cls=renamed(
-        {
-            "--any-writer": bypass_flag(ANY_WRITER),
-            **ATTACHMENT,
-        },
-        needs_pipelines(
-            "runs this tree's bounded workers",
-            safety.marked(
-                safety.Effect.CHANGES_STATE,
-                dry_run_starts="its dry run starts the worker, which fetches and transforms "
-                "every window (--mode dry-run, #1732)",
-            ),
+    cls=needs_pipelines(
+        "runs this tree's bounded workers",
+        safety.marked(
+            safety.Effect.CHANGES_STATE,
+            dry_run_starts="its dry run starts the worker, which fetches and transforms "
+            "every window (--dry-run, #1732)",
         ),
     ),
 )
@@ -115,7 +108,7 @@ def backfill(
         typer.Option(
             "--dry-run",
             "-n",
-            help="Fetch and transform every window, and write nothing: --mode dry-run",
+            help="Fetch and transform every window, and write nothing",
         ),
     ] = False,
     fixture: Annotated[
@@ -182,7 +175,7 @@ def backfill(
         uqs job backfill demo_deals_backfill --source-version v1 --date 2026-09-13
 
     `--mode plan` lists the windows a run would fetch without opening the
-    source or writing anything; `--dry-run` (`--mode dry-run`) fetches them and
+    source or writing anything; `--dry-run` fetches them and
     writes nothing. Their output is in the process's log, like a run's. Every
     mode but a run rehearses against the data directory as the stack's last
     start left it, and never bootstraps it: on a tree not yet started it is
@@ -230,12 +223,11 @@ def backfill(
                 "is not"
             )
         )
-    if mode == "dry-run" and not dry_run:  # one spelling of a dry run (#1858)
-        warn_renamed("--mode dry-run", "--dry-run")
-        dry_run = True
+    if mode == "dry-run":  # one spelling of a dry run (#1858, #2752)
+        _die(UqsUsageError("`--mode dry-run` is `--dry-run`"))
     if dry_run:
-        if mode not in (None, "dry-run"):
-            _die(UqsError(f"--dry-run is --mode dry-run: not with --mode {mode}"))
+        if mode is not None:
+            _die(UqsError(f"--dry-run is a mode of its own: not with --mode {mode}"))
         mode = "dry-run"
     if force and writer is None:
         _die(

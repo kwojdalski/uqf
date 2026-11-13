@@ -33,7 +33,7 @@ NOTES = {
 }
 
 #: The values `--mode` offers: every mode but `dry-run`, which is spelled
-#: `--dry-run` (#1858) - `--mode dry-run` is still taken, with a warning.
+#: `--dry-run` (#1858) - `--mode dry-run` is refused, naming it.
 MODE_OPTION_MODES = tuple(mode for mode in MODES if mode != "dry-run")
 
 #: The modes that open no source, write nothing and leave no status file -

@@ -11,26 +11,12 @@ from typing import Annotated
 import typer
 
 from uqs.cli import safety
-from uqs.cli.renames import bypass_flag
-from uqs.deploy import overrides, portable
+from uqs.deploy import overrides
 from uqs.deploy.config import DeployError
 from uqs.logger import get_logger
 from uqs.paths import UqsError
 
 log = get_logger()
-
-#: The old bypass flags, each now `--override NAME --reason REASON`, which
-#: took no value (#1852). Kept, hidden, for one release.
-OLD_SPELLINGS: dict[str, str | tuple[str, ...]] = {
-    f"--{name}": bypass_flag(name)
-    for name in (overrides.ALLOW_DIRTY, overrides.FIX_HDB, overrides.BREAK_LOCK)
-}
-#: `deploy build`'s and `deploy rollback`'s old bypass flags (#1852).
-BUILD_OLD_SPELLINGS = {
-    f"--{name}": bypass_flag(name)
-    for name in (overrides.ALLOW_DIRTY, portable.ALLOW_COMPUTED_NAMES)
-}
-ROLLBACK_OLD_SPELLINGS = {f"--{overrides.BREAK_LOCK}": bypass_flag(overrides.BREAK_LOCK)}
 
 
 def waived(command: str, names: list[str] | None, reason: str | None) -> dict[str, str]:

@@ -7,12 +7,9 @@ the job scaffolded as though it had been honoured.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Any
 
-import typer
-
-from uqs.cli import completion
-from uqs.cli.choices import alternatives
+from uqs.cli.choices import ChoiceOpt
 from uqs.model.kinds import SCAFFOLD_KINDS
 
 #: `--kind` when it is not given.
@@ -23,31 +20,9 @@ KIND_NOTES = {
     "horizon": "each event evaluated once --horizon has passed",
 }
 
-#: Kinds renamed, old -> new: a Python publisher outside q is a connector, as
-#: `uqs connector` names it; "feed" is a q streaming job that only publishes,
-#: and "external" was a third word for the first (#1890).
-OLD_KINDS = {"external": "connector"}
-
-
-def canonical(kind: str) -> str:
-    """`--kind`'s value, an old one (OLD_KINDS) named by its new spelling and warned."""
-    if kind in OLD_KINDS:
-        from uqs.cli.renames import warn_renamed
-
-        warn_renamed(f"--kind {kind}", f"--kind {OLD_KINDS[kind]}")
-    return OLD_KINDS.get(kind, kind)
-
-
-KindOpt = Annotated[
-    str,
-    typer.Option(
-        "--kind",
-        help=alternatives(SCAFFOLD_KINDS, KIND_NOTES, default=DEFAULT_KIND, quote="`"),
-        autocompletion=completion.choices(*SCAFFOLD_KINDS),
-        callback=canonical,
-        show_default=False,
-    ),
-]
+KindOpt = ChoiceOpt(
+    SCAFFOLD_KINDS, "--kind", "{values}", notes=KIND_NOTES, default=DEFAULT_KIND, required=True
+)
 
 _BACKFILL = ("backfill",)
 _STANDING = ("streaming", "normalizer", "connector", "horizon")

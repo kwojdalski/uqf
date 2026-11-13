@@ -25,7 +25,6 @@ from uqs.cli.json_out import Verbatim, emit, json_opt
 from uqs.cli.q_login import (
     DEFAULT_PASSWORD,
     DEFAULT_USER,
-    QPasswdOpt,
     QPasswordEnvOpt,
     QUserOpt,
     q_password,
@@ -211,7 +210,6 @@ def query(
     ] = None,
     user: QUserOpt = DEFAULT_USER,
     password_env: QPasswordEnvOpt = None,
-    passwd: QPasswdOpt = None,
     servers: Annotated[
         str,
         typer.Option(help="With the gateway: the process types an expression is routed to"),
@@ -260,7 +258,7 @@ def query(
     try:
         render = stack_render.renderer(render)
         proc, expr = _proc_first(proc, expr, port is not None)
-        passwd = q_password(password_env, passwd)
+        passwd = q_password(password_env)
     except UqsError as exc:
         _die(exc)
     if proc is not None and port is not None:

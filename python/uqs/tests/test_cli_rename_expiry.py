@@ -11,7 +11,6 @@ test needs no git history (CI checks out shallow, without tags).
 
 from __future__ import annotations
 
-import inspect
 import re
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -21,7 +20,6 @@ import pytest
 import typer
 
 from uqs import cli
-from uqs.cli import backfill, config, create_kinds, hdb_alter, lists
 from uqs.cli.rename_expiry import RENAMED_AFTER
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -46,17 +44,15 @@ def _commands(command: Any, path: tuple[str, ...]) -> Iterator[tuple[tuple[str, 
 
 
 def kept_in_the_cli() -> set[str]:
-    """Every old spelling the command tree carries: an option `renamed()`
-    rewrites, a hidden option, and a hidden command - an alias, or the
-    hand-written `deploy build-runtime`. An alias's own options come with it,
-    and a hidden group is only the alias commands under it."""
+    """Every old spelling the command tree carries: a hidden option, and a
+    hidden command. A hidden command's own options come with it, and a hidden
+    group is only the commands under it."""
     found: set[str] = set()
     for path, command in _commands(typer.main.get_command(cli.app), ("uqs",)):
         words = " ".join(path)
         if getattr(command, "hidden", False) and not hasattr(command, "commands"):
             found.add(words)
             continue
-        found |= {f"{words} {old}" for old in getattr(command, "renames", {})}
         for param in command.params:
             if getattr(param, "hidden", False):
                 found |= {f"{words} {opt}" for opt in param.opts}
@@ -64,32 +60,10 @@ def kept_in_the_cli() -> set[str]:
     return found - {"uqs --yes"}
 
 
-def _hidden(*path: str) -> Any:
-    """The (hidden) command at `path`: its old spellings are hand-kept rows."""
-    command: Any = typer.main.get_command(cli.app)
-    for word in path:
-        command = command.commands[word]
-    return command
-
-
 #: Old spellings no command tree shows, each with the check that it is still
-#: there - so a row outliving its spelling is caught like any other.
-HAND_KEPT: dict[str, Callable[[], bool]] = {
-    **{f"uqs list {kind}": (lambda k=kind: k in lists.MOVED) for kind in lists.MOVED},
-    # an old VALUE, which only the command's own code reads (#1856)
-    "uqs data alter --rename OLD=NEW": lambda: "def _old_rename" in inspect.getsource(hdb_alter),
-    # hidden since #1858, its own old spelling kept with it
-    "uqs job receive --attach": lambda: "--attach" in _hidden("job", "receive").renames,
-    # old VALUES, which only the command's own code reads (#1858)
-    "uqs config set PROC FIELD VALUE": lambda: "the old two-word" in inspect.getsource(config),
-    "uqs job new --kind external": lambda: "external" in create_kinds.OLD_KINDS,
-    "uqs job backfill --mode dry-run": lambda: (
-        '"--mode dry-run", "--dry-run"' in inspect.getsource(backfill)
-    ),
-    "uqs job attachment add --override CODE:COMPONENT": lambda: (
-        "spell it" in inspect.getsource(__import__("uqs.cli.attach").cli.attach.waivers)
-    ),
-}
+#: there - so a row outliving its spelling is caught like any other. None is
+#: left (#2752): an old VALUE is refused by the command that reads it.
+HAND_KEPT: dict[str, Callable[[], bool]] = {}
 
 
 def recorded() -> dict[str, str]:

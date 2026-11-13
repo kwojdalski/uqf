@@ -2,14 +2,13 @@
 
 A q error or log line that says "run `uqs remove checkpoint W`" is guidance
 someone types, and nothing held it to the CLI: commands renamed in #1733 and
-#1737 keep their old paths for one release as hidden aliases, so the old
+#1737 kept their old paths for one release as hidden aliases, so the old
 spelling still ran - and still taught the name about to go.
 
 This reads every q string literal in the tree's own q (src/, scripts/,
 sidecars/, the q uqs ships) for `uqs ...` and parses each with the CLI's own
 parser, target_confirm.parse - Click's, run without any callback - requiring
-that it names a command or group that is not hidden, by its own path rather
-than an alias's, with no option it accepts only as an old spelling.
+that it names a command or group that is not hidden, with no hidden option.
 
 What counts as a reference: `uqs` followed by a word the CLI knows (a command
 or group, hidden or not) or an option, up to the backtick, quote, bracket or
@@ -17,8 +16,7 @@ punctuation that ends it. "the token uqs writes" is prose, not a command, and a
 misspelt command name (`uqs sumary`) is not recognised as one - this guards
 renames, not typos. Comments are not scanned: they are prose for the reader
 of the file, and tests/ is not either - its strings describe uqs, they do not
-instruct anyone. python/uqs/src/uqs/cli/renames.py's own migration notices
-are made from the rename tables, not written in q.
+instruct anyone.
 
 The same parse holds two more places guidance is written (#1787): the help
 `uqs ... --help` prints, read from the CLI tree itself, and the string literals
@@ -26,9 +24,9 @@ of the tree's Python - an error, a log line, a next step - other than
 docstrings, which are prose for the reader of the code as a q comment is. A
 Python string is prose more often than a q message is, and cuts a command off
 mid-line (`uqs job backfill --attachment` with its NAME in the next sentence), so
-there the part that parses is what is judged: it must still name no alias, no
-hidden command and no old option. The few places that name an old spelling on
-purpose are KEPT, each with its reason, and each must still be needed.
+there the part that parses is what is judged: it must still name no hidden
+command and no hidden option. A place that names an old spelling on purpose is
+KEPT, with its reason, and must still be needed.
 """
 
 from __future__ import annotations
@@ -55,23 +53,11 @@ PY_ROOTS = (
 
 #: Files whose strings ARE old spellings, by design: they name the spellings in
 #: order to retire them, so every entry would read as guidance here.
-LEDGERS = {
-    "python/uqs/src/uqs/cli/rename_expiry.py": (
-        "RENAMED_AFTER lists each old spelling with the stable tag it shipped "
-        "in; test_cli_rename_expiry holds it to the CLI tree (#1796)"
-    ),
-}
+LEDGERS: dict[str, str] = {}
 
 #: (where, the old spelling as written) -> why it is named there on purpose.
 #: `where` is a file under the tree, or `uqs <path> --help` for help text.
-KEPT = {
-    ("python/uqs/src/uqs/cli/backfill_receive.py", "job receive"): (
-        "`job receive --stop`'s own notice that it is `job receiver stop` now (#1858)"
-    ),
-    ("python/uqs/src/uqs/cli/lists.py", "list"): (
-        "the hidden `uqs list KIND`'s own notice naming the noun each kind moved to (#1858)"
-    ),
-}
+KEPT: dict[tuple[str, str], str] = {}
 
 #: A q string literal, escapes included.
 _STRING = re.compile(r'"((?:[^"\\]|\\.)*)"')
@@ -159,22 +145,14 @@ def problem(words: list[str]) -> str | None:
     parsed = target_confirm.parse(words)
     if parsed is None:
         return "does not parse: no such command, or an option it does not take"
-    _, alias = target_confirm.canonical(parsed.ctx.command)
-    if alias is not None:
-        return f"is the old spelling of `uqs {' '.join(alias)}`"
     path = parsed.path
     for depth in range(1, len(path) + 1):
         if getattr(target_confirm.find(path[:depth]), "hidden", False):
             return f"`uqs {' '.join(path[:depth])}` is hidden"
     # The command's own options follow its name; one before it is the root's
-    # (`uqs --debug status`), which the command's renames do not cover.
+    # (`uqs --debug status`).
     after = words[words.index(path[-1]) + 1 :] if path else words
-    renames = getattr(parsed.ctx.command, "renames", None) or {}
-    old = [w.partition("=")[0] for w in after if w.partition("=")[0] in renames]
-    if old:
-        return f"{', '.join(old)} is an old spelling: {renames[old[0]]}"
-    # An option kept hidden for a release (renames.old_spelling, a retired
-    # flag that now refuses) parses too, and is going as surely.
+    # A hidden option parses too, and is no guidance to give.
     hidden = {o for p in parsed.ctx.command.params if getattr(p, "hidden", False) for o in p.opts}
     retired = [w.partition("=")[0] for w in after if w.partition("=")[0] in hidden]
     if retired:
@@ -252,9 +230,9 @@ def test_the_scan_finds_the_messages_it_exists_for():
 @pytest.mark.parametrize(
     ("words", "why"),
     [
-        (["job", "receive", "--contract", "c"], "old spelling of `uqs job receiver start`"),
-        (["job", "new", "--procname", "x"], "--procname is an old spelling"),
-        (["deploy", "check", "--deadline", "5"], "--deadline is an old spelling"),
+        (["job", "receive", "--contract", "c"], "does not parse"),  # gone in #2752
+        (["job", "new", "--procname", "x"], "does not parse"),
+        (["deploy", "check", "--deadline", "5"], "does not parse"),
         (["summary"], "does not parse"),
         (["status", "--no-such-flag"], "does not parse"),
     ],
@@ -329,7 +307,7 @@ def test_the_python_scan_finds_the_messages_it_exists_for():
         for p in (UQF_ROOT / root).rglob("*.py")
         for _, w in python_references(p.read_text(errors="replace"))
     }
-    assert {"--target NAME status", "job receive --stop"} <= named
+    assert {"--target NAME status", "job attachment status"} <= named
     helped = {" ".join(w) for _, text in help_texts() for w in commands_in(text)}
     assert "job runs list" in helped
 
@@ -348,17 +326,17 @@ def test_a_python_string_is_read_and_a_docstring_is_not():
     ]
 
 
-@pytest.mark.parametrize(
-    ("words", "why"),
-    [
-        (["--target", "NAME", "list", "processes"], "`uqs list` is hidden"),
-        (["data", "seed", "--overwrite"], "--overwrite is a hidden option"),
-        (["job", "backfill", "--any-writer", "--attachment"], "--any-writer is an old spelling"),
-        (["deploy", "check", "--procs", "NAME"], "--procs is an old spelling"),
-    ],
-)
-def test_prose_cut_short_is_judged_by_what_parses(words, why):
-    assert why in (old_spelling(words) or "")
+def test_prose_cut_short_is_judged_by_what_parses(monkeypatch):
+    """No command or option is hidden today (#2752), so one is hidden here."""
+    preview = target_confirm.find(["job", "preview"])
+    monkeypatch.setattr(preview, "hidden", True)
+    cut = ["--target", "NAME", "job", "preview", "feed", "for", "it"]
+    assert "`uqs job preview` is hidden" in (old_spelling(cut) or "")
+    seed = target_confirm.find(["data", "seed"])
+    conflict = next(p for p in seed.params if "--on-conflict" in p.opts)
+    monkeypatch.setattr(conflict, "hidden", True)
+    cut = ["data", "seed", "--on-conflict", "replace", "and", "more"]
+    assert "--on-conflict is a hidden option" in (old_spelling(cut) or "")
 
 
 @pytest.mark.parametrize(
@@ -436,7 +414,7 @@ def test_the_backticked_scan_sees_an_unknown_command():
     """Not vacuous: a path that names nothing is caught, a placeholder is not."""
     assert unknown_word("sumary".split()) == "sumary"
     assert unknown_word("job attach apply".split()) == "attach", "removed (#2649)"
-    assert unknown_word("job receive --stop".split()) is None, "hidden: the parse tests' case"
+    assert unknown_word("job receive --stop".split()) == "receive", "removed (#2752)"
     assert unknown_word("job runs nosuch".split()) == "nosuch"
     assert unknown_word("--target uat status".split()) is None
     assert unknown_word("<command>".split()) is None

@@ -324,13 +324,6 @@ def test_schema_writer_tickerplant_and_cli_are_saved_choices(world):
     assert "--transient and --schema-writer cli exclude each other" in said(world, refused)
 
 
-def test_remote_schema_file_is_refused_with_what_to_run_instead(world):
-    result = run("add", *new(world), "--remote-schema-file", "--dry-run")
-    assert result.exit_code == 1
-    assert "--remote-schema-file was replaced by --schema-writer tickerplant" in said(world, result)
-    assert "run the same command with --schema-writer tickerplant instead" in said(world, result)
-
-
 def test_no_secret_reaches_the_file_the_manifest_the_preview_or_json(world, monkeypatch):
     monkeypatch.setenv("UQS_NATIVE_TEST_PW", SECRET)
     shown = run("add", *new(world), "--password-env", "UQS_NATIVE_TEST_PW", "--dry-run", "--json")

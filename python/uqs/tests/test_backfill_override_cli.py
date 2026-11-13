@@ -94,7 +94,8 @@ def test_each_spelling_admits_a_fenced_local_backfill_as_one_waiver(
     """The ordinary attached path, without --writer: a plan, a dry run and a run within the
     fence are admitted by either spelling, repeated or not, as one waiver."""
     _in_fence(world)
-    result = _cli(monkeypatch, "--mode", mode, *SPELLINGS[spelling], "--reason", REASON)
+    how = ["--dry-run"] if mode == "dry-run" else ["--mode", mode]
+    result = _cli(monkeypatch, *how, *SPELLINGS[spelling], "--reason", REASON)
     assert result.exit_code == 0, (result.output, world.errors)
     assert BYPASSED in " ".join(result.output.split())
     if mode == "plan":

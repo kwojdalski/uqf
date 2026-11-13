@@ -82,14 +82,9 @@ def test_profiles_complete_the_last_element_of_a_comma_list():
     assert "fx,fx" not in offered
 
 
-def test_list_offers_every_listable_kind():
-    assert complete("uqs list ") == sorted(listing.LISTABLE_KINDS)
-
-
 def test_sort_offers_the_columns_of_the_kind_already_typed():
-    """The line ends in `--sort`, still waiting for its value - which is where
-    Click stops parsing and leaves `processes` unassigned. The completer has to
-    find it anyway, or `--sort` offers nothing."""
+    """The line ends in `--sort`, still waiting for its value: the noun's list
+    knows its kind, so `--sort` offers that kind's columns."""
     assert complete("uqs process list --sort ") == list(
         listing.list_items(stack_paths.default_paths(), "processes")[0]
     )

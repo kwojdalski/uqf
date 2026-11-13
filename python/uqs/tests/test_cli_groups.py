@@ -46,7 +46,6 @@ def _group(*path: str) -> TyperGroup:
                 "gaps",
                 "runs",
                 "attachment",
-                "receive",
                 "receiver",
             },  # fmt: skip
         ),

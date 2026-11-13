@@ -1050,19 +1050,6 @@ def test_rule3_one_concept_has_one_option_name():
     _hold("rule 3 (one name per concept)", found, RULE3_CONCEPT_ALLOWLIST)
 
 
-def test_rule3_a_list_kind_is_not_another_nouns_name():
-    """`uqs list overrides` listed process_overrides.csv beside `uqs override
-    list`, the checks a command bypasses (#1855): a kind of the stack's own
-    tables must not share its word with a noun group, which owns that word."""
-    from uqs.cli import lists
-    from uqs.stack import listing
-
-    nouns = {path.split()[-1] for path in GROUPS}
-    kinds = set(listing.LISTABLE_KINDS) - set(lists.MOVED) - set(lists.REFUSED)
-    clash = {k for k in kinds if {k, k.removesuffix("s"), k.removesuffix("es")} & nouns}
-    assert not clash, f"`uqs list` kinds named like a noun group: {sorted(clash)}"
-
-
 # ------------------------------------------------------ rule 5: uniform flags
 
 REPORTS, CONFIRMS, CHANGES = "reports", "confirms", "changes"
@@ -1678,10 +1665,8 @@ def _completer(param):
 
 #: (command, option) -> why its fixed values are a completer, not a Choice.
 NOT_A_CHOICE = {
-    ("job backfill", "--mode"): "takes the retired value dry-run for one release "
-    "(rename_expiry: `uqs job backfill --mode dry-run`), which its help no longer shows",
-    ("job new", "--kind"): "takes the retired kind `external` for one release (#1890), which a "
-    "Choice would refuse before its callback names `connector`",
+    ("job backfill", "--mode"): "refuses `dry-run`, naming `--dry-run` (#2752), which a Choice "
+    "would refuse before the command could name it",
     ("deploy build", "--q-version"): "one name, one type (cli/vocabulary.py): on `deploy push` "
     "--q-version is a free REQUIREMENT, >=4.1",
 }
@@ -2121,13 +2106,18 @@ def test_h_is_help_everywhere():
 
 # ------------------------------------------------- output into a pipe (#1883)
 
-#: Every list command, as argv: each of `uqs list`'s kinds and every noun's own.
+#: A noun's own list -> the kind of the stack's tables it lists.
+_NOUN_KINDS = {
+    **{command.removeprefix("uqs "): kind for kind, command in lists.NOUN_LISTS.items()},
+    "target list": "targets",
+    "runtime list": "runtimes",
+    "job list": "jobs",
+    "job attachment list": "attachments",
+}
+
+#: Every list command, as argv: every noun's own.
 LIST_COMMANDS = [
-    *(["list", kind] for kind in sorted(listing.LISTABLE_KINDS) if kind not in lists.REFUSED),
-    ["target", "list"],
-    ["runtime", "list"],
-    ["job", "list"],
-    ["job", "attachment", "list"],
+    *(path.split() for path in _NOUN_KINDS if "-" not in path),
     ["override", "list"],
 ]
 
@@ -2163,18 +2153,12 @@ def piped(monkeypatch):
     monkeypatch.setattr(shared.console, "soft_wrap", made.soft_wrap)
 
 
-#: A noun's own list -> the kind of `uqs list` it lists.
-_NOUN_KINDS = {
-    command.removeprefix("uqs "): kind for kind, command in {**lists.MOVED, **lists.REFUSED}.items()
-}
-
-
 def _cells(argv: list[str]) -> list[str]:
     """The text of every cell the command's table holds, from its rows."""
     if argv[0] == "override":
         rows = lists._bypasses()
     else:
-        kind = argv[1] if argv[0] == "list" else _NOUN_KINDS[" ".join(argv)]
+        kind = _NOUN_KINDS[" ".join(argv)]
         rows = listing.list_items(paths.default_paths(), kind)
     texts = (cell_text(v) for row in rows for v in row.values())
     return [text for text in texts if text]

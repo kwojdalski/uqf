@@ -16,7 +16,6 @@ import typer
 from uqs.cli import safety
 from uqs.cli.concepts import job_arg
 from uqs.cli.regenerate import report_regeneration
-from uqs.cli.renames import bypass_flag, renamed
 from uqs.cli.safety import ChangesState, OverrideOpt, ReasonOpt, dry_run_note
 from uqs.cli.shared import JOB_AUTHORING_PANEL, _die, _paths, console, job_app, log
 from uqs.paths import UqsError
@@ -29,10 +28,7 @@ _NameOpt = job_arg("The job, as uqs job new named it")
 @job_app.command(
     "remove",
     rich_help_panel=JOB_AUTHORING_PANEL,
-    cls=renamed(
-        {"--even-if-edited": bypass_flag(EVEN_IF_EDITED)},
-        ChangesState,
-    ),
+    cls=ChangesState,
 )
 def remove_job(
     name: _NameOpt,

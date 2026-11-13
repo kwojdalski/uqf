@@ -44,14 +44,14 @@ from uqs.cli.attach_output import (
     steps_table,
     verdict,
 )
-from uqs.cli.attachment import OLD_REASON, attachment_app
+from uqs.cli.attachment import attachment_app
 from uqs.cli.concepts import AttachmentArg
 from uqs.cli.json_out import json_opt
 from uqs.cli.launch_options import FollowOpt, LevelOpt, StopOnExitOpt, TraceOpt
-from uqs.cli.shared import _debug_requested, _paths, log
+from uqs.cli.shared import _debug_requested, _paths
 from uqs.cli.stop_options import KillOpt
 from uqs.guardrails import spelled
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsUsageError
 
 NameArg = AttachmentArg
 #: Extra words are taken, not rejected by the parser, so the old `uqs job attach
@@ -75,19 +75,14 @@ def waivers(override: list[str] | None, reason: str) -> list[str]:
     one list, checked as every command's are (safety.given, #1852): a code this
     command does not take, one that is never overridden, a missing component or
     reason, or a reason with no override, is refused here. A name is matched as
-    the attachment's findings name it - `torq-version` is `TORQ_VERSION`, and the
-    code's own spelling still parses for one release, warning (#1884).
+    the attachment's findings name it - `torq-version` is `TORQ_VERSION`; the
+    code's own spelling is refused, naming this one (#1884).
     service.accept then checks each against what the stack shows, so a component
     with no such finding is refused there."""
     specs = []
     for c, sep, rest in (s.partition(":") for s in override or ()):
         if c != spelled(c):
-            log.warning(
-                "--override {}: spell it {} - the finding-code spelling goes in the next "
-                "release (#1884)",
-                c,
-                spelled(c),
-            )
+            raise UqsUsageError(f"--override {c}: spell it {spelled(c)} (#1884)")
         specs.append(f"{c.upper().replace('-', '_')}{sep}{rest}")
     return list(safety.given("job attachment add", specs or None, reason or None))
 
@@ -98,7 +93,7 @@ def _refuse_extra(out: Output, command: str, extra: list[str]) -> None:
         out.fail(f"unexpected argument(s) {extra}: `uqs {command}` takes one attachment name")
 
 
-@attachment_app.command("add", context_settings=EXTRA_WORDS, cls=OLD_REASON)
+@attachment_app.command("add", context_settings=EXTRA_WORDS, cls=safety.ChangesState)
 def attach(
     ctx: typer.Context,
     name: NameArg,
@@ -113,7 +108,6 @@ def attach(
     password_env: o.PasswordEnvOpt = None,
     runtime_only: o.TransientOpt = False,
     schema_writer: o.SchemaWriterOpt = None,
-    remote_schema_file: o.RetiredRemoteSchemaOpt = False,
     process_file: o.ProcessFileOpt = None,
     start_with_all: o.StartWithAllOpt = None,
     tplogdir: o.TplogdirOpt = "",
@@ -164,8 +158,6 @@ def attach(
     )  # fmt: skip
     if refused is not None:
         out.fail(refused, code=shared.EXIT_USAGE)
-    if remote_schema_file:
-        out.fail(o.REMOTE_SCHEMA_RETIRED)
     began = time.monotonic()
     given = workflow.Given(
         job=job, bundle=bundle, stack_id=stack_id, host=host, discovery=discovery,

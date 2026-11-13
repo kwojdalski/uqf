@@ -3,10 +3,7 @@
 Each noun that adds or removes a thing lists it too, under its own group -
 `uqs target list`, `uqs runtime list`, `uqs job list`, `uqs job attachment
 list` - and every list takes the same output flags: --json, --export, --sort,
---reverse and -i. `uqs list KIND` stays for the stack's own tables (processes,
-profiles, fields, env, dependencies, backfills); a kind that moved
-to its noun still works there for one release, logging the command that lists
-it now.
+--reverse and -i. The stack's own tables are their nouns' too (`NOUN_LISTS`).
 
 No `from __future__ import annotations` here: `_noun_list` builds each
 command's signature at runtime, and Typer resolves string annotations against
@@ -24,7 +21,6 @@ from uqs.cli import completion, safety
 from uqs.cli.attachment import attachment_app
 from uqs.cli.config import config_app
 from uqs.cli.json_out import JSON_HELP, emit, records
-from uqs.cli.renames import warn_renamed
 from uqs.cli.runtime_diff import runtime_app
 from uqs.cli.shared import (
     JOB_AUTHORING_PANEL,
@@ -42,23 +38,14 @@ from uqs.cli.shared import (
 from uqs.cli.sorting import _sorted_items
 from uqs.cli.target import target_app
 from uqs.deploy import targets
-from uqs.paths import UqsError, UqsUsageError
+from uqs.paths import UqsError
 from uqs.stack import housekeeping, listing
 from uqs.stack.env import build_env
 from uqs.stack.procs import get_process_config
 
-#: Kinds of `uqs list` whose one release is over (#2649): refused, naming the
-#: command now, never listed - they are still kinds, which their nouns list.
-REFUSED = {
-    "targets": "uqs target list",
-    "runtimes": "uqs runtime list",
-    "jobs": "uqs job list",
-    "attachments": "uqs job attachment list",
-}
-
-#: Kinds of `uqs list` that moved to their noun's own list -> the command now.
-MOVED = {
-    # #1858: every kind is its noun's now, and `uqs list` goes with the last
+#: The stack's own tables -> the command that lists each, its noun's (#1858);
+#: `uqs list KIND` is gone (#2752). uqs-mcp makes each a tool.
+NOUN_LISTS = {
     "processes": "uqs process list",
     "profiles": "uqs profile list",
     "fields": "uqs config field list",
@@ -175,8 +162,8 @@ config_app.command("list", cls=safety.ReadOnly)(
     )
 )
 
-#: The stack's own tables, each under its noun (#1858): what `uqs list KIND`
-#: listed, a verb with seven kinds after every other noun listed its own.
+#: The stack's own tables, each under its noun (#1858), as every other noun
+#: lists its own.
 process_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
@@ -278,54 +265,3 @@ override_app.command("list", cls=safety.ReadOnly)(
         ("override", "commands", "effect"),
     )
 )
-
-
-def _kinds() -> list[str]:
-    return sorted(k for k in listing.LISTABLE_KINDS if k not in MOVED and k not in REFUSED)
-
-
-#: Every kind is its noun's (#1858): `uqs list` stays one release, hidden.
-@app.command("list", hidden=True, cls=safety.ReadOnly)
-def list_items(
-    kind: Annotated[
-        str | None,
-        typer.Argument(
-            metavar="KIND",
-            help="Which of the stack's tables - run with no argument to see every kind",
-            autocompletion=completion.list_kinds,
-        ),
-    ] = None,
-    port: BasePortOpt = None,
-    export: ExportOpt = None,
-    sort: Annotated[
-        str | None,
-        typer.Option("--sort", help=_SORT_HELP, autocompletion=completion.list_columns),
-    ] = None,
-    reverse: ReverseOpt = False,
-    interactive: InteractiveOpt = False,
-    as_json: JsonOpt = False,
-) -> None:
-    """List one of the stack's own tables; with no KIND, list the kinds.
-
-    Run with no argument to see the
-    kinds: 'processes', 'profiles', 'fields' (process.csv's settable columns),
-    'env' (the resolved KDBBASEPORT, KDBHDB, ...), 'dependencies' and
-    'backfills' (what each attached backfill did). A noun's own records are
-    listed by its group: `uqs target list`, `uqs runtime list`, `uqs job
-    list`, `uqs job attachment list`, `uqs config list` (process_overrides.csv).
-
-    `--sort` takes any column the chosen kind produces, which differ between
-    kinds. The order reaches `--export` too, so an exported CSV matches what
-    was on screen.
-    """
-    if kind is None:
-        if as_json:
-            emit({"kinds": _kinds()})
-        else:
-            console.print(f"Available kinds: {', '.join(_kinds())}")
-        return
-    if kind in REFUSED:
-        _die(UqsUsageError(f"`uqs list {kind}` is `{REFUSED[kind]}`"))
-    if kind in MOVED:
-        warn_renamed(f"uqs list {kind}", MOVED[kind])
-    _print(kind, port, export, sort, reverse, interactive, as_json)

@@ -184,11 +184,7 @@ def _leaves(cmd: Any = None, path: tuple[str, ...] = ()) -> dict[str, Any]:
 def test_every_command_that_reaches_the_pipelines_is_marked():
     """A command that needs this tree's pipelines and is not marked runs on
     torq against processes and tables that do not exist: refuse it instead."""
-    reach = {
-        path: _reaches(c.callback) & PIPELINE_MODULES
-        for path, c in _leaves().items()
-        if not getattr(c, "alias_of", None)
-    }
+    reach = {path: _reaches(c.callback) & PIPELINE_MODULES for path, c in _leaves().items()}
     unmarked = sorted(
         f"{path} (reaches {', '.join(sorted(mods))})"
         for path, mods in reach.items()
@@ -201,20 +197,6 @@ def test_every_command_that_reaches_the_pipelines_is_marked():
     assert not unreached, f"no marked command reaches these - delete them: {unreached}"
     gone = sorted(set(REACHES_BUT_RUNS_ANYWHERE) - {p for p, mods in reach.items() if mods})
     assert not gone, f"no longer reach the pipelines - delete these rows: {gone}"
-
-
-def test_an_alias_needs_what_its_new_name_needs():
-    """`alias_command` takes no mark from its new name, so it is given the same."""
-    from uqs.cli import target_confirm
-
-    differ = {
-        path: alias.alias_of
-        for path, alias in _leaves().items()
-        if getattr(alias, "alias_of", None)
-        and getattr(alias, "needs_pipelines", None)
-        != getattr(target_confirm.canonical(alias)[0], "needs_pipelines", None)
-    }
-    assert not differ, f"aliases marked unlike their new name: {differ}"
 
 
 def test_every_runtime_declares_profiles_that_exist():

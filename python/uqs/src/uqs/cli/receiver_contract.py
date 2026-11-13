@@ -24,7 +24,6 @@ from uqs.cli.attachment import attachment_app
 from uqs.cli.choices import ChoiceOpt
 from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.renames import ATTACHMENT, renamed
 from uqs.cli.safety import ChangesState, Effect, ReadOnly, dry_run_note, marked
 from uqs.cli.shared import (
     ExportOpt,
@@ -95,15 +94,6 @@ ApproveJson = json_opt(
 )
 
 
-#: A conflict policy is `--on-conflict` on every command; `--max-rows` was a
-#: row limit's name for something else, the rows one message carries (#1857).
-_APPROVE_RENAMES = {
-    "--conflict": "--on-conflict",
-    "--max-rows": "--max-message-rows",
-    **ATTACHMENT,
-}
-
-
 _AttachOpt = attach_opt(
     "The saved, verified attachment whose HDB it may write",
     required=True,
@@ -118,7 +108,7 @@ _ConflictOpt = ChoiceOpt(
 )
 
 
-@contract_app.command("approve", cls=renamed(_APPROVE_RENAMES, ChangesState))
+@contract_app.command("approve", cls=ChangesState)
 def approve(
     file: Annotated[
         Path,
@@ -179,7 +169,7 @@ _AttachOpt = attach_opt(
 ListJson = json_opt('{"contracts": [{contract, binding, path}]}, in the order the table shows')
 
 
-@contract_app.command("list", cls=renamed(ATTACHMENT, ReadOnly))
+@contract_app.command("list", cls=ReadOnly)
 def list_(
     attach: _AttachOpt,
     export: ExportOpt = None,

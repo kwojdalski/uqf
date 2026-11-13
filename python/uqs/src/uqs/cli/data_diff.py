@@ -159,7 +159,7 @@ def diff(
     """
     try:
         window = timerange.resolve(range_from, range_to, day, last)
-        passwd = q_password(password_env, None)
+        passwd = q_password(password_env)
         report = diff_endpoints.run(
             _paths(), left, right, tables_given(table), window,
             filters=filters, limit=limit, source_version=source_version,

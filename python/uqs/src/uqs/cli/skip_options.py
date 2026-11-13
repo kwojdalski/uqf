@@ -132,11 +132,7 @@ def is_generated(param: object) -> TypeGuard[GuardrailOption]:
 
 
 def command_of(cmd: Any, ctx: Any) -> str:
-    """The command `cmd` runs, as guardrails name it: its words below the root,
-    or for an alias its new name's (`up` is `start`)."""
-    alias = getattr(cmd, "alias_of", None)
-    if alias:
-        return " ".join(alias)
+    """The command `cmd` runs, as guardrails name it: its words below the root."""
     words: list[str] = []
     while ctx is not None and ctx.parent is not None:
         words.append(ctx.info_name)
@@ -150,7 +146,6 @@ def generated(cmd: Any, command: str) -> tuple[GuardrailOption, ...]:
     --reason for them to become."""
     opts = options_for(command) if command else ()
     own = {o for p in cmd.params for o in (*p.opts, *p.secondary_opts)}
-    own |= set(getattr(cmd, "renames", None) or ())
     for opt in opts:
         g = opt.guardrail
         if flag(g) in own:
@@ -234,8 +229,6 @@ def forwarded(args: Sequence[str]) -> list[str]:
         for param in level.command.get_params(level):
             if param.param_type_name == "option" and not param.is_flag and not param.count:
                 takes_value.update(param.opts)
-        renames = getattr(level.command, "renames", None) or {}
-        takes_value.update(old for old, new in renames.items() if new in takes_value)
         level = level.parent
     out: list[str] = []
     words = iter(args)

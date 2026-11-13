@@ -18,7 +18,6 @@ import typer
 from uqs.attach import backfill_remote, backfill_run, config, service
 from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import emit, json_opt
-from uqs.cli.renames import ATTACHMENT, alias_command, renamed, warn_renamed
 from uqs.cli.safety import ChangesState, dry_run_note
 from uqs.cli.shared import JOB_OPERATIONS_PANEL, _die, _paths, console, job_app
 from uqs.cli.stop_options import KillOpt
@@ -141,7 +140,6 @@ ListenPortOpt = Annotated[
 ]
 _STARTED = '{"attachment", "dataset", "contract", "port", "hdb_dir", "pid", "log", ...}'
 ReceiverJson = json_opt(_STARTED)
-ReceiveJson = json_opt(_STARTED, 'With --stop, {"stopped": [...]}')
 StoppedJson = json_opt('{"stopped": [{job, pid, outcome, ...}], "still_running": [...], "dry_run"}')
 
 
@@ -222,36 +220,6 @@ def _receiver(run: dict) -> str:
     return f"{run['worker']} (pid {run['pid']}{killed})"
 
 
-def receive(
-    attach: AttachmentOpt,
-    contract: ContractOpt = None,
-    port: ListenPortOpt = None,
-    stop: Annotated[
-        bool,
-        typer.Option(
-            "--stop",
-            help="Stop this machine's receiver for the attachment instead, so a detach can go "
-            "ahead; an extractor then fails its next window without covering it",
-        ),
-    ] = False,
-    dry_run: Annotated[
-        bool,
-        typer.Option(
-            "--dry-run",
-            "-n",
-            help="Admit the destination and show what it would serve; start nothing",
-        ),
-    ] = False,
-    as_json: ReceiveJson = False,
-) -> None:
-    """`uqs job receive`, before #1858: `job receiver start`, or with --stop
-    `job receiver stop`."""
-    if stop:
-        warn_renamed("uqs job receive --stop", "uqs job receiver stop")
-        receiver_stop(attach, dry_run=dry_run, as_json=as_json)
-    _start(attach, contract, port, dry_run, as_json)
-
-
 def _start(attach: str, contract: str | None, port: int | None, dry_run: bool, as_json: bool):
     """Admit the destination and start the receiver - `job receiver start`."""
     if port is None:
@@ -295,12 +263,3 @@ def _start(attach: str, contract: str | None, port: int | None, dry_run: bool, a
             markup=False,
         )
     raise typer.Exit(code=0)
-
-
-alias_command(
-    job_app,
-    "receive",
-    "uqs job receiver start",
-    receive,
-    cls=renamed(ATTACHMENT, ChangesState),
-)

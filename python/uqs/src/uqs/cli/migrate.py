@@ -72,7 +72,6 @@ def migrate(
     apply: safety.ApplyOpt = False,
     yes: safety.ApplyYesOpt = False,
     as_json: MigrateJson = False,
-    dry_run: safety.DefaultDryRunOpt = False,
 ) -> None:
     """Migrate one HDB partition of a table to this release's schema.
 
@@ -92,10 +91,6 @@ def migrate(
     instead, but only if q finds every stored column empty (checked again under
     the writer lock before staging).
     """
-    try:
-        safety.dry_unless_applied(dry_run, apply)
-    except UqsError as exc:
-        _die(exc)
     try:
         root = local_hdb(attach, hdb, command="data migrate", why=_NO_ATTACHMENT)
         if all(v is None for v in (day, range_from, range_to, last)):

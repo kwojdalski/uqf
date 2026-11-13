@@ -123,7 +123,7 @@ def test_the_target_is_read_from_the_global_options_only(argv, expected):
         (["setup", "odbc", "env"], False),
         (["setup", "odbc", "install", "pkg.tar.gz"], True),
         (["setup", "odbc", "rollback"], True),
-        (["config", "set", "rdb1", "port", "1"], True),
+        (["config", "set", "rdb1", "port=1"], True),
         (["config", "sources", "stub"], True),
         # #2235: a dry run unless --apply, which asks on the server
         (["data", "seed"], False),
@@ -132,7 +132,7 @@ def test_the_target_is_read_from_the_global_options_only(argv, expected):
         (["data", "replay", "--apply"], False),
         (["some-command-added-later"], True),
         (["stop", "--dry-run"], False),
-        (["config", "set", "rdb1", "port", "1", "-n"], False),
+        (["config", "set", "rdb1", "port=1", "-n"], False),
         (["job", "backfill", "demo_deals_backfill", "--dry-run"], True),
         # read-only, and missing from the lists until #1780
         (["connector", "logs", "kafka"], False),
@@ -151,7 +151,7 @@ def test_the_target_is_read_from_the_global_options_only(argv, expected):
         (["start", "rdb1", "--override", "q-version-check", "--reason", "-h"], True),
         (["start", "rdb1", "--override", "q-version-check", "--reason=--dry-run"], True),
         # after `--` every word is positional, as Click reads it
-        (["config", "set", "rdb1", "port", "1", "--", "--dry-run"], True),
+        (["config", "set", "rdb1", "port=1", "--", "--dry-run"], True),
         (["start", "rdb1", "--dry-run"], False),
         (["--help"], False),
         (["job", "--help"], False),
@@ -185,21 +185,6 @@ def test_an_unmarked_command_is_named():
     probe.command("writes", cls=ChangesState)(lambda: None)
     probe.command("forgotten")(lambda: None)
     assert target_confirm.unmarked(typer.main.get_command(probe)) == ["forgotten"]
-
-
-@pytest.mark.parametrize(
-    ("old", "new"),
-    [
-        (["job", "receive"], ["job", "receiver", "start"]),
-    ],
-)
-def test_a_hidden_old_name_is_classified_as_its_new_one(old, new):
-    """An alias takes its new name's mark (renames.alias_command), so it needs
-    no entry of its own and cannot be left behind when the alias goes."""
-    alias, current = target_confirm.find(old), target_confirm.find(new)
-    assert alias.hidden and not current.hidden
-    assert target_confirm.effect_of(alias) is target_confirm.effect_of(current) is not None
-    assert target_confirm.changes_the_server(old) is target_confirm.changes_the_server(new)
 
 
 def test_the_marks_say_what_each_kind_of_command_does():
@@ -297,13 +282,6 @@ def test_connector_logs_runs_without_a_prompt_or_yes(server, capfd, monkeypatch)
     monkeypatch.setattr(target_cli.typer, "confirm", no)
     assert target_cli.forward("uat", False, ["connector", "logs", "kafka"], interactive=False) == 0
     assert "[logs]" in capfd.readouterr().out
-
-
-def test_classifying_warns_of_no_old_spelling(capfd):
-    """Parsing to decide whether to ask rewrites an old spelling silently: the
-    server's uqs warns about it, once."""
-    assert target_confirm.changes_the_server(["job", "preview", "feed", "--sample", "3"]) is False
-    assert "renamed" not in capfd.readouterr().err
 
 
 def test_a_change_with_yes_runs(server, capfd):

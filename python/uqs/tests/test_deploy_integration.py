@@ -54,7 +54,8 @@ def artifacts(tmp_path_factory) -> list[Path]:
     built = []
     for _ in range(3):
         r = subprocess.run(
-            [UQS, "deploy", "build", "--output-dir", str(out), "--allow-dirty"],
+            [UQS, "deploy", "build", "--output-dir", str(out), "--override", "allow-dirty",
+             "--reason", "an integration test"],
             capture_output=True, text=True, check=True, timeout=1800,
         )  # fmt: skip
         built.append(Path(r.stdout.strip().splitlines()[-1]))

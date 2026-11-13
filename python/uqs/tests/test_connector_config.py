@@ -20,7 +20,6 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.cli import external as cli_external
-from uqs.cli import renames
 from uqs.external import connection, crypto, feeds, kafka_feed
 from uqs.paths import UqsError, UqsPaths
 from uqs.scaffold import external as scaffold_external
@@ -322,17 +321,15 @@ def test_the_dry_run_masks_the_credential_and_names_its_source(monkeypatch):
 
 
 def test_the_credential_is_taken_by_the_name_of_its_variable(monkeypatch):
-    """`--tp-credential-env NAME` in --help, the inline flag hidden."""
+    """`--tp-credential-env NAME` in --help, and no inline flag at all."""
     import typer
 
     root: Any = typer.main.get_command(cli.app)
     start = root.commands["connector"].commands["start"]
     shown = {o: p.hidden for p in start.params for o in p.opts}
-    assert shown["--tp-credential-env"] is False and shown["--tp-credential"] is True
+    assert shown["--tp-credential-env"] is False and "--tp-credential" not in shown
     monkeypatch.setenv("OPS_TP", "ops:pw")
-    given, origins = cli_external._secrets_from_env(
-        {"tp_credential": None, "tp_credential_env": "OPS_TP", "group": "g"}
-    )
+    given, origins = cli_external._secrets_from_env({"tp_credential_env": "OPS_TP", "group": "g"})
     assert given == {"tp_credential": "ops:pw", "group": "g"}
     assert origins == {"tp_credential": "$OPS_TP"}
 
@@ -365,25 +362,11 @@ def test_a_bad_credential_in_the_named_variable_names_the_variable(monkeypatch):
     assert errors and "from $OPS_TP" in errors[0] and "nocolon-secret" not in errors[0]
 
 
-def test_the_inline_credential_still_works_for_one_release_and_warns(monkeypatch):
-    warned: list[tuple[str, str]] = []
-    monkeypatch.setattr(renames, "warn_secret_argv", lambda old, new: warned.append((old, new)))
+def test_the_inline_credential_is_no_option(monkeypatch):
     given = runner.invoke(
         cli.app, ["connector", "start", "crypto", "-n", "--tp-credential", SECRET]
     )
-    assert given.exit_code == 0, given.output
-    assert "tp_credential=***" in given.stdout and SECRET not in given.output
-    assert warned == [("--tp-credential", "--tp-credential-env NAME")]
-
-
-def test_the_inline_and_named_credential_together_are_refused(monkeypatch):
-    monkeypatch.setenv("OPS_TP", "ops:pw")
-    errors = _recorded_refusals(monkeypatch)
-    with pytest.raises(SystemExit):
-        cli_external._start(
-            "crypto", {"tp_credential": SECRET, "tp_credential_env": "OPS_TP"}, dry_run=True
-        )
-    assert errors == ["give --tp-credential-env or --tp-credential, not both"]
+    assert given.exit_code == 2 and SECRET not in given.stdout
 
 
 def test_credential_from_env_reads_what_credential_env_wrote():
