@@ -126,6 +126,42 @@
     .qunit.assertEquals[.qetl.transform.apply[`xf_mid;enlist[`quotes]!enlist .qt.qetl.transform.two_quotes];.qt.qetl.transform.two_mids;
         "apply runs fn over the named inputs"]};
 
+/ The fields run logs for one apply, captured by standing in for the debug
+/ channel - restored whether or not the apply throws.
+.qt.qetl.transform.logged:{[name;given]
+    real:.qetl.log.ch.dbg;
+    `.qt.qetl.transform.seen set ()!();
+    `.qetl.log.ch.dbg set {[channel;text;fields] `.qt.qetl.transform.seen set fields};
+    r:@[{[a] .qetl.transform.apply . a; ""};(name;given);{[e] e}];
+    `.qetl.log.ch.dbg set real;
+    if[count r; 'r];
+    .qt.qetl.transform.seen}
+
+.qt.qetl.transform.test_rows_in_logs_one_inputs_rows_as_a_scalar_long:{[t]
+    .qetl.transform.define[`xf_mid;.qt.qetl.transform.decl[.qt.qetl.transform.mid_fn;.qt.qetl.transform.good_example[]]];
+    f:.qt.qetl.transform.logged[`xf_mid;enlist[`quotes]!enlist .qt.qetl.transform.two_quotes];
+    .qunit.assertEquals[f`rows_in;2;"the input's rows, not ,2 - one count per input (#2750)"];
+    .qunit.assertEquals[type f`rows_in;-7h;"a scalar long"];
+    .qunit.assertEquals[f`rows_out;2;"rows_out unchanged"]};
+
+.qt.qetl.transform.test_rows_in_logs_the_total_of_every_input:{[t]
+    q:.qt.qetl.transform.quotes_schema;
+    two:.qt.qetl.transform.two_quotes;
+    .qetl.transform.define[`xf_mid2;`inputs`output`fn`examples!(`a`b!(q;q);.qt.qetl.transform.mid_schema;
+        {[a;b] .qt.qetl.transform.mid_fn a,b};
+        enlist `inputs`expected!(`a`b!(two;two);.qt.qetl.transform.two_mids,.qt.qetl.transform.two_mids))];
+    f:.qt.qetl.transform.logged[`xf_mid2;`a`b!(100#two;200#two)];
+    .qunit.assertEquals[f`rows_in;300;"100 and 200 input rows are 300 (#2750)"];
+    .qunit.assertEquals[type f`rows_in;-7h;"a scalar long"];
+    .qunit.assertEquals[f`rows_out;300;"rows_out unchanged"]};
+
+.qt.qetl.transform.test_the_logged_capture_restores_the_debug_channel:{[t]
+    real:.qetl.log.ch.dbg;
+    .qetl.transform.define[`xf_mid;.qt.qetl.transform.decl[.qt.qetl.transform.mid_fn;.qt.qetl.transform.good_example[]]];
+    .qunit.assertThrows[.qt.qetl.transform.logged[`xf_mid;];enlist[`quotes]!enlist ([] x:1 2);"transform xf_mid input quotes*";
+        "an apply that throws still throws"];
+    .qunit.assertTrue[real~.qetl.log.ch.dbg;"and the real channel is back"]};
+
 .qt.qetl.transform.test_apply_refuses_an_input_of_the_wrong_type:{[t]
     .qetl.transform.define[`xf_mid;.qt.qetl.transform.decl[.qt.qetl.transform.mid_fn;.qt.qetl.transform.good_example[]]];
     .qunit.assertError[{.qetl.transform.apply[`xf_mid;x]};enlist[`quotes]!enlist update bid:1 2 from .qt.qetl.transform.two_quotes;
