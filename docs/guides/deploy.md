@@ -43,7 +43,9 @@ A server must provide these even when TorQ, q and Python are all bundled:
 - `envsubst` (gettext), `pgrep` (procps), `lsof`, and a `hostname` that takes
   `-I` and `-A`, for `torq.sh`.
 - `sshd` with `scp`. With `--remote-user`, a `sudo -n -iu <user>` rule.
-- A writable `--dest`.
+- A writable `--dest`, with three times the artifact plus 1 GiB free on its
+  filesystem (`df -Pk`), and 1 GiB free on the data directory's if that is
+  another filesystem.
 
 ## Building a release
 
@@ -203,7 +205,8 @@ uqs deploy prune prod-a --yes             # from a script, to the target's keep
 
 Three releases stay whatever `--keep` is: the one `current` names, the one a
 rollback would return to, and any whose push died part-way.
-`uqs deploy push --keep N` prunes the same way after it activates a release.
+`uqs deploy push --keep N` prunes the same way after it activates a release. A
+target that sets no `keep` never prunes, and `push` warns about it.
 
 ## What a push does
 

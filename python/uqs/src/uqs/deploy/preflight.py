@@ -15,6 +15,14 @@ import shlex
 
 from uqs.interpreter import REMOVED_ENV
 
+#: What a push needs free on the filesystems holding --dest and the data
+#: directory (#2743), judged by overrides.for_disk: DISK_FACTOR times the
+#: artifact - its upload, its unpacked tree and the .venv its wheels install
+#: into - plus DISK_MARGIN, so a push never leaves what writes beside it (the
+#: tickerplant's logs, the HDB, another service on a shared host) with nothing.
+DISK_FACTOR = 3
+DISK_MARGIN = 1 << 30
+
 
 def _removed_checks() -> str:
     """A refusal for each variable that chose an interpreter before #1753,
@@ -131,6 +139,18 @@ if [ -n "$torq_app_home" ]; then
   done
 fi
 if [ -d "$data" ]; then echo "data=present"; else echo "data=absent"; fi
+# Free space where the release lands and where its processes write (#2743),
+# from the nearest directory that exists: kB available, then the mount point,
+# as POSIX df prints them. The caller judges them against the artifact.
+disk() {
+  p=$2
+  until [ -e "$p" ]; do p=$(dirname "$p"); done
+  line=$(df -Pk "$p" 2>/dev/null | awk 'NR == 2 { print $4, $6 }')
+  [ -n "$line" ] || fail "df -Pk cannot read the filesystem holding $p"
+  echo "disk_$1=$line"
+}
+disk dest "$dest"
+disk data "$data"
 if [ -L "$current" ]; then echo "current=$(basename "$(readlink "$current")")"; fi
 if [ -n "$release_dir" ] && [ -e "$release_dir" ]; then echo "release_exists=yes"; fi
 if [ -d "$lock" ]; then
