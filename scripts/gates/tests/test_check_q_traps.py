@@ -273,7 +273,8 @@ def test_a_long_thrown_message_is_flagged():
     msg = "x" * 260
     found = _flagged("f:{[x] '\"" + msg + '"}', "QB004")
     assert len(found) == 1
-    assert "260 chars" in found[0].detail
+    # q-lint 0.15.0 counts bytes, as q truncates by bytes (q-lint #230).
+    assert "260 bytes" in found[0].detail
 
 
 def test_a_short_thrown_message_is_not_flagged():
