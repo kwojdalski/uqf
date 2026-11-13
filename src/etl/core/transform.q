@@ -292,7 +292,7 @@
     p:.qetl.transform.problems[d`output;out;1b];
     if[count p; '"transform ",string[name]," output: ","; " sv p];
     .[{.qetl.log.ch.dbg[`transform;y;(enlist[`transform]!enlist x),z]};(name;"transform applied";
-        `rows_in`rows_out!(count each given key ins;count out));::];
+        `rows_in`rows_out!(sum count each given key ins;count out));::];
     out}
 
 / -------------------------------------------------------------- VERIFYING
