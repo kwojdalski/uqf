@@ -1,12 +1,12 @@
 """`--json` on a reporting command: one JSON document on stdout (#1731).
 
-Every command that reports something takes `--json` (docs/guides/uqs.md, "CLI
-conventions", rule 5) and prints the data its table shows as ONE document: an
+Every command that reports something takes `--json` (docs/reference/cli.md, "CLI
+conventions") and prints the data its table shows as ONE document: an
 object whose lists are records with snake_case keys, so `jq '.runs[].status'`
 reads what the `status` column shows. The log already goes to stderr under
 `--json` (uqs.logger.json_requested), and a refusal is the document
 `{"ok": false, "error": ...}` (shared.json_refusal) - so stdout parses whatever
-happens. docs/guides/uqs.md, "Machine-readable output", lists each document.
+happens. docs/reference/cli.md, "Machine-readable output", states the contract.
 
 One contract for every document (#1882): it is an object, never a bare list -
 a list command prints `{<plural>: [...]}`; its values are typed (a port is a

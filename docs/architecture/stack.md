@@ -242,10 +242,10 @@ their schema row and their place in the DAG, and are one command away:
 
 To run them, start a profile - a named set that pulls in what it reads - rather
 than adding processes to the default start:
-[`guides/uqs.md`](../guides/uqs.md#profiles) lists them, and refuses one the
-licence cannot hold. Each process above has its upstream producer either in the
-default set or shed alongside it, so starting one is enough - that property is
-held by a test, not by habit.
+[`guides/runtimes-and-profiles.md`](../guides/runtimes-and-profiles.md#profiles)
+lists them, and refuses one the licence cannot hold. Each process above has its
+upstream producer either in the default set or shed alongside it, so starting
+one is enough - that property is held by a test, not by habit.
 
 ## Data pipeline: table by table
 

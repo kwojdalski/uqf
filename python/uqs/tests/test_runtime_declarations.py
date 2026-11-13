@@ -237,10 +237,10 @@ def test_a_profile_its_runtime_does_not_declare_is_refused_naming_its_own():
 
 
 def test_the_guide_s_runtime_table_matches_the_declarations():
-    """docs/guides/uqs.md#runtimes compares the runtimes column by column:
+    """docs/guides/runtimes-and-profiles.md#runtimes compares the runtimes column by column:
     one column per declared runtime, in order, the default marked, and each
     one's data directory as declared."""
-    text = (REPO / "docs" / "guides" / "uqs.md").read_text()
+    text = (REPO / "docs" / "guides" / "runtimes-and-profiles.md").read_text()
     section = text.split("### Runtimes", 1)[1].split("\n### ", 1)[0]
     rows = [
         [cell.strip() for cell in line.strip().strip("|").split("|")]

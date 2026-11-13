@@ -3,8 +3,9 @@
 Two failures happen often enough to walk through end to end: a backfill that
 fails partway through its range, and a streaming job that dies. Each section
 goes from "something is wrong" to "it is fixed", with the command for every
-step. What each log line means is in [`uqs.md`](uqs.md#where-a-process-stopped);
-this page is the order to read things in.
+step. What each log line means is in
+[`logs.md`](logs.md#where-a-process-stopped); this page is the order to read
+things in.
 
 ## A backfill failed, or was killed, partway through its range
 
@@ -69,7 +70,7 @@ If the error alone doesn't explain it, re-run with more detail:
 - `--trace` adds every query the source was sent. A live job takes it too:
   `uqs restart <procname> --trace`.
 
-See [the DEBUG level](uqs.md#where-a-process-stopped).
+See [the DEBUG level](logs.md#where-a-process-stopped).
 
 ### 3. Fix the cause, then re-run the same command
 
@@ -119,8 +120,8 @@ uqs logs <procname> --level ERROR
 
 `on_batch failed` names the table and the error. If there is no ERROR line, read
 the last few lines without `--level`: [where a process
-stopped](uqs.md#where-a-process-stopped) says what each one means, from a q file
-that failed to load to a tickerplant that was never up.
+stopped](logs.md#where-a-process-stopped) says what each one means, from a q
+file that failed to load to a tickerplant that was never up.
 
 ### 3. Fix it and start it again
 

@@ -98,7 +98,7 @@ FULL_INFRA: tuple[str, ...] = (*CORE_INFRA, "feed1")
 #: What the starter pack runs on PeachQ today, and nothing that dies there:
 #: the plant, the rdb, the hdb, the gateway, housekeeping, the chained plant,
 #: metrics and feed1, so trade and quote come in. Left out, each for a PeachQ
-#: gap (docs/guides/uqs.md#runtimes): wdb1 (no .Q.chk), sort1 (refuses
+#: gap (docs/guides/runtimes-and-profiles.md#runtimes): wdb1 (no .Q.chk), sort1 (refuses
 #: -s -2), reporter1 (`type` loading reporter.q), monitor1 (ignores stop).
 CAPTURE_INFRA: tuple[str, ...] = (
     "discovery1",

@@ -1,6 +1,6 @@
 """The `uqs` CLI conventions (#1738), held over the real Typer tree.
 
-docs/guides/uqs.md#cli-conventions states six rules; this walks every command
+docs/reference/cli.md#cli-conventions states the rules; this walks every command
 `uqs.cli.entry` registers and enforces the four a tree can show:
 
 - rule 1: no group is named after a verb;
@@ -52,7 +52,7 @@ from uqs.stack import alive, listing
 from uqs.stack import procs as stack_procs
 
 ROOT = "uqs"  # the label the root group's own options are reported under
-GUIDE = Path(__file__).resolve().parents[3] / "docs" / "guides" / "uqs.md"
+GUIDE = Path(__file__).resolve().parents[3] / "docs" / "reference" / "cli.md"
 
 #: The issues allowed to hold an exception open: #1738's sub-issues, those the
 #: audit that built these lists filed beside them, and the naming audit's
@@ -1234,7 +1234,7 @@ def test_rule5c_yes_y_exactly_on_what_asks():
     _hold("rule 5c", found, RULE5C_ALLOWLIST)
 
 
-#: Every command whose deletion cannot be undone (docs/guides/uqs.md's rule):
+#: Every command whose deletion cannot be undone (docs/reference/cli.md's rule):
 #: each asks first and takes --yes/-y. `clean`, which removes the HDB with the
 #: rest of the data directory, asked nothing (#2233).
 IRREVERSIBLE = {
@@ -1246,7 +1246,7 @@ IRREVERSIBLE = {
 def test_rule5c_every_irreversible_deletion_asks():
     missing = {p for p in IRREVERSIBLE if p not in ASKS or not _flag(LEAVES[p], "--yes", "-y")}
     assert not missing, sorted(missing)
-    guide = (Path(__file__).resolve().parents[3] / "docs/guides/uqs.md").read_text()
+    guide = GUIDE.read_text()
     rule = " ".join(guide[guide.index("Every deletion that cannot be undone") :].split()[:60])
     unnamed = {p for p in IRREVERSIBLE if f"`{p}`" not in rule.replace("`uqs ", "`")}
     assert not unnamed, f"the guide's rule does not name {sorted(unnamed)}"

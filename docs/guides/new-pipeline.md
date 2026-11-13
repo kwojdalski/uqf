@@ -1,14 +1,10 @@
 # Adding a data pipeline
 
-How to take an external source of rows and land it in a local table, with
-completeness you can query and a bound you can see. The worked example below is
-a real one: every command was run against this tree, and the output shown is
-what it printed.
+This page walks one bounded pipeline end to end: scaffold it, write its source
+and worker, run it, check its coverage and test it.
 
-A pipeline here is **three declarations**, and nothing that registers them. The
-lifecycle --- windowing, retries, coverage, checkpoints, dry-run, the job graph ---
-is the shell's, and you do not write any of it. If you find yourself writing a
-loop over days, you are rebuilding `.qetl.job.bounded`.
+A pipeline is three declarations. The shell owns windowing, retries, coverage,
+checkpoints, dry-run and the job graph, so you write none of that.
 
   | You write                          | It says                                                                  |
   | ---                                | ---                                                                      |
@@ -16,234 +12,81 @@ loop over days, you are rebuilding `.qetl.job.bounded`.
   | a **transform**, beside the worker | what a fetched batch becomes before it is published, with example tables |
   | a **worker** in `src/etl/workers/` | which source, which transform, which target dataset, how wide a window   |
 
-[`src/etl/init.q`](../../src/etl/init.q) **globs** `sources/`, `transforms/`,
-`workers/` and `streaming/`, so there is no manual loader entry: a declaration
-loads because its file exists.
-
-Everything else follows from those. Why it is shaped this way is [the pipeline
-philosophy](../architecture/pipeline-philosophy.md). Every key each declaration
-accepts, and what it refuses, is in [the declaration
-reference](../reference/pipeline-declarations.md).
+[`src/etl/init.q`](../../src/etl/init.q) globs `sources/`, `transforms/`,
+`workers/` and `streaming/`, so a declaration loads because its file exists.
+Every key a declaration accepts is in [the declaration
+reference](../reference/pipeline-declarations.md). Why the framework has this
+shape is in [the pipeline philosophy](../architecture/pipeline-philosophy.md).
 
 ## Scaffolding it
 
-`uqs job new` writes the skeleton: the q files, the table definition and a test.
-There is no registry entry - the process is read from the job's own declaration.
+`uqs job new` writes the skeleton: the q files, the table definition and a
+failing test.
 
 <!-- Source: docs/diagrams/scaffolding.d2. Rendered by
      `scripts/generate/derive.py diagrams`, which CI runs with --check. -->
 
 ![What uqs job new writes, in five bands: the plan, the files it creates, the two files it appends to, what globs each one up afterwards, and the handler and test left deliberately red](../diagrams/scaffolding.svg)
 
-Everything but two files is picked up by a glob. Those two it appends to: the
-table definition, and `expected` in
-[`tests/q/test_stack_tables.q`](../../tests/q/test_stack_tables.q). It then
-regenerates `processes.md`, `pipeline_dag.q` and the port lock.
-
-The test is not registered anywhere. Its suite is `.qt.qpipe.job.<name>` - the
-production owner it tests, under `.qt` - and the runner finds a suite by the
-tests it holds, so naming it is the whole of adding it.
-
-```
-uqs job new markout2 --subscribe-to trades,quote \
-    --outputs my_metric --schema "sym:symbol, px:float"
-
+```bash
 uqs job new fx_rates --kind backfill --outputs fx_rates \
     --schema "sym:symbol, mid:float" --width 1D
-
-uqs job new fx_rates_1h --kind backfill --outputs fx_rates_1h \
-    --source fx_rates --schema "sym:symbol, mid:float" --width 0D01
 ```
 
-`--transport odbc` scaffolds a backfill source read from a database instead of a
-q process, and `--transport local` one read from an HDB directory's files on
-this machine, with no process serving it (see "A source read from local HDB
-files" below), `--proc` names the process, and `--start-with-all` puts a
-streaming job in `uqs start all`. `--period` sets a feed's tick or gives an etl
-a timer, `--profile`/`--unprofiled` place a standing job in a start profile, and
-`--slice`/`--check` shape a backfill. `--transform passthrough|derive` scaffolds
-the transform - and for a one-in, one-out streaming job its whole handler (see
-[the ETL page](../scaffolding/etl.md)). `uqs job remove NAME` undoes a scaffold.
-Where q is installed, `uqs job new` also re-exports the contract surface;
-without it, it prints the command to run.
-
-The third is a second worker over the second's source: an existing source or
-table is reused, not rewritten. `--schema` is required whenever a new source or
-table is written, and refused otherwise. Two workers cannot fill one dataset
-without a partition - see [below](#filling-one-dataset-with-several-workers).
-
-A streaming job follows the same rule for what it publishes: `--outputs` takes a
-comma list, a table the plant already defines is published onto without
-`--schema`, and `--schema` shapes the one new table. Its `--subscribe-to` must
-name tables the plant defines, so a producer is scaffolded before its consumer.
-
-`--dry-run` prints what it would write and writes nothing. `kind` is derived for
-a streaming job, and the new process's port is appended to the port lock, so no
-existing process moves.
-
-The scaffold itself --- what each shape gets, why the handler throws, and the
-one generated body that does *not* throw --- is
-[`scaffolding/`](../scaffolding/README.md), a page per shape. This guide picks
-up where that leaves off, so what it needs from there is just the list of what a
-fresh scaffold leaves red.
+This writes worker `fx_rates_backfill` over a new source `fx_rates`, the pair
+this page fills in. `--outputs` names the dataset and `--width` the window.
+`--schema` is required whenever a new source or table is written, and refused
+otherwise. `--dry-run` prints what the command would write and writes nothing.
+`uqs job remove NAME` undoes a scaffold. The other flags are in
+`uqs job new --help`, and [`scaffolding/`](../scaffolding/README.md) has a page
+for each shape, the streaming ones included.
 
 ### What a fresh scaffold leaves red
 
-The handler throws and the test fails, deliberately. For a job that subscribes
-and publishes, its scaffolded test also carries a `contract_driver` that throws
-until written - the batch
-[`tests/q/test_job_output_contracts.q`](../../tests/q/test_job_output_contracts.q)
-drives the job with to hold every table it publishes to its plant table:
+The handler throws and the test fails until you write them.
+`uv run pytest python/uqs` lists, by `path:line`, every placeholder still marked
+`SCAFFOLDED`: the handler, the test, the job's `note`, a new table's catalog
+description, and the process's card in [Services](../services/README.md) and
+comment in [`stack.md`](../architecture/stack.md). That list is the to-do list.
+A line clears when you replace the placeholder and delete its marker. Name the
+process in `stack.md`'s list when you delete its comment.
 
-```
-uqs job new dxprobe --subscribe-to trades --outputs dx_t --schema "sym:symbol, v:float"
-q tests/run_tests.q
-```
-
-reports `.qt.qpipe.job.dxprobe.test_dxprobe_is_implemented`, and the
-`.qt.qpipe.job_output_contracts` tests that drive every publishing job fail on
-the throwing driver.
-
-Nothing else in the q suite needs an edit: the scaffold adds the new table to
-`expected` itself, and the runner finds your test's suite on its own.
-
-`uv run pytest python/uqs` fails on `test_no_scaffold_left.py`, which lists, by
-`path:line`, every placeholder still marked `SCAFFOLDED` - the handler, the
-test, the driver, the job's `note`, for a new table its desk catalog
-description, and the process's card in the [Services -
-Showcase](../services/README.md) and its comment in
-[`docs/architecture/stack.md`](../architecture/stack.md). That list is the to-do
-list; each line clears when its placeholder is replaced and the marker deleted
-with it. Name the process in `stack.md`'s list when you delete its comment:
-`test_the_prose_architecture_doc_is_consistent_with_the_registry` fails
-otherwise.
-
-A backfill also gets a worked example, `scripts/examples/<name>_example.q`: it
-runs the worker once on its fixture into a throwaway HDB and shows what it
-published, with no stack running.
-
-A new table's desk catalog entry is written for you: a SCAFFOLDED description in
-[`uqs_catalog.q`](../../scripts/processes/uqs_catalog.q), and a SCAFFOLDED
-`.qcat.unbounded` reason beside it. The description is yours: it is read by
-someone deciding whether your table is the one they want, and the table's own
-name there would pass every test and tell them nothing. The reason says why a
-whole select of the table is safe to read; replace it with a `querypolicy.csv`
-row where it is not. If the desk should not see the table, delete both and add
-the table to `.qcat.hidden` with the reason --- `tests/q/test_catalog.q` refuses
-a published table that is in neither list, and a browsable one with neither a
-policy row nor an unbounded reason.
-
-Everything that IS derived - `processes.md`, `src/etl/generated/pipeline_dag.q`
-and `docs/man.q` - it regenerates before it returns.
-
-The rest of this guide is what to write into that skeleton, and why each part is
-shaped the way it is.
+Write the description in
+[`uqs_catalog.q`](../../scripts/processes/uqs_catalog.q) for someone deciding
+whether the table is the one they want. Where a whole select of the table is not
+safe to read, replace the `.qcat.unbounded` reason beside it with a
+`querypolicy.csv` row. To keep the table from the desk, delete both and add the
+table to `.qcat.hidden` with the reason.
 
 ## Bounded or continuous?
 
-Two different shells. Which one a job wants is
-[`scaffolding/`](../scaffolding/README.md)'s opening question, asked there over
-all seven shapes; what follows here is what the two shells actually are, which
-is what you need before writing into either.
+Choose the shell first. It is the one choice that is hard to change afterwards.
 
 <!-- Source: docs/diagrams/pipeline-decision.d2. Rendered by
      `scripts/generate/derive.py diagrams`, which CI runs with --check. -->
 
 ![A decision tree: known range or not chooses the bounded worker or the streaming shell; whether it reads another table chooses a feed or an etl; whether it publishes a new table decides if columns must be declared; every path ends at the same uqs job new command and the same three remaining steps](../diagrams/pipeline-decision.svg)
 
-Only the first question is hard to change afterwards; the other two are flags on
-one command.
+- Bounded: you know the range before you start, as with a backfill, a nightly
+  window or a restatement. It runs, finishes and exits. This is
+  `.qetl.job.bounded`, and the rest of this page.
+- Continuous: it subscribes and never finishes, as with a tickerplant feed or a
+  poller. This is `.qetl.job.continuous`, whose state is a cursor.
 
-**Bounded** --- you know the range before you start: a backfill, a nightly
-window, a restatement. It runs, it finishes, it exits. `.qetl.job.bounded`, and
-the rest of this guide.
+A continuous job is one file under
+[`src/etl/streaming/`](../../src/etl/streaming) with a `.qetl.job.stream.define`
+call. A feed is the same with no subscription. Normalizer, bars and rolling jobs
+are continuous jobs whose shell owns the lifecycle. The
+[scaffolding](../scaffolding/README.md) pages and the declaration reference
+cover each.
 
-**Continuous** --- it subscribes and never finishes: a tickerplant feed, a
-poller. `.qetl.job.continuous` in
-[`src/etl/core/continuous_state.q`](../../src/etl/core/continuous_state.q),
-whose state is a cursor rather than a range.
-
-Both have a transform, and both are **one file per job**. A continuous job is a
-file under [`src/etl/streaming/`](../../src/etl/streaming) holding every step ---
-schemas, transform, batch handler, timer body, its own buffers --- and a
-`.qetl.job.stream.define` call naming the tables it subscribes to, the tables it
-publishes and the TorQ process that runs it. A **feed** is the same thing with
-no subscription: it declares a `period` and an `on_timer` that builds rows and
-publishes them. One generic process script,
-[`scripts/processes/torq_stream.q`](../../scripts/processes/torq_stream.q), runs
-whichever job the process it was started as claims.
-
-A job never calls TorQ: it calls `publish` in its own namespace, which the
-runner wires to the tickerplant and a test wires to a recorder
-(`tests/q/test_stream_job.q`). That seam is what lets the whole job --- not just
-its transform --- be loaded and driven in a plain q process.
-
-**Every table you publish must exist on the plant.** `.u.upd` onto a table the
-tickerplant does not define discards the rows *silently*. A process refuses to
-start when the plant lacks a table it *declares* it publishes - so declare every
-table the job publishes.
-
-**Normalizer** --- a continuous job of one particular shape: several tables
-carrying the same fact in different spellings, one canonical table out.
-`.qetl.job.stream.normalizer` in
-[`src/etl/core/normalizer.q`](../../src/etl/core/normalizer.q). An instance
-declares its output and one `.qetl.transform` transform per source, and the
-shell owns the rest --- it dispatches on the table a batch arrived on, projects
-the batch onto the columns that source's transform declares, applies it, and
-publishes. It also performs the `.qetl.job.stream.define` itself, so the job's
-edges cannot disagree with its mappings, and it refuses at `define` any mapping
-whose declared output drifts from the canonical table, column, type and order.
-Two ship: `executions` (`trades` + `crypto_trades`) and `market_data` (`quote` +
-`fx_orderbook` + `crypto_book`), which is how `posbook1` holds FX and crypto
-positions in one book without knowing either market's tape format. A third
-market is a mapping in a normalizer, not a branch in a consumer.
-`uqs job new NAME --kind normalizer --subscribe-to a,b --schema ...` scaffolds
-one: the canonical table NAME, and per source its schema, a throwing mapping and
-a typed example row, so the file loads while each mapping stays red.
-
-```q
-.qetl.job.stream.normalize[`executions;`procname`output`input!(
-    `executions1;
-    .qpipe.job.executions.executions;
-    `trades`crypto_trades!`executions_from_trades`executions_from_crypto_trades)];
-```
-
-**Bars and rolling windows** --- two more shapes of continuous job whose shell
-owns the lifecycle, so an instance declares only what differs. A **bars** job
-(`.qetl.job.stream.at_bars`, [`src/etl/core/bars.q`](../../src/etl/core/bars.q))
-cuts a stream into fixed, non-overlapping windows and publishes each once it has
-closed: `exec_bars1`. A **rolling** job (`.qetl.job.stream.at_rolling`,
-[`src/etl/core/rolling.q`](../../src/etl/core/rolling.q)) keeps a statistic over
-the last N minutes up to date --- "the reject rate over the last five minutes,
-as of now" --- at several window lengths, re-evaluated every period:
-`order_quality1`. Choose bars when each interval is a row of its own (OHLC, a
-minute's volume); choose rolling when the question is about "right now". Both
-are a transform plus a declaration:
-
-```q
-.qetl.job.stream.at_rolling[`order_quality;`procname`events`by`event_time`transform`outputs`windows`lateness`period!(
-    `order_quality1;`order_outcomes;`book;`source_time;`order_quality;enlist `order_quality;
-    0D00:01 0D00:05 0D01;0D00:00:05;0D00:00:05)];
-```
-
-The transform sees the rows of the longest window once per window length, each
-tagged `window`, `as_of` and `inside`, and returns one row per key per length.
-The windows are `(as_of-N, as_of]`: a row exactly N old is out and a row at
-`as_of` is in. A key quiet in a short window publishes the statistic's identity,
-a late row within `lateness` amends the next publication and an older one is
-dropped and logged, state is bounded by the longest window, and a restart
-replays the input to the publication an uninterrupted job would have made. The
-windows roll across midnight; after a restart past midnight a window longer than
-the day's log is withheld rather than published over part of its span. The full
-declaration is in
-[pipeline-declarations](../reference/pipeline-declarations.md#rolling-window-job-----qetljobstreamrolling).
-
-The rest of this guide is the bounded case.
+Declare every table a continuous job publishes. `.u.upd` onto a table the
+tickerplant does not define discards the rows silently. A process refuses to
+start when the plant lacks a table it declares.
 
 ## 1. Declare the source
 
-A source declares its **shape**, not its plumbing. Create
-`src/etl/sources/fx_rates.q`:
+Create `src/etl/sources/fx_rates.q`:
 
 <!-- q-example: run -->
 ```q
@@ -276,100 +119,35 @@ A source declares its **shape**, not its plumbing. Create
 \d .
 ```
 
-Five of those deserve a sentence each, because each is a decision rather than a
-formality.
-
-**The namespace is `.qpipe.source.<source name>`, and it is the same word
-twice.** Sources live under one `.qpipe.source` root and are named exactly as
-they register, so `.qpipe.source.fx_rates.` goes with
-`source_name:`fx_rates` and nothing else; `test_source_contract.q` fails if the two disagree. A file opens no `\d\`
-context for it: every name is written in full from the root, as in the block
-above.
-
-**`columns` is what you READ, not everything the source has.** Declaring a
-column the worker never touches means an upstream change to an unused column
-breaks the run.
-
-**`query` is a parameterised lambda, never string concatenation.** The bounds
-are arguments to a functional select evaluated on the remote side, so no caller
-value is ever spliced into query text.
-`"select ... where t>=",string range_from` is how a crafted value becomes an
-injection, and how a type coercion becomes a silently wrong window rather than
-an error. Where a driver cannot parameterise --- ODBC --- there is exactly one
-escape function, `.qetl.io.odbc.literal`, and everything goes through it. It is
-sent with `.qetl.source.ipc`, not `h(...)`: that is what logs the lambda and its
-bounds at TRACE, so `uqs job backfill --trace` shows every query a run sends, as
-`.qetl.io.odbc.run_sql` does for SQL. This is required, not advised. The test
-suite fails a source in the tree whose `query` does otherwise, and
-`uqs job install` refuses a sidecar source with a direct `h(...)` line, unless
-the line says `/ untraced: <why>`.
-
-**The window is half-open `[from;to)`** --- `>=` on the lower bound and `<` on
-the upper. One wrong operator double-publishes every boundary row, and the
-duplicate surfaces far from here.
-
-**`row_key` is only correct if the source guarantees uniqueness.** A source that
-reuses ids after a purge silently merges unrelated rows. It is declared per
-source for that reason.
-
-**`tz` is a claim, not a default.** An unstated zone is the shape of the bug:
-every later reader assumes UTC while the source hands over local wall-clock
-time, and the two differ by an offset that changes twice a year. `UTC` is the
-only value needing no zone table --- push the conversion upstream if you can.
-
-**`fixture` must satisfy the same contract as the live source**, and it must be
-deterministic. A fixture that changes between runs makes a failing assertion
-impossible to attribute. It is what the worker uses when no credential is
-configured, which is a stated demo path rather than a fallback for a failed
-connection --- an outage must never quietly become synthetic data recorded as
-covered.
+- The namespace is `.qpipe.source.<source name>`, matching `source_name`. Write
+  every name in full from the root.
+- `columns` lists the columns you read. Leave out any the worker never touches.
+- `query` is a parameterised lambda sent with `.qetl.source.ipc`, never string
+  concatenation and never `h(...)`. `uqs job backfill --trace` then shows every
+  query a run sends.
+- The window is half-open `[from;to)`: `>=` on the lower bound and `<` on the
+  upper. A wrong operator publishes every boundary row twice.
+- `row_key` must be unique in the source. A source that reuses ids after a purge
+  silently merges unrelated rows.
+- `tz` states the zone `time_column` is expressed in. `UTC` is the only value
+  that needs no zone table.
+- `fixture` must be deterministic and satisfy the same contract as the live
+  source. The worker uses it when no credential is configured, never when a
+  connection fails.
 
 ### A source read from local HDB files
 
-Not every kdb+ database has a process serving it. A source with
-`transport:`local\` reads an HDB directory on this machine directly, with no
-IPC:
-
-```q
-transport:`local
-
-query:{[h;range_from;range_to]
-    .qetl.source.local[h;{[read;from_ts;to_ts]
-        select time, sym, px from read[`trades;from_ts;to_ts]
-            where time>=from_ts, time<to_ts
-      };range_from;range_to]}
-```
-
-- **The credential is the directory.** Give the source a `sources.csv` row whose
-  setting is the HDB's path, such as `${KDBHDB}` (see [where a source
-  connects](../reference/pipeline-declarations.md#where-a-source-connects-sourcescsv)),
-  or set `UQF_SOURCE_CRED_<SOURCE>` to it. `.qetl.source.local_root` checks it
-  when the worker connects: it must be a directory holding a `sym` file or a
-  date partition. A wrong path **fails the run**; it never falls back to the
-  fixture. As with every transport, only a source with neither selects the
-  fixture.
-- **`read[table;from_ts;to_ts]`** returns the whole date partitions the window
-  touches, with `date` as the first column, as a select from a mapped HDB has
-  it. The window's end is exclusive, so a window ending at midnight doesn't read
-  the next day. The query filters the rows itself.
-- **Each symbol column is decoded against that HDB's own domain file:** the one
-  named after the column's domain, usually `sym`, but a column can be enumerated
-  against any domain. A plain `get` would decode it against whatever domain of
-  that name the backfill process has loaded (for `sym`, the HDB it *writes*) and
-  silently return the wrong symbols. A missing or too-short domain file is
-  refused rather than decoded to blanks, and partitions whose columns differ are
-  refused, naming the dates, as a mapped HDB would refuse them.
-- **Nothing is loaded globally.** `\l` would map the whole database at the root
-  and change the working directory. Tables are read one partition at a time,
-  column by column.
-- **Tracing and failures** work as for IPC: `--trace` logs each query with its
-  lambda and bounds, a `request` number and `transport=local`, and a query that
-  throws is traced as `failed` and rethrown.
-- **The handle is the directory itself**, so cleanup has nothing to close.
+A source with ``transport:`local`` reads an HDB directory on this machine
+directly, with no process serving it. `--transport local` scaffolds one. Its
+credential is the directory, set in `UQF_SOURCE_CRED_<SOURCE>` or a
+[`sources.csv`
+row](../reference/pipeline-declarations.md#where-a-source-connects-sourcescsv).
+A wrong path fails the run and never falls back to the fixture. [From one kdb+
+database to another](../scaffolding/hdb-transfer.md) is the worked example.
 
 ## 2. Write the worker
 
-Mostly a declaration. Create `src/etl/workers/fx_rates_backfill.q`:
+Create `src/etl/workers/fx_rates_backfill.q`:
 
 <!-- q-example: run -->
 ```q
@@ -403,74 +181,41 @@ Mostly a declaration. Create `src/etl/workers/fx_rates_backfill.q`:
     (`fx_rates;enlist `fx_rates;1D;`fx_rates_pips;.qpipe.job.fx_rates_backfill.quality_check)];
 ```
 
-**The namespace is `.qpipe.job.<worker name>`, and you do not choose it.** Every
-worker instance lives under the one `.qpipe.job` root, named exactly as it is
-registered, and `.qetl.job.bounded.define` derives the namespace from the worker
-name --- a supplied `ns` key is refused. So
-`key `.qpipe.job` lists every loaded worker, and a worker has one name rather than a name and an abbreviation to keep in step. The quant library is two levels (`.qf.px`, `.qf.exec`, ...) and the framework nests by module (`.qetl.job.bounded`, `.qetl.coverage`, `.qetl.source\`);
-the nesting marks the line between the framework and what runs on it.
+- The namespace is `.qpipe.job.<worker name>`. `.qetl.job.bounded.define`
+  derives it from the worker name and refuses a supplied `ns` key.
+- `define` writes the contract's names there, among them the methods `init`,
+  `plan`, `fetch`, `publish`, `checkpoint`, `spec`, `run` and `cleanup`.
+- To override a method, define it above the `define` call, which fills only the
+  names the namespace lacks. An override can call the default by its full name,
+  as in ``.qetl.job.bounded.publish[`fx_rates_backfill;batch]``.
+- `transform` is required and runs between fetch and the check. Its one input
+  must be the source's `columns` and `types` exactly. A job that publishes what
+  it fetched declares `.qetl.transform.passthrough`.
+- Write the transform's expected table by hand. The q suite runs every example,
+  twice, and feeds each transform an empty batch.
+- `check` is optional and runs between the transform and publish. It returns a
+  table of failures with `check`, `status` and `detail` columns. When the batch
+  passes, it returns the empty one, `.qetl.job.bounded.no_failures[]`.
+- A batch that fails the check is not published and its window is not recorded
+  as covered, so the next run plans it again. Check for conditions no correct
+  row could meet, such as a non-positive rate or a null key.
+- `io` and `facts` are optional: an [IO
+  manager](../../src/etl/core/io_manager.q) to write somewhere other than the
+  default, and a function from the transformed batch to a dictionary of labels
+  recorded as materialisation metadata.
 
-**The contract's names are stamped by `define`, not written by you.** The
-lifecycle contract requires `source_version`, `range_from` and `range_to` to be
-names in *this* namespace, so that "is this worker complete" is a check rather
-than a code-review question --- and `.qetl.job.bounded.define` writes them
-there, along with `handle`, the run accumulators, and the eight methods (`init`,
-`plan`, `fetch`, `publish`, `checkpoint`, `spec`, `run`, `cleanup`), each a
-one-line delegate to the shell with the shell's own parameter names:
-
-```q
-q).qpipe.job.fx_rates_backfill.fetch
-{[from_ts;to_ts] .qetl.job.bounded.fetch[`fx_rates_backfill;from_ts;to_ts]}
-```
-
-**To override a method, define it before the `define` call.** `define` fills
-only the names the namespace does not already have, and `.qetl.job.bounded.run`
-reaches `plan`, `fetch` and `publish` through the worker's namespace rather than
-calling its own --- so a worker with a genuinely different publish path writes
-`publish:{[batch] ...}` above its `define` and the run loop uses it. An override
-that wants the default for part of its work calls the shell by its full name,
-`.qetl.job.bounded.publish[`fx_rates_backfill;batch\]\`.
-
-**`transform` is required, because it is the job.** It runs between fetch and
-the check, so the check and the target both see its output. Its one input must
-be the source's `columns` and `types` exactly, and `define` refuses a transform
-written against any other shape. The expected table is written by hand:
-`tests/q/test_transform.q` runs every registered transform's examples on every
-build, calls each twice to catch a clock or a random draw in the output, and
-feeds each an empty batch. A job that publishes what it fetched declares
-`.qetl.transform.passthrough` rather than leaving the step out.
-
-**`check` is optional, and it runs between the transform and publish.** A batch
-that fails is never published and its window is never recorded as covered, so
-the next run plans it again. Make the conditions ones no correct row could meet ---
-a non-positive rate, a null key --- rather than statistical outliers. A check
-that fires on merely unusual data trains its reader to ignore it, and an ignored
-check is worse than none because it still reads as protection.
-
-`io` and `facts` are the other optional keys: an [IO
-manager](../../src/etl/core/io_manager.q) to write somewhere other than an
-in-memory table, and a function from the transformed batch to a dictionary of
-labels recorded as materialisation metadata.
-
-Leave `io` out and the process decides: under `uqs job backfill`, rows go into
-the HDB partition of their own date, never through the tickerplant; in plain q,
-into an in-memory table. [The FAQ](../faq.md#where-do-a-backfills-rows-end-up)
-has the detail.
+Without `io`, a run under `uqs job backfill` writes each row into the HDB
+partition of its own date, never through the tickerplant. In plain q it writes
+an in-memory table. See [the FAQ](../faq.md#where-do-a-backfills-rows-end-up).
 
 ## 3. Register it
 
-**Nothing, for the load.** A declaration file is loaded the moment it exists.
+There is nothing to register. A declaration file loads once it exists, and the
+runner finds a test suite by the `test_*` functions it holds.
 
-One ordering still holds, and the file explains it: directories load sources
-before workers, because `.qetl.job.bounded.define` looks its source up at define
-time. Within a directory files load alphabetically, so none may read another
-job's table at load time - take a schema from `.qetl.plant` instead, which loads
-first. `test_no_job_reads_a_peer_job_at_load` refuses a job that does.
-
-A test file is loaded by glob too, and its suite is found by what it holds: a
-namespace under `.qt` with `test_*` functions (`tests/lib/discovery.q`). Nothing
-lists it, and a test fails if a declared test did not load or a loaded one was
-never declared.
+Sources load before workers, and files within a directory load alphabetically.
+So a job must not read another job's table at load time. Take a schema from
+`.qetl.plant`, which loads first.
 
 The job graph adopts the worker from its own declaration:
 
@@ -483,49 +228,14 @@ inputs | ,`fx_rates@fx_rates
 outputs| ,`fx_rates
 ```
 
-### Its process comes from the declaration
+The uqs process registry is read from the same declarations. A worker's
+`procname` defaults to `<worker>1`, and an optional `note` says why it exists. A
+backfill registers with discovery, runs its range and exits, so it never starts
+with the stack.
 
-There is no registration to add. The uqs process registry is READ from the q
-declarations - every `.qetl.job.stream.define`/`.qetl.job.stream.normalize`
-under `src/etl/streaming/` and every `.qetl.job.bounded.define` under
-`src/etl/workers/` - by
-[`model/declarations.py`](../../python/uqs/src/uqs/model/declarations.py).
-
-A worker's declaration names its process, and may say why it exists:
-
-```q
-.qetl.job.bounded.define[`fx_rates_backfill;
-    `source`outputs`width`transform`procname`note!
-    (`fx_rates;enlist `fx_rates;1D;`fx_rates_passthrough;
-     `fx_rates_backfill1;
-     "bounded: reads the vendor's daily fixings over ODBC")];
-```
-
-`procname` defaults to `<worker>1` when absent, in q and in the registry alike.
-A backfill never starts with the stack - it registers with discovery, runs its
-range and exits - so a worker has no `start_with_all`.
-
-Both job types name what they produce under `outputs`, a symbol list --- and the
-job type decides what that means. A worker's holds exactly one dataset
-(`enlist `fx_rates`), the one its coverage is recorded under and its `replace` is keyed on; zero or several is refused at declaration. A streaming job's holds the tables it publishes onto the tickerplant, none or many, and nothing records them as complete. The old spellings, a worker's `dataset` and a streaming job's `publishes\`,
-are refused with the rename. See
+A worker's `outputs` holds exactly one dataset, the one its coverage is recorded
+under. A streaming job's holds the tables it publishes, none or many. See
 [Outputs](../reference/pipeline-declarations.md#outputs-----one-key-two-meanings).
-
-A streaming job already names its `procname`, `subscribe_to` and `outputs`, and
-those are its process's edges. Two more keys are optional:
-
-  | key              | means                                                | absent    |
-  | ---              | ---                                                  | ---       |
-  | `start_with_all` | `1b` to start with the stack                         | on demand |
-  | `note`           | why it is deployed as it is, shown in `processes.md` | no note   |
-
-Default on demand, because joining the default start spends one of the plant's
-licensed connections.
-
-**Ports** come from
-[`scripts/processes/process_ports.csv`](../../scripts/processes/process_ports.csv),
-a generated, append-only lock: a new process gets the next free offset, and a
-retired one keeps its row so no offset is reused.
 
 ## 4. Run it
 
@@ -537,12 +247,9 @@ In a q session from the repository root:
 \l src/etl/init.q
 ```
 
-`scripts/processes/torq_pipeline.q` is easy to forget and the failure is
-obscure: it defines `.qtorq`, which is where the status and lock directories
-come from, and without it `init` dies inside `mkdir` on a path built from
-nothing.
-
-There is no credential yet, so ask for the fixture, then run it:
+Do not skip `scripts/processes/torq_pipeline.q`: it defines `.qtorq`, which
+supplies the status and lock directories. There is no credential yet, so ask for
+the fixture, then run the worker:
 
 <!-- q-example: transcript -->
 ```q
@@ -557,25 +264,23 @@ cursor           | 2026.09.16D00:00:00.000000000
 reactions_owed   | 0
 ```
 
-Five daily windows over a five-day range, each published and recorded.
+To run it as a process, which is what an orchestrator starts:
 
-As a process, which is what an orchestrator starts --- the worker and its range
-are required flags, because a backfill that guessed a range would publish the
-wrong window and record it as covered. The source version is required too,
-unless the worker declares a default `source_version`:
-
-```
+```bash
 uqs job backfill fx_rates_backfill --source-version v1 --from 2026-09-11 --to 2026-09-16 --fixture
 ```
 
-Both ask for the fixture (`UQF_FIXTURE_WRITES`, `--fixture`): a run with no
-credential that would write one is refused otherwise, and its coverage is
-recorded under `v1~fixture`, never `v1`, so a live run once the credential is
-set still fetches the range.
+The worker and its range are required. The source version is required too,
+unless the worker declares a default `source_version`. [The backfill
+page](../scaffolding/backfill.md#running-it) covers the rest of the command.
 
-Every run it makes is recorded in the run ledger, beside the coverage ledger in
-the status directory, with the facts each window reported. `uqs job runs` reads
-it back. No stack needs to be up, because the worker has exited by then:
+Both runs ask for the fixture, with `UQF_FIXTURE_WRITES` and `--fixture`. A run
+with no credential that would write the fixture is refused otherwise. Its
+coverage is recorded under `v1~fixture`, never `v1`, so a live run still fetches
+the range once the credential is set.
+
+Every run is recorded in the run ledger, with the facts each window reported.
+`uqs job runs` reads it back, and no stack needs to be up:
 
 ```bash
 uqs job runs list --unfinished                     # runs that began and never finished - interrupted ones
@@ -585,27 +290,14 @@ uqs job runs audit fx_rates --from 2026-09-11 --to 2026-09-12
                                    # one window's facts from every run that published it
 ```
 
-Every run's row in `etl_runs` has the same columns whichever worker ran it. What
-it was asked to do is written when it starts: `dataset`, `source_version`,
-`range_from`, `range_to` and the window `width`. What it did is written when it
-ends: `windows_planned`, `windows_completed`, `windows_failed` and
-`rows_published`. A run that never finished keeps `running` and blank counts. A
-run whose row could not be closed fails: its status file reads `failed`, names
-the open row's `run_id`, and says the run ledger could not record the outcome. A
-ledger written before these columns existed stops the next backfill with
-`etl_runs predates the run's range and counts`; run `uqs job runs upgrade` once,
-and earlier runs keep blanks where nothing was recorded.
-
-`audit` is the question run identity exists to answer: whether two
-materialisations of the same window agree. It reads `$UQF_STATUS_DIR`, or
-`$TORQDATA/status` when that is unset, the directory the workers write.
+`audit` reads `$UQF_STATUS_DIR`, or `$TORQDATA/status` when that is unset. If a
+backfill stops with `etl_runs predates the run's range and counts`, run
+`uqs job runs upgrade` once.
 
 ## 5. Check what it claims
 
-Coverage is **recorded, not derived** --- a completion event is staged for every
-completed window, including an empty one. That is what makes "we ran and there
-was nothing" distinguishable from "we never ran", and a derived ledger cannot
-express the difference at all.
+A completion event is recorded for every completed window, including an empty
+one. That is how "ran and found nothing" differs from "never ran".
 
 <!-- q-example: transcript -->
 ```q
@@ -615,15 +307,12 @@ q).qetl.coverage.is_covered[`fx_rates;`;`v1;.z.p;2026.09.11D00:00;2026.09.16D00:
 0b
 ```
 
-The version is `` `$"v1~fixture" `` because step 4 wrote the fixture, which is
-recorded apart from `v1`; a live run's coverage is under `v1`.
+The version is `` `$"v1~fixture" `` because step 4 wrote the fixture. A live
+run's coverage is under `v1`. The `` ` `` is the partition, and every read
+requires it. It means the dataset has no partition dimension. See
+[below](#filling-one-dataset-with-several-workers).
 
-The `` ` `` is the partition, and it is required on every read for the reason
-`source_version` is: an optional filter is one a caller forgets, and forgetting
-this one reports a gap-ridden range as complete. `` ` `` means "this dataset has
-no partition dimension" --- see below.
-
-Run it a second time and it is **idle**, not failed:
+Run the worker a second time and it is `idle`, which is a success:
 
 <!-- q-example: transcript -->
 ```q
@@ -631,49 +320,42 @@ q).qpipe.job.fx_rates_backfill.run[][`state]
 `idle
 ```
 
-"Ran, found no work" is a success. An orchestrator that cannot tell the two
-apart retries a successful no-op forever.
-
 `.qetl.coverage.missing` narrows a range to what is still absent,
 `.qetl.coverage.history` shows every claim ever made, and
 `.qetl.coverage.contributing_runs` says which executions built it.
 
 ## 6. Test it
 
-Add `tests/q/test_fx_rates_backfill.q`, defining its tests under
-`.qt.qpipe.job.fx_rates_backfill` - the job it tests - from the root, with the
-whole path and no `\d` (the scaffold writes it that way). Then:
+Add `tests/q/test_fx_rates_backfill.q`. Define its tests under
+`.qt.qpipe.job.fx_rates_backfill` from the root, with the whole path and no
+`\d`, as the scaffold writes it. Then:
 
-```
+```bash
 uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes
 ```
 
-Worth covering beyond the happy path: a second run is idle; a version bump
-re-runs the whole range; a partial run is narrowed to the gap; a middle gap is
-not bridged by a window spanning it; a contract-breaking source records **no**
-coverage rather than publishing nulls; a dry run publishes nothing; and each of
-the five contract methods actually delegates.
+Cover more than the happy path: a second run is idle, a version bump re-runs the
+whole range, a partial run is narrowed to the gap, a middle gap is not bridged
+by a window spanning it, a contract-breaking source records no coverage, a dry
+run publishes nothing, and each contract method delegates.
+`uv run pytest -m coverage tests/qrun/test_q_coverage.py` shows which of those
+you missed.
 
-`uv run pytest -m coverage tests/qrun/test_q_coverage.py` will tell you which of
-those you missed.
-
-None of that runs your `query`. The unit suite never sets a credential, so a
-worker there runs on its fixture, and the query lambda is never sent anywhere.
-To see it run against a real second process, follow
-[`tests/q/run_two_instances.q`](../../tests/q/run_two_instances.q): start a
+None of that sends your `query`: the unit suite sets no credential, so the
+worker runs on its fixture. To run it against a real second process, follow
+[`tests/q/run_two_instances.q`](../../tests/q/run_two_instances.q). Start a
 plain q process holding the upstream table, set
-`UQF_SOURCE_CRED_<SOURCE>=host:port`, and run the worker
-(`uv run pytest tests/qrun/test_process_runners.py -k two-instances` does
-exactly this for `upstream_trades`). One trap that only shows up there: write
-`` from `trade ``, never `from trade`. The lambda carries the
-`.qpipe.source.fx_rates` context it was defined under across the wire, so a bare
-name resolves in that namespace on the remote and throws;
-`test_source_contract.q` refuses it.
+`UQF_SOURCE_CRED_<SOURCE>=host:port`, and run the worker.
+
+In the query, write `` from `trade ``, never `from trade`. The lambda carries
+its `.qpipe.source.fx_rates` context across the wire, so a bare name resolves in
+that namespace on the remote and throws.
 
 ## Recomputing on an upstream publish
 
 A published window announces itself. Register a reaction and it runs, with the
-range that was just published, as soon as the window is recorded:
+range that was just published, as soon as the window is recorded. [The reaction
+page](../scaffolding/reaction.md) scaffolds one.
 
 <!-- q-example: run -->
 ```q
@@ -686,10 +368,9 @@ range that was just published, as soon as the window is recorded:
     }];
 ```
 
-Run against the five-day demo range, that fills itself as each window publishes,
-with nothing calling it by hand:
+Run against the five-day demo range, that fills itself as each window publishes:
 
-```
+```text
 run:  `state`windows_completed`rows_published!(`completed;5;5)
 
 sym    window                       | notional
@@ -701,112 +382,52 @@ USDJPY 2026.09.14D00:00:00.000000000| 3000000
 EURUSD 2026.09.15D00:00:00.000000000| 1250000
 ```
 
-**Key the derived rows by the window, not only by `sym`.** The handler is called
-once per window with that window's range, so a derived row keyed on `sym` alone
-is overwritten by the next window rather than added to - EURUSD's three deals
-would read as its last one. Keyed by the window each contribution is stored
-once, the total is `select sum notional by sym from positions`, and
-re-publishing a window replaces its own row instead of double counting. That
-last property is what makes a restatement safe.
+Key the derived rows by the window as well as `sym`. The handler is called once
+per window, so a row keyed on `sym` alone is overwritten by the next window.
+Keyed by the window, the total is `select sum notional by sym from positions`,
+and re-publishing a window replaces its own row.
 
-Nothing polls, and nothing is missed: `.qetl.job.bounded.do_window` fires the
-event after `finish_window` records the materialisation, so the reaction sees a
-ledger that already includes the window it is being told about. A dry run
-publishes nothing and therefore announces nothing.
-
-**Who should react is derivable; what they should do is not.** `.qetl.dag`
-already knows which jobs read a dataset ---
-`.qetl.reaction.dag_consumers[`demo_deals\]` names them — but running a downstream worker needs a `source_version`, which is a decision about which release of the upstream data the run claims. No framework can invent one, so the graph tells you who to wire and the handler says what running means. `.qetl.reaction.audit\[\]\`
-lists graph edges with no reaction behind them, and reactions on datasets the
-graph does not know.
-
-**Three things the dispatcher guarantees**, each because the alternative fails
-quietly rather than loudly:
-
-- **A cascade is a loop, not recursion.** A handler that publishes notifies from
-  inside the first notification; that work is queued and drained by the call
-  already draining. A chain cannot grow the stack.
-- **A failing reaction never fails the publication, but it does fail the run.**
-  The rows are written and the coverage staged before any handler runs, so a
-  downstream bug cannot turn a successful materialisation into a failed one: the
-  coverage stands. The run, though, ends `partial` while any reaction over its
-  range is owed, because a dataset derived from it is stale. The status file
-  reads `failed` with `reactions_owed` and an error naming the reactions;
-  `/ops/backfill` shows both, `uqs job backfill --wait` prints the error, and
-  the exit code is 1. Failures also land in `.qetl.reaction.history` and the
+- A handler runs at least once per window, so make it idempotent.
+  `.qetl.reaction.write` replaces a window instead of appending to it.
+- A failing reaction leaves the rows and the coverage in place, but the run ends
+  `partial` while a reaction over its range is owed. `uqs job backfill --wait`
+  prints the error and exits 1.
+- The next real run of the worker over that range fetches an owed window again
+  and re-announces it. Every reaction for the dataset runs again, on the
+  source's rows as they are now. Pin the release with `source_version` if that
+  matters. A reaction added after its dataset was published is filled the same
+  way.
+- A handler may publish. The same `(dataset, range)` is dispatched at most once
+  per drain, and `.qetl.reaction.max_depth` bounds a chain of new ranges.
+- Failures land in `.qetl.reaction.history`, the `etl_reactions` ledger and the
   log.
-- **Handlers must be idempotent.** A handler runs *at least* once per window,
-  not exactly once. A process killed after a handler wrote its rows but before
-  its success was recorded fires it again over the same window, and so does
-  every replay below. Write the window's output so that writing it twice leaves
-  what writing it once did; `.qetl.reaction.write` replaces a window rather than
-  appending to it for this reason. `test_rebuild_positions.q` proves it for the
-  shipped handler by running every window's reaction twice.
-- **A replay re-fetches from the source.** An owed window is fetched and
-  transformed again, not read back from what was published. If the source has
-  changed since, the handler sees the source's rows now, not the ones the first
-  attempt published. Pin the source's release with `source_version` if that
-  matters.
-- **A reaction that never succeeded is fired again.** Every outcome is also
-  written to `etl_reactions` beside the coverage ledger. A window covered with
-  no successful reaction since --- the reaction threw, or the process died
-  between recording coverage and reacting --- is owed
-  (`.qetl.reaction.pending`), and the next real run of the worker over that
-  range fetches it again and re-announces it before its own windows, even when
-  it otherwise finds nothing to do, so a retry repays it and ends green. Every
-  reaction for the dataset runs again, which is safe only because handlers are
-  idempotent (above). A reaction added after its dataset was published is filled
-  the same way, over whatever range the next run covers.
-- **A cascade terminates.** The same `(dataset, range)` is dispatched at most
-  once per drain, so `a -> b -> a` settles; `.qetl.reaction.max_depth` bounds a
-  chain that keeps inventing new ranges.
 
-### Reactions are nodes in the job graph
+### Reactions in the job graph
 
 `.qetl.dag.adopt_all[]` picks up reactions alongside workers, feeders and the
-streaming processes, so one graph covers the whole system. A reaction's
-**input** is the dataset it watches --- that is a fact, it is what fires it. Its
-**output** is whatever it declared, and the three ways of registering one differ
-in exactly that:
+streaming processes. How you [register
+one](../reference/pipeline-declarations.md#reactions-----qetlreaction) decides
+its output in the graph:
 
-  |                             | Output                                        | In the graph as                                                        |
-  | ---                         | ---                                           | ---                                                                    |
-  | `.qetl.reaction.on`         | none                                          | a terminal node — reads the dataset, says nothing about what it writes |
-  | `.qetl.reaction.on_writing` | **asserted** by you                           | a full node, listed in ```audit[]``asserted```                         |
-  | `.qetl.reaction.on_worker`  | **derived** from the worker's own declaration | a full node that cannot disagree with what the worker does             |
+- `.qetl.reaction.on_worker` derives it from the worker's own declaration.
+  Prefer it where it applies. It is plain q only: a TorQ process refuses it.
+- `.qetl.reaction.on_writing` records the output you assert, for a handler that
+  writes something no worker owns.
+- `.qetl.reaction.on` declares none, so the reaction is a terminal node.
 
-Prefer `on_worker` where it applies (plain q only: it runs the worker in the
-publisher's process as its own run, so a TorQ process refuses it --- one bounded
-worker per process): the worker already declares the dataset it writes, so
-nothing is restated and `dag.q`'s "derive, never re-declare" rule survives.
-`on_writing` is for a handler that writes something no worker owns --- worth
-having, because it puts the edge in the graph, but it is a claim about an opaque
-lambda rather than a checked fact, and `.qetl.reaction.audit[]` lists those
-separately so a drawing can mark them.
+A reactive cycle is refused when you wire it. A reaction node is named
+`<dataset>~<reaction>`. Build that name with
+`.qetl.dag.reaction_job[dataset;name]`, because `~` cannot appear in a q symbol
+literal. `.qetl.reaction.audit[]` lists graph edges with no reaction behind
+them, and reactions on datasets the graph does not know.
 
-**A reactive cycle is refused when you wire it**, not when it runs:
-
-```
-q).qetl.dag.topological[]
-'topological: cycle among a~to_b, b~to_a
-```
-
-A reaction node is named `<dataset>~<reaction>`, because a reaction name is
-unique per dataset rather than globally. Build that name with
-`.qetl.dag.reaction_job[dataset;name]` rather than typing it: `~` cannot appear
-in a q symbol literal, so `` `demo_deals~rebuild `` parses as a *match* against
-a variable called `rebuild` and fails with a value error naming that variable
-instead of anything about the graph.
-
-**When a timer is still right.** This answers "recompute because data arrived".
-It cannot answer "recompute because time passed" --- `crypto_markout1` scores a
-fill once a book at its horizon should exist, and no publication event can tell
-it that. `.qtorq.safe_timer` remains the tool for that question.
+A reaction recomputes because data arrived. To recompute because time passed,
+use `.qtorq.safe_timer`.
 
 ## Filling one dataset with several workers
 
-One worker per `(dataset, partition)` pair. Declare a `partition`, and the
-`partition_column` of the output that holds it, and two workers can fill one
+One worker fills each `(dataset, partition)` pair. Declare a `partition`, and
+the `partition_column` of the output that holds it, and two workers can fill one
 dataset at once:
 
 <!-- q-example: run -->
@@ -815,26 +436,10 @@ dataset at once:
     `source`outputs`width`transform`partition`partition_column!(`fx_rates;enlist `fx_rates;1D;`fx_rates_pips;`EURUSD;`sym)];
 ```
 
-`define` refuses a `partition` without its column: publish uses it to refuse
-another partition's rows, and a `replace` to clear only this partition's.
+`define` refuses a `partition` without its column, and a second worker on the
+same dataset and partition. Publish refuses another partition's rows, and a
+`replace` clears only this partition's.
 
-Coverage is then recorded and read under that partition, and **no read unions
-across partitions** --- a range covered for `` `EURUSD `` says nothing about
-`` `USDJPY ``. Declaring nothing gets the `` ` `` sentinel: no partition.
-
-Two workers on the same dataset *and* partition are refused:
-
-```
-define: clash declares dataset fx_rates[EURUSD], already claimed by
-fx_rates_eurusd - two workers on one dataset and partition produce coverage
-rows nothing can tell apart
-```
-
-## What you did not have to write
-
-Windowing, resumption from a checkpoint, skipping what is already published,
-retry with backoff that distinguishes transport from data failures, the dry-run
-gate, coverage staged only after the publication it describes, single-instance
-locking, heartbeats, structured logs, and a node in the job graph. All of it is
-`.qetl.job.bounded` and `.qetl.job.bounded.runtime`, and all of it is the same
-for every worker --- which is the point.
+Coverage is recorded and read under that partition, and no read unions across
+partitions. A range covered for `` `EURUSD `` says nothing about `` `USDJPY ``.
+A worker that declares no partition gets the `` ` `` sentinel.

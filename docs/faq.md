@@ -273,8 +273,8 @@ processes that runtime has.
 `uqs profile list` also shows each profile's connection cost against your
 licence's cap: a profile can fit on its own and not fit combined with another.
 
-More detail: [runtimes](guides/uqs.md#runtimes) and
-[profiles](guides/uqs.md#profiles) in the `uqs` guide.
+More detail: [runtimes](guides/runtimes-and-profiles.md#runtimes) and
+[profiles](guides/runtimes-and-profiles.md#profiles) in the `uqs` guide.
 
 ## Can I edit `lib/torq`, `process.csv` or `database.q`?
 
