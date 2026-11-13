@@ -43,8 +43,9 @@ A server must provide these even when TorQ, q and Python are all bundled:
 - `envsubst` (gettext), `pgrep` (procps), `lsof`, and a `hostname` that takes
   `-I` and `-A`, for `torq.sh`.
 - `sshd` with `scp`. With `--remote-user`, a `sudo -n -iu <user>` rule.
-- A writable `--dest`, with three times the artifact plus 1 GiB free (`df -Pk`)
-  on its filesystem and the data directory's.
+- A writable `--dest`, with three times the artifact plus 1 GiB free on its
+  filesystem (`df -Pk`), and 1 GiB free on the data directory's if that is
+  another filesystem.
 
 ## Building a release
 

@@ -1498,7 +1498,8 @@ def test_a_filesystem_below_the_free_space_floor_is_refused(tmp_path):
     assert err.value.stage == "preflight"
     assert "the filesystem /srv (holding /opt/uqf) has 1.0 GiB free" in said, said
     assert said.count("the filesystem /srv") == 1, "one filesystem is judged once"
-    assert "needs 1.0 GiB free: 3 times the artifact's" in said and "1.0 GiB margin" in said
+    assert "needs 1.0 GiB free where the release lands, 1.0 GiB elsewhere (3 times" in said
+    assert "1.0 GiB margin" in said
     assert "--override allow-low-disk --reason REASON" in said
 
 
@@ -1506,12 +1507,27 @@ def test_a_full_data_filesystem_is_named_apart_from_dest(tmp_path):
     path = _artifact(tmp_path)
     facts = SERVER + f"data=present\ndisk_dest={_floor_kb(path) + 1} /opt\ndisk_data=2048 /data\n"
     with pytest.raises(DeployError, match=r"^the filesystem /data \(holding /opt/uqf/shared/data\)"
-                       r" has 2.0 MiB free, and this push needs"):  # fmt: skip
+                       r" has 2.0 MiB free and needs 1.0 GiB - "):  # fmt: skip
         driver.deploy(
             parse_args(_args(path, "--dry-run")),
             FakeRemote({"uv python find": _done(facts)}),
             out=io.StringIO(),
         )
+
+
+def test_a_data_filesystem_of_its_own_needs_only_the_margin(tmp_path):
+    """No release bytes land there: the artifact's multiple is --dest's floor alone."""
+    path = _artifact(tmp_path)
+    margin_kb = preflight.DISK_MARGIN // 1024
+    facts = (
+        SERVER
+        + f"data=present\ndisk_dest={_floor_kb(path) + 1} /opt\ndisk_data={margin_kb} /data\n"
+    )
+    out = io.StringIO()
+    driver.deploy(
+        parse_args(_args(path, "--dry-run")), FakeRemote({"uv python find": _done(facts)}), out=out
+    )
+    assert "EXCEPTIONS" not in out.getvalue()
 
 
 def test_a_filesystem_above_the_floor_passes(tmp_path):
@@ -1531,8 +1547,8 @@ def test_allow_low_disk_pushes_below_the_floor_and_is_recorded(tmp_path):
     out = io.StringIO()
     driver.deploy(parse_args(args), FakeRemote({"uv python find": _done(facts)}), out=out)
     said = out.getvalue()
-    assert "--override allow-low-disk: 1.0 GiB free: 3 times the artifact's" in said, said
-    assert "the filesystem /srv (holding /opt/uqf) has 4.0 KiB free found; reason: pruning" in said
+    assert "--override allow-low-disk: 1.0 GiB free where the release lands" in said, said
+    assert "/srv (holding /opt/uqf) has 4.0 KiB free and needs 1.0 GiB found; reason: pr" in said
 
 
 def test_preflight_reports_free_space_on_the_nearest_existing_directory(tmp_path):

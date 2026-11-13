@@ -205,10 +205,22 @@ def for_disk(cfg: Config, facts: dict[str, str], artifact_bytes: int) -> list[di
     """The free-space floor for the filesystems preflight found holding --dest
     and the data directory (its disk_dest and disk_data: kB free, then the
     mount point), each judged once: refused unless --override allow-low-disk
-    relaxes it, else the exceptions requested."""
-    need = preflight.DISK_FACTOR * artifact_bytes + preflight.DISK_MARGIN
+    relaxes it, else the exceptions requested. The release lands on --dest's
+    filesystem, which needs DISK_FACTOR times the artifact plus DISK_MARGIN; a
+    data directory on a filesystem of its own needs only the margin."""
+    release = preflight.DISK_FACTOR * artifact_bytes + preflight.DISK_MARGIN
+    requirement = (
+        f"{_size(release)} free where the release lands, {_size(preflight.DISK_MARGIN)} elsewhere"
+    )
+    why = (
+        f"{preflight.DISK_FACTOR} times the artifact's {_size(artifact_bytes)}, "
+        f"plus a {_size(preflight.DISK_MARGIN)} margin"
+    )
     short, seen = [], set()
-    for key, path in (("disk_dest", cfg.dest), ("disk_data", cfg.data_root)):
+    for key, path, need in (
+        ("disk_dest", cfg.dest, release),
+        ("disk_data", cfg.data_root, preflight.DISK_MARGIN),
+    ):
         if key not in facts:
             continue
         free_kb, _, mount = facts[key].partition(" ")
@@ -217,15 +229,14 @@ def for_disk(cfg: Config, facts: dict[str, str], artifact_bytes: int) -> list[di
         seen.add(mount)
         free = int(free_kb) * 1024
         if free < need:
-            short.append(f"the filesystem {mount} (holding {path}) has {_size(free)} free")
-    requirement = (
-        f"{_size(need)} free: {preflight.DISK_FACTOR} times the artifact's "
-        f"{_size(artifact_bytes)}, plus a {_size(preflight.DISK_MARGIN)} margin"
-    )
+            short.append(
+                f"the filesystem {mount} (holding {path}) has {_size(free)} free "
+                f"and needs {_size(need)}"
+            )
     if short and cfg.allow_low_disk is None:
         raise DeployError(
             "preflight",
-            f"{'; '.join(short)}, and this push needs {requirement} - free space there "
+            f"{'; '.join(short)} - this push needs {requirement} ({why}). Free space there "
             "(`uqs deploy prune` removes old releases), or pass "
             "--override allow-low-disk --reason REASON to deploy anyway",
         )
