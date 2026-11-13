@@ -392,7 +392,7 @@ def test_the_attachment_aliases_say_the_finding_stays_and_accept_risks_is_still_
 
 def test_the_start_aliases_say_only_their_check_is_lifted():
     helps = _shipped_help(["start"])
-    assert "only the q-version refusal is lifted" in (helps["--skip-q-version-check"][0] or "")
+    assert "only the q-version refusals are lifted" in (helps["--skip-q-version-check"][0] or "")
     assert "the licence's own limit is still q's to enforce" in (
         helps["--skip-profile-budget-check"][0] or ""
     )
