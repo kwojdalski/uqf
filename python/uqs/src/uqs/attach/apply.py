@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import config, manifest, plan, sorting
+from uqs.attach import config, live, manifest, plan, sorting
 from uqs.attach.apply_schema import block
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Facts
@@ -154,14 +154,10 @@ def _in_place(proc: Proc, spec: TableSpec, token: str, consumer: bool) -> bool:
     return True
 
 
-def _joined(proc: Proc, table: str, name: str) -> bool:
-    return name in (proc.probe or {}).get("owned", {}).get(table, {}).get("users", [])
-
-
 def _register(m: Manifest, ipc: Ipc, att: Attachment, tp: Proc, spec: TableSpec) -> Step:
     prior = m.done("stp_register", tp.procname, spec.name)
     if prior is not None and _in_place(tp, spec, m.token, False):
-        if prior.ownership == SHARED and not _joined(tp, spec.name, att.name):
+        if prior.ownership == SHARED and not live.listed_user(tp.probe or {}, spec.name, att.name):
             pass  # the plant forgot we use it (a restart without our +uses block): join again
         elif prior.ownership != CREATED or _mine(tp, spec.name, m.token):
             return Step("stp_register", tp.procname, spec.name, "already")

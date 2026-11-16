@@ -9,6 +9,7 @@ partial failure is reported as partial and a retry finishes it.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import os
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -612,6 +613,79 @@ def test_a_user_of_the_table_still_holds_the_creator_back_after_a_restart(
     assert "users" not in fake.named("stp1")["owned"][TABLE]
     assert detach_(a, fake, state).outcome == "rolled_back"
     assert schema.read_text() == "trade:([] time:`timestamp$())\n"
+
+
+@pytest.mark.parametrize("then", ["rejoins", "detaches"])
+def test_a_transient_user_a_restart_forgot_is_refused_and_holds_the_creator_back(
+    world, tmp_path, q_binary, monkeypatch, then
+):
+    """#2764: B joins A's durable table with --transient, so it writes no +uses
+    block, and a restart rebuilds the ledger record from A's block without B. B's
+    start is refused as verify would fail it, and A's rollback - which the ledger
+    alone no longer stops - is refused naming B, until B rejoins or leaves."""
+    fake, make, state, schema, log = world
+    a, b = make("pb-a"), make("pb-b", runtime_only=True)
+    apply_(a, fake, state)
+    apply_(b, fake, state)
+    assert not persist.present(str(schema), "pb-b+uses")
+    assert verify.verify(a, fake, root=ROOT, state_dir=state, host=LOCAL).ok  # A's gate too
+    assert verify.verify(b, fake, root=ROOT, state_dir=state, host=LOCAL).ok
+    assert start_asks(b, state, monkeypatch, fake) == ["pb-b"]  # B is asked, A restart-safe
+
+    restart_from_schema_file(fake, schema, tmp_path, q_binary)
+    assert (
+        TABLE in fake.named("stp1")["tables"] and "users" not in fake.named("stp1")["owned"][TABLE]
+    )
+    with pytest.raises(UqsError) as refused:
+        live.check("pb-b", fake, LOCAL)
+    said = " ".join(str(refused.value).split())
+    assert f"is the publisher of attachment pb-b, and {TABLE} is still registered on stp1" in said
+    assert (
+        "no longer lists pb-b among the users: the tickerplant restarted and forgot this "
+        "attachment's use" in said
+    )
+    assert "Re-apply with `uqs job attachment add pb-b` to join again. Nothing was started." in said
+
+    before = stack_state(fake)
+    for dry_run in (True, False):
+        result = detach_(a, fake, state, dry_run=dry_run)
+        assert result.outcome == "refused"
+        (blocker,) = result.blockers
+        assert blocker.component == "stp1"
+        assert blocker.reason == (
+            f"attachment pb-b (verified) uses {TABLE}, but the tickerplant no longer lists it "
+            "among the table's users: a restart forgot its use"
+        )
+        assert blocker.action == (
+            "detach pb-b first, or let it re-apply (`uqs job attachment add pb-b`), which joins "
+            "the table again"
+        )
+        assert stack_state(fake) == before and TABLE in fake.named("stp1")["schemas"]
+
+    if then == "rejoins":
+        apply_(b, fake, state)
+        assert fake.named("stp1")["owned"][TABLE]["users"] == ["pb-b"]
+        live.check("pb-b", fake, LOCAL)
+        # the ledger names B again, so the tickerplant's own check holds A back
+        result = detach_(a, fake, state)
+        assert result.outcome == "refused" and "used by attachment(s) pb-b" in reasons(result)
+        assert "forgot" not in reasons(result)
+    assert detach_(b, fake, state).outcome == "rolled_back"
+    assert detach_(a, fake, state).outcome == "rolled_back"
+    assert TABLE not in fake.named("stp1")["schemas"]
+
+
+def test_a_user_on_another_stack_does_not_hold_the_creator_back(world):
+    """#2764's guard looks only at attachments of the same stack id."""
+    fake, make, state, schema, log = world
+    a, b = make("pb-a"), make("pb-b", runtime_only=True)
+    apply_(a, fake, state)
+    apply_(b, fake, state)
+    for proc in ("stp1", "rdb1", "wdb1"):  # forgotten everywhere, as after a restart
+        fake.named(proc)["owned"][TABLE].pop("users")
+    config.save(dataclasses.replace(b, stack=dataclasses.replace(b.stack, id=7000)), state)
+    result = detach_(a, fake, state)
+    assert result.outcome == "rolled_back", reasons(result)
 
 
 def test_a_one_character_user_is_a_list_of_one_after_a_restart(world, tmp_path, q_binary):

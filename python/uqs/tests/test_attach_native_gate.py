@@ -113,6 +113,26 @@ def test_the_gate_refuses_while_the_tickerplant_lacks_the_tables(world):
     assert f"its tables are not ready on stack 6000 after 0s: {TABLE} not registered on" in message
 
 
+def test_the_gate_refuses_at_once_a_shared_table_that_forgot_this_use(world):
+    """#2764: the table is registered, but its ledger record no longer names this
+    attachment among the users - waiting does not bring that back."""
+    from uqs.attach.manifest import SHARED, Manifest
+
+    _verified(world)
+    m = Manifest.load("pb-uat")
+    op = m.done("stp_register", "stp1", TABLE)
+    assert op is not None
+    m.finish(op, op.status, SHARED, {"owner": "pb-a"})
+    world.named("stp1")["owned"][TABLE] = {"attachment": "pb-a", "token": "a"}
+    naps: list[float] = []
+    with pytest.raises(UqsError) as refused:
+        native_gate.check("pb-uat", "6000", ipc=world, sleep=naps.append)
+    said = " ".join(str(refused.value).split())
+    assert f"is the publisher of attachment pb-uat, and {TABLE} is still registered on" in said
+    assert "no longer lists pb-uat among the users" in said
+    assert said.endswith("to join again. Nothing was started.") and naps == []
+
+
 def test_the_gate_waits_for_a_tickerplant_that_is_coming_up(world):
     _verified(world)
     ipcs, naps = [FakeStack(6000), world], []

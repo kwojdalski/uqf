@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import config, durability, persist, plan, reach, schema_files, sorting
+from uqs.attach import config, durability, live, persist, plan, reach, schema_files, sorting
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Facts, Host
 from uqs.attach.findings import blockers
@@ -87,8 +87,9 @@ def _tickerplant(
         out.append(Check(f"{who}: {t} carries this attachment's ownership record", mine))
     if op is not None and op.ownership == SHARED:
         # without it the creator's detach would remove a table this attachment publishes to
-        users = p.get("owned", {}).get(t, {}).get("users", [])
-        out.append(Check(f"{who}: {t} lists {att.name} among its users", att.name in users))
+        out.append(
+            Check(f"{who}: {t} lists {att.name} among its users", live.listed_user(p, t, att.name))
+        )
     return out
 
 

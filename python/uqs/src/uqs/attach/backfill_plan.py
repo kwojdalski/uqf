@@ -149,7 +149,8 @@ def _still_registered(att: Attachment, obs: Observation, attach_root: Path | Non
     for a table no process holds, and that no end of day will write. So when the
     start gate would ask - a stack on another machine, or a table a restart does
     not restore - the tickerplant `observe` already asked must still register
-    every attached table. When it would not ask, neither does this.
+    every attached table, and list it among the users of each one it shares
+    (#2764). When it would not ask, neither does this.
     """
     m = Manifest.load(att.name, attach_root)
     if not live.needed(att, m, backfill_coordination.HOST):
@@ -162,12 +163,18 @@ def _still_registered(att: Attachment, obs: Observation, attach_root: Path | Non
             f"{att.stack.id} at {att.stack.host} cannot be told: {where} does not answer, "
             "and a backfill is refused until it does."
         )
-    gone = live.unregistered(att, tp.probe or {})
+    probe, where = tp.probe or {}, tp.endpoint.label
+    gone = live.unregistered(att, probe)
     if gone:
         raise UqsError(
             f"attachment {att.name} cannot be backfilled: "
-            f"{live.lost(att, gone, tp.endpoint.label)} A backfill would write partitions for "
+            f"{live.lost(att, gone, where)} A backfill would write partitions for "
             "a table no process holds, and no end of day writes."
+        )
+    left = live.forgotten(att, m, probe)
+    if left:
+        raise UqsError(
+            f"attachment {att.name} cannot be backfilled: {live.forgot(att, left, where)}"
         )
 
 

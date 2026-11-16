@@ -50,7 +50,7 @@ from uqs.attach import (
 )
 from uqs.attach.apply import Step
 from uqs.attach.config import Attachment, AttachmentError
-from uqs.attach.drift import Blocker, drift, plant_ours
+from uqs.attach.drift import Blocker, drift, forgotten_users, plant_ours
 from uqs.attach.evidence import EMPTY_LOG, Evidence, evidence
 from uqs.attach.facts import Host
 from uqs.attach.manifest import (
@@ -234,6 +234,7 @@ def _reverse(
     result.blockers = (
         unknown
         + drift(att, obs, m, ipc)
+        + forgotten_users(att, obs, m, state_dir)
         + [Blocker(*b) for b in sorting.blockers(att, obs, ipc, m, state_dir, host)]
         + _dry_runs(ipc, m, procs, ours)
     )

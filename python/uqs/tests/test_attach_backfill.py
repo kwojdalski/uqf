@@ -38,7 +38,7 @@ from uqs import cli
 from uqs.attach import backfill as attached
 from uqs.attach import backfill_plan as planning
 from uqs.attach import config, service
-from uqs.attach.manifest import Manifest
+from uqs.attach.manifest import DONE, SHARED, Manifest
 from uqs.attach.schema import parse_definition
 from uqs.interpreter import PEACHQ, q_impl, q_interpreter
 from uqs.paths import UqsError
@@ -240,6 +240,24 @@ def test_a_transient_attachment_whose_table_the_tickerplant_lost_is_not_backfill
     assert "Re-apply with `uqs job attachment add pb-uat`" in text
     assert "a table no process holds, and no end of day writes" in text
     assert world.stack.ops() <= {"probe"}, "refused before any reader or writer was asked"
+
+
+def test_a_transient_user_the_tickerplant_forgot_is_not_backfilled(world):
+    """#2764: the table is still registered, but its ownership record - rebuilt by
+    a restart from the creator's block - no longer lists this attachment among
+    its users, which verify would fail on too."""
+    _attached(world, persist="runtime-only")
+    m = Manifest.load("pb-uat")
+    m.finish(m.begin("stp_register", "stp1", DATASET, {}), DONE, SHARED, {"owner": "pb-a"})
+    world.stack.named("stp1")["owned"][DATASET] = {"attachment": "pb-a", "token": "a"}
+    with pytest.raises(UqsError) as caught:
+        plan_with(world, facts_of())
+    text = " ".join(str(caught.value).split())
+    assert text.startswith(f"attachment pb-uat cannot be backfilled: {DATASET} is still ")
+    assert "no longer lists pb-uat among the users: the tickerplant restarted and forgot" in text
+    assert text.endswith("Re-apply with `uqs job attachment add pb-uat` to join again.")
+    world.stack.named("stp1")["owned"][DATASET]["users"] = ["pb-uat"]  # joined again
+    assert plan_with(world, facts_of())["writers"] == ["rdb1", "wdb1"]
 
 
 def test_a_transient_attachment_whose_table_is_still_registered_is_admitted(world):

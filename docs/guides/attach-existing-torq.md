@@ -135,8 +135,10 @@ Nothing is published through the tickerplant, and today's RDB is not populated.
 - When a start of the publisher would ask the stack (a stack on another machine,
   or a table a restart would not restore, such as a `--transient` one), the
   tickerplant must still register every attached table. One it lost in a restart
-  is refused, as the start is: re-apply with `uqs job attachment add NAME`. A
-  `--writer` run with `--override any-writer` checks nothing, this included.
+  is refused, as the start is: re-apply with `uqs job attachment add NAME`. So
+  is a shared table whose ownership record no longer lists the attachment among
+  its users. A `--writer` run with `--override any-writer` checks nothing, this
+  included.
 - Every affected date must be before the date any writer is filling.
 - A `compression` process on the stack is a blocker.
 - A run is not coordinated with `dbmaint` or q run against the directory by
@@ -225,20 +227,24 @@ Evidence that cannot be read counts as publication.
 A refused detach changes nothing but the stopped publisher, names the manual
 action and cannot be overridden. It refuses while another attachment uses the
 table, and when the schema file or the process-file row was edited since apply.
-A failure part way is `rollback_partial`: run detach again.
+"Uses" is read from the tickerplant's ownership record and from the other
+attachments saved on this machine for the same stack: a restart can drop a
+`--transient` user from the record, and the detach then names it instead. A
+failure part way is `rollback_partial`: run detach again.
 
 ## Restart behaviour
 
-  | State                                      | A tickerplant restart                                                                                                                                |
-  | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-  | applied, with the schema block             | the block recreates the table and its ownership record                                                                                               |
-  | applied, `--transient`                     | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attachment add NAME` restores it                                  |
-  | sharing a `--transient` table              | gone too: no block defines it. The plan warned `SHARED_RUNTIME_ONLY`; a start asks the stack and is refused                                          |
-  | adopting a table the schema file defines   | the stack's own definition recreates it; no block is written for it. The plan said `STACK_DEFINES`                                                   |
-  | adopting a runtime-only table              | gone: no block is written for a table the attachment did not create. The plan warned `ADOPTED_RUNTIME_ONLY`; a start asks the stack and is refused   |
-  | rolled back                                | the block went with the registration: the table does not come back                                                                                   |
-  | detached after publication                 | the block stayed, so the table comes back and its logs replay                                                                                        |
-  | detached after publication, no block       | the table is gone, and end of day writes no partition for it. Unsaved rows are only in the log. `--dry-run` reports it as `detached:`, not to apply  |
+  | State                                       | A tickerplant restart                                                                                                                                                          |
+  | ------------------------------------------  | ----------------------------------------------------------------------------------------------------------------------------------------------------                           |
+  | applied, with the schema block              | the block recreates the table and its ownership record                                                                                                                         |
+  | applied, `--transient`                      | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attachment add NAME` restores it                                                            |
+  | sharing a `--transient` table               | gone too: no block defines it. The plan warned `SHARED_RUNTIME_ONLY`; a start asks the stack and is refused                                                                    |
+  | `--transient` user of a block-defined table | the table comes back, but its ownership record no longer lists this user: a start is refused and the creator's detach names it until `uqs job attachment add NAME` joins again |
+  | adopting a table the schema file defines    | the stack's own definition recreates it; no block is written for it. The plan said `STACK_DEFINES`                                                                             |
+  | adopting a runtime-only table               | gone: no block is written for a table the attachment did not create. The plan warned `ADOPTED_RUNTIME_ONLY`; a start asks the stack and is refused                             |
+  | rolled back                                 | the block went with the registration: the table does not come back                                                                                                             |
+  | detached after publication                  | the block stayed, so the table comes back and its logs replay                                                                                                                  |
+  | detached after publication, no block        | the table is gone, and end of day writes no partition for it. Unsaved rows are only in the log. `--dry-run` reports it as `detached:`, not to apply                            |
 
 TorQ does not reconnect an rdb or wdb to a restarted tickerplant. Restart them
 yourself. End of day needs nothing extra.
