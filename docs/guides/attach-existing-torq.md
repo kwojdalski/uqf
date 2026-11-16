@@ -105,10 +105,10 @@ save it. It also re-runs the preflight. Passing makes the attachment `verified`,
 and a failed re-verification takes it back to `applied`.
 
 The publisher starts only while the attachment is `verified` and only under its
-stack id, whatever starts it. A bare `uqs start pb_ledger1` is refused with the
-right command named. If an `attachment.json` cannot be read, every start is
-refused. Make it readable, or move the folder out of the attachments directory
-if the attachment is gone.
+stack id, whatever starts it, `uqs exec -- debug pb_ledger1` included. A bare
+`uqs start pb_ledger1` is refused with the right command named. If an
+`attachment.json` cannot be read, every start is refused. Make it readable, or
+move the folder out of the attachments directory if the attachment is gone.
 
 `--no-start` applies and verifies, and leaves the publisher stopped. The same
 command without it starts it later. `--follow`, `--trace`, `--level` and

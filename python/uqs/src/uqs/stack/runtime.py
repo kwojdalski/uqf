@@ -178,9 +178,9 @@ def run_torq_sh(
     bootstrap writes anything. *args* naming attachments' publishers alone
     prepares only them (bootstrap_publisher, #1847).
 
-    A `start` or `restart` is refused first by start_policy.refuse_start -
-    here, so no caller (`uqs start`, `uqs job backfill`, `uqs replay`, `uqs exec`)
-    can skip it (#964).
+    A `start`, `restart` or `debug` (start_policy.STARTING_VERBS) is refused
+    first by start_policy.refuse_start - here, so no caller (`uqs start`,
+    `uqs job backfill`, `uqs replay`, `uqs exec`) can skip it (#964, #2756).
 
     `timeout` is seconds to wait before giving up, or None to wait forever -
     which is the right default for `start`/`stop`, whose whole job is to wait
@@ -228,7 +228,7 @@ def _bootstrap_and_run(
     # the inherited one (PATH, etc.) or envsubst and q stop resolving, though on PATH.
     env = {**os.environ, **overrides}
     if args and args[0] in start_policy.STARTING_VERBS:
-        # What a start or restart loads, converted and proven first - refused before
+        # What a start, restart or debug loads, converted and proven first - refused before
         # anything starts. stop and summary leave the published tree alone.
         if qtree.is_flattened(paths):
             qtree.prepare(paths, q_command(env), env)
