@@ -286,6 +286,38 @@ def refuse_replacing_running(resolved: Resolved, running: bool) -> None:
     )
 
 
+def refuse_running_unregistered(
+    att: Attachment, p: plan.Plan, running: bool, state_dir: Path | None = None
+) -> None:
+    """A re-run of an attachment whose publisher runs on a registration the stack
+    lost (#2765).
+
+    A runtime-only registration is gone after a tickerplant restart, and the
+    publisher, still running, has been publishing into a tickerplant without its
+    table since: those rows were dropped. Apply refuses while the publisher runs,
+    so the running branch of `execute` would only re-verify - and fail, taking
+    `verified` back - with the publisher still running. Re-registering under it
+    instead would resume publication as if nothing had been lost. So the re-run
+    is refused up front, saying what was lost and that the stop comes first;
+    with the publisher stopped the same command applies again, verifies, and
+    starts it.
+    """
+    m = manifest_of(att.name, state_dir)
+    gone = p.lost(m) if running and m is not None else []
+    if not gone:
+        return
+    proc, port = att.publisher.procname, att.stack.id
+    raise AttachmentError(
+        f"{proc} is running, but the stack lost the registration it publishes into ("
+        + "; ".join(f"{where} no longer holds {table}" for where, table in gone)
+        + "): a tickerplant restart without a persisted schema drops it, so rows "
+        f"{proc} published since that restart were dropped. Apply refuses while the "
+        f"publisher is running: stop it first (`uqs stop {proc} --base-port {port}`), "
+        f"then run `uqs job attachment add {att.name}` again - it re-applies and "
+        "verifies before it starts the publisher. Nothing was saved or changed"
+    )
+
+
 def refuse_replacing_backfilled(resolved: Resolved, state_dir: Path | None = None) -> None:
     """A `--replace` of an attachment an attached backfill owns (#2758).
 
@@ -373,12 +405,15 @@ def execute(
     saved. Every stage is safe to repeat, so the recovery for any failure
     includes running the same command again. A replacement of an attachment
     whose publisher runs is refused before any stage (refuse_replacing_running),
-    and one a backfill owns at its save (refuse_replacing_backfilled).
+    and one a backfill owns at its save (refuse_replacing_backfilled); so is a
+    re-run whose publisher runs on a registration the stack lost
+    (refuse_running_unregistered).
     """
     att, out, name, host = resolved.att, Outcome(), resolved.att.name, host or Host()
     again, back = f"`uqs job attachment add {name}`", f"`uqs job attachment remove {name}`"
     running = already_running(att, p, state_dir)
     refuse_replacing_running(resolved, running)
+    refuse_running_unregistered(att, p, running, state_dir)
 
     def stage(what: str, status: str, detail: str, began: float) -> Stage:
         out.stages.append(Stage(what, status, detail, round(time.monotonic() - began, 3)))

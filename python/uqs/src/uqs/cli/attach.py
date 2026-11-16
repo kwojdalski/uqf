@@ -196,12 +196,13 @@ def attach(
     running = workflow.already_running(att, planned)
     out.doc["plan"] = d
     render_plan(out, d)
-    verdict(out, d, running)
-    try:
+    try:  # before the verdict: a refused run is not "already attached and verified"
         workflow.refuse_replacing_running(resolved, running)
+        workflow.refuse_running_unregistered(att, planned, running)
         workflow.refuse_replacing_backfilled(resolved)
     except UqsError as exc:
         out.fail(exc)
+    verdict(out, d, running)
     if dry_run:
         out.text(safety.dry_run_note())
         out.finish(ok=planned.ok or running)

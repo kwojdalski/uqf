@@ -253,19 +253,24 @@ def storage(att: Attachment, obs: Observation) -> list[Finding]:
 
 def runtime_only(att: Attachment, facts: Facts) -> str:
     """What a runtime-only registration costs, said in the plan and in verify's
-    output alike. With the stack elsewhere (#1651) nothing on this machine sees
-    its tickerplant restart, so the re-apply is the operator's to make."""
+    output alike. The recovery is the same wherever the stack is: stop the
+    publisher, then re-apply - a re-apply with it still running is refused
+    (workflow.refuse_running_unregistered, #2765). With the stack elsewhere
+    (#1651) nothing on this machine sees its tickerplant restart, so noticing
+    it is the operator's too."""
+    proc = att.publisher.procname
     said = (
-        "runtime-only: restarting the tickerplant DROPS the registration; the attachment "
-        "then reports registration-lost and must be re-applied "
-        f"(`uqs job attachment add {att.name}`)"
+        "runtime-only: restarting the tickerplant DROPS the registration, and rows the "
+        "publisher sends after it are dropped; the attachment then reports registration-lost "
+        f"and must be re-applied: stop {proc} (`uqs stop {proc} --base-port {att.stack.id}`), "
+        f"then re-apply (`uqs job attachment add {att.name}`) - the attach re-verifies before "
+        "it starts the publisher, a bare `uqs start` does not"
     )
     if facts.host.is_local(att.stack.host):
         return said
     return said + (
         f". The stack is on {att.stack.host}, and nothing on this machine is told when its "
-        f"tickerplant restarts: stop {att.publisher.procname}, then re-apply - the attach "
-        "re-verifies before it starts the publisher, a bare `uqs start` does not"
+        "tickerplant restarts"
     )
 
 

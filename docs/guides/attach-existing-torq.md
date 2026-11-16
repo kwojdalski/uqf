@@ -240,12 +240,17 @@ A failure part way is `rollback_partial`: run detach again.
   | State                                      | A tickerplant restart                                                                                                                                |
   | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
   | applied, with the schema block             | the block recreates the table and its ownership record                                                                                               |
-  | applied, `--transient`                     | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attachment add NAME` restores it                                  |
+  | applied, `--transient`                     | gone, and a running publisher's rows are dropped. Stop it (`uqs stop PROC --base-port N`), then `uqs job attachment add NAME` restores it            |
   | sharing a `--transient` table              | gone too: no block defines it. The plan warned `SHARED_RUNTIME_ONLY`; a start asks the stack and is refused                                          |
   | adopting a table the schema file defines   | the stack's own definition recreates it; no block is written for it. The plan said `STACK_DEFINES`                                                   |
   | adopting a runtime-only table              | gone: no block is written for a table the attachment did not create. The plan warned `ADOPTED_RUNTIME_ONLY`; a start asks the stack and is refused   |
   | rolled back                                | the block went with the registration: the table does not come back                                                                                   |
   | detached after publication                 | the block stayed, so the table comes back and its logs replay                                                                                        |
+
+With a `--transient` table lost, `--dry-run` reports `registration-lost`. While
+the publisher still runs, `uqs job attachment add NAME` and its `--dry-run` are
+refused and save nothing: the rows it published since the restart were dropped,
+and apply refuses while it runs. Stop it first.
 
 TorQ does not reconnect an rdb or wdb to a restarted tickerplant. Restart them
 yourself. End of day needs nothing extra.
@@ -343,8 +348,8 @@ refused with `PERSIST_UNAVAILABLE`. Choose one:
   file over the same q IPC. The block is q that it runs at every start, and the
   saved option records that the stack's operators agreed to it.
 - `--transient`. A tickerplant restart drops the registration, and nothing on
-  this machine is told. Stop the publisher, then run
-  `uqs job attachment add NAME`.
+  this machine is told. Stop the publisher (`uqs stop PROC --base-port N`), then
+  run `uqs job attachment add NAME`, as on one machine (Restart behaviour).
 - Run `uqs` on the stack's machine.
 
 These are not verified across two real machines: a network between them

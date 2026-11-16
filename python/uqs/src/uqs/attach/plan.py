@@ -180,22 +180,39 @@ class Plan:
         """Where the stack no longer matches what the manifest says was applied -
         a restart without a persisted schema being the usual cause."""
         procs = {p.procname: p for p in self.observation.procs()}
-        lost = []
-        for op in m.operations:
-            if op.op not in ("stp_register", "consumer_attach") or op.status not in (
-                DONE,
-                RETAINED,
-            ):
-                continue
+        said = []
+        for op in self._registered(m):
             proc = procs.get(op.process)
             if proc is None or not proc.up:
-                lost.append(f"{op.process} is not reachable: {op.table} cannot be checked")
+                said.append(f"{op.process} is not reachable: {op.table} cannot be checked")
             elif not (proc.probe or {}).get("schemas", {}).get(op.table):
-                lost.append(
+                said.append(
                     f"registration-lost: {op.process} no longer holds {op.table} "
                     "(restarted without the persisted schema?) - apply it again"
                 )
-        return lost
+        return said
+
+    def lost(self, m: Manifest) -> list[tuple[str, str]]:
+        """(process, table) for each registration the manifest records as applied
+        that a process the plan reached no longer holds - what `health` reports
+        as registration-lost. An unreachable process is not counted: nothing
+        says what it holds."""
+        procs = {p.procname: p for p in self.observation.procs()}
+        return [
+            (op.process, op.table)
+            for op in self._registered(m)
+            if (proc := procs.get(op.process)) is not None
+            and proc.up
+            and not (proc.probe or {}).get("schemas", {}).get(op.table)
+        ]
+
+    @staticmethod
+    def _registered(m: Manifest) -> list:
+        return [
+            op
+            for op in m.operations
+            if op.op in ("stp_register", "consumer_attach") and op.status in (DONE, RETAINED)
+        ]
 
     def as_dict(self, m: Manifest | None = None) -> dict:
         att = self.attachment

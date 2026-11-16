@@ -231,6 +231,80 @@ def test_a_dry_run_shows_the_manifest_and_a_registration_the_stack_lost(world):
     assert "registration-lost" in human and "Manifest: verified" in human
 
 
+def _restart_tp_without_schema(fake) -> None:
+    """A tickerplant restart that drops a runtime-only registration, and the rdb
+    and wdb restarted after it (TorQ does not reconnect them): the table, its
+    ownership record and its subscriptions are gone everywhere."""
+    stp = fake.named("stp1")
+    for key in ("schemas", "owned", "subscribers", "logged", "updtab", "logfiles", "replay"):
+        stp[key].pop(TABLE, None)
+    for key in ("tables", "published", "names"):
+        stp[key].remove(TABLE)
+    for name in ("rdb1", "wdb1"):
+        p = fake.named(name)
+        p["schemas"].pop(TABLE)
+        p["owned"].pop(TABLE)
+        for key in ("subscribed", "names", "tables"):
+            p[key].remove(TABLE)
+
+
+def _refused_lost_registration(text: str) -> None:
+    assert "pb_ledger1 is running, but the stack lost the registration" in text
+    assert f"stp1 no longer holds {TABLE}" in text
+    assert "rows pb_ledger1 published since that restart were dropped" in text
+    assert "stop it first (`uqs stop pb_ledger1 --base-port 6000`)" in text
+    assert "then run `uqs job attachment add pb-uat` again" in text
+    assert "Nothing was saved or changed" in text
+    assert "nothing to apply" not in text, "a refused run is not already attached and verified"
+
+
+def test_a_rerun_while_the_publisher_runs_on_a_lost_registration_is_refused(world):
+    """Transient, running, tickerplant restarted (#2765): the re-run the RUNTIME_ONLY
+    warning names is refused up front - rows published since the restart were
+    dropped, and apply refuses while the publisher runs - instead of re-verifying,
+    failing, taking `verified` back and leaving the publisher running."""
+    assert run("add", *new(world, "--yes")).exit_code == 0
+    _restart_tp_without_schema(world)
+    before, calls = snapshot(world.state_dir), len(changes(world))
+    result = run("add", "pb-uat", "--yes")
+    assert result.exit_code == 1, result.output
+    _refused_lost_registration(flat(result.output + " ".join(world.errors)))
+    assert snapshot(world.state_dir) == before, "nothing saved, nothing demoted"
+    assert Manifest.load("pb-uat").state == "verified"
+    assert len(changes(world)) == calls and world.started == ["pb_ledger1"]
+
+
+def test_a_dry_run_on_a_lost_registration_with_the_publisher_running_is_not_ok(world):
+    assert run("add", *new(world, "--yes")).exit_code == 0
+    _restart_tp_without_schema(world)
+    world.errors.clear()
+    before = snapshot(world.state_dir)
+    result = run("add", "pb-uat", "--dry-run", "--json")
+    assert result.exit_code == 1, result.output
+    data = json.loads(result.output)
+    assert data["ok"] is False
+    _refused_lost_registration(flat(data["error"]))
+    assert any(line.startswith("registration-lost: stp1") for line in data["plan"]["health"])
+    human = run("add", "pb-uat", "--dry-run")
+    assert human.exit_code == 1
+    _refused_lost_registration(flat(human.output + " ".join(world.errors)))
+    assert snapshot(world.state_dir) == before
+
+
+def test_with_the_publisher_stopped_a_lost_registration_is_applied_again(world):
+    assert run("add", *new(world, "--yes")).exit_code == 0
+    _restart_tp_without_schema(world)
+    world.started.clear()  # `uqs stop pb_ledger1 --base-port 6000`
+    assert run("add", "pb-uat", "--dry-run").exit_code == 0
+    result = run("add", "pb-uat", "--yes", "--json")
+    assert result.exit_code == 0, result.output
+    stages = {s["stage"]: s["status"] for s in json.loads(result.output)["stages"]}
+    assert stages == {"save": "done", "apply": "done", "verify": "done", "start": "done"}
+    assert TABLE in world.named("stp1")["schemas"], "registered again"
+    assert world.started == ["pb_ledger1"]
+    assert Manifest.load("pb-uat").state == "verified"
+
+
 # ------------------------------------------------------------------ execution
 
 
