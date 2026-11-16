@@ -87,7 +87,9 @@ def hdb_alter(
     with none, this runtime's. Shows the plan and writes nothing unless
     --apply, which asks first (--yes does not). Refused when the partitions
     holding the table disagree on its columns, order or types - `data check`
-    repairs a missing table, anything else is for a person to decide.
+    repairs a missing table, anything else is for a person to decide. With
+    --attachment, the attachment must be verified and pin its HDB - for the
+    plan too, as an attached backfill's plan is refused.
     """
     try:
         given = {
@@ -104,7 +106,7 @@ def hdb_alter(
                 + (f" (not {len(chosen)})" if chosen else "")
             )
         (op, value), *_ = chosen.items()
-        handle = resolve(attach, hdb)
+        handle = resolve(attach, hdb, writes=True)
         name = _table(handle, table, required=op != "undo")
         req = Request(handle.hdb, name, op, value)
         what = f"Undo {value}" if op == "undo" else f"{op} {value} on {name}"

@@ -137,7 +137,7 @@ def _attached(monkeypatch, where: Path, ssh: str | None) -> None:
 
     handle = hdb_scope.Handle("attach", str(where), "pinned", hdb_scope._paths())
     monkeypatch.setattr(type(handle), "ssh", property(lambda self: ssh))
-    monkeypatch.setattr(compress_cli, "resolve", lambda attach, hdb: handle)
+    monkeypatch.setattr(compress_cli, "resolve", lambda attach, hdb, *, writes: handle)
 
 
 def test_the_report_reads_an_attachments_hdb_on_this_machine(hdb, monkeypatch):

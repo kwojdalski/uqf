@@ -5,8 +5,10 @@ Which HDB is named once, by what already knows it - never a path to remember:
 
   uqs --target TARGET data ...   a deployed release: the command runs THERE, on its
                                own configured HDB (deploy/control.py routes it)
-  uqs data ... --attachment ATTACHMENT   an attached TorQ stack: its pinned HDB, else its live
-                               wdb's .wdb.hdbdir, on the stack's host over ssh
+  uqs data ... --attachment ATTACHMENT   an attached TorQ stack: its pinned HDB, else (a
+                               read only) its live wdb's .wdb.hdbdir, on the stack's
+                               host over ssh; a write needs it verified and pinned,
+                               as an attached backfill does (#2769)
   uqs data ... --hdb DIR       a directory on this machine, for anything else
   uqs --target TARGET data compress --report --hdb DIR
                                a directory on the target, read over its ssh by a
@@ -46,7 +48,10 @@ from uqs.stack import hdb_alter, hdb_remote
 from uqs.stack.hdb_alter import Request
 from uqs.stack.hdb_compression import SshHost
 
-AttachOpt = attach_opt("The attachment whose HDB to use: its pinned one, else its live wdb's")
+AttachOpt = attach_opt(
+    "The attachment whose HDB to use: its pinned one, else (a read only) its live wdb's; "
+    "a write needs the attachment verified and pinning its HDB"
+)
 HdbOpt = Annotated[
     Path | None,
     typer.Option("--hdb", help="An HDB directory on this machine, when nothing else names it"),
@@ -97,9 +102,11 @@ def ssh_host(name: str) -> SshHost:
     )  # fmt: skip
 
 
-def resolve(attach: str | None, hdb: Path | str | None) -> Handle:
+def resolve(attach: str | None, hdb: Path | str | None, *, writes: bool) -> Handle:
     """The one HDB named: --attachment, --hdb, or (neither) this runtime's own;
-    --hdb on the target `uqs --target` named, when it named one (ON_TARGET)."""
+    --hdb on the target `uqs --target` named, when it named one (ON_TARGET).
+    `writes`: the command may write the HDB (`check --apply`, `alter`), so an
+    attachment must be verified and pin it (hdb_where.resolve)."""
     paths = _paths()
     if attach and hdb:
         raise UqsUsageError(AMBIGUOUS)
@@ -113,7 +120,7 @@ def resolve(attach: str | None, hdb: Path | str | None) -> Handle:
                       paths, target=ssh)  # fmt: skip
     if attach:
         ipc = service.ipc_for(attach_config.load(attach))
-        where = hdb_where.resolve(attach, ipc)
+        where = hdb_where.resolve(attach, ipc, writes=writes)
         on = f", on {where.ssh} over ssh" if where.ssh else ", on this machine"
         return Handle("attach", where.hdb, where.source + on, paths, where, list(where.warnings))
     if hdb:

@@ -6,7 +6,17 @@ directory gets changed. Resolution, in order:
 
   1. the attachment's pinned `storage.hdb_dir`;
   2. otherwise the live wdb's `.wdb.hdbdir`, as its `probe` reports it - when
-     exactly one directory is reported.
+     exactly one directory is reported. Only for a read: `data check` without
+     `--apply`, whose plan writes nothing (#2769).
+
+A command that writes (`data check --apply`, `data alter`, its dry run too, as
+`uqs job backfill --attachment` refuses its own plan) follows an attached
+backfill's rule (`backfill.require_verified`): the attachment must be
+`verified` - a detached, rolled-back or never-verified attachment's stack is
+not known to be the one named, or is no longer ours to write - and must pin its
+HDB, so the directory written is the one verification checked, not whichever a
+wdb reports today. `--hdb DIR` stays the explicit way to name a directory
+nothing has verified.
 
 A pin that a live wdb contradicts is refused: the attachment and the stack
 then disagree on which directory is the HDB, and nothing is changed until a
@@ -32,7 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from uqs.attach import backfill_owner, config
-from uqs.attach.backfill import canonical
+from uqs.attach.backfill import _PIN, canonical, require_verified
 from uqs.attach.backfill_coordination import EOD_GUARD
 from uqs.attach.backfill_fence import fence
 from uqs.attach.backfill_plan import readers_of
@@ -96,9 +106,21 @@ def ssh_destination(att: Attachment, host: Host = HOST) -> tuple[str | None, str
     )
 
 
-def resolve(name: str, ipc: Ipc, root: Path | None = None, host: Host = HOST) -> AttachedHdb:
-    """The attachment's HDB, or a refusal naming why it cannot be told."""
+def resolve(
+    name: str, ipc: Ipc, root: Path | None = None, host: Host = HOST, *, writes: bool
+) -> AttachedHdb:
+    """The attachment's HDB, or a refusal naming why it cannot be told - or, when
+    the command `writes`, why this attachment's HDB may not be written."""
     att = config.load(name, root)
+    if writes:
+        require_verified(name, root, needs="a write to its HDB")
+        if not att.storage.hdb_dir:
+            raise AttachmentError(
+                f"attachment {name} pins no HDB directory (storage.hdb_dir is empty): a write "
+                f"through --attachment never falls back to a live wdb's .wdb.hdbdir"
+                + _PIN.format(name=name)
+                + " (or name the directory with --hdb DIR)"
+            )
     obs, structural = observe(att, ipc)
     warnings = []
     if structural and not obs.discovery.up:
