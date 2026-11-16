@@ -99,10 +99,12 @@ settings and the accepted risks. Storage pins stay unless an option that decides
 them changed (another stack, tickerplant or consumers). A saved replacement is
 no longer `verified` until it is applied and verified. While the publisher is
 running a `--replace` is refused and nothing is saved: stop the publisher
-(`uqs stop PROCNAME --base-port N`) and run it again. The configuration is saved
-as `attachment.json` under `$UQS_ATTACH_DIR`, else `$UQS_DATA_ROOT/attachments`,
-else `output/attachments`. It holds the name of the password's environment
-variable and no password.
+(`uqs stop PROCNAME --base-port N`) and run it again. While an attached backfill
+runs, a `--replace` is refused too, as `uqs job attachment remove` is: let the
+run finish or stop it, then run the same command again. The configuration is
+saved as `attachment.json` under `$UQS_ATTACH_DIR`, else
+`$UQS_DATA_ROOT/attachments`, else `output/attachments`. It holds the name of
+the password's environment variable and no password.
 
 A durable attachment replaced with `--transient` keeps no block. Before anything
 was published the apply removes its block from the schema file (hash checked,
@@ -170,7 +172,11 @@ the stack's next end of day writes it or `uqs data check` fills it.
 `--follow` streams the run's log, and Ctrl-C stops the stream only. With
 `--follow --stop-on-exit` the first Ctrl-C asks the run to stop between windows.
 The windows it completed are covered, and the same command again does the rest.
-`uqs job attachment remove` refuses while a run is alive.
+`uqs job attachment remove` and `uqs job attachment add --replace` refuse while
+a run is alive. `uqs job runs stop JOB --attachment NAME` writes its stop file
+in the state directory of the destination the run was launched into, as its
+owner record names it, and `uqs job runs list --attachment NAME` reads that
+run's ledger.
 
 ### Waiving the end-of-day fence
 

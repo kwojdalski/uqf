@@ -96,12 +96,23 @@ def _record(row: dict, columns: tuple[str, ...]) -> dict:
 
 
 def _where(attach: str | None) -> dict:
-    """The `directory=` for the ledger reads: the attached destination's, or none (the default)."""
+    """The `directory=` for the ledger reads: the attached destination's, or none (the default).
+
+    While a run is going it is the destination that run was launched into, as its owner
+    record names it (#2758): the config's pins may have changed since, and would point the
+    listing at a ledger the run never writes. With none going, the config's own."""
     if attach is None:
         return {}
     from uqs.attach import backfill as attached
+    from uqs.attach import backfill_owner, backfill_stop
 
-    return {"directory": attached.state_dir_of(_paths(), attach)}
+    live = {backfill_stop.run_state_dir(_paths(), attach, r) for r in backfill_owner.active(attach)}
+    if len(live) > 1:
+        raise UqsError(
+            f"attachment {attach} has runs going into more than one destination "
+            f"({', '.join(sorted(map(str, live)))}): which ledger to read is ambiguous"
+        )
+    return {"directory": live.pop() if live else attached.state_dir_of(_paths(), attach)}
 
 
 def _cell(value: object) -> str:
@@ -345,12 +356,11 @@ def stop(
 
     Exits 4 when the run stopped (or was killed), 1 when it is still running.
     """
-    from uqs.attach import backfill as attached
     from uqs.attach import backfill_stop
 
     try:
         record = backfill_stop.find(attach, job)
-        state_dir = attached.state_dir_of(_paths(), attach)
+        state_dir = backfill_stop.run_state_dir(_paths(), attach, record)
         if dry_run:
             console.print(
                 f"would stop {job} (pid {record['pid']}) into {attach}"

@@ -20,7 +20,7 @@ from typer.core import TyperGroup
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.attach import config, facts, live, plan, publisher, service
+from uqs.attach import backfill_owner, config, facts, live, plan, publisher, service
 from uqs.attach import verify as verifying
 from uqs.attach.manifest import Manifest
 from uqs.cli import shared, target_confirm
@@ -408,6 +408,66 @@ def test_a_replacement_apply_refuses_is_no_longer_verified(world, monkeypatch):
     assert "nothing was changed on the stack" in flat(result.output)
     assert config.load("pb-uat").stack.user == "bob"
     assert Manifest.load("pb-uat").state == "applied"
+
+
+def _a_backfill_runs(name: str = "pb-uat") -> Path:
+    """An owner record naming a live process (this one), as launch writes it."""
+    return backfill_owner.claim(name, "demo_deals_backfill", os.getpid(), "0123456789ab")
+
+
+@pytest.mark.parametrize("dry", [False, True])
+def test_a_replacement_is_refused_while_a_backfill_owns_the_attachment(world, dry):
+    """A run reads its destination's state dir, and `stop` its owner record; a
+    replacement that changed a pin would move what the config names under it
+    (#2758). Refused as detach is - before anything is saved, on --dry-run too."""
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+    record = _a_backfill_runs()
+    before, first = snapshot(world.state_dir), changes(world)
+    result = run("add", "pb-uat", "--user", "bob", "--replace", "--yes", "--no-start",
+                 *(["--dry-run"] if dry else []))  # fmt: skip
+    assert result.exit_code == 1, result.output
+    (said,) = [m for m in world.errors if "attached backfill running" in m]
+    assert "demo_deals_backfill (pid" in said and str(record) in said
+    assert "then replace it. Nothing was changed." in said
+    assert snapshot(world.state_dir) == before and changes(world) == first
+    assert Manifest.load("pb-uat").state == "verified"
+
+
+def test_a_replacement_save_rechecks_the_owner_under_the_lock(world, monkeypatch):
+    """A run launched between the CLI's check and the save is still refused:
+    workflow.save checks again under the lock launch claims under (#2758)."""
+    from uqs.attach import workflow
+
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+    real = workflow.refuse_replacing_backfilled
+    calls = []
+
+    def late(resolved, state_dir=None):
+        if not calls:
+            calls.append(_a_backfill_runs())  # the run starts just after the first check
+            return
+        real(resolved, state_dir)
+
+    monkeypatch.setattr(workflow, "refuse_replacing_backfilled", late)
+    result = run("add", "pb-uat", "--user", "bob", "--replace", "--yes", "--no-start")
+    assert result.exit_code == 1
+    text = flat(result.output)
+    assert "attached backfill running" in text and "nothing was saved" in text
+    assert config.load("pb-uat").stack.user == "admin"
+    assert Manifest.load("pb-uat").state == "verified"
+
+
+def test_a_plain_rerun_while_a_backfill_runs_is_allowed(world):
+    """No replacement: the saved pins are kept as they are, so the config is
+    written back unchanged, and apply on a converged stack changes nothing - the
+    run's destination cannot move under it (#2758)."""
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+    _a_backfill_runs()
+    saved, first = (world.state_dir / "pb-uat" / config.CONFIG_FILE).read_bytes(), changes(world)
+    result = run("add", "pb-uat", "--yes", "--no-start")
+    assert result.exit_code == 0, result.output
+    assert (world.state_dir / "pb-uat" / config.CONFIG_FILE).read_bytes() == saved
+    assert changes(world) == first
 
 
 def test_a_new_attachment_needs_a_job_and_a_stack_id(world):

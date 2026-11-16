@@ -199,6 +199,7 @@ def attach(
     verdict(out, d, running)
     try:
         workflow.refuse_replacing_running(resolved, running)
+        workflow.refuse_replacing_backfilled(resolved)
     except UqsError as exc:
         out.fail(exc)
     if dry_run:

@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from uqs.attach import apply as applying
-from uqs.attach import config, jobs, native, native_config, plan, reach
+from uqs.attach import backfill_owner, config, jobs, native, native_config, plan, reach
 from uqs.attach import verify as verifying
 from uqs.attach.config import Attachment, AttachmentError, Storage
 from uqs.attach.facts import Host
@@ -286,19 +286,42 @@ def refuse_replacing_running(resolved: Resolved, running: bool) -> None:
     )
 
 
+def refuse_replacing_backfilled(resolved: Resolved, state_dir: Path | None = None) -> None:
+    """A `--replace` of an attachment an attached backfill owns (#2758).
+
+    A running backfill writes into the destination it was launched for, and keeps
+    its ledgers, run lock and stop file in that destination's state directory. A
+    replacement that changes the stack, tickerplant or consumers drops the storage
+    pins it decides (`carried`) and re-observes them, so the config would name
+    another HDB - or none - under a run still writing the old one, and every
+    later admission would judge the run against a destination it is not using.
+    So it is refused while a run owns the attachment, as detach is; with the run
+    finished or stopped the same command replaces it. A plain re-run is not a
+    replacement: it keeps every saved pin and applies nothing on a converged stack.
+    """
+    if resolved.source == "replaced":
+        backfill_owner.refuse_while_active(resolved.att.name, state_dir, then="replace it")
+
+
 def save(resolved: Resolved, p: plan.Plan, state_dir: Path | None = None) -> Path:
     """Save the configuration, with the storage the plan saw pinned into it.
 
-    A replacement is journalled, and takes a `verified` manifest back to
-    `applied` (#2762): `verified` vouches for the configuration that was applied
-    and verified, and the start gate and backfill trust it. A replaced one is
-    neither until the apply and verify that follow succeed - and apply may still
-    refuse it (a blocker, risks nobody confirmed), or the command stop at a
-    blocked plan, with the replacement already saved."""
-    where = save_planned(resolved.att, p, state_dir)
+    A replacement is saved under the attachment's lock, refused while a backfill
+    owns the attachment (refuse_replacing_backfilled): launch claims under that
+    lock (#1454, #1526), so no run can start between the check and the save. It is
+    journalled, and takes a `verified` manifest back to `applied` (#2762):
+    `verified` vouches for the configuration that was applied and verified, and
+    the start gate and backfill trust it. A replaced one is neither until the
+    apply and verify that follow succeed - and apply may still refuse it (a
+    blocker, risks nobody confirmed), or the command stop at a blocked plan, with
+    the replacement already saved."""
     name = resolved.att.name
-    if resolved.source == "replaced" and Manifest.exists(name, state_dir):
-        with config.locked(name, state_dir):
+    if resolved.source != "replaced":
+        return save_planned(resolved.att, p, state_dir)
+    with config.locked(name, state_dir):
+        refuse_replacing_backfilled(resolved, state_dir)
+        where = save_planned(resolved.att, p, state_dir)
+        if Manifest.exists(name, state_dir):
             m = Manifest.load(name, state_dir)
             m.event("configuration replaced", "; ".join(resolved.changed))
             if m.state == "verified":
@@ -349,7 +372,8 @@ def execute(
     as it is now; `p` (the plan the operator was shown) decides only what is
     saved. Every stage is safe to repeat, so the recovery for any failure
     includes running the same command again. A replacement of an attachment
-    whose publisher runs is refused before any stage (refuse_replacing_running).
+    whose publisher runs is refused before any stage (refuse_replacing_running),
+    and one a backfill owns at its save (refuse_replacing_backfilled).
     """
     att, out, name, host = resolved.att, Outcome(), resolved.att.name, host or Host()
     again, back = f"`uqs job attachment add {name}`", f"`uqs job attachment remove {name}`"
@@ -377,7 +401,16 @@ def execute(
             stage("save", "skipped", "already attached and verified; the publisher is running", t)
         stage("apply", "skipped", "nothing to apply", t)
     else:
-        stage("save", "done", str(save(resolved, p, state_dir)), t)
+        try:
+            where = save(resolved, p, state_dir)
+        except AttachmentError as exc:  # a backfill owns it, or another operation holds it
+            stage("save", "failed", str(exc), t)
+            out.recovery = [
+                "nothing was saved, nothing on the stack changed and the publisher was not started",
+                "resolve what it names, then re-run the same command",
+            ]
+            return out
+        stage("save", "done", str(where), t)
         t = time.monotonic()
         try:
             out.applied = applying.apply(
