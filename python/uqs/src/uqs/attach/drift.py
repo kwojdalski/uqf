@@ -1,13 +1,15 @@
 """Drift: what makes reversing an attachment unsafe or unprovable right now -
 a table no longer the shape it was created with, an ownership record that is
-missing or another's, a user still depending on it, a schema-file block edited
-since. Split from detach.py, which acts on what this finds."""
+missing or another's, a user still depending on it - on the tickerplant's
+ledger, or in another saved attachment the ledger forgot (#2764) - a
+schema-file block edited since. Split from detach.py, which acts on what this finds."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
-from uqs.attach import persist, schema_files, sorting
+from uqs.attach import config, live, persist, schema_files, sorting
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.manifest import CREATED, DONE, PENDING, SHARED, Manifest, Op
 from uqs.attach.outcome import BLOCKS, CONSUMER_OPS
@@ -120,3 +122,65 @@ def _table_state(att: Attachment, m: Manifest, op: Op, proc: Proc, ours: set[str
             )  # fmt: skip
         )
     return out
+
+
+def forgotten_users(
+    att: Attachment, obs: Observation, m: Manifest, state_dir: Path | None
+) -> list[Blocker]:
+    """Other attachments saved beside this one, on the same stack, that still use a
+    table this one created - a done SHARED `stp_register` of it on the same
+    tickerplant - while the tickerplant's ledger record no longer lists them (#2764).
+
+    stp_unregister.q refuses to remove a table whose record names a user, but the
+    record is all it can see: a tickerplant restart rebuilds it from the creator's
+    block, and only a user's `+uses` block puts the user back - which a --transient
+    user does not write. So this machine's own manifests are asked as well, and a
+    rollback that would drop the table under such a user is refused. Scoped to the
+    stack id: another stack's table of the same name is another table. A user on
+    another machine, or saved under another attach directory, is not seen here; its
+    start gate refuses it once its use is forgotten (live.forgotten)."""
+    tp = obs.tickerplant
+    if tp is None:
+        return []  # the caller refuses an unreadable stack before asking
+    mine = {
+        o.table
+        for o in m.operations
+        if o.op == "stp_register" and o.ownership == CREATED and o.status in (DONE, PENDING)
+        and o.process == tp.procname
+    }  # fmt: skip
+    if not mine:
+        return []
+    probe, found = tp.probe or {}, []
+    for other in config.names(state_dir):
+        if other == att.name or not Manifest.exists(other, state_dir):
+            continue
+        try:
+            if config.load(other, state_dir).stack.id != att.stack.id:
+                continue
+            om = Manifest.load(other, state_dir)
+        except AttachmentError as exc:  # unreadable: whether it uses the table is unknown
+            found.append(
+                Blocker(
+                    other,
+                    f"attachment {other} cannot be read ({exc}), so whether it still uses "
+                    f"{', '.join(sorted(mine))} cannot be told",
+                    f"repair or remove attachment {other}, then detach {att.name} again",
+                )
+            )
+            continue
+        for op in om.operations:
+            if (
+                op.op == "stp_register" and op.ownership == SHARED and op.status == DONE
+                and op.process == tp.procname and op.table in mine
+                and not live.listed_user(probe, op.table, other)
+            ):  # fmt: skip
+                found.append(
+                    Blocker(
+                        tp.procname,
+                        f"attachment {other} ({om.state}) uses {op.table}, but the tickerplant "
+                        "no longer lists it among the table's users: a restart forgot its use",
+                        f"detach {other} first, or let it re-apply (`uqs job attachment add "
+                        f"{other}`), which joins the table again",
+                    )
+                )
+    return found

@@ -37,12 +37,17 @@ it said it accepts losing them, so every start asks.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from uqs.attach import persist
-from uqs.attach.config import DURABLE, Attachment
+from uqs.attach import persist, schema_files
+from uqs.attach.config import DURABLE, Attachment, AttachmentError
 from uqs.attach.manifest import CREATED, DONE, EXISTING, SHARED, Manifest
 from uqs.attach.schema import TableSpec
 from uqs.attach.schema_files import LocalFile
+
+if TYPE_CHECKING:
+    from uqs.attach.remote import Ipc
+    from uqs.attach.topology import Proc
 
 
 @dataclass(frozen=True)
@@ -213,3 +218,15 @@ def local_text(att: Attachment, m: Manifest) -> str | None:
     if where is None or where[1]:
         return None
     return LocalFile(where[0]).read()
+
+
+def read_text(att: Attachment, m: Manifest, ipc: Ipc, procs: dict[str, Proc]) -> str | None:
+    """The schema file the tickerplant reads at start (`schema_file`), read where
+    it is; None when apply recorded none or it cannot be read."""
+    where = schema_file(att, m)
+    if where is None:
+        return None
+    try:
+        return schema_files.file_of(*where, ipc, procs).read()
+    except AttachmentError, OSError:
+        return None

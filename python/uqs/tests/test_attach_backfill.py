@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -30,12 +31,14 @@ from attach_backfill_support import (
     snapshot,
     tree_table,
 )
+from attach_support import blocked
 from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import backfill as attached
 from uqs.attach import backfill_plan as planning
-from uqs.attach import service
+from uqs.attach import config, service
+from uqs.attach.manifest import DONE, SHARED, Manifest
 from uqs.attach.schema import parse_definition
 from uqs.interpreter import PEACHQ, q_impl, q_interpreter
 from uqs.paths import UqsError
@@ -203,6 +206,93 @@ def test_an_unreachable_discovery_is_a_blocker(world):
     world.stack.down.add(6001)
     with pytest.raises(UqsError, match="discovery"):
         plan_with(world, facts_of())
+
+
+# ------------------------------------- the start gate's live check, at admission (#2761)
+#
+# A `verified` manifest survives a tickerplant restart that dropped a runtime-only
+# registration. Admission asks the tickerplant, as `uqs start` of the publisher does
+# (live.py), whenever the start gate would: a stack elsewhere, or a table a restart
+# would not restore.
+
+
+def _attached(world, *, persist: str, host: str = "testhost", restored: bool = False) -> None:
+    att = save_attachment("pb-uat", world.hdb, host=host)
+    config.save(replace(att, persist=persist))
+    if restored:
+        blocked(Manifest.load("pb-uat"), [DATASET])
+
+
+def _lose_the_table(world) -> None:
+    for key in ("tables", "published"):
+        world.stack.named("stp1")[key].remove(DATASET)
+
+
+def test_a_transient_attachment_whose_table_the_tickerplant_lost_is_not_backfilled(world):
+    _attached(world, persist="runtime-only")
+    _lose_the_table(world)
+    with pytest.raises(UqsError) as caught:
+        plan_with(world, facts_of())
+    text = str(caught.value)
+    assert text.startswith("attachment pb-uat cannot be backfilled: ")
+    assert f"{DATASET} is no longer registered on stp1 at testhost:6000" in text
+    assert "(stack 6000 at testhost): the tickerplant has restarted or changed" in text
+    assert "Re-apply with `uqs job attachment add pb-uat`" in text
+    assert "a table no process holds, and no end of day writes" in text
+    assert world.stack.ops() <= {"probe"}, "refused before any reader or writer was asked"
+
+
+def test_a_transient_user_the_tickerplant_forgot_is_not_backfilled(world):
+    """#2764: the table is still registered, but its ownership record - rebuilt by
+    a restart from the creator's block - no longer lists this attachment among
+    its users, which verify would fail on too."""
+    _attached(world, persist="runtime-only")
+    m = Manifest.load("pb-uat")
+    m.finish(m.begin("stp_register", "stp1", DATASET, {}), DONE, SHARED, {"owner": "pb-a"})
+    world.stack.named("stp1")["owned"][DATASET] = {"attachment": "pb-a", "token": "a"}
+    with pytest.raises(UqsError) as caught:
+        plan_with(world, facts_of())
+    text = " ".join(str(caught.value).split())
+    assert text.startswith(f"attachment pb-uat cannot be backfilled: {DATASET} is still ")
+    assert "no longer lists pb-uat among the users: the tickerplant restarted and forgot" in text
+    assert text.endswith("Re-apply with `uqs job attachment add pb-uat` to join again.")
+    world.stack.named("stp1")["owned"][DATASET]["users"] = ["pb-uat"]  # joined again
+    assert plan_with(world, facts_of())["writers"] == ["rdb1", "wdb1"]
+
+
+def test_a_transient_attachment_whose_table_is_still_registered_is_admitted(world):
+    _attached(world, persist="runtime-only")
+    assert plan_with(world, facts_of())["writers"] == ["rdb1", "wdb1"]
+
+
+def test_a_transient_attachment_whose_tickerplant_does_not_answer_is_not_backfilled(world):
+    _attached(world, persist="runtime-only")
+    world.stack.down.add(6000)
+    with pytest.raises(UqsError) as caught:
+        plan_with(world, facts_of())
+    text = str(caught.value)
+    assert "whether attachment pb-uat's tables are still registered on stack 6000" in text
+    assert "cannot be told: stp1 at testhost:6000 (" in text and "Connection refused" in text
+    assert "a backfill is refused until it does" in text
+
+
+def test_a_durable_attachment_here_whose_table_a_restart_restores_is_not_asked(world):
+    """Documented design (live.py): a restart of a tickerplant on this machine reloads
+    a table its block defines, so neither the start gate nor admission asks."""
+    _attached(world, persist="schema-file", restored=True)
+    _lose_the_table(world)
+    assert plan_with(world, facts_of())["writers"] == ["rdb1", "wdb1"]
+
+
+def test_a_durable_attachment_on_another_machine_whose_table_was_lost_is_not_backfilled(world):
+    _attached(world, persist="schema-file", host="uat-box.example", restored=True)
+    _lose_the_table(world)
+    with pytest.raises(UqsError) as caught:
+        plan_with(world, facts_of())
+    text = str(caught.value)
+    assert f"{DATASET} is no longer registered on stp1" in text
+    assert "(stack 6000 at uat-box.example)" in text
+    assert "Re-apply with `uqs job attachment add pb-uat`" in text
 
 
 # ----------------------------------------------------------------------- plan

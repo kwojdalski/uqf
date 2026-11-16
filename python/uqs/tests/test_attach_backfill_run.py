@@ -162,7 +162,7 @@ def world(monkeypatch, tmp_path, upstream):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(coordination, "HOST", Host(local_names=("testhost",)))
     reader = FakeReader(tmp_path, "hdb1", hdb)
-    stack = HdbStack(hdb, reader_ports={"hdb1": reader.port})
+    stack = HdbStack(hdb, reader_ports={"hdb1": reader.port}, holds=DATASET)
     stack.state_over = {n: dict(FUTURE) | {"partition": "2090.01.01"} for n in ("rdb1", "wdb1")}
     monkeypatch.setattr(service, "ipc_for", lambda att: stack)
     save_attachment(
@@ -477,7 +477,10 @@ def test_only_the_readers_that_serve_the_destination_are_asked_to_reload(world, 
     elsewhere = tmp_path / "elsewhere-hdb"
     elsewhere.mkdir()
     world.stack = HdbStack(
-        world.hdb, other=elsewhere, reader_ports={"hdb1": world.reader.port, "hdb2": other.port}
+        world.hdb,
+        other=elsewhere,
+        reader_ports={"hdb1": world.reader.port, "hdb2": other.port},
+        holds=DATASET,
     )
     world.monkeypatch.setattr(service, "ipc_for", lambda att: world.stack)
     world.stack.state_over = {
@@ -764,7 +767,10 @@ def test_a_covered_date_with_an_incompatible_column_type_is_not_queryable(world)
 def test_one_reader_failing_leaves_no_qualified_readiness(world):
     second = FakeReader(world.tmp, "hdb2", world.hdb)
     world.stack = HdbStack(
-        world.hdb, other=world.hdb, reader_ports={"hdb1": world.reader.port, "hdb2": second.port}
+        world.hdb,
+        other=world.hdb,
+        reader_ports={"hdb1": world.reader.port, "hdb2": second.port},
+        holds=DATASET,
     )
     world.stack.state_over = {
         n: dict(FUTURE) | {"partition": "2090.01.01"} for n in ("rdb1", "wdb1")

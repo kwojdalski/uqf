@@ -147,6 +147,13 @@ Nothing is published through the tickerplant, and today's RDB is not populated.
 
 - The attachment must be `verified`, and its HDB unsegmented and on a local
   filesystem of the machine that runs `uqs`.
+- When a start of the publisher would ask the stack (a stack on another machine,
+  or a table a restart would not restore, such as a `--transient` one), the
+  tickerplant must still register every attached table. One it lost in a restart
+  is refused, as the start is: re-apply with `uqs job attachment add NAME`. So
+  is a shared table whose ownership record no longer lists the attachment among
+  its users. A `--writer` run with `--override any-writer` checks nothing, this
+  included.
 - Every affected date must be before the date any writer is filling.
 - A `compression` process on the stack is a blocker.
 - A run is not coordinated with `dbmaint` or q run against the directory by
@@ -229,23 +236,34 @@ Evidence that cannot be read counts as publication.
   block and sort rows stay, because removing them breaks replay or changes what
   a restart does. The attachment becomes `detached`, and applying again adopts
   what stayed. Destructive cleanup is outside this workflow.
+- What stays lasts only as long as the tickerplant keeps it. A table a block
+  defines comes back after a restart. A table no block defines, such as a
+  `--transient` attachment's, is kept only until the tickerplant restarts.
+  Detach lists each such table under `restart:`. After the restart, rows not yet
+  written by end of day are only in the tickerplant log, and nothing replays it.
+  Let end of day run before you restart, or keep that log and replay it by hand.
 
 A refused detach changes nothing but the stopped publisher, names the manual
 action and cannot be overridden. It refuses while another attachment uses the
 table, and when the schema file or the process-file row was edited since apply.
-A failure part way is `rollback_partial`: run detach again.
+"Uses" is read from the tickerplant's ownership record and from the other
+attachments saved on this machine for the same stack: a restart can drop a
+`--transient` user from the record, and the detach then names it instead. A
+failure part way is `rollback_partial`: run detach again.
 
 ## Restart behaviour
 
-  | State                                      | A tickerplant restart                                                                                                                                |
-  | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-  | applied, with the schema block             | the block recreates the table and its ownership record                                                                                               |
-  | applied, `--transient`                     | gone, and a running publisher's rows are dropped. Stop it (`uqs stop PROC --base-port N`), then `uqs job attachment add NAME` restores it            |
-  | sharing a `--transient` table              | gone too: no block defines it. The plan warned `SHARED_RUNTIME_ONLY`; a start asks the stack and is refused                                          |
-  | adopting a table the schema file defines   | the stack's own definition recreates it; no block is written for it. The plan said `STACK_DEFINES`                                                   |
-  | adopting a runtime-only table              | gone: no block is written for a table the attachment did not create. The plan warned `ADOPTED_RUNTIME_ONLY`; a start asks the stack and is refused   |
-  | rolled back                                | the block went with the registration: the table does not come back                                                                                   |
-  | detached after publication                 | the block stayed, so the table comes back and its logs replay                                                                                        |
+  | State                                       | A tickerplant restart                                                                                                                                                          |
+  | ------------------------------------------  | ----------------------------------------------------------------------------------------------------------------------------------------------------                           |
+  | applied, with the schema block              | the block recreates the table and its ownership record                                                                                                                         |
+  | applied, `--transient`                      | gone, and a running publisher's rows are dropped. Stop it (`uqs stop PROC --base-port N`), then `uqs job attachment add NAME` restores it                                      |
+  | sharing a `--transient` table               | gone too: no block defines it. The plan warned `SHARED_RUNTIME_ONLY`; a start asks the stack and is refused                                                                    |
+  | `--transient` user of a block-defined table | the table comes back, but its ownership record no longer lists this user: a start is refused and the creator's detach names it until `uqs job attachment add NAME` joins again |
+  | adopting a table the schema file defines    | the stack's own definition recreates it; no block is written for it. The plan said `STACK_DEFINES`                                                                             |
+  | adopting a runtime-only table               | gone: no block is written for a table the attachment did not create. The plan warned `ADOPTED_RUNTIME_ONLY`; a start asks the stack and is refused                             |
+  | rolled back                                 | the block went with the registration: the table does not come back                                                                                                             |
+  | detached after publication                  | the block stayed, so the table comes back and its logs replay                                                                                                                  |
+  | detached after publication, no block        | the table is gone, and end of day writes no partition for it. Unsaved rows are only in the log. `--dry-run` reports it as `detached:`, not to apply                            |
 
 With a `--transient` table lost, `--dry-run` reports `registration-lost`. While
 the publisher still runs, `uqs job attachment add NAME` and its `--dry-run` are
