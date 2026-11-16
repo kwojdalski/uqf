@@ -414,6 +414,65 @@ def test_after_detaching_a_published_attachment_applying_again_adopts_what_staye
     assert verify.verify(att, fake, state).ok
 
 
+def restart_without_the_table(fake: FakeStack) -> None:
+    """What a tickerplant restart does to a table no block defines, rdb and wdb
+    restarted after it: gone from all three."""
+    for name in ("stp1", "rdb1", "wdb1"):
+        fake.named(name)["schemas"].pop(TABLE, None)
+    fake.named("stp1")["owned"].pop(TABLE, None)
+
+
+def test_a_runtime_only_detach_after_publication_says_a_restart_drops_the_table(world):
+    """#2766: nothing is deleted, as for any published attachment - but what is
+    kept lasts only until the tickerplant restarts, and detach says so instead of
+    promising replay and restart."""
+    fake, make, state, schema, log = world
+    att = make(runtime_only=True)
+    apply_(att, fake, state)
+    fake.publish(TABLE, 3)
+    snapshot = stack_state(fake)
+    result = detach_(att, fake, state)
+    assert result.outcome == "detached" and stack_state(fake) == snapshot, "nothing deleted"
+    [loss] = [" ".join(line.split()) for line in result.restart_loss]
+    assert loss.startswith(f"{TABLE}: kept only until stp1 restarts - no block in the schema")
+    assert "rows not yet written by end of day exist only in the rdb/wdb and in" in loss
+    assert "let end of day run before stp1 restarts" in loss
+    assert "stp1_" in loss, "the log file is named"
+    assert all(r.endswith("(until the tickerplant restarts)") for r in result.retained)
+    m = Manifest.load("pb-uat", state)
+    notes = {o.note for o in m.operations}
+    assert m.state == "detached" and notes == {detaching.KEPT_UNTIL_RESTART}
+    assert "kept for replay and restart" not in detaching.KEPT_UNTIL_RESTART
+
+
+def test_a_durable_detach_after_publication_still_promises_replay_and_restart(world):
+    fake, make, state, schema, log = world
+    att = make()
+    apply_(att, fake, state)
+    fake.publish(TABLE, 3)
+    result = detach_(att, fake, state)
+    assert result.outcome == "detached" and result.restart_loss == []
+    assert not any("until" in r for r in result.retained)
+    assert {o.note for o in Manifest.load("pb-uat", state).operations} == {detaching.KEPT}
+
+
+def test_a_detached_attachment_whose_table_a_restart_dropped_is_not_told_to_apply_again(world):
+    """#2766: the registration-lost advice is for an applied attachment. Detached,
+    a runtime-only table a restart dropped is what detach said would happen."""
+    fake, make, state, schema, log = world
+    att = make(runtime_only=True)
+    apply_(att, fake, state)
+    fake.publish(TABLE, 3)
+    detach_(att, fake, state)
+    restart_without_the_table(fake)
+    health = service.make_plan(att, fake, ROOT).health(Manifest.load("pb-uat", state))
+    assert health, "the loss is still shown"
+    assert not any("apply it again" in line or "registration-lost" in line for line in health)
+    assert all(line.startswith("detached: ") for line in health)
+    assert f"stp1 no longer holds {TABLE} - no block defines it" in health[0]
+    assert "pb-uat is detached, so there is nothing to apply" in health[0]
+
+
 def test_after_a_rollback_applying_again_is_a_new_attachment_with_a_new_token(world):
     fake, make, state, schema, log = world
     att = make()

@@ -154,8 +154,19 @@ class Plan:
 
     def health(self, m: Manifest) -> list[str]:
         """Where the stack no longer matches what the manifest says was applied -
-        a restart without a persisted schema being the usual cause."""
+        a restart without a persisted schema being the usual cause.
+
+        Only an applied attachment is told to apply again. A detached one kept its
+        registrations only as long as the tickerplant does (detach.py, #2766): one
+        a restart dropped is reported as that, with nothing to repair. A rolled-back
+        one has nothing left to check - every step is reverted."""
         procs = {p.procname: p for p in self.observation.procs()}
+        blocked = {
+            t
+            for o in m.operations
+            if o.op == "schema_block" and o.status in (DONE, RETAINED)
+            for t in o.table.split(",")
+        }
         lost = []
         for op in m.operations:
             if op.op not in ("stp_register", "consumer_attach") or op.status not in (
@@ -167,6 +178,9 @@ class Plan:
             if proc is None or not proc.up:
                 lost.append(f"{op.process} is not reachable: {op.table} cannot be checked")
             elif not (proc.probe or {}).get("schemas", {}).get(op.table):
+                if m.state == "detached":
+                    lost.append(_detached_lost(m, op.process, op.table, op.table in blocked))
+                    continue
                 lost.append(
                     f"registration-lost: {op.process} no longer holds {op.table} "
                     "(restarted without the persisted schema?) - apply it again"
@@ -218,6 +232,22 @@ class Plan:
             "accepted_risks": [f.as_dict() for f in self.accepted],
             "override_problems": self.override_problems,
         }
+
+
+def _detached_lost(m: Manifest, process: str, table: str, blocked: bool) -> str:
+    """A registration a detached attachment kept that is gone: expected after a
+    restart for a table no block defines, odd for one a block does."""
+    if blocked:
+        return (
+            f"detached: {process} no longer holds {table} although {m.attachment}'s block "
+            "defines it - check that the tickerplant reads that schema file at start; "
+            f"{m.attachment} is detached, so there is nothing to apply"
+        )
+    return (
+        f"detached: {process} no longer holds {table} - no block defines it, so a "
+        f"restart dropped it, as detach said; {m.attachment} is detached, so there is "
+        "nothing to apply"
+    )
 
 
 def own_publisher_running(att: Attachment, f: Finding) -> bool:

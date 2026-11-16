@@ -531,6 +531,24 @@ def test_detach_before_publication_rolls_back_and_says_so(world):
     assert Manifest.load("pb-uat").state == "rolled_back"
 
 
+def test_a_transient_detach_after_publication_says_a_restart_drops_the_table(world):
+    """#2766: the output names what a restart loses, and a dry run afterwards does
+    not tell a detached attachment to apply again."""
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+    world.publish(TABLE, 3)
+    result = run("remove", "pb-uat", "--yes")
+    assert result.exit_code == 0, result.output
+    text = flat(result.output)
+    assert f"restart: {TABLE}: kept only until stp1 restarts" in text
+    assert "let end of day run before stp1 restarts" in text
+    for name in ("stp1", "rdb1", "wdb1"):
+        world.named(name)["schemas"].pop(TABLE)
+    data = json.loads(run("add", "pb-uat", "--dry-run", "--json").output)["plan"]
+    assert data["manifest"]["state"] == "detached"
+    assert data["health"] and not any("apply it again" in line for line in data["health"])
+    assert all(line.startswith("detached: ") for line in data["health"])
+
+
 # ------------------------------------------------------------ list attachments
 
 
