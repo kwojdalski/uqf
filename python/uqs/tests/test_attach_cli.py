@@ -426,7 +426,7 @@ def test_a_moved_hdb_is_refused_everywhere_until_it_is_repinned(world, consumers
     checked = verifying.verify(config.load("pb-uat"), world)
     assert not checked.ok and Manifest.load("pb-uat").state == "applied"
     with pytest.raises(config.AttachmentError, match="wdb1 reports /moved/hdb") as refused:
-        hdb_where.resolve("pb-uat", world)
+        hdb_where.resolve("pb-uat", world, writes=False)
     assert REPIN in str(refused.value)
     plain = run("add", "pb-uat", "--replace", "--yes", "--no-start")
     assert plain.exit_code == 1, "a --replace that changes nothing never re-pins"
@@ -440,7 +440,7 @@ def test_a_moved_hdb_is_refused_everywhere_until_it_is_repinned(world, consumers
     assert m.state == "verified"
     (event,) = [e for e in m.history if e["event"] == "configuration replaced"]
     assert "storage.hdb_dir: '/data/hdb' -> '/moved/hdb'" in event["detail"]
-    assert hdb_where.resolve("pb-uat", world).hdb == "/moved/hdb"
+    assert hdb_where.resolve("pb-uat", world, writes=False).hdb == "/moved/hdb"
 
 
 def test_a_repin_is_refused_while_the_publisher_runs(world):
