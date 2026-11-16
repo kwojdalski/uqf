@@ -266,6 +266,27 @@ def defined_by(text: str, table: str) -> str:
     return ""
 
 
+def stack_defines(text: str, table: str) -> bool:
+    """Whether the stack's own part of `text` - outside every attachment's block -
+    defines `table` with a `name:([]...)` line, as the starter pack's database.q
+    defines `trade` (#2763). A restart restores such a table with no block of
+    anyone's. Read the way q loads the file: a line holding only `/` opens a
+    comment a line holding only `\\` closes, and a `\\` line outside one ends it."""
+    head = re.compile(rf"{re.escape(table)}\s*:\s*\(\[")
+    comment = False
+    for line in _lines(outside_all(text)):
+        bare = _bare(line).rstrip()
+        if comment:
+            comment = bare != "\\"
+        elif bare == "/":
+            comment = True
+        elif bare == "\\":
+            return False
+        elif head.match(line):
+            return True
+    return False
+
+
 def _separated(block_lines: list[str]) -> bool:
     return any(_bare(line) == SEPARATOR_NOTE for line in block_lines)
 

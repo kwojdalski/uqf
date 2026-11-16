@@ -15,12 +15,12 @@ from pathlib import Path
 
 import pytest
 import typer
-from attach_support import FakeStack, FaultIpc, make_bundle
+from attach_support import LEDGER_Q, FakeStack, FaultIpc, make_bundle, registered_at_runtime
 from typer.core import TyperGroup
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.attach import config, facts, plan, publisher, service
+from uqs.attach import config, facts, live, plan, publisher, service
 from uqs.attach import verify as verifying
 from uqs.attach.manifest import Manifest
 from uqs.cli import shared, target_confirm
@@ -568,3 +568,45 @@ def test_the_publisher_port_state_tells_stopped_from_unreachable():
         assert attach_state._port_state("127.0.0.1", port)[0] == "running"
     assert attach_state._port_state("127.0.0.1", port)[0] == "stopped"
     assert attach_state._port_state("no-such-host.invalid", 1)[0] == "unreachable"
+
+
+@pytest.mark.parametrize("stack_defines", [True, False], ids=["schema file", "runtime only"])
+def test_a_durable_attach_over_a_table_someone_else_registered(world, tmp_path, stack_defines):
+    """#2763: the table is already on the stack, with no ownership record. Apply
+    writes no block for a table it did not create, so the plan must not promise one:
+    when the stack's own schema file defines the table a restart restores it and
+    the plan says so; when only a runtime registration holds it, the plan and
+    verify both warn that a restart drops it, and the start gate asks the stack."""
+    schema = tmp_path / "database.q"
+    schema.write_text("trade:([] time:`timestamp$())\n" + f"{LEDGER_Q}\n" * stack_defines)
+    text = schema.read_text()
+    tp = world.named("stp1")
+    tp["schemafile"] = str(schema)
+    for d in ("tplogs", "wdb", "hdb"):
+        (tmp_path / d).mkdir()
+    tp["tplogdir"] = str(tmp_path / "tplogs")
+    world.named("wdb1")["savedir"] = f":{tmp_path / 'wdb'}"
+    world.named("wdb1")["hdbdir"] = f":{tmp_path / 'hdb'}"
+    registered_at_runtime(world, TABLE)
+    durable = [a for a in new(world) if a != "--transient"]
+    result = run("add", *durable, "--yes", "--json")
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    found = {f["code"]: f["message"] for f in data["plan"]["findings"]}
+    assert "WILL_PERSIST" not in found
+    assert not [c for c in data["plan"]["changes"] if c["process"] == "schema file"]
+    assert [s["outcome"] for s in data["apply"]["steps"] if s["op"] == "stp_register"] == [
+        "adopted"
+    ]
+    assert schema.read_text() == text, "apply wrote no block, as the plan said"
+    m = Manifest.load("pb-uat", world.state_dir)
+    if stack_defines:
+        assert found["STACK_DEFINES"].startswith(f"{schema} defines {TABLE} outside any")
+        assert "ADOPTED_RUNTIME_ONLY" not in found
+        assert data["verify"]["warnings"] == []
+    else:
+        said = found["ADOPTED_RUNTIME_ONLY"]
+        assert said.startswith(f"{TABLE} is runtime-only: it was registered on the tickerplant")
+        assert data["verify"]["ok"] and data["verify"]["warnings"] == [said]
+    att = config.load("pb-uat", world.state_dir)
+    assert live.needed(att, m, facts.Host(lambda h, p: False, ("localhost",))) is not stack_defines

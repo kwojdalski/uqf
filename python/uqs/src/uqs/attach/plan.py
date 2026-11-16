@@ -12,10 +12,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import native, overrides, preflight, schema_files, sort_plan
+from uqs.attach import durability, native, overrides, preflight, schema_files, sort_plan
 from uqs.attach.config import DURABLE, Attachment
 from uqs.attach.findings import Finding, blockers
-from uqs.attach.manifest import DONE, RETAINED, Manifest
+from uqs.attach.manifest import DONE, EXISTING, RETAINED, Manifest
 from uqs.attach.remote import Ipc
 from uqs.attach.topology import Observation, Proc, observe
 
@@ -90,16 +90,21 @@ class Plan:
                         "needs_restart": False,
                     }
                 )
-        if att.persist in DURABLE:
-            tp = obs.tickerplant
-            path = (tp.probe or {}).get("schemafile", "") if tp else ""
+        tp = obs.tickerplant
+        probe = (tp.probe or {}) if tp else {}
+        # apply writes a block for the tables it creates or shares, never one it adopts
+        # (durability.py, #2763): with only adopted tables there is no schema-file change
+        ownership = durability.ownership_now(att, probe, self.token)
+        blocked = [t.name for t in att.tables if ownership[t.name] != EXISTING]
+        if att.persist in DURABLE and blocked:
+            path = probe.get("schemafile", "")
             by = f"{tp.procname if tp else 'the tickerplant'} appends" * (
                 att.persist == "remote-schema-file"
             )
             # the tables a restart would restore, as preflight judged them (durability.py):
             # a shared table whose creator is runtime-only is not one of them (#2759)
             lost = {f.facts["table"] for f in self.findings if f.code == "SHARED_RUNTIME_ONLY"}
-            kept = [t.name for t in att.tables if t.name not in lost]
+            kept = [t for t in blocked if t not in lost]
             steps.append(
                 {
                     "process": "schema file",

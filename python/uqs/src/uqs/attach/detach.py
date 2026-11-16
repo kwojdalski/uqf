@@ -273,7 +273,9 @@ def _unblock(att: Attachment, m: Manifest, op: Op, ipc: Ipc, procs: dict[str, Pr
     the tickerplant, when it wrote it (schema_files.file_of)."""
     specs = tuple(s for s in att.tables if s.name in op.table.split(","))
     record = persist.BlockRecord(**op.post)
-    persist.remove(record, att, m.token, specs, schema_files.file_of(record, ipc, procs))
+    persist.remove(
+        record, att, m.token, specs, schema_files.file_of(record.path, record.process, ipc, procs)
+    )
     m.finish(op, REVERTED, note="block removed")
     return Step(op.op, op.process, op.table, "removed", "block removed")
 

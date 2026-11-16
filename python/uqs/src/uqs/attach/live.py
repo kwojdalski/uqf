@@ -43,7 +43,7 @@ def needed(att: Attachment, m: Manifest, host: Host) -> bool:
     no block defines (durability.from_manifest, reading the schema file here)."""
     if not host.is_local(att.stack.host):
         return True
-    verdicts = durability.from_manifest(att, m, durability.local_text(m))
+    verdicts = durability.from_manifest(att, m, durability.local_text(att, m))
     return not all(v.restored for v in verdicts)
 
 
