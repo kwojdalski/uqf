@@ -86,6 +86,14 @@ class Storage:
     hdb_dir: str = ""
 
 
+def repin(name: str) -> str:
+    """The one command that re-pins an attachment's storage to what the stack
+    reports now (#2767): every refusal of a pin the stack no longer agrees with
+    names it. A pin is never followed silently - a backfill's state and the
+    coverage ledgers are keyed on the destination it names."""
+    return f"`uqs job attachment add {name} --replace --repin-storage`"
+
+
 @dataclass(frozen=True)
 class Stack:
     """Which stack, by identity, and how to reach it."""

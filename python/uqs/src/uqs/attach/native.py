@@ -45,10 +45,11 @@ from uqs.attach.manifest import Manifest, now
 from uqs.attach.registry import Registry, write
 from uqs.attach.topology import TICKERPLANT, Observation
 from uqs.portexpr import resolve
+from uqs.stack import attach_state
 from uqs.stack.attached_publisher import with_auth
 
 CODE = "PROCESS_REGISTRY"
-ROW, LAUNCHER = "process_row", "launcher"
+ROW, LAUNCHER = attach_state.REGISTERED_ROW, "launcher"
 REMOTE = (
     "remote registration is not supported yet: the process file must be on this machine, the "
     "stack's ({host}), and uqs writes it here only. Run `uqs job attachment add` on the stack's "
@@ -196,11 +197,20 @@ def _tickerplants(t: Target, att: Attachment, obs: Observation | None) -> list[s
     return []
 
 
-def problems(t: Target, att: Attachment, m: Manifest | None, obs: Observation | None) -> list[str]:
-    """Every reason this registration may not be written, now."""
+def problems(
+    t: Target, att: Attachment, m: Manifest | None, obs: Observation | None, lost: list[str]
+) -> list[str]:
+    """Every reason this registration may not be written, now. `lost` is the tables
+    a tickerplant restart would not restore (durability.py), as the plan or verify
+    judged them - not the persist label, which a shared or adopted table belies."""
     out = _ownership(t, m) + _ports(t, att) + _tickerplants(t, att, obs)
-    if att.native.start_with_all and att.persist not in config.DURABLE:
-        out.append("--start-with-all needs durable table registration, not --transient")
+    if att.native.start_with_all and lost:
+        out.append(
+            f"--start-with-all puts {t.procname} in a native `start all`, which restarts the "
+            f"tickerplant, and a tickerplant restart would not restore {', '.join(lost)} (the "
+            "warning above says why): the publisher's start gate would refuse it. Make the "
+            "tables restart-safe first, or give --no-start-with-all"
+        )
     if att.stack.password_env and os.environ.get(att.stack.password_env) is None:
         out.append(
             f"the publisher's start gate reads the stack's password from ${att.stack.password_env} "
@@ -214,9 +224,15 @@ def problems(t: Target, att: Attachment, m: Manifest | None, obs: Observation | 
 
 
 def assess(
-    att: Attachment, obs: Observation, port: PublisherPort, root: Path, state_dir: Path | None
+    att: Attachment,
+    obs: Observation,
+    port: PublisherPort,
+    root: Path,
+    state_dir: Path | None,
+    lost: list[str],
 ) -> tuple[list[Finding], dict]:
-    """The findings and the preview of the registration. Reads, changes nothing."""
+    """The findings and the preview of the registration. Reads, changes nothing.
+    `lost`: the tables a restart would not restore, as preflight judged them."""
     tp = obs.tickerplant
     schema = (tp.probe or {}).get("schemafile", "") if tp else ""
     files = []
@@ -236,7 +252,7 @@ def assess(
     try:
         t = target(att, root, port, state_dir)
         current = t.registry.line_of(t.procname)
-        found = problems(t, att, m, obs)
+        found = problems(t, att, m, obs, lost)
     except AttachmentError as exc:
         return [_blocker(att.native.process_file, str(exc))], preview
     here = socket.gethostname()
@@ -289,13 +305,16 @@ def register(
     port: PublisherPort,
     obs: Observation | None,
     state_dir: Path | None = None,
+    *,
+    lost: list[str],
 ) -> list[str]:
     """Write the launcher, then the row - each journalled (module docstring).
-    Idempotent: what already reads as derived is left alone. Returns what it did."""
+    Idempotent: what already reads as derived is left alone. Returns what it did.
+    `lost`: the tables a restart would not restore, as verify just judged them."""
     with config.locked(att.name, state_dir):
         m = Manifest.load(att.name, state_dir)
         t = target(att, root, port, state_dir)
-        found = problems(t, att, m, obs)
+        found = problems(t, att, m, obs, lost)
         if found:
             raise AttachmentError("; ".join(found))
         said = []

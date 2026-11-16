@@ -143,17 +143,17 @@ def observed_storage(att: Attachment, obs: Observation) -> Storage:
     """`att.storage` with every location it left unpinned filled from the
     stack as it is now.
 
-    The wdb is the attachment's own when it names one; otherwise an up wdb it
-    does not manage, as long as every such wdb reports the same directories - the
-    backfill admission counts those as the destination's writers too, so an
-    attachment made with `--consumer rdb1` still learns where its HDB is.
+    The wdb directories are those every wdb that decides the HDB reports
+    (Observation.hdb_wdbs: its own and those it does not manage), as long as
+    they all report the same - the same set preflight checks a pin against and
+    the backfill admission counts as the destination's writers, so an
+    attachment made with `--consumer rdb1` still learns where its HDB is, and
+    hears when it moves. Wdbs that disagree pin nothing.
     """
     tp = (obs.tickerplant.probe or {}) if obs.tickerplant else {}
-    wdb = next((c.probe or {} for c in obs.consumers if c.proctype == "wdb" and c.up), None)
-    if wdb is None:
-        others = [c.probe or {} for c in obs.unmanaged if c.proctype == "wdb" and c.up]
-        dirs = {(o.get("savedir", ""), o.get("hdbdir", "")) for o in others}
-        wdb = others[0] if len(dirs) == 1 else {}
+    wdbs = [w.probe or {} for w in obs.hdb_wdbs()]
+    dirs = {(w.get("savedir", ""), w.get("hdbdir", "")) for w in wdbs}
+    wdb = wdbs[0] if len(dirs) == 1 else {}
     seen = {
         "tplogdir": tp.get("tplogdir", ""),
         "schema_file": tp.get("schemafile", ""),

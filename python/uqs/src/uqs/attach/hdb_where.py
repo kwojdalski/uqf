@@ -6,7 +6,17 @@ directory gets changed. Resolution, in order:
 
   1. the attachment's pinned `storage.hdb_dir`;
   2. otherwise the live wdb's `.wdb.hdbdir`, as its `probe` reports it - when
-     exactly one directory is reported.
+     exactly one directory is reported. Only for a read: `data check` without
+     `--apply`, whose plan writes nothing (#2769).
+
+A command that writes (`data check --apply`, `data alter`, its dry run too, as
+`uqs job backfill --attachment` refuses its own plan) follows an attached
+backfill's rule (`backfill.require_verified`): the attachment must be
+`verified` - a detached, rolled-back or never-verified attachment's stack is
+not known to be the one named, or is no longer ours to write - and must pin its
+HDB, so the directory written is the one verification checked, not whichever a
+wdb reports today. `--hdb DIR` stays the explicit way to name a directory
+nothing has verified.
 
 A pin that a live wdb contradicts is refused: the attachment and the stack
 then disagree on which directory is the HDB, and nothing is changed until a
@@ -32,14 +42,14 @@ from pathlib import Path
 from typing import Any
 
 from uqs.attach import backfill_owner, config
-from uqs.attach.backfill import canonical
+from uqs.attach.backfill import _PIN, canonical, require_verified
 from uqs.attach.backfill_coordination import EOD_GUARD
 from uqs.attach.backfill_fence import fence
 from uqs.attach.backfill_plan import readers_of
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Host
 from uqs.attach.remote import Endpoint, Ipc, IpcError
-from uqs.attach.topology import Observation, Proc, observe
+from uqs.attach.topology import Observation, observe
 from uqs.stack.hdb_alter import reader_row
 
 #: This machine, as the resolution asks about it (a test replaces it).
@@ -80,10 +90,6 @@ def _same(a: str, b: str, ssh: str | None) -> bool:
     return canonical(a) == canonical(b) if ssh is None else a == b
 
 
-def _wdbs(obs: Observation) -> list[Proc]:
-    return [p for p in [*obs.consumers, *obs.unmanaged] if p.up and p.proctype == "wdb"]
-
-
 def ssh_destination(att: Attachment, host: Host = HOST) -> tuple[str | None, str]:
     """(where to ssh, the setting that says so); None when the stack is this machine."""
     if att.stack.ssh:
@@ -96,14 +102,26 @@ def ssh_destination(att: Attachment, host: Host = HOST) -> tuple[str | None, str
     )
 
 
-def resolve(name: str, ipc: Ipc, root: Path | None = None, host: Host = HOST) -> AttachedHdb:
-    """The attachment's HDB, or a refusal naming why it cannot be told."""
+def resolve(
+    name: str, ipc: Ipc, root: Path | None = None, host: Host = HOST, *, writes: bool
+) -> AttachedHdb:
+    """The attachment's HDB, or a refusal naming why it cannot be told - or, when
+    the command `writes`, why this attachment's HDB may not be written."""
     att = config.load(name, root)
+    if writes:
+        require_verified(name, root, needs="a write to its HDB")
+        if not att.storage.hdb_dir:
+            raise AttachmentError(
+                f"attachment {name} pins no HDB directory (storage.hdb_dir is empty): a write "
+                f"through --attachment never falls back to a live wdb's .wdb.hdbdir"
+                + _PIN.format(name=name)
+                + " (or name the directory with --hdb DIR)"
+            )
     obs, structural = observe(att, ipc)
     warnings = []
     if structural and not obs.discovery.up:
         warnings.append(f"the stack does not answer ({structural[0].message})")
-    live = {p.procname: _dir(p.probe or {}) for p in _wdbs(obs)}
+    live = {p.procname: _dir(p.probe or {}) for p in obs.hdb_wdbs()}
     live = {k: v for k, v in live.items() if v}
     pinned = att.storage.hdb_dir.rstrip("/")
     ssh, setting = ssh_destination(att, host)
@@ -113,8 +131,8 @@ def resolve(name: str, ipc: Ipc, root: Path | None = None, host: Host = HOST) ->
             said = ", ".join(f"{k} reports {v}" for k, v in sorted(against.items()))
             raise AttachmentError(
                 f"attachment {name} pins its HDB at {pinned}, but {said}: which directory is "
-                "the HDB is ambiguous, so nothing is planned. Re-plan the attachment "
-                f"(`uqs job attachment add {name}`) once they agree"
+                "the HDB is ambiguous, so nothing is planned. If the stack moved its HDB, "
+                f"re-pin it: {config.repin(name)}"
             )
         source = f"attachment {name}'s pinned storage.hdb_dir"
         return AttachedHdb(att, pinned, source, ssh, setting, obs, warnings)
@@ -143,7 +161,7 @@ def refuse_running_writers(where: AttachedHdb, ipc: Ipc, root: Path | None = Non
             f"the stack of attachment {where.att.name} does not answer: whether a wdb is in "
             "its end of day cannot be checked, so nothing is written"
         )
-    for proc in _wdbs(where.observation):
+    for proc in where.observation.hdb_wdbs():
         if not _same(_dir(proc.probe or {}), where.hdb, where.ssh):
             continue
         try:

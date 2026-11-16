@@ -65,6 +65,17 @@ class Observation:
         found = [self.discovery, self.tickerplant, *self.consumers]
         return [p for p in found if p is not None]
 
+    def hdb_wdbs(self) -> list[Proc]:
+        """The wdbs whose directories decide where the attachment's HDB is: every
+        up wdb of the stack, its own consumers and those it does not manage (#2767).
+
+        One set for every judge of the HDB: pinning (service.observed_storage),
+        preflight's STORAGE_MISMATCH (preflight_components.storage), an attached
+        backfill's writers (backfill_plan) and `uqs data --attachment`
+        (hdb_where). An attachment made with `--consumer rdb1` learns its HDB from
+        a wdb it does not manage, so that wdb moving must be noticed too."""
+        return [p for p in [*self.consumers, *self.unmanaged] if p.up and p.proctype == "wdb"]
+
 
 def port_of(hpup: str) -> int | None:
     """The port in discovery's `:host:port`."""

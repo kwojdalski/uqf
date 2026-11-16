@@ -92,10 +92,37 @@ rolled back for you. Run the same command again, which is safe, or
 
 After the first execution the attachment is reused by name
 (`uqs job attachment add NAME`). Options that contradict the saved ones are
-refused, and `--replace` rebuilds it from them. The configuration is saved as
-`attachment.json` under `$UQS_ATTACH_DIR`, else `$UQS_DATA_ROOT/attachments`,
-else `output/attachments`. It holds the name of the password's environment
-variable and no password.
+refused, and `--replace` replaces exactly those. Every option it is not given
+keeps its saved value, as it does without `--replace`: the persist mode and
+schema writer, the user, password variable and ssh destination, the native
+settings and the accepted risks. Storage pins stay unless an option that decides
+them changed (another stack, tickerplant or consumers).
+
+The pins are the tickerplant's log directory and schema file and the wdb's save
+and HDB directories. They are read when the attachment is saved, from the wdbs
+of the stack, including those it does not manage, so `--consumer rdb1` still
+pins an HDB. Every later plan, verify, backfill and `uqs data --attachment`
+checks them against the same wdbs. A pin is never moved for you: when the stack
+is restarted on another HDB the plan reports `STORAGE_MISMATCH`, verify takes
+`verified` back, and backfill and `data check` refuse. If the move is intended,
+re-pin with `uqs job attachment add NAME --replace --repin-storage`. It reads
+every pin again from the stack, shows each one old -> new, and is refused when
+the wdbs disagree on a location. As a replacement it is refused while the
+publisher runs or a backfill owns the attachment, and is applied and verified
+again. A saved replacement is no longer `verified` until it is applied and
+verified. While the publisher is running a `--replace` is refused and nothing is
+saved: stop the publisher (`uqs stop PROCNAME --base-port N`) and run it again.
+While an attached backfill runs, a `--replace` is refused too, as
+`uqs job attachment remove` is: let the run finish or stop it, then run the same
+command again. The configuration is saved as `attachment.json` under
+`$UQS_ATTACH_DIR`, else `$UQS_DATA_ROOT/attachments`, else `output/attachments`.
+It holds the name of the password's environment variable and no password.
+
+A durable attachment replaced with `--transient` keeps no block. Before anything
+was published the apply removes its block from the schema file (hash checked,
+and the plan shows the removal). After publication the block is kept, as
+`uqs job attachment remove` keeps it, because a tickerplant restart and the
+log's replay need it. That replacement is refused (`BLOCK_AFTER_PUBLICATION`).
 
 ## Verify and start
 
@@ -105,10 +132,10 @@ save it. It also re-runs the preflight. Passing makes the attachment `verified`,
 and a failed re-verification takes it back to `applied`.
 
 The publisher starts only while the attachment is `verified` and only under its
-stack id, whatever starts it. A bare `uqs start pb_ledger1` is refused with the
-right command named. If an `attachment.json` cannot be read, every start is
-refused. Make it readable, or move the folder out of the attachments directory
-if the attachment is gone.
+stack id, whatever starts it, `uqs exec -- debug pb_ledger1` included. A bare
+`uqs start pb_ledger1` is refused with the right command named. If an
+`attachment.json` cannot be read, every start is refused. Make it readable, or
+move the folder out of the attachments directory if the attachment is gone.
 
 `--no-start` applies and verifies, and leaves the publisher stopped. The same
 command without it starts it later. `--follow`, `--trace`, `--level` and
@@ -132,6 +159,16 @@ Nothing is published through the tickerplant, and today's RDB is not populated.
 
 - The attachment must be `verified`, and its HDB unsegmented and on a local
   filesystem of the machine that runs `uqs`.
+- Every live wdb and rdb of the stack, managed or not, must report the pinned
+  HDB. After the stack moved it, re-pin it with
+  `uqs job attachment add NAME --replace --repin-storage`.
+- When a start of the publisher would ask the stack (a stack on another machine,
+  or a table a restart would not restore, such as a `--transient` one), the
+  tickerplant must still register every attached table. One it lost in a restart
+  is refused, as the start is: re-apply with `uqs job attachment add NAME`. So
+  is a shared table whose ownership record no longer lists the attachment among
+  its users. A `--writer` run with `--override any-writer` checks nothing, this
+  included.
 - Every affected date must be before the date any writer is filling.
 - A `compression` process on the stack is a blocker.
 - A run is not coordinated with `dbmaint` or q run against the directory by
@@ -157,7 +194,11 @@ the stack's next end of day writes it or `uqs data check` fills it.
 `--follow` streams the run's log, and Ctrl-C stops the stream only. With
 `--follow --stop-on-exit` the first Ctrl-C asks the run to stop between windows.
 The windows it completed are covered, and the same command again does the rest.
-`uqs job attachment remove` refuses while a run is alive.
+`uqs job attachment remove` and `uqs job attachment add --replace` refuse while
+a run is alive. `uqs job runs stop JOB --attachment NAME` writes its stop file
+in the state directory of the destination the run was launched into, as its
+owner record names it, and `uqs job runs list --attachment NAME` reads that
+run's ledger.
 
 ### Waiving the end-of-day fence
 
@@ -199,8 +240,12 @@ uqs job attachment remove pb-uat
 ```
 
 Detach stops the publisher and takes its row, if it has one, out of the stack's
-process file. It then reads the stack for evidence that anything was published.
-Evidence that cannot be read counts as publication.
+process file. A publisher the site's `torq.sh` started from that row is stopped
+too: `uqs stop` treats the process file the attachment registered in as its own
+for that one process. One started from any other process file is never
+signalled; the refusal names the `torq.sh stop PROC -csv FILE` that stops it. It
+then reads the stack for evidence that anything was published. Evidence that
+cannot be read counts as publication.
 
 - Before any publication, the attachment is rolled back. What it created is
   removed in reverse order: the schema block, the consumers' table and
@@ -210,20 +255,39 @@ Evidence that cannot be read counts as publication.
   block and sort rows stay, because removing them breaks replay or changes what
   a restart does. The attachment becomes `detached`, and applying again adopts
   what stayed. Destructive cleanup is outside this workflow.
+- What stays lasts only as long as the tickerplant keeps it. A table a block
+  defines comes back after a restart. A table no block defines, such as a
+  `--transient` attachment's, is kept only until the tickerplant restarts.
+  Detach lists each such table under `restart:`. After the restart, rows not yet
+  written by end of day are only in the tickerplant log, and nothing replays it.
+  Let end of day run before you restart, or keep that log and replay it by hand.
 
 A refused detach changes nothing but the stopped publisher, names the manual
 action and cannot be overridden. It refuses while another attachment uses the
 table, and when the schema file or the process-file row was edited since apply.
-A failure part way is `rollback_partial`: run detach again.
+"Uses" is read from the tickerplant's ownership record and from the other
+attachments saved on this machine for the same stack: a restart can drop a
+`--transient` user from the record, and the detach then names it instead. A
+failure part way is `rollback_partial`: run detach again.
 
 ## Restart behaviour
 
-  | State                          | A tickerplant restart                                                                                               |
-  | ------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-  | applied, with the schema block | the block recreates the table and its ownership record                                                              |
-  | applied, `--transient`         | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attachment add NAME` restores it |
-  | rolled back                    | the block went with the registration: the table does not come back                                                  |
-  | detached after publication     | the block stayed, so the table comes back and its logs replay                                                       |
+  | State                                       | A tickerplant restart                                                                                                                                                          |
+  | ------------------------------------------  | ----------------------------------------------------------------------------------------------------------------------------------------------------                           |
+  | applied, with the schema block              | the block recreates the table and its ownership record                                                                                                                         |
+  | applied, `--transient`                      | gone, and a running publisher's rows are dropped. Stop it (`uqs stop PROC --base-port N`), then `uqs job attachment add NAME` restores it                                      |
+  | sharing a `--transient` table               | gone too: no block defines it. The plan warned `SHARED_RUNTIME_ONLY`; a start asks the stack and is refused                                                                    |
+  | `--transient` user of a block-defined table | the table comes back, but its ownership record no longer lists this user: a start is refused and the creator's detach names it until `uqs job attachment add NAME` joins again |
+  | adopting a table the schema file defines    | the stack's own definition recreates it; no block is written for it. The plan said `STACK_DEFINES`                                                                             |
+  | adopting a runtime-only table               | gone: no block is written for a table the attachment did not create. The plan warned `ADOPTED_RUNTIME_ONLY`; a start asks the stack and is refused                             |
+  | rolled back                                 | the block went with the registration: the table does not come back                                                                                                             |
+  | detached after publication                  | the block stayed, so the table comes back and its logs replay                                                                                                                  |
+  | detached after publication, no block        | the table is gone, and end of day writes no partition for it. Unsaved rows are only in the log. `--dry-run` reports it as `detached:`, not to apply                            |
+
+With a `--transient` table lost, `--dry-run` reports `registration-lost`. While
+the publisher still runs, `uqs job attachment add NAME` and its `--dry-run` are
+refused and save nothing: the rows it published since the restart were dropped,
+and apply refuses while it runs. Stop it first.
 
 TorQ does not reconnect an rdb or wdb to a restarted tickerplant. Restart them
 yourself. End of day needs nothing extra.
@@ -290,8 +354,10 @@ uqs job attachment add pb-uat --no-start-with-all  # registered, started on dema
 ```
 
 - The file must be on this machine, and so must the stack.
-- `--start-with-all` needs a durable registration and is refused with
-  `--transient`. It is not a boot service or crash supervision.
+- `--start-with-all` needs every table to survive a tickerplant restart, so it
+  is refused with `--transient`, and for a table the plan or verify warns is
+  runtime-only, whatever the persist mode says. It is not a boot service or
+  crash supervision.
 - Set the variable `--password-env` names in the environment `torq.sh` runs in.
 - Run the add again after you set or unset
   [`KDBSECURE`](../reference/environment.md).
@@ -319,8 +385,8 @@ refused with `PERSIST_UNAVAILABLE`. Choose one:
   file over the same q IPC. The block is q that it runs at every start, and the
   saved option records that the stack's operators agreed to it.
 - `--transient`. A tickerplant restart drops the registration, and nothing on
-  this machine is told. Stop the publisher, then run
-  `uqs job attachment add NAME`.
+  this machine is told. Stop the publisher (`uqs stop PROC --base-port N`), then
+  run `uqs job attachment add NAME`, as on one machine (Restart behaviour).
 - Run `uqs` on the stack's machine.
 
 These are not verified across two real machines: a network between them

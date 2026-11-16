@@ -9,16 +9,27 @@ partial failure is reported as partial and a retry finishes it.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import os
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from attach_support import FakeStack, FaultIpc, make_bundle
+from attach_support import FakeStack, FaultIpc, make_bundle, registered_at_runtime
 
 from uqs.attach import apply as applying
-from uqs.attach import backfill_owner, backfill_run, config, facts, persist, service, verify
+from uqs.attach import (
+    backfill_owner,
+    backfill_run,
+    config,
+    facts,
+    live,
+    persist,
+    plan,
+    service,
+    verify,
+)
 from uqs.attach import detach as detaching
 from uqs.attach.config import AttachmentError, Storage
 from uqs.attach.manifest import Manifest
@@ -404,6 +415,65 @@ def test_after_detaching_a_published_attachment_applying_again_adopts_what_staye
     assert verify.verify(att, fake, state).ok
 
 
+def restart_without_the_table(fake: FakeStack) -> None:
+    """What a tickerplant restart does to a table no block defines, rdb and wdb
+    restarted after it: gone from all three."""
+    for name in ("stp1", "rdb1", "wdb1"):
+        fake.named(name)["schemas"].pop(TABLE, None)
+    fake.named("stp1")["owned"].pop(TABLE, None)
+
+
+def test_a_runtime_only_detach_after_publication_says_a_restart_drops_the_table(world):
+    """#2766: nothing is deleted, as for any published attachment - but what is
+    kept lasts only until the tickerplant restarts, and detach says so instead of
+    promising replay and restart."""
+    fake, make, state, schema, log = world
+    att = make(runtime_only=True)
+    apply_(att, fake, state)
+    fake.publish(TABLE, 3)
+    snapshot = stack_state(fake)
+    result = detach_(att, fake, state)
+    assert result.outcome == "detached" and stack_state(fake) == snapshot, "nothing deleted"
+    [loss] = [" ".join(line.split()) for line in result.restart_loss]
+    assert loss.startswith(f"{TABLE}: kept only until stp1 restarts - no block in the schema")
+    assert "rows not yet written by end of day exist only in the rdb/wdb and in" in loss
+    assert "let end of day run before stp1 restarts" in loss
+    assert "stp1_" in loss, "the log file is named"
+    assert all(r.endswith("(until the tickerplant restarts)") for r in result.retained)
+    m = Manifest.load("pb-uat", state)
+    notes = {o.note for o in m.operations}
+    assert m.state == "detached" and notes == {detaching.KEPT_UNTIL_RESTART}
+    assert "kept for replay and restart" not in detaching.KEPT_UNTIL_RESTART
+
+
+def test_a_durable_detach_after_publication_still_promises_replay_and_restart(world):
+    fake, make, state, schema, log = world
+    att = make()
+    apply_(att, fake, state)
+    fake.publish(TABLE, 3)
+    result = detach_(att, fake, state)
+    assert result.outcome == "detached" and result.restart_loss == []
+    assert not any("until" in r for r in result.retained)
+    assert {o.note for o in Manifest.load("pb-uat", state).operations} == {detaching.KEPT}
+
+
+def test_a_detached_attachment_whose_table_a_restart_dropped_is_not_told_to_apply_again(world):
+    """#2766: the registration-lost advice is for an applied attachment. Detached,
+    a runtime-only table a restart dropped is what detach said would happen."""
+    fake, make, state, schema, log = world
+    att = make(runtime_only=True)
+    apply_(att, fake, state)
+    fake.publish(TABLE, 3)
+    detach_(att, fake, state)
+    restart_without_the_table(fake)
+    health = service.make_plan(att, fake, ROOT).health(Manifest.load("pb-uat", state))
+    assert health, "the loss is still shown"
+    assert not any("apply it again" in line or "registration-lost" in line for line in health)
+    assert all(line.startswith("detached: ") for line in health)
+    assert f"stp1 no longer holds {TABLE} - no block defines it" in health[0]
+    assert "pb-uat is detached, so there is nothing to apply" in health[0]
+
+
 def test_after_a_rollback_applying_again_is_a_new_attachment_with_a_new_token(world):
     fake, make, state, schema, log = world
     att = make()
@@ -512,6 +582,13 @@ def restart_from_schema_file(fake, schema: Path, scratch: Path, q_binary) -> Non
     fake.named("stp1")["owned"] = got["owned"]
     for c in ("rdb1", "wdb1"):
         fake.named(c)["owned"].pop(TABLE, None)
+    if TABLE not in got["tables"]:  # no block defines it: the restarted plant lacks it
+        tp = fake.named("stp1")
+        for key in ("schemas", "logged", "updtab", "logfiles", "replay", "subscribers"):
+            tp[key].pop(TABLE, None)
+        for key in ("tables", "published", "names"):
+            if TABLE in tp[key]:
+                tp[key].remove(TABLE)
 
 
 def test_a_user_of_the_table_still_holds_the_creator_back_after_a_restart(
@@ -538,6 +615,79 @@ def test_a_user_of_the_table_still_holds_the_creator_back_after_a_restart(
     assert schema.read_text() == "trade:([] time:`timestamp$())\n"
 
 
+@pytest.mark.parametrize("then", ["rejoins", "detaches"])
+def test_a_transient_user_a_restart_forgot_is_refused_and_holds_the_creator_back(
+    world, tmp_path, q_binary, monkeypatch, then
+):
+    """#2764: B joins A's durable table with --transient, so it writes no +uses
+    block, and a restart rebuilds the ledger record from A's block without B. B's
+    start is refused as verify would fail it, and A's rollback - which the ledger
+    alone no longer stops - is refused naming B, until B rejoins or leaves."""
+    fake, make, state, schema, log = world
+    a, b = make("pb-a"), make("pb-b", runtime_only=True)
+    apply_(a, fake, state)
+    apply_(b, fake, state)
+    assert not persist.present(str(schema), "pb-b+uses")
+    assert verify.verify(a, fake, root=ROOT, state_dir=state, host=LOCAL).ok  # A's gate too
+    assert verify.verify(b, fake, root=ROOT, state_dir=state, host=LOCAL).ok
+    assert start_asks(b, state, monkeypatch, fake) == ["pb-b"]  # B is asked, A restart-safe
+
+    restart_from_schema_file(fake, schema, tmp_path, q_binary)
+    assert (
+        TABLE in fake.named("stp1")["tables"] and "users" not in fake.named("stp1")["owned"][TABLE]
+    )
+    with pytest.raises(UqsError) as refused:
+        live.check("pb-b", fake, LOCAL)
+    said = " ".join(str(refused.value).split())
+    assert f"is the publisher of attachment pb-b, and {TABLE} is still registered on stp1" in said
+    assert (
+        "no longer lists pb-b among the users: the tickerplant restarted and forgot this "
+        "attachment's use" in said
+    )
+    assert "Re-apply with `uqs job attachment add pb-b` to join again. Nothing was started." in said
+
+    before = stack_state(fake)
+    for dry_run in (True, False):
+        result = detach_(a, fake, state, dry_run=dry_run)
+        assert result.outcome == "refused"
+        (blocker,) = result.blockers
+        assert blocker.component == "stp1"
+        assert blocker.reason == (
+            f"attachment pb-b (verified) uses {TABLE}, but the tickerplant no longer lists it "
+            "among the table's users: a restart forgot its use"
+        )
+        assert blocker.action == (
+            "detach pb-b first, or let it re-apply (`uqs job attachment add pb-b`), which joins "
+            "the table again"
+        )
+        assert stack_state(fake) == before and TABLE in fake.named("stp1")["schemas"]
+
+    if then == "rejoins":
+        apply_(b, fake, state)
+        assert fake.named("stp1")["owned"][TABLE]["users"] == ["pb-b"]
+        live.check("pb-b", fake, LOCAL)
+        # the ledger names B again, so the tickerplant's own check holds A back
+        result = detach_(a, fake, state)
+        assert result.outcome == "refused" and "used by attachment(s) pb-b" in reasons(result)
+        assert "forgot" not in reasons(result)
+    assert detach_(b, fake, state).outcome == "rolled_back"
+    assert detach_(a, fake, state).outcome == "rolled_back"
+    assert TABLE not in fake.named("stp1")["schemas"]
+
+
+def test_a_user_on_another_stack_does_not_hold_the_creator_back(world):
+    """#2764's guard looks only at attachments of the same stack id."""
+    fake, make, state, schema, log = world
+    a, b = make("pb-a"), make("pb-b", runtime_only=True)
+    apply_(a, fake, state)
+    apply_(b, fake, state)
+    for proc in ("stp1", "rdb1", "wdb1"):  # forgotten everywhere, as after a restart
+        fake.named(proc)["owned"][TABLE].pop("users")
+    config.save(dataclasses.replace(b, stack=dataclasses.replace(b.stack, id=7000)), state)
+    result = detach_(a, fake, state)
+    assert result.outcome == "rolled_back", reasons(result)
+
+
 def test_a_one_character_user_is_a_list_of_one_after_a_restart(world, tmp_path, q_binary):
     """#2604: `enlist "b"` is a char atom made a string, so the users read back as
     "b" rather than ["b"], and the creator's detach could not name them."""
@@ -549,6 +699,189 @@ def test_a_one_character_user_is_a_list_of_one_after_a_restart(world, tmp_path, 
     assert fake.named("stp1")["owned"][TABLE]["users"] == ["b"]
     result = detach_(a, fake, state)
     assert result.outcome == "refused" and "used by attachment(s) b" in reasons(result)
+
+
+def codes(shown) -> dict[str, str]:
+    return {f.code: f.message for f in shown.findings}
+
+
+def schema_row(shown) -> dict:
+    (row,) = [c for c in shown.changes() if c["process"] == "schema file"]
+    return row
+
+
+def start_asks(att, state, monkeypatch, fake) -> list[str]:
+    """Run the start gate for `att`'s publisher; the stack is `fake`, and every
+    time the live check asks it is noted. Raises the gate's refusal."""
+    asked: list[str] = []
+
+    def ipc_for(a):
+        asked.append(a.name)
+        return fake
+
+    monkeypatch.setenv(config.ATTACH_DIR_ENV, str(state))
+    monkeypatch.setattr(live, "ipc_for", ipc_for)
+    monkeypatch.setattr(live, "Host", lambda: LOCAL)
+    attach_state.refuse_unverified_start(default_paths(), att.publisher.procname, 6000)
+    return asked
+
+
+def test_a_durable_user_of_a_transient_creators_table_is_runtime_only(
+    world, tmp_path, q_binary, monkeypatch
+):
+    """#2759: B shares a table A attached with --transient. B's +uses block defines
+    no table, so a restart drops it: the plan must not promise it survives, verify
+    says so, and every start of B's publisher asks the stack - so once the table is
+    gone, B's start is refused instead of publishing into a plant that drops its rows."""
+    fake, make, state, schema, log = world
+    a, b = make("pb-a", runtime_only=True), make("pb-b")
+    apply_(a, fake, state)
+    assert verify.verify(a, fake, root=ROOT, state_dir=state, host=LOCAL).ok  # A's gate too
+    shown = plan.build(b, fake, ROOT, facts.Facts(host=LOCAL))
+    found = codes(shown)
+    assert "WILL_PERSIST" not in found
+    said = found["SHARED_RUNTIME_ONLY"]
+    assert f"{TABLE} is runtime-only: attachment pb-a created it with --transient" in said
+    assert "attach pb-a without --transient, or detach pb-a and apply pb-b again" in said
+    assert schema_row(shown)["table"] == "(none restored by a restart)"
+    assert f"({TABLE} stays runtime-only)" in schema_row(shown)["action"]
+
+    apply_(b, fake, state)
+    assert persist.present(str(schema), "pb-b+uses")  # the dependency is still recorded
+    checked = verify.verify(b, fake, root=ROOT, state_dir=state, host=LOCAL)
+    assert checked.ok and checked.warnings == [said]
+    # the publisher is A's too (one job), so the gate asks for both; B is asked now
+    assert start_asks(b, state, monkeypatch, fake) == ["pb-a", "pb-b"]
+
+    restart_from_schema_file(fake, schema, tmp_path, q_binary)
+    assert TABLE not in fake.named("stp1")["tables"]
+    with pytest.raises(UqsError) as refused:
+        live.check("pb-b", fake, LOCAL)
+    said = " ".join(str(refused.value).split())
+    assert (
+        f"is the publisher of attachment pb-b, and {TABLE} is no longer registered on stp1" in said
+    )
+    assert "Nothing was started" in said
+
+
+@pytest.mark.parametrize("user", [True, False], ids=["user of a durable creator", "creator"])
+def test_a_table_a_block_defines_needs_no_live_check(world, monkeypatch, user):
+    """The cases #2759 leaves alone: a durable creator, and a durable user of its
+    table, are restart-safe - the plan says WILL_PERSIST, verify warns of nothing,
+    and a start on this machine asks no stack."""
+    fake, make, state, schema, log = world
+    a = make("pb-a")
+    apply_(a, fake, state)
+    assert verify.verify(a, fake, root=ROOT, state_dir=state, host=LOCAL).ok  # A's gate too
+    att = make("pb-b") if user else a
+    shown = plan.build(att, fake, ROOT, facts.Facts(host=LOCAL))
+    assert "SHARED_RUNTIME_ONLY" not in codes(shown)
+    assert schema_row(shown)["table"] == TABLE
+    if user:
+        assert codes(shown)["WILL_PERSIST"].endswith("a marked block will be added")
+        apply_(att, fake, state)
+    checked = verify.verify(att, fake, root=ROOT, state_dir=state, host=LOCAL)
+    assert checked.ok and checked.warnings == []
+    assert start_asks(att, state, monkeypatch, fake) == []
+
+
+@pytest.mark.parametrize(
+    ("text", "defines"),
+    [
+        ("t:([] a:`long$())\n", True),
+        ("t :([] a:`long$())\n", True),
+        ("tt:([] a:`long$())\nt2:([] a:`long$())\n", False),
+        ("/ t:([] a:`long$())\n", False),
+        ("/\nt:([] a:`long$())\n\\\n", False),  # a block comment
+        ("\\\nt:([] a:`long$())\n", False),  # after the end of the script
+        ("/ BEGIN uqs-attach a x\nt:([] a:`long$())\n/ END uqs-attach a\n", False),
+    ],
+)
+def test_the_stacks_own_definition_is_read_as_q_loads_the_file(text, defines):
+    """#2763: only a definition q would run, outside every attachment's block."""
+    assert persist.stack_defines(text, "t") is defines
+
+
+def test_adopting_a_table_the_stacks_schema_file_defines_writes_no_block(
+    world, tmp_path, q_binary, monkeypatch
+):
+    """#2763 (a): the stack's own schema file defines the table it adopts, outside
+    any uqs-attach block - as database.q defines `trade`. A restart restores it
+    with no block: the plan says so (no `a marked block will be added`), apply
+    writes nothing, verify warns of nothing, and a start asks no stack."""
+    from attach_support import LEDGER_Q
+
+    fake, make, state, schema, log = world
+    schema.write_text(f"trade:([] time:`timestamp$())\n{LEDGER_Q}\n")
+    text = schema.read_text()
+    registered_at_runtime(fake, TABLE)
+    att = make()
+    shown = plan.build(att, fake, ROOT, facts.Facts(host=LOCAL))
+    found = codes(shown)
+    assert found["STACK_DEFINES"] == (
+        f"{schema} defines {TABLE} outside any uqs-attach block, so a restart restores it; "
+        "no block is added for it"
+    )
+    assert not {"WILL_PERSIST", "ADOPTED_RUNTIME_ONLY"} & set(found)
+    assert not [c for c in shown.changes() if c["process"] == "schema file"]
+
+    apply_(att, fake, state)
+    assert schema.read_text() == text, "no block for a table this attachment did not create"
+    checked = verify.verify(att, fake, root=ROOT, state_dir=state, host=LOCAL)
+    assert checked.ok and checked.warnings == []
+    assert start_asks(att, state, monkeypatch, fake) == []
+
+    restart_from_schema_file(fake, schema, tmp_path, q_binary)
+    assert TABLE in fake.named("stp1")["tables"], "the plan's promise held"
+    assert TABLE not in fake.named("stp1")["owned"], "and the table is still nobody's"
+    live.check("pb-uat", fake, LOCAL)  # nothing to refuse
+
+
+def test_adopting_a_runtime_only_table_is_reported_and_asked_at_every_start(
+    world, tmp_path, q_binary, monkeypatch
+):
+    """#2763 (b): the table was only registered at runtime, so a restart drops it.
+    A block would hold an ownership record that makes it this attachment's after
+    a restart - and its detach would then remove it - so none is written; the plan
+    warns instead of promising WILL_PERSIST, verify says the same, every start
+    asks the stack, and once a restart has dropped the table the start is refused."""
+    fake, make, state, schema, log = world
+    text = schema.read_text()
+    registered_at_runtime(fake, TABLE)
+    att = make()
+    shown = plan.build(att, fake, ROOT, facts.Facts(host=LOCAL))
+    found = codes(shown)
+    assert "WILL_PERSIST" not in found and "STACK_DEFINES" not in found
+    said = found["ADOPTED_RUNTIME_ONLY"]
+    assert said.startswith(f"{TABLE} is runtime-only: it was registered on the tickerplant ")
+    assert "pb-uat writes no block for a table it did not create" in said
+    assert f"Every start of {att.publisher.procname} asks the stack" in said
+    assert said.endswith(f"outside any uqs-attach block, before applying (an edit there "
+                         f"afterwards makes a block's removal refuse), then plan again: "
+                         f"{att.tables[0].definition()}")  # fmt: skip
+    assert not [c for c in shown.changes() if c["process"] == "schema file"]
+
+    apply_(att, fake, state)
+    assert schema.read_text() == text
+    checked = verify.verify(att, fake, root=ROOT, state_dir=state, host=LOCAL)
+    assert checked.ok and checked.warnings == [said]
+    assert start_asks(att, state, monkeypatch, fake) == ["pb-uat"]
+
+    restart_from_schema_file(fake, schema, tmp_path, q_binary)
+    assert TABLE not in fake.named("stp1")["tables"], "as the plan said"
+    with pytest.raises(UqsError) as refused:
+        live.check("pb-uat", fake, LOCAL)
+    said = " ".join(str(refused.value).split())
+    assert f"{TABLE} is no longer registered on stp1" in said and "Nothing was started" in said
+
+
+def test_a_transient_attachment_is_still_asked_at_every_start(world, monkeypatch):
+    fake, make, state, schema, log = world
+    a = make("pb-a", runtime_only=True)
+    apply_(a, fake, state)
+    checked = verify.verify(a, fake, root=ROOT, state_dir=state, host=LOCAL)
+    assert checked.ok and checked.warnings[0].startswith("runtime-only: restarting")
+    assert start_asks(a, state, monkeypatch, fake) == ["pb-a"]
 
 
 def test_a_user_the_plant_forgot_fails_verify_and_applying_again_joins_again(world):

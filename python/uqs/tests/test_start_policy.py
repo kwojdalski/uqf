@@ -98,12 +98,14 @@ def test_profile_resolution_refuses_with_a_reason(names, extra, says):
 FROM, TO = datetime(2026, 9, 13, tzinfo=UTC), datetime(2026, 9, 15, tzinfo=UTC)
 
 #: Every way into torq.sh that starts q processes: `uqs start`, `uqs restart`,
-#: `uqs job backfill`, and `uqs exec -- start ...` (run_torq_sh as given).
+#: `uqs job backfill`, and `uqs exec -- start ...` (run_torq_sh as given), and
+#: `uqs exec -- debug ...`, which runs the start line in the foreground (#2756).
 STARTERS = {
     "start": lambda p: runtime.start(p, "rdb1"),
     "restart": lambda p: runtime.restart(p, "rdb1"),
     "backfill": lambda p: backfill.start(p, "demo_deals_backfill", "v1", FROM, TO),
     "raw": lambda p: runtime.run_torq_sh(p, ["start", "rdb1"]),
+    "debug": lambda p: runtime.run_torq_sh(p, ["debug", "rdb1"]),
 }
 
 
@@ -143,6 +145,18 @@ def test_backfill_is_checked_as_the_process_it_starts(monkeypatch):
     assert seen == ["deals_backfill1", "all"]
     with pytest.raises(UqsError, match="nosuchproc1"):
         start_policy.refuse_start(paths, ["start", "nosuchproc1", "-extras", "-worker", "x"], None)
+
+
+def test_a_debug_is_checked_as_the_start_it_is(monkeypatch):
+    """torq.sh's `debug` evaluates the start line: its name and ports are checked (#2756)."""
+    seen = []
+    monkeypatch.setattr(start_policy.qtree, "refuse_unloadable", lambda *_a: None)
+    monkeypatch.setattr(occupancy, "refuse_if_taken", lambda _p, _b, procs: seen.append(procs))
+    paths = stack_paths.default_paths()
+    start_policy.refuse_start(paths, ["debug", "rdb1", "-extras", "-x"], 7000)
+    assert seen == ["rdb1"]
+    with pytest.raises(UqsError, match="nosuchproc1"):
+        start_policy.refuse_start(paths, ["debug", "nosuchproc1"], None)
 
 
 def test_a_verb_that_starts_nothing_is_not_refused(monkeypatch):

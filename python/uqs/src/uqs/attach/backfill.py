@@ -177,10 +177,13 @@ def canonical(path: str) -> Path:
     return Path(os.path.realpath(path))
 
 
-def require_verified(attachment: str, attach_root: Path | None = None) -> None:
+def require_verified(
+    attachment: str, attach_root: Path | None = None, *, needs: str = "a backfill"
+) -> None:
     """Refuse unless the attachment's manifest, read now, says `verified`. Admission
     calls it, and launch again under the attachment's lock (#1526): a detach can land
-    between the two."""
+    between the two. `needs` names what asked: `uqs data check --apply` / `data alter
+    --attachment` hold a write to the HDB to the same rule (hdb_where, #2769)."""
     folder = config.directory(attachment, attach_root)
     manifest = (
         Manifest.load(attachment, attach_root) if Manifest.exists(attachment, attach_root) else None
@@ -188,7 +191,7 @@ def require_verified(attachment: str, attach_root: Path | None = None) -> None:
     state = manifest.state if manifest else "planned"
     if state != VERIFIED:
         raise UqsError(
-            f"attachment {attachment} is {state}, not {VERIFIED}: a backfill needs the "
+            f"attachment {attachment} is {state}, not {VERIFIED}: {needs} needs the "
             f"attachment's identity and storage checked "
             f"(`uqs job attachment add {attachment} --no-start`)"
             + (

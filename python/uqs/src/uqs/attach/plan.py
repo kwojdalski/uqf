@@ -12,10 +12,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import native, overrides, preflight, schema_files, sort_plan
+from uqs.attach import (
+    apply_schema,
+    durability,
+    native,
+    overrides,
+    preflight,
+    schema_files,
+    sort_plan,
+)
 from uqs.attach.config import DURABLE, Attachment
 from uqs.attach.findings import Finding, blockers
-from uqs.attach.manifest import DONE, RETAINED, Manifest
+from uqs.attach.manifest import DONE, EXISTING, RETAINED, Manifest, Op
+from uqs.attach.preflight_components import RUNTIME_ONLY_CODES
 from uqs.attach.remote import Ipc
 from uqs.attach.topology import Observation, Proc, observe
 
@@ -34,6 +43,8 @@ class Plan:
     sort_changes: list[sort_plan.Change] = field(default_factory=list)
     #: every file attaching writes, the publisher's identity and its startup policy
     native: dict = field(default_factory=dict)
+    #: the blocks apply removes: a durable attachment replaced as --transient (#2762)
+    unblocks: list[Op] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -90,23 +101,46 @@ class Plan:
                         "needs_restart": False,
                     }
                 )
-        if att.persist in DURABLE:
-            tp = obs.tickerplant
-            path = (tp.probe or {}).get("schemafile", "") if tp else ""
+        tp = obs.tickerplant
+        probe = (tp.probe or {}) if tp else {}
+        # apply writes a block for the tables it creates or shares, never one it adopts
+        # (durability.py, #2763): with only adopted tables there is no schema-file change
+        ownership = durability.ownership_now(att, probe, self.token)
+        blocked = [t.name for t in att.tables if ownership[t.name] != EXISTING]
+        if att.persist in DURABLE and blocked:
+            path = probe.get("schemafile", "")
             by = f"{tp.procname if tp else 'the tickerplant'} appends" * (
                 att.persist == "remote-schema-file"
             )
+            # the tables a restart would restore, as preflight judged them (durability.py):
+            # a shared table whose creator is runtime-only is not one of them (#2759)
+            lost = {f.facts["table"] for f in self.findings if f.code == "SHARED_RUNTIME_ONLY"}
+            kept = [t for t in blocked if t not in lost]
             steps.append(
                 {
                     "process": "schema file",
-                    "action": f"{by or 'append'} a marked block to {path}",
-                    "table": ", ".join(t.name for t in att.tables),
+                    "action": f"{by or 'append'} a marked block to {path}"
+                    + (f" ({', '.join(sorted(lost))} stays runtime-only)" if lost else ""),
+                    "table": ", ".join(kept) or "(none restored by a restart)",
                     "creates": True,
                     "reversible_before": "remove the block (hash checked)",
                     "reversible_after": "retained (restart and replay need it)",
                     "needs_restart": False,
                 }
             )
+        steps += [
+            {
+                "process": "schema file",
+                "action": f"remove this attachment's {'+uses ' * (o.op == 'schema_uses')}"
+                f"block from {o.post.get('path', '')} (--transient keeps none)",
+                "table": o.table.replace(",", ", "),
+                "creates": False,
+                "reversible_before": "n/a (a removal)",
+                "reversible_after": "n/a (a removal)",
+                "needs_restart": False,
+            }
+            for o in self.unblocks
+        ]
         return steps
 
     def components(self) -> list[dict]:
@@ -144,24 +178,55 @@ class Plan:
 
     def health(self, m: Manifest) -> list[str]:
         """Where the stack no longer matches what the manifest says was applied -
-        a restart without a persisted schema being the usual cause."""
+        a restart without a persisted schema being the usual cause.
+
+        Only an applied attachment is told to apply again. A detached one kept its
+        registrations only as long as the tickerplant does (detach.py, #2766): one
+        a restart dropped is reported as that, with nothing to repair. A rolled-back
+        one has nothing left to check - every step is reverted."""
         procs = {p.procname: p for p in self.observation.procs()}
-        lost = []
-        for op in m.operations:
-            if op.op not in ("stp_register", "consumer_attach") or op.status not in (
-                DONE,
-                RETAINED,
-            ):
-                continue
+        blocked = {
+            t
+            for o in m.operations
+            if o.op == "schema_block" and o.status in (DONE, RETAINED)
+            for t in o.table.split(",")
+        }
+        said = []
+        for op in self._registered(m):
             proc = procs.get(op.process)
             if proc is None or not proc.up:
-                lost.append(f"{op.process} is not reachable: {op.table} cannot be checked")
+                said.append(f"{op.process} is not reachable: {op.table} cannot be checked")
             elif not (proc.probe or {}).get("schemas", {}).get(op.table):
-                lost.append(
+                if m.state == "detached":
+                    said.append(_detached_lost(m, op.process, op.table, op.table in blocked))
+                    continue
+                said.append(
                     f"registration-lost: {op.process} no longer holds {op.table} "
                     "(restarted without the persisted schema?) - apply it again"
                 )
-        return lost
+        return said
+
+    def lost(self, m: Manifest) -> list[tuple[str, str]]:
+        """(process, table) for each registration the manifest records as applied
+        that a process the plan reached no longer holds - what `health` reports
+        as registration-lost. An unreachable process is not counted: nothing
+        says what it holds."""
+        procs = {p.procname: p for p in self.observation.procs()}
+        return [
+            (op.process, op.table)
+            for op in self._registered(m)
+            if (proc := procs.get(op.process)) is not None
+            and proc.up
+            and not (proc.probe or {}).get("schemas", {}).get(op.table)
+        ]
+
+    @staticmethod
+    def _registered(m: Manifest) -> list:
+        return [
+            op
+            for op in m.operations
+            if op.op in ("stp_register", "consumer_attach") and op.status in (DONE, RETAINED)
+        ]
 
     def as_dict(self, m: Manifest | None = None) -> dict:
         att = self.attachment
@@ -210,6 +275,22 @@ class Plan:
         }
 
 
+def _detached_lost(m: Manifest, process: str, table: str, blocked: bool) -> str:
+    """A registration a detached attachment kept that is gone: expected after a
+    restart for a table no block defines, odd for one a block does."""
+    if blocked:
+        return (
+            f"detached: {process} no longer holds {table} although {m.attachment}'s block "
+            "defines it - check that the tickerplant reads that schema file at start; "
+            f"{m.attachment} is detached, so there is nothing to apply"
+        )
+    return (
+        f"detached: {process} no longer holds {table} - no block defines it, so a "
+        f"restart dropped it, as detach said; {m.attachment} is detached, so there is "
+        "nothing to apply"
+    )
+
+
 def own_publisher_running(att: Attachment, f: Finding) -> bool:
     """`f` says the attachment's OWN publisher is running. Apply must not run
     under it (rows published mid-registration may be lost), but it is what a
@@ -231,6 +312,16 @@ def publisher_port(att: Attachment, root: Path) -> preflight.PublisherPort:
     )
 
 
+def restart_loses(att: Attachment, findings: list[Finding]) -> list[str]:
+    """The tables a tickerplant restart would not restore, as preflight judged them
+    (durability.py): each one a runtime-only warning names, and every table of a
+    runtime-only attachment."""
+    if att.persist not in DURABLE:
+        return [t.name for t in att.tables]
+    codes = set(RUNTIME_ONLY_CODES.values())
+    return sorted({f.facts["table"] for f in findings if f.code in codes})
+
+
 def build(att: Attachment, ipc: Ipc, root: Path, facts: preflight.Facts | None = None) -> Plan:
     """Observe the stack and check it. Read-only."""
     obs, structural = observe(att, ipc)
@@ -240,7 +331,16 @@ def build(att: Attachment, ipc: Ipc, root: Path, facts: preflight.Facts | None =
     if att.persist == "remote-schema-file" and obs.tickerplant and obs.tickerplant.up:
         facts.schema = schema_files.inspect(ipc, obs.tickerplant)
     changes, sort_findings = sort_plan.assess(att, obs, ipc, facts, root)
-    registry, preview = native.assess(att, obs, port, root, facts.state_dir)
-    found = structural + preflight.check(att, obs, facts) + sort_findings + registry
+    found = structural + preflight.check(att, obs, facts) + sort_findings
+    registry, preview = native.assess(
+        att, obs, port, root, facts.state_dir, restart_loses(att, found)
+    )
+    found += registry
+    # a durable attachment replaced as --transient: its blocks go, unless published (#2762)
+    held = facts.token and Manifest.exists(att.name, facts.state_dir)
+    m = Manifest.load(att.name, facts.state_dir) if held else None
+    unblocks = apply_schema.unwanted(m, att)
+    if refused := apply_schema.after_publication(att, unblocks, obs, ipc, facts.host):
+        found, unblocks = found + refused, []
     found, problems = overrides.evaluate(att.overrides, found)
-    return Plan(att, obs, found, port, facts.token, problems, changes, preview)
+    return Plan(att, obs, found, port, facts.token, problems, changes, preview, unblocks)

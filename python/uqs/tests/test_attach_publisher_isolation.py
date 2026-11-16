@@ -16,26 +16,37 @@ its launch is recorded, never run.
 from __future__ import annotations
 
 import csv
+import dataclasses
 import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
-from attach_support import FakeStack
+from attach_support import FakeStack, blocked
 from typer.testing import CliRunner
 from which_support import fake_which
 
 from uqs import cli
 from uqs import paths as stack_paths
-from uqs.attach import config, facts, live, service
+from uqs.attach import config, facts, live, native, native_row, service
 from uqs.attach.config import AttachmentError
 from uqs.attach.manifest import Manifest
-from uqs.attach.publisher import UqsPublisher
+from uqs.attach.publisher import UqsPublisher, stop_publisher
 from uqs.cli import shared
 from uqs.model.pipelines import PIPELINE_OFFSETS
 from uqs.paths import UqsError, repo_root
-from uqs.stack import alive, attach_state, attached_publisher, gateway_access, qtree, runtime
+from uqs.process_stop import Stopped
+from uqs.stack import (
+    alive,
+    attach_state,
+    attached_publisher,
+    gateway_access,
+    generated,
+    qtree,
+    runtime,
+    stopping,
+)  # fmt: skip
 
 ROOT = repo_root()
 JOB, PUBLISHER, STACK = "executions", "executions1", 6000
@@ -144,6 +155,7 @@ def saved(state: str = "verified") -> config.Attachment:
     att = service.create("ex-site", JOB, None, STACK, ROOT)
     config.save(att)
     m = Manifest.new(att, Manifest.path_for(att.name))
+    blocked(m, [t.name for t in att.tables])  # restart-safe: the start asks no stack
     m.set_state(state, "set by the test")
     return att
 
@@ -357,3 +369,114 @@ def test_a_whole_stack_start_without_the_access_list_fails_by_name(site, monkeyp
     assert "gateway1's and sctp1's access lists start from the starter pack's logins" in said
     assert "A publisher attached to a stack uqf does not manage needs neither list" in said
     assert site.launched == []
+
+
+# ------------------------------------- a publisher the site's torq.sh started (#2757)
+
+
+class Natively:
+    """A publisher process on a stubbed process listing, started with the
+    site's torq.sh start line - `-procfile` the file it read - that a stop
+    ends by recording the pid gone; listening while any pid of it is."""
+
+    def __init__(self, site: Site, monkeypatch, procfile: Path) -> None:
+        uqf = native_row.uqf_row(site.paths(), PUBLISHER)
+        assert uqf is not None
+        proctype = uqf["proctype"]
+        self.line = (
+            f"q torq.q -stackid {STACK} -proctype {proctype} -procname {PUBLISHER} "
+            f"-load x.q -procfile {procfile}"
+        )
+        self.lines: dict[int, str] = {}
+        self.signalled: list[int] = []
+        self.start()
+
+        def stop_pids(pids, **_kw):
+            self.signalled += pids
+            for pid in pids:
+                self.lines.pop(pid)
+            return [Stopped(pid, True) for pid in pids]
+
+        monkeypatch.setattr(
+            alive, "_command_lines", lambda timeout=None: sorted(self.lines.items())
+        )
+        monkeypatch.setattr(stopping, "stop_pids", stop_pids)
+        monkeypatch.setattr(generated, "lock_path", lambda _p: site.data / "lifecycle.lock")
+
+    def start(self) -> None:
+        self.lines[4321] = self.line
+
+    def publisher(self, site: Site) -> UqsPublisher:
+        return UqsPublisher(site.paths(), facts.Host(lambda _h, _p: bool(self.lines)))
+
+
+def registered(site: Site) -> config.Attachment:
+    """A verified attachment whose native registration wrote its row into the
+    site's process file, as native.register records it in the manifest."""
+    att = saved()
+    native_cfg = config.Native(str(site.app / "appconfig" / "process.csv"))
+    att = dataclasses.replace(att, native=native_cfg)
+    config.save(att)
+    m = Manifest.load(att.name)
+    m.registrations[native.ROW] = {
+        "path": att.native.process_file, "host": "here", "procname": PUBLISHER,
+        "status": "done", "value": "localhost,...", "previous": None, "at": "now",
+    }  # fmt: skip
+    m.save()
+    return att
+
+
+def test_one_started_from_the_registered_process_file_is_stopped_and_detach_goes_on(
+    site, monkeypatch
+):
+    att = registered(site)
+    proc = Natively(site, monkeypatch, site.app / "appconfig" / "process.csv")
+    assert alive.instances(site.paths(), STACK)[PUBLISHER] == [4321], "uqs status sees it up"
+    done = stopping.stop(site.paths(), PUBLISHER, STACK, capture=True)
+    assert done.returncode == 0 and f"{PUBLISHER}: stopped pid 4321" in done.stdout
+    assert proc.signalled == [4321]
+    # detach's stop: the same process, started natively again
+    proc.start()
+    assert stop_publisher(config.load(att.name), proc.publisher(site)) is True
+    assert proc.signalled == [4321, 4321] and not proc.lines
+
+
+def test_one_from_a_process_file_no_attachment_registered_is_never_signalled(
+    site, monkeypatch, tmp_path
+):
+    registered(site)
+    other = tmp_path / "other-checkout" / "process.csv"
+    proc = Natively(site, monkeypatch, other)
+    done = stopping.stop(site.paths(), PUBLISHER, STACK, capture=True)
+    assert proc.signalled == [], "another process file's process is left alone (#2689)"
+    assert done.returncode == 1, "it is still up, as `uqs status` says"
+    assert "is not currently running" not in done.stdout
+    assert f"{PUBLISHER}: left running pid 4321 - started from {other.resolve()}" in done.stdout
+    assert f"`torq.sh stop {PUBLISHER} -csv {other.resolve()}`" in done.stdout
+
+
+def test_a_publisher_detach_cannot_stop_is_refused_naming_what_stops_it(
+    site, monkeypatch, tmp_path
+):
+    att = registered(site)
+    # its row was edited by hand to start it from another file: not this attachment's
+    other = tmp_path / "hand-edited" / "process.csv"
+    proc = Natively(site, monkeypatch, other)
+    with pytest.raises(AttachmentError) as refused:
+        stop_publisher(config.load(att.name), proc.publisher(site))
+    said = str(refused.value)
+    assert f"{PUBLISHER} did not stop (exit 1)" in said
+    assert f"`torq.sh stop {PUBLISHER} -csv {other.resolve()}`" in said
+    assert proc.signalled == []
+
+
+def test_still_listening_after_a_stop_names_the_site_torq_sh_stop(site, monkeypatch):
+    att = registered(site)
+    proc = Natively(site, monkeypatch, site.app / "appconfig" / "process.csv")
+    monkeypatch.setattr(UqsPublisher, "running", lambda self, att: True)
+    with pytest.raises(AttachmentError) as refused:
+        stop_publisher(config.load(att.name), proc.publisher(site))
+    said = str(refused.value)
+    assert "still listening after stop" in said
+    assert f"`uqs stop {PUBLISHER} --base-port {STACK} --kill`" in said
+    assert f"`torq.sh stop {PUBLISHER} -csv {att.native.process_file}`" in said

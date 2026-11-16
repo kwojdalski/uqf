@@ -14,6 +14,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from uqs.attach.manifest import CREATED, DONE, Manifest
 from uqs.attach.remote import Endpoint, IpcError
 
 #: Loads a schema file the way a restarting tickerplant does (`\l`), and says what it defined.
@@ -23,6 +24,36 @@ owned:@[value;`.uqfattach.owned;()!()];
   $[count owned;(key owned)!.j.k each value owned;()!()]);
 exit 0
 """
+
+
+def blocked(m: Manifest, tables: list[str], path: str = "/nowhere/database.q") -> None:
+    """Record in `m`, as apply does, that the attachment created `tables` and a
+    schema-file block of its own defines them: the evidence that a tickerplant
+    restart restores them (durability.py), for a manifest a test makes by hand."""
+    for name in tables:
+        m.finish(m.begin("stp_register", "stp1", name, {}), DONE, CREATED)
+    record = {"path": path, "outside_sha": "", "block_sha": ""}
+    m.finish(m.begin("schema_block", "schema-file", ",".join(tables), {}), DONE, CREATED, record)
+
+
+def registered_at_runtime(fake: FakeStack, table: str) -> None:
+    """`table` is on the tickerplant and both consumers already - registered at
+    runtime by something that keeps no ownership record (#2763) - with everything
+    a registration made by stp_register gives it: logs, time stamp, subscribers."""
+    cols = [list(c) for c in LEDGER_COLUMNS]
+    tp = fake.named("stp1")
+    tp["schemas"] = {table: cols}
+    for key in ("tables", "published", "names"):
+        tp[key].append(table)
+    log = f"{tp['dldir'].lstrip(':')}/stp1_{table}20261016090000"
+    tp |= {"logged": {table: True}, "updtab": {table: True}, "replay": {table: 1},
+           "logfiles": {table: [{"name": log, "size": 8, "open": True}]},
+           "subscribers": {table: 2}}  # fmt: skip
+    for name in ("rdb1", "wdb1"):
+        fake.named(name)["schemas"] = {table: cols}
+        fake.named(name)["subscribed"].append(table)
+    fake.named("rdb1")["subtables"].append(table)
+    fake.named("wdb1")["tablelist"].append(table)
 
 
 def q_load(q_binary: tuple[str, dict[str, str]], schema: Path, scratch: Path) -> dict[str, Any]:

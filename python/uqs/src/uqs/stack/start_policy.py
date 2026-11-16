@@ -38,8 +38,11 @@ from uqs.stack import attach_state, occupancy, qtree, runtime_profiles, start_ov
 from uqs.stack import procs as stack_procs
 from uqs.stack.env import with_interpreter
 
-#: torq.sh verbs that start q processes, and so load the tree.
-STARTING_VERBS = ("start", "restart")
+#: torq.sh verbs that start q processes, and so load the tree. `debug` is one:
+#: torq.sh evaluates the process's start line in the foreground with `-debug`,
+#: `-extras` included, so it is refused, prepared and recorded as a start is
+#: (#2756). `top` runs a q too, but only TorQ's profiler against a running pid.
+STARTING_VERBS = ("start", "restart", "debug")
 
 
 def refuse_start(
@@ -57,10 +60,19 @@ def refuse_start(
 
     The publisher of an attachment (`uqs job attachment add`, #1424) is refused here
     too, unless the attachment is verified and the start is under its stack id.
+
+    A `debug` names exactly one process, as torq.sh's own check demands - which
+    it makes only after these, so a `debug all` would be refused for `all`'s
+    reasons rather than its own.
     """
     if not args or args[0] not in STARTING_VERBS:
         return
     procs = started_procs(args)
+    if args[0] == "debug" and (procs == "all" or len(procs.split()) != 1):
+        raise UqsError(
+            f"torq.sh debug runs one process in the foreground: name exactly one "
+            f"process, not `{procs}`. Nothing was started"
+        )
     stack_procs.assert_known_procnames(paths, procs)
     if not start_overrides.skipped(paths, overrides, "q_version", args[0], procs):
         env = with_interpreter(paths)
@@ -104,8 +116,9 @@ def refuse_unsupported(paths: UqsPaths, procs: str, env: Mapping[str, str]) -> N
 
 def with_publisher_extras(paths: UqsPaths, args: Sequence[str]) -> list[str]:
     """`args`, plus the `-extras` an attachment's publisher needs to find a
-    stack on another machine (attach_state.publisher_extras). Only a start or
-    restart is changed."""
+    stack on another machine (attach_state.publisher_extras). Only a starting
+    verb is changed: torq.sh's `debug` builds its line as `start` does, so the
+    extras reach a debugged publisher too."""
     args = list(args)
     if not args or args[0] not in STARTING_VERBS:
         return args

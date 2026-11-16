@@ -24,6 +24,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from attach_support import blocked
 from mcp_support import call, refused
 from typer.testing import CliRunner
 
@@ -79,6 +80,7 @@ def nothing_starts(monkeypatch):
 
 def with_state(att: config.Attachment, status: str) -> Path:
     m = Manifest.new(att, Manifest.path_for(att.name))
+    blocked(m, [t.name for t in att.tables])  # restart-safe: the start asks no stack
     m.set_state(status, "set by the test")
     return Manifest.path_for(att.name)
 
@@ -100,6 +102,9 @@ STARTS = [
     ["restart"],
     ["start", "rdb1", PUBLISHER],
     ["start", PUBLISHER, "-extras", "-x", "1"],
+    # `uqs exec -- debug`: torq.sh runs the start line in the foreground (#2756)
+    ["debug", PUBLISHER],
+    ["debug", PUBLISHER, "-extras", "-x", "1"],
 ]
 
 
@@ -124,6 +129,14 @@ def test_a_verified_publisher_is_refused_under_another_stack(att, args, port):
 def test_a_verified_publisher_starts_under_its_own_stack(att, args):
     with_state(att, "verified")
     start_policy.refuse_start(default_paths(), args, STACK)
+
+
+@pytest.mark.parametrize("args", [["debug"], ["debug", "all"], ["debug", "rdb1", PUBLISHER]])
+def test_a_debug_names_exactly_one_process(att, args):
+    """torq.sh debugs one process; `all` must not be refused for all's reasons."""
+    with_state(att, "verified")
+    with pytest.raises(UqsError, match=r"torq.sh debug runs one process .*name exactly one"):
+        start_policy.refuse_start(default_paths(), args, STACK)
 
 
 def test_a_start_that_does_not_launch_the_publisher_is_not_gated(att):
@@ -326,6 +339,48 @@ def test_a_backfill_style_start_is_gated_too(unverified):
     """`uqs job backfill`/`replay`/`exec` call run_torq_sh with their own args."""
     with pytest.raises(UqsError, match="publisher of attachment ex-uat"):
         runtime.run_torq_sh(default_paths(), ["start", PUBLISHER, "-extras", "-x"], STACK)
+
+
+def _refusal(argv: list[str], monkeypatch) -> str:
+    """The one line `uqs <argv>` dies with (cli.shared._die logs it through loguru)."""
+    said: list[str] = []
+    monkeypatch.setattr(
+        shared, "log", SimpleNamespace(error=lambda m, *a: said.append(m.format(*a)))
+    )
+    result = CliRunner().invoke(cli.app, argv)
+    assert result.exit_code == 1 and len(said) == 1, said
+    return said[0]
+
+
+def test_exec_debug_is_refused_as_start_is(unverified, monkeypatch):
+    """`uqs exec -- debug <publisher>` launches the publisher in the foreground:
+    the same refusal as `uqs start`, word for word (#2756)."""
+    port = ["--base-port", str(STACK)]
+    started = _refusal(["start", PUBLISHER, *port], monkeypatch)
+    assert "publisher of attachment ex-uat" in started and "which is applied" in started
+    assert _refusal(["exec", *port, "--", "debug", PUBLISHER], monkeypatch) == started
+
+
+def test_exec_debug_of_a_verified_publisher_reaches_torq_sh(att, monkeypatch, tmp_path):
+    """Verified and under its stack id, the debug passes the gate and runs."""
+    with_state(att, "verified")
+    ran: list[list[str]] = []
+
+    def run(cmd, **_kw):
+        ran.append(cmd)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(runtime, "torq_launcher", lambda _p: Path("torq.sh"))
+    monkeypatch.setattr(runtime, "bootstrap_publisher", lambda *_a, **_k: {})
+    monkeypatch.setattr(generated, "lock_path", lambda _p: tmp_path / "lifecycle.lock")
+    monkeypatch.setattr(runtime.deployment, "record", lambda *_a, **_k: None)
+    monkeypatch.setattr(runtime.qtree, "is_flattened", lambda _p: False)
+    monkeypatch.setattr(runtime.subprocess, "run", run)
+    result = CliRunner().invoke(
+        cli.app, ["exec", "--base-port", str(STACK), "--", "debug", PUBLISHER]
+    )
+    assert result.exit_code == 0, result.output
+    assert ran == [["torq.sh", "debug", PUBLISHER]]
 
 
 def test_stop_is_never_gated(unverified, monkeypatch, tmp_path):

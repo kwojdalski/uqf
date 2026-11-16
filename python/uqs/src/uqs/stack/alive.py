@@ -28,10 +28,12 @@ import subprocess
 import time
 from collections import defaultdict
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
+from uqs.stack import attach_state
 from uqs.stack.env import build_env
 from uqs.stack.placeholders import resolve_process_config
 from uqs.stack.procs import effective_process_rows
@@ -156,38 +158,81 @@ def listeners(ports: Iterable[int], timeout: float | None = None) -> dict[int, l
     return dict(held)
 
 
-def instances(
-    paths: UqsPaths,
-    base_port: int | None = None,
-    timeout: float | None = None,
-    *,
-    own_procfile: bool = False,
-) -> dict[str, list[int]]:
-    """Every local process this stack declares, with EVERY pid whose command
-    line matches it, oldest first - a duplicate started by hand included.
-    status_table reports the newest, as torq.sh does; `uqs stop` stops them
-    all (stack/stopping.py).
-
-    `own_procfile` keeps only those started from THIS tree's process.csv
-    (`-procfile`, which every start line carries): another checkout, or a
-    test's stack, on the same base port matches -stackid/-procname too, and a
-    stop must never signal it (#2689)."""
+def _matches(
+    paths: UqsPaths, base_port: int | None, timeout: float | None
+) -> tuple[int, dict[str, list[tuple[int, str]]]]:
+    """The resolved base port, and every local process this stack declares with
+    the (pid, command line) of each process that matches it, oldest first."""
     try:
         commands = _command_lines(timeout)
     except subprocess.TimeoutExpired as exc:
         raise UqsError(f"listing processes did not finish within {timeout:g}s") from exc
-    if own_procfile:
-        mine = paths.generated_procs.resolve()
-        commands = [(pid, args) for pid, args in commands if _procfile(args) == mine]
     local = _local_hosts()
     base_port = paths.runtime_declaration.resolve_base_port(base_port)  # torq.sh's -stackid
-    found: dict[str, list[int]] = {}
+    found: dict[str, list[tuple[int, str]]] = {}
     for row in _process_rows(paths, base_port):
         if row.get("host", "localhost") not in local:
             continue
         needle = f"-stackid {base_port} -proctype {row['proctype']} -procname {row['procname']} "
-        found[row["procname"]] = [pid for pid, args in commands if needle in args + " "]
-    return found
+        found[row["procname"]] = [(pid, args) for pid, args in commands if needle in args + " "]
+    return base_port, found
+
+
+def instances(
+    paths: UqsPaths, base_port: int | None = None, timeout: float | None = None
+) -> dict[str, list[int]]:
+    """Every local process this stack declares, with EVERY pid whose command
+    line matches it, oldest first - a duplicate started by hand included, and
+    one started from any process file. status_table reports the newest, as
+    torq.sh does; `uqs stop` stops only those `stoppable` calls its own."""
+    return {
+        name: [pid for pid, _ in hits]
+        for name, hits in _matches(paths, base_port, timeout)[1].items()
+    }
+
+
+@dataclass(frozen=True)
+class Elsewhere:
+    """An attachment's publisher that matches by name and stack id but was
+    started from a process file that is not this stack's to stop."""
+
+    pid: int
+    #: its `-procfile`, None when its start line has none
+    procfile: Path | None
+
+
+def stoppable(
+    paths: UqsPaths, base_port: int | None = None, timeout: float | None = None
+) -> tuple[dict[str, list[int]], dict[str, list[Elsewhere]]]:
+    """`instances`, split into the pids a stop may signal and the attachment
+    publishers' pids it may not.
+
+    Its own are those started from THIS tree's process.csv (`-procfile`, which
+    every start line carries) or, for an attachment's publisher, from the site
+    process file that attachment's native registration wrote its row into
+    (attach_state.registered_process_files, #2757) - the site's torq.sh starts
+    it from there. Anything else that matches -stackid/-procname - another
+    checkout's or a test's stack on the same base port, or a site process file
+    no attachment recorded - is never signalled (#2689). Of those, only an
+    attachment publisher's under this stack id is returned: there "not
+    running" would be a lie that blocks detach, so the stop names it and how
+    it is stopped. Another checkout's or test stack's process on a shared base
+    port is routine, and left alone without a word."""
+    base_port, found = _matches(paths, base_port, timeout)
+    mine = paths.generated_procs.resolve()
+    registered = attach_state.registered_process_files(base_port)
+    published = {p.procname for p in attach_state.publishers() if p.stack_id == base_port}
+    ours: dict[str, list[int]] = {}
+    others: dict[str, list[Elsewhere]] = {}
+    for name, hits in found.items():
+        allowed = {mine} | registered.get(name, set())
+        ours[name] = [pid for pid, args in hits if _procfile(args) in allowed]
+        others[name] = [
+            Elsewhere(pid, _procfile(args))
+            for pid, args in hits
+            if name in published and _procfile(args) not in allowed
+        ]
+    return ours, others
 
 
 def _procfile(args: str) -> Path | None:

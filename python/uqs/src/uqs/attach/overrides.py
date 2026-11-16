@@ -127,12 +127,19 @@ POLICY: dict[str, Policy] = {
     ),
     "WDB_MODE": Policy(False, "this wdb does not save, so nothing would persist the table"),
     "STORAGE_MISMATCH": Policy(
-        False, "a recorded location is not where the stack keeps it; plan again"
+        False,
+        "a recorded location is not where the stack keeps it; re-pin it with "
+        "`uqs job attachment add NAME --replace --repin-storage`",
     ),
     "PERSIST_UNAVAILABLE": Policy(
         False,
         "use --transient to accept losing the registration on a restart, or, for a stack "
         "on another machine, --schema-writer tickerplant to have its tickerplant write the block",
+    ),
+    "BLOCK_AFTER_PUBLICATION": Policy(
+        False,
+        "a block a published table's restart and replay need is never removed, so a durable "
+        "attachment cannot become --transient after publication (#2762)",
     ),
     "PROCESS_REGISTRY": Policy(
         False,
@@ -198,9 +205,10 @@ GUARDRAILS = from_policy(POLICY, ("job attachment add",))
 NOT_BLOCKERS = frozenset(
     {
         "WILL_CREATE", "WILL_ADOPT", "ALREADY_APPLIED", "SHARED_TABLE", "WILL_PERSIST",
-        "ALREADY_PERSISTED", "RUNTIME_ONLY", "PUBLISHER_PORT_UNKNOWN", "UNMANAGED_CONSUMER",
-        "CHAINED_UNMANAGED", "HDB_HISTORY", "SORT_RULES_ADD", "SORT_RULES_PRESENT",
-        "SORT_FILE_UNCHECKED", "SORT_READER_STOPPED",
+        "ALREADY_PERSISTED", "RUNTIME_ONLY", "SHARED_RUNTIME_ONLY", "ADOPTED_RUNTIME_ONLY",
+        "STACK_DEFINES", "PUBLISHER_PORT_UNKNOWN",
+        "UNMANAGED_CONSUMER", "CHAINED_UNMANAGED", "HDB_HISTORY", "SORT_RULES_ADD",
+        "SORT_RULES_PRESENT", "SORT_FILE_UNCHECKED", "SORT_READER_STOPPED",
     }
 )  # fmt: skip
 

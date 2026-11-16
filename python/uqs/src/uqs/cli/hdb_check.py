@@ -90,14 +90,16 @@ def hdb_check(
     against every table it declares. With one: that table alone, in the HDB
     they name (`uqs --target TARGET data check` is a release's own). --apply
     shows the plan, asks, and writes only what is missing - additive: a table
-    directory or column file that exists is never touched.
+    directory or column file that exists is never touched. With --attachment,
+    --apply needs the attachment verified and pinning its HDB, as an attached
+    backfill does; the plan alone writes nothing and takes any attachment.
     """
     tables = tables_given(table)
     if tables or template or attach or hdb:
         try:
             if as_json and len(tables) > 1:
                 raise UqsError("--json reports one table: give --table once")
-            handle = resolve(attach, hdb)
+            handle = resolve(attach, hdb, writes=apply)
             schema = hdb_types.declared_schema(handle.paths)
             declared = hdb_shape.declared_tables(handle.paths)
             for name in tables or [_table(handle, None)]:
@@ -130,7 +132,7 @@ def _whole_runtime(*, apply: bool, yes: bool, as_json: bool) -> None:
         _die(exc)
     if apply:
         try:
-            handle = resolve(None, None)
+            handle = resolve(None, None, writes=True)
             confirm(handle, "Write every missing declared table and column, fold the markout "
                     "configuration columns (contract_version, rate_timing, report_ccy) into "
                     "configuration snapshots, dropping them, and REWRITE each partition of a table "

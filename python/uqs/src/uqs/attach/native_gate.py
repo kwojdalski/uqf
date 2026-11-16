@@ -17,7 +17,10 @@ exits 1, and q is never started, unless
     same moment, and rows published before it has reloaded the schema block
     are discarded without a word. So it is asked again, every
     `INTERVAL_S`, for up to `--wait` seconds, while the stack comes up; a
-    stack that never answers refuses, since an answer nobody got is not a yes.
+    stack that never answers refuses, since an answer nobody got is not a yes;
+  * and lists the attachment among the users of each table it shares
+    (live.forgotten, #2764). That refuses at once: waiting does not bring a
+    use the tickerplant forgot back.
 
 The stack's password comes from the variable the attachment names, in the
 environment torq.sh runs in; a variable that is not set refuses at once.
@@ -59,10 +62,11 @@ def check(
     att = config.load(name, state_dir)
     proc, nothing = att.publisher.procname, "Nothing was started."
     try:
-        state = Manifest.load(name, state_dir).state
+        m = Manifest.load(name, state_dir)
     except UqsError as exc:
         raise UqsError(f"{proc}: the manifest of attachment {name} cannot be read ({exc}). "
                        f"{nothing}") from None  # fmt: skip
+    state = m.state
     if state != "verified":
         raise UqsError(
             f"{proc} is the publisher of attachment {name} (stack {att.stack.id}), which is "
@@ -83,10 +87,16 @@ def check(
     deadline = clock() + wait
     while True:
         try:
-            gone, where = live.missing(att, ipc)
+            probe, where = live.ask(att, ipc)
         except UqsError as exc:
             reason = str(exc)
         else:
+            gone, left = live.unregistered(att, probe), live.forgotten(att, m, probe)
+            if not gone and left:  # waiting does not bring a forgotten use back (#2764)
+                raise UqsError(
+                    f"{proc} is the publisher of attachment {name}, and "
+                    f"{live.forgot(att, left, where)} {nothing}"
+                )
             if not gone:
                 return f"{proc}: attachment {name} is verified and {where} holds its tables"
             reason = f"{', '.join(gone)} not registered on {where}"

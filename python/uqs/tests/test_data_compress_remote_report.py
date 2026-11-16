@@ -182,7 +182,7 @@ def test_a_path_is_quoted_and_never_run_by_a_shell(server, hdb, capsys):
 def test_a_target_path_is_not_checked_on_this_machine(server, monkeypatch):
     token = hdb_scope.ON_TARGET.set("tp")
     try:
-        handle = hdb_scope.resolve(None, "/only/on/the/target/hdb")
+        handle = hdb_scope.resolve(None, "/only/on/the/target/hdb", writes=False)
     finally:
         hdb_scope.ON_TARGET.reset(token)
     assert (handle.kind, handle.hdb) == ("target", "/only/on/the/target/hdb")
