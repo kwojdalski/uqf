@@ -353,6 +353,11 @@ def publisher_extras(paths: UqsPaths, procs: str) -> list[str]:
 #: What a TCP connect to the publisher's port says, as `job attachment list` shows it.
 RUNNING, STOPPED, UNREACHABLE, UNKNOWN = "running", "stopped", "unreachable", "unknown"
 
+#: Where an attachment's publisher listens: `runtime.start` starts it on this
+#: machine, whichever host the stack it publishes to runs on (#1651, #2768).
+#: `job attachment list`/`show` and `uqs.attach` all probe it here.
+PUBLISHER_HOST = "localhost"
+
 
 def _port_state(host: str, port: int, timeout: float = 0.5) -> tuple[str, str]:
     """(state, detail) of host:port. A refused connection is the host answering
@@ -382,7 +387,8 @@ def _publisher_port(procname: str, stack_id: int, root: Path) -> int | None:
 def inventory(root: Path | None = None, repo: Path | None = None) -> list[dict[str, Any]]:
     """One row per attachment: what it is, where, its lifecycle state, and -
     separately - whether its publisher is running now. Reads the two JSON
-    files and connects to one port; changes nothing, and takes no lock."""
+    files and connects to one port - the publisher's, on PUBLISHER_HOST, not
+    on the stack's host; changes nothing, and takes no lock."""
     rows: list[dict[str, Any]] = []
     base = root or state_root()
     published, broken = _scan(base)
@@ -395,10 +401,10 @@ def inventory(root: Path | None = None, repo: Path | None = None) -> list[dict[s
             job, host, persist = "", "", ""
             log.warning("attachment {}: {}", pub.attachment, exc)
         port = _publisher_port(pub.procname, pub.stack_id, repo or repo_root())
-        if port is None or not host:
+        if port is None:
             running, detail = UNKNOWN, "the publisher's port cannot be worked out"
         else:
-            running, detail = _port_state(host, port)
+            running, detail = _port_state(PUBLISHER_HOST, port)
         rows.append(
             {
                 "attachment": pub.attachment,

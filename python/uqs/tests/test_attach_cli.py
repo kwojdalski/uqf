@@ -560,6 +560,26 @@ def test_list_attachments_shows_attachment_and_publisher_state_separately(world,
     assert "attachments (1)" in _list().output
 
 
+def test_list_probes_the_publisher_here_not_on_a_remote_stacks_host(world, monkeypatch):
+    """uqs starts the publisher on this machine (PUBLISHER_HOST), so a remote
+    stack's host says nothing about whether it runs (#2768)."""
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+    config = world.state_dir / "pb-uat" / attach_state.CONFIG_FILE
+    cfg = json.loads(config.read_text())
+    cfg["stack"]["host"] = "torq-prod.example"
+    config.write_text(json.dumps(cfg))
+    probed: list[tuple[str, int]] = []
+
+    def port_state(host, port):
+        probed.append((host, port))
+        return ("running", "") if host == attach_state.PUBLISHER_HOST else ("unreachable", "")
+
+    monkeypatch.setattr(attach_state, "_port_state", port_state)
+    (row,) = json.loads(_list("--json").output)["attachments"]
+    assert row["host"] == "torq-prod.example" and row["publisher_state"] == "running"
+    assert probed and all(host == "localhost" for host, _ in probed), probed
+
+
 def test_the_publisher_port_state_tells_stopped_from_unreachable():
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))

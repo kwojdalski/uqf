@@ -36,9 +36,9 @@ from collections.abc import Callable
 from uqs.attach.config import Attachment
 from uqs.attach.facts import Host
 from uqs.attach.findings import Finding
-from uqs.attach.preflight import PUBLISHER_HOST
 from uqs.attach.publisher import Publisher
 from uqs.attach.remote import Bounded, Endpoint, Ipc, IpcError
+from uqs.stack.attach_state import PUBLISHER_HOST
 
 CODE = "PUBLISHER_UNREACHABLE_FROM_STACK"
 #: The stack's credential refused by the publisher.

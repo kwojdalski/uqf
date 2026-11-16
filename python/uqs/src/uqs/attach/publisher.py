@@ -20,9 +20,7 @@ from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Host
 from uqs.paths import UqsError, UqsPaths, repo_root
 from uqs.stack import runtime
-
-#: Where the publisher runs: `runtime.start` starts it on this machine.
-PUBLISHER_HOST = "localhost"
+from uqs.stack.attach_state import PUBLISHER_HOST
 
 
 class Publisher(Protocol):
