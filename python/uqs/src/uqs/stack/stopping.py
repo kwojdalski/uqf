@@ -13,10 +13,11 @@ an attachment's publisher, from the site process file its native
 registration wrote (#2757) - and EVERY matching pid gets SIGTERM, a grace to
 exit, and SIGKILL only with `kill`. Another stack's processes carry another
 -stackid, another checkout's on the same base port another -procfile, and a
-stray q carries neither: nothing else is touched. One that matches by name
-but not by process file is still up as `uqs status` sees it, so the stop
-does not call it "not currently running": it names it, the command that does
-stop it, and fails.
+stray q carries neither: nothing else is touched. An attachment's publisher
+that matches by name but not by process file is still up as `uqs status` and
+detach see it, so the stop does not call it "not currently running": it names
+it, the command that does stop it, and fails. Another checkout's or test
+stack's process on a shared base port is left alone without a word.
 
 `all` is torq.sh's: every startwithall=1 row. A stop needs no bootstrap - it
 writes nothing - but it holds the stack's lifecycle lock, as torq.sh's did, so
@@ -65,7 +66,8 @@ def _wanted(paths: UqsPaths, procs: str, found: dict[str, list[int]]) -> list[st
 
 
 def _elsewhere_line(name: str, other: alive.Elsewhere) -> str:
-    """Why a process `uqs stop` matched by name is left running, and what stops it."""
+    """Why an attachment's publisher `uqs stop` matched by name is left running,
+    and what stops it."""
     if other.procfile is None:
         return (
             f"{name}: left running pid {other.pid} - its start line names no -procfile, so "
@@ -90,7 +92,7 @@ def stop_stack(
 ) -> tuple[list[str], list[ProcessStopped], list[str]]:
     """Stop every running instance of `procs` this stack may stop: the names
     that were not running, what became of each pid that was, and a line for
-    each matching process it may not stop (alive.stoppable)."""
+    each attachment publisher it may not stop (alive.stoppable)."""
     stack_procs.assert_known_procnames(paths, procs)  # below every front end (#887)
     with generated.lifecycle_lock(paths, wait=lock_wait):
         found, others = alive.stoppable(paths, base_port, timeout)
@@ -116,7 +118,7 @@ def stop(
 ) -> subprocess.CompletedProcess[str]:
     """stop_stack, reported as the torq.sh run it replaces was: a line per
     process, exit 0 when every pid is gone and 1 when any survives - one it
-    may not stop included. Printed
+    may not stop included (an attachment's publisher only). Printed
     unless `capture`, which returns the lines as stdout. `timeout` bounds the
     process listing, as it bounds `uqs status`'s."""
     idle, stopped, left = stop_stack(

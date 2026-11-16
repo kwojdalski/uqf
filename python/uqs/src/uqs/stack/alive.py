@@ -193,7 +193,7 @@ def instances(
 
 @dataclass(frozen=True)
 class Elsewhere:
-    """A process that matches a stack's process by name and stack id but was
+    """An attachment's publisher that matches by name and stack id but was
     started from a process file that is not this stack's to stop."""
 
     pid: int
@@ -204,7 +204,8 @@ class Elsewhere:
 def stoppable(
     paths: UqsPaths, base_port: int | None = None, timeout: float | None = None
 ) -> tuple[dict[str, list[int]], dict[str, list[Elsewhere]]]:
-    """`instances`, split into the pids a stop may signal and the ones it may not.
+    """`instances`, split into the pids a stop may signal and the attachment
+    publishers' pids it may not.
 
     Its own are those started from THIS tree's process.csv (`-procfile`, which
     every start line carries) or, for an attachment's publisher, from the site
@@ -212,18 +213,24 @@ def stoppable(
     (attach_state.registered_process_files, #2757) - the site's torq.sh starts
     it from there. Anything else that matches -stackid/-procname - another
     checkout's or a test's stack on the same base port, or a site process file
-    no attachment recorded - is never signalled (#2689); it is returned so
-    the stop can say it is still up, and how it is stopped."""
+    no attachment recorded - is never signalled (#2689). Of those, only an
+    attachment publisher's under this stack id is returned: there "not
+    running" would be a lie that blocks detach, so the stop names it and how
+    it is stopped. Another checkout's or test stack's process on a shared base
+    port is routine, and left alone without a word."""
     base_port, found = _matches(paths, base_port, timeout)
     mine = paths.generated_procs.resolve()
     registered = attach_state.registered_process_files(base_port)
+    published = {p.procname for p in attach_state.publishers() if p.stack_id == base_port}
     ours: dict[str, list[int]] = {}
     others: dict[str, list[Elsewhere]] = {}
     for name, hits in found.items():
         allowed = {mine} | registered.get(name, set())
         ours[name] = [pid for pid, args in hits if _procfile(args) in allowed]
         others[name] = [
-            Elsewhere(pid, _procfile(args)) for pid, args in hits if _procfile(args) not in allowed
+            Elsewhere(pid, _procfile(args))
+            for pid, args in hits
+            if name in published and _procfile(args) not in allowed
         ]
     return ours, others
 

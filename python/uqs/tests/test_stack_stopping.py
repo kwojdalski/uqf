@@ -54,18 +54,26 @@ def test_every_instance_is_stopped_and_another_stack_or_checkout_is_not(tmp_path
     try:
         idle, stopped, left = stopping.stop_stack(default_paths(), "rdb1", BASE, grace=10)
         assert idle == []
-        assert left == [
-            f"rdb1: left running pid {other_tree.pid} - started from "
-            f"{(tmp_path / 'process.csv').resolve()}, which is neither this tree's process.csv "
-            "nor a process file an attachment registered it in; stop it with the torq.sh that "
-            f"reads that file: `torq.sh stop rdb1 -csv {(tmp_path / 'process.csv').resolve()}`"
-        ]
+        assert left == [], "another checkout's process is not this stop's to report"
         assert sorted(s.result.pid for s in stopped) == sorted(p.pid for p in ours)
         assert all(s.result.verdict == "stopped" for s in stopped)
         assert other_stack.poll() is None, "another stack's process is left alone"
         assert other_tree.poll() is None, "another checkout's process is left alone"
     finally:
         reap(*ours, other_stack, other_tree)
+
+
+def test_another_checkouts_process_alone_is_no_failure_and_is_not_signalled(tmp_path):
+    """Worktrees and live test stacks share base ports routinely (#2689): a
+    stop finding only another tree's process says not running, exits 0."""
+    other_tree = _dummy(OBEYS, procfile=tmp_path / "process.csv")
+    try:
+        done = stopping.stop(default_paths(), "rdb1", BASE, grace=10, capture=True)
+        assert done.returncode == 0 and "rdb1 is not currently running" in done.stdout
+        assert "left running" not in done.stdout
+        assert other_tree.poll() is None, "another checkout's process is left alone"
+    finally:
+        reap(other_tree)
 
 
 def test_one_that_ignores_sigterm_fails_the_stop_and_is_named():
