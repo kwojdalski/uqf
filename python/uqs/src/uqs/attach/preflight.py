@@ -28,9 +28,7 @@ from uqs.attach.config import Attachment
 from uqs.attach.facts import LOCAL_HOSTS, Facts, Host, PublisherPort
 from uqs.attach.findings import Finding
 from uqs.attach.topology import Observation, Proc, host_of, port_of, refused
-
-#: The publisher runs where uqs starts it (uqs.attach.publisher).
-PUBLISHER_HOST = "localhost"
+from uqs.stack.attach_state import PUBLISHER_HOST
 
 __all__ = ["SUPPORTED_TORQ", "Facts", "Host", "PublisherPort", "check"]
 
