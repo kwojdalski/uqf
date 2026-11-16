@@ -39,9 +39,23 @@ def stop_publisher(att: Attachment, publisher: Publisher) -> bool:
     if publisher.running(att):
         raise AttachmentError(
             f"{att.publisher.procname} is still listening after stop - detach will not touch the "
-            "stack while the publisher may be publishing"
+            f"stack while the publisher may be publishing. {stop_hint(att)}, then detach again"
         )
     return True
+
+
+def stop_hint(att: Attachment) -> str:
+    """The commands that stop the publisher when `uqs stop` did not: what the
+    site's torq.sh started from the attachment's registered process file, it
+    stops (#2757); one ignoring SIGTERM, `--kill` stops."""
+    proc = att.publisher.procname
+    hint = f"Stop it with `uqs stop {proc} --base-port {att.stack.id} --kill`"
+    if att.native.process_file:
+        hint += (
+            f" or, if the site's torq.sh started it, `torq.sh stop {proc} -csv "
+            f"{att.native.process_file}` with that torq.sh"
+        )
+    return hint
 
 
 class UqsPublisher:

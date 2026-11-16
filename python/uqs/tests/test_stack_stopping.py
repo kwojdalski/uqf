@@ -52,8 +52,14 @@ def test_every_instance_is_stopped_and_another_stack_or_checkout_is_not(tmp_path
     # checkout's stack, or a test's - never this stop's to signal.
     other_tree = _dummy(OBEYS, procfile=tmp_path / "process.csv")
     try:
-        idle, stopped = stopping.stop_stack(default_paths(), "rdb1", BASE, grace=10)
+        idle, stopped, left = stopping.stop_stack(default_paths(), "rdb1", BASE, grace=10)
         assert idle == []
+        assert left == [
+            f"rdb1: left running pid {other_tree.pid} - started from "
+            f"{(tmp_path / 'process.csv').resolve()}, which is neither this tree's process.csv "
+            "nor a process file an attachment registered it in; stop it with the torq.sh that "
+            f"reads that file: `torq.sh stop rdb1 -csv {(tmp_path / 'process.csv').resolve()}`"
+        ]
         assert sorted(s.result.pid for s in stopped) == sorted(p.pid for p in ours)
         assert all(s.result.verdict == "stopped" for s in stopped)
         assert other_stack.poll() is None, "another stack's process is left alone"
@@ -93,7 +99,9 @@ def test_a_process_not_running_is_said_so_and_is_no_failure():
 def test_a_name_that_is_not_a_local_process_is_refused_before_anything_is_signalled(
     monkeypatch,
 ):
-    monkeypatch.setattr(alive, "instances", lambda paths, base_port, *_a, **_k: {"rdb1": [11]})
+    monkeypatch.setattr(
+        alive, "stoppable", lambda paths, base_port, *_a, **_k: ({"rdb1": [11]}, {"rdb1": []})
+    )
     monkeypatch.setattr(stopping.stack_procs, "assert_known_procnames", lambda *_a: None)
     sent = []
     monkeypatch.setattr(stopping, "stop_pids", lambda pids, **_k: sent.extend(pids) or [])

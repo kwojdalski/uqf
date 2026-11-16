@@ -199,8 +199,12 @@ uqs job attachment remove pb-uat
 ```
 
 Detach stops the publisher and takes its row, if it has one, out of the stack's
-process file. It then reads the stack for evidence that anything was published.
-Evidence that cannot be read counts as publication.
+process file. A publisher the site's `torq.sh` started from that row is stopped
+too: `uqs stop` treats the process file the attachment registered in as its own
+for that one process. One started from any other process file is never
+signalled; the refusal names the `torq.sh stop PROC -csv FILE` that stops it. It
+then reads the stack for evidence that anything was published. Evidence that
+cannot be read counts as publication.
 
 - Before any publication, the attachment is rolled back. What it created is
   removed in reverse order: the schema block, the consumers' table and

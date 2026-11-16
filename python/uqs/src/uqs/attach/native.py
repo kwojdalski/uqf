@@ -45,10 +45,11 @@ from uqs.attach.manifest import Manifest, now
 from uqs.attach.registry import Registry, write
 from uqs.attach.topology import TICKERPLANT, Observation
 from uqs.portexpr import resolve
+from uqs.stack import attach_state
 from uqs.stack.attached_publisher import with_auth
 
 CODE = "PROCESS_REGISTRY"
-ROW, LAUNCHER = "process_row", "launcher"
+ROW, LAUNCHER = attach_state.REGISTERED_ROW, "launcher"
 REMOTE = (
     "remote registration is not supported yet: the process file must be on this machine, the "
     "stack's ({host}), and uqs writes it here only. Run `uqs job attachment add` on the stack's "

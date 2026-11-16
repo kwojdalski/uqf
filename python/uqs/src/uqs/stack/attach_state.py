@@ -209,6 +209,35 @@ def publishers(root: Path | None = None) -> list[Published]:
     return _scan(root)[0]
 
 
+#: The manifest record of the row a native registration wrote (uqs.attach.native.ROW).
+REGISTERED_ROW = "process_row"
+
+
+def registered_process_files(stack_id: int, root: Path | None = None) -> dict[str, set[Path]]:
+    """procname -> the site process files attachments under stack `stack_id`
+    registered that publisher in (uqs.attach.native, #1845), resolved.
+
+    A native start from that file - the site's torq.sh - puts it on the start
+    line as `-procfile`, so a process carrying it, with the publisher's name
+    and the stack's id, is the attachment's own: `uqs stop` stops it as it
+    stops one started from this tree's process.csv (#2757). Only the file the
+    manifest records for that publisher: never any process file."""
+    found: dict[str, set[Path]] = {}
+    for pub in publishers(root):
+        if pub.stack_id != stack_id:
+            continue
+        manifest = directory(pub.attachment, root) / MANIFEST_FILE
+        try:
+            rec = json.loads(manifest.read_text()).get("registrations", {}).get(REGISTERED_ROW)
+            if rec and rec["procname"] == pub.procname:
+                found.setdefault(pub.procname, set()).add(Path(rec["path"]).resolve())
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+            log.warning("attachment manifest {} cannot be read: {}", manifest, exc)
+    return found
+
+
 def _started_by(paths: UqsPaths, wanted: set[str]) -> set[str]:
     """The processes a start of `wanted` launches: `all` (or nothing named,
     which torq.sh reads as `all`) is every startwithall=1 row of the
