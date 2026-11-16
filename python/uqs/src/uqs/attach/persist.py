@@ -30,18 +30,19 @@ or `RemoteFile`, the tickerplant's own file changed by the tickerplant
 (schema_files.py, #1651). Every change is one append or one cut, composed here from
 the text the file held, so both apply exactly the same rules. Whether the file
 can be written is preflight's question (preflight_components.persistence);
-this assumes the answer was yes.
+this assumes the answer was yes. Finding a block in the text, and what lies
+outside every one, is block_text.py's: this writes, checks and removes.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from uqs.attach import block_text
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.schema import SchemaError, TableSpec, check_publishable
 from uqs.attach.schema_files import CODEC, File, LocalFile
@@ -52,26 +53,15 @@ SEPARATOR_NOTE = (
     "block, and the last block removed takes it out again."
 )
 
-#: The suffix of the block an attachment writes for the tables it uses but did not create.
-USES = "+uses"
-
 
 def _sha(text: str) -> str:
     return hashlib.sha256(text.encode(*CODEC)).hexdigest()
 
 
-def begin_marker(name: str, token: str) -> str:
-    return f"/ BEGIN uqs-attach {name} {token}"
-
-
-def end_marker(name: str) -> str:
-    return f"/ END uqs-attach {name}"
-
-
 def uses_name(name: str) -> str:
     """The block name for `name`'s dependencies. `+` is not allowed in an
     attachment name (stack/attach_state.py), so it cannot be another's block."""
-    return name + USES
+    return name + block_text.USES
 
 
 @dataclass(frozen=True)
@@ -90,17 +80,6 @@ class BlockRecord:
     process: str = ""
 
 
-def _lines(text: str) -> list[str]:
-    """`text` split after each `\\n` and nowhere else: `str.splitlines` also splits
-    at `\\r`, form feeds and more, which q does not treat as line ends."""
-    parts = text.split("\n")
-    return [p + "\n" for p in parts[:-1]] + ([parts[-1]] if parts[-1] else [])
-
-
-def _bare(line: str) -> str:
-    return line.removesuffix("\n").removesuffix("\r")
-
-
 #: The comment a block opens with: the commands that add and remove it.
 _CREATED_BY = "/ Added by `uqs job attachment add` (#1424); `uqs job attachment remove` removes it."
 _USES_BY = "/ Added by `uqs job attachment add` (#1446): {name} uses these tables, which another"
@@ -110,14 +89,14 @@ _USES_REMOVED_BY = (
 
 
 def _block(name: str, token: str, separated: bool, comments: list[str], body: list[str]) -> str:
-    lines = [begin_marker(name, token), *comments]
+    lines = [block_text.begin_marker(name, token), *comments]
     if separated:
         lines.append(SEPARATOR_NOTE)
     lines += [
         ".uqfattach.owned:@[value;`.uqfattach.owned;()!()];",
         ".uqfattach.uses:@[value;`.uqfattach.uses;()!()];",
         *body,
-        end_marker(name),
+        block_text.end_marker(name),
     ]
     return "\n".join(lines) + "\n"
 
@@ -189,106 +168,14 @@ def render_uses(name: str, token: str, tables: tuple[str, ...], separated: bool 
     )
 
 
-def locate(text: str, name: str) -> tuple[int, int] | None:
-    """The [start, end) character span of `name`'s block in `text`, or None.
-    Raises when the markers are unbalanced: a half block is not ours to guess at."""
-    prefix, end = f"/ BEGIN uqs-attach {name} ", end_marker(name)
-    start = after = -1
-    pos = 0
-    for line in _lines(text):
-        if line.startswith(prefix) and start == -1:
-            start = pos
-        elif _bare(line) == end and start != -1:
-            after = pos + len(line)
-            break
-        pos += len(line)
-    if start == -1:
-        return None
-    if after == -1:
-        raise AttachmentError(f"the schema file has a BEGIN marker for {name} and no END")
-    return start, after
-
-
 def present(where: str | File, name: str) -> bool:
     """Whether the file holds `name`'s block."""
     text = _file(where).read()
-    return text is not None and locate(text, name) is not None
-
-
-def outside(text: str, name: str) -> str:
-    span = locate(text, name)
-    return text if span is None else text[: span[0]] + text[span[1] :]
-
-
-_ANY_BEGIN = re.compile(r"^/ BEGIN uqs-attach (\S+) ")
-
-
-def _blocks(text: str) -> tuple[str, list[str]]:
-    """`text` without any attachment's block, and the blocks' lines."""
-    kept: list[str] = []
-    inside: list[str] = []
-    closing = ""
-    for line in _lines(text):
-        if closing:
-            inside.append(line)
-            if _bare(line) == closing:
-                closing = ""
-            continue
-        if m := _ANY_BEGIN.match(line):
-            closing = end_marker(m.group(1))
-            inside.append(line)
-            continue
-        kept.append(line)
-    return "".join(kept), inside
-
-
-def outside_all(text: str) -> str:
-    """`text` without any attachment's block: what the file holds that no
-    attachment put there. Hashing THIS, not the text outside one block, is what
-    lets two attachments share a schema file and detach in either order - the
-    other's block arriving or leaving is not a change to the stack's own file."""
-    return _blocks(text)[0]
-
-
-def defined_by(text: str, table: str) -> str:
-    """The attachment whose block in `text` defines `table` - holds its definition
-    and ownership record (render), which a restart loads - or "". A `+uses` block
-    defines nothing: it only adds users to a record another block made (#2759)."""
-    record, name = f".uqfattach.owned[`{table}]:", ""
-    for line in _lines(text):
-        if not name:
-            if m := _ANY_BEGIN.match(line):
-                name = m.group(1)
-        elif _bare(line) == end_marker(name):
-            name = ""
-        elif not name.endswith(USES) and line.startswith(record):
-            return name
-    return ""
-
-
-def stack_defines(text: str, table: str) -> bool:
-    """Whether the stack's own part of `text` - outside every attachment's block -
-    defines `table` with a `name:([]...)` line, as the starter pack's database.q
-    defines `trade` (#2763). A restart restores such a table with no block of
-    anyone's. Read the way q loads the file: a line holding only `/` opens a
-    comment a line holding only `\\` closes, and a `\\` line outside one ends it."""
-    head = re.compile(rf"{re.escape(table)}\s*:\s*\(\[")
-    comment = False
-    for line in _lines(outside_all(text)):
-        bare = _bare(line).rstrip()
-        if comment:
-            comment = bare != "\\"
-        elif bare == "/":
-            comment = True
-        elif bare == "\\":
-            return False
-        elif head.match(line):
-            return True
-    return False
+    return text is not None and block_text.locate(text, name) is not None
 
 
 def _separated(block_lines: list[str]) -> bool:
-    return any(_bare(line) == SEPARATOR_NOTE for line in block_lines)
+    return any(block_text.bare(line) == SEPARATOR_NOTE for line in block_lines)
 
 
 def _real(path: str) -> Path:
@@ -307,10 +194,10 @@ def _write(name: str, token: str, rendered: Callable[[bool], str], file: File) -
     text = file.read()
     if text is None:
         raise AttachmentError(f"{file.label} does not exist")
-    span = locate(text, name)
+    span = block_text.locate(text, name)
     if span is not None:
         found = text[span[0] : span[1]]
-        separated = _separated(_lines(found))
+        separated = _separated(block_text.split_lines(found))
         if found != rendered(separated):
             raise AttachmentError(
                 f"{file.label} already holds a different uqs-attach block for {name}; "
@@ -318,9 +205,14 @@ def _write(name: str, token: str, rendered: Callable[[bool], str], file: File) -
                 "`uqs job attachment add` again"
             )
         return BlockRecord(
-            file.path, _sha(outside_all(text)), _sha(found), separated, name, file.process
+            file.path,
+            _sha(block_text.outside_all(text)),
+            _sha(found),
+            separated,
+            name,
+            file.process,
         )
-    _, others = _blocks(text)
+    _, others = block_text.blocks(text)
     if others:
         # The newline question was answered when the first of them went in: copy the answer.
         separated = _separated(others)
@@ -336,7 +228,12 @@ def _write(name: str, token: str, rendered: Callable[[bool], str], file: File) -
     block = rendered(separated)
     file.append(text, lead + block, name, token)
     return BlockRecord(
-        file.path, _sha(outside_all(text + lead)), _sha(block), separated, name, file.process
+        file.path,
+        _sha(block_text.outside_all(text + lead)),
+        _sha(block),
+        separated,
+        name,
+        file.process,
     )
 
 
@@ -382,13 +279,13 @@ def problems(
 def _problems(record: BlockRecord, name: str, label: str, text: str | None) -> list[str]:
     if text is None:
         return [f"{label} no longer exists"]
-    span = locate(text, name)
+    span = block_text.locate(text, name)
     if span is None:
         return [f"the uqs-attach block for {name} is gone from {label}"]
     found = []
     if _sha(text[span[0] : span[1]]) != record.block_sha:
         found.append(f"the block in {label} was edited")
-    if _sha(outside_all(text)) != record.outside_sha:
+    if _sha(block_text.outside_all(text)) != record.outside_sha:
         found.append(f"{label} was changed outside the block since it was applied")
     return found
 
@@ -408,9 +305,9 @@ def remove(
     if found := _problems(record, name, file.label, text):
         raise AttachmentError("; ".join(found))
     assert text is not None  # _problems says so otherwise
-    start, end = locate(text, name) or (0, 0)
+    start, end = block_text.locate(text, name) or (0, 0)
     rest = text[:start] + text[end:]
     # A record from before the note line existed says it in `added_newline` instead.
-    separated = _separated(_lines(text[start:end])) or record.added_newline
-    trim = separated and not _blocks(rest)[1] and rest.endswith("\n")
+    separated = _separated(block_text.split_lines(text[start:end])) or record.added_newline
+    trim = separated and not block_text.blocks(rest)[1] and rest.endswith("\n")
     file.cut(text, (start, end), trim, name, token)

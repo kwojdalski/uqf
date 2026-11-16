@@ -19,7 +19,7 @@ from uqs.cli import create, create_bundle, create_reaction
 from uqs.paths import CATALOG_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
 from uqs.scaffold import bundle as bundle_mod
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
-from uqs.stack import bundles
+from uqs.stack import bundle_additions, bundles
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 TRADES = [
@@ -223,8 +223,8 @@ def test_two_appends_to_a_new_bundle_file_both_land(tmp_path):
     from uqs.scaffold import write
 
     write.apply_plan(redirected, Path("/"))
-    tables = (folder / bundles.TABLES).read_text()
-    catalog = (folder / bundles.CATALOG).read_text()
+    tables = (folder / bundle_additions.TABLES).read_text()
+    catalog = (folder / bundle_additions.CATALOG).read_text()
     assert "audit_raw" in tables and "audit_quotes" in tables
     assert "audit_raw" in catalog and "audit_quotes" in catalog
 

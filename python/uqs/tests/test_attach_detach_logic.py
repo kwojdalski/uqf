@@ -22,11 +22,13 @@ from uqs.attach import apply as applying
 from uqs.attach import (
     backfill_owner,
     backfill_run,
+    block_text,
     config,
     facts,
     live,
     persist,
     plan,
+    retain,
     service,
     verify,
 )
@@ -442,8 +444,8 @@ def test_a_runtime_only_detach_after_publication_says_a_restart_drops_the_table(
     assert all(r.endswith("(until the tickerplant restarts)") for r in result.retained)
     m = Manifest.load("pb-uat", state)
     notes = {o.note for o in m.operations}
-    assert m.state == "detached" and notes == {detaching.KEPT_UNTIL_RESTART}
-    assert "kept for replay and restart" not in detaching.KEPT_UNTIL_RESTART
+    assert m.state == "detached" and notes == {retain.KEPT_UNTIL_RESTART}
+    assert "kept for replay and restart" not in retain.KEPT_UNTIL_RESTART
 
 
 def test_a_durable_detach_after_publication_still_promises_replay_and_restart(world):
@@ -454,7 +456,7 @@ def test_a_durable_detach_after_publication_still_promises_replay_and_restart(wo
     result = detach_(att, fake, state)
     assert result.outcome == "detached" and result.restart_loss == []
     assert not any("until" in r for r in result.retained)
-    assert {o.note for o in Manifest.load("pb-uat", state).operations} == {detaching.KEPT}
+    assert {o.note for o in Manifest.load("pb-uat", state).operations} == {retain.KEPT}
 
 
 def test_a_detached_attachment_whose_table_a_restart_dropped_is_not_told_to_apply_again(world):
@@ -799,7 +801,7 @@ def test_a_table_a_block_defines_needs_no_live_check(world, monkeypatch, user):
 )
 def test_the_stacks_own_definition_is_read_as_q_loads_the_file(text, defines):
     """#2763: only a definition q would run, outside every attachment's block."""
-    assert persist.stack_defines(text, "t") is defines
+    assert block_text.stack_defines(text, "t") is defines
 
 
 def test_adopting_a_table_the_stacks_schema_file_defines_writes_no_block(

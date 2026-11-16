@@ -22,7 +22,7 @@ blocks it has, not its `persist` label: a durable attachment sharing a table
 whose creator attached it with `--transient` is asked like a runtime-only one
 (#2759).
 
-An attached backfill's admission applies the same rule (backfill_plan.admit,
+An attached backfill's admission applies the same rule (backfill_admission.admit,
 #2761): it writes HDB partitions for the attached tables, and one the
 tickerplant no longer holds is a table no process holds and no end of day writes.
 

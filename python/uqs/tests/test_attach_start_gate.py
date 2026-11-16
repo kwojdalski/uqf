@@ -37,6 +37,7 @@ from uqs.cli import shared
 from uqs.paths import UqsError, default_paths, repo_root
 from uqs.stack import (
     alive,
+    attach_inventory,
     attach_state,
     generated,
     listing,
@@ -394,5 +395,5 @@ def test_stop_is_never_gated(unverified, monkeypatch, tmp_path):
 
 def test_list_attachments_shows_a_detaching_state_as_it_is(att, state):
     with_state(att, "detaching")
-    row = next(r for r in attach_state.inventory(state) if r["attachment"] == "ex-uat")
+    row = next(r for r in attach_inventory.inventory(state) if r["attachment"] == "ex-uat")
     assert row["state"] == "detaching"

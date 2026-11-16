@@ -46,8 +46,9 @@ from uqs.attach.backfill import (
     resolve,
     state_dir_for,
 )
+from uqs.attach.backfill_admission import admit
 from uqs.attach.backfill_coordination import assess
-from uqs.attach.backfill_plan import admit, evaluate
+from uqs.attach.backfill_plan import evaluate
 from uqs.attach.backfill_run import LOGS, REACH_PASSWORD_ENV, RUNNER, Launched, q_date
 from uqs.attach.remote import Ipc
 from uqs.interpreter import q_interpreter

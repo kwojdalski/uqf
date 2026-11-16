@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from attach_support import make_bundle
 
-from uqs.attach import config, manifest, persist, service
+from uqs.attach import block_text, config, manifest, persist, service
 from uqs.attach.config import AttachmentError
 from uqs.attach.manifest import Manifest
 from uqs.attach.schema import TableSpec
@@ -194,7 +194,7 @@ def test_writing_adds_the_block_and_leaves_everything_else_byte_for_byte(att, sc
     before = schema.read_text()
     record = persist.write(att, "tok123", SPECS, str(schema))
     text = schema.read_text()
-    assert text.startswith(before) and persist.outside(text, "pb-uat") == before
+    assert text.startswith(before) and block_text.outside(text, "pb-uat") == before
     assert record.outside_sha == persist._sha(before) and not record.added_newline
     assert schema.stat().st_mode & 0o777 == 0o640, "the file's permissions are kept"
 
@@ -262,7 +262,7 @@ def test_removal_is_refused_when_the_file_changed_outside_the_block(att, schema)
 
 def test_a_block_that_vanished_or_a_file_that_is_gone_is_reported(att, schema):
     record = persist.write(att, "tok123", SPECS, str(schema))
-    schema.write_text(persist.outside(schema.read_text(), "pb-uat"))
+    schema.write_text(block_text.outside(schema.read_text(), "pb-uat"))
     assert "is gone from" in persist.problems(record, att, "tok123", SPECS)[0]
     schema.unlink()
     assert "no longer exists" in persist.problems(record, att, "tok123", SPECS)[0]
@@ -270,7 +270,7 @@ def test_a_block_that_vanished_or_a_file_that_is_gone_is_reported(att, schema):
 
 def test_half_a_block_is_refused_not_guessed_at(att):
     with pytest.raises(AttachmentError, match="BEGIN marker for pb-uat and no END"):
-        persist.locate("x\n/ BEGIN uqs-attach pb-uat tok\nstuff\n", "pb-uat")
+        block_text.locate("x\n/ BEGIN uqs-attach pb-uat tok\nstuff\n", "pb-uat")
 
 
 def test_a_relative_schema_path_is_refused(att):

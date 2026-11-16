@@ -7,7 +7,7 @@ publisher - each stage the existing one in uqs.attach, run in order by
 workflow.execute; `--dry-run` stops after the plan and changes nothing.
 `remove` stops the publisher and reverses what is safe to reverse. `show`
 (attachment_show.py) is one attachment; the inventory is `uqs job attachment
-list` (stack/attach_state.py).
+list` (stack/attach_inventory.py).
 
 `add` and `remove` were `uqs job attach` and `uqs job detach`, verbs whose
 noun was spelled three other ways (`list attachments`, `--attachment`, `job
@@ -29,7 +29,7 @@ from typing import Annotated
 import typer
 from rich.markup import escape
 
-from uqs.attach import config, service, workflow
+from uqs.attach import config, resolution, service, workflow
 from uqs.attach import detach as detaching
 from uqs.attach import publisher as publishing
 from uqs.cli import attach_launch, attach_next, safety, shared
@@ -160,7 +160,7 @@ def attach(
     if refused is not None:
         out.fail(refused, code=shared.EXIT_USAGE)
     began = time.monotonic()
-    given = workflow.Given(
+    given = resolution.Given(
         job=job, bundle=bundle, stack_id=stack_id, host=host, discovery=discovery,
         tickerplant=tickerplant, consumers=tuple(consumer or ()), user=user,
         password_env=password_env, runtime_only=runtime_only,
@@ -170,7 +170,7 @@ def attach(
     )  # fmt: skip
     try:
         paths = _paths()
-        resolved = workflow.resolve(
+        resolved = resolution.resolve(
             name, given, paths.repo_root, replace_saved=replace, runtime=paths.runtime
         )
         out.secrets = secrets_of(resolved.att)
@@ -203,7 +203,7 @@ def attach(
         workflow.refuse_replacing_running(resolved, running)
         workflow.refuse_running_unregistered(att, planned, running)
         workflow.refuse_replacing_backfilled(resolved)
-        repinned = workflow.repins(resolved, planned)
+        repinned = resolution.repins(resolved, planned)
     except UqsError as exc:
         out.fail(exc)
     if repinned:

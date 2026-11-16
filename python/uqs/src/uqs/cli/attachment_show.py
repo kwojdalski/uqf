@@ -15,7 +15,7 @@ from uqs.cli.json_out import emit, json_opt
 from uqs.cli.safety import ReadOnly
 from uqs.cli.shared import _die, _paths, console
 from uqs.paths import UqsError
-from uqs.stack import attach_state
+from uqs.stack import attach_inventory
 
 ShowJson = json_opt(
     '{"attachment": {name, stack, publisher, tables, ...}, "state": {...}, '
@@ -42,7 +42,7 @@ def show(name: NameArg, as_json: ShowJson = False) -> None:
         att = config.load(name)
     except UqsError as exc:
         _die(exc)
-    rows = attach_state.inventory(repo=_paths().repo_root)
+    rows = attach_inventory.inventory(repo=_paths().repo_root)
     state = next((r for r in rows if r["attachment"] == name), {})
     record, waivers = backfill_audit.of_attachment(_paths(), name)
     overrides = {"record": None if record is None else str(record), "entries": waivers}

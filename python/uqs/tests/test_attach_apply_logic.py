@@ -14,7 +14,7 @@ import pytest
 from attach_support import LEDGER_COLUMNS, FakeStack, FaultIpc, make_bundle
 
 from uqs.attach import apply as applying
-from uqs.attach import config, facts, live, persist, plan, service, verify
+from uqs.attach import block_text, config, facts, live, persist, plan, service, verify
 from uqs.attach.config import AttachmentError
 from uqs.attach.manifest import Manifest
 from uqs.paths import UqsError, default_paths, repo_root
@@ -284,7 +284,7 @@ def test_apply_adds_one_marked_block_to_the_schema_file_and_nothing_else(bundle,
     assert f"{TABLE}:([] time:`timestamp$();" in text and text.rstrip().endswith(
         "/ END uqs-attach pb-uat"
     )
-    assert persist.outside(text, "pb-uat") == before + "\n"
+    assert block_text.outside(text, "pb-uat") == before + "\n"
     block = m.find("schema_block", "schema-file", TABLE)
     assert found(block).status == "done" and found(block).post["path"] == str(schema)
     fake.calls.clear()
