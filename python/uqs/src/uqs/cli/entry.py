@@ -81,6 +81,7 @@ from uqs.cli import target_edit  # noqa: F401
 from uqs.cli import target_adopt  # noqa: F401
 from uqs.cli import target_tunnel  # noqa: F401
 from uqs.cli import target_config  # noqa: F401
+from uqs.cli import target_config_push  # noqa: F401
 from uqs.cli import activity  # noqa: F401
 from uqs.cli import lists  # noqa: F401
 

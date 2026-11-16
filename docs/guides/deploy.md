@@ -142,7 +142,9 @@ uqs target revert last             # or a change's number from the log
 `deploy_targets.log.jsonl` beside it. `--reach` saves nothing when the server
 cannot be reached. `--dry-run` (`-n`) shows the diff and writes nothing.
 `uqs target log` lists the changes. The config files a push wrote to a server
-have their own history under `uqs target config`.
+have their own history under `uqs target config`, and `uqs target config push`
+sends files into a target's `shared/config/` through the frontend API, as its
+Files view does.
 
 ### Inspection-only targets
 
