@@ -331,46 +331,20 @@ jobs:
           enable-cache: true
       - name: Install workspace dependencies
         run: uv sync --locked
-      - name: Restore PeachQ built from its pinned commit
-        # PeachQ is an MIT-licensed q, so unlike KDB-X a hosted runner can
-        # have one - which makes it the only interpreter CI can run q with.
-        #
-        # Built from a pinned COMMIT, not downloaded. The v0.88 release asset
-        # was rebuilt and re-uploaded under the same tag three times in five
-        # days (#578 and after), each turning every run red at the checksum
-        # until someone re-pinned to whatever upstream had published - which
-        # makes the pin a formality. A commit hash cannot change under us.
-        #
-        # The pin and the build options are scripts/peachq/pin.json, the same
-        # file the local lanes build from (#719): moving either is one edit
-        # there, and it changes this key. The cache is the resolver's own
-        # (~/.cache/uqf/peachq), so a hit is a warm cache and needs no network.
-        id: peachq-cache
-        if: ${{ !cancelled() }}
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/uqf/peachq
-          key: peachq-${{ hashFiles('scripts/peachq/pin.json') }}-${{ runner.os }}-${{ runner.arch }}
-      - name: Provide PeachQ beside the tree
-        # scripts/peachq/resolve.py reuses the cached build, or fetches the pinned
-        # commit, checks it out, verifies the hash, builds it with this
-        # platform's options and identifies the result - about 40s, once per
-        # pin. It prints an absolute path and puts nothing on PATH: every
-        # other step still finds no q, so nothing here can be mistaken for a
-        # KDB-X run. It is reached only by the steps below, which name it
-        # through QCMD and nothing else (#1753): uqs and the
-        # pytest conftest ask the binary which q it is.
+      - name: Download PeachQ
+        # PeachQ is an MIT-licensed q, so unlike KDB-X a hosted runner can have one. v0.92.20261116 is an
+        # immutable release built from the commit scripts/peachq/pin.json pins, so local lanes test the same PeachQ.
         if: ${{ !cancelled() }}
         shell: bash
         run: |
           set -euo pipefail
-          bin="$(python3 scripts/peachq/resolve.py)"
-          # A binary that will not even start fails here, by name, rather
-          # than as a confusing first lane.
-          printf 'exit 0\n' > "$RUNNER_TEMP/peachq-smoke.q"
-          "$bin" "$RUNNER_TEMP/peachq-smoke.q" -q
-          echo "PEACHQ_BIN=$bin" >> "$GITHUB_ENV"
-          echo "PeachQ: built from peachq-org/peachq@$(python3 scripts/peachq/resolve.py --commit)" >> "$GITHUB_STEP_SUMMARY"
+          cd "$RUNNER_TEMP"
+          mkdir peachq
+          curl -fsSL https://github.com/peachq-org/peachq/releases/download/v0.92.20261116/peachq-linux-x86_64.tar.gz | tar -xz -C peachq
+          printf 'exit 0\n' > peachq-smoke.q
+          peachq/q peachq-smoke.q -q
+          echo "PEACHQ_BIN=$RUNNER_TEMP/peachq/q" >> "$GITHUB_ENV"
+          echo "PeachQ: release v0.92.20261116" >> "$GITHUB_STEP_SUMMARY"
       - name: Run the whole qUnit suite on PeachQ (blocking)
         # The q tests CI can hold a merge to. This runner has no KDB-X, so
         # scripts/peachq/full_suite.py runs every suite on PeachQ, over a copy
