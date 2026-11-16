@@ -126,8 +126,9 @@ ReplaceOpt = Annotated[
     bool,
     typer.Option(
         "--replace",
-        help="Rebuild a saved attachment from these options. Keeps its manifest and "
-        "accepted risks; refused while the manifest holds changes on another stack.",
+        help="Replace the options given on a saved attachment; every other keeps its saved "
+        "value. Keeps its manifest and accepted risks; refused while the manifest holds "
+        "changes on another stack.",
     ),
 ]
 OverrideOpt = Annotated[

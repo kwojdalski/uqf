@@ -12,10 +12,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import durability, native, overrides, preflight, schema_files, sort_plan
+from uqs.attach import (
+    apply_schema,
+    durability,
+    native,
+    overrides,
+    preflight,
+    schema_files,
+    sort_plan,
+)
 from uqs.attach.config import DURABLE, Attachment
 from uqs.attach.findings import Finding, blockers
-from uqs.attach.manifest import DONE, EXISTING, RETAINED, Manifest
+from uqs.attach.manifest import DONE, EXISTING, RETAINED, Manifest, Op
 from uqs.attach.preflight_components import RUNTIME_ONLY_CODES
 from uqs.attach.remote import Ipc
 from uqs.attach.topology import Observation, Proc, observe
@@ -35,6 +43,8 @@ class Plan:
     sort_changes: list[sort_plan.Change] = field(default_factory=list)
     #: every file attaching writes, the publisher's identity and its startup policy
     native: dict = field(default_factory=dict)
+    #: the blocks apply removes: a durable attachment replaced as --transient (#2762)
+    unblocks: list[Op] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -118,6 +128,19 @@ class Plan:
                     "needs_restart": False,
                 }
             )
+        steps += [
+            {
+                "process": "schema file",
+                "action": f"remove this attachment's {'+uses ' * (o.op == 'schema_uses')}"
+                f"block from {o.post.get('path', '')} (--transient keeps none)",
+                "table": o.table.replace(",", ", "),
+                "creates": False,
+                "reversible_before": "n/a (a removal)",
+                "reversible_after": "n/a (a removal)",
+                "needs_restart": False,
+            }
+            for o in self.unblocks
+        ]
         return steps
 
     def components(self) -> list[dict]:
@@ -266,5 +289,11 @@ def build(att: Attachment, ipc: Ipc, root: Path, facts: preflight.Facts | None =
         att, obs, port, root, facts.state_dir, restart_loses(att, found)
     )
     found += registry
+    # a durable attachment replaced as --transient: its blocks go, unless published (#2762)
+    held = facts.token and Manifest.exists(att.name, facts.state_dir)
+    m = Manifest.load(att.name, facts.state_dir) if held else None
+    unblocks = apply_schema.unwanted(m, att)
+    if refused := apply_schema.after_publication(att, unblocks, obs, ipc, facts.host):
+        found, unblocks = found + refused, []
     found, problems = overrides.evaluate(att.overrides, found)
-    return Plan(att, obs, found, port, facts.token, problems, changes, preview)
+    return Plan(att, obs, found, port, facts.token, problems, changes, preview, unblocks)

@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from uqs.attach import config, manifest, plan, sorting
-from uqs.attach.apply_schema import block
+from uqs.attach.apply_schema import block, unblock
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Facts
 from uqs.attach.findings import Finding, blockers
@@ -91,7 +91,7 @@ class ApplyResult:
         return sum(
             1
             for s in self.steps
-            if s.outcome in ("created", "adopted", "subscribed", "shared", "reloaded")
+            if s.outcome in ("created", "adopted", "subscribed", "shared", "reloaded", "removed")
         )
 
 
@@ -345,6 +345,10 @@ def apply(
                 result.steps.append(Step(*block(m, ipc, att, tp, made, deps)))
             if att.persist in config.DURABLE and used:
                 result.steps.append(Step(*block(m, ipc, att, tp, used, deps, uses=True)))
+            # replaced as --transient: the blocks the plan said go (#2762), as found now
+            unwanted = {(o.op, o.table) for o in planned.unblocks}
+            for op in [o for o in m.operations if (o.op, o.table) in unwanted and o.status == DONE]:
+                result.steps.append(Step(*unblock(m, ipc, att, tp, op)))
         except (IpcError, AttachmentError) as exc:
             m.set_state("partial", str(exc))
             result.state = "partial"

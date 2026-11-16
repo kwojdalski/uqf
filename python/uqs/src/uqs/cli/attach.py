@@ -206,7 +206,7 @@ def attach(
         out.finish(ok=planned.ok or running)
     if not planned.ok and not running:
         if clear_overrides and resolved.source != "new":
-            service.save_planned(att, planned)
+            workflow.save(resolved, planned)
             out.text("[yellow]the accepted risks were withdrawn and saved[/]")
         out.fail(
             "refused: "

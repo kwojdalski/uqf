@@ -212,6 +212,47 @@ def test_the_same_replacement_with_the_publisher_stopped_applies_it(world):
     assert config.load("pb-uat").persist == "schema-file"
 
 
+def test_a_durable_attachment_replaced_as_transient_before_publication_loses_its_block(world):
+    """--transient keeps no block (#2762): a durable attachment replaced so, before
+    anything was published, has the block it wrote removed - hash checked, shown in the
+    plan - and its record reverted, not left in the file under a runtime-only config."""
+    original = world.schema.read_bytes()
+    assert run("add", *new(world), "--yes", "--no-start").exit_code == 0
+    assert "uqs-attach" in world.schema.read_text()
+    shown = run("add", *new(world), "--transient", "--replace", "--dry-run", "--json")
+    assert shown.exit_code == 0, shown.output
+    (removal,) = [c for c in json.loads(shown.output)["plan"]["changes"]
+                  if c["action"].startswith("remove this attachment's block")]  # fmt: skip
+    assert removal["action"] == (
+        f"remove this attachment's block from {world.schema} (--transient keeps none)"
+    )
+    result = run("add", *new(world), "--transient", "--replace", "--yes", "--no-start", "--json")
+    assert result.exit_code == 0, result.output
+    steps = json.loads(result.output)["apply"]["steps"]
+    assert [s["outcome"] for s in steps if s["op"] == "schema_block"] == ["removed"]
+    assert world.schema.read_bytes() == original
+    (op,) = [o for o in Manifest.load("pb-uat").operations if o.op == "schema_block"]
+    assert op.status == "reverted"
+    assert Manifest.load("pb-uat").state == "verified"
+    assert config.load("pb-uat").persist == "runtime-only"
+
+
+def test_a_durable_attachment_replaced_as_transient_after_publication_is_refused(world):
+    """After publication a block is kept, as detach keeps it: a restart and the log's
+    replay need it. So the --transient replacement is refused, and nothing is saved."""
+    assert run("add", *new(world), "--yes", "--no-start").exit_code == 0
+    world.publish(TABLE)
+    before = _saved(world)
+    result = run("add", *new(world), "--transient", "--replace", "--yes", "--no-start")
+    assert result.exit_code == 1
+    text = said(world, result)
+    assert "BLOCK_AFTER_PUBLICATION (schema)" in text
+    assert "its tables were published" in text and "the tickerplant counted messages" in text
+    assert "--replace --schema-writer cli" in text
+    assert _saved(world) == before, "no configuration, manifest or block changed"
+    assert config.load("pb-uat").persist == "schema-file"
+
+
 def test_start_with_all_is_refused_for_a_durable_attachment_a_restart_would_not_restore(world):
     """The label is not the evidence (#2759, #2760): pb-b asks for a durable writer, but
     it only shares a table pb-a created with --transient, so the tickerplant restart a

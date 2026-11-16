@@ -357,6 +357,59 @@ def test_conflicting_options_for_a_saved_attachment_are_refused_unless_replaced(
     assert Manifest.load("pb-uat").state == "verified", "the ownership record is untouched"
 
 
+def test_a_replacement_keeps_every_option_it_does_not_give(world):
+    """A transient attachment replaced with only --user given (#2762): it stays
+    runtime-only - no block is written, the one thing --transient declined - and keeps
+    its ssh and storage pins; what was replaced, and journalled, is --user alone."""
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+    assert run("add", "pb-uat", "--ssh", "ops@box", "--yes", "--no-start").exit_code == 0
+    pins = saved_storage(world)
+    result = run("add", *new(world)[:-1], "--user", "bob", "--replace", "--yes", "--no-start",
+                 debug=True)  # fmt: skip
+    assert result.exit_code == 0, result.output
+    assert "replaced --user: 'admin' -> 'bob'" in flat(result.output)
+    att = config.load("pb-uat")
+    assert (att.persist, att.stack.user, att.stack.ssh) == ("runtime-only", "bob", "ops@box")
+    assert saved_storage(world) == pins, "no pin dropped: nothing that decides one changed"
+    m = Manifest.load("pb-uat")
+    assert not [o for o in m.operations if o.op.startswith("schema_")]
+    (event,) = [e for e in m.history if e["event"] == "configuration replaced"]
+    assert event["detail"] == "--user: 'admin' -> 'bob'"
+    assert m.state == "verified", "applied and verified again as replaced"
+
+
+def test_a_replacement_saved_at_a_blocked_plan_is_no_longer_verified(world):
+    """--clear-overrides saves at a blocked plan; a replacement saved with it is a
+    configuration never applied, so the manifest must not keep `verified` (#2762)."""
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+    world.named("stp1")["multilog"] = "singular"
+    result = run("add", "pb-uat", "--user", "bob", "--replace", "--clear-overrides", "--yes")
+    assert result.exit_code == 1
+    assert any("LOGGING_MODE" in m and "Nothing was changed" in m for m in world.errors)
+    assert config.load("pb-uat").stack.user == "bob"
+    m = Manifest.load("pb-uat")
+    assert m.state == "applied"
+    assert m.history[-1]["detail"] == "the configuration was replaced: apply and verify it"
+
+
+def test_a_replacement_apply_refuses_is_no_longer_verified(world, monkeypatch):
+    """Saved, then refused by apply's own plan (the stack changed after the preview):
+    the start gate and backfill trust `verified`, so it is taken back (#2762)."""
+    from uqs.attach import apply as applying
+
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+
+    def refused(*args, **kwargs):
+        raise applying.ApplyRefused([])
+
+    monkeypatch.setattr(applying, "apply", refused)
+    result = run("add", "pb-uat", "--user", "bob", "--replace", "--yes", "--no-start")
+    assert result.exit_code == 1
+    assert "nothing was changed on the stack" in flat(result.output)
+    assert config.load("pb-uat").stack.user == "bob"
+    assert Manifest.load("pb-uat").state == "applied"
+
+
 def test_a_new_attachment_needs_a_job_and_a_stack_id(world):
     result = run("add", "pb-uat", "--dry-run")
     assert result.exit_code == 1

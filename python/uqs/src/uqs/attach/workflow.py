@@ -25,7 +25,14 @@ from uqs.attach.findings import blockers
 from uqs.attach.manifest import Manifest
 from uqs.attach.publisher import Publisher, stop_publisher
 from uqs.attach.remote import Endpoint, Ipc
-from uqs.attach.service import create, manifest_of, newly_pinned, parse_discovery, save_planned
+from uqs.attach.service import (
+    create,
+    discovery_offset,
+    manifest_of,
+    newly_pinned,
+    parse_discovery,
+    save_planned,
+)
 
 
 @dataclass(frozen=True)
@@ -113,10 +120,13 @@ def resolve(
 
     A saved attachment is reused when the options agree with it (repeating the
     first command line is the same request), and refused when they conflict,
-    unless `replace_saved`. A replacement keeps the overrides and never touches
-    the manifest - the record of what was changed on the stack and the only
-    thing detach can reverse from - and it may not move an attachment whose
-    manifest still holds changes to another stack or other tables.
+    unless `replace_saved`. A replacement changes only the options given and
+    keeps every other saved value, the overrides among them (`carried`). It
+    never rewrites the manifest - the record of what was changed on the stack
+    and the only thing detach can reverse from - and it may not move an
+    attachment whose manifest still holds changes to another stack or other
+    tables. Its saving takes `verified` back (`save`): only the apply and
+    verify that follow can grant it to the new configuration.
     """
     path = config.directory(name, state_dir) / config.CONFIG_FILE
     if (m := manifest_of(name, state_dir)) is not None:
@@ -137,22 +147,24 @@ def resolve(
         if not replace_saved:
             raise AttachmentError(
                 f"attachment {name} is saved with other settings ({'; '.join(changed)}). "
-                "Drop those options to use the saved ones, or add --replace to rebuild it"
+                "Drop those options to use the saved ones, or add --replace to replace them"
             )
-    if not given.job or given.stack_id is None:
+    if saved is None and (not given.job or given.stack_id is None):
         raise AttachmentError(
             f"a new attachment needs --job and --base-port (no attachment {name} is saved)"
-            if saved is None
-            else "--replace rebuilds the attachment: give --job and --base-port"
         )
-    att = create(
-        name, given.job, given.bundle, given.stack_id, root,
-        host=given.host or "localhost", discovery=given.discovery,
-        tickerplant=given.tickerplant or "", consumers=tuple(given.consumers),
-        user=given.user or config.DEFAULT_USER, password_env=given.password_env or "",
-        runtime_only=given.runtime_only, schema_writer=given.schema_writer,
-        storage=Storage(tplogdir=given.tplogdir, schema_file=given.schema_file), runtime=runtime,
-        ssh=given.ssh or "",
+    att = (
+        create(
+            name, given.job or "", given.bundle, given.stack_id or 0, root,
+            host=given.host or "localhost", discovery=given.discovery,
+            tickerplant=given.tickerplant or "", consumers=tuple(given.consumers),
+            user=given.user or config.DEFAULT_USER, password_env=given.password_env or "",
+            runtime_only=given.runtime_only, schema_writer=given.schema_writer,
+            storage=Storage(tplogdir=given.tplogdir, schema_file=given.schema_file),
+            runtime=runtime, ssh=given.ssh or "",
+        )
+        if saved is None
+        else carried(saved, given, root, runtime)
     )  # fmt: skip
     att, more = native_config.settle(
         att, saved.native if saved else None, given.process_file, given.start_with_all
@@ -160,7 +172,61 @@ def resolve(
     if saved is None:
         return Resolved(att, "new", path)
     _refuse_moving(saved, att, state_dir)
-    return Resolved(replace(att, overrides=saved.overrides), "replaced", path, changed + more)
+    if given.ssh is not None and given.ssh != saved.stack.ssh:
+        changed.append(f"--ssh: {saved.stack.ssh!r} -> {given.ssh!r}")
+    return Resolved(att, "replaced", path, changed + more)
+
+
+def carried(saved: Attachment, given: Given, root: Path, runtime: str = "") -> Attachment:
+    """`saved` with what `given` sets replaced, and nothing else (#2762).
+
+    The one rule `differences` and a plain re-run already follow: an option not
+    given keeps its saved value, under `--replace` too - the stack and how it is
+    reached (user, password variable, ssh), the persist mode, the job, the
+    native settings and the overrides. `--transient` is given only as itself and
+    `--schema-writer` only with a value, so a durable attachment stays durable,
+    with the writer it had, unless one of them says otherwise. A replacement
+    changes exactly the options it lists.
+
+    The storage pins stay too, except where an option that decides them changed:
+    a stack moved (base port, host, discovery) re-observes every one, another
+    tickerplant its log directory and schema file, other consumers the wdb's
+    directories - each re-read from the stack at save (service.observed_storage),
+    unless `--tplogdir`/`--schema-file` pin it here.
+    """
+    st = saved.stack
+    stack_id = st.id if given.stack_id is None else given.stack_id
+    host = given.host or st.host
+    derived = (st.host, st.id + discovery_offset(root))
+    discovery = given.discovery or (
+        None
+        if (st.discovery_host, st.discovery_port) == derived
+        else f"{st.discovery_host}:{st.discovery_port}"
+    )
+    if given.runtime_only or given.schema_writer is not None:
+        runtime_only, writer = given.runtime_only, given.schema_writer
+    else:
+        runtime_only, writer = saved.persist == "runtime-only", saved.schema_writer or None
+    folder = saved.origin.get("folder")
+    att = create(
+        saved.name, given.job or saved.publisher.job,
+        given.bundle or (Path(folder) if folder else None), stack_id, root,
+        host=host, discovery=discovery, tickerplant=given.tickerplant or st.tickerplant,
+        consumers=tuple(given.consumers) or st.consumers, user=given.user or st.user,
+        password_env=given.password_env or st.password_env, runtime_only=runtime_only,
+        schema_writer=writer, runtime=runtime, ssh=st.ssh if given.ssh is None else given.ssh,
+    )  # fmt: skip
+    moved = (att.stack.id, att.stack.host, att.stack.discovery_host, att.stack.discovery_port) != (
+        st.id, st.host, st.discovery_host, st.discovery_port
+    )  # fmt: skip
+    pins = saved.storage
+    if moved or att.stack.tickerplant != st.tickerplant:
+        pins = replace(pins, tplogdir="", schema_file="")
+    if moved or att.stack.consumers != st.consumers:
+        pins = replace(pins, wdb_savedir="", hdb_dir="")
+    given_pins = {"tplogdir": given.tplogdir, "schema_file": given.schema_file}
+    pins = replace(pins, **{k: v for k, v in given_pins.items() if v})
+    return replace(att, storage=pins, overrides=saved.overrides)
 
 
 def _refuse_moving(saved: Attachment, att: Attachment, state_dir: Path | None) -> None:
@@ -218,6 +284,27 @@ def refuse_replacing_running(resolved: Resolved, running: bool) -> None:
         f"(`uqs stop {proc} --base-port {port}`), then run the same command again. "
         "Nothing was saved"
     )
+
+
+def save(resolved: Resolved, p: plan.Plan, state_dir: Path | None = None) -> Path:
+    """Save the configuration, with the storage the plan saw pinned into it.
+
+    A replacement is journalled, and takes a `verified` manifest back to
+    `applied` (#2762): `verified` vouches for the configuration that was applied
+    and verified, and the start gate and backfill trust it. A replaced one is
+    neither until the apply and verify that follow succeed - and apply may still
+    refuse it (a blocker, risks nobody confirmed), or the command stop at a
+    blocked plan, with the replacement already saved."""
+    where = save_planned(resolved.att, p, state_dir)
+    name = resolved.att.name
+    if resolved.source == "replaced" and Manifest.exists(name, state_dir):
+        with config.locked(name, state_dir):
+            m = Manifest.load(name, state_dir)
+            m.event("configuration replaced", "; ".join(resolved.changed))
+            if m.state == "verified":
+                m.set_state("applied", "the configuration was replaced: apply and verify it")
+            m.save()
+    return where
 
 
 @dataclass
@@ -290,13 +377,7 @@ def execute(
             stage("save", "skipped", "already attached and verified; the publisher is running", t)
         stage("apply", "skipped", "nothing to apply", t)
     else:
-        where = save_planned(att, p, state_dir)
-        if resolved.source == "replaced" and Manifest.exists(name, state_dir):
-            with config.locked(name, state_dir):
-                m = Manifest.load(name, state_dir)
-                m.event("configuration replaced", "; ".join(resolved.changed))
-                m.save()
-        stage("save", "done", str(where), t)
+        stage("save", "done", str(save(resolved, p, state_dir)), t)
         t = time.monotonic()
         try:
             out.applied = applying.apply(

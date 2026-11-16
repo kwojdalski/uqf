@@ -92,12 +92,23 @@ rolled back for you. Run the same command again, which is safe, or
 
 After the first execution the attachment is reused by name
 (`uqs job attachment add NAME`). Options that contradict the saved ones are
-refused, and `--replace` rebuilds it from them. While the publisher is running a
-`--replace` is refused and nothing is saved: stop the publisher
+refused, and `--replace` replaces exactly those. Every option it is not given
+keeps its saved value, as it does without `--replace`: the persist mode and
+schema writer, the user, password variable and ssh destination, the native
+settings and the accepted risks. Storage pins stay unless an option that decides
+them changed (another stack, tickerplant or consumers). A saved replacement is
+no longer `verified` until it is applied and verified. While the publisher is
+running a `--replace` is refused and nothing is saved: stop the publisher
 (`uqs stop PROCNAME --base-port N`) and run it again. The configuration is saved
 as `attachment.json` under `$UQS_ATTACH_DIR`, else `$UQS_DATA_ROOT/attachments`,
 else `output/attachments`. It holds the name of the password's environment
 variable and no password.
+
+A durable attachment replaced with `--transient` keeps no block. Before anything
+was published the apply removes its block from the schema file (hash checked,
+and the plan shows the removal). After publication the block is kept, as
+`uqs job attachment remove` keeps it, because a tickerplant restart and the
+log's replay need it. That replacement is refused (`BLOCK_AFTER_PUBLICATION`).
 
 ## Verify and start
 

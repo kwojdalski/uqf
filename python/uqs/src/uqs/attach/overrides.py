@@ -134,6 +134,11 @@ POLICY: dict[str, Policy] = {
         "use --transient to accept losing the registration on a restart, or, for a stack "
         "on another machine, --schema-writer tickerplant to have its tickerplant write the block",
     ),
+    "BLOCK_AFTER_PUBLICATION": Policy(
+        False,
+        "a block a published table's restart and replay need is never removed, so a durable "
+        "attachment cannot become --transient after publication (#2762)",
+    ),
     "PROCESS_REGISTRY": Policy(
         False,
         "the stack's process file is the site's: a row it already has, a clashing port, an "
