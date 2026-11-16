@@ -114,8 +114,11 @@ Name the HDB with exactly one handle. The plan says which was used.
   | `uqs data ... --hdb DIR`           | that directory                                                                              | on this machine                          |
   | none                               | this runtime's own HDB (what `--target` reaches on a server)                                | on this machine                          |
 
-With `--attachment`, the table defaults to the attachment's own. The q that
-writes the HDB must be KDB-X: PeachQ is refused.
+With `--attachment`, a pinned HDB that a live wdb of the stack contradicts is
+refused. If the stack moved it, re-pin it with
+`uqs job attachment add NAME --replace --repin-storage`. With `--attachment`,
+the table defaults to the attachment's own. The q that writes the HDB must be
+KDB-X: PeachQ is refused.
 
 With `--attachment`, a command that writes follows the same rule as an attached
 backfill. That is `data check --apply` and `data alter`, including the plan

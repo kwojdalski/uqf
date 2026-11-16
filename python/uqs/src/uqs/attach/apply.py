@@ -24,8 +24,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import config, manifest, plan, sorting
-from uqs.attach.apply_schema import block
+from uqs.attach import config, live, manifest, plan, sorting
+from uqs.attach.apply_schema import block, unblock
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Facts
 from uqs.attach.findings import Finding, blockers
@@ -91,7 +91,7 @@ class ApplyResult:
         return sum(
             1
             for s in self.steps
-            if s.outcome in ("created", "adopted", "subscribed", "shared", "reloaded")
+            if s.outcome in ("created", "adopted", "subscribed", "shared", "reloaded", "removed")
         )
 
 
@@ -154,14 +154,10 @@ def _in_place(proc: Proc, spec: TableSpec, token: str, consumer: bool) -> bool:
     return True
 
 
-def _joined(proc: Proc, table: str, name: str) -> bool:
-    return name in (proc.probe or {}).get("owned", {}).get(table, {}).get("users", [])
-
-
 def _register(m: Manifest, ipc: Ipc, att: Attachment, tp: Proc, spec: TableSpec) -> Step:
     prior = m.done("stp_register", tp.procname, spec.name)
     if prior is not None and _in_place(tp, spec, m.token, False):
-        if prior.ownership == SHARED and not _joined(tp, spec.name, att.name):
+        if prior.ownership == SHARED and not live.listed_user(tp.probe or {}, spec.name, att.name):
             pass  # the plant forgot we use it (a restart without our +uses block): join again
         elif prior.ownership != CREATED or _mine(tp, spec.name, m.token):
             return Step("stp_register", tp.procname, spec.name, "already")
@@ -171,7 +167,9 @@ def _register(m: Manifest, ipc: Ipc, att: Attachment, tp: Proc, spec: TableSpec)
         tp.procname,
         spec.name,
         {"table_present": bool(probe.get("schemas", {}).get(spec.name)),
-         "multilog": probe.get("multilog"), "tables": probe.get("published", [])},
+         "multilog": probe.get("multilog"), "tables": probe.get("published", []),
+         # where a restart would look for an adopted table's definition (durability.py)
+         "schemafile": probe.get("schemafile", "")},
     )  # fmt: skip
     try:
         answer = ipc.call(tp.endpoint, "stp_register", _request(m, att, spec))
@@ -343,6 +341,10 @@ def apply(
                 result.steps.append(Step(*block(m, ipc, att, tp, made, deps)))
             if att.persist in config.DURABLE and used:
                 result.steps.append(Step(*block(m, ipc, att, tp, used, deps, uses=True)))
+            # replaced as --transient: the blocks the plan said go (#2762), as found now
+            unwanted = {(o.op, o.table) for o in planned.unblocks}
+            for op in [o for o in m.operations if (o.op, o.table) in unwanted and o.status == DONE]:
+                result.steps.append(Step(*unblock(m, ipc, att, tp, op)))
         except (IpcError, AttachmentError) as exc:
             m.set_state("partial", str(exc))
             result.state = "partial"

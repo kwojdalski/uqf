@@ -126,8 +126,19 @@ ReplaceOpt = Annotated[
     bool,
     typer.Option(
         "--replace",
-        help="Rebuild a saved attachment from these options. Keeps its manifest and "
-        "accepted risks; refused while the manifest holds changes on another stack.",
+        help="Replace the options given on a saved attachment; every other keeps its saved "
+        "value. Keeps its manifest and accepted risks; refused while the manifest holds "
+        "changes on another stack.",
+    ),
+]
+RepinStorageOpt = Annotated[
+    bool,
+    typer.Option(
+        "--repin-storage",
+        help="With --replace: drop every saved storage pin (log directory, schema file, "
+        "wdb and HDB directories) and pin what the stack reports now; the plan shows "
+        "old -> new. The only way a pin follows a moved stack. Refused while a backfill "
+        "owns the attachment or its publisher runs.",
     ),
 ]
 OverrideOpt = Annotated[

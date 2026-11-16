@@ -13,6 +13,13 @@ The contract (issue #1424), as code:
     registration, log, row and schema-file block stays - removing a
     registration would break replay of the log and lose the rows in the
     consumers. Detachment is not data deletion.
+  * What stays lasts only as long as the tickerplant keeps it (#2766). A table a
+    restart restores (durability.py) keeps its registration, replay and end of
+    day. One it does not - a runtime-only attachment's - is gone from the
+    tickerplant and its consumers once the tickerplant restarts, and its rows
+    not yet written by end of day then exist only in the tickerplant's log,
+    which nothing replays. Detach says so per table (`restart_loss`) instead of
+    promising a replay that will not happen.
   * "Published" is decided from evidence read off the stack, never from a flag
     this tool set; evidence that cannot be read counts as publication.
   * Drift or unknown ownership REFUSES the reversal and lists what a person has
@@ -32,10 +39,18 @@ from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import backfill_owner, config, native, persist, schema_files, sorting
+from uqs.attach import (
+    backfill_owner,
+    config,
+    durability,
+    native,
+    persist,
+    schema_files,
+    sorting,
+)
 from uqs.attach.apply import Step
 from uqs.attach.config import Attachment, AttachmentError
-from uqs.attach.drift import Blocker, drift, plant_ours
+from uqs.attach.drift import Blocker, drift, forgotten_users, plant_ours
 from uqs.attach.evidence import EMPTY_LOG, Evidence, evidence
 from uqs.attach.facts import Host
 from uqs.attach.manifest import (
@@ -64,6 +79,8 @@ class DetachResult:
     blockers: list[Blocker] = field(default_factory=list)
     #: what stays, and why (after publication), or notes
     retained: list[str] = field(default_factory=list)
+    #: after publication, per table a tickerplant restart would drop: what that loses
+    restart_loss: list[str] = field(default_factory=list)
     publisher_stopped: bool = False
     dry_run: bool = False
     #: set while the reversal is in progress: an error then leaves the gate closed
@@ -212,11 +229,12 @@ def _reverse(
     unknown += [Blocker(*found) for found in sorting.resolve_pending(m, save=not dry_run)]
     result.evidence = evidence(att, obs, host, ipc)
     if result.evidence.published:
-        return _retain(att, ipc, procs, m, result)
+        return _retain(att, ipc, procs, m, result, obs)
     ours = plant_ours(obs, m)
     result.blockers = (
         unknown
         + drift(att, obs, m, ipc)
+        + forgotten_users(att, obs, m, state_dir)
         + [Blocker(*b) for b in sorting.blockers(att, obs, ipc, m, state_dir, host)]
         + _dry_runs(ipc, m, procs, ours)
     )
@@ -239,17 +257,36 @@ def _reverse(
     return _rollback(att, ipc, procs, m, result, ours, obs, backups)
 
 
+#: The note on a retained step whose table a tickerplant restart restores.
+KEPT = "published: kept for replay and restart"
+#: ... and on one whose table it does not (#2766).
+KEPT_UNTIL_RESTART = (
+    "published: kept until the tickerplant restarts, which drops the table "
+    "(no block defines it); rows not written by end of day are then only in its log"
+)
+
+
 def _retain(
-    att: Attachment, ipc: Ipc, procs: dict[str, Proc], m: Manifest, result: DetachResult
+    att: Attachment,
+    ipc: Ipc,
+    procs: dict[str, Proc],
+    m: Manifest,
+    result: DetachResult,
+    obs: Observation,
 ) -> DetachResult:
     """After publication: keep every registration, row, log and block - except the
-    `+uses` block, which only says this attachment still depends on a table."""
+    `+uses` block, which only says this attachment still depends on a table - and
+    say which of them a tickerplant restart drops (#2766)."""
     result.outcome = "detached"
+    lost = _restart_loss(att, ipc, procs, m, obs)
+    result.restart_loss = list(lost.values())
     for op in m.operations:
         if op.ownership == CREATED and op.status in (DONE, PENDING):
-            result.retained.append(f"{op.op} {op.process}: {op.table}")
+            dropped = any(t in lost for t in op.table.split(","))
+            until = " (until the tickerplant restarts)" if dropped else ""
+            result.retained.append(f"{op.op} {op.process}: {op.table}{until}")
             if not result.dry_run:
-                m.finish(op, RETAINED, note="published: kept for replay and restart")
+                m.finish(op, RETAINED, note=KEPT_UNTIL_RESTART if dropped else KEPT)
         elif op.ownership == SHARED and op.status == DONE and not result.dry_run:
             if op.op == "schema_uses":
                 # no longer a user, so a restart must not make it one again
@@ -268,12 +305,50 @@ def _retain(
     return result
 
 
+def _restart_loss(
+    att: Attachment, ipc: Ipc, procs: dict[str, Proc], m: Manifest, obs: Observation
+) -> dict[str, str]:
+    """table -> what a tickerplant restart loses of it, for each registered table
+    a restart would not restore (durability.from_manifest)."""
+    text = durability.read_text(att, m, ipc, procs)
+    tp = obs.tickerplant
+    plant = tp.procname if tp else "the tickerplant"
+    logs = ((tp.probe or {}) if tp else {}).get("logfiles", {})
+    out: dict[str, str] = {}
+    for v in durability.from_manifest(att, m, text):
+        if v.restored or not v.ownership:
+            continue
+        unread = text is None and v.ownership != CREATED
+        why = (
+            "the schema file it would be restored from could not be read here"
+            if unread
+            else f"no block in the schema file {plant} reads at start defines it"
+        )
+        names = [str(f["name"]) for f in logs.get(v.table, [])]
+        log = (
+            f"the tickerplant log {', '.join(names)}"
+            if names
+            else f"the tickerplant's log in {att.storage.tplogdir or 'its log directory'}"
+        )
+        out[v.table] = (
+            f"{v.table}: kept only until {plant} restarts - {why}. A restart drops "
+            f"{v.table} from {plant} and its consumers, and end of day then writes no "
+            f"partition for it: rows not yet written by end of day exist only in the "
+            f"rdb/wdb and in {log}, which nothing replays once {v.table} is gone. To keep "
+            f"them, let end of day run before {plant} restarts; otherwise keep {log} "
+            f"to replay by hand"
+        )
+    return out
+
+
 def _unblock(att: Attachment, m: Manifest, op: Op, ipc: Ipc, procs: dict[str, Proc]) -> Step:
     """Take the block out of the file it is in: the tickerplant's own, through
     the tickerplant, when it wrote it (schema_files.file_of)."""
     specs = tuple(s for s in att.tables if s.name in op.table.split(","))
     record = persist.BlockRecord(**op.post)
-    persist.remove(record, att, m.token, specs, schema_files.file_of(record, ipc, procs))
+    persist.remove(
+        record, att, m.token, specs, schema_files.file_of(record.path, record.process, ipc, procs)
+    )
     m.finish(op, REVERTED, note="block removed")
     return Step(op.op, op.process, op.table, "removed", "block removed")
 

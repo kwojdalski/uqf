@@ -104,6 +104,18 @@ def test_a_saved_attachment_is_not_switched_by_a_later_flag(bundle, tmp_path):
         workflow.resolve("pb-uat", given, ROOT, state_dir=tmp_path)
 
 
+def test_a_replacement_that_omits_the_writer_keeps_the_tickerplant_writing(bundle, tmp_path):
+    """An option not given keeps its saved value under --replace too (#2762): a
+    replacement of --user alone does not turn remote-schema-file into schema-file."""
+    config.save(_att(bundle), tmp_path)
+    given = workflow.Given(user="bob")
+    resolved = workflow.resolve("pb-uat", given, ROOT, replace_saved=True, state_dir=tmp_path)
+    assert resolved.source == "replaced"
+    assert resolved.changed == ["--user: 'admin' -> 'bob'"]
+    assert resolved.att.persist == "remote-schema-file"
+    assert (resolved.att.stack.host, resolved.att.stack.user) == ("uat-box.example", "bob")
+
+
 # ----------------------------------------------------------------------- preflight
 
 

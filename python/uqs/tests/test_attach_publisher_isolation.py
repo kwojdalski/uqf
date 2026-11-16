@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
-from attach_support import FakeStack
+from attach_support import FakeStack, blocked
 from typer.testing import CliRunner
 from which_support import fake_which
 
@@ -155,6 +155,7 @@ def saved(state: str = "verified") -> config.Attachment:
     att = service.create("ex-site", JOB, None, STACK, ROOT)
     config.save(att)
     m = Manifest.new(att, Manifest.path_for(att.name))
+    blocked(m, [t.name for t in att.tables])  # restart-safe: the start asks no stack
     m.set_state(state, "set by the test")
     return att
 

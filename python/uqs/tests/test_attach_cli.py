@@ -15,12 +15,12 @@ from pathlib import Path
 
 import pytest
 import typer
-from attach_support import FakeStack, FaultIpc, make_bundle
+from attach_support import LEDGER_Q, FakeStack, FaultIpc, make_bundle, registered_at_runtime
 from typer.core import TyperGroup
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.attach import config, facts, plan, publisher, service
+from uqs.attach import backfill_owner, config, facts, live, plan, publisher, service
 from uqs.attach import verify as verifying
 from uqs.attach.manifest import Manifest
 from uqs.cli import shared, target_confirm
@@ -231,6 +231,80 @@ def test_a_dry_run_shows_the_manifest_and_a_registration_the_stack_lost(world):
     assert "registration-lost" in human and "Manifest: verified" in human
 
 
+def _restart_tp_without_schema(fake) -> None:
+    """A tickerplant restart that drops a runtime-only registration, and the rdb
+    and wdb restarted after it (TorQ does not reconnect them): the table, its
+    ownership record and its subscriptions are gone everywhere."""
+    stp = fake.named("stp1")
+    for key in ("schemas", "owned", "subscribers", "logged", "updtab", "logfiles", "replay"):
+        stp[key].pop(TABLE, None)
+    for key in ("tables", "published", "names"):
+        stp[key].remove(TABLE)
+    for name in ("rdb1", "wdb1"):
+        p = fake.named(name)
+        p["schemas"].pop(TABLE)
+        p["owned"].pop(TABLE)
+        for key in ("subscribed", "names", "tables"):
+            p[key].remove(TABLE)
+
+
+def _refused_lost_registration(text: str) -> None:
+    assert "pb_ledger1 is running, but the stack lost the registration" in text
+    assert f"stp1 no longer holds {TABLE}" in text
+    assert "rows pb_ledger1 published since that restart were dropped" in text
+    assert "stop it first (`uqs stop pb_ledger1 --base-port 6000`)" in text
+    assert "then run `uqs job attachment add pb-uat` again" in text
+    assert "Nothing was saved or changed" in text
+    assert "nothing to apply" not in text, "a refused run is not already attached and verified"
+
+
+def test_a_rerun_while_the_publisher_runs_on_a_lost_registration_is_refused(world):
+    """Transient, running, tickerplant restarted (#2765): the re-run the RUNTIME_ONLY
+    warning names is refused up front - rows published since the restart were
+    dropped, and apply refuses while the publisher runs - instead of re-verifying,
+    failing, taking `verified` back and leaving the publisher running."""
+    assert run("add", *new(world, "--yes")).exit_code == 0
+    _restart_tp_without_schema(world)
+    before, calls = snapshot(world.state_dir), len(changes(world))
+    result = run("add", "pb-uat", "--yes")
+    assert result.exit_code == 1, result.output
+    _refused_lost_registration(flat(result.output + " ".join(world.errors)))
+    assert snapshot(world.state_dir) == before, "nothing saved, nothing demoted"
+    assert Manifest.load("pb-uat").state == "verified"
+    assert len(changes(world)) == calls and world.started == ["pb_ledger1"]
+
+
+def test_a_dry_run_on_a_lost_registration_with_the_publisher_running_is_not_ok(world):
+    assert run("add", *new(world, "--yes")).exit_code == 0
+    _restart_tp_without_schema(world)
+    world.errors.clear()
+    before = snapshot(world.state_dir)
+    result = run("add", "pb-uat", "--dry-run", "--json")
+    assert result.exit_code == 1, result.output
+    data = json.loads(result.output)
+    assert data["ok"] is False
+    _refused_lost_registration(flat(data["error"]))
+    assert any(line.startswith("registration-lost: stp1") for line in data["plan"]["health"])
+    human = run("add", "pb-uat", "--dry-run")
+    assert human.exit_code == 1
+    _refused_lost_registration(flat(human.output + " ".join(world.errors)))
+    assert snapshot(world.state_dir) == before
+
+
+def test_with_the_publisher_stopped_a_lost_registration_is_applied_again(world):
+    assert run("add", *new(world, "--yes")).exit_code == 0
+    _restart_tp_without_schema(world)
+    world.started.clear()  # `uqs stop pb_ledger1 --base-port 6000`
+    assert run("add", "pb-uat", "--dry-run").exit_code == 0
+    result = run("add", "pb-uat", "--yes", "--json")
+    assert result.exit_code == 0, result.output
+    stages = {s["stage"]: s["status"] for s in json.loads(result.output)["stages"]}
+    assert stages == {"save": "done", "apply": "done", "verify": "done", "start": "done"}
+    assert TABLE in world.named("stp1")["schemas"], "registered again"
+    assert world.started == ["pb_ledger1"]
+    assert Manifest.load("pb-uat").state == "verified"
+
+
 # ------------------------------------------------------------------ execution
 
 
@@ -324,6 +398,92 @@ def test_wdbs_outside_the_attachment_that_disagree_pin_nothing(world):
     assert saved_storage(world)["hdb_dir"] == ""
 
 
+REPIN = "`uqs job attachment add pb-uat --replace --repin-storage`"
+
+
+def _restart_on_another_hdb(world) -> None:
+    """The stack restarted on another HDB directory: its wdb reports it (#2767)."""
+    world.named("wdb1")["hdbdir"] = ":/moved/hdb"
+    world.named("rdb1")["hdbdir"] = ":/moved/hdb"
+
+
+@pytest.mark.parametrize("consumers", [("--consumer", "rdb1"), ()], ids=["rdb1", "all"])
+def test_a_moved_hdb_is_refused_everywhere_until_it_is_repinned(world, consumers):
+    """The pin is taken from wdb1 whether or not the attachment manages it, so
+    wdb1 moving its HDB is a STORAGE_MISMATCH either way, verify takes `verified`
+    back, `data --attachment` refuses naming the re-pin, and the re-pin is the
+    operator's act: shown old -> new, applied and verified again (#2767)."""
+    from uqs.attach import hdb_where
+
+    assert run("add", *new(world, *consumers, "--yes", "--no-start")).exit_code == 0
+    assert saved_storage(world)["hdb_dir"] == "/data/hdb"
+    _restart_on_another_hdb(world)
+
+    planned = json.loads(run("add", "pb-uat", "--dry-run", "--json").output)["plan"]
+    (found,) = [f for f in planned["findings"] if f["code"] == "STORAGE_MISMATCH"]
+    assert found["message"] == "hdb_dir was recorded as /data/hdb but wdb1 reports /moved/hdb"
+    assert REPIN in found["action"]
+    checked = verifying.verify(config.load("pb-uat"), world)
+    assert not checked.ok and Manifest.load("pb-uat").state == "applied"
+    with pytest.raises(config.AttachmentError, match="wdb1 reports /moved/hdb") as refused:
+        hdb_where.resolve("pb-uat", world)
+    assert REPIN in str(refused.value)
+    plain = run("add", "pb-uat", "--replace", "--yes", "--no-start")
+    assert plain.exit_code == 1, "a --replace that changes nothing never re-pins"
+    assert saved_storage(world)["hdb_dir"] == "/data/hdb"
+
+    result = run("add", "pb-uat", "--replace", "--repin-storage", "--yes", "--no-start")
+    assert result.exit_code == 0, result.output
+    assert "re-pin storage.hdb_dir: '/data/hdb' -> '/moved/hdb'" in flat(result.output)
+    assert saved_storage(world)["hdb_dir"] == "/moved/hdb"
+    m = Manifest.load("pb-uat")
+    assert m.state == "verified"
+    (event,) = [e for e in m.history if e["event"] == "configuration replaced"]
+    assert "storage.hdb_dir: '/data/hdb' -> '/moved/hdb'" in event["detail"]
+    assert hdb_where.resolve("pb-uat", world).hdb == "/moved/hdb"
+
+
+def test_a_repin_is_refused_while_the_publisher_runs(world):
+    """A re-pin is a replacement: with the publisher running it cannot be applied
+    and verified, so nothing is saved (#2760, #2767)."""
+    assert run("add", *new(world, "--consumer", "rdb1", "--yes")).exit_code == 0
+    _restart_on_another_hdb(world)
+    result = run("add", "pb-uat", "--replace", "--repin-storage", "--yes")
+    assert result.exit_code == 1
+    (said,) = [m for m in world.errors if "pb_ledger1 is running" in m]
+    assert "--repin-storage" in said and "Nothing was saved" in said
+    assert saved_storage(world)["hdb_dir"] == "/data/hdb"
+
+
+def test_a_repin_is_refused_while_a_backfill_owns_the_attachment(world):
+    """A run keeps its state under the destination it was launched for: the
+    pin it writes into cannot move under it (#2758, #2767)."""
+    assert run("add", *new(world, "--consumer", "rdb1", "--yes", "--no-start")).exit_code == 0
+    _restart_on_another_hdb(world)
+    _a_backfill_runs()
+    result = run("add", "pb-uat", "--replace", "--repin-storage", "--yes", "--no-start")
+    assert result.exit_code == 1
+    assert any("attached backfill running" in m and "then replace it" in m for m in world.errors)
+    assert saved_storage(world)["hdb_dir"] == "/data/hdb"
+
+
+def test_a_repin_needs_replace_and_one_location_to_pin(world):
+    """Without --replace it is refused naming the command; with wdbs that
+    disagree it is refused rather than left unpinned (#2767)."""
+    assert run("add", *new(world, "--consumer", "rdb1", "--yes", "--no-start")).exit_code == 0
+    assert run("add", "pb-uat", "--repin-storage", "--yes").exit_code == 1
+    assert any("needs --replace" in m and REPIN in m for m in world.errors)
+    world.add(dict(world.named("wdb1"), procname="wdb2", port=6006, hdbdir=":/elsewhere"))
+    world.refresh_discovery()
+    result = run("add", "pb-uat", "--replace", "--repin-storage", "--yes", "--no-start")
+    assert result.exit_code == 1
+    assert any(
+        "reports no single wdb_savedir, hdb_dir now" in m and "wdb2 :/elsewhere" in m
+        for m in world.errors
+    )
+    assert saved_storage(world)["hdb_dir"] == "/data/hdb"
+
+
 def test_a_rerun_after_no_start_applies_nothing_and_then_starts(world):
     assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
     first = changes(world)
@@ -355,6 +515,119 @@ def test_conflicting_options_for_a_saved_attachment_are_refused_unless_replaced(
     assert any("detach it first" in m for m in world.errors)
     assert config.load("pb-uat").stack.id == 6000
     assert Manifest.load("pb-uat").state == "verified", "the ownership record is untouched"
+
+
+def test_a_replacement_keeps_every_option_it_does_not_give(world):
+    """A transient attachment replaced with only --user given (#2762): it stays
+    runtime-only - no block is written, the one thing --transient declined - and keeps
+    its ssh and storage pins; what was replaced, and journalled, is --user alone."""
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+    assert run("add", "pb-uat", "--ssh", "ops@box", "--yes", "--no-start").exit_code == 0
+    pins = saved_storage(world)
+    result = run("add", *new(world)[:-1], "--user", "bob", "--replace", "--yes", "--no-start",
+                 debug=True)  # fmt: skip
+    assert result.exit_code == 0, result.output
+    assert "replaced --user: 'admin' -> 'bob'" in flat(result.output)
+    att = config.load("pb-uat")
+    assert (att.persist, att.stack.user, att.stack.ssh) == ("runtime-only", "bob", "ops@box")
+    assert saved_storage(world) == pins, "no pin dropped: nothing that decides one changed"
+    m = Manifest.load("pb-uat")
+    assert not [o for o in m.operations if o.op.startswith("schema_")]
+    (event,) = [e for e in m.history if e["event"] == "configuration replaced"]
+    assert event["detail"] == "--user: 'admin' -> 'bob'"
+    assert m.state == "verified", "applied and verified again as replaced"
+
+
+def test_a_replacement_saved_at_a_blocked_plan_is_no_longer_verified(world):
+    """--clear-overrides saves at a blocked plan; a replacement saved with it is a
+    configuration never applied, so the manifest must not keep `verified` (#2762)."""
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+    world.named("stp1")["multilog"] = "singular"
+    result = run("add", "pb-uat", "--user", "bob", "--replace", "--clear-overrides", "--yes")
+    assert result.exit_code == 1
+    assert any("LOGGING_MODE" in m and "Nothing was changed" in m for m in world.errors)
+    assert config.load("pb-uat").stack.user == "bob"
+    m = Manifest.load("pb-uat")
+    assert m.state == "applied"
+    assert m.history[-1]["detail"] == "the configuration was replaced: apply and verify it"
+
+
+def test_a_replacement_apply_refuses_is_no_longer_verified(world, monkeypatch):
+    """Saved, then refused by apply's own plan (the stack changed after the preview):
+    the start gate and backfill trust `verified`, so it is taken back (#2762)."""
+    from uqs.attach import apply as applying
+
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+
+    def refused(*args, **kwargs):
+        raise applying.ApplyRefused([])
+
+    monkeypatch.setattr(applying, "apply", refused)
+    result = run("add", "pb-uat", "--user", "bob", "--replace", "--yes", "--no-start")
+    assert result.exit_code == 1
+    assert "nothing was changed on the stack" in flat(result.output)
+    assert config.load("pb-uat").stack.user == "bob"
+    assert Manifest.load("pb-uat").state == "applied"
+
+
+def _a_backfill_runs(name: str = "pb-uat") -> Path:
+    """An owner record naming a live process (this one), as launch writes it."""
+    return backfill_owner.claim(name, "demo_deals_backfill", os.getpid(), "0123456789ab")
+
+
+@pytest.mark.parametrize("dry", [False, True])
+def test_a_replacement_is_refused_while_a_backfill_owns_the_attachment(world, dry):
+    """A run reads its destination's state dir, and `stop` its owner record; a
+    replacement that changed a pin would move what the config names under it
+    (#2758). Refused as detach is - before anything is saved, on --dry-run too."""
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+    record = _a_backfill_runs()
+    before, first = snapshot(world.state_dir), changes(world)
+    result = run("add", "pb-uat", "--user", "bob", "--replace", "--yes", "--no-start",
+                 *(["--dry-run"] if dry else []))  # fmt: skip
+    assert result.exit_code == 1, result.output
+    (said,) = [m for m in world.errors if "attached backfill running" in m]
+    assert "demo_deals_backfill (pid" in said and str(record) in said
+    assert "then replace it. Nothing was changed." in said
+    assert snapshot(world.state_dir) == before and changes(world) == first
+    assert Manifest.load("pb-uat").state == "verified"
+
+
+def test_a_replacement_save_rechecks_the_owner_under_the_lock(world, monkeypatch):
+    """A run launched between the CLI's check and the save is still refused:
+    workflow.save checks again under the lock launch claims under (#2758)."""
+    from uqs.attach import workflow
+
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+    real = workflow.refuse_replacing_backfilled
+    calls = []
+
+    def late(resolved, state_dir=None):
+        if not calls:
+            calls.append(_a_backfill_runs())  # the run starts just after the first check
+            return
+        real(resolved, state_dir)
+
+    monkeypatch.setattr(workflow, "refuse_replacing_backfilled", late)
+    result = run("add", "pb-uat", "--user", "bob", "--replace", "--yes", "--no-start")
+    assert result.exit_code == 1
+    text = flat(result.output)
+    assert "attached backfill running" in text and "nothing was saved" in text
+    assert config.load("pb-uat").stack.user == "admin"
+    assert Manifest.load("pb-uat").state == "verified"
+
+
+def test_a_plain_rerun_while_a_backfill_runs_is_allowed(world):
+    """No replacement: the saved pins are kept as they are, so the config is
+    written back unchanged, and apply on a converged stack changes nothing - the
+    run's destination cannot move under it (#2758)."""
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+    _a_backfill_runs()
+    saved, first = (world.state_dir / "pb-uat" / config.CONFIG_FILE).read_bytes(), changes(world)
+    result = run("add", "pb-uat", "--yes", "--no-start")
+    assert result.exit_code == 0, result.output
+    assert (world.state_dir / "pb-uat" / config.CONFIG_FILE).read_bytes() == saved
+    assert changes(world) == first
 
 
 def test_a_new_attachment_needs_a_job_and_a_stack_id(world):
@@ -531,6 +804,24 @@ def test_detach_before_publication_rolls_back_and_says_so(world):
     assert Manifest.load("pb-uat").state == "rolled_back"
 
 
+def test_a_transient_detach_after_publication_says_a_restart_drops_the_table(world):
+    """#2766: the output names what a restart loses, and a dry run afterwards does
+    not tell a detached attachment to apply again."""
+    assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
+    world.publish(TABLE, 3)
+    result = run("remove", "pb-uat", "--yes")
+    assert result.exit_code == 0, result.output
+    text = flat(result.output)
+    assert f"restart: {TABLE}: kept only until stp1 restarts" in text
+    assert "let end of day run before stp1 restarts" in text
+    for name in ("stp1", "rdb1", "wdb1"):
+        world.named(name)["schemas"].pop(TABLE)
+    data = json.loads(run("add", "pb-uat", "--dry-run", "--json").output)["plan"]
+    assert data["manifest"]["state"] == "detached"
+    assert data["health"] and not any("apply it again" in line for line in data["health"])
+    assert all(line.startswith("detached: ") for line in data["health"])
+
+
 # ------------------------------------------------------------ list attachments
 
 
@@ -588,3 +879,45 @@ def test_the_publisher_port_state_tells_stopped_from_unreachable():
         assert attach_state._port_state("127.0.0.1", port)[0] == "running"
     assert attach_state._port_state("127.0.0.1", port)[0] == "stopped"
     assert attach_state._port_state("no-such-host.invalid", 1)[0] == "unreachable"
+
+
+@pytest.mark.parametrize("stack_defines", [True, False], ids=["schema file", "runtime only"])
+def test_a_durable_attach_over_a_table_someone_else_registered(world, tmp_path, stack_defines):
+    """#2763: the table is already on the stack, with no ownership record. Apply
+    writes no block for a table it did not create, so the plan must not promise one:
+    when the stack's own schema file defines the table a restart restores it and
+    the plan says so; when only a runtime registration holds it, the plan and
+    verify both warn that a restart drops it, and the start gate asks the stack."""
+    schema = tmp_path / "database.q"
+    schema.write_text("trade:([] time:`timestamp$())\n" + f"{LEDGER_Q}\n" * stack_defines)
+    text = schema.read_text()
+    tp = world.named("stp1")
+    tp["schemafile"] = str(schema)
+    for d in ("tplogs", "wdb", "hdb"):
+        (tmp_path / d).mkdir()
+    tp["tplogdir"] = str(tmp_path / "tplogs")
+    world.named("wdb1")["savedir"] = f":{tmp_path / 'wdb'}"
+    world.named("wdb1")["hdbdir"] = f":{tmp_path / 'hdb'}"
+    registered_at_runtime(world, TABLE)
+    durable = [a for a in new(world) if a != "--transient"]
+    result = run("add", *durable, "--yes", "--json")
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    found = {f["code"]: f["message"] for f in data["plan"]["findings"]}
+    assert "WILL_PERSIST" not in found
+    assert not [c for c in data["plan"]["changes"] if c["process"] == "schema file"]
+    assert [s["outcome"] for s in data["apply"]["steps"] if s["op"] == "stp_register"] == [
+        "adopted"
+    ]
+    assert schema.read_text() == text, "apply wrote no block, as the plan said"
+    m = Manifest.load("pb-uat", world.state_dir)
+    if stack_defines:
+        assert found["STACK_DEFINES"].startswith(f"{schema} defines {TABLE} outside any")
+        assert "ADOPTED_RUNTIME_ONLY" not in found
+        assert data["verify"]["warnings"] == []
+    else:
+        said = found["ADOPTED_RUNTIME_ONLY"]
+        assert said.startswith(f"{TABLE} is runtime-only: it was registered on the tickerplant")
+        assert data["verify"]["ok"] and data["verify"]["warnings"] == [said]
+    att = config.load("pb-uat", world.state_dir)
+    assert live.needed(att, m, facts.Host(lambda h, p: False, ("localhost",))) is not stack_defines

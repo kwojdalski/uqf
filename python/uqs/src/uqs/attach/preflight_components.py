@@ -7,10 +7,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from uqs.attach import persist
+from uqs.attach import config, durability, persist
 from uqs.attach.config import Attachment
 from uqs.attach.facts import Facts
 from uqs.attach.findings import Finding
+from uqs.attach.manifest import EXISTING, SHARED
 from uqs.attach.schema import TableSpec, differences
 from uqs.attach.topology import Observation, Proc
 
@@ -224,27 +225,37 @@ def _sorting(c: Proc, spec: TableSpec, rows: list[dict]) -> list[Finding]:
 
 
 def storage(att: Attachment, obs: Observation) -> list[Finding]:
+    """A pinned location the stack no longer reports. The wdb directories are
+    judged against every wdb that decides the HDB (Observation.hdb_wdbs), the
+    unmanaged ones among them: pinning reads them, so a pin taken from a wdb the
+    attachment does not manage must be held to it too (#2767)."""
     tp, pinned, out = obs.tickerplant, att.storage, []
-    observed = {
-        "tplogdir": (tp.probe or {}).get("tplogdir", "") if tp else "",
-        "schema_file": (tp.probe or {}).get("schemafile", "") if tp else "",
-    }
-    for c in obs.consumers:
-        probe = c.probe or {}
-        if c.proctype == "wdb":
-            observed["wdb_savedir"] = probe.get("savedir", "").lstrip(":")
-            observed["hdb_dir"] = probe.get("hdbdir", "").lstrip(":")
+    observed: dict[str, dict[str, str]] = {"wdb_savedir": {}, "hdb_dir": {}}
+    if tp:
+        observed["tplogdir"] = {tp.procname: (tp.probe or {}).get("tplogdir", "")}
+        observed["schema_file"] = {tp.procname: (tp.probe or {}).get("schemafile", "")}
+    for w in obs.hdb_wdbs():
+        probe = w.probe or {}
+        observed["wdb_savedir"][w.procname] = probe.get("savedir", "").lstrip(":")
+        observed["hdb_dir"][w.procname] = probe.get("hdbdir", "").lstrip(":")
     for key, want in pinned.__dict__.items():
-        have = observed.get(key, "")
-        if want and have and Path(want) != Path(have):
+        against = {
+            who: have
+            for who, have in observed.get(key, {}).items()
+            if want and have and Path(want) != Path(have)
+        }
+        if against:
+            said = ", ".join(f"{who} reports {have}" for who, have in sorted(against.items()))
             out.append(
                 Finding(
                     "blocker",
                     "STORAGE_MISMATCH",
                     key,
-                    f"{key} was recorded as {want} but the stack reports {have}",
-                    "the attachment never falls back to a default location; re-plan if the "
-                    "stack moved",
+                    f"{key} was recorded as {want} but {said}",
+                    "the attachment never follows a moved location by itself; if the stack "
+                    f"moved, re-pin what it reports now with {config.repin(att.name)} (refused "
+                    "while a backfill owns the attachment or its publisher runs)",
+                    {"pinned": want, **against},
                 )
             )
     return out
@@ -252,19 +263,24 @@ def storage(att: Attachment, obs: Observation) -> list[Finding]:
 
 def runtime_only(att: Attachment, facts: Facts) -> str:
     """What a runtime-only registration costs, said in the plan and in verify's
-    output alike. With the stack elsewhere (#1651) nothing on this machine sees
-    its tickerplant restart, so the re-apply is the operator's to make."""
+    output alike. The recovery is the same wherever the stack is: stop the
+    publisher, then re-apply - a re-apply with it still running is refused
+    (workflow.refuse_running_unregistered, #2765). With the stack elsewhere
+    (#1651) nothing on this machine sees its tickerplant restart, so noticing
+    it is the operator's too."""
+    proc = att.publisher.procname
     said = (
-        "runtime-only: restarting the tickerplant DROPS the registration; the attachment "
-        "then reports registration-lost and must be re-applied "
-        f"(`uqs job attachment add {att.name}`)"
+        "runtime-only: restarting the tickerplant DROPS the registration, and rows the "
+        "publisher sends after it are dropped; the attachment then reports registration-lost "
+        f"and must be re-applied: stop {proc} (`uqs stop {proc} --base-port {att.stack.id}`), "
+        f"then re-apply (`uqs job attachment add {att.name}`) - the attach re-verifies before "
+        "it starts the publisher, a bare `uqs start` does not"
     )
     if facts.host.is_local(att.stack.host):
         return said
     return said + (
         f". The stack is on {att.stack.host}, and nothing on this machine is told when its "
-        f"tickerplant restarts: stop {att.publisher.procname}, then re-apply - the attach "
-        "re-verifies before it starts the publisher, a bare `uqs start` does not"
+        "tickerplant restarts"
     )
 
 
@@ -286,7 +302,9 @@ def persistence(att: Attachment, obs: Observation, facts: Facts) -> list[Finding
             return _unavailable(f"{read.path} does not exist on {att.stack.host}")
         if not read.writable:
             return _unavailable(f"{read.path} is not writable by {by}'s user")
-        return _judge(att, read.path, read.text, f"{by} will append a marked block to it")
+        return _judge(
+            att, tp, facts, read.path, read.text, f"{by} will append a marked block to it"
+        )
     if not facts.host.is_local(att.stack.host):
         return _unavailable(
             f"the schema file is on {att.stack.host}; this machine cannot edit it",
@@ -298,26 +316,60 @@ def persistence(att: Attachment, obs: Observation, facts: Facts) -> list[Finding
         return _unavailable(f"{path} does not exist on this machine")
     if not _writable(Path(path)):
         return _unavailable(f"{path} is not writable by this user")
-    return _judge(att, path, Path(path).read_text(errors="replace"), "a marked block will be added")
+    text = Path(path).read_text(errors="replace")
+    return _judge(att, tp, facts, path, text, "a marked block will be added")
 
 
-def _judge(att: Attachment, path: str, text: str, will: str) -> list[Finding]:
-    """The file can be written: is the block there already, or is it a file uqf rebuilds?"""
+def _judge(
+    att: Attachment, tp: Proc | None, facts: Facts, path: str, text: str, will: str
+) -> list[Finding]:
+    """The file can be written: is the block there already, or is it a file uqf
+    rebuilds? And would a restart restore each table (durability.py)? A table this
+    attachment would only share, with a creator whose registration no block in
+    the file defines, is runtime-only whatever block this one writes (#2759). One
+    it would adopt gets no block at all: the stack's own definition restores it
+    (STACK_DEFINES), or nothing does (#2763)."""
+    if "GENERATED" in text[:400] and persist.locate(text, att.name) is None:
+        return _unavailable(
+            f"{path} is generated (uqf rebuilds it from plant_tables.q on every start); "
+            "persist through `uqs job install` / `runtime prepare` instead"
+        )
+    verdicts = durability.from_plan(att, (tp.probe or {}) if tp else {}, facts.token, text)
+    out = [
+        Finding("warning", RUNTIME_ONLY_CODES[v.ownership], "schema", v.why, "",
+                {"table": v.table})
+        for v in verdicts
+        if not v.restored
+    ]  # fmt: skip
+    out += [
+        Finding("info", "STACK_DEFINES", "schema", f"{path} defines {v.table} outside any "
+                "uqs-attach block, so a restart restores it; no block is added for it",
+                "", {"table": v.table})
+        for v in verdicts
+        if v.restored and not v.blocked
+    ]  # fmt: skip
+    kept = [v.table for v in verdicts if v.restored and v.blocked]
     if persist.locate(text, att.name) is not None:
-        return [
+        out.append(
             Finding(
                 "info",
                 "ALREADY_PERSISTED",
                 "schema",
                 f"{path} already holds this attachment's block",
             )
-        ]
-    if "GENERATED" in text[:400]:
-        return _unavailable(
-            f"{path} is generated (uqf rebuilds it from plant_tables.q on every start); "
-            "persist through `uqs job install` / `runtime prepare` instead"
         )
-    return [Finding("info", "WILL_PERSIST", "schema", f"{path}: {will}")]
+    elif kept and len(kept) < len(verdicts):
+        out.append(
+            Finding("info", "WILL_PERSIST", "schema", f"{path}: {will}, which keeps "
+                    f"{', '.join(kept)} across a restart")
+        )  # fmt: skip
+    elif kept:
+        out.append(Finding("info", "WILL_PERSIST", "schema", f"{path}: {will}"))
+    return out
+
+
+#: The warning for a table a restart would drop, by what apply records of it.
+RUNTIME_ONLY_CODES = {SHARED: "SHARED_RUNTIME_ONLY", EXISTING: "ADOPTED_RUNTIME_ONLY"}
 
 
 def _unavailable(

@@ -2,10 +2,13 @@
 
 `--follow --stop-on-exit` (#2679) asks a run to stop only from the invocation that launched
 it. This finds a run that is already going - by its owner record (backfill_owner), the one
-file that names the attachment's live run and its pid - and does the same three things:
+file that names the attachment's live run, its pid and its destination - and does the same
+three things:
 
   1. ask: write the stop file the lifecycle checks between windows (backfill_run.stop_file_for,
-     the path q's `.qetl.job.bounded.stop.path` derives), for that pid and no other;
+     the path q's `.qetl.job.bounded.stop.path` derives), for that pid and no other, in the
+     state directory of the destination the record names (`run_state_dir`) - the one the run
+     was launched into, never one derived from the attachment's config as it is now (#2758);
   2. wait for the run to exit by itself at its window boundary;
   3. only when the caller says so (`kill`), escalate through the one stop policy every stop
      path shares (process_stop.stop_pids, #2689): SIGTERM, a short grace, then SIGKILL.
@@ -18,6 +21,7 @@ record names a dead pid, which `backfill_owner.active` does not count.
 from __future__ import annotations
 
 import os
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -25,11 +29,14 @@ from pathlib import Path
 
 from uqs import process_stop
 from uqs.attach import backfill_owner, backfill_run
+from uqs.attach.backfill import state_dir_for
 from uqs.liveness import on_this_host, pid_alive
-from uqs.paths import UqsError
+from uqs.paths import UqsError, UqsPaths
 
 #: What a stop ended as: the run `stopped` at a window boundary, was `killed`, or is `running`.
 STOPPED, KILLED, RUNNING = "stopped", "killed", "running"
+#: A destination's identity (backfill.identity_of): what an owner record's `destination` holds.
+_IDENTITY = re.compile(r"[0-9a-f]{12}")
 
 
 @dataclass(frozen=True)
@@ -57,6 +64,22 @@ def find(attachment: str, worker: str, root: Path | None = None) -> dict:
             )
         return record
     raise UqsError(f"{worker} has no running backfill into {attachment}. Nothing was changed.")
+
+
+def run_state_dir(paths: UqsPaths, attachment: str, record: dict) -> Path:
+    """The state directory the run in `record` keeps its ledgers and reads its stop file in.
+
+    Its own destination's - the identity launch claimed it with - and not the one the
+    attachment's config names now: a re-pinned HDB, or none, would point a stop or a
+    listing at a directory the run never reads (#2758)."""
+    destination = str(record.get("destination", ""))
+    if not _IDENTITY.fullmatch(destination):
+        raise UqsError(
+            f"{record.get('worker', '?')}'s owner record ({record.get('file', '?')}) names no "
+            f"destination ({destination!r}), so where the run reads its stop file is unknown. "
+            "Nothing was changed."
+        )
+    return state_dir_for(paths, attachment, destination)
 
 
 def stop(

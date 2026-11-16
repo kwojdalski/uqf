@@ -114,6 +114,7 @@ def attach(
     schema_file: o.SchemaFileOpt = "",
     ssh: o.SshOpt = None,
     replace: o.ReplaceOpt = False,
+    repin_storage: o.RepinStorageOpt = False,
     override: o.OverrideOpt = None,
     override_reason: o.ReasonOpt = "",
     accept_risks: o.AcceptRisksOpt = False,
@@ -165,6 +166,7 @@ def attach(
         password_env=password_env, runtime_only=runtime_only,
         schema_writer=schema_writer.value if schema_writer else None, tplogdir=tplogdir,
         schema_file=schema_file, ssh=ssh, process_file=process_file, start_with_all=start_with_all,
+        repin_storage=repin_storage,
     )  # fmt: skip
     try:
         paths = _paths()
@@ -196,13 +198,25 @@ def attach(
     running = workflow.already_running(att, planned)
     out.doc["plan"] = d
     render_plan(out, d)
+    repinned: list[str] = []
+    try:  # before the verdict: a refused run is not "already attached and verified"
+        workflow.refuse_replacing_running(resolved, running)
+        workflow.refuse_running_unregistered(att, planned, running)
+        workflow.refuse_replacing_backfilled(resolved)
+        repinned = workflow.repins(resolved, planned)
+    except UqsError as exc:
+        out.fail(exc)
+    if repinned:
+        out.doc["repinned"] = repinned
+        for line in repinned:
+            out.text(f"[yellow]re-pin[/] {escape(line)}")
     verdict(out, d, running)
     if dry_run:
         out.text(safety.dry_run_note())
         out.finish(ok=planned.ok or running)
     if not planned.ok and not running:
         if clear_overrides and resolved.source != "new":
-            service.save_planned(att, planned)
+            workflow.save(resolved, planned)
             out.text("[yellow]the accepted risks were withdrawn and saved[/]")
         out.fail(
             "refused: "
@@ -327,7 +341,10 @@ def detach(
     Before any publication, the empty state the attachment created is removed
     (each process re-checks that it is empty and its own). After publication
     nothing is deleted: the publisher is stopped and every registration, row,
-    log and the schema block stay, so replay and restart keep working. If the
+    log and the schema block stay. A table a tickerplant restart restores (a
+    schema block defines it) keeps replay and end of day; one it does not - a
+    runtime-only attachment's - is kept only until the tickerplant restarts,
+    and each such table is listed with what that loses and what to do. If the
     stack drifted or ownership cannot be shown, nothing is removed and what a
     person has to do is listed.
     """
@@ -357,6 +374,7 @@ def detach(
         "steps": steps,
         "published": result.evidence.reasons + result.evidence.unknown,
         "retained": result.retained,
+        "restart_loss": result.restart_loss,
         "blockers": [asdict(b) for b in result.blockers],
     }
     steps_table(out, "Steps", redact(steps, out.secrets))
@@ -364,6 +382,8 @@ def detach(
         out.text(f"[yellow]published:[/] {reason}")
     for line in result.retained:
         out.text(f"[cyan]kept:[/] {line}")
+    for line in result.restart_loss:
+        out.text(f"[yellow]restart:[/] {line}")
     for b in result.blockers:
         out.text(f"[red]refused[/] {b.component}: {b.reason}\n  -> {b.action}")
     out.detail(f"total {time.monotonic() - began:.3f}s")

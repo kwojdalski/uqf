@@ -24,6 +24,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from attach_support import blocked
 from mcp_support import call, refused
 from typer.testing import CliRunner
 
@@ -79,6 +80,7 @@ def nothing_starts(monkeypatch):
 
 def with_state(att: config.Attachment, status: str) -> Path:
     m = Manifest.new(att, Manifest.path_for(att.name))
+    blocked(m, [t.name for t in att.tables])  # restart-safe: the start asks no stack
     m.set_state(status, "set by the test")
     return Manifest.path_for(att.name)
 

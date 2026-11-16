@@ -19,11 +19,12 @@ from pathlib import Path
 from typing import Any
 
 from uqs import timerange
-from uqs.attach import config
+from uqs.attach import backfill_coordination, config, live
 from uqs.attach.backfill import PLAN_SCRIPT, Destination, canonical, resolve
 from uqs.attach.backfill_coordination import assess
 from uqs.attach.backfill_policy import coordination_line, override_lines, overrides_of
 from uqs.attach.config import Attachment
+from uqs.attach.manifest import Manifest
 from uqs.attach.remote import Endpoint, Ipc, IpcError
 from uqs.attach.topology import Observation, observe, port_of
 from uqs.interpreter import q_interpreter
@@ -61,18 +62,21 @@ def _same_dir(reported: str, where: Path) -> bool:
 
 
 def _writers(att: Attachment, obs: Observation, dest: Destination) -> list[str]:
-    """The wdb/rdb processes whose HDB directory is the destination."""
-    named = [*obs.consumers, *obs.unmanaged]
-    reporting = [p for p in named if p.up and p.proctype in ("wdb", "rdb")]
-    disagree = [
+    """The wdb/rdb processes whose HDB directory is the destination: the wdbs
+    that decide the HDB pin (Observation.hdb_wdbs, #2767), and every up rdb,
+    which writes it at end of day too."""
+    rdbs = [p for p in [*obs.consumers, *obs.unmanaged] if p.up and p.proctype == "rdb"]
+    reporting = [*obs.hdb_wdbs(), *rdbs]
+    disagree = sorted(
         p.procname
         for p in reporting
         if (p.probe or {}).get("hdbdir") and not _same_dir((p.probe or {})["hdbdir"], dest.hdb_dir)
-    ]
+    )
     if disagree:
         raise UqsError(
             f"{', '.join(disagree)} report another HDB directory than attachment {att.name}'s "
-            f"{dest.hdb_dir}: the destination is ambiguous, so nothing is planned"
+            f"{dest.hdb_dir}: the destination is ambiguous, so nothing is planned. If the "
+            f"stack moved its HDB, re-pin it: {config.repin(att.name)}"
         )
     writers = [
         p.procname for p in reporting if _same_dir((p.probe or {}).get("hdbdir", ""), dest.hdb_dir)
@@ -123,8 +127,11 @@ def readers_of(att: Attachment, obs: Observation, hdb_dir: Path, ipc: Ipc) -> li
     return sorted(out, key=lambda r: r.procname)
 
 
-def admit(att: Attachment, dest: Destination, ipc: Ipc) -> Admission:
-    """The live checks: who writes the destination, and who serves it.
+def admit(
+    att: Attachment, dest: Destination, ipc: Ipc, attach_root: Path | None = None
+) -> Admission:
+    """The live checks: are the attached tables still registered, who writes the
+    destination, and who serves it.
 
     Read-only: every call is `probe` or `hdb_reader`. Refuses a stack that does
     not answer, whose processes disagree about the HDB, or whose HDB readers
@@ -133,7 +140,45 @@ def admit(att: Attachment, dest: Destination, ipc: Ipc) -> Admission:
     obs, structural = observe(att, ipc)
     if structural:
         raise UqsError("; ".join(f"{f.component}: {f.message}" for f in structural))
+    _still_registered(att, obs, attach_root)
     return Admission(_writers(att, obs, dest), readers_of(att, obs, dest.hdb_dir, ipc), obs)
+
+
+def _still_registered(att: Attachment, obs: Observation, attach_root: Path | None) -> None:
+    """The start gate's live check (live.py), applied to a backfill (#2761).
+
+    The manifest's `verified` survives a tickerplant restart that dropped a
+    runtime-only registration; a backfill admitted on it alone writes partitions
+    for a table no process holds, and that no end of day will write. So when the
+    start gate would ask - a stack on another machine, or a table a restart does
+    not restore - the tickerplant `observe` already asked must still register
+    every attached table, and list it among the users of each one it shares
+    (#2764). When it would not ask, neither does this.
+    """
+    m = Manifest.load(att.name, attach_root)
+    if not live.needed(att, m, backfill_coordination.HOST):
+        return
+    tp = obs.tickerplant
+    if tp is None or not tp.up:
+        where = f"{tp.endpoint.label} ({tp.error})" if tp else "the tickerplant"
+        raise UqsError(
+            f"whether attachment {att.name}'s tables are still registered on stack "
+            f"{att.stack.id} at {att.stack.host} cannot be told: {where} does not answer, "
+            "and a backfill is refused until it does."
+        )
+    probe, where = tp.probe or {}, tp.endpoint.label
+    gone = live.unregistered(att, probe)
+    if gone:
+        raise UqsError(
+            f"attachment {att.name} cannot be backfilled: "
+            f"{live.lost(att, gone, where)} A backfill would write partitions for "
+            "a table no process holds, and no end of day writes."
+        )
+    left = live.forgotten(att, m, probe)
+    if left:
+        raise UqsError(
+            f"attachment {att.name} cannot be backfilled: {live.forgot(att, left, where)}"
+        )
 
 
 def partitions_on_disk(dest: Destination, dates: list[date]) -> list[dict[str, Any]]:
@@ -350,7 +395,7 @@ def plan_attached(
     """
     dest = resolve(paths, attachment, worker, port=port, fixture=fixture, attach_root=attach_root)
     att = config.load(attachment, attach_root)
-    admission = admit(att, dest, ipc)
+    admission = admit(att, dest, ipc, attach_root)
     facts = evaluate(paths, dest, worker, version, range_from, range_to, on_conflict)
     return build_plan(
         paths,

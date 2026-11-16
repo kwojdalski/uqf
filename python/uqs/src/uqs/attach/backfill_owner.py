@@ -80,8 +80,9 @@ def active(attachment: str, root: Path | None = None) -> list[dict[str, Any]]:
     return found
 
 
-def refuse_while_active(attachment: str, root: Path | None = None) -> None:
-    """Raise if an attached backfill owns a live run: detach calls this first."""
+def refuse_while_active(attachment: str, root: Path | None = None, *, then: str = "detach") -> None:
+    """Raise if an attached backfill owns a live run: detach calls this first, and
+    a `--replace` before it saves (`then` is what the operator does afterwards)."""
     runs = active(attachment, root)
     if runs:
         who = "; ".join(
@@ -91,6 +92,6 @@ def refuse_while_active(attachment: str, root: Path | None = None) -> None:
         )
         raise AttachmentError(
             f"attachment {attachment} has an attached backfill running: {who}. Let it finish "
-            "(`uqs job backfill ... --wait` follows it), or stop it, then detach. "
+            f"(`uqs job backfill ... --wait` follows it), or stop it, then {then}. "
             "Nothing was changed."
         )

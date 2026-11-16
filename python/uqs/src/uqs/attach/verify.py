@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import config, persist, plan, reach, schema_files, sorting
+from uqs.attach import config, durability, live, persist, plan, reach, schema_files, sorting
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Facts, Host
 from uqs.attach.findings import blockers
@@ -47,6 +47,8 @@ class VerifyResult:
     state: str
     #: true and worth saying, but not a failed check: what a runtime-only registration costs
     warnings: list[str] = field(default_factory=list)
+    #: the tables a tickerplant restart would not restore (durability.py)
+    lost: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -87,8 +89,9 @@ def _tickerplant(
         out.append(Check(f"{who}: {t} carries this attachment's ownership record", mine))
     if op is not None and op.ownership == SHARED:
         # without it the creator's detach would remove a table this attachment publishes to
-        users = p.get("owned", {}).get(t, {}).get("users", [])
-        out.append(Check(f"{who}: {t} lists {att.name} among its users", att.name in users))
+        out.append(
+            Check(f"{who}: {t} lists {att.name} among its users", live.listed_user(p, t, att.name))
+        )
     return out
 
 
@@ -137,7 +140,11 @@ def _schema_file(
         record = persist.BlockRecord(**block.post)
         try:
             found = persist.problems(
-                record, att, m.token, mine, schema_files.file_of(record, ipc, procs)
+                record,
+                att,
+                m.token,
+                mine,
+                schema_files.file_of(record.path, record.process, ipc, procs),
             )
         except AttachmentError as exc:
             found = [str(exc)]
@@ -168,6 +175,24 @@ def run(att: Attachment, obs: Observation, m: Manifest, ipc: Ipc) -> list[Check]
             if c.up:
                 out += _consumer(m, c, spec)
     return out + _schema_file(m, att, att.tables, ipc, obs)
+
+
+def _losses(
+    att: Attachment, m: Manifest, ipc: Ipc, obs: Observation, host: Host
+) -> tuple[list[str], list[str]]:
+    """(the warnings, the tables) of what a restart would lose (durability.py): every
+    table of a runtime-only attachment, or each table no block defines - one it
+    shares with a creator that attached it with --transient (#2759)."""
+    if att.persist == "runtime-only":
+        return [runtime_only(att, Facts(host=host))], [t.name for t in att.tables]
+    lost = [
+        v
+        for v in durability.from_manifest(
+            att, m, durability.read_text(att, m, ipc, {p.procname: p for p in obs.procs()})
+        )
+        if not v.restored
+    ]
+    return [v.why for v in lost], [v.table for v in lost]
 
 
 def preflight_now(att: Attachment, ipc: Ipc, root: Path, m: Manifest) -> list[Check]:
@@ -231,8 +256,7 @@ def verify(
         port = plan.publisher_port(att, root).port
         tp = obs.tickerplant.endpoint if obs.tickerplant else None
         checks += [Check(*c) for c in reach.checks(att, ipc, port, host, tp)]
-        warned = [runtime_only(att, Facts(host=host))] if att.persist == "runtime-only" else []
-        result = VerifyResult(checks, m.state, warned)
+        result = VerifyResult(checks, m.state, *_losses(att, m, ipc, obs, host))
         if result.ok and m.state != "verified":
             m.set_state("verified", f"{len(checks)} check(s) passed")
         elif not result.ok and m.state == "verified":

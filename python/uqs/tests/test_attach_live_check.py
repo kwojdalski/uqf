@@ -16,7 +16,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from attach_support import FakeStack
+from attach_support import FakeStack, blocked
 
 from uqs.attach import config, live, service
 from uqs.attach.facts import Host
@@ -109,13 +109,24 @@ def test_an_unset_password_variable_refuses_rather_than_passes(monkeypatch):
 
 
 def test_a_schema_file_attachment_here_makes_no_call(monkeypatch):
-    verified("localhost", False)
+    att = verified("localhost", False)
+    blocked(Manifest.load(att.name), [t.name for t in att.tables])
 
     def no_ipc(_att):
         raise AssertionError("a local schema-file attachment asked the stack")
 
     monkeypatch.setattr(live, "ipc_for", no_ipc)
     start()
+
+
+def test_a_schema_file_label_without_a_block_is_asked(monkeypatch):
+    """#2759: the label is not the evidence. A durable attachment whose manifest
+    holds no block defining its tables (here: none at all) is asked, as a
+    runtime-only one is."""
+    att = verified("localhost", False)
+    fake = stack_holding(att, monkeypatch)
+    start()
+    assert fake.ops() == {"probe"}
 
 
 def test_without_the_check_loaded_a_start_is_refused(monkeypatch):
