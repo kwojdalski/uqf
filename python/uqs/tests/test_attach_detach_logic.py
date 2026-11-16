@@ -18,7 +18,17 @@ import pytest
 from attach_support import FakeStack, FaultIpc, make_bundle
 
 from uqs.attach import apply as applying
-from uqs.attach import backfill_owner, backfill_run, config, facts, persist, service, verify
+from uqs.attach import (
+    backfill_owner,
+    backfill_run,
+    config,
+    facts,
+    live,
+    persist,
+    plan,
+    service,
+    verify,
+)
 from uqs.attach import detach as detaching
 from uqs.attach.config import AttachmentError, Storage
 from uqs.attach.manifest import Manifest
@@ -512,6 +522,13 @@ def restart_from_schema_file(fake, schema: Path, scratch: Path, q_binary) -> Non
     fake.named("stp1")["owned"] = got["owned"]
     for c in ("rdb1", "wdb1"):
         fake.named(c)["owned"].pop(TABLE, None)
+    if TABLE not in got["tables"]:  # no block defines it: the restarted plant lacks it
+        tp = fake.named("stp1")
+        for key in ("schemas", "logged", "updtab", "logfiles", "replay", "subscribers"):
+            tp[key].pop(TABLE, None)
+        for key in ("tables", "published", "names"):
+            if TABLE in tp[key]:
+                tp[key].remove(TABLE)
 
 
 def test_a_user_of_the_table_still_holds_the_creator_back_after_a_restart(
@@ -549,6 +566,99 @@ def test_a_one_character_user_is_a_list_of_one_after_a_restart(world, tmp_path, 
     assert fake.named("stp1")["owned"][TABLE]["users"] == ["b"]
     result = detach_(a, fake, state)
     assert result.outcome == "refused" and "used by attachment(s) b" in reasons(result)
+
+
+def codes(shown) -> dict[str, str]:
+    return {f.code: f.message for f in shown.findings}
+
+
+def schema_row(shown) -> dict:
+    (row,) = [c for c in shown.changes() if c["process"] == "schema file"]
+    return row
+
+
+def start_asks(att, state, monkeypatch, fake) -> list[str]:
+    """Run the start gate for `att`'s publisher; the stack is `fake`, and every
+    time the live check asks it is noted. Raises the gate's refusal."""
+    asked: list[str] = []
+
+    def ipc_for(a):
+        asked.append(a.name)
+        return fake
+
+    monkeypatch.setenv(config.ATTACH_DIR_ENV, str(state))
+    monkeypatch.setattr(live, "ipc_for", ipc_for)
+    monkeypatch.setattr(live, "Host", lambda: LOCAL)
+    attach_state.refuse_unverified_start(default_paths(), att.publisher.procname, 6000)
+    return asked
+
+
+def test_a_durable_user_of_a_transient_creators_table_is_runtime_only(
+    world, tmp_path, q_binary, monkeypatch
+):
+    """#2759: B shares a table A attached with --transient. B's +uses block defines
+    no table, so a restart drops it: the plan must not promise it survives, verify
+    says so, and every start of B's publisher asks the stack - so once the table is
+    gone, B's start is refused instead of publishing into a plant that drops its rows."""
+    fake, make, state, schema, log = world
+    a, b = make("pb-a", runtime_only=True), make("pb-b")
+    apply_(a, fake, state)
+    assert verify.verify(a, fake, root=ROOT, state_dir=state, host=LOCAL).ok  # A's gate too
+    shown = plan.build(b, fake, ROOT, facts.Facts(host=LOCAL))
+    found = codes(shown)
+    assert "WILL_PERSIST" not in found
+    said = found["SHARED_RUNTIME_ONLY"]
+    assert f"{TABLE} is runtime-only: attachment pb-a created it with --transient" in said
+    assert "attach pb-a without --transient, or detach pb-a and apply pb-b again" in said
+    assert schema_row(shown)["table"] == "(none restored by a restart)"
+    assert f"({TABLE} stays runtime-only)" in schema_row(shown)["action"]
+
+    apply_(b, fake, state)
+    assert persist.present(str(schema), "pb-b+uses")  # the dependency is still recorded
+    checked = verify.verify(b, fake, root=ROOT, state_dir=state, host=LOCAL)
+    assert checked.ok and checked.warnings == [said]
+    # the publisher is A's too (one job), so the gate asks for both; B is asked now
+    assert start_asks(b, state, monkeypatch, fake) == ["pb-a", "pb-b"]
+
+    restart_from_schema_file(fake, schema, tmp_path, q_binary)
+    assert TABLE not in fake.named("stp1")["tables"]
+    with pytest.raises(UqsError) as refused:
+        live.check("pb-b", fake, LOCAL)
+    said = " ".join(str(refused.value).split())
+    assert (
+        f"is the publisher of attachment pb-b, and {TABLE} is no longer registered on stp1" in said
+    )
+    assert "Nothing was started" in said
+
+
+@pytest.mark.parametrize("user", [True, False], ids=["user of a durable creator", "creator"])
+def test_a_table_a_block_defines_needs_no_live_check(world, monkeypatch, user):
+    """The cases #2759 leaves alone: a durable creator, and a durable user of its
+    table, are restart-safe - the plan says WILL_PERSIST, verify warns of nothing,
+    and a start on this machine asks no stack."""
+    fake, make, state, schema, log = world
+    a = make("pb-a")
+    apply_(a, fake, state)
+    assert verify.verify(a, fake, root=ROOT, state_dir=state, host=LOCAL).ok  # A's gate too
+    att = make("pb-b") if user else a
+    shown = plan.build(att, fake, ROOT, facts.Facts(host=LOCAL))
+    assert "SHARED_RUNTIME_ONLY" not in codes(shown)
+    assert schema_row(shown)["table"] == TABLE
+    if user:
+        assert codes(shown)["WILL_PERSIST"].endswith("a marked block will be added")
+        apply_(att, fake, state)
+    checked = verify.verify(att, fake, root=ROOT, state_dir=state, host=LOCAL)
+    assert checked.ok and checked.warnings == []
+    assert start_asks(att, state, monkeypatch, fake) == []
+
+
+def test_a_transient_attachment_is_still_asked_at_every_start(world, monkeypatch):
+    fake, make, state, schema, log = world
+    a = make("pb-a", runtime_only=True)
+    apply_(a, fake, state)
+    checked = verify.verify(a, fake, root=ROOT, state_dir=state, host=LOCAL)
+    assert checked.ok and checked.warnings[0].startswith("runtime-only: restarting")
+    assert start_asks(a, state, monkeypatch, fake) == ["pb-a"]
 
 
 def test_a_user_the_plant_forgot_fails_verify_and_applying_again_joins_again(world):

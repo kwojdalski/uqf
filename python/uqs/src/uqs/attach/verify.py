@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach import config, persist, plan, reach, schema_files, sorting
+from uqs.attach import config, durability, persist, plan, reach, schema_files, sorting
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Facts, Host
 from uqs.attach.findings import blockers
@@ -170,6 +170,31 @@ def run(att: Attachment, obs: Observation, m: Manifest, ipc: Ipc) -> list[Check]
     return out + _schema_file(m, att, att.tables, ipc, obs)
 
 
+def _warnings(att: Attachment, m: Manifest, ipc: Ipc, obs: Observation, host: Host) -> list[str]:
+    """What a restart would lose (durability.py): every table of a runtime-only
+    attachment, or each table no block defines - one it shares with a creator
+    that attached it with --transient (#2759)."""
+    if att.persist == "runtime-only":
+        return [runtime_only(att, Facts(host=host))]
+    lost = [
+        v for v in durability.from_manifest(att, m, _schema_text(m, ipc, obs)) if not v.restored
+    ]
+    return [v.why for v in lost]
+
+
+def _schema_text(m: Manifest, ipc: Ipc, obs: Observation) -> str | None:
+    """The schema file this attachment's blocks are in, read where it is; None
+    when it has none or the file cannot be read."""
+    procs = {p.procname: p for p in obs.procs()}
+    for op in m.operations:
+        if op.op in ("schema_block", "schema_uses") and op.status == DONE:
+            try:
+                return schema_files.file_of(persist.BlockRecord(**op.post), ipc, procs).read()
+            except AttachmentError, OSError:
+                return None
+    return None
+
+
 def preflight_now(att: Attachment, ipc: Ipc, root: Path, m: Manifest) -> list[Check]:
     """The whole preflight, re-run against the stack as it is NOW (#1444).
 
@@ -231,8 +256,7 @@ def verify(
         port = plan.publisher_port(att, root).port
         tp = obs.tickerplant.endpoint if obs.tickerplant else None
         checks += [Check(*c) for c in reach.checks(att, ipc, port, host, tp)]
-        warned = [runtime_only(att, Facts(host=host))] if att.persist == "runtime-only" else []
-        result = VerifyResult(checks, m.state, warned)
+        result = VerifyResult(checks, m.state, _warnings(att, m, ipc, obs, host))
         if result.ok and m.state != "verified":
             m.set_state("verified", f"{len(checks)} check(s) passed")
         elif not result.ok and m.state == "verified":

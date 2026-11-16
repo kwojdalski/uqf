@@ -222,6 +222,7 @@ A failure part way is `rollback_partial`: run detach again.
   | ------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
   | applied, with the schema block | the block recreates the table and its ownership record                                                              |
   | applied, `--transient`         | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attachment add NAME` restores it |
+  | sharing a `--transient` table  | gone too: no block defines it. The plan warned `SHARED_RUNTIME_ONLY`; a start asks the stack and is refused         |
   | rolled back                    | the block went with the registration: the table does not come back                                                  |
   | detached after publication     | the block stayed, so the table comes back and its logs replay                                                       |
 

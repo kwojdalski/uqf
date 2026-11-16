@@ -12,8 +12,11 @@ So for those attachments every start asks the tickerplant, with the read-only
 `probe`, whether each attached table is still one of its tables AND of its
 pub/sub tables, and refuses when one is not - or when the stack cannot be
 asked, since an answer nobody got is not a yes. An attachment on this machine
-whose tables a schema file keeps is not asked: a restart reloads them, and
-the start costs no IPC.
+whose every table a restart would restore (durability.py) is not asked: a
+restart reloads them, and the start costs no IPC. That is judged from the
+blocks it has, not its `persist` label: a durable attachment sharing a table
+whose creator attached it with `--transient` is asked like a runtime-only one
+(#2759).
 
 `stack` may not import this package, so this module registers `check` with
 the gate when it is imported. Every front end that starts processes imports
@@ -23,9 +26,10 @@ refuses a start that needs the check when nothing registered it.
 
 from __future__ import annotations
 
-from uqs.attach import config, topology
+from uqs.attach import config, durability, topology
 from uqs.attach.config import Attachment
 from uqs.attach.facts import Host
+from uqs.attach.manifest import Manifest
 from uqs.attach.remote import Ipc, KolaIpc
 from uqs.paths import UqsError
 from uqs.stack import attach_state
@@ -34,9 +38,13 @@ from uqs.stack import attach_state
 TIMEOUT_MS = 3000
 
 
-def needed(att: Attachment, host: Host) -> bool:
-    """A runtime-only registration, or a stack on another machine."""
-    return att.persist == "runtime-only" or not host.is_local(att.stack.host)
+def needed(att: Attachment, m: Manifest, host: Host) -> bool:
+    """A stack on another machine, or a table a restart would not restore: one
+    no block defines (durability.from_manifest, reading the schema file here)."""
+    if not host.is_local(att.stack.host):
+        return True
+    verdicts = durability.from_manifest(att, m, durability.local_text(m))
+    return not all(v.restored for v in verdicts)
 
 
 def ipc_for(att: Attachment) -> Ipc:
@@ -65,7 +73,7 @@ def check(name: str, ipc: Ipc | None = None, host: Host | None = None) -> None:
     """Refuse the start of attachment `name`'s publisher when a table it
     publishes is no longer registered on its tickerplant, or that cannot be told."""
     att = config.load(name)
-    if not needed(att, host or Host()):
+    if not needed(att, Manifest.load(name), host or Host()):
         return
     if ipc is None:
         try:

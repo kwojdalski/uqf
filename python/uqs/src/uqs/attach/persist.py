@@ -250,6 +250,22 @@ def outside_all(text: str) -> str:
     return _blocks(text)[0]
 
 
+def defined_by(text: str, table: str) -> str:
+    """The attachment whose block in `text` defines `table` - holds its definition
+    and ownership record (render), which a restart loads - or "". A `+uses` block
+    defines nothing: it only adds users to a record another block made (#2759)."""
+    record, name = f".uqfattach.owned[`{table}]:", ""
+    for line in _lines(text):
+        if not name:
+            if m := _ANY_BEGIN.match(line):
+                name = m.group(1)
+        elif _bare(line) == end_marker(name):
+            name = ""
+        elif not name.endswith(USES) and line.startswith(record):
+            return name
+    return ""
+
+
 def _separated(block_lines: list[str]) -> bool:
     return any(_bare(line) == SEPARATOR_NOTE for line in block_lines)
 

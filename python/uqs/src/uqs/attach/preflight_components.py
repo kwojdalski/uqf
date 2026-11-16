@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from uqs.attach import persist
+from uqs.attach import durability, persist
 from uqs.attach.config import Attachment
 from uqs.attach.facts import Facts
 from uqs.attach.findings import Finding
@@ -286,7 +286,9 @@ def persistence(att: Attachment, obs: Observation, facts: Facts) -> list[Finding
             return _unavailable(f"{read.path} does not exist on {att.stack.host}")
         if not read.writable:
             return _unavailable(f"{read.path} is not writable by {by}'s user")
-        return _judge(att, read.path, read.text, f"{by} will append a marked block to it")
+        return _judge(
+            att, tp, facts, read.path, read.text, f"{by} will append a marked block to it"
+        )
     if not facts.host.is_local(att.stack.host):
         return _unavailable(
             f"the schema file is on {att.stack.host}; this machine cannot edit it",
@@ -298,26 +300,46 @@ def persistence(att: Attachment, obs: Observation, facts: Facts) -> list[Finding
         return _unavailable(f"{path} does not exist on this machine")
     if not _writable(Path(path)):
         return _unavailable(f"{path} is not writable by this user")
-    return _judge(att, path, Path(path).read_text(errors="replace"), "a marked block will be added")
+    text = Path(path).read_text(errors="replace")
+    return _judge(att, tp, facts, path, text, "a marked block will be added")
 
 
-def _judge(att: Attachment, path: str, text: str, will: str) -> list[Finding]:
-    """The file can be written: is the block there already, or is it a file uqf rebuilds?"""
+def _judge(
+    att: Attachment, tp: Proc | None, facts: Facts, path: str, text: str, will: str
+) -> list[Finding]:
+    """The file can be written: is the block there already, or is it a file uqf
+    rebuilds? And would a restart restore each table (durability.py)? A table this
+    attachment would only share, with a creator whose registration no block in
+    the file defines, is runtime-only whatever block this one writes (#2759)."""
+    if "GENERATED" in text[:400] and persist.locate(text, att.name) is None:
+        return _unavailable(
+            f"{path} is generated (uqf rebuilds it from plant_tables.q on every start); "
+            "persist through `uqs job install` / `runtime prepare` instead"
+        )
+    verdicts = durability.from_plan(att, (tp.probe or {}) if tp else {}, facts.token, text)
+    kept = [v.table for v in verdicts if v.restored]
+    out = [
+        Finding("warning", "SHARED_RUNTIME_ONLY", "schema", v.why, "", {"table": v.table})
+        for v in verdicts
+        if not v.restored
+    ]
     if persist.locate(text, att.name) is not None:
-        return [
+        out.append(
             Finding(
                 "info",
                 "ALREADY_PERSISTED",
                 "schema",
                 f"{path} already holds this attachment's block",
             )
-        ]
-    if "GENERATED" in text[:400]:
-        return _unavailable(
-            f"{path} is generated (uqf rebuilds it from plant_tables.q on every start); "
-            "persist through `uqs job install` / `runtime prepare` instead"
         )
-    return [Finding("info", "WILL_PERSIST", "schema", f"{path}: {will}")]
+    elif kept and len(kept) < len(verdicts):
+        out.append(
+            Finding("info", "WILL_PERSIST", "schema", f"{path}: {will}, which keeps "
+                    f"{', '.join(kept)} across a restart")
+        )  # fmt: skip
+    elif kept:
+        out.append(Finding("info", "WILL_PERSIST", "schema", f"{path}: {will}"))
+    return out
 
 
 def _unavailable(

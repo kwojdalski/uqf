@@ -96,11 +96,16 @@ class Plan:
             by = f"{tp.procname if tp else 'the tickerplant'} appends" * (
                 att.persist == "remote-schema-file"
             )
+            # the tables a restart would restore, as preflight judged them (durability.py):
+            # a shared table whose creator is runtime-only is not one of them (#2759)
+            lost = {f.facts["table"] for f in self.findings if f.code == "SHARED_RUNTIME_ONLY"}
+            kept = [t.name for t in att.tables if t.name not in lost]
             steps.append(
                 {
                     "process": "schema file",
-                    "action": f"{by or 'append'} a marked block to {path}",
-                    "table": ", ".join(t.name for t in att.tables),
+                    "action": f"{by or 'append'} a marked block to {path}"
+                    + (f" ({', '.join(sorted(lost))} stays runtime-only)" if lost else ""),
+                    "table": ", ".join(kept) or "(none restored by a restart)",
                     "creates": True,
                     "reversible_before": "remove the block (hash checked)",
                     "reversible_after": "retained (restart and replay need it)",
