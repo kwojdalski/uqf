@@ -92,8 +92,10 @@ rolled back for you. Run the same command again, which is safe, or
 
 After the first execution the attachment is reused by name
 (`uqs job attachment add NAME`). Options that contradict the saved ones are
-refused, and `--replace` rebuilds it from them. The configuration is saved as
-`attachment.json` under `$UQS_ATTACH_DIR`, else `$UQS_DATA_ROOT/attachments`,
+refused, and `--replace` rebuilds it from them. While the publisher is running a
+`--replace` is refused and nothing is saved: stop the publisher
+(`uqs stop PROCNAME --base-port N`) and run it again. The configuration is saved
+as `attachment.json` under `$UQS_ATTACH_DIR`, else `$UQS_DATA_ROOT/attachments`,
 else `output/attachments`. It holds the name of the password's environment
 variable and no password.
 
@@ -293,8 +295,10 @@ uqs job attachment add pb-uat --no-start-with-all  # registered, started on dema
 ```
 
 - The file must be on this machine, and so must the stack.
-- `--start-with-all` needs a durable registration and is refused with
-  `--transient`. It is not a boot service or crash supervision.
+- `--start-with-all` needs every table to survive a tickerplant restart, so it
+  is refused with `--transient`, and for a table the plan or verify warns is
+  runtime-only, whatever the persist mode says. It is not a boot service or
+  crash supervision.
 - Set the variable `--password-env` names in the environment `torq.sh` runs in.
 - Run the add again after you set or unset
   [`KDBSECURE`](../reference/environment.md).

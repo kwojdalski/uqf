@@ -16,6 +16,7 @@ from uqs.attach import durability, native, overrides, preflight, schema_files, s
 from uqs.attach.config import DURABLE, Attachment
 from uqs.attach.findings import Finding, blockers
 from uqs.attach.manifest import DONE, EXISTING, RETAINED, Manifest
+from uqs.attach.preflight_components import RUNTIME_ONLY_CODES
 from uqs.attach.remote import Ipc
 from uqs.attach.topology import Observation, Proc, observe
 
@@ -241,6 +242,16 @@ def publisher_port(att: Attachment, root: Path) -> preflight.PublisherPort:
     )
 
 
+def restart_loses(att: Attachment, findings: list[Finding]) -> list[str]:
+    """The tables a tickerplant restart would not restore, as preflight judged them
+    (durability.py): each one a runtime-only warning names, and every table of a
+    runtime-only attachment."""
+    if att.persist not in DURABLE:
+        return [t.name for t in att.tables]
+    codes = set(RUNTIME_ONLY_CODES.values())
+    return sorted({f.facts["table"] for f in findings if f.code in codes})
+
+
 def build(att: Attachment, ipc: Ipc, root: Path, facts: preflight.Facts | None = None) -> Plan:
     """Observe the stack and check it. Read-only."""
     obs, structural = observe(att, ipc)
@@ -250,7 +261,10 @@ def build(att: Attachment, ipc: Ipc, root: Path, facts: preflight.Facts | None =
     if att.persist == "remote-schema-file" and obs.tickerplant and obs.tickerplant.up:
         facts.schema = schema_files.inspect(ipc, obs.tickerplant)
     changes, sort_findings = sort_plan.assess(att, obs, ipc, facts, root)
-    registry, preview = native.assess(att, obs, port, root, facts.state_dir)
-    found = structural + preflight.check(att, obs, facts) + sort_findings + registry
+    found = structural + preflight.check(att, obs, facts) + sort_findings
+    registry, preview = native.assess(
+        att, obs, port, root, facts.state_dir, restart_loses(att, found)
+    )
+    found += registry
     found, problems = overrides.evaluate(att.overrides, found)
     return Plan(att, obs, found, port, facts.token, problems, changes, preview)

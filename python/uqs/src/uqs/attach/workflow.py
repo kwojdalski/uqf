@@ -194,6 +194,32 @@ def already_running(att: Attachment, p: plan.Plan, state_dir: Path | None = None
     )
 
 
+def refuse_replacing_running(resolved: Resolved, running: bool) -> None:
+    """A `--replace` of an attachment whose publisher is running (#2760).
+
+    Every option a replacement can change reaches something only an apply,
+    verify or the publisher's own start acts on: the stack and the processes
+    apply changes, the credential verify and the start gate connect with, the
+    persist mode (a block in the schema file), the storage it pins, the job and
+    its tables - and `--process-file`/`--start-with-all` ride along into the
+    native row. Apply refuses while the publisher runs, so such a replacement
+    could only be saved as if applied: no block written, the start gate and a
+    native `start all` trusting a configuration nothing carried out. So it is
+    refused here, before anything is saved or any row written; with the
+    publisher stopped the same command applies it.
+    """
+    if not running or resolved.source != "replaced":
+        return
+    proc, port = resolved.att.publisher.procname, resolved.att.stack.id
+    raise AttachmentError(
+        f"{proc} is running, and the replacement changes what apply, verify and its "
+        f"registration act on ({'; '.join(resolved.changed)}). Apply refuses while the "
+        f"publisher is running, so the replacement cannot be applied now: stop it first "
+        f"(`uqs stop {proc} --base-port {port}`), then run the same command again. "
+        "Nothing was saved"
+    )
+
+
 @dataclass
 class Stage:
     #: save | apply | verify | register | start | reach
@@ -235,11 +261,13 @@ def execute(
     Each stage is the existing one and repeats its own checks against the stack
     as it is now; `p` (the plan the operator was shown) decides only what is
     saved. Every stage is safe to repeat, so the recovery for any failure
-    includes running the same command again.
+    includes running the same command again. A replacement of an attachment
+    whose publisher runs is refused before any stage (refuse_replacing_running).
     """
     att, out, name, host = resolved.att, Outcome(), resolved.att.name, host or Host()
     again, back = f"`uqs job attachment add {name}`", f"`uqs job attachment remove {name}`"
     running = already_running(att, p, state_dir)
+    refuse_replacing_running(resolved, running)
 
     def stage(what: str, status: str, detail: str, began: float) -> Stage:
         out.stages.append(Stage(what, status, detail, round(time.monotonic() - began, 3)))
@@ -251,8 +279,9 @@ def execute(
         # down, or not among its consumers, when it was saved) is pinned now: a
         # backfill needs the HDB directory and never guesses it
         pins = newly_pinned(att, p)
-        # a saved attachment's own change (an --ssh) is saved too: it reaches no process
-        own = resolved.changed if resolved.source == "saved" else []
+        # a saved attachment's own change (an --ssh, the native settings) is saved too: it
+        # reaches no process apply changes. A replacement never gets here (above)
+        own = resolved.changed
         if pins or own:
             where = save_planned(att, p, state_dir)
             said = [f"pinned {', '.join(pins)} the stack now reports"] if pins else []
@@ -351,7 +380,9 @@ def _register(att: Attachment, root: Path, p: plan.Plan, out: Outcome,
     before any start, and not skipped by --no-start - it is the future policy."""
     t = time.monotonic()
     try:
-        said = "; ".join(native.register(att, root, p.publisher_port, p.observation, state_dir))
+        lost = out.verified.lost if out.verified else [t.name for t in att.tables]
+        said = "; ".join(native.register(att, root, p.publisher_port, p.observation, state_dir,
+                                         lost=lost))  # fmt: skip
     except (AttachmentError, OSError) as exc:
         said, out.recovery = str(exc), [
             "applied and verified; the process file is unchanged or as the manifest records",

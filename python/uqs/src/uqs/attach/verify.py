@@ -47,6 +47,8 @@ class VerifyResult:
     state: str
     #: true and worth saying, but not a failed check: what a runtime-only registration costs
     warnings: list[str] = field(default_factory=list)
+    #: the tables a tickerplant restart would not restore (durability.py)
+    lost: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -174,18 +176,20 @@ def run(att: Attachment, obs: Observation, m: Manifest, ipc: Ipc) -> list[Check]
     return out + _schema_file(m, att, att.tables, ipc, obs)
 
 
-def _warnings(att: Attachment, m: Manifest, ipc: Ipc, obs: Observation, host: Host) -> list[str]:
-    """What a restart would lose (durability.py): every table of a runtime-only
-    attachment, or each table no block defines - one it shares with a creator
-    that attached it with --transient (#2759)."""
+def _losses(
+    att: Attachment, m: Manifest, ipc: Ipc, obs: Observation, host: Host
+) -> tuple[list[str], list[str]]:
+    """(the warnings, the tables) of what a restart would lose (durability.py): every
+    table of a runtime-only attachment, or each table no block defines - one it
+    shares with a creator that attached it with --transient (#2759)."""
     if att.persist == "runtime-only":
-        return [runtime_only(att, Facts(host=host))]
+        return [runtime_only(att, Facts(host=host))], [t.name for t in att.tables]
     lost = [
         v
         for v in durability.from_manifest(att, m, _schema_text(att, m, ipc, obs))
         if not v.restored
     ]
-    return [v.why for v in lost]
+    return [v.why for v in lost], [v.table for v in lost]
 
 
 def _schema_text(att: Attachment, m: Manifest, ipc: Ipc, obs: Observation) -> str | None:
@@ -262,7 +266,7 @@ def verify(
         port = plan.publisher_port(att, root).port
         tp = obs.tickerplant.endpoint if obs.tickerplant else None
         checks += [Check(*c) for c in reach.checks(att, ipc, port, host, tp)]
-        result = VerifyResult(checks, m.state, _warnings(att, m, ipc, obs, host))
+        result = VerifyResult(checks, m.state, *_losses(att, m, ipc, obs, host))
         if result.ok and m.state != "verified":
             m.set_state("verified", f"{len(checks)} check(s) passed")
         elif not result.ok and m.state == "verified":

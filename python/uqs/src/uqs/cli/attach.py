@@ -197,6 +197,10 @@ def attach(
     out.doc["plan"] = d
     render_plan(out, d)
     verdict(out, d, running)
+    try:
+        workflow.refuse_replacing_running(resolved, running)
+    except UqsError as exc:
+        out.fail(exc)
     if dry_run:
         out.text(safety.dry_run_note())
         out.finish(ok=planned.ok or running)

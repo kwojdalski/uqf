@@ -27,6 +27,8 @@ from attach_native_support import (
 from uqs.attach import config, native
 from uqs.attach.manifest import Manifest
 
+TABLE = "piggybank_general_ledger"
+
 
 @pytest.fixture
 def world(monkeypatch, tmp_path):
@@ -155,6 +157,80 @@ def test_start_with_all_is_refused_with_runtime_only(world):
     assert result.exit_code == 1
     assert "--start-with-all needs durable table registration" in said(world, result)
     assert rows_for(world.registry) == []
+
+
+def _saved(world) -> dict[str, bytes]:
+    """Everything a refused command must leave as it was."""
+    folder = world.state_dir / "pb-uat"
+    files = {p.name: p.read_bytes() for p in folder.iterdir() if p.is_file()}
+    return files | {"registry": world.registry.read_bytes(), "schema": world.schema.read_bytes()}
+
+
+@pytest.mark.parametrize("extra", [(), ("--start-with-all",)])
+def test_a_replacement_while_the_publisher_runs_is_refused_and_saves_nothing(world, extra):
+    """A transient attachment, running, replaced with a durable writer (#2760): apply
+    refuses while the publisher runs, so the replacement - which only an apply would
+    carry out (a block in the schema file) - is refused before anything is saved,
+    not saved as if applied while no block is written and startwithall=1 is."""
+    assert run("add", *new(world), "--transient", "--yes").exit_code == 0
+    assert world.started == [PROC]
+    before = _saved(world)
+    refused = run("add", *new(world), "--schema-writer", "cli", *extra, "--replace", "--yes")
+    assert refused.exit_code == 1, refused.output
+    text = said(world, refused)
+    assert f"{PROC} is running" in text and "--schema-writer: 'runtime-only' -> 'cli'" in text
+    assert ("--start-with-all: False -> True" in text) == bool(extra)
+    assert f"stop it first (`uqs stop {PROC} --base-port 6000`)" in text
+    assert "Nothing was saved" in text
+    assert _saved(world) == before, "no configuration, manifest, row or block changed"
+    assert config.load("pb-uat").persist == "runtime-only"
+    assert world.started == [PROC]
+    again = run("add", "pb-uat", "--yes", "--json")
+    assert again.exit_code == 0, again.output
+    stages = {s["stage"]: s["status"] for s in json.loads(again.output)["stages"]}
+    assert stages == {"save": "skipped", "apply": "skipped", "verify": "done",
+                      "register": "done", "start": "skipped"}  # fmt: skip
+    assert _saved(world) == before, "a plain re-run of a running attachment changes nothing"
+
+
+def test_the_same_replacement_with_the_publisher_stopped_applies_it(world):
+    assert run("add", *new(world), "--transient", "--yes").exit_code == 0
+    world.started.clear()
+    result = run(
+        "add", *new(world), "--schema-writer", "cli", "--start-with-all", "--replace",
+        "--yes", "--json",
+    )  # fmt: skip
+    assert result.exit_code == 0, result.output
+    stages = {s["stage"]: s["status"] for s in json.loads(result.output)["stages"]}
+    assert stages["apply"] == "done" and stages["register"] == "done"
+    assert "uqs-attach" in world.schema.read_text(), "the block a restart restores from"
+    assert _registered(world).split(",")[10] == "1"
+    m = Manifest.load("pb-uat")
+    assert any(o.op == "schema_block" and o.status == "done" for o in m.operations)
+    (event,) = [e for e in m.history if e["event"] == "configuration replaced"]
+    assert "--schema-writer: 'runtime-only' -> 'cli'" in event["detail"]
+    assert config.load("pb-uat").persist == "schema-file"
+
+
+def test_start_with_all_is_refused_for_a_durable_attachment_a_restart_would_not_restore(world):
+    """The label is not the evidence (#2759, #2760): pb-b asks for a durable writer, but
+    it only shares a table pb-a created with --transient, so the tickerplant restart a
+    `start all` is drops it and the start gate refuses the publisher. --start-with-all
+    is refused on what a restart would restore, in the plan and at registration."""
+    first = ["pb-a", *new(world)[1:-2], "--transient", "--no-start", "--yes"]
+    assert run("add", *first).exit_code == 0
+    shared = ["pb-b", *new(world)[1:], "--start-with-all"]
+    shown = run("add", *shared, "--dry-run", "--json")
+    assert shown.exit_code == 1, shown.output
+    found = json.loads(shown.output)["plan"]["findings"]
+    (said,) = [f["message"] for f in found if f["code"] == native.CODE]
+    assert f"a tickerplant restart would not restore {TABLE}" in said
+    assert "give --no-start-with-all" in said
+    refused = run("add", *shared, "--yes")
+    assert refused.exit_code == 1 and rows_for(world.registry) == []
+    kept = run("add", *shared[:-1], "--yes")
+    assert kept.exit_code == 0, kept.output
+    assert _registered(world).split(",")[10] == "0", "registered on demand, through its gate"
 
 
 def test_start_with_all_without_a_process_file_is_refused(world):
