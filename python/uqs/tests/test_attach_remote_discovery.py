@@ -47,6 +47,8 @@ def test_a_publisher_of_a_remote_stack_is_pointed_at_its_discovery():
         "start", PUBLISHER, "-extras", "-.servers.DISCOVERY", ":uat-stack:6001",
     ]  # fmt: skip
     assert extras("restart", PUBLISHER)[-2:] == ["-.servers.DISCOVERY", ":uat-stack:6001"]
+    # torq.sh's `debug` builds its line as `start` does, -extras included (#2756)
+    assert extras("debug", PUBLISHER)[-2:] == ["-.servers.DISCOVERY", ":uat-stack:6001"]
 
 
 def test_the_discovery_named_by_the_attachment_is_the_one_passed():

@@ -222,6 +222,10 @@ uqs exec -- debug rdb1     # run one process in the foreground
 uqs exec -- top rdb1
 ```
 
+`debug` starts a q process, so it is refused as `uqs start` is: an unknown name,
+a q too old for the tree, a port another stack holds, and an attachment's
+publisher that is not verified under its stack id. It names exactly one process.
+
 ## Installing
 
 `./install.sh` checks the prerequisites, installs `uqs` as an editable tool and
