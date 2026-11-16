@@ -18,6 +18,10 @@ blocks it has, not its `persist` label: a durable attachment sharing a table
 whose creator attached it with `--transient` is asked like a runtime-only one
 (#2759).
 
+An attached backfill's admission applies the same rule (backfill_plan.admit,
+#2761): it writes HDB partitions for the attached tables, and one the
+tickerplant no longer holds is a table no process holds and no end of day writes.
+
 `stack` may not import this package, so this module registers `check` with
 the gate when it is imported. Every front end that starts processes imports
 it - the CLI, the MCP server, the browser's control routes - and the gate
@@ -64,9 +68,25 @@ def missing(att: Attachment, ipc: Ipc) -> tuple[list[str], str]:
         raise _unknown(att, found[0].message if found else "discovery lists no usable tickerplant")
     if not tp.up:
         raise _unknown(att, f"{tp.endpoint.label}: {tp.error}")
-    probe = tp.probe or {}
+    return unregistered(att, tp.probe or {}), tp.endpoint.label
+
+
+def unregistered(att: Attachment, probe: dict) -> list[str]:
+    """The attached tables the tickerplant's `probe` does not list among its
+    tables AND its pub/sub tables."""
     tables, published = set(probe.get("tables", [])), set(probe.get("published", []))
-    return [n for n in names if n not in tables or n not in published], tp.endpoint.label
+    return [t.name for t in att.tables if t.name not in tables or t.name not in published]
+
+
+def lost(att: Attachment, gone: list[str], where: str) -> str:
+    """What a refusal says of `gone`, the tables `where` no longer registers, and
+    its remedy: the start gate's, and an attached backfill's admission (#2761)."""
+    return (
+        f"{', '.join(gone)} {'is' if len(gone) == 1 else 'are'} no longer registered on "
+        f"{where} (stack {att.stack.id} at {att.stack.host}): the tickerplant has "
+        f"restarted or changed since it was verified. Re-apply with `uqs job attachment add "
+        f"{att.name}`."
+    )
 
 
 def check(name: str, ipc: Ipc | None = None, host: Host | None = None) -> None:
@@ -84,10 +104,7 @@ def check(name: str, ipc: Ipc | None = None, host: Host | None = None) -> None:
     if gone:
         raise UqsError(
             f"{att.publisher.procname} is the publisher of attachment {att.name}, and "
-            f"{', '.join(gone)} {'is' if len(gone) == 1 else 'are'} no longer registered on "
-            f"{where} (stack {att.stack.id} at {att.stack.host}): the tickerplant has "
-            f"restarted or changed since it was verified. Re-apply with `uqs job attachment add "
-            f"{att.name}`. Nothing was started."
+            f"{lost(att, gone, where)} Nothing was started."
         )
 
 

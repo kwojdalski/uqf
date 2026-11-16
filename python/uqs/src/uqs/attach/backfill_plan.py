@@ -19,11 +19,12 @@ from pathlib import Path
 from typing import Any
 
 from uqs import timerange
-from uqs.attach import config
+from uqs.attach import backfill_coordination, config, live
 from uqs.attach.backfill import PLAN_SCRIPT, Destination, canonical, resolve
 from uqs.attach.backfill_coordination import assess
 from uqs.attach.backfill_policy import coordination_line, override_lines, overrides_of
 from uqs.attach.config import Attachment
+from uqs.attach.manifest import Manifest
 from uqs.attach.remote import Endpoint, Ipc, IpcError
 from uqs.attach.topology import Observation, observe, port_of
 from uqs.interpreter import q_interpreter
@@ -123,8 +124,11 @@ def readers_of(att: Attachment, obs: Observation, hdb_dir: Path, ipc: Ipc) -> li
     return sorted(out, key=lambda r: r.procname)
 
 
-def admit(att: Attachment, dest: Destination, ipc: Ipc) -> Admission:
-    """The live checks: who writes the destination, and who serves it.
+def admit(
+    att: Attachment, dest: Destination, ipc: Ipc, attach_root: Path | None = None
+) -> Admission:
+    """The live checks: are the attached tables still registered, who writes the
+    destination, and who serves it.
 
     Read-only: every call is `probe` or `hdb_reader`. Refuses a stack that does
     not answer, whose processes disagree about the HDB, or whose HDB readers
@@ -133,7 +137,38 @@ def admit(att: Attachment, dest: Destination, ipc: Ipc) -> Admission:
     obs, structural = observe(att, ipc)
     if structural:
         raise UqsError("; ".join(f"{f.component}: {f.message}" for f in structural))
+    _still_registered(att, obs, attach_root)
     return Admission(_writers(att, obs, dest), readers_of(att, obs, dest.hdb_dir, ipc), obs)
+
+
+def _still_registered(att: Attachment, obs: Observation, attach_root: Path | None) -> None:
+    """The start gate's live check (live.py), applied to a backfill (#2761).
+
+    The manifest's `verified` survives a tickerplant restart that dropped a
+    runtime-only registration; a backfill admitted on it alone writes partitions
+    for a table no process holds, and that no end of day will write. So when the
+    start gate would ask - a stack on another machine, or a table a restart does
+    not restore - the tickerplant `observe` already asked must still register
+    every attached table. When it would not ask, neither does this.
+    """
+    m = Manifest.load(att.name, attach_root)
+    if not live.needed(att, m, backfill_coordination.HOST):
+        return
+    tp = obs.tickerplant
+    if tp is None or not tp.up:
+        where = f"{tp.endpoint.label} ({tp.error})" if tp else "the tickerplant"
+        raise UqsError(
+            f"whether attachment {att.name}'s tables are still registered on stack "
+            f"{att.stack.id} at {att.stack.host} cannot be told: {where} does not answer, "
+            "and a backfill is refused until it does."
+        )
+    gone = live.unregistered(att, tp.probe or {})
+    if gone:
+        raise UqsError(
+            f"attachment {att.name} cannot be backfilled: "
+            f"{live.lost(att, gone, tp.endpoint.label)} A backfill would write partitions for "
+            "a table no process holds, and no end of day writes."
+        )
 
 
 def partitions_on_disk(dest: Destination, dates: list[date]) -> list[dict[str, Any]]:
@@ -350,7 +385,7 @@ def plan_attached(
     """
     dest = resolve(paths, attachment, worker, port=port, fixture=fixture, attach_root=attach_root)
     att = config.load(attachment, attach_root)
-    admission = admit(att, dest, ipc)
+    admission = admit(att, dest, ipc, attach_root)
     facts = evaluate(paths, dest, worker, version, range_from, range_to, on_conflict)
     return build_plan(
         paths,

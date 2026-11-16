@@ -132,6 +132,11 @@ Nothing is published through the tickerplant, and today's RDB is not populated.
 
 - The attachment must be `verified`, and its HDB unsegmented and on a local
   filesystem of the machine that runs `uqs`.
+- When a start of the publisher would ask the stack (a stack on another machine,
+  or a table a restart would not restore, such as a `--transient` one), the
+  tickerplant must still register every attached table. One it lost in a restart
+  is refused, as the start is: re-apply with `uqs job attachment add NAME`. A
+  `--writer` run with `--override any-writer` checks nothing, this included.
 - Every affected date must be before the date any writer is filling.
 - A `compression` process on the stack is a blocker.
 - A run is not coordinated with `dbmaint` or q run against the directory by

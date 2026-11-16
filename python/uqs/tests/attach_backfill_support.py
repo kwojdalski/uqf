@@ -56,7 +56,11 @@ class HdbStack(FakeStack):
     """FakeStack whose HDB reader answers `hdb_reader` like a TorQ hdb process."""
 
     def __init__(
-        self, hdb: Path, other: Path | None = None, reader_ports: dict[str, int] | None = None
+        self,
+        hdb: Path,
+        other: Path | None = None,
+        reader_ports: dict[str, int] | None = None,
+        holds: str = DATASET,
     ) -> None:
         super().__init__(6000)
         #: ports of readers that listen but never answer (a hung process, not a stopped one)
@@ -65,6 +69,10 @@ class HdbStack(FakeStack):
         self.state_over: dict[str, dict[str, Any]] = {}
         for name in ("rdb1", "wdb1"):
             self.named(name)["hdbdir"] = f":{hdb}"
+        # a healthy attachment: its tickerplant still registers the attached table `holds`,
+        # as admission's live check asks of one a restart would not restore (#2761)
+        for key in ("tables", "published"):
+            self.named("stp1")[key].append(holds)
         self.readers = {
             "hdb1": {"stackid": "6000", "hdbdir": str(hdb), "partitions": 2},
         }

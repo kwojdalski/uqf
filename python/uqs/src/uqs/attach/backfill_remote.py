@@ -266,7 +266,7 @@ def receive(
             f"{', '.join(users) or 'none'}, "
             f"but attachment {attachment} connects as {att.stack.user}: approve it again"
         )
-    admission = admit(att, dest, ipc)
+    admission = admit(att, dest, ipc, attach_root)
     assert admission.observation is not None
     # never waived: `uqs job receiver start` takes no override, so the receiver always has its
     # end-of-day deadline (an extractor's --skip-eod-fence is refused before it gets here)
