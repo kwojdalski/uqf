@@ -243,7 +243,7 @@ def compress(
             raise UqsUsageError(
                 f"--report reads the whole HDB and changes nothing: not with {', '.join(given)}"
             )
-        handle = resolve(attach, hdb)
+        handle = resolve(attach, hdb, writes=False)
         if handle.ssh:
             raise UqsUsageError(
                 f"--report reads the HDB's files on this machine, and {attach}'s is on "

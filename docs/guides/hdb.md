@@ -110,12 +110,22 @@ Name the HDB with exactly one handle. The plan says which was used.
   | handle                             | the HDB                                                                                     | runs                                     |
   | ---                                | ---                                                                                         | ---                                      |
   | `uqs --target NAME data ...`       | the deployed release's own configured HDB                                                   | on the server, from the release          |
-  | `uqs data ... --attachment NAME`   | the attachment's pinned `storage.hdb_dir`, else its live wdb's `.wdb.hdbdir`                | on the stack's host, over ssh            |
+  | `uqs data ... --attachment NAME`   | the attachment's pinned `storage.hdb_dir`, else (a read only) its live wdb's `.wdb.hdbdir`  | on the stack's host, over ssh            |
   | `uqs data ... --hdb DIR`           | that directory                                                                              | on this machine                          |
   | none                               | this runtime's own HDB (what `--target` reaches on a server)                                | on this machine                          |
 
 With `--attachment`, the table defaults to the attachment's own. The q that
 writes the HDB must be KDB-X: PeachQ is refused.
+
+With `--attachment`, a command that writes follows the same rule as an attached
+backfill. That is `data check --apply` and `data alter`, including the plan
+`data alter` prints without `--apply`. The attachment must be `verified`
+(`uqs job attachment status`) and must pin its HDB. A detached, rolled-back or
+unverified attachment is refused, and so is an empty `storage.hdb_dir`: a write
+never goes to the directory a wdb reports instead. `data check` without
+`--apply` writes nothing, so it takes an attachment in any state and falls back
+to the live wdb's `.wdb.hdbdir`. To write a directory no attachment vouches for,
+name it with `--hdb DIR`.
 
 `data check --table T` (or `--attachment`, `--hdb`) gives each partition lacking
 the table an empty one. The schema is this runtime's declaration when it
@@ -156,8 +166,9 @@ plan prints the reload command for you to run.
 
 For a table a backfill wrote into a production TorQ HDB on some dates only:
 
-1. Attach the job if it is not attached (`uqs job attachment add`), with `--ssh`
-   naming an account on the HDB's host that can write it. Check that
+1. Attach the job if it is not attached (`uqs job attachment add`, which leaves
+   it `verified` with its HDB pinned), with `--ssh` naming an account on the
+   HDB's host that can write it. Check that
    `ssh -o BatchMode=yes USER@HOST true` works.
 2. Let any attached backfill finish (`uqs job attachment status`), and pick a
    time well away from end of day.
