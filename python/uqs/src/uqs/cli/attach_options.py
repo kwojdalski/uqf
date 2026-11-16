@@ -131,6 +131,16 @@ ReplaceOpt = Annotated[
         "changes on another stack.",
     ),
 ]
+RepinStorageOpt = Annotated[
+    bool,
+    typer.Option(
+        "--repin-storage",
+        help="With --replace: drop every saved storage pin (log directory, schema file, "
+        "wdb and HDB directories) and pin what the stack reports now; the plan shows "
+        "old -> new. The only way a pin follows a moved stack. Refused while a backfill "
+        "owns the attachment or its publisher runs.",
+    ),
+]
 OverrideOpt = Annotated[
     list[str] | None,
     typer.Option(

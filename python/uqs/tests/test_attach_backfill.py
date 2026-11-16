@@ -195,6 +195,26 @@ def test_wdb_reporting_another_hdb_makes_the_destination_ambiguous(world):
         plan_with(world, facts_of())
 
 
+def test_an_unmanaged_wdb_that_moved_the_hdb_is_refused_until_the_attachment_is_repinned(world):
+    """`--consumer rdb1`: the pin came from wdb1, which the attachment does not
+    manage. The stack restarted on another HDB is refused naming the re-pin, and
+    the configuration that re-pin saves is admitted (#2767; the re-pin itself,
+    applied and verified, is test_attach_cli's)."""
+    save_attachment("pb-uat", world.hdb, consumers=("rdb1",))
+    moved = world.tmp / "moved"
+    (moved / "2026.09.11" / DATASET).mkdir(parents=True)
+    for name in ("rdb1", "wdb1"):
+        world.stack.named(name)["hdbdir"] = f":{moved}"
+    world.stack.readers["hdb1"]["hdbdir"] = str(moved)
+    with pytest.raises(UqsError, match="rdb1, wdb1 report another HDB directory") as refused:
+        plan_with(world, facts_of())
+    assert "re-pin it: `uqs job attachment add pb-uat --replace --repin-storage`" in str(
+        refused.value
+    )
+    save_attachment("pb-uat", moved, consumers=("rdb1",))
+    assert plan_with(world, facts_of())["writers"] == ["rdb1", "wdb1"]
+
+
 def test_no_process_reporting_the_directory_is_a_blocker(world):
     for name in ("rdb1", "wdb1"):
         world.stack.named(name)["hdbdir"] = ""

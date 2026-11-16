@@ -211,10 +211,11 @@ def save_attachment(
     host: str = "testhost",
     table=None,
     origin: dict | None = None,
+    consumers: tuple[str, ...] = ("rdb1", "wdb1"),
 ) -> Attachment:
     att = Attachment(
         name=name,
-        stack=Stack(stack_id, host, host, stack_id + 1, "stp1", ("rdb1", "wdb1")),
+        stack=Stack(stack_id, host, host, stack_id + 1, "stp1", consumers),
         publisher=Publisher("pb_job", "pb_ledger1"),
         tables=(table or tree_table(),),
         storage=Storage(hdb_dir=str(hdb) if pin else ""),

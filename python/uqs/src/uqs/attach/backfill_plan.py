@@ -62,18 +62,21 @@ def _same_dir(reported: str, where: Path) -> bool:
 
 
 def _writers(att: Attachment, obs: Observation, dest: Destination) -> list[str]:
-    """The wdb/rdb processes whose HDB directory is the destination."""
-    named = [*obs.consumers, *obs.unmanaged]
-    reporting = [p for p in named if p.up and p.proctype in ("wdb", "rdb")]
-    disagree = [
+    """The wdb/rdb processes whose HDB directory is the destination: the wdbs
+    that decide the HDB pin (Observation.hdb_wdbs, #2767), and every up rdb,
+    which writes it at end of day too."""
+    rdbs = [p for p in [*obs.consumers, *obs.unmanaged] if p.up and p.proctype == "rdb"]
+    reporting = [*obs.hdb_wdbs(), *rdbs]
+    disagree = sorted(
         p.procname
         for p in reporting
         if (p.probe or {}).get("hdbdir") and not _same_dir((p.probe or {})["hdbdir"], dest.hdb_dir)
-    ]
+    )
     if disagree:
         raise UqsError(
             f"{', '.join(disagree)} report another HDB directory than attachment {att.name}'s "
-            f"{dest.hdb_dir}: the destination is ambiguous, so nothing is planned"
+            f"{dest.hdb_dir}: the destination is ambiguous, so nothing is planned. If the "
+            f"stack moved its HDB, re-pin it: {config.repin(att.name)}"
         )
     writers = [
         p.procname for p in reporting if _same_dir((p.probe or {}).get("hdbdir", ""), dest.hdb_dir)

@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from uqs.attach import durability, persist
+from uqs.attach import config, durability, persist
 from uqs.attach.config import Attachment
 from uqs.attach.facts import Facts
 from uqs.attach.findings import Finding
@@ -225,27 +225,37 @@ def _sorting(c: Proc, spec: TableSpec, rows: list[dict]) -> list[Finding]:
 
 
 def storage(att: Attachment, obs: Observation) -> list[Finding]:
+    """A pinned location the stack no longer reports. The wdb directories are
+    judged against every wdb that decides the HDB (Observation.hdb_wdbs), the
+    unmanaged ones among them: pinning reads them, so a pin taken from a wdb the
+    attachment does not manage must be held to it too (#2767)."""
     tp, pinned, out = obs.tickerplant, att.storage, []
-    observed = {
-        "tplogdir": (tp.probe or {}).get("tplogdir", "") if tp else "",
-        "schema_file": (tp.probe or {}).get("schemafile", "") if tp else "",
-    }
-    for c in obs.consumers:
-        probe = c.probe or {}
-        if c.proctype == "wdb":
-            observed["wdb_savedir"] = probe.get("savedir", "").lstrip(":")
-            observed["hdb_dir"] = probe.get("hdbdir", "").lstrip(":")
+    observed: dict[str, dict[str, str]] = {"wdb_savedir": {}, "hdb_dir": {}}
+    if tp:
+        observed["tplogdir"] = {tp.procname: (tp.probe or {}).get("tplogdir", "")}
+        observed["schema_file"] = {tp.procname: (tp.probe or {}).get("schemafile", "")}
+    for w in obs.hdb_wdbs():
+        probe = w.probe or {}
+        observed["wdb_savedir"][w.procname] = probe.get("savedir", "").lstrip(":")
+        observed["hdb_dir"][w.procname] = probe.get("hdbdir", "").lstrip(":")
     for key, want in pinned.__dict__.items():
-        have = observed.get(key, "")
-        if want and have and Path(want) != Path(have):
+        against = {
+            who: have
+            for who, have in observed.get(key, {}).items()
+            if want and have and Path(want) != Path(have)
+        }
+        if against:
+            said = ", ".join(f"{who} reports {have}" for who, have in sorted(against.items()))
             out.append(
                 Finding(
                     "blocker",
                     "STORAGE_MISMATCH",
                     key,
-                    f"{key} was recorded as {want} but the stack reports {have}",
-                    "the attachment never falls back to a default location; re-plan if the "
-                    "stack moved",
+                    f"{key} was recorded as {want} but {said}",
+                    "the attachment never follows a moved location by itself; if the stack "
+                    f"moved, re-pin what it reports now with {config.repin(att.name)} (refused "
+                    "while a backfill owns the attachment or its publisher runs)",
+                    {"pinned": want, **against},
                 )
             )
     return out

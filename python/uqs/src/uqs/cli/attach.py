@@ -114,6 +114,7 @@ def attach(
     schema_file: o.SchemaFileOpt = "",
     ssh: o.SshOpt = None,
     replace: o.ReplaceOpt = False,
+    repin_storage: o.RepinStorageOpt = False,
     override: o.OverrideOpt = None,
     override_reason: o.ReasonOpt = "",
     accept_risks: o.AcceptRisksOpt = False,
@@ -165,6 +166,7 @@ def attach(
         password_env=password_env, runtime_only=runtime_only,
         schema_writer=schema_writer.value if schema_writer else None, tplogdir=tplogdir,
         schema_file=schema_file, ssh=ssh, process_file=process_file, start_with_all=start_with_all,
+        repin_storage=repin_storage,
     )  # fmt: skip
     try:
         paths = _paths()
@@ -196,12 +198,18 @@ def attach(
     running = workflow.already_running(att, planned)
     out.doc["plan"] = d
     render_plan(out, d)
+    repinned: list[str] = []
     try:  # before the verdict: a refused run is not "already attached and verified"
         workflow.refuse_replacing_running(resolved, running)
         workflow.refuse_running_unregistered(att, planned, running)
         workflow.refuse_replacing_backfilled(resolved)
+        repinned = workflow.repins(resolved, planned)
     except UqsError as exc:
         out.fail(exc)
+    if repinned:
+        out.doc["repinned"] = repinned
+        for line in repinned:
+            out.text(f"[yellow]re-pin[/] {escape(line)}")
     verdict(out, d, running)
     if dry_run:
         out.text(safety.dry_run_note())

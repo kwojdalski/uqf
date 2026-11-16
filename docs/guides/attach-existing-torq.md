@@ -96,15 +96,27 @@ refused, and `--replace` replaces exactly those. Every option it is not given
 keeps its saved value, as it does without `--replace`: the persist mode and
 schema writer, the user, password variable and ssh destination, the native
 settings and the accepted risks. Storage pins stay unless an option that decides
-them changed (another stack, tickerplant or consumers). A saved replacement is
-no longer `verified` until it is applied and verified. While the publisher is
-running a `--replace` is refused and nothing is saved: stop the publisher
-(`uqs stop PROCNAME --base-port N`) and run it again. While an attached backfill
-runs, a `--replace` is refused too, as `uqs job attachment remove` is: let the
-run finish or stop it, then run the same command again. The configuration is
-saved as `attachment.json` under `$UQS_ATTACH_DIR`, else
-`$UQS_DATA_ROOT/attachments`, else `output/attachments`. It holds the name of
-the password's environment variable and no password.
+them changed (another stack, tickerplant or consumers).
+
+The pins are the tickerplant's log directory and schema file and the wdb's save
+and HDB directories. They are read when the attachment is saved, from the wdbs
+of the stack, including those it does not manage, so `--consumer rdb1` still
+pins an HDB. Every later plan, verify, backfill and `uqs data --attachment`
+checks them against the same wdbs. A pin is never moved for you: when the stack
+is restarted on another HDB the plan reports `STORAGE_MISMATCH`, verify takes
+`verified` back, and backfill and `data check` refuse. If the move is intended,
+re-pin with `uqs job attachment add NAME --replace --repin-storage`. It reads
+every pin again from the stack, shows each one old -> new, and is refused when
+the wdbs disagree on a location. As a replacement it is refused while the
+publisher runs or a backfill owns the attachment, and is applied and verified
+again. A saved replacement is no longer `verified` until it is applied and
+verified. While the publisher is running a `--replace` is refused and nothing is
+saved: stop the publisher (`uqs stop PROCNAME --base-port N`) and run it again.
+While an attached backfill runs, a `--replace` is refused too, as
+`uqs job attachment remove` is: let the run finish or stop it, then run the same
+command again. The configuration is saved as `attachment.json` under
+`$UQS_ATTACH_DIR`, else `$UQS_DATA_ROOT/attachments`, else `output/attachments`.
+It holds the name of the password's environment variable and no password.
 
 A durable attachment replaced with `--transient` keeps no block. Before anything
 was published the apply removes its block from the schema file (hash checked,
@@ -147,6 +159,9 @@ Nothing is published through the tickerplant, and today's RDB is not populated.
 
 - The attachment must be `verified`, and its HDB unsegmented and on a local
   filesystem of the machine that runs `uqs`.
+- Every live wdb and rdb of the stack, managed or not, must report the pinned
+  HDB. After the stack moved it, re-pin it with
+  `uqs job attachment add NAME --replace --repin-storage`.
 - When a start of the publisher would ask the stack (a stack on another machine,
   or a table a restart would not restore, such as a `--transient` one), the
   tickerplant must still register every attached table. One it lost in a restart

@@ -398,6 +398,92 @@ def test_wdbs_outside_the_attachment_that_disagree_pin_nothing(world):
     assert saved_storage(world)["hdb_dir"] == ""
 
 
+REPIN = "`uqs job attachment add pb-uat --replace --repin-storage`"
+
+
+def _restart_on_another_hdb(world) -> None:
+    """The stack restarted on another HDB directory: its wdb reports it (#2767)."""
+    world.named("wdb1")["hdbdir"] = ":/moved/hdb"
+    world.named("rdb1")["hdbdir"] = ":/moved/hdb"
+
+
+@pytest.mark.parametrize("consumers", [("--consumer", "rdb1"), ()], ids=["rdb1", "all"])
+def test_a_moved_hdb_is_refused_everywhere_until_it_is_repinned(world, consumers):
+    """The pin is taken from wdb1 whether or not the attachment manages it, so
+    wdb1 moving its HDB is a STORAGE_MISMATCH either way, verify takes `verified`
+    back, `data --attachment` refuses naming the re-pin, and the re-pin is the
+    operator's act: shown old -> new, applied and verified again (#2767)."""
+    from uqs.attach import hdb_where
+
+    assert run("add", *new(world, *consumers, "--yes", "--no-start")).exit_code == 0
+    assert saved_storage(world)["hdb_dir"] == "/data/hdb"
+    _restart_on_another_hdb(world)
+
+    planned = json.loads(run("add", "pb-uat", "--dry-run", "--json").output)["plan"]
+    (found,) = [f for f in planned["findings"] if f["code"] == "STORAGE_MISMATCH"]
+    assert found["message"] == "hdb_dir was recorded as /data/hdb but wdb1 reports /moved/hdb"
+    assert REPIN in found["action"]
+    checked = verifying.verify(config.load("pb-uat"), world)
+    assert not checked.ok and Manifest.load("pb-uat").state == "applied"
+    with pytest.raises(config.AttachmentError, match="wdb1 reports /moved/hdb") as refused:
+        hdb_where.resolve("pb-uat", world)
+    assert REPIN in str(refused.value)
+    plain = run("add", "pb-uat", "--replace", "--yes", "--no-start")
+    assert plain.exit_code == 1, "a --replace that changes nothing never re-pins"
+    assert saved_storage(world)["hdb_dir"] == "/data/hdb"
+
+    result = run("add", "pb-uat", "--replace", "--repin-storage", "--yes", "--no-start")
+    assert result.exit_code == 0, result.output
+    assert "re-pin storage.hdb_dir: '/data/hdb' -> '/moved/hdb'" in flat(result.output)
+    assert saved_storage(world)["hdb_dir"] == "/moved/hdb"
+    m = Manifest.load("pb-uat")
+    assert m.state == "verified"
+    (event,) = [e for e in m.history if e["event"] == "configuration replaced"]
+    assert "storage.hdb_dir: '/data/hdb' -> '/moved/hdb'" in event["detail"]
+    assert hdb_where.resolve("pb-uat", world).hdb == "/moved/hdb"
+
+
+def test_a_repin_is_refused_while_the_publisher_runs(world):
+    """A re-pin is a replacement: with the publisher running it cannot be applied
+    and verified, so nothing is saved (#2760, #2767)."""
+    assert run("add", *new(world, "--consumer", "rdb1", "--yes")).exit_code == 0
+    _restart_on_another_hdb(world)
+    result = run("add", "pb-uat", "--replace", "--repin-storage", "--yes")
+    assert result.exit_code == 1
+    (said,) = [m for m in world.errors if "pb_ledger1 is running" in m]
+    assert "--repin-storage" in said and "Nothing was saved" in said
+    assert saved_storage(world)["hdb_dir"] == "/data/hdb"
+
+
+def test_a_repin_is_refused_while_a_backfill_owns_the_attachment(world):
+    """A run keeps its state under the destination it was launched for: the
+    pin it writes into cannot move under it (#2758, #2767)."""
+    assert run("add", *new(world, "--consumer", "rdb1", "--yes", "--no-start")).exit_code == 0
+    _restart_on_another_hdb(world)
+    _a_backfill_runs()
+    result = run("add", "pb-uat", "--replace", "--repin-storage", "--yes", "--no-start")
+    assert result.exit_code == 1
+    assert any("attached backfill running" in m and "then replace it" in m for m in world.errors)
+    assert saved_storage(world)["hdb_dir"] == "/data/hdb"
+
+
+def test_a_repin_needs_replace_and_one_location_to_pin(world):
+    """Without --replace it is refused naming the command; with wdbs that
+    disagree it is refused rather than left unpinned (#2767)."""
+    assert run("add", *new(world, "--consumer", "rdb1", "--yes", "--no-start")).exit_code == 0
+    assert run("add", "pb-uat", "--repin-storage", "--yes").exit_code == 1
+    assert any("needs --replace" in m and REPIN in m for m in world.errors)
+    world.add(dict(world.named("wdb1"), procname="wdb2", port=6006, hdbdir=":/elsewhere"))
+    world.refresh_discovery()
+    result = run("add", "pb-uat", "--replace", "--repin-storage", "--yes", "--no-start")
+    assert result.exit_code == 1
+    assert any(
+        "reports no single wdb_savedir, hdb_dir now" in m and "wdb2 :/elsewhere" in m
+        for m in world.errors
+    )
+    assert saved_storage(world)["hdb_dir"] == "/data/hdb"
+
+
 def test_a_rerun_after_no_start_applies_nothing_and_then_starts(world):
     assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
     first = changes(world)

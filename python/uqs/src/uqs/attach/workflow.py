@@ -30,6 +30,7 @@ from uqs.attach.service import (
     discovery_offset,
     manifest_of,
     newly_pinned,
+    observed_storage,
     parse_discovery,
     save_planned,
 )
@@ -60,6 +61,9 @@ class Given:
     #: native registration (#1845): None keeps the saved setting; no --replace needed
     process_file: Path | None = None
     start_with_all: bool | None = None
+    #: `--repin-storage` (#2767): with --replace, drop every storage pin and pin
+    #: what the stack reports now - the one way a pinned location follows a move
+    repin_storage: bool = False
 
 
 @dataclass
@@ -70,6 +74,8 @@ class Resolved:
     path: Path
     #: what a --replace changed, as "field: saved -> given"
     changed: list[str] = field(default_factory=list)
+    #: under --repin-storage, the pins it replaces (`repins` says what with)
+    repinned: Storage | None = None
 
 
 def differences(saved: Attachment, given: Given, root: Path) -> list[str]:
@@ -133,8 +139,17 @@ def resolve(
         applying.refuse_detaching(name, m.state)
     saved = config.load(name, state_dir) if path.is_file() else None
     changed: list[str] = []
+    if given.repin_storage and (saved is None or not replace_saved):
+        raise AttachmentError(
+            f"--repin-storage replaces attachment {name}'s saved storage pins with what the "
+            "stack reports now, so it needs "
+            + ("--replace" if saved is not None else f"a saved one (no attachment {name} is)")
+            + f": {config.repin(name)}"
+        )
     if saved is not None:
         changed = differences(saved, given, root)
+        if given.repin_storage:
+            changed.append("--repin-storage: every storage pin re-read from the stack")
         if not changed:
             att, said = saved, []
             if given.ssh is not None and given.ssh != saved.stack.ssh:
@@ -174,7 +189,8 @@ def resolve(
     _refuse_moving(saved, att, state_dir)
     if given.ssh is not None and given.ssh != saved.stack.ssh:
         changed.append(f"--ssh: {saved.stack.ssh!r} -> {given.ssh!r}")
-    return Resolved(att, "replaced", path, changed + more)
+    repinned = saved.storage if given.repin_storage else None
+    return Resolved(att, "replaced", path, changed + more, repinned)
 
 
 def carried(saved: Attachment, given: Given, root: Path, runtime: str = "") -> Attachment:
@@ -192,7 +208,8 @@ def carried(saved: Attachment, given: Given, root: Path, runtime: str = "") -> A
     a stack moved (base port, host, discovery) re-observes every one, another
     tickerplant its log directory and schema file, other consumers the wdb's
     directories - each re-read from the stack at save (service.observed_storage),
-    unless `--tplogdir`/`--schema-file` pin it here.
+    unless `--tplogdir`/`--schema-file` pin it here. `--repin-storage` drops
+    every one, to be re-observed the same way (#2767).
     """
     st = saved.stack
     stack_id = st.id if given.stack_id is None else given.stack_id
@@ -224,6 +241,8 @@ def carried(saved: Attachment, given: Given, root: Path, runtime: str = "") -> A
         pins = replace(pins, tplogdir="", schema_file="")
     if moved or att.stack.consumers != st.consumers:
         pins = replace(pins, wdb_savedir="", hdb_dir="")
+    if given.repin_storage:
+        pins = Storage()
     given_pins = {"tplogdir": given.tplogdir, "schema_file": given.schema_file}
     pins = replace(pins, **{k: v for k, v in given_pins.items() if v})
     return replace(att, storage=pins, overrides=saved.overrides)
@@ -318,6 +337,38 @@ def refuse_running_unregistered(
     )
 
 
+def repins(resolved: Resolved, p: plan.Plan) -> list[str]:
+    """What `--repin-storage` re-pins, as "storage.KEY: old -> new", from the
+    stack the plan saw (#2767). Empty without it.
+
+    The re-pin is an operator's act, never a side effect: a moved HDB under a
+    verified attachment is exactly when following the stack silently would be
+    dangerous (a backfill's state directory and its ledgers are keyed on the
+    destination, backfill.state_dir_of). So it is a replacement - refused while
+    the publisher runs or a backfill owns the attachment, and taking `verified`
+    back until apply and verify re-grant it. A location the stack reports no
+    single value for (its wdbs disagree, or none is up) is refused rather than
+    left unpinned: nothing could check it afterwards."""
+    if resolved.repinned is None:
+        return []
+    old, new = resolved.repinned, observed_storage(resolved.att, p.observation)
+    lost = [k for k, v in old.__dict__.items() if v and not getattr(new, k)]
+    if lost:
+        wdbs = ", ".join(
+            f"{w.procname} {(w.probe or {}).get('hdbdir', '?')}" for w in p.observation.hdb_wdbs()
+        )
+        raise AttachmentError(
+            f"--repin-storage: the stack reports no single {', '.join(lost)} now "
+            f"(wdbs: {wdbs or 'none up'}), so re-pinning would leave it unpinned. Bring the "
+            "stack to one location, then run the same command again. Nothing was saved"
+        )
+    return [
+        f"storage.{k}: {v!r} -> {getattr(new, k)!r}"
+        for k, v in old.__dict__.items()
+        if v != getattr(new, k)
+    ] or ["storage: every pin already matches what the stack reports"]
+
+
 def refuse_replacing_backfilled(resolved: Resolved, state_dir: Path | None = None) -> None:
     """A `--replace` of an attachment an attached backfill owns (#2758).
 
@@ -352,10 +403,11 @@ def save(resolved: Resolved, p: plan.Plan, state_dir: Path | None = None) -> Pat
         return save_planned(resolved.att, p, state_dir)
     with config.locked(name, state_dir):
         refuse_replacing_backfilled(resolved, state_dir)
+        said = [*resolved.changed, *repins(resolved, p)]
         where = save_planned(resolved.att, p, state_dir)
         if Manifest.exists(name, state_dir):
             m = Manifest.load(name, state_dir)
-            m.event("configuration replaced", "; ".join(resolved.changed))
+            m.event("configuration replaced", "; ".join(said))
             if m.state == "verified":
                 m.set_state("applied", "the configuration was replaced: apply and verify it")
             m.save()

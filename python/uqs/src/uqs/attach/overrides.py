@@ -127,7 +127,9 @@ POLICY: dict[str, Policy] = {
     ),
     "WDB_MODE": Policy(False, "this wdb does not save, so nothing would persist the table"),
     "STORAGE_MISMATCH": Policy(
-        False, "a recorded location is not where the stack keeps it; plan again"
+        False,
+        "a recorded location is not where the stack keeps it; re-pin it with "
+        "`uqs job attachment add NAME --replace --repin-storage`",
     ),
     "PERSIST_UNAVAILABLE": Policy(
         False,
