@@ -210,6 +210,12 @@ Evidence that cannot be read counts as publication.
   block and sort rows stay, because removing them breaks replay or changes what
   a restart does. The attachment becomes `detached`, and applying again adopts
   what stayed. Destructive cleanup is outside this workflow.
+- What stays lasts only as long as the tickerplant keeps it. A table a block
+  defines comes back after a restart. A table no block defines, such as a
+  `--transient` attachment's, is kept only until the tickerplant restarts.
+  Detach lists each such table under `restart:`. After the restart, rows not yet
+  written by end of day are only in the tickerplant log, and nothing replays it.
+  Let end of day run before you restart, or keep that log and replay it by hand.
 
 A refused detach changes nothing but the stopped publisher, names the manual
 action and cannot be overridden. It refuses while another attachment uses the
@@ -218,13 +224,16 @@ A failure part way is `rollback_partial`: run detach again.
 
 ## Restart behaviour
 
-  | State                          | A tickerplant restart                                                                                               |
-  | ------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-  | applied, with the schema block | the block recreates the table and its ownership record                                                              |
-  | applied, `--transient`         | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attachment add NAME` restores it |
-  | sharing a `--transient` table  | gone too: no block defines it. The plan warned `SHARED_RUNTIME_ONLY`; a start asks the stack and is refused         |
-  | rolled back                    | the block went with the registration: the table does not come back                                                  |
-  | detached after publication     | the block stayed, so the table comes back and its logs replay                                                       |
+  | State                                      | A tickerplant restart                                                                                                                                |
+  | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | applied, with the schema block             | the block recreates the table and its ownership record                                                                                               |
+  | applied, `--transient`                     | the table is gone; `--dry-run` reports `registration-lost`, verify fails, `uqs job attachment add NAME` restores it                                  |
+  | sharing a `--transient` table              | gone too: no block defines it. The plan warned `SHARED_RUNTIME_ONLY`; a start asks the stack and is refused                                          |
+  | adopting a table the schema file defines   | the stack's own definition recreates it; no block is written for it. The plan said `STACK_DEFINES`                                                   |
+  | adopting a runtime-only table              | gone: no block is written for a table the attachment did not create. The plan warned `ADOPTED_RUNTIME_ONLY`; a start asks the stack and is refused   |
+  | rolled back                                | the block went with the registration: the table does not come back                                                                                   |
+  | detached after publication                 | the block stayed, so the table comes back and its logs replay                                                                                        |
+  | detached after publication, no block       | the table is gone, and end of day writes no partition for it. Unsaved rows are only in the log. `--dry-run` reports it as `detached:`, not to apply  |
 
 TorQ does not reconnect an rdb or wdb to a restarted tickerplant. Restart them
 yourself. End of day needs nothing extra.

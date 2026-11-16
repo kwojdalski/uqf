@@ -171,7 +171,9 @@ def _register(m: Manifest, ipc: Ipc, att: Attachment, tp: Proc, spec: TableSpec)
         tp.procname,
         spec.name,
         {"table_present": bool(probe.get("schemas", {}).get(spec.name)),
-         "multilog": probe.get("multilog"), "tables": probe.get("published", [])},
+         "multilog": probe.get("multilog"), "tables": probe.get("published", []),
+         # where a restart would look for an adopted table's definition (durability.py)
+         "schemafile": probe.get("schemafile", "")},
     )  # fmt: skip
     try:
         answer = ipc.call(tp.endpoint, "stp_register", _request(m, att, spec))

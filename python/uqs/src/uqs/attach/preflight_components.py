@@ -11,6 +11,7 @@ from uqs.attach import durability, persist
 from uqs.attach.config import Attachment
 from uqs.attach.facts import Facts
 from uqs.attach.findings import Finding
+from uqs.attach.manifest import EXISTING, SHARED
 from uqs.attach.schema import TableSpec, differences
 from uqs.attach.topology import Observation, Proc
 
@@ -310,19 +311,29 @@ def _judge(
     """The file can be written: is the block there already, or is it a file uqf
     rebuilds? And would a restart restore each table (durability.py)? A table this
     attachment would only share, with a creator whose registration no block in
-    the file defines, is runtime-only whatever block this one writes (#2759)."""
+    the file defines, is runtime-only whatever block this one writes (#2759). One
+    it would adopt gets no block at all: the stack's own definition restores it
+    (STACK_DEFINES), or nothing does (#2763)."""
     if "GENERATED" in text[:400] and persist.locate(text, att.name) is None:
         return _unavailable(
             f"{path} is generated (uqf rebuilds it from plant_tables.q on every start); "
             "persist through `uqs job install` / `runtime prepare` instead"
         )
     verdicts = durability.from_plan(att, (tp.probe or {}) if tp else {}, facts.token, text)
-    kept = [v.table for v in verdicts if v.restored]
     out = [
-        Finding("warning", "SHARED_RUNTIME_ONLY", "schema", v.why, "", {"table": v.table})
+        Finding("warning", RUNTIME_ONLY_CODES[v.ownership], "schema", v.why, "",
+                {"table": v.table})
         for v in verdicts
         if not v.restored
-    ]
+    ]  # fmt: skip
+    out += [
+        Finding("info", "STACK_DEFINES", "schema", f"{path} defines {v.table} outside any "
+                "uqs-attach block, so a restart restores it; no block is added for it",
+                "", {"table": v.table})
+        for v in verdicts
+        if v.restored and not v.blocked
+    ]  # fmt: skip
+    kept = [v.table for v in verdicts if v.restored and v.blocked]
     if persist.locate(text, att.name) is not None:
         out.append(
             Finding(
@@ -340,6 +351,10 @@ def _judge(
     elif kept:
         out.append(Finding("info", "WILL_PERSIST", "schema", f"{path}: {will}"))
     return out
+
+
+#: The warning for a table a restart would drop, by what apply records of it.
+RUNTIME_ONLY_CODES = {SHARED: "SHARED_RUNTIME_ONLY", EXISTING: "ADOPTED_RUNTIME_ONLY"}
 
 
 def _unavailable(

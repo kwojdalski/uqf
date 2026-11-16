@@ -72,7 +72,7 @@ def _block(att: Attachment, m: Manifest, op: Op, ipc: Ipc, procs: dict[str, Proc
     specs = tuple(s for s in att.tables if s.name in op.table.split(","))
     record = persist.BlockRecord(**op.post)
     try:
-        file = schema_files.file_of(record, ipc, procs)
+        file = schema_files.file_of(record.path, record.process, ipc, procs)
         problems = persist.problems(record, att, m.token, specs, file)
     except AttachmentError as exc:  # the tickerplant that holds it cannot be asked
         problems = [str(exc)]

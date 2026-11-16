@@ -33,7 +33,7 @@ def block(
         try:
             found = persist.problems(
                 record, att, m.token, tuple(specs),
-                schema_files.file_of(record, ipc, {tp.procname: tp}),
+                schema_files.file_of(record.path, record.process, ipc, {tp.procname: tp}),
             )  # fmt: skip
         except AttachmentError as exc:
             found = [str(exc)]

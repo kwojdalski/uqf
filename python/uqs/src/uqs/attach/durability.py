@@ -17,24 +17,37 @@ attachment has rather than from its label:
     The creator's `.uqfattach.owned` record is no evidence: it says `persisted`
     only once a block restored it, so a durable creator not yet restarted reads
     exactly like a transient one (a timestamp, stp_register.q);
-  * a table it ADOPTED (pre-existing): still judged by the label - whether the
-    stack's own definition survives is #2763's question, not answered here;
+  * a table it ADOPTED (pre-existing, no ledger record): the stack's own part of
+    the schema file - outside every attachment's block - defines it
+    (`persist.stack_defines`), as the starter pack's database.q defines `trade`.
+    One only registered at runtime is runtime-only whatever the label says, and
+    no block is written for it (#2763): a block holds an ownership record, which
+    a restart loads - the table would come back as this attachment's, and its
+    detach would remove a table it never created. So the plan warns
+    `ADOPTED_RUNTIME_ONLY`, verify says so, and every start asks the stack;
   * a table it has not registered (no done `stp_register`): not restored.
 
 `from_manifest` gathers that evidence after apply (verify, the start gate's
 `live.needed`); `from_plan` gathers what apply WOULD record (preflight's
 persistence finding, the plan's schema-file row). Both answer through
-`restart_restores`.
+`restart_restores`. A non-durable attachment's tables are never restored here:
+it said it accepts losing them, so every start asks.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from uqs.attach import persist
-from uqs.attach.config import DURABLE, Attachment
+from uqs.attach import persist, schema_files
+from uqs.attach.config import DURABLE, Attachment, AttachmentError
 from uqs.attach.manifest import CREATED, DONE, EXISTING, SHARED, Manifest
+from uqs.attach.schema import TableSpec
 from uqs.attach.schema_files import LocalFile
+
+if TYPE_CHECKING:
+    from uqs.attach.remote import Ipc
+    from uqs.attach.topology import Proc
 
 
 @dataclass(frozen=True)
@@ -59,32 +72,62 @@ class Verdict:
     restored: bool
     #: why a restart would not restore it, and what to do; "" when it would
     why: str = ""
+    #: created | existing | shared, as apply records it; "" when not registered
+    ownership: str = ""
+
+    @property
+    def blocked(self) -> bool:
+        """Whether a block of the attachment records the table: its own, or its
+        `+uses` - an adopted table never gets one (module docstring)."""
+        return self.ownership in (CREATED, SHARED)
 
 
 def restart_restores(att: Attachment, ev: Evidence) -> list[Verdict]:
     """For each of `att`'s tables: would a tickerplant restart bring it back?"""
-    return [_judge(att, ev, t.name) for t in att.tables]
+    return [Verdict(t.name, *_judge(att, ev, t), ev.ownership.get(t.name, "")) for t in att.tables]
 
 
-def _judge(att: Attachment, ev: Evidence, table: str) -> Verdict:
-    kind = ev.ownership.get(table, "")
+def _judge(att: Attachment, ev: Evidence, spec: TableSpec) -> tuple[bool, str]:
+    table, kind = spec.name, ev.ownership.get(spec.name, "")
+    unread = f"{table}: the schema file was not read here"
     if kind == CREATED:
         if table in ev.blocks:
-            return Verdict(table, True)
-        return Verdict(table, False, f"{table}: no block of {att.name}'s defines it")
+            return True, ""
+        return False, f"{table}: no block of {att.name}'s defines it"
     if kind == EXISTING:
-        durable = att.persist in DURABLE  # the label still: #2763 (module docstring)
-        return Verdict(table, durable, "" if durable else f"{table}: {att.name} is runtime-only")
+        if att.persist not in DURABLE:
+            return False, f"{table}: {att.name} is runtime-only"
+        if ev.text is None:
+            return False, unread
+        if persist.stack_defines(ev.text, table):
+            return True, ""
+        return False, adopted_runtime_only(att, spec)
     if kind == SHARED:
         if table not in ev.uses:
-            return Verdict(table, False, f"{table}: {att.name} keeps no +uses block for it")
+            return False, f"{table}: {att.name} keeps no +uses block for it"
         if ev.text is None:
-            return Verdict(table, False, f"{table}: the schema file was not read here")
+            return False, unread
         if persist.defined_by(ev.text, table):
-            return Verdict(table, True)
+            return True, ""
         owner = ev.owners.get(table) or "another attachment"
-        return Verdict(table, False, creator_runtime_only(att, table, owner))
-    return Verdict(table, False, f"{table}: not registered by {att.name}")
+        return False, creator_runtime_only(att, table, owner)
+    return False, f"{table}: not registered by {att.name}"
+
+
+def adopted_runtime_only(att: Attachment, spec: TableSpec) -> str:
+    """The warning for a table `att` adopted that only a runtime registration
+    holds - said by the plan and by verify alike (#2763)."""
+    return (
+        f"{spec.name} is runtime-only: it was registered on the tickerplant before "
+        f"{att.name}, by something that kept no ownership record, and nothing in the "
+        f"tickerplant's schema file defines it, so a tickerplant restart drops it. "
+        f"{att.name} writes no block for a table it did not create (the block's ownership "
+        f"record would make it {att.name}'s, and its detach would remove it). Every start of "
+        f"{att.publisher.procname} asks the stack whether {spec.name} is still registered. "
+        f"To make it restart-safe, add its definition to the schema file as the stack's own, "
+        f"outside any uqs-attach block, before applying (an edit there afterwards makes a "
+        f"block's removal refuse), then plan again: {spec.definition()}"
+    )
 
 
 def creator_runtime_only(att: Attachment, table: str, owner: str) -> str:
@@ -126,32 +169,64 @@ def from_plan(att: Attachment, probe: dict, token: str, text: str | None) -> lis
     it lacks is created (and blocked, when durable), one another attachment's
     ledger record holds is shared (and recorded in +uses, when durable), any
     other present table is adopted. `text` is the schema file as read now."""
-    ownership: dict[str, str] = {}
-    owners: dict[str, str] = {}
+    ownership = ownership_now(att, probe, token)
+    owners = {
+        t: str(probe["owned"][t].get("attachment") or "")
+        for t, k in ownership.items()
+        if k == SHARED
+    }
     durable = att.persist in DURABLE
+    by = {kind: frozenset(t for t, k in ownership.items() if k == kind and durable)
+          for kind in (CREATED, SHARED)}  # fmt: skip
+    return restart_restores(att, Evidence(ownership, by[CREATED], by[SHARED], owners, text))
+
+
+def ownership_now(att: Attachment, probe: dict, token: str) -> dict[str, str]:
+    """What apply would record for each table, from the tickerplant's `probe`."""
+    ownership: dict[str, str] = {}
     for spec in att.tables:
         ledger = probe.get("owned", {}).get(spec.name)
         if not probe.get("schemas", {}).get(spec.name) or (
             ledger and token and ledger.get("token") == token
         ):
             ownership[spec.name] = CREATED
-        elif ledger:
-            ownership[spec.name] = SHARED
-            owners[spec.name] = str(ledger.get("attachment") or "")
         else:
-            ownership[spec.name] = EXISTING
-    by = {kind: frozenset(t for t, k in ownership.items() if k == kind and durable)
-          for kind in (CREATED, SHARED)}  # fmt: skip
-    return restart_restores(att, Evidence(ownership, by[CREATED], by[SHARED], owners, text))
+            ownership[spec.name] = SHARED if ledger else EXISTING
+    return ownership
 
 
-def local_text(m: Manifest) -> str | None:
-    """The schema file a block of `m` was written to on THIS machine, as it reads
-    now - None when there is none (a block the tickerplant wrote to its own file
-    is read only by asking it: schema_files.file_of)."""
+def schema_file(att: Attachment, m: Manifest) -> tuple[str, str] | None:
+    """(path, process) of the schema file the tickerplant reads at start, as apply
+    recorded it - process is the tickerplant that alone can read it, "" for a file
+    on this machine. From a block's record, else from the registration's (an
+    attachment that only adopted has no block); None when neither has it."""
     for op in m.operations:
         if op.op in ("schema_block", "schema_uses") and op.status == DONE:
             record = persist.BlockRecord(**op.post)
-            if not record.process:
-                return LocalFile(record.path).read()
+            return record.path, record.process
+    for op in m.operations:
+        if op.op == "stp_register" and op.status == DONE and op.pre.get("schemafile"):
+            by = op.process if att.persist == "remote-schema-file" else ""
+            return str(op.pre["schemafile"]), by
     return None
+
+
+def local_text(att: Attachment, m: Manifest) -> str | None:
+    """The schema file as it reads now on THIS machine - None when apply recorded
+    none, or it is the tickerplant's own (read only by asking it: schema_files.file_of)."""
+    where = schema_file(att, m)
+    if where is None or where[1]:
+        return None
+    return LocalFile(where[0]).read()
+
+
+def read_text(att: Attachment, m: Manifest, ipc: Ipc, procs: dict[str, Proc]) -> str | None:
+    """The schema file the tickerplant reads at start (`schema_file`), read where
+    it is; None when apply recorded none or it cannot be read."""
+    where = schema_file(att, m)
+    if where is None:
+        return None
+    try:
+        return schema_files.file_of(*where, ipc, procs).read()
+    except AttachmentError, OSError:
+        return None

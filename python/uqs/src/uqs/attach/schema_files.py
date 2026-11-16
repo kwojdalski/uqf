@@ -31,7 +31,6 @@ from uqs.attach.facts import SchemaRead
 from uqs.attach.remote import Endpoint, Ipc
 
 if TYPE_CHECKING:
-    from uqs.attach.persist import BlockRecord
     from uqs.attach.topology import Proc
 
 #: How the file's bytes become text and back: UTF-8, with any byte that is not
@@ -144,15 +143,15 @@ def inspect(ipc: Ipc, tp: Proc) -> SchemaRead:
     return SchemaRead(file.path, text, file.writable)
 
 
-def file_of(record: BlockRecord, ipc: Ipc, procs: dict[str, Proc]) -> File:
-    """The file `record`'s block is in: the path here, or the tickerplant's own
-    file when a tickerplant wrote it - never that path read on this machine."""
-    if not record.process:
-        return LocalFile(record.path)
-    proc = procs.get(record.process)
+def file_of(path: str, process: str, ipc: Ipc, procs: dict[str, Proc]) -> File:
+    """The schema file at `path`: here, or the tickerplant `process`'s own file
+    when it is the one that reads and writes it (a block's `BlockRecord.process`)
+    - never that path read on this machine."""
+    if not process:
+        return LocalFile(path)
+    proc = procs.get(process)
     if proc is None or not proc.up:
         raise AttachmentError(
-            f"{record.process} cannot be reached to check its schema file {record.path}, "
-            "which only it can read"
+            f"{process} cannot be reached to check its schema file {path}, which only it can read"
         )
-    return RemoteFile(ipc, proc.endpoint, record.path)
+    return RemoteFile(ipc, proc.endpoint, path)
