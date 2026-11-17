@@ -40,9 +40,9 @@ from uqs.paths import UqsError, repo_root
 config_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="A target's config push history: history, show, diff, restore.\n\n"
-    "What each push through the frontend's file browser replaced and wrote, kept on the "
-    "server under shared/config/.uqf-history/.",
+    help="A target's config pushes: push, history, show, diff, restore.\n\n"
+    "`push` sends files through the frontend API, as its Files view does; the others read "
+    "what each push replaced and wrote, kept on the server under shared/config/.uqf-history/.",
 )
 target_app.add_typer(config_app, name="config")
 

@@ -16,7 +16,7 @@ from attach_stack_support import CORE, IsolatedStack, requires_stack
 from attach_support import FaultIpc, make_bundle
 
 from uqs.attach import apply as applying
-from uqs.attach import config, persist, service, verify
+from uqs.attach import block_text, config, persist, service, verify
 from uqs.attach.manifest import Manifest
 from uqs.paths import repo_root
 from uqs.stack import attach_state
@@ -262,7 +262,7 @@ def test_the_schema_block_is_what_apply_wrote_and_nothing_else_in_the_file_moved
     go(stack, att)
     text = stack.schema_file.read_text()
     m = Manifest.load("pb-uat", state(stack))
-    assert persist.outside(text, "pb-uat") == original
+    assert block_text.outside(text, "pb-uat") == original
     assert f"/ BEGIN uqs-attach pb-uat {m.token}" in text
 
 

@@ -6,7 +6,7 @@
 //
 // Started on the stack's machine by `uqs job receive --contract ID --attach NAME`
 // (uqs.attach.backfill_remote), which has resolved the destination from the saved attachment and admitted
-// it against the live stack exactly as an attached backfill does (uqs.attach.backfill_plan) - so the
+// it against the live stack exactly as an attached backfill does (uqs.attach.backfill_admission) - so the
 // bounds, the readers and the HDB are the verified ones, and nothing is read from $KDBHDB.
 //
 // IT LOADS NO JOB (#1717). What the batches look like comes from -contract, the receiver contract the

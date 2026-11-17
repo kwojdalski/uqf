@@ -15,17 +15,17 @@ other.
 
 `uqs job install <bundle>` (`cli/install_bundle.py:86`) and
 `uqs runtime prepare` (`stack/runtime_bundles.py:138`) both end in
-`bundles.install` (`stack/bundles.py:340`). It writes:
+`bundles.install` (`stack/bundles.py:233`). It writes:
 
   | What                                                                       | Where it writes                                             | Code                                                                     |
   | ---                                                                        | ---                                                         | ---                                                                      |
-  | job files, placed by kind                                                  | `src/etl/{sources,workers,streaming,reactions}/`            | `bundles.py:352`, `stack/install.py:60`                                  |
-  | files a previous version owned and this one does not, deleted              | the same directories                                        | `bundles.py:354`                                                         |
-  | the table and catalog additions, one `/ BEGIN bundle <name>` block in each | `src/etl/plant_tables.q`, `scripts/processes/uqs_catalog.q` | `bundles.py:356`, `stack/bundle_blocks.py:56`                            |
-  | the ledger                                                                 | `src/etl/installed_bundles.json`                            | `bundles.py:377`, `paths.py:54`                                          |
-  | process.csv rows for the bundle's own processes                            | `python/uqs/bundle_overrides.csv`                           | `bundles.py:351`, `stack/overrides.py:72`                                |
-  | connectors (`*_feed.py`)                                                   | `src/etl/connectors/<bundle>/`                              | `bundles.py:370`, `stack/bundle_connectors.py:70`                        |
-  | the evaluated plant schema                                                 | `src/etl/generated/plant_schema.json`                       | `bundles.py:378`, `stack/bundle_shadowing.py:36`                         |
+  | job files, placed by kind                                                  | `src/etl/{sources,workers,streaming,reactions}/`            | `bundles.py:246`, `stack/install.py:60`                                  |
+  | files a previous version owned and this one does not, deleted              | the same directories                                        | `bundles.py:248`                                                         |
+  | the table and catalog additions, one `/ BEGIN bundle <name>` block in each | `src/etl/plant_tables.q`, `scripts/processes/uqs_catalog.q` | `bundles.py:251`, `stack/bundle_blocks.py:56`                            |
+  | the ledger                                                                 | `src/etl/installed_bundles.json`                            | `bundles.py:270`, `paths.py:54`                                          |
+  | process.csv rows for the bundle's own processes                            | `python/uqs/bundle_overrides.csv`                           | `bundles.py:244`, `stack/overrides.py:72`                                |
+  | connectors (`*_feed.py`)                                                   | `src/etl/connectors/<bundle>/`                              | `bundles.py:263`, `stack/bundle_connectors.py:70`                        |
+  | the evaluated plant schema                                                 | `src/etl/generated/plant_schema.json`                       | `bundles.py:271`, `stack/bundle_shadowing.py:37`                         |
 
 The CLI then runs `_DERIVED` (`cli/regenerate.py:39`) over the checkout
 (`install_bundle.py:95`, `runtime_prepare.py:93`). `operational-docs` rewrites
@@ -46,7 +46,7 @@ Every guard in this area exists because of that:
 - the getdata and stack-table tests exempt ledger tables, so that the committed
   `tableproperties.csv` and the tables list describe the base tree
   (`tests/q/test_catalog.q:123`, `tests/q/test_stack_tables.q:41`);
-- shadowing refusal (#1545, `stack/bundle_shadowing.py:48`) reads the load plan
+- shadowing refusal (#1545, `stack/bundle_shadowing.py:49`) reads the load plan
   with the bundle's files substituted for what is on disk, because they would
   land on disk in the same directories;
 - the bundle half of #1540 (`.gitignore:116`, `overrides.py:13`) keeps bundle

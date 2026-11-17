@@ -48,7 +48,7 @@ from uqs.scaffold import profile
 from uqs.scaffold.external import EXTERNAL_DIR, PY_TEST_DIR
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.scaffold.write import flat_source
-from uqs.stack import bundles
+from uqs.stack import bundle_additions, bundles
 
 #: Tree folders whose new files are a bundle's job files.
 _JOB_DIRS = (SOURCE_DIR, WORKER_DIR, STREAM_DIR, REACTION_DIR)
@@ -61,7 +61,7 @@ def _job_files(folder: Path) -> list[Path]:
     return [
         p
         for p in folder.rglob("*.q")
-        if p.name not in bundles.ADDITIONS and not p.name.startswith("test_")
+        if p.name not in bundle_additions.ADDITIONS and not p.name.startswith("test_")
     ]
 
 
@@ -163,8 +163,8 @@ def into_bundle(plan: ScaffoldPlan, bundle_dir: Path) -> ScaffoldPlan:
             actions.append(FileAction(target, action.body.lstrip("\n")))
         else:
             actions.append(FileAction(target, action.body, action.mode))
-    renamed = {str(TABLES_FILE): str(bundle_dir / bundles.TABLES),
-               str(CATALOG_FILE): str(bundle_dir / bundles.CATALOG)}  # fmt: skip
+    renamed = {str(TABLES_FILE): str(bundle_dir / bundle_additions.TABLES),
+               str(CATALOG_FILE): str(bundle_dir / bundle_additions.CATALOG)}  # fmt: skip
     notes = []
     for note in plan.notes:
         if any(str(p) in note for p in dropped):
@@ -206,7 +206,7 @@ def _destination(action: FileAction, bundle_dir: Path) -> Path | None:
     if action.mode is WriteMode.CREATE and (path.parent in _JOB_DIRS or path.parent == TEST_DIR):
         return bundle_dir / path.name
     if path == TABLES_FILE:
-        return bundle_dir / bundles.TABLES
+        return bundle_dir / bundle_additions.TABLES
     if path == CATALOG_FILE:
-        return bundle_dir / bundles.CATALOG
+        return bundle_dir / bundle_additions.CATALOG
     return None

@@ -14,7 +14,17 @@ from pathlib import Path
 import pytest
 from attach_support import FakeStack, make_bundle
 
-from uqs.attach import config, detach, facts, persist, plan, service, verify, workflow
+from uqs.attach import (
+    block_text,
+    config,
+    detach,
+    facts,
+    plan,
+    resolution,
+    service,
+    verify,
+    workflow,
+)
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Host
 from uqs.attach.manifest import Manifest
@@ -68,7 +78,7 @@ def _fake() -> FakeStack:
 
 
 def _run(att: Attachment, fake: FakeStack, state: Path, publisher: Publisher | None = None):
-    resolved = workflow.Resolved(att, "new", config.directory(att.name, state))
+    resolved = resolution.Resolved(att, "new", config.directory(att.name, state))
     shown = plan.build(att, fake, ROOT, facts.Facts(host=HERE))
     return workflow.execute(
         resolved, shown, fake, ROOT, publisher or Publisher(), state_dir=state, host=HERE
@@ -99,17 +109,17 @@ def test_the_option_is_recorded_in_the_attachment_and_excludes_runtime_only(bund
 
 def test_a_saved_attachment_is_not_switched_by_a_later_flag(bundle, tmp_path):
     config.save(_att(bundle, schema_writer="cli"), tmp_path)
-    given = workflow.Given(schema_writer="tickerplant")
+    given = resolution.Given(schema_writer="tickerplant")
     with pytest.raises(AttachmentError, match="--schema-writer: 'cli' -> 'tickerplant'"):
-        workflow.resolve("pb-uat", given, ROOT, state_dir=tmp_path)
+        resolution.resolve("pb-uat", given, ROOT, state_dir=tmp_path)
 
 
 def test_a_replacement_that_omits_the_writer_keeps_the_tickerplant_writing(bundle, tmp_path):
     """An option not given keeps its saved value under --replace too (#2762): a
     replacement of --user alone does not turn remote-schema-file into schema-file."""
     config.save(_att(bundle), tmp_path)
-    given = workflow.Given(user="bob")
-    resolved = workflow.resolve("pb-uat", given, ROOT, replace_saved=True, state_dir=tmp_path)
+    given = resolution.Given(user="bob")
+    resolved = resolution.resolve("pb-uat", given, ROOT, replace_saved=True, state_dir=tmp_path)
     assert resolved.source == "replaced"
     assert resolved.changed == ["--user: 'admin' -> 'bob'"]
     assert resolved.att.persist == "remote-schema-file"
@@ -166,7 +176,7 @@ def test_apply_has_the_tickerplant_append_the_block_and_journals_it(bundle, tmp_
     assert out.ok, out.stages
     text = fake.stack_files[STACK_PATH].decode()
     assert text.startswith(STACK_TEXT)
-    assert persist.begin_marker(att.name, Manifest.load(att.name, tmp_path).token) in text
+    assert block_text.begin_marker(att.name, Manifest.load(att.name, tmp_path).token) in text
     m = Manifest.load(att.name, tmp_path)
     (op,) = [o for o in m.operations if o.op == "schema_block"]
     assert (op.status, op.ownership) == ("done", "created")
@@ -213,7 +223,7 @@ def test_detach_refuses_when_the_tickerplant_file_changed_outside_the_block(bund
     result = _detach(att, fake, pub, tmp_path)
     assert result.outcome == "refused"
     assert any("was changed outside the block" in b.reason for b in result.blockers)
-    assert persist.begin_marker(att.name, "") in fake.stack_files[STACK_PATH].decode()
+    assert block_text.begin_marker(att.name, "") in fake.stack_files[STACK_PATH].decode()
 
 
 def test_detach_refuses_when_the_tickerplant_cannot_be_asked(bundle, tmp_path):
@@ -223,7 +233,7 @@ def test_detach_refuses_when_the_tickerplant_cannot_be_asked(bundle, tmp_path):
     fake.down.add(6000)
     with pytest.raises(AttachmentError, match="the stack cannot be read"):
         _detach(att, fake, pub, tmp_path)
-    assert persist.begin_marker(att.name, "") in fake.stack_files[STACK_PATH].decode()
+    assert block_text.begin_marker(att.name, "") in fake.stack_files[STACK_PATH].decode()
 
 
 def test_a_change_computed_from_stale_text_is_refused_by_the_tickerplant(bundle):
@@ -252,6 +262,6 @@ def test_publication_is_read_off_the_stacks_disk_by_the_tickerplant(bundle, tmp_
         fake.stack_partitions.add("/data/hdb")
     result = _detach(att, fake, pub, tmp_path)
     assert result.outcome == "detached" and any(said in r for r in result.evidence.reasons)
-    assert persist.begin_marker(att.name, "") in fake.stack_files[STACK_PATH].decode(), "kept"
+    assert block_text.begin_marker(att.name, "") in fake.stack_files[STACK_PATH].decode(), "kept"
     (asked,) = [r for _, op, r in fake.calls if op == "disk_marks"]
     assert asked["dirs"] == ["/data/wdbhdb", "/data/hdb"] and asked["logdir"] == "/data/tplogs"

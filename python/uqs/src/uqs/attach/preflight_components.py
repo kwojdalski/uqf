@@ -7,7 +7,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from uqs.attach import config, durability, persist
+from uqs.attach import block_text, config, durability
 from uqs.attach.config import Attachment
 from uqs.attach.facts import Facts
 from uqs.attach.findings import Finding
@@ -329,7 +329,7 @@ def _judge(
     the file defines, is runtime-only whatever block this one writes (#2759). One
     it would adopt gets no block at all: the stack's own definition restores it
     (STACK_DEFINES), or nothing does (#2763)."""
-    if "GENERATED" in text[:400] and persist.locate(text, att.name) is None:
+    if "GENERATED" in text[:400] and block_text.locate(text, att.name) is None:
         return _unavailable(
             f"{path} is generated (uqf rebuilds it from plant_tables.q on every start); "
             "persist through `uqs job install` / `runtime prepare` instead"
@@ -349,7 +349,7 @@ def _judge(
         if v.restored and not v.blocked
     ]  # fmt: skip
     kept = [v.table for v in verdicts if v.restored and v.blocked]
-    if persist.locate(text, att.name) is not None:
+    if block_text.locate(text, att.name) is not None:
         out.append(
             Finding(
                 "info",

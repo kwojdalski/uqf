@@ -16,7 +16,7 @@ from uqs.model.dependencies import dependency_rows, inputs_by_process, outputs_b
 from uqs.model.jobs import job_rows
 from uqs.model.registry import PIPELINES
 from uqs.paths import WORKER_DIR, UqsError, UqsPaths
-from uqs.stack import attach_state, backfill_status, runtime_report
+from uqs.stack import attach_inventory, backfill_status, runtime_report
 from uqs.stack.env import build_env, with_interpreter
 from uqs.stack.placeholders import resolve_process_config
 from uqs.stack.procs import _read_overrides, effective_process_rows
@@ -172,7 +172,7 @@ def _list_profiles(paths: UqsPaths, base_port: int) -> list[dict[str, Any]]:
 
 def _list_attachments(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:
     """Every attachment: its lifecycle state and, separately, whether its publisher runs."""
-    return attach_state.inventory(repo=paths.repo_root)
+    return attach_inventory.inventory(repo=paths.repo_root)
 
 
 def _list_jobs(paths: UqsPaths, base_port: int) -> list[dict[str, str]]:

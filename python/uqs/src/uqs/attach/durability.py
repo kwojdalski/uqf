@@ -13,13 +13,13 @@ attachment has rather than from its label:
 
   * a table it CREATED: a done `schema_block` of its own covers it;
   * a table it SHARES: its `+uses` block records it AND a block in the schema
-    file the tickerplant reads defines it - the creator's (`persist.defined_by`).
+    file the tickerplant reads defines it - the creator's (`block_text.defined_by`).
     The creator's `.uqfattach.owned` record is no evidence: it says `persisted`
     only once a block restored it, so a durable creator not yet restarted reads
     exactly like a transient one (a timestamp, stp_register.q);
   * a table it ADOPTED (pre-existing, no ledger record): the stack's own part of
     the schema file - outside every attachment's block - defines it
-    (`persist.stack_defines`), as the starter pack's database.q defines `trade`.
+    (`block_text.stack_defines`), as the starter pack's database.q defines `trade`.
     One only registered at runtime is runtime-only whatever the label says, and
     no block is written for it (#2763): a block holds an ownership record, which
     a restart loads - the table would come back as this attachment's, and its
@@ -39,7 +39,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from uqs.attach import persist, schema_files
+from uqs.attach import block_text, persist, schema_files
 from uqs.attach.config import DURABLE, Attachment, AttachmentError
 from uqs.attach.manifest import CREATED, DONE, EXISTING, SHARED, Manifest
 from uqs.attach.schema import TableSpec
@@ -99,7 +99,7 @@ def _judge(att: Attachment, ev: Evidence, spec: TableSpec) -> tuple[bool, str]:
             return False, f"{table}: {att.name} is runtime-only"
         if ev.text is None:
             return False, unread
-        if persist.stack_defines(ev.text, table):
+        if block_text.stack_defines(ev.text, table):
             return True, ""
         return False, adopted_runtime_only(att, spec)
     if kind == SHARED:
@@ -107,7 +107,7 @@ def _judge(att: Attachment, ev: Evidence, spec: TableSpec) -> tuple[bool, str]:
             return False, f"{table}: {att.name} keeps no +uses block for it"
         if ev.text is None:
             return False, unread
-        if persist.defined_by(ev.text, table):
+        if block_text.defined_by(ev.text, table):
             return True, ""
         owner = ev.owners.get(table) or "another attachment"
         return False, creator_runtime_only(att, table, owner)

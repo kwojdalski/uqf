@@ -231,7 +231,7 @@ DOMAIN_VERBS = {
     "stub": "add a placeholder row",
     "env": "print the environment to source",
     "build": "build a release",
-    "push": "deploy a release onto a server",
+    "push": "deploy a release onto a server, or files into its shared/config",
     "rollback": "return to the previous release or version",
     "prune": "remove old releases",
     "history": "what was deployed, or pushed to a target's config",

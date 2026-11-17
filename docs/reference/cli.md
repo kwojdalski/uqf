@@ -45,7 +45,7 @@ Every verb comes from one fixed vocabulary:
   | `diff` `prepare`                              | compare runtimes, or a table on two endpoints; install a runtime's bundles       |
   | `stub`                                        | add a placeholder source row                                                     |
   | `env`                                         | print variables to source                                                        |
-  | `build` `push` `rollback` `prune` `history`   | releases and their deployment                                                    |
+  | `build` `push` `rollback` `prune` `history`   | releases and their deployment; `push` also files into a target's shared/config   |
   | `shell`                                       | a shell on a target                                                              |
   | `unset` `rename` `edit`                       | a target's settings: remove one, rename it, edit the file                        |
   | `log` `revert`                                | a target's change log, and undoing one change in it                              |
@@ -100,9 +100,11 @@ worker's log and status file are the rehearsal's output.
   | 2    | the command line is wrong: a missing argument, an unknown or contradictory option   |
   | 3    | done in part, with the rest to retry                                                |
   | 4    | stopped on request                                                                  |
+  | 5    | done, but what came of part of it is unknown: look before running it again          |
   | 130  | Ctrl-C ended the stream of `job backfill --attachment --follow`                     |
 
-Only `job backfill` exits 3, 4 or 130:
+Only `job backfill` and `target config push` exit 3 or 4, only `job backfill`
+130, and only `target config push` 5. For `job backfill`:
 
 - 3 comes from `--attachment --wait` (or `--follow`). The rows are written and
   covered, but a reader has not reloaded them. Run the same command again to ask
@@ -112,6 +114,11 @@ Only `job backfill` exits 3, 4 or 130:
 - 130 leaves the run going. With `--stop-on-exit` the first Ctrl-C asks the run
   to stop and keeps following, so the command exits 4. A second Ctrl-C exits 130
   and leaves the request in place.
+
+`target config push` exits 3 when a file was refused, failed, invalid or not
+sent (nothing was written for it), 4 after a Ctrl-C, and 5 when a file's outcome
+is unknown: it may have been written, and is never retried, so list the
+directory before pushing it again.
 
 ### Output in a pipe
 

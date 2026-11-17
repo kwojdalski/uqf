@@ -292,6 +292,47 @@ browse, delete or upload path may name `.uqf-history`, in any letter case.
   with a push id, read the same history over ssh with the same helper; `restore`
   takes `--dry-run` and asks first unless given `--yes`.
 
+### Pushing from the command line --- `uqs target config push`
+
+`uqs target config push TARGET FILE... [--into DIR] [--api URL] [--overwrite]`
+does what the Files view does, through this API and nothing else, so the push is
+recorded as a browser's is: `config.push.open`, one `files.upload` per file,
+`config.push`, and the push's history on the server (#2786). It is the scripted
+form of choosing a target and folder, choosing files or a folder, confirming and
+watching the queue:
+
+- **The queue.** Each FILE is a file or a folder; a folder's files keep their
+  paths below the folder's own name, as a folder upload keeps them. `--into DIR`
+  is the folder below `shared/config/` they go to. The browser's checks run
+  first: a file over 16 MiB, at a path the server refuses, or queued twice is
+  `invalid` and never sent; more than 500 files or 256 MiB refuses the whole
+  push.
+- **The confirmation.** The target's `dest` (from `GET /services`), the folder,
+  each file with its size and whether existing files are replaced. It asks
+  unless `--yes`; `--dry-run` shows it and sends nothing else.
+- **The push.** The open (`confirmed: true`, the queued files' count and bytes),
+  then one `PUT` per file, in turn, never retried, then the close - always,
+  after a failure or a Ctrl-C too - reporting each file that failed, was
+  cancelled, is unknown or was invalid. Each outcome is read as the browser
+  reads it: a refusal (409, 413, 422, 404) or a failure the server names as
+  certain wrote nothing; `UploadOutcomeUncertain`, a 504, an answer that is not
+  JSON, a lost connection or a Ctrl-C in flight is `unknown`.
+- **Credentials.** The write token from `UQF_FRONTEND_WRITE_TOKEN`, as
+  `Authorization: Bearer`. Every request carries its own `X-UQF-Request-Id` and
+  the run's one `X-UQF-Session-Id`, and `x-uqf-user` names `--claimed-user`
+  (default: this machine's user) - recorded as a claim, like any `x-uqf-user`.
+  The push's manifest says `via: frontend`, as a browser's does.
+- **The report.** The push id, each file's outcome with its sha256 and whether
+  it replaced a file, and where to read it again:
+  `uqs target config show TARGET PUSH`, the push history,
+  `uqs activity list --session ID`. `--json` prints it as one document. Exit 0
+  when every file was uploaded, 3 when any was refused, failed, invalid or not
+  sent, 4 after a Ctrl-C, 5 when any file's outcome is unknown - list the
+  directory before pushing it again - and 1 when nothing was sent.
+
+Uploading activates nothing: a release reads `shared/config/` when it next
+starts.
+
 A backfill is launched detached rather than awaited: it runs for as long as its
 range takes, and a request that blocked on one would time out mid-run and tell
 the caller nothing about whether the work continued. Every bound must carry an

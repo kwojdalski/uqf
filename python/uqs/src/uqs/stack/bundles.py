@@ -32,13 +32,13 @@ the tree already owns is a conflict, refused before anything is written.
 
 COPY ONLY. A bundle is what a release carries to a server, and a symlink back
 to a workstation checkout is exactly what does not travel.
+
+What each addition file may hold is stack/bundle_additions.py's.
 """
 
 from __future__ import annotations
 
-import csv
 import hashlib
-import io
 import json
 import re
 import subprocess
@@ -49,18 +49,13 @@ from uqs.model import q_support
 from uqs.model.declarations import read_file
 from uqs.model.pipeline import PipelineKind
 from uqs.paths import BUNDLE_LEDGER, CATALOG_FILE, TABLES_FILE
-from uqs.stack import bundle_connectors, bundle_shadowing
+from uqs.stack import bundle_additions, bundle_connectors, bundle_shadowing
 from uqs.stack import install as stack_install
 from uqs.stack import overrides as override_files
 from uqs.stack.bundle_blocks import BundleError, with_block, without_block
 from uqs.stack.install import Item, Kind, Mode, Status
 
 MANIFEST = "bundle.json"
-TABLES = "tables.q"
-CATALOG = "catalog.q"
-OVERRIDES = "process_overrides.csv"
-#: The bundle's own addition files: read by this module, never placed as jobs.
-ADDITIONS = (TABLES, CATALOG, OVERRIDES)
 #: Where the tree records which bundle owns what, relative to its root.
 LEDGER = BUNDLE_LEDGER
 OVERRIDES_FILE = override_files.BUNDLE_FILE
@@ -69,17 +64,6 @@ OVERRIDES_FILE = override_files.BUNDLE_FILE
 NAME = re.compile(r"[a-z][a-z0-9_]{0,63}")
 _VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,63}")
 _MANIFEST_KEYS = frozenset({"name", "version", "description"})
-#: `name:([]...)` as uqs.model.schemas reads the plant: a bundle writes it bare, the
-#: tree holds it qualified (#1411), so both match and `table_lines` qualifies.
-_TABLE = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\]")
-_CONTRACT = re.compile(r"^(?:\.qetl\.plant\.)?(nested|sorting)\[`([a-z_][a-z0-9_]*);")
-_DESCRIBE = re.compile(r"^\.qcat\.describe\[`([a-z_][a-z0-9_]*)\]:")
-#: A raw table a desk should not browse (the input to a fold) is hidden with its
-#: reason rather than described, as the tree's own are.
-_HIDDEN = re.compile(r"^\.qcat\.hidden\[`([a-z_][a-z0-9_]*)\]:")
-#: A bundle cannot add querypolicy.csv rows, so a reason its table is browsable
-#: unbounded is how it meets the catalog's policy-or-reason rule (#889).
-_UNBOUNDED = re.compile(r"^\.qcat\.unbounded\[`([a-z_][a-z0-9_]*)\]:")
 
 
 @dataclass(frozen=True)
@@ -115,117 +99,6 @@ def read_bundle(folder: Path) -> Bundle:
     if not isinstance(version, str) or not _VERSION.fullmatch(version):
         raise BundleError(f"{path}: version must be a string such as 1.4.0")
     return Bundle(folder.resolve(), name, version, str(data.get("description", "")))
-
-
-# ------------------------------------------------------------- additions
-
-
-def _lines(path: Path | None) -> list[str]:
-    return path.read_text().rstrip("\n").splitlines() if path else []
-
-
-def _refuse_block_comment(line: str, where: str) -> None:
-    # A line holding only `/` (or `\`) opens a q block comment that swallows
-    # everything after it - in the tree file, not just the bundle's block.
-    if line.strip() in ("/", "\\"):
-        raise BundleError(f"{where}: a line of only {line.strip()!r} opens a q block comment")
-
-
-def table_lines(bundle: Bundle, known: set[str]) -> tuple[list[str], list[str]]:
-    """tables.q's lines and the tables it defines. `known` is every table
-    the tree already defines outside this bundle's block."""
-    path = bundle.addition(TABLES)
-    lines, tables = _lines(path), []
-    for n, line in enumerate(lines, 1):
-        where = f"{bundle.name}/{TABLES}:{n}"
-        _refuse_block_comment(line, where)
-        if not line.strip() or line.startswith("/ "):
-            continue
-        if m := _TABLE.match(line):
-            if m.group(1) in known:
-                raise BundleError(f"{where}: table {m.group(1)} is already defined in the tree")
-            if m.group(1) in tables:
-                raise BundleError(f"{where}: table {m.group(1)} is defined twice")
-            tables.append(m.group(1))
-        elif m := _CONTRACT.match(line):
-            if m.group(2) not in tables:
-                raise BundleError(
-                    f"{where}: {m.group(1)}[] for {m.group(2)}, which this bundle does not define "
-                    "(above this line)"
-                )
-        else:
-            raise BundleError(
-                f"{where}: expected `name:([]...)`, `nested[...]`, `sorting[...]` or `/ ` lines"
-            )
-    return [_qualified(line) for line in lines], tables
-
-
-def _qualified(line: str) -> str:  # a tables.q line as the tree holds it
-    matched = (_TABLE.match(line) or _CONTRACT.match(line)) and not line.startswith(".qetl.")
-    return ".qetl.plant." + line if matched else line
-
-
-def catalog_lines(bundle: Bundle, tables: list[str], described: set[str]) -> list[str]:
-    """catalog.q's lines, every bundle table described (or hidden, with a
-    reason) exactly once and nothing the tree already describes described
-    again. An unbounded reason may name only a table this bundle defines."""
-    lines, seen = _lines(bundle.addition(CATALOG)), []
-    for n, line in enumerate(lines, 1):
-        where = f"{bundle.name}/{CATALOG}:{n}"
-        _refuse_block_comment(line, where)
-        if not line.strip() or line.startswith("/ ") or line[:1] in " \t":
-            continue
-        if u := _UNBOUNDED.match(line):
-            if u.group(1) not in tables:
-                raise BundleError(
-                    f"{where}: .qcat.unbounded for {u.group(1)}, which this bundle does not define"
-                )
-            continue
-        m = _DESCRIBE.match(line) or _HIDDEN.match(line)
-        if not m:
-            raise BundleError(
-                f'{where}: expected .qcat.describe[`table]:"...", .qcat.hidden[`table]:"..." or '
-                '.qcat.unbounded[`table]:"..." (fully qualified)'
-            )
-        if m.group(1) in described or m.group(1) in seen:
-            raise BundleError(f"{where}: {m.group(1)} is already described")
-        if _HIDDEN.match(line) and m.group(1) not in tables:
-            raise BundleError(
-                f"{where}: .qcat.hidden for {m.group(1)}, which this bundle does not define"
-            )
-        seen.append(m.group(1))
-    if missing := [t for t in tables if t not in seen]:
-        raise BundleError(
-            f"{bundle.name}: {', '.join(missing)} defined in {TABLES} but neither described nor "
-            f"hidden in {CATALOG} - the catalog refuses a table that is neither"
-        )
-    return lines
-
-
-def override_rows(bundle: Bundle, procnames: set[str]) -> list[tuple[str, str, str]]:
-    """process_overrides.csv's rows: the bundle's OWN processes only."""
-    from uqs.model.pipelines import PROCESS_CSV_FIELDS
-
-    path = bundle.addition(OVERRIDES)
-    if path is None:
-        return []
-    reader = csv.DictReader(io.StringIO(path.read_text()))
-    if reader.fieldnames != ["procname", "field", "value"]:
-        raise BundleError(f"{bundle.name}/{OVERRIDES}: the header must be procname,field,value")
-    rows: dict[tuple[str, str], str] = {}
-    for n, row in enumerate(reader, 2):
-        where = f"{bundle.name}/{OVERRIDES}:{n}"
-        proc, fld, value = row["procname"], row["field"], row["value"] or ""
-        if proc not in procnames:
-            raise BundleError(f"{where}: {proc} is not one of this bundle's processes")
-        if fld not in PROCESS_CSV_FIELDS or fld in ("procname", "port"):
-            raise BundleError(f"{where}: {fld!r} is not a process.csv field a bundle may set")
-        if "," in value or "\n" in value:
-            raise BundleError(f"{where}: torq.sh reads process.csv unquoted - no comma in {fld}")
-        if (proc, fld) in rows:
-            raise BundleError(f"{where}: {proc} {fld} is set twice")
-        rows[(proc, fld)] = value
-    return [(p, f, v) for (p, f), v in rows.items()]
 
 
 # ------------------------------------------------------------------ ledger
@@ -294,7 +167,7 @@ def plan(bundle: Bundle, root: Path) -> Plan:
     others = {p for name in ledger if name != bundle.name for p in _owned(root, ledger, name)}
     items, tests = [], []
     for item in stack_install.plan(bundle.root, root):
-        if item.source.parent == bundle.root and item.source.name in ADDITIONS:
+        if item.source.parent == bundle.root and item.source.name in bundle_additions.ADDITIONS:
             continue
         if item.reason.startswith("a q test"):
             tests.append(item.source)
@@ -313,17 +186,11 @@ def plan(bundle: Bundle, root: Path) -> Plan:
         raise BundleError(f"bundle {bundle.name} declares no source, worker or streaming job")
 
     known = bundle_shadowing.known_tables(root, bundle.name)
-    table_body, tables = table_lines(bundle, known)
+    table_body, tables = bundle_additions.table_lines(bundle, known)
     catalog_text = without_block((root / CATALOG_FILE).read_text(), bundle.name, str(CATALOG_FILE))
-    described = {
-        m.group(1)
-        for ln in catalog_text.splitlines()
-        if (m := _DESCRIBE.match(ln) or _HIDDEN.match(ln))
-    }
-    described |= set(
-        re.findall(r"^\s*(?:describe|hidden)\[`([a-z_][a-z0-9_]*)\]", catalog_text, re.M)
+    catalog_body = bundle_additions.catalog_lines(
+        bundle, tables, bundle_additions.described(catalog_text)
     )
-    catalog_body = catalog_lines(bundle, tables, described)
     procnames = {
         d.procname
         for i in items
@@ -331,7 +198,7 @@ def plan(bundle: Bundle, root: Path) -> Plan:
         for d in read_file(i.source)
         if d.kind is not PipelineKind.BACKFILL
     }
-    overrides = override_rows(bundle, procnames)
+    overrides = bundle_additions.override_rows(bundle, procnames)
     stale = sorted(p for p in mine if p not in {i.destination for i in items} and p.suffix == ".q")
     bundle_shadowing.refuse(root, items, stale)
     feeds = bundle_connectors.check(bundle.name, bundle.root, root, tables)

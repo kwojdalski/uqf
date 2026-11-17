@@ -10,7 +10,7 @@ default. This module is that resolution plus the read-only admission plan; it
 starts no worker and writes nothing, so a plan can be run against any stack,
 any number of times, and leave it as it found it.
 
-Two stages, the second in uqs.attach.backfill_plan because it needs a live stack:
+Two stages, the second in uqs.attach.backfill_admission because it needs a live stack:
 
   resolve   (here) the saved attachment and the worker, offline: refuse a detached or
             unverified attachment, an unpinned or missing HDB, a dataset the

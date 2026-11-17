@@ -12,9 +12,7 @@ python/uqs/tests/test_columns.py::test_every_type_agrees_with_q  # PeachQ result
 
 
 
-python/uqs/tests/test_fill_hdb_release.py::test_the_repair_runs_from_a_release_with_nothing_else_of_the_checkout  # PeachQ cannot append a column to a table's .d (the amend dbmaint's add1col uses is 'nyi), so a missing column is not written
 python/uqs/tests/test_fill_hdb_columns.py::test_the_query_fails_before_the_repair  # PeachQ cannot read a partitioned table back from disk ('book, 'nyi)
-python/uqs/tests/test_fill_hdb_columns.py::test_the_repair_is_idempotent  # PeachQ cannot read a partitioned table back from disk ('book, 'nyi)
 python/uqs/tests/test_fill_hdb_columns.py::test_the_repair_makes_the_query_run  # PeachQ cannot read a partitioned table back from disk ('book, 'nyi)
 
 python/uqs/tests/test_hdb_alter_cli.py::test_a_dry_run_writes_nothing_and_creates_no_journal  # PeachQ cannot write a partitioned HDB natively (the .d amend is 'nyi), so scripts/hdb/alter.q refuses it before reading the database (#1755)
@@ -28,7 +26,6 @@ python/uqs/tests/test_hdb_alter_cli.py::test_the_plan_names_the_hdb_its_source_a
 python/uqs/tests/test_hdb_alter_cli.py::test_json_without_yes_is_refused_and_writes_nothing  # PeachQ cannot write a partitioned HDB natively (the .d amend is 'nyi), so scripts/hdb/alter.q refuses it before reading the database, before the --yes refusal this test asserts is reached (#1755, #2229)
 
 python/uqs/tests/test_gaps.py::test_the_hole_between_two_sessions_and_the_twin_that_refills_it  # PeachQ's .j.j writes a timestamp with q's `D` separator where KDB-X writes JSON's `T`, so the hole's bounds come back as 2026-09-13D10:00 rather than 2026-09-13T10:00
-python/uqs/tests/test_attach_sorting_q.py::test_the_declared_rule_is_written_reloaded_and_sorts_with_torqs_own_code  # PeachQ sorts a splayed table on disk but TorQ's applyattr (@[dir;col;`p#]) leaves no attribute on it
 
 python/uqs/tests/test_hdb_layout.py::test_the_fixtures_are_what_q_says_they_are  # PeachQ's \l maps no partitioned database (no .Q.pv/.Q.pd), so q's own view of the fixtures - the oracle - is empty
 python/uqs/tests/test_hdb_layout.py::test_the_partitions_are_the_ones_q_maps[conv]  # PeachQ's \l maps no partitioned database (no .Q.pv/.Q.pd), so q's own view of the fixtures - the oracle - is empty
@@ -41,6 +38,6 @@ python/uqs/tests/test_hdb_layout.py::test_a_date_in_two_segments_is_judged_in_ea
 python/uqs/tests/test_hdb_layout.py::test_a_segment_that_does_not_exist_is_named  # PeachQ's \l maps no partitioned database, so data check falls back to the filesystem listing, which refuses a segmented HDB (par.txt) instead of judging its segments (#1783)
 python/uqs/tests/test_hdb_layout.py::test_a_segment_q_cannot_read_is_named  # PeachQ's \l maps no partitioned database, so data check falls back to the filesystem listing, which refuses a segmented HDB (par.txt) instead of judging its segments (#1783)
 python/uqs/tests/test_hdb_layout.py::test_partitions_beside_par_txt_are_refused_as_q_refuses_them  # PeachQ's \l maps no partitioned database, so data check falls back to the filesystem listing, which refuses a segmented HDB (par.txt) instead of judging its segments (#1783)
-python/uqs/tests/test_data_check_markout_migration.py::test_apply_folds_the_columns_into_legacy_snapshots_and_the_hdb_loads  # PeachQ cannot append a column to a table's .d (the amend dbmaint's add1col uses is 'nyi), so the migration cannot write config_id
-python/uqs/tests/test_data_check_markout_migration.py::test_a_second_apply_changes_nothing  # PeachQ cannot append a column to a table's .d (the amend dbmaint's add1col uses is 'nyi), so the migration cannot write config_id
 python/uqs/tests/test_data_compress_report.py::test_the_report_reads_each_columns_compression_and_names_the_unsorted_partitions  # PeachQ keeps a column's attribute in a <column>.pqattr side file beside it, which TorQ's .cmp.hdbstructure walks as one more column (sym.pqattr); KDB-X stores p# in the column file itself
+python/uqs/tests/test_attach_two_hosts.py::test_the_publisher_refusing_the_stacks_credential  # PeachQ result differs: a refused credential fails hopen as `access. <host>:<port>: credentials or handshake rejected`, not KDB-X's bare `access`
+python/uqs/tests/test_attach_two_hosts.py::test_the_stack_refusing_the_publishers_credential  # PeachQ result differs: a refused credential fails hopen as `access. <host>:<port>: credentials or handshake rejected`, not KDB-X's bare `access`
