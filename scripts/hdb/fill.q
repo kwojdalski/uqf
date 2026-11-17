@@ -27,8 +27,8 @@
 /     partition without asking whether one is already there, so one call over
 /     a database that was merely partly short would overwrite the partitions
 /     that were not. Nor is add1table, the single-directory step under it:
-/     it writes with the amend `@[dir;`;:;table]`, which PeachQ does not
-/     implement ('nyi), and the bootstrap of a PeachQ stack depends on
+/     it writes with the amend `@[dir;`;:;table]`, which PeachQ v0.92 still
+/     refuses ('io), and the bootstrap of a PeachQ stack depends on
 /     writing the missing tables of the sample partitions. A directory this
 /     script has just found to hold no table is written with `set`, the form
 /     wdb.q's `inittable` uses, enumerated against the HDB's sym file.
@@ -39,8 +39,7 @@
 /     the interactive name check, driven from what each partition lacks.
 /   - The declared default. A column the partition lacks is written as the
 /     declared type's null; a symbol default is enumerated here, with .Q.en,
-/     rather than by dbmaint's `enum`, which enumerates with a file-handle `?`
-/     that PeachQ does not implement.
+/     against the HDB's sym file.
 /   - Checking the result. dbmaint reports what it did, not whether the
 /     database is now whole. The last step re-reads every partition and exits
 /     1 naming anything still missing.
@@ -415,11 +414,7 @@ derived_clock:{[root;table_name;dir]
 
 / The columns a table directory holds, from its `.d`: the authority for what a
 / splayed table holds, not the directory listing, because a nested column
-/ writes TWO files (`bids` and `bids#`) and appears in `.d` once. This is
-/ dbmaint's allcols, spelled with the path joined by `sv`: allcols reads
-/ `get tabledir,`.d`, a symbol VECTOR used as a path, which PeachQ refuses
-/ ('io). Reading is what every run does, including the run with nothing to
-/ repair, so it must not be the step that fails there.
+/ writes TWO files (`bids` and `bids#`) and appears in `.d` once.
 / @param dir a table directory that holds a `.d`
 / @return the column names
 disk_cols:{[dir] get ` sv dir,`.d}
@@ -430,20 +425,6 @@ disk_cols:{[dir] get ` sv dir,`.d}
 / @return the missing columns, in declared order
 missing_cols:{[table_name;dir] (cols value table_name) except disk_cols dir}
 
-/ Write a table, already run through .Q.en against root, as a splayed table at dir. PeachQ's
-/ splayed `set` enumerates symbols again against a `sym` file it creates in dir's PARENT, the
-/ date folder, where KDB-X refuses one (#2285). Column by column puts them against root's.
-/ @param root the HDB root
-/ @param dir the table directory to write
-/ @param t the table
-/ @return the directory
-write_splay:{[root;dir;t]
-    `sym set get ` sv root,`sym;
-    c:cols t;
-    {[dir;c;v] (` sv dir,c) set v}[dir]'[c;{$[11h=type x; `sym$x; x]} each t c];
-    (` sv dir,`.d) set c;
-    dir}
-
 / Repair one table directory.
 / @return `table if it wrote an empty table, `skipped for a directory that
 /   exists with no .d, else the columns it added (empty when none was missing)
@@ -451,7 +432,7 @@ repair_dir:{[root;table_name;dir]
     if[()~key ` sv dir,`.d;
         / a directory that exists with no .d is not ours to write into
         if[not ()~key dir; :`skipped];
-        write_splay[root;dir;.Q.en[root;0#value table_name]];
+        (` sv dir,`) set .Q.en[root;0#value table_name];
         :`table];
     absent:missing_cols[table_name;dir];
     / an existing partition gets the columns derived from its stored ones only when the migration is asked for

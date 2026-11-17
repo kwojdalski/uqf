@@ -21,10 +21,9 @@ directories beside par.txt (q refuses the load). Each is a refusal naming it,
 as is any run that does not finish - never an empty list of partitions, which
 would read as a database with nothing wrong.
 
-Without q, or with PeachQ (whose `\\l` maps no partitioned database), the
-filesystem listing in stack/hdb_shape.py stands in, and it reads only a
-conventional root: a segmented one is refused there rather than judged by its
-root alone.
+Without q, the filesystem listing in stack/hdb_shape.py stands in, and it
+reads only a conventional root: a segmented one is refused there rather than
+judged by its root alone.
 """
 
 from __future__ import annotations
@@ -34,7 +33,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from uqs.interpreter import PEACHQ, identified, q_interpreter
+from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import hdb_shape
 from uqs.stack.env import with_interpreter
@@ -92,7 +91,7 @@ def inspect(paths: UqsPaths, hdb_root: Path) -> Layout:
     """The HDB at `hdb_root`, as q loads it: one q process."""
     env = with_interpreter(paths)
     q = q_interpreter(env)
-    if q is None or identified(q) == PEACHQ:
+    if q is None:
         listing = hdb_shape.listing(hdb_root)
         dirs = {name: hdb_root / name for name in listing}
         return Layout(listing, dirs, False, None, "filesystem")

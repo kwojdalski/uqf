@@ -47,12 +47,6 @@
 
 if[()~key .qhdblayout.root; .qhdblayout.emit[0b;();();();enlist "no HDB at ",.qhdblayout.root_text]];
 
-/ PeachQ's `\l` maps no partitioned database, so it would report every HDB
-/ as one without partitions: refused, never answered. The probe is
-/ .qetl.io.on_peachq's (src/etl/core/io_hdb.q), as hdb/alter.q's.
-if[not -7h=type @[value;`.pq.load_natives;{[e] 0N}];
-    .qhdblayout.emit[0b;();();();enlist "KDB-X only: PeachQ's \\l maps no partitioned database, so it cannot say which partitions this one has"]];
-
 / A partition directory's name: a date, the only scheme this stack writes.
 .qhdblayout.date_shaped:{[name] name like "[0-9][0-9][0-9][0-9].[0-9][0-9].[0-9][0-9]"}
 
