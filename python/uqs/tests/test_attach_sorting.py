@@ -22,14 +22,24 @@ import pytest
 from attach_support import LEDGER_Q, FakeStack, make_bundle
 
 from uqs.attach import apply as applying
-from uqs.attach import config, facts, plan, service, sort_file, sorting, verify, workflow
+from uqs.attach import (
+    config,
+    facts,
+    plan,
+    resolution,
+    service,
+    sort_file,
+    sorting,
+    verify,
+    workflow,
+)
 from uqs.attach import detach as detaching
 from uqs.attach.config import AttachmentError, Storage
 from uqs.attach.manifest import Manifest, Op
 from uqs.attach.preflight import Host
 from uqs.attach.schema import SchemaError, TableSpec, check_sorting, parse_sorting
 from uqs.paths import repo_root
-from uqs.stack import bundles
+from uqs.stack import bundle_additions, bundles
 
 ROOT = repo_root()
 TABLE = "piggybank_general_ledger"
@@ -143,11 +153,11 @@ def test_an_invalid_declaration_is_refused_before_the_stack_is_asked_anything(wo
 
 def test_a_bundle_takes_a_sorting_line_only_for_a_table_it_defines(tmp_path):
     good = bundles.read_bundle(make_bundle(tmp_path / "a", LEDGER_Q + "\n" + DECLARED))
-    lines, tables = bundles.table_lines(good, set())
+    lines, tables = bundle_additions.table_lines(good, set())
     assert tables == [TABLE] and lines[-1] == ".qetl.plant." + DECLARED
     bad = bundles.read_bundle(make_bundle(tmp_path / "b", LEDGER_Q + "\nsorting[`other;`x!`]"))
     with pytest.raises(bundles.BundleError, match="sorting\\[\\] for other"):
-        bundles.table_lines(bad, set())
+        bundle_additions.table_lines(bad, set())
 
 
 def test_the_declaration_is_saved_with_the_attachment(world):
@@ -362,7 +372,7 @@ def test_a_failed_reload_leaves_the_publisher_stopped_and_a_rerun_finishes(world
     fake.named("sort1")["reload_fails"] = "failed to open sort.csv"
     publisher = Publisher()
     shown = plan.build(att, fake, ROOT)
-    resolved = workflow.Resolved(att, "new", config.directory("pb-uat", state))
+    resolved = resolution.Resolved(att, "new", config.directory("pb-uat", state))
     out = workflow.execute(resolved, shown, fake, ROOT, publisher, state_dir=state)
     assert not out.ok and [s.name for s in out.stages] == ["save", "apply"]
     assert "a file alone is not configuration" in out.stages[-1].detail

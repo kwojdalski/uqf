@@ -43,9 +43,9 @@ from typing import Any
 
 from uqs.attach import backfill_owner, config
 from uqs.attach.backfill import _PIN, canonical, require_verified
+from uqs.attach.backfill_admission import readers_of
 from uqs.attach.backfill_coordination import EOD_GUARD
 from uqs.attach.backfill_fence import fence
-from uqs.attach.backfill_plan import readers_of
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Host
 from uqs.attach.remote import Endpoint, Ipc, IpcError

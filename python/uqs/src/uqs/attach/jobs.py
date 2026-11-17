@@ -36,7 +36,7 @@ from uqs.attach.schema import (
 from uqs.model import plant_metadata
 from uqs.model.declarations import Declaration, read_file
 from uqs.paths import TABLES_FILE, UqsError
-from uqs.stack import bundles
+from uqs.stack import bundle_additions, bundles
 
 _TABLE_LINE = re.compile(r"^(?:\.qetl\.plant\.)?([a-z_][a-z0-9_]*):\(\[\]")
 
@@ -114,14 +114,14 @@ def from_bundle(job: str, folder: Path) -> JobSpec:
         raise AttachmentError(str(exc)) from None
     declarations: list[Declaration] = []
     for path in sorted(folder.glob("*.q")):
-        if path.name in bundles.ADDITIONS or path.name.startswith("test_"):
+        if path.name in bundle_additions.ADDITIONS or path.name.startswith("test_"):
             continue
         declarations += read_file(path)
     decl = _pick(declarations, job, f"bundle {bundle.name}")
     if not decl.publishes:
         raise AttachmentError(f"{job} publishes nothing, so there is nothing to attach")
-    tables_q = folder / bundles.TABLES
-    where = f"bundle {bundle.name}/{bundles.TABLES}"
+    tables_q = folder / bundle_additions.TABLES
+    where = f"bundle {bundle.name}/{bundle_additions.TABLES}"
     text = tables_q.read_text() if tables_q.is_file() else ""
     defined, nested, sorting = _definitions(text), _nested(text, where), _sorting(text, where)
     return _build(

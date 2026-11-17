@@ -10,7 +10,8 @@ both can reach, and uqs.attach.config re-exports them.
 
 Reads the two JSON files by hand, with no knowledge of their other contents:
 this module's only questions are "which process does this attachment publish
-from", "which stack", and "what state is it in".
+from", "which stack", and "what state is it in". `uqs job attachment list`
+asks the same of every attachment (stack/attach_inventory.py).
 """
 
 from __future__ import annotations
@@ -22,7 +23,6 @@ import socket
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths, repo_root
@@ -93,7 +93,7 @@ class Published:
 UNREADABLE = "unreadable"
 
 
-def _scan(root: Path | None = None) -> tuple[list[Published], list[str]]:
+def scan(root: Path | None = None) -> tuple[list[Published], list[str]]:
     """Every attachment's publisher, and a line for each attachment whose
     publisher cannot be known (its folder or attachment.json unreadable)."""
     base = root or state_root()
@@ -206,8 +206,13 @@ def publishers(root: Path | None = None) -> list[Published]:
     nothing has been applied, UNREADABLE when the manifest cannot be read).
     An attachment whose attachment.json cannot be read is left out, with a
     warning - refuse_unverified_start refuses every start over it instead."""
-    return _scan(root)[0]
+    return scan(root)[0]
 
+
+#: Where an attachment's publisher listens: `runtime.start` starts it on this
+#: machine, whichever host the stack it publishes to runs on (#1651, #2768).
+#: `job attachment list`/`show` and `uqs.attach` all probe it here.
+PUBLISHER_HOST = "localhost"
 
 #: The manifest record of the row a native registration wrote (uqs.attach.native.ROW).
 REGISTERED_ROW = "process_row"
@@ -271,7 +276,7 @@ def refuse_unverified_start(paths: UqsPaths, procs: str, base_port: int | None) 
     (`live_check`, #1651): a runtime-only registration, or one on another
     machine, can be gone while the manifest still says verified.
     """
-    found, broken = _scan()
+    found, broken = scan()
     if broken:
         raise UqsError(
             "an attachment cannot be read, so whether this start launches its publisher "
@@ -330,7 +335,7 @@ def publisher_extras(paths: UqsPaths, procs: str) -> list[str]:
     started on its own: `-extras` reaches every process of one torq.sh call,
     and no other process may be pointed at that discovery.
     """
-    found, _ = _scan()
+    found, _ = scan()
     remote = [pub for pub in found if pub.remote_discovery]
     if not remote:
         return []
@@ -346,84 +351,3 @@ def publisher_extras(paths: UqsPaths, procs: str) -> list[str]:
             "Nothing was started."
         )
     return ["-.servers.DISCOVERY", named[0].remote_discovery]
-
-
-# ------------------------------------------------------- `uqs job attachment list`
-
-#: What a TCP connect to the publisher's port says, as `job attachment list` shows it.
-RUNNING, STOPPED, UNREACHABLE, UNKNOWN = "running", "stopped", "unreachable", "unknown"
-
-#: Where an attachment's publisher listens: `runtime.start` starts it on this
-#: machine, whichever host the stack it publishes to runs on (#1651, #2768).
-#: `job attachment list`/`show` and `uqs.attach` all probe it here.
-PUBLISHER_HOST = "localhost"
-
-
-def _port_state(host: str, port: int, timeout: float = 0.5) -> tuple[str, str]:
-    """(state, detail) of host:port. A refused connection is the host answering
-    that nothing listens - stopped; anything else (no route, no name, a
-    timeout) says nothing about the publisher - unreachable, never stopped."""
-    import socket
-
-    address = "127.0.0.1" if host == "localhost" else host
-    try:
-        with socket.create_connection((address, port), timeout):
-            return RUNNING, ""
-    except ConnectionRefusedError:
-        return STOPPED, ""
-    except OSError as exc:
-        return UNREACHABLE, f"{host}:{port}: {exc.strerror or type(exc).__name__}"
-
-
-def _publisher_port(procname: str, stack_id: int, root: Path) -> int | None:
-    from uqs.model.registry import allocate_offsets, read_port_lock
-
-    try:
-        return stack_id + allocate_offsets([procname], read_port_lock(root))[procname]
-    except OSError, ValueError, KeyError:
-        return None
-
-
-def inventory(root: Path | None = None, repo: Path | None = None) -> list[dict[str, Any]]:
-    """One row per attachment: what it is, where, its lifecycle state, and -
-    separately - whether its publisher is running now. Reads the two JSON
-    files and connects to one port - the publisher's, on PUBLISHER_HOST, not
-    on the stack's host; changes nothing, and takes no lock."""
-    rows: list[dict[str, Any]] = []
-    base = root or state_root()
-    published, broken = _scan(base)
-    for pub in published:
-        try:
-            cfg = json.loads((base / pub.attachment / CONFIG_FILE).read_text())
-            job, host = str(cfg["publisher"]["job"]), str(cfg["stack"]["host"])
-            persist = str(cfg.get("persist", ""))
-        except (OSError, ValueError, KeyError, TypeError) as exc:
-            job, host, persist = "", "", ""
-            log.warning("attachment {}: {}", pub.attachment, exc)
-        port = _publisher_port(pub.procname, pub.stack_id, repo or repo_root())
-        if port is None:
-            running, detail = UNKNOWN, "the publisher's port cannot be worked out"
-        else:
-            running, detail = _port_state(PUBLISHER_HOST, port)
-        rows.append(
-            {
-                "attachment": pub.attachment,
-                "job": job,
-                "publisher": pub.procname,
-                "stack": pub.stack_id,
-                "host": host,
-                "state": pub.state,
-                "persist": persist,
-                "publisher_state": running,
-                "publisher_port": port,
-                "detail": pub.problem or detail,
-            }
-        )
-    for line in broken:
-        blank = {**dict.fromkeys(("job", "publisher", "host", "persist"), ""), "stack": None}
-        name = Path(line.split(" cannot be read")[0]).parent.name
-        rows.append(
-            {"attachment": name, **blank, "state": UNREADABLE,
-             "publisher_state": UNKNOWN, "publisher_port": None, "detail": line}
-        )  # fmt: skip
-    return rows

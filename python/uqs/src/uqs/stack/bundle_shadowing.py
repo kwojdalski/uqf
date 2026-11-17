@@ -1,6 +1,7 @@
 """What a bundle may not shadow in the tree it installs into (#1545).
 
-Split from stack/bundles.py, which holds the plan these checks refuse inside.
+Split from stack/bundles.py, which holds the plan these checks refuse inside;
+the bundle's own additions are checked in stack/bundle_additions.py.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ def known_tables(root: Path, bundle: str) -> set[str]:
     same name would redefine at the next load. The pack adds none when absent.
 
     The tree's side as q evaluated it (#1781): trusted code, already installed.
-    The bundle's own tables.q is read as text by bundles.table_lines, never run."""
+    The bundle's own tables.q is read as text by bundle_additions.table_lines, never run."""
     from uqs.stack.bundles import read_ledger
 
     try:

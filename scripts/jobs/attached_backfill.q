@@ -6,7 +6,7 @@
 //
 // Started by `uqs job backfill --attach NAME --mode run|dry-run` (uqs.attach.backfill_run), which has
 // already resolved the destination from the saved attachment, admitted it against the live stack
-// (uqs.attach.backfill_plan) and worked out the two bounds below. Everything it needs about the
+// (uqs.attach.backfill_admission) and worked out the two bounds below. Everything it needs about the
 // destination arrives here as a flag. NOTHING is read from $KDBHDB or defaulted: a flag that is missing
 // is a refusal, because a backfill that guessed its destination would write uqf's own HDB or none.
 //

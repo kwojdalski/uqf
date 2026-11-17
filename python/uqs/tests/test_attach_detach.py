@@ -18,7 +18,7 @@ from attach_stack_support import CORE, IsolatedStack, requires_stack
 from attach_support import LEDGER_Q, FaultIpc, make_bundle
 
 from uqs.attach import apply as applying
-from uqs.attach import config, persist, service, verify
+from uqs.attach import block_text, config, service, verify
 from uqs.attach import detach as detaching
 from uqs.attach.config import AttachmentError, Storage
 from uqs.attach.manifest import Manifest
@@ -414,7 +414,7 @@ def test_a_schema_file_edited_by_someone_else_blocks_the_rollback(stack, bundle)
     stack.schema_file.write_text(block_edit)
     text = refuse_without_changing(stack, att, snapshot(stack))
     assert "was edited" in text
-    stack.schema_file.write_text(persist.outside(block_edit, "pb-uat"))  # a different edit
+    stack.schema_file.write_text(block_text.outside(block_edit, "pb-uat"))  # a different edit
     assert "is gone from" in refuse_without_changing(stack, att, snapshot(stack))
 
 
@@ -440,7 +440,7 @@ def test_another_attachment_using_the_table_blocks_the_creator_until_it_detaches
     # but its +uses block: a restart must not make it a user again
     assert snapshot(stack) == {
         **snap,
-        "schema_file": persist.outside(snap["schema_file"], "pb-b+uses"),
+        "schema_file": block_text.outside(snap["schema_file"], "pb-b+uses"),
     }
     assert detach_(stack, a, Publisher()).outcome == "rolled_back"
     assert TABLE not in stack.q("stp1", ".j.j string tables[]")

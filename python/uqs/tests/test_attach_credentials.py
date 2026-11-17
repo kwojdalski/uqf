@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 from attach_support import FakeStack, make_bundle
 
-from uqs.attach import config, facts, overrides, plan, reach, service, verify, workflow
+from uqs.attach import config, facts, overrides, plan, reach, resolution, service, verify, workflow
 from uqs.attach.config import Attachment
 from uqs.attach.facts import Host
 from uqs.attach.manifest import Manifest
@@ -80,7 +80,7 @@ def _port(att: Attachment) -> int:
 
 
 def _run(att: Attachment, fake: FakeStack, state: Path, pub: Publisher):
-    resolved = workflow.Resolved(att, "new", config.directory(att.name, state))
+    resolved = resolution.Resolved(att, "new", config.directory(att.name, state))
     return workflow.execute(
         resolved, plan.build(att, fake, ROOT), fake, ROOT, pub, state_dir=state, host=HERE
     )

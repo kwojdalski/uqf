@@ -26,7 +26,7 @@ from uqs.attach.manifest import Manifest
 from uqs.cli import shared, target_confirm
 from uqs.deploy import control
 from uqs.paths import repo_root
-from uqs.stack import attach_state, listing, runtime
+from uqs.stack import attach_inventory, attach_state, listing, runtime
 
 TABLE = "piggybank_general_ledger"
 SECRET = "s3cr3t-Pw!x"
@@ -833,7 +833,7 @@ def _list(*extra: str):
 
 def test_list_attachments_shows_attachment_and_publisher_state_separately(world, monkeypatch):
     assert run("add", *new(world, "--yes", "--no-start")).exit_code == 0
-    monkeypatch.setattr(attach_state, "_port_state", lambda host, port: ("stopped", ""))
+    monkeypatch.setattr(attach_inventory, "_port_state", lambda host, port: ("stopped", ""))
     before = snapshot(world.state_dir)
     result = _list("--json")
     assert result.exit_code == 0, result.output
@@ -844,7 +844,7 @@ def test_list_attachments_shows_attachment_and_publisher_state_separately(world,
     assert row["state"] == "verified" and row["publisher_state"] == "stopped"
     assert snapshot(world.state_dir) == before, "listing changes nothing"
     monkeypatch.setattr(
-        attach_state, "_port_state", lambda host, port: ("unreachable", "no route to host")
+        attach_inventory, "_port_state", lambda host, port: ("unreachable", "no route to host")
     )
     (row,) = json.loads(_list("--json").output)["attachments"]
     assert row["publisher_state"] == "unreachable" and row["state"] == "verified"
@@ -865,7 +865,7 @@ def test_list_probes_the_publisher_here_not_on_a_remote_stacks_host(world, monke
         probed.append((host, port))
         return ("running", "") if host == attach_state.PUBLISHER_HOST else ("unreachable", "")
 
-    monkeypatch.setattr(attach_state, "_port_state", port_state)
+    monkeypatch.setattr(attach_inventory, "_port_state", port_state)
     (row,) = json.loads(_list("--json").output)["attachments"]
     assert row["host"] == "torq-prod.example" and row["publisher_state"] == "running"
     assert probed and all(host == "localhost" for host, _ in probed), probed
@@ -876,9 +876,9 @@ def test_the_publisher_port_state_tells_stopped_from_unreachable():
         listener.bind(("127.0.0.1", 0))
         listener.listen()
         port = listener.getsockname()[1]
-        assert attach_state._port_state("127.0.0.1", port)[0] == "running"
-    assert attach_state._port_state("127.0.0.1", port)[0] == "stopped"
-    assert attach_state._port_state("no-such-host.invalid", 1)[0] == "unreachable"
+        assert attach_inventory._port_state("127.0.0.1", port)[0] == "running"
+    assert attach_inventory._port_state("127.0.0.1", port)[0] == "stopped"
+    assert attach_inventory._port_state("no-such-host.invalid", 1)[0] == "unreachable"
 
 
 @pytest.mark.parametrize("stack_defines", [True, False], ids=["schema file", "runtime only"])
