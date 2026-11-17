@@ -60,7 +60,7 @@
 / ON PEACHQ. Since v0.92 PeachQ upserts onto a splayed table, sorts one with
 / xasc, keeps on-disk attributes and has .Q.chk, so it writes and finishes
 / exactly as KDB-X does. Only compression differs: it has no -19!, so
-/ finish compresses nothing there (write_triple).
+/ finish leaves a table with a column override uncompressed (write_triple).
 
 / Is this PeachQ? The one test this tree uses for it, as uqs's own
 / (python/uqs/src/uqs/interpreter.py): PeachQ defines .pq.load_natives.
@@ -614,14 +614,15 @@
     .qetl.io.assign_row_ids[part;tbl]}
 
 / Private: what this partition is compressed with when it is finished: the
-/ table's write-time triple, or the empty list. Never on PeachQ: v0.92 compresses
-/ under .z.zd, but has no -19! ('nyi), which a column override is applied with
-/ (.qetl.compression.apply_columns, #2153); and nothing where the policy module is
-/ not loaded.
+/ table's write-time triple, or the empty list. Nothing where the policy module is
+/ not loaded. On PeachQ v0.92 the sort compresses under .z.zd as on KDB-X, but -19!
+/ is 'nyi, and a column override is applied with it (.qetl.compression.apply_columns,
+/ #2153): so there a table with an override is left uncompressed rather than
+/ compressed only in part.
 / @private
 .qetl.io.write_triple:{[tbl;part]
-    if[.qetl.io.on_peachq; :()];
     if[not `for_write in key `.qetl.compression; :()];
+    if[.qetl.io.on_peachq and count .qetl.compression.column_triples tbl; :()];
     .qetl.compression.for_write[tbl;part]}
 
 / Private: sort and attribute these partitions of `root`, fill every

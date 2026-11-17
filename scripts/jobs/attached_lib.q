@@ -92,7 +92,8 @@
         have:@[get;` sv p,`.d;{[e] `symbol$()}];
         gone:want_cols where not want_cols in have;
         out:$[count gone; enlist string[d],": ",string[ds]," lacks column(s) ",", " sv string gone; ()];
-        m:@[{select c, t from 0!meta x};hsym `$string[p],"/";{[e] ()}];
+        / meta of the mapped table, not of the path: PeachQ v0.92 throws 'type on `meta` of a directory
+        m:@[{select c, t from 0!meta get x};hsym `$string[p],"/";{[e] ()}];
         if[()~m; :out,enlist string[d],": ",string[ds]," cannot be read as a table"];
         want:want_cols!want_types;
         / plain indexing, not qSQL: a name inside a where clause is a column before it is a local
