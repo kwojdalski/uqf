@@ -94,12 +94,12 @@ def test_peachq_etl_is_declared_experimental_on_a_flattened_tree():
 @pytest.mark.parametrize(
     ("fields", "message"),
     [
-        ({}, "cannot load this tree's pipelines as written"),
+        ({}, "pipelines on PeachQ are experimental"),
         ({"q_tree": "flattened"}, "pipelines on PeachQ are experimental"),
         ({"q_tree": "rewritten", "experimental": True}, "q_tree is source or flattened"),
     ],
 )
-def test_pipelines_on_peachq_need_the_flattened_tree_and_the_experimental_flag(fields, message):
+def test_pipelines_on_peachq_need_the_experimental_flag(fields, message):
     with pytest.raises(ValueError, match=message):
         Runtime("ghost", "x", "uqs-ghost", True, True, 6950, interpreter="peachq", **fields)
 

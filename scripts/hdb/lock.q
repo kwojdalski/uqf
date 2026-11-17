@@ -3,9 +3,8 @@
 / .
 / Run as:  q scripts/hdb/lock.q acquire|release <hdb root> <holder pid>
 / from a directory holding src/etl/core/backfill_state.q and io_hdb.q - the
-/ repository root, or for PeachQ, which cannot load their nested \d contexts,
-/ a copy uqs has flattened (hdb_migrate._lock_code). Only those two load: the
-/ lock protocol and the lock's path, which need nothing else in the tree.
+/ repository root. Only those two load: the lock protocol and the lock's path,
+/ which need nothing else in the tree.
 / .
 / Called by uqs.stack.hdb_migrate, which holds the root's lock across its q
 / stage and its own atomic exchange. Python used to take the lock itself, with
