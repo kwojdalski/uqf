@@ -94,12 +94,12 @@ def test_peachq_etl_is_declared_experimental_on_a_flattened_tree():
 @pytest.mark.parametrize(
     ("fields", "message"),
     [
-        ({}, "cannot load this tree's pipelines as written"),
+        ({}, "pipelines on PeachQ are experimental"),
         ({"q_tree": "flattened"}, "pipelines on PeachQ are experimental"),
         ({"q_tree": "rewritten", "experimental": True}, "q_tree is source or flattened"),
     ],
 )
-def test_pipelines_on_peachq_need_the_flattened_tree_and_the_experimental_flag(fields, message):
+def test_pipelines_on_peachq_need_the_experimental_flag(fields, message):
     with pytest.raises(ValueError, match=message):
         Runtime("ghost", "x", "uqs-ghost", True, True, 6950, interpreter="peachq", **fields)
 
@@ -271,10 +271,10 @@ def test_each_runtime_is_started_with_only_its_own_data_access_tables(monkeypatc
     )
 
 
-def test_a_peachq_hdb_starts_without_the_data_access_api(tmp_path: Path) -> None:
-    """#2281: PeachQ maps no partitioned database, so TorQ's .dataaccess.init in
-    an hdb finds every listed table missing and exits while loading. The rdb and
-    the gateway keep -dataaccess; a KDB-X runtime's hdb keeps it too."""
+def test_a_peachq_hdb_starts_with_the_data_access_api(tmp_path: Path) -> None:
+    """PeachQ v0.92 maps a partitioned database (`\\l` sets .Q.pf, .Q.pv and
+    .Q.pd, and `meta` sees each table), so its hdb takes -dataaccess as a
+    KDB-X runtime's does (#2281 kept it off while it could not)."""
     app = tmp_path / "lib" / "torq-finance-starter-pack" / "appconfig"
     app.mkdir(parents=True)
     (app / "process.csv").write_text(
@@ -293,7 +293,7 @@ def test_a_peachq_hdb_starts_without_the_data_access_api(tmp_path: Path) -> None
         }
 
     on = "-dataaccess ${TORQDATA}/tableproperties.csv"
-    assert extras("peachq-etl") == {"rdb1": on, "hdb1": "-x 1", "gateway1": on}
+    assert extras("peachq-etl") == {"rdb1": on, "hdb1": f"-x 1 {on}", "gateway1": on}
     assert extras("uqf")["hdb1"] == f"-x 1 {on}"
 
 

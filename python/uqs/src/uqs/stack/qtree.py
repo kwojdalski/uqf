@@ -1,7 +1,7 @@
 """The flattened q tree a `q_tree="flattened"` runtime's processes load.
 
-PeachQ cannot load a nested `\\d` context (peachq-org/peachq#80), and the ETL
-tree is built of them. scripts/portable/flatten_contexts.py (#856) rewrites q
+A kdb+ older than 5.0 cannot load a nested `\\d` context (PeachQ v0.92 and
+KDB-X 5 both can). scripts/portable/flatten_contexts.py (#856) rewrites q
 so it needs none, and deploy/portable.py already runs it over a release's
 staged copy. This runs the same converter for a local runtime: over a COPY of
 `src/` and `scripts/` - installed bundle jobs included, since `uqs runtime
@@ -95,11 +95,11 @@ def refuse_unloadable(paths: UqsPaths, env: Mapping[str, str]) -> None:
     The tree as written uses nested working contexts. A KDB-X runtime loading
     it, on a q older than 5.0, would start processes that die on the first
     nested `\\d` with the failure only in their logs - the same q that deploy's
-    preflight refuses. A flattened runtime loads a converted tree, and a
-    PeachQ one is refused pipelines by its declaration (runtimes.py), so
-    neither is asked here. Nor is an unanswered version: no evidence, no
-    refusal. `env` is the runtime's own (stack/env.with_interpreter): this
-    module cannot import it, env importing this one.
+    preflight refuses. A flattened runtime loads a converted tree, and PeachQ
+    (v0.92) loads nested contexts, so neither is asked here. Nor is an
+    unanswered version: no evidence, no refusal. `env` is the runtime's own
+    (stack/env.with_interpreter): this module cannot import it, env importing
+    this one.
 
     A release converted at build time is the exception, on its evidence rather
     than its runtime's q_tree (#936): stack/converted.recognise checks the

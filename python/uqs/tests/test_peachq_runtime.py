@@ -28,11 +28,19 @@ def pinned(monkeypatch, tmp_path):
     return binary
 
 
-def test_a_peachq_runtime_with_pipelines_is_refused_naming_the_blocker():
-    with pytest.raises(
-        ValueError, match=r"cannot load the nested ETL namespaces \(peachq-org/peachq#80\)"
-    ):
-        Runtime("p", "d", "uqs-p", pipelines=True, overlays=True, base_port=1, interpreter="peachq")
+def test_a_peachq_runtime_loads_the_source_tree_with_pipelines():
+    # PeachQ v0.92 loads nested `\d` contexts, so the source tree is no blocker
+    r = Runtime(
+        "p",
+        "d",
+        "uqs-p",
+        pipelines=True,
+        overlays=True,
+        base_port=1,
+        interpreter="peachq",
+        experimental=True,
+    )
+    assert r.q_tree == "source"
 
 
 def test_an_unknown_interpreter_is_refused():
@@ -60,17 +68,8 @@ def test_the_peachq_runtime_starts_only_what_runs_on_peachq():
 def test_only_the_peachq_runtime_gets_an_interpreter_of_its_own(pinned):
     assert stack_env.interpreter_env(stack_paths.paths_for_root(ROOT, "torq")) == {}
     assert stack_env.interpreter_env(stack_paths.paths_for_root(ROOT, "peachq")) == {
-        "QCMD": str(pinned),
-        "QINIT": str(ROOT / "scripts" / "peachq" / "init.q"),
+        "QCMD": str(pinned)
     }
-
-
-def test_the_peachq_init_file_exists_and_only_fills_gaps():
-    """QINIT names a file that is there, and that defines .Q.chk only when the
-    interpreter lacks it (#1650: TorQ's wdb calls it as it starts)."""
-    init = ROOT / "scripts" / stack_env.PEACHQ_INIT
-    assert init.is_file()
-    assert "if[10h=type @[value;`.Q.chk;{x}];" in init.read_text()
 
 
 def test_build_env_stays_pure_and_never_resolves_a_binary(monkeypatch, tmp_path):

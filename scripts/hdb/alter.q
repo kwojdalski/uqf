@@ -142,11 +142,6 @@ dbmaint_file:hsym `$script_dir,"../../lib/kx-dbmaint/dbmaint.q";
 if[()~key dbmaint_file; refuse "no dbmaint.q at ",1_string dbmaint_file];
 system"l ",1_string dbmaint_file;
 
-/ PeachQ cannot write a partitioned database natively (the .d amend is 'nyi),
-/ so this script is KDB-X only, and says so rather than failing half way.
-/ The probe is .qetl.io.on_peachq's (src/etl/core/io_hdb.q).
-if[not -7h=type @[value;`.pq.load_natives;{[e] 0N}]; refuse "KDB-X only: PeachQ cannot write a partitioned HDB"];
-
 / ------------------------------------------------------------- write lock
 
 / The lock protocol and the lock's path, which need nothing else in the tree

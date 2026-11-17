@@ -30,10 +30,6 @@ log = get_logger()
 #: The variable naming the deployment set's file to every TorQ process
 #: (stack/deployment.py writes it, scripts/torqcode/handlers/deployment.q reads it).
 DEPLOYMENT_ENV = "UQF_DEPLOYMENT_FILE"
-#: The file q loads before anything else (q's own QINIT), and the one a PeachQ
-#: runtime names in it: what TorQ's processes call and PeachQ lacks.
-QINIT_ENV = "QINIT"
-PEACHQ_INIT = "peachq/init.q"
 
 
 def build_env(paths: UqsPaths, base_port: int | None = None) -> dict[str, str]:
@@ -108,10 +104,6 @@ def interpreter_env(paths: UqsPaths) -> dict[str, str]:
     For that runtime's stack only: what torq.sh, the HDB filler and `uqs status`
     see for it, never the operator's shell, and nothing goes on PATH. A
     KDB-X runtime gets {}: the operator's own QCMD stands, as it always has.
-
-    QINIT names scripts/peachq/init.q, so every q the runtime starts defines
-    what TorQ needs and PeachQ does not have; it replaces an operator's QINIT
-    for this runtime's processes only.
     """
     if paths.runtime_declaration.interpreter != PEACHQ:
         return {}
@@ -119,12 +111,7 @@ def interpreter_env(paths: UqsPaths) -> dict[str, str]:
         binary = peachq_binary(scripts_dir=paths.scripts_dir)
     except UqsError as exc:
         raise UqsError(f"the {paths.runtime} runtime needs a PeachQ binary: {exc}") from None
-    return {
-        Q_INTERPRETER_ENV: str(binary),
-        # What TorQ's processes call and PeachQ lacks (.Q.chk, which the wdb
-        # calls as it starts), defined before torq.q loads (#1650).
-        QINIT_ENV: str(paths.scripts_dir / PEACHQ_INIT),
-    }
+    return {Q_INTERPRETER_ENV: str(binary)}
 
 
 def with_interpreter(paths: UqsPaths) -> dict[str, str]:

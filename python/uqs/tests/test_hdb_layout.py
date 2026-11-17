@@ -301,7 +301,6 @@ def test_a_q_that_does_not_finish_is_a_refusal_not_an_empty_hdb(fixtures, tmp_pa
     fake.write_text("#!/bin/sh\necho 'q: killed' >&2\nexit 3\n")
     fake.chmod(0o755)
     monkeypatch.setenv("QCMD", str(fake))
-    monkeypatch.setattr(hdb_layout, "identified", lambda q: "kdbx")
     with pytest.raises(UqsError, match="did not finish: q: killed"):
         hdb_layout.inspect(_paths(fixtures, "conv", tmp_path, SCHEMA), fixtures / "conv" / "hdb")
 

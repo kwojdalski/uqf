@@ -282,8 +282,9 @@ records `peachq-etl` as each one's runtime, so the jobs join no other runtime.
 
 ### The converted q tree
 
-PeachQ cannot load nested `\d` contexts. This tree opens none (#1411), but a
-bundle's own jobs may, and a copy is how they load. So the processes do not load
+PeachQ before v0.92 could not load nested `\d` contexts, and kdb+ 4.0 still
+cannot. This tree opens none (#1411), but a bundle's own jobs may, and the
+`peachq-etl` runtime still loads a converted copy. So the processes do not load
 the checkout: they load a copy in `output/uqs-peachq-etl/qtree`:
 
 - **What it holds.** `src/` and `scripts/` from the checkout, installed bundle

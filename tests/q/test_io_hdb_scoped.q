@@ -28,10 +28,8 @@ system "l scripts/jobs/attached_lib.q";
     .qt.qetl.hdb_scoped.put[root;`iodeals;rows[enlist 2026.01.03D09:00:00.000000000;enlist `USDJPY;enlist 4e6]];
     root}
 
-/ A partition read back by a FRESH q process, as a dictionary of column to its -3! text: PeachQ cannot
-/ re-read, in the process that replaced it, a splayed table renamed into place ('corrupt), and a fresh
-/ reader is what a native HDB process is anyway. Column by column, as .qetl.io.read_part does, because
-/ PeachQ cannot `get a splayed table directory; text, because it has no .j.j for an enumeration.
+/ A partition read back by a FRESH q process, as a dictionary of column to its -3! text: a fresh
+/ reader is what a native HDB process is.
 .qt.qetl.hdb_scoped.part:{[root;d;t]
     script:(first system"mktemp -d"),"/read.q";
     path:(1_string .Q.par[root;d;t]),"/";

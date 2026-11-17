@@ -17,13 +17,8 @@
 / column is read, decoded against the SOURCE's domain, and re-enumerated
 / against the TARGET's sym file.
 / .
-/ BY HAND, NOT .Q.en. `enumerate` below is what .Q.en does - read the sym
-/ file, append the new symbols, write it back, cast - spelled out because
-/ PeachQ's .Q.en returns symbols unenumerated and it has no file `?`. One
-/ path, correct on both, and testable without a KDB-X licence.
-/ .
-/ Column by column (`.d`, then each file) rather than `get` of the table
-/ directory: it reads the same bytes, and it is what PeachQ supports too.
+/ Column by column (`.d`, then each file), each source enumeration decoded
+/ against its own domain file, then enumerated against the target's.
 / .
 / TWO PASSES. Every partition to copy is read and checked first; only when
 / all of them pass is anything written. A schema mismatch is refused naming
@@ -121,39 +116,20 @@ skipped:0;
 / A symbol vector enumerated against the TARGET's sym file, extending the
 / file with any symbol it lacks.
 / .
-/ Through the file's own enumeration (`:root/sym?v) where the interpreter has
-/ it: KDB-X appends there under the file's lock, as .Q.en does, so a seed into
-/ a RUNNING target cannot lose the symbols its end of day or a backfill
-/ appends meanwhile. Reading the file, appending in memory and writing it all
-/ back - the by-hand path - overwrote any appended between the get and the
-/ set, leaving their partitions pointing past the end of sym (#799).
-/ .
-/ PeachQ has no file `?` ('nyi, see the header), and only there does this
-/ fall back to the by-hand path - on that 'nyi alone, any other error is
-/ raised. PeachQ's .Q.en does not enumerate against the file at all, so
-/ nothing there appends to it under a lock for the by-hand path to race.
-enumerate:{[root;v]
-    if[not 11h=type v; :v];
-    file:` sv root,`sym;
-    @[{[file;v] file?v}[file];v;{[file;v;e] $[e~"nyi"; enumerate_by_hand[file;v]; 'e]}[file;v]]}
+/ Through the file's own enumeration (`:root/sym?v): q appends there under
+/ the file's lock, as .Q.en does, so a seed into a RUNNING target cannot lose
+/ the symbols its end of day or a backfill appends meanwhile. Reading the
+/ file, appending in memory and writing it all back overwrote any appended
+/ between the get and the set, leaving their partitions pointing past the end
+/ of sym (#799).
+enumerate:{[root;v] $[11h=type v; (` sv root,`sym)?v; v]}
 
-/ Private: read the whole sym file, append the symbols it lacks, write it
-/ back, cast. Only for an interpreter without file `?` - see enumerate.
-enumerate_by_hand:{[file;v]
-    `sym set @[get;file;`symbol$()];
-    if[count new:(distinct v) except sym; `sym set sym,new; file set sym];
-    `sym$v}
+/ The source's attribute put back (`p# on sym, as the wdb sorts it).
+with_attr:{[a;v] $[null a; v; a#v]}
 
-/ The source's attribute put back (`p# on sym, as the wdb sorts it) where
-/ the interpreter has it; PeachQ does not, and the column stays plain.
-with_attr:{[a;v] $[null a; v; @[{x#y}[a];v;{[v;e] v}[v]]]} / noqa: QF016 trap handler takes the error
-
-/ Write a splayed table column by column, then `.d` - the same bytes a `set`
-/ of the table writes, without PeachQ's splayed set, which re-enumerates an
-/ already enumerated column under a partition and stores the wrong indices.
+/ Write a splayed table and give its row count.
 write_table:{[dir;c;vals]
-    {[dir;c;v] (` sv dir,c) set v}[dir]'[c;vals];
-    (` sv dir,`.d) set c;
+    (` sv dir,`) set flip c!vals;
     count first vals}
 
 / Pass two: write them, re-enumerated against the target, attributes kept.

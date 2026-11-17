@@ -269,7 +269,6 @@ src/etl/core/io_hdb.q	.qetl.io.is_finished	test_demo_deals_backfill.q,test_io_hd
 src/etl/core/io_hdb.q	.qetl.io.locked	test_demo_deals_backfill.q,test_io_hdb_scoped.q,test_io_manager.q,test_io_remote.q,test_rebuild_positions.q,test_retention.q
 src/etl/core/io_hdb.q	.qetl.io.part_path	test_demo_deals_backfill.q,test_io_hdb_scoped.q,test_io_manager.q,test_rebuild_positions.q,test_retention.q
 src/etl/core/io_hdb.q	.qetl.io.sort_rule	test_demo_deals_backfill.q,test_io_hdb_scoped.q,test_io_manager.q,test_io_remote.q,test_rebuild_positions.q
-src/etl/core/io_hdb.q	.qetl.io.read_part	test_io_manager.q
 src/etl/core/io_hdb.q	.qetl.io.recover_hdb	test_demo_deals_backfill.q,test_io_hdb_scoped.q,test_io_manager.q,test_rebuild_positions.q,test_retention.q
 src/etl/core/io_hdb.q	.qetl.io.repair_torn	test_demo_deals_backfill.q,test_io_hdb_scoped.q,test_io_manager.q,test_rebuild_positions.q,test_retention.q
 src/etl/core/io_hdb.q	.qetl.io.retire	test_retention.q

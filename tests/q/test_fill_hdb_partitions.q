@@ -68,8 +68,6 @@
 / Write one table into one partition the way a writer does.
 .qt.qproc.fillhdb.put:{[root;part;t;data]
     d:.qt.qproc.fillhdb.dir[root;part;t];
-    / PeachQ's set does not create the partition directory above the table
-    system "mkdir -p ",1_string d;
     d set .Q.en[hsym `$root;data]}
 
 / The declared schema used by most tests: `book` grew four columns after the

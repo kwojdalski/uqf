@@ -23,20 +23,18 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
 
-from uqs.interpreter import KDBX, q_impl, q_interpreter
+from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
-from uqs.stack import converted, qtree
 from uqs.stack.env import with_interpreter
 from uqs.stack.hdb_types import declared_schema
 
 STAGE_SCRIPT = Path("hdb") / "stage_migration.q"
 LOCK_SCRIPT = Path("hdb") / "lock.q"
-#: What LOCK_SCRIPT loads, relative to its working directory: the lock
-#: protocol and the HDB lock path, and nothing else.
+#: What LOCK_SCRIPT loads, relative to its working directory (the checkout):
+#: the lock protocol and the HDB lock path, and nothing else.
 LOCK_MODULES = ("src/etl/core/backfill_state.q", "src/etl/core/io_hdb.q")
 _NAME = re.compile(r"^[a-z_][a-z_0-9]*$")
 
@@ -76,27 +74,6 @@ def _exchange(left: Path, right: Path) -> None:
         raise UqsError(f"atomic HDB partition exchange failed: {os.strerror(err)}")
 
 
-@contextlib.contextmanager
-def _lock_code(paths: UqsPaths, env: dict[str, str]) -> Iterator[Path]:
-    """The directory LOCK_SCRIPT loads LOCK_MODULES from.
-
-    The checkout itself on KDB-X, or for a release whose q was converted when
-    it was built. PeachQ cannot load the modules' nested `\\d` contexts
-    (peachq-org/peachq#80), so for it they are flattened by the converter a
-    flattened runtime's tree uses (stack/qtree.py) into a temporary directory:
-    the same code, never a second copy of the protocol.
-    """
-    if q_impl(env) == KDBX or converted.recorded_target(paths.repo_root) is not None:
-        yield paths.repo_root
-        return
-    texts = {rel: (paths.repo_root / rel).read_text() for rel in LOCK_MODULES}
-    with tempfile.TemporaryDirectory(prefix="uqf_hdb_lock_") as tmp:
-        for rel, text in qtree.convert(paths.repo_root, texts).items():
-            (Path(tmp) / rel).parent.mkdir(parents=True, exist_ok=True)
-            (Path(tmp) / rel).write_text(text)
-        yield Path(tmp)
-
-
 def _run_lock_script(
     paths: UqsPaths, q: Path, env: dict[str, str], action: str, code: Path, hdb: Path
 ) -> subprocess.CompletedProcess[str]:
@@ -127,8 +104,7 @@ def _write_lock(
     not resolved: .qetl.io.hdb_lock computes the path, so both sides agree.
     `hdb` is a root named by --hdb; None, this runtime's.
     """
-    with _lock_code(paths, env) as code:
-        result = _run_lock_script(paths, q, env, action, code, hdb or paths.hdb_dir)
+    result = _run_lock_script(paths, q, env, action, paths.repo_root, hdb or paths.hdb_dir)
     tag = "LOCKED|" if action == "acquire" else "RELEASED|"
     lines = [line for line in result.stdout.splitlines() if line.startswith(tag)]
     if result.returncode != 0 or len(lines) != 1:

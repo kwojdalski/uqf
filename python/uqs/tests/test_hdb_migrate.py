@@ -20,9 +20,7 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_the_lock_modules_are_the_ones_the_lock_script_loads():
-    """LOCK_MODULES is what _lock_code flattens for PeachQ, and hdb/lock.q's
-    own `\\l` lines are what runs (#1795): a module only one of them names is
-    loaded unflattened, or flattened for nothing."""
+    """LOCK_MODULES names what hdb/lock.q's own `\\l` lines load (#1795)."""
     from test_runs import q_loads
 
     proof = q_loads(ROOT / "scripts" / hdb_migrate.LOCK_SCRIPT)
@@ -233,24 +231,24 @@ def _write_as_a_q_writer(q_binary, tmp_path: Path, paths: UqsPaths, spelling: st
     script = tmp_path / "writer.q"
     script.write_text(WRITER)
     hdb_dir = paths.hdb_dir
-    # Run where the lock's own q loads from (the checkout, or PeachQ's
-    # flattened copy); a relative root is joined to the HDB's parent from there.
-    with hdb_migrate._lock_code(paths, env) as code:
-        root = SPELLINGS[spelling](hdb_dir)
-        if not root.startswith("/"):
-            # Both resolved: q's cwd is the physical directory, and a temp
-            # directory's name may pass through a link (/var on macOS).
-            root = os.path.relpath(hdb_dir.parent.resolve(), code.resolve()) + "/" + root
-        result = subprocess.run(
-            [q, str(script), root],
-            capture_output=True,
-            text=True,
-            env=env,
-            cwd=code,
-            check=False,
-            stdin=subprocess.DEVNULL,
-            timeout=120,
-        )
+    # Run where the lock's own q loads from, the checkout; a relative root is
+    # joined to the HDB's parent from there.
+    code = paths.repo_root
+    root = SPELLINGS[spelling](hdb_dir)
+    if not root.startswith("/"):
+        # Both resolved: q's cwd is the physical directory, and a temp
+        # directory's name may pass through a link (/var on macOS).
+        root = os.path.relpath(hdb_dir.parent.resolve(), code.resolve()) + "/" + root
+    result = subprocess.run(
+        [q, str(script), root],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=code,
+        check=False,
+        stdin=subprocess.DEVNULL,
+        timeout=120,
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     return result.stdout
 

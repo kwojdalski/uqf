@@ -29,7 +29,6 @@
     r}
 
 .qt.qetl.variant.scale.test_variants_beyond_the_first_cost_no_gather_and_no_heap_before_the_evaluation:{[t]
-    if[.qetl.io.on_peachq; :.qunit.assertTrue[1b;"PeachQ cannot map a partitioned HDB: measured on KDB-X"]];
     r:.qt.qetl.variant.scale.run[.qt.qetl.variant.scale.rows[];1 10 100 1000;1];
     .qunit.assertTrue[(first r`slice)>0;"books were gathered"];
     .qunit.assertEquals[count distinct r`slice;1;"the gathered slice is the same at 1, 10, 100 and 1000 variants: ",", " sv string r`slice];
@@ -39,7 +38,6 @@
     .qunit.assertTrue[(last r`eval_heap)>(first r`eval_heap);"what grows is the evaluation: the prices of the variants (heap ",string[first r`eval_heap]," -> ",string[last r`eval_heap],")"]};
 
 .qt.qetl.variant.scale.test_the_gather_is_flat_as_the_market_grows_tenfold:{[t]
-    if[.qetl.io.on_peachq; :.qunit.assertTrue[1b;"PeachQ cannot map a partitioned HDB: measured on KDB-X"]];
     n:.qt.qetl.variant.scale.rows[];
     small:first .qt.qetl.variant.scale.run[n;enlist 100;1];
     big:first .qt.qetl.variant.scale.run[10*n;enlist 100;1];
@@ -47,7 +45,6 @@
     .qunit.assertTrue[(big`reads)<2*small`reads;"and about the same ladder rows: ",string[small`reads]," -> ",string big`reads]};
 
 .qt.qetl.variant.scale.test_more_selects_gather_more_books_but_only_by_the_distinct_selects:{[t]
-    if[.qetl.io.on_peachq; :.qunit.assertTrue[1b;"PeachQ cannot map a partitioned HDB: measured on KDB-X"]];
     r:.qt.qetl.variant.scale.run[.qt.qetl.variant.scale.rows[];100 1000;3];
     .qunit.assertEquals[r`groups;3 3;"three offsets are three SELECT groups at 100 and at 1000 variants"];
     .qunit.assertEquals[first r`slice;last r`slice;"and the same slice"];

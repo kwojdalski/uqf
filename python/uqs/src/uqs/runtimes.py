@@ -68,8 +68,8 @@ class Runtime:
     #: Which q the stack's processes load. `source` is this tree as written.
     #: `flattened` is a copy bootstrap prepares under the runtime's data
     #: directory, converted by scripts/portable/flatten_contexts.py so it
-    #: needs no nested `\d` - the one thing that keeps the ETL tree off
-    #: PeachQ (stack/qtree.py). The checkout itself is never rewritten.
+    #: needs no nested `\d`, for a kdb+ older than 5.0 (stack/qtree.py).
+    #: The checkout itself is never rewritten.
     q_tree: str = "source"
     #: Not yet supported: listed and runnable, said to be experimental
     #: wherever the runtime is shown, and refused nothing it can do.
@@ -82,16 +82,6 @@ class Runtime:
             )
         if self.q_tree not in ("source", "flattened"):
             raise ValueError(f"{self.name}: q_tree is source or flattened, not {self.q_tree!r}")
-        # PeachQ cannot load a nested `\d` namespace (peachq-org/peachq#80,
-        # #511), and the ETL tree is built of them: a pipeline process would
-        # die loading the source. Only the flattened tree can carry them, and
-        # only as an experiment, until a full fleet is proven there.
-        if self.interpreter == "peachq" and self.pipelines and self.q_tree != "flattened":
-            raise ValueError(
-                f"{self.name}: a PeachQ runtime cannot load this tree's pipelines as written - "
-                "PeachQ cannot load the nested ETL namespaces (peachq-org/peachq#80); "
-                "declare it with pipelines=False, or with q_tree='flattened'"
-            )
         if self.interpreter == "peachq" and self.pipelines and not self.experimental:
             raise ValueError(
                 f"{self.name}: pipelines on PeachQ are experimental - declare experimental=True"

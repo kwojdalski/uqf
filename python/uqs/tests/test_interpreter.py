@@ -344,7 +344,7 @@ def test_the_summary_line_names_the_interpreter_and_its_budget(
         ("kdbx", "4.0", False),
         ("kdbx", "", None),
         ("kdbx", "garbage", None),
-        ("peachq", "5.0", False),
+        ("peachq", "5.0", True),
     ],
 )
 def test_one_predicate_answers_whether_a_q_loads_the_tree(impl, version, loads):

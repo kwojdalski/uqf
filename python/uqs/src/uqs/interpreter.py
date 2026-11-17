@@ -82,8 +82,9 @@ IDENTIFY_SCRIPT = '-1 $[-7h=type @[value;`.pq.load_natives;{0N}];"kdbx";"peachq"
 
 #: The first kdb+ major whose q loads a nested working context (`\d .a.b`),
 #: which this tree is written in (#882). An older kdb+ - 4.0 is a supported
-#: deployment target since #861 - and PeachQ (peachq-org/peachq#80) load only
-#: a tree scripts/portable/flatten_contexts.py has converted. THE one answer
+#: deployment target since #861 - loads only a tree
+#: scripts/portable/flatten_contexts.py has converted. PeachQ reports .z.K 5
+#: and, since v0.92, loads `\\d .a.b` as KDB-X 5 does. THE one answer
 #: to "can this q load the tree as written?": deploy's preflight
 #: (deploy/artifact.compatible) and a local start (stack/qtree) both ask it.
 NESTED_CONTEXTS_SINCE = 5
@@ -96,8 +97,6 @@ def loads_nested_contexts(impl: str, version: str) -> bool | None:
     """Can a q of implementation `impl` reporting `.z.K` = `version` load this
     tree as written? None when `version` says nothing - an unparsable answer
     is not evidence either way, and is never a reason to refuse."""
-    if impl == PEACHQ:
-        return False
     major = version.strip().split(".")[0]
     if not major.isdigit():
         return None
