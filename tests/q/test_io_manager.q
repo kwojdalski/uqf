@@ -276,8 +276,7 @@
     .qunit.assertEquals[(`#q`time;value q`sym);(2026.01.02D09:00:00.000000000 2026.01.02D10:00:00.000000000;`GBPUSD`EURUSD);
         "sorted by the declared time; the default would have put EURUSD first"];
     .qunit.assertTrue[last p;"a partition finished by its declared rule reads as finished"];
-    if[not .qetl.io.on_peachq;
-        .qunit.assertEquals[(attr q`time;attr q`sym);(`s;`);"s#time as declared, and no p#sym the default would add"]]};
+    .qunit.assertEquals[(attr q`time;attr q`sym);(`s;`);"s#time as declared, and no p#sym the default would add"]};
 
 .qt.qetl.io.test_finish_sorts_by_every_column_of_a_multi_column_rule:{[t]
     root:.qt.qetl.io.hdb_dir[];
@@ -290,8 +289,7 @@
         .qt.qetl.io.part[root;2026.01.02;`iodeals]}[root;m;rows]];
     .qunit.assertEquals[(`#q`notional;value q`sym);(1e6 2e6 3e6;`EURUSD`GBPUSD`EURUSD);
         "sorted by notional, then sym - the declared columns, in the declared order"];
-    if[not .qetl.io.on_peachq;
-        .qunit.assertEquals[(attr q`notional;attr q`sym);(`g;`);"g# on the first column as declared; none on sym"]]};
+    .qunit.assertEquals[(attr q`notional;attr q`sym);(`g;`);"g# on the first column as declared; none on sym"]};
 
 .qt.qetl.io.test_a_declared_rule_leaves_other_tables_on_the_default:{[t]
     root:.qt.qetl.io.hdb_dir[];
@@ -301,7 +299,7 @@
         .qetl.io.finish m;
         .qt.qetl.io.part[root;2026.01.02;`iootherdeals]}[root;m]];
     .qunit.assertEquals[value q`sym;`EURUSD`GBPUSD;"a table with no rule is still sorted by sym then time"];
-    if[not .qetl.io.on_peachq; .qunit.assertEquals[attr q`sym;`p;"and still gets p#sym"]]};
+    .qunit.assertEquals[attr q`sym;`p;"and still gets p#sym"]};
 
 .qt.qetl.io.test_an_append_to_a_partition_finished_by_a_declared_rule_succeeds:{[t]
     root:.qt.qetl.io.hdb_dir[];
@@ -914,19 +912,7 @@
         "every config carries the same key set, so the registry's shape is stable"]};
 
 
-/ --- the PeachQ path's two readers, run here on KDB-X ---------------------
-/ .
-/ On PeachQ an append rewrites a partition whole from read_part, and a
-/ partition counts as finished when in_order says so. Neither runs on KDB-X
-/ in the course of a write, so they are asked directly: both only read.
-
-.qt.qetl.io.test_read_part_returns_a_partition_with_its_symbols_decoded:{[t]
-    root:.qt.qetl.io.hdb_dir[];
-    .qetl.io.write[.qetl.io.hdb[root;`deal_time];`iodeals;.qt.qetl.io.deals[]];
-    p:.qetl.io.read_part hsym `$(string .Q.par[root;2026.01.02;`iodeals]),"/";
-    .qunit.assertEquals[(type p`sym;asc p`sym);(11h;`EURUSD`GBPUSD);
-        "symbols as symbols, not the sym file's enumeration - what a whole rewrite appends to"];
-    .qunit.assertEquals[cols p;cols .qt.qetl.io.part[root;2026.01.02;`iodeals];"every column the partition has"]};
+/ --- in_order, which judges a partition by a declared rule with no attribute ---
 
 .qt.qetl.io.test_in_order_is_finish_s_order_sym_then_time:{[t]
     root:.qt.qetl.io.hdb_dir[];

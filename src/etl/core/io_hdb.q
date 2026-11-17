@@ -57,13 +57,10 @@
 / tree is not edited - so a backfill is still not safe beside end-of-day:
 / both append to the sym file. Backfills never write today's partition.
 / .
-/ ON PEACHQ. PeachQ cannot upsert onto a splayed table on disk, so write
-/ rewrites a partition it appends to whole. It has no on-disk attributes and
-/ no .Q.chk, so there finish
-/ sorts each partition and does neither: no p#sym, no s#time, no filling of
-/ missing tables - uqs's bootstrap fills those from the schema instead
-/ (scripts/hdb/fill.q). With no attribute to read, a
-/ partition counts as finished when it is in finish's order.
+/ ON PEACHQ. Since v0.92 PeachQ upserts onto a splayed table, sorts one with
+/ xasc, keeps on-disk attributes and has .Q.chk, so it writes and finishes
+/ exactly as KDB-X does. Only compression differs: it has no -19!, so
+/ finish compresses nothing there (write_triple).
 
 / Is this PeachQ? The one test this tree uses for it, as uqs's own
 / (python/uqs/src/uqs/interpreter.py): PeachQ defines .pq.load_natives.
@@ -178,17 +175,13 @@
         / finish sorts and puts it back.
         / A declared rule's other attributes (s#time, say) would refuse the
         / append the same way, so every column of the rule loses its own.
-        if[not .qetl.io.on_peachq;
-            {[part;existing;col] if[col in existing; @[part;col;`#]]}[part;existing] each
-                $[count r:.qetl.io.declared_rule[target]; key r; `sym]];
-        / PeachQ cannot upsert onto a splayed table on disk ('type), so there
-        / the partition is read back and written again whole.
+        {[part;existing;col] if[col in existing; @[part;col;`#]]}[part;existing] each
+            $[count r:.qetl.io.declared_rule[target]; key r; `sym];
         / The FIRST write of a table into a date is staged and swapped in like a
         / keyed one (#2185): a bare `set` writes .d and then the column files one
         / by one, so a kill left a partition the HDB could not read and recover
         / threw on. Staged, it appears whole or not at all.
         $[()~existing; [.qetl.io.stage[root;d;target;rows]; .qetl.io.swap[root;d;target]];
-          .qetl.io.on_peachq; [.qetl.io.write_splay[root;part;.Q.en[root] t,(cols t:.qetl.io.read_part[part])#rows]; ::];
           part upsert rows];
         `.qetl.io.touched upsert (root;d;target);
         }[root;target;data;days] each distinct days;
@@ -198,45 +191,21 @@
 / .
 / upsert onto a splayed table appends column by column, so a batch with one
 / column of another type threw part-way and left the partition's columns of
-/ different lengths; on PeachQ, whose append rewrites the partition whole,
-/ it retyped the rows already there. scripts/jobs/attached_forced.q makes the
+/ different lengths. scripts/jobs/attached_forced.q makes the
 / same check for its writer (#2208). Every column the partition has must be
 / in the batch with its type; a general-list column on disk takes anything.
-/ Read through read_part on PeachQ, which cannot take `meta` of a directory.
+/ `meta get part`, not `meta part`: PeachQ v0.92 still throws 'type on meta of a
+/ directory, and on KDB-X the two are the same.
 / @private
 .qetl.io.require_part_types:{[part;rows]
     if[()~key part; :1b];
-    native:exec c!t from meta $[.qetl.io.on_peachq; .qetl.io.read_part[part]; part];
+    native:exec c!t from meta get part;
     batch:exec c!t from meta rows;
     k:key native;
     bad:k where not (" "=native k) or native[k]=batch k;
     if[0=count bad; :1b];
     '"hdb: the batch does not match the partition ",(1_string part)," - nothing was written; ",
         "; " sv {[n;b;c] string[c],": partition ",n[c],", batch ",$[not c in key b; "(absent)"; " "=b c; "a general list"; b c]}[native;batch] each bad}
-
-/ Private: write a table, already run through .Q.en against root, as a splayed table at dir.
-/ .
-/ On PeachQ `set` of a splayed table enumerates its symbol columns AGAIN, against a `sym`
-/ file it creates in dir's PARENT - the date folder, once the table is in its partition (#2285).
-/ A partitioned HDB keeps one sym, at its root, and KDB-X refuses one inside a partition. So
-/ there each column is cast against root's sym and written file by file, then .d: the same bytes
-/ KDB-X writes, with the sym file where it belongs. Elsewhere it is a plain `set`.
-/ @private
-.qetl.io.write_splay:{[root;dir;t]
-    if[not .qetl.io.on_peachq; dir set t; :dir];
-    `sym set get ` sv root,`sym;
-    c:cols t;
-    {[dir;c;v] (` sv dir,c) set v}[dir]'[c;{$[11h=type x; `sym$x; x]} each t c];
-    (` sv dir,`.d) set c;
-    dir}
-
-/ Private: a partition on disk as a table, symbols decoded - what PeachQ
-/ appends to by writing the partition again whole.
-/ @private
-.qetl.io.read_part:{[part]
-    base:-1_string part;
-    c:get hsym `$base,"/.d";
-    flip c!{[base;x] v:get hsym `$base,"/",string x; $[type[v] within 20 76h; value v; v]}[base] each c}
 
 / Private: the batch with the plant's `time` column, refused when it cannot
 / be partitioned, would land in the tickerplant's dates, or would land in a
@@ -275,8 +244,6 @@
 / column - with time in the key, a later partition cannot hold the same
 / key - and never in today's partition, which is the tickerplant's: a
 / refill of yesterday cannot reach a row still on its way to end-of-day.
-/ Not on PeachQ, which cannot rewrite a partition already on disk: there a
-/ replace leaves the spill, as it always did.
 / @private
 .qetl.io.write_hdb_keyed:{[root;partition_col;target;batch;opts]
     strategy:.qetl.io.require_strategy opts`on_conflict;
@@ -295,11 +262,8 @@
     / resolve folds it - so it is appended, as the append path does. Only
     / when EVERY date is clean: one clash sends the whole batch the slow way,
     / so a `fail on one date still leaves every date untouched. replace
-    / always rewrites - it removes the window's rows. Not on PeachQ, whose
-    / append path rewrites a partition whole anyway (it cannot upsert onto a
-    / splayed table), so there is nothing to save and the key probe would
-    / read a partition the way PeachQ cannot.
-    if[(not .qetl.io.on_peachq) and not `replace=strategy;
+    / always rewrites - it removes the window's rows.
+    if[not `replace=strategy;
         kc:(),opts`row_key;
         / The fold IS resolve's: each date's rows resolved against an empty
         / table, one call per date as the slow path makes one per partition
@@ -311,7 +275,7 @@
         clean:{[root;target;kc;rows;d]
             part:hsym `$(string .Q.par[root;d;target]),"/";
             if[()~key part; :1b];
-            if[not (exec t from meta rows)~exec t from meta part; :0b];
+            if[not (exec t from meta rows)~exec t from meta get part; :0b];
             not any (kc#rows) in ?[part;();0b;kc!kc]}[root;target;kc]'[folds;dates];
         if[all clean; .qetl.io.write_hdb[root;partition_col;target;fold]; :count batch]];
     if[`replace=strategy;
@@ -340,7 +304,7 @@
         existing:$[()~key part; 0#rows; flip {x til count x} each flip select from get part];
         (part;d;.qetl.io.plain .qetl.io.resolve[strategy;existing;rows;o])
         }[root;target;data;days;strategy;o] each dates;
-    if[(`replace=strategy) and (not .qetl.io.on_peachq) and not any (`time,opts`time_column) in (),opts`row_key;
+    if[(`replace=strategy) and not any (`time,opts`time_column) in (),opts`row_key;
         plan,:.qetl.io.spill[root;target;data;opts;dates]];
     / STAGED, THEN SWAPPED. Writing `set` straight onto the live partition
     / rewrote it column by column while the HDB had it mapped: a kill part way
@@ -431,7 +395,7 @@
     .qetl.io.sh["rm -rf";p];
     .qetl.io.sh["mkdir -p";p];
     .qetl.io.step`staged_dir;
-    .qetl.io.write_splay[root;hsym `$p,"/";rows];
+    (hsym `$p,"/") set rows;
     .qetl.io.step`staged;
     p}
 
@@ -618,28 +582,12 @@
     order:`sym`time inter c;
     order!{$[x=`sym;`p;`]} each order}
 
-/ Private: sort a splayed partition on PeachQ by these columns, file by file.
-/ .
-/ PeachQ's xasc over a path re-enumerates the symbol columns against a `sym` file it makes beside
-/ the table (#2285), which leaves their indices relative to that file and not to the root's. So
-/ the permutation is worked out from the decoded key columns and applied to each column file as
-/ it is, enumerated indices untouched.
-/ @private
-.qetl.io.sort_files:{[part;order_cols]
-    base:-1_string part;
-    c:get hsym `$base,"/.d";
-    key_cols:{[base;col] v:get hsym `$base,"/",string col; $[type[v] within 20 76h; value v; v]}[base] each order_cols;
-    idx:exec ix from order_cols xasc update ix:i from flip order_cols!key_cols;
-    {[base;idx;col] f:hsym `$base,"/",string col; f set (get f) idx}[base;idx] each c;}
-
 / Private: sort a partition by its rule and put each attribute on, which is every
 / column file this finish rewrites.
 / @private
 .qetl.io.sort_and_attribute:{[part;rule]
-    if[count rule; $[.qetl.io.on_peachq; .qetl.io.sort_files[part;key rule]; (key rule) xasc part]];
-    / PeachQ keeps no attribute (.qetl.io.on_peachq).
-    if[not .qetl.io.on_peachq;
-        {[part;col;a] if[not null a; @[part;col;#[a;]]]}[part]'[key rule;value rule]];
+    if[count rule; (key rule) xasc part];
+    {[part;col;a] if[not null a; @[part;col;#[a;]]]}[part]'[key rule;value rule];
     }
 
 / Private: give a finished partition its row numbers, for a table that declares a row-number column
@@ -666,8 +614,9 @@
     .qetl.io.assign_row_ids[part;tbl]}
 
 / Private: what this partition is compressed with when it is finished: the
-/ table's write-time triple, or the empty list. Never on PeachQ, which has no
-/ -19! and no .z.zd compression (#2153); and nothing where the policy module is
+/ table's write-time triple, or the empty list. Never on PeachQ: v0.92 compresses
+/ under .z.zd, but has no -19! ('nyi), which a column override is applied with
+/ (.qetl.compression.apply_columns, #2153); and nothing where the policy module is
 / not loaded.
 / @private
 .qetl.io.write_triple:{[tbl;part]
@@ -682,7 +631,7 @@
 / @return how many partitions were finished
 / @private
 .qetl.io.finish_parts:{[root;todo]
-    / Nothing to finish: and PeachQ throws 'nyi on each-both over empty lists.
+    / Nothing to finish.
     if[0=count todo; :0];
     .qetl.io.restore_retired[root;] each distinct todo`tbl;
     {[root;d;t]
@@ -715,7 +664,7 @@
     / tables nobody asked about.
     / .Q.chk fills EVERY partition of the root, so it must not run while one
     / waits for end of day: its empty tables there are what makes movetohdb abort (#2186).
-    if[not .qetl.io.on_peachq or .qetl.io.is_scoped root;
+    if[not .qetl.io.is_scoped root;
         $[count w:.qetl.io.eod_waiting[root;.qetl.io.part_dates root];
             .qetl.log.ch.warn[`eod;"not filling the HDB's missing tables - a partition is still waiting for end of day";enlist[`waiting]!enlist w];
             .Q.chk root]];
@@ -735,21 +684,21 @@
     if[()~key hsym `$base,"/.d"; :1b];
     c:get hsym `$base,"/.d";
     / A declared rule is judged by its own attributes, or by its order where
-    / it declares none (and always on PeachQ, which keeps none).
+    / it declares none it can keep: PeachQ v0.92 keeps p# and s# on a column
+    / file but not g# (`@[part;col;`g#]` leaves attr `).
     if[count r:.qetl.io.declared_rule[t];
         / `#`, not `r where`: indexing a dictionary by its keys gives a list of
         / values, whose key is no column name (#1891)
-        have:(where not null r)#r;
-        :$[.qetl.io.on_peachq or 0=count have;
+        have:(where not (null r) or .qetl.io.on_peachq and r=`g)#r;
+        :$[0=count have;
             .qetl.io.in_order[base;key r];
             all {[base;col;a] a=attr get hsym `$base,"/",string col}[base]'[key have;value have]]];
-    if[.qetl.io.on_peachq; :.qetl.io.in_order[base;`sym`time inter c]];
     $[`sym in c; `p=attr get hsym `$base,"/sym";
       `time in c; `s=attr get hsym `$base,"/time";
       1b]}
 
 / Private: is the partition at `base` sorted by `order`, finish's sort columns?
-/ How PeachQ, which keeps no attribute, tells a finished partition.
+/ How a declared rule with no attribute tells a finished partition.
 / @private
 .qetl.io.in_order:{[base;order]
     if[0=count order; :1b];

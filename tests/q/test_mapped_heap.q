@@ -50,7 +50,6 @@
     r}
 
 .qt.qetl.mapped.heap.test_the_twins_heap_is_flat_as_the_market_grows_and_grows_with_the_executions:{[t]
-    if[.qetl.io.on_peachq; :.qunit.assertTrue[1b;"PeachQ cannot map a partitioned HDB: measured on KDB-X"]];
     n:.qt.qetl.mapped.heap.rows[];
     small:.qt.qetl.mapped.heap.run[`build;`measure;n;1000];
     big:.qt.qetl.mapped.heap.run[`build;`measure;10*n;1000];
@@ -61,14 +60,12 @@
     .qunit.assertTrue[(more`used)>1.4*small`used;"twice the executions, more heap: ",string[small`used]," -> ",string more`used]};
 
 .qt.qetl.mapped.heap.test_selecting_the_books_with_a_where_beyond_the_date_grows_with_the_market:{[t]
-    if[.qetl.io.on_peachq; :.qunit.assertTrue[1b;"PeachQ cannot map a partitioned HDB: measured on KDB-X"]];
     n:.qt.qetl.mapped.heap.rows[] div 10;
     small:.qt.qetl.mapped.heap.run[`build_deep;`measure_copy;n;0];
     big:.qt.qetl.mapped.heap.run[`build_deep;`measure_copy;10*n;0];
     .qunit.assertTrue[(big`used)>5*small`used;"the control: the copy grows with the partition (",string[small`used]," -> ",string[big`used],"), which is what the aj avoids"]};
 
 .qt.qetl.mapped.heap.test_a_books_depth_read_through_its_rid_is_flat_as_the_market_grows:{[t]
-    if[.qetl.io.on_peachq; :.qunit.assertTrue[1b;"PeachQ cannot map a partitioned HDB: measured on KDB-X"]];
     n:.qt.qetl.mapped.heap.rows[] div 10;
     small:.qt.qetl.mapped.heap.run[`build_deep;`measure_depth;n;500];
     big:.qt.qetl.mapped.heap.run[`build_deep;`measure_depth;10*n;500];

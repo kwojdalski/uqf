@@ -19,7 +19,12 @@
 / The partition as a table with symbols decoded, or () when it is absent.
 .qt.qetl.hdb_crash.read:{[root;t]
     p:.Q.par[root;2026.01.02;t];
-    $[()~key hsym `$(string p),"/.d"; (); .qetl.io.read_part[hsym `$(string p),"/"]]}
+    $[()~key hsym `$(string p),"/.d"; (); .qt.qetl.hdb_crash.decoded string p]}
+
+/ A splayed table on disk, column by column, its symbols decoded.
+.qt.qetl.hdb_crash.decoded:{[base]
+    c:get hsym `$base,"/.d";
+    flip c!{[base;x] v:get hsym `$base,"/",string x; $[type[v] within 20 76h; value v; v]}[base] each c}
 
 / Is every row of the table its own - sym, k and px the functions of its id?
 .qt.qetl.hdb_crash.aligned:{[x]
@@ -80,8 +85,8 @@
     .qt.qetl.hdb_crash.window m;
     m[`finish][::];
     fin:.qt.qetl.hdb_crash.read[root;`hcrash];
-    / PeachQ keeps no attribute (.qetl.io.on_peachq), so the attribute is judged on KDB-X only
-    (fired;ok_mid;ok_rec;fin~post;.qt.qetl.hdb_crash.aligned fin;$[.qetl.io.on_peachq;`p;attr fin`sym])}
+    / off the column file: decoding the enumeration drops p# on PeachQ v0.92 (KDB-X keeps it)
+    (fired;ok_mid;ok_rec;fin~post;.qt.qetl.hdb_crash.aligned fin;attr get hsym `$(string .Q.par[root;2026.01.02;`hcrash]),"/sym")}
 
 .qt.qetl.hdb_crash.test_finish_killed_after_the_copy_is_staged:{[t]
     .qunit.assertEquals[.qt.qetl.hdb_crash.finish_killed_at`staged;(1b;1b;1b;1b;1b;`p);"old or new, aligned, finished"]};

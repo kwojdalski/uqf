@@ -68,7 +68,7 @@ system "l scripts/jobs/attached_lib.q";
     .qunit.assertEquals[(value p`sym;`#p`time);(`EURUSD`GBPUSD`GBPUSD;2026.09.11D08:00:00.000000000 2026.09.11D07:00:00.000000000 2026.09.11D09:00:00.000000000);
         "by sym, then time within a sym - a finished partition's order"];
     .qunit.assertEquals[.qdev.attached.forced_dates;`date$();"the dates sent are forgotten once sorted"];
-    if[not .qetl.io.on_peachq; .qunit.assertEquals[attr p`sym;`p;"p# is back on sym"]]};
+    .qunit.assertEquals[attr p`sym;`p;"p# is back on sym"]};
 
 .qt.qetl.attached_forced.test_max_date_is_the_date_the_command_line_gave:{[t]
     .qunit.assertEquals[.qdev.attached.forced_max_date .Q.opt ("-max_date";"2026.09.12");2026.09.12;"read as a date, from the parsed command line"]};
@@ -107,8 +107,6 @@ system "l scripts/jobs/attached_lib.q";
     .qunit.assertEquals[.qt.qetl.attached_forced.fingerprint db;before;"every byte of the native HDB is as it was, the sym file included"]};
 
 .qt.qetl.attached_forced.test_a_batch_that_matches_is_still_appended:{[t]
-    / PeachQ cannot upsert onto a splayed table on disk ('type), which is why io_hdb.q reads and rewrites there
-    if[.qetl.io.on_peachq; :(::)];
     db:.qt.qetl.attached_forced.native[];
     rows:([] sym:enlist `USDJPY; time:enlist 2026.09.01D12:00:00.000000000; px:enlist 150.1; qty:enlist 5);
     .qunit.assertEquals[.qdev.attached.forced_append[db;2026.09.01;`fx;rows];1;"one row appended"];
