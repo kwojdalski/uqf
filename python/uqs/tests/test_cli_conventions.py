@@ -1098,7 +1098,8 @@ ASKS = {c.path for c in TREE if c.path in LEAVES and _kind(c.path) == CONFIRMS} 
 #: give it --yes/-y, then list the module here.
 PROMPTING_MODULES = {
     "attach", "cleanup", "deploy_server", "hdb_scope", "install", "install_bundle", "migrate",
-    "remove", "replay", "seed", "target", "target_adopt", "target_config", "target_edit",
+    "remove", "replay", "seed", "target", "target_adopt", "target_config", "target_config_push",
+    "target_edit",
     "compress_plan",
 }  # fmt: skip
 
@@ -1303,6 +1304,9 @@ JSON_WITHOUT_YES = {
     ),
     "job attachment remove": (
         "test_attach_cli.py::test_json_execution_without_yes_refuses_with_a_json_error"
+    ),
+    "target config push": (
+        "test_target_config_push.py::test_json_without_yes_is_refused_and_sends_nothing"
     ),
 }
 

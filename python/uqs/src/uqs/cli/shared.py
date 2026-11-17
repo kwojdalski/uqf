@@ -305,6 +305,10 @@ EXIT_PARTIAL = 3
 #: window, kept everything it had completed, and left the rest for a re-run. q's own code for
 #: the stop, so the CLI and the runner say the same number.
 EXIT_STOPPED = q_facts.STOP_EXIT_CODE
+#: Done, but what came of part of it is unknown (#2786): a config push file
+#: that may or may not have been written, never retried - look before running
+#: it again.
+EXIT_UNKNOWN = 5
 
 
 def _die(exc: UqsError) -> NoReturn:
