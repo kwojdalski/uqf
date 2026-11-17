@@ -15,7 +15,9 @@ not interrupt a statement, so no expiry is compared.
 
 from __future__ import annotations
 
+import os
 import platform
+import signal
 import subprocess
 from pathlib import Path
 
@@ -54,22 +56,47 @@ def skip_reason() -> str | None:
     return None
 
 
-def run_client(impl: str) -> str:
-    run = subprocess.run(
-        [str(ROSETTA), "q", SCRIPT, "-impl", impl, "-q"],
+def rosetta_q(args: list[str], timeout: float) -> subprocess.CompletedProcess[str] | None:
+    """Run q under Rosetta in its own process group; None if it outlives `timeout`.
+
+    subprocess.run's own timeout kills only the wrapper script, then waits for
+    EOF on pipes the q grandchild still holds - forever, when q never starts
+    (#2792). Killing the whole group closes them.
+    """
+    proc = subprocess.Popen(
+        [str(ROSETTA), "q", *args],
         cwd=REPO,
-        capture_output=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=300,
+        start_new_session=True,
     )
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        os.killpg(proc.pid, signal.SIGKILL)
+        return None
+    return subprocess.CompletedProcess(proc.args, proc.returncode, out, err)
+
+
+def run_client(impl: str) -> str:
+    run = rosetta_q([SCRIPT, "-impl", impl, "-q"], timeout=300)
+    assert run is not None, f"-impl {impl} did not finish in 300 s"
     assert run.returncode == 0, f"-impl {impl} exited {run.returncode}:\n{run.stdout}{run.stderr}"
     return run.stdout
 
 
-def test_odbc_q_answers_exactly_as_odbc_k_does() -> None:
+def test_odbc_q_answers_exactly_as_odbc_k_does(tmp_path: Path) -> None:
     why = skip_reason()
     if why:
         pytest.skip(why)
+    # A q that cannot even start under Rosetta is a machine that cannot run
+    # this, like the missing setup above - not a difference between clients.
+    probe = tmp_path / "probe.q"
+    probe.write_text("exit 0\n")
+    if rosetta_q([str(probe), "-q"], timeout=30) is None:
+        pytest.skip("q under Rosetta does not start (an empty script ran past 30 s)")
     reference, ours = run_client("k"), run_client("q")
     assert ours == reference
     # a comparison of two empty outputs would also be equal
