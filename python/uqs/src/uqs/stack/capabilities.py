@@ -1,15 +1,15 @@
 """What an interpreter can do, asked before a worker that needs it starts.
 
-PeachQ runs this tree's flattened q (stack/qtree.py), but not everything a
-worker can ask of q. A static PeachQ build cannot load a shared library (`2:`),
-so no ODBC driver: a worker reading through one would fail after startup,
-having taken its lock and begun a run. So a backfill on a PeachQ runtime asks
+PeachQ runs this tree's q, but not everything a worker can ask of q. A
+static PeachQ build cannot load a shared library (`2:`), so no ODBC driver: a
+worker reading through one would fail after startup, having taken its lock and
+begun a run. So a backfill on a PeachQ runtime asks
 the interpreter first, and is refused naming each capability missing and why
 the worker needs it.
 
-Writing the HDB is not one of them: src/etl/core/io_hdb.q writes, appends and
-finishes partitions on PeachQ itself, without the on-disk attributes and
-`.Q.chk` it lacks.
+Writing the HDB is not one of them: since v0.92 PeachQ writes, appends,
+sorts, attributes and .Q.chk-fills partitions as KDB-X does
+(src/etl/core/io_hdb.q); only compression, which needs -19!, is skipped.
 
 Asked, never assumed: PROBE runs on the binary the runtime starts, so a build
 that gains a capability gains the workers that need it with no edit here.

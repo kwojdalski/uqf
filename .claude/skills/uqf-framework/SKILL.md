@@ -273,16 +273,17 @@ invariants, is `uqf-q-traps.md`.
 - **V4** A test that replaces a global saves and restores it. A test that sets
   `.qetl.load.only` deletes it again. Suites share one process, and leftover
   state makes another suite pass or fail by order.
-- **V5** Code must work on KDB-X and on PeachQ. PeachQ can't load nested `\d`
-  contexts: define every name fully qualified from the root (`\d .` at most, one
-  level at most - `check.py nested-contexts`); only `tests/` is still flattened
-  for it (`scripts/portable/flatten_contexts.py`). A test it can't run goes into
-  `tests/q/peachq_known_gaps.txt` or `python/peachq_known_gaps.txt`, with the
-  reason. Both lists are held both ways: a listed test that passes fails the
-  build too. A q reason starts `peachq-lacks:`, `tree-bug: #N` or `flattening:`,
-  and says why - not the assertion's message (#986). Both lists record CI's
-  Linux PeachQ, and only CI's lane is authoritative: off that platform the q
-  lane reports "not comparable" (#968), so a local pass is no promise.
+- **V5** Code must work on KDB-X and on PeachQ. kdb+ 4.0 can't load nested `\d`
+  contexts (PeachQ can since v0.92): define every name fully qualified from the
+  root (`\d .` at most, one level at most - `check.py nested-contexts`); only
+  `tests/` is still flattened for it (`scripts/portable/flatten_contexts.py`). A
+  test it can't run goes into `tests/q/peachq_known_gaps.txt` or
+  `python/peachq_known_gaps.txt`, with the reason. Both lists are held both
+  ways: a listed test that passes fails the build too. A q reason starts
+  `peachq-lacks:`, `tree-bug: #N` or `flattening:`, and says why - not the
+  assertion's message (#986). Both lists record CI's Linux PeachQ, and only CI's
+  lane is authoritative: off that platform the q lane reports "not comparable"
+  (#968), so a local pass is no promise.
 - **V6** Every `@eg` line in a qDoc block is executed, by
   `tests/q/run_examples.q` and `.qt.man.examples`. One that can't run without a
   live process is listed in `.qt.man.examples.needs_live`, with the reason.
