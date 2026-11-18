@@ -18,7 +18,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import seed as cli_seed
+from uqs.cli.data import seed as cli_seed
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import hdb_seed

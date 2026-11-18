@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from uqs.cli.create_backfill import twin_target
+from uqs.cli.job.create_backfill import twin_target
 from uqs.interpreter import q_interpreter
 from uqs.paths import STACK_TABLES_TEST
 from uqs.scaffold import jobs, write

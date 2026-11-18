@@ -19,7 +19,8 @@ from uqs.attach.config import Attachment, Publisher, Stack, Storage
 from uqs.attach.facts import Host
 from uqs.attach.manifest import Manifest
 from uqs.attach.remote import Endpoint, IpcError
-from uqs.cli import backfill_attached, shared
+from uqs.cli.common import shared
+from uqs.cli.job import backfill_attached
 from uqs.interpreter import q_interpreter
 from uqs.paths import paths_for_root
 

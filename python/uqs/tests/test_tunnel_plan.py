@@ -23,7 +23,8 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import runtimes
-from uqs.cli import app, shared
+from uqs.cli import app
+from uqs.cli.common import shared
 from uqs.deploy import targets, tunnel, tunnel_check, tunnel_plan
 from uqs.deploy.tunnel_plan import Declared, TunnelPlanError
 

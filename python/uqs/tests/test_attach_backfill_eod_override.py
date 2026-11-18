@@ -26,7 +26,7 @@ from uqs import cli
 from uqs.attach import backfill_owner, backfill_policy, backfill_run
 from uqs.attach import backfill_plan as planning
 from uqs.attach.backfill import Destination
-from uqs.cli import safety, skip_options
+from uqs.cli.common import safety, skip_options
 from uqs.paths import UqsError
 
 BYPASSED = "EOD fence bypassed; no EOD write deadline"

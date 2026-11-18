@@ -195,7 +195,7 @@ LEAVES = _leaves()
 def _folder_imports(folder: str) -> set[str]:
     """Which other folders the modules in `folder` reach into."""
     out: set[str] = set()
-    for path in sorted((PKG / "src" / "uqs" / folder).glob("*.py")):
+    for path in sorted((PKG / "src" / "uqs" / folder).rglob("*.py")):
         out |= _uqs_targets(path.read_text())
     out.discard(folder)
     return out - LEAVES

@@ -38,7 +38,7 @@ from pathlib import Path
 
 import pytest
 
-from uqs.cli import target_confirm
+from uqs.cli.common import target_confirm
 
 UQF_ROOT = Path(__file__).resolve().parents[3]
 ROOTS = ("src", "scripts", "sidecars", "python/uqs/src/uqs")

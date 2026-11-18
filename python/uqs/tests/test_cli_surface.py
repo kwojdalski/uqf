@@ -11,7 +11,8 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import backfill_remote
-from uqs.cli import shared, target_edit
+from uqs.cli.common import shared
+from uqs.cli.target import target_edit
 from uqs.paths import UqsPaths
 from uqs.stack import procs as stack_procs
 
@@ -20,7 +21,7 @@ runner = CliRunner()
 
 def test_config_set_takes_several_field_value_pairs_and_unset_removes_one(monkeypatch, tmp_path):
     paths = UqsPaths.__new__(UqsPaths)
-    monkeypatch.setattr("uqs.cli.config._paths", lambda: paths)
+    monkeypatch.setattr("uqs.cli.config.config._paths", lambda: paths)
     monkeypatch.setattr(type(paths), "overrides_path", tmp_path / "o.csv", raising=False)
     monkeypatch.setattr(type(paths), "repo_root", tmp_path, raising=False)  # no bundle rows
     monkeypatch.setattr(type(paths), "orchestrator_dir", tmp_path, raising=False)
@@ -80,7 +81,7 @@ def test_target_edit_name_opens_the_file_at_that_targets_table(monkeypatch, tmp_
 
 
 def test_schema_through_a_target_is_refused_beside_tunnel():
-    from uqs.cli import target as target_cli
+    from uqs.cli.target import target as target_cli
 
     try:
         target_cli.forward("uat", False, ["schema", "--tunnel", "uat"], interactive=False)

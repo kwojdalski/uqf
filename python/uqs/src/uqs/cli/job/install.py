@@ -1,0 +1,376 @@
+"""`uqs job install`: bring jobs kept outside the tree - a "sidecar" folder
+of sources, workers and streaming jobs - into it, as copies or symlinks.
+
+Its own module because, like `uqs job new`, it writes into the tree rather than
+acting on a running fleet; the logic that decides what goes where is in
+stack/install.py, so this is only the wizard around it: show the plan, ask
+how, ask before replacing anything, then say how to check it worked.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Annotated
+
+import typer
+from rich.console import Group
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+
+from uqs.checks.traced_queries import untraced_lines
+from uqs.cli.common import safety
+from uqs.cli.common.safety import ChangesState, dry_run_note
+from uqs.cli.common.shared import (
+    JOB_AUTHORING_PANEL,
+    _die,
+    _paths,
+    console,
+    job_app,
+)
+from uqs.cli.job import install_bundle
+from uqs.cli.job.create_plant import plant_tables as _plant_tables
+from uqs.cli.job.regenerate import _DERIVED, _regenerate_derived, derived_command
+from uqs.model.declarations import (
+    Declaration,
+    declaration_calls,
+    declared_outputs,
+    read_file,
+)
+from uqs.model.pipeline import PipelineKind
+from uqs.paths import UqsError, UqsUsageError
+from uqs.stack import bundles
+from uqs.stack import install as stack_install
+from uqs.stack.install import Item, Kind, Mode, Status
+
+_STATUS_STYLE = {
+    Status.NEW: "green",
+    Status.SAME: "dim",
+    Status.CONFLICT: "bold yellow",
+    Status.SKIPPED: "red",
+}
+
+_MODE_HELP = {
+    Mode.COPY: "the tree owns a snapshot; edit the sidecar and you must install again",
+    Mode.SYMLINK: "the sidecar stays the source of truth; edits there are live on the next "
+    "start, and moving or deleting it breaks the tree",
+}
+
+
+def _dry_run_end(dry_run: bool) -> None:
+    """A dry run's last line, on a path that found nothing to do as well."""
+    if dry_run:
+        console.print(dry_run_note())
+
+
+def _where(item: Item, repo_root: Path) -> str:
+    return str(item.destination.relative_to(repo_root)) if item.destination else "-"
+
+
+def _plan_table(items: list[Item], sidecar: Path, repo_root: Path) -> Table:
+    table = Table(title="Plan", title_justify="left", header_style="bold cyan", expand=False)
+    table.add_column("File", no_wrap=True)
+    table.add_column("Kind", no_wrap=True)
+    table.add_column("Declares")
+    # The folder only: a file keeps its name, so the full path would repeat it.
+    table.add_column("Into", no_wrap=True)
+    table.add_column("Status")
+    for item in items:
+        status = Text(item.status.value, style=_STATUS_STYLE[item.status])
+        if item.reason:
+            status.append(f"\n{item.reason}", style="dim")
+        table.add_row(
+            str(item.source.relative_to(sidecar)),
+            item.kind.value if item.kind else "-",
+            ", ".join(item.names) or "-",
+            f"{item.destination.parent.relative_to(repo_root)}/" if item.destination else "-",
+            status,
+        )
+    return table
+
+
+def _ask_mode() -> Mode:
+    choices = Table.grid(padding=(0, 2))
+    for mode, help_text in _MODE_HELP.items():
+        choices.add_row(f"[bold]{mode.value}[/]", help_text)
+    console.print(
+        Panel(choices, title="How should they be installed?", border_style="cyan", expand=False)
+    )
+    return Mode(safety.choose("Mode", [m.value for m in Mode], default=Mode.COPY.value))
+
+
+def _resolve_conflicts(items: list[Item], overwrite: bool, yes: bool, repo_root: Path) -> set[Path]:
+    """The conflicting destinations to replace: all of them with --overwrite,
+    none with --yes alone, and otherwise whichever the operator agrees to."""
+    conflicts = [i for i in items if i.status is Status.CONFLICT]
+    if overwrite:
+        return {i.source for i in conflicts}
+    if yes:
+        return set()
+    return {
+        i.source
+        for i in conflicts
+        if safety.ask(f"{_where(i, repo_root)} exists and differs. Replace it?")
+    }
+
+
+def _declarations(items: list[Item]) -> list[Declaration]:
+    """What the installed files declare, read back from where they now are."""
+    found: list[Declaration] = []
+    for item in items:
+        if item.destination is None or item.kind is Kind.SOURCE:
+            continue
+        try:
+            found.extend(read_file(item.destination))
+        except UqsError as exc:
+            console.print(f"[red]cannot read {item.destination.name}:[/] {exc}")
+    return found
+
+
+def _report_undefined_tables(items: list[Item], declarations: list[Declaration]) -> None:
+    """A job or worker writing or reading a table the plant does not define
+    starts, and then has nowhere to put its rows - say so now, not at the
+    first tick."""
+    known = _plant_tables(_paths())
+    uses: list[tuple[str, str, tuple[str, ...]]] = []
+    for decl in declarations:
+        uses += [(decl.name, "reads", decl.subscribe_to), (decl.name, "publishes", decl.publishes)]
+    for item in items:
+        if item.kind is Kind.WORKER and item.destination is not None:
+            for fn, name, fields in declaration_calls(item.destination.read_text()):
+                if fn == "qetl.job.bounded.define":
+                    uses.append((name, "fills", declared_outputs(fields, name)))
+    for name, verb, used in uses:
+        missing = [t for t in used if t not in known]
+        if missing:
+            console.print(
+                f"[yellow]![/] {name} {verb} {', '.join(missing)}, which the plant does not "
+                "define: add it to src/etl/plant_tables.q"
+            )
+
+
+def _untraced(items: list[Item]) -> list[str]:
+    """`file:line  the line` for every query a sidecar file would send that
+    `--trace` cannot see (uqs.checks.traced_queries)."""
+    return [
+        f"{item.source.name}:{number}  {line}"
+        for item in items
+        if item.source.suffix == ".q"
+        for number, line in untraced_lines(item.source.read_text(errors="replace"))
+    ]
+
+
+def _err_log() -> str:
+    """Where a process's error log is, as this runtime puts it (#1893): under its
+    data directory, which is `uqs-torq`, `uqs-fx`, ... - not always output/uqs."""
+    paths = _paths()
+    where = paths.torq_log("<procname>", "err")
+    try:
+        return str(where.relative_to(paths.repo_root))
+    except ValueError:
+        return str(where)
+
+
+def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> Panel:
+    streaming = [d.procname for d in declarations if d.kind is not PipelineKind.BACKFILL]
+    workers = [d.name for d in declarations if d.kind is PipelineKind.BACKFILL]
+    procs = " ".join(streaming) or "<procname>"
+    steps = Table.grid(padding=(0, 2))
+    steps.add_column(style="bold cyan", justify="right")
+    steps.add_column()
+    steps.add_column(style="green")
+
+    def step(what: str, command: str) -> None:
+        steps.add_row(f"{len(steps.rows) + 1}.", what, command)
+
+    step("The registry sees them", "uqs process list")
+    step("The exact start line", f"uqs start --dry-run {procs}")
+    if streaming or not workers:
+        step("Start them", f"uqs start {procs}")
+    for worker in workers:
+        step(
+            "Run a worker (the fleet must be up)",
+            f"uqs job backfill {worker} --source-version v1 --from 2026-09-01 --to 2026-09-02",
+        )
+    step("Each one answers", "uqs status --columns status   (Responds: yes)")
+    step("How long each took to load", "uqs --debug status")
+    step("Their logs", f"uqs logs {procs} -f")
+    step("The whole suite", "q tests/run_tests.q")
+
+    notes = [
+        "",
+        "[bold]q tests[/] are found by what they hold: put each in [cyan]tests/q/[/] and "
+        "define its tests under [cyan].qt.<owner>.<suite>[/] from the root, no [cyan]\\d[/].",
+    ]
+    if sidecar_tests:
+        notes.append(
+            f"  The sidecar carries {', '.join(p.name for p in sidecar_tests)} - not installed."
+        )
+    notes += [
+        f"[bold]Down or not answering?[/] Check [cyan]{_err_log()}[/], "
+        "or run it in the foreground: [green]uqs exec -- debug <procname>[/].",
+        "[bold]Commit[/] what [cyan]git status[/] now shows, derived files included - "
+        "CI checks they are current.",
+    ]
+    return Panel(
+        Group(steps, *notes),
+        title="Next steps: check it is up and running",
+        border_style="green",
+        expand=False,
+    )
+
+
+@job_app.command("install", rich_help_panel=JOB_AUTHORING_PANEL, cls=ChangesState)
+def install_jobs(
+    sidecar: Annotated[
+        Path,
+        typer.Argument(
+            metavar="BUNDLE",
+            help="The sidecar bundle folder holding the job files, laid out any way: each "
+            "file is placed by what it declares",
+            exists=True,
+            file_okay=False,
+            dir_okay=True,
+        ),
+    ],
+    link: Annotated[
+        bool | None,
+        typer.Option(
+            "--link/--copy",
+            help="Symlink the files into the tree, or copy them. Omit to be asked",
+            show_default=False,
+        ),
+    ] = None,
+    overwrite: Annotated[
+        bool, typer.Option("--overwrite", help="Replace tree files that differ, without asking")
+    ] = False,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", "-n", help="Show the plan, install nothing")
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option(
+            "--yes",
+            "-y",
+            help="Ask nothing (needs --link or --copy); conflicts are kept unless --overwrite",
+        ),
+    ] = False,
+) -> None:
+    """Install sources, workers and streaming jobs from a folder outside the tree.
+
+    Each .q file goes where src/etl/init.q and the registry look for its kind -
+    src/etl/sources, src/etl/workers or src/etl/streaming - decided by what it
+    declares (.qetl.source.define, .qetl.job.bounded.define,
+    .qetl.job.stream.define/.qetl.job.stream.normalize), so
+    the sidecar can be laid out any way. Then the derived files are
+    regenerated, and the next steps say how to check the jobs are running.
+
+        uqs job install ../sidecars
+
+        uqs job install ../sidecars --link --yes
+
+    A folder holding bundle.json is a BUNDLE: its jobs plus the plant tables,
+    catalog entries and process overrides they need, installed together as
+    copies, idempotently - see docs/guides/sidecar-bundles.md.
+
+        uqs job install ../piggybank-bundle --yes
+
+    `uqs runtime prepare` installs every bundle a runtime declares the same way.
+    """
+    mode = None if link is None else (Mode.SYMLINK if link else Mode.COPY)
+    repo_root = _paths().repo_root
+    sidecar = sidecar.resolve()
+    if bundles.is_bundle(sidecar):
+        install_bundle.install(
+            sidecar, repo_root, mode=mode, dry_run=dry_run, yes=yes, runtime=_paths().runtime
+        )
+        return
+    try:
+        items = stack_install.plan(sidecar, repo_root)
+    except (FileNotFoundError, UqsError) as exc:
+        _die(UqsError(str(exc)))
+
+    console.print(
+        Panel(
+            f"from [cyan]{sidecar}[/]\ninto [cyan]{repo_root}[/]",
+            title="uqs job install",
+            border_style="cyan",
+            expand=False,
+        )
+    )
+    if not items:
+        console.print("[yellow]No .q files in that folder.[/]")
+        _dry_run_end(dry_run)
+        return
+    console.print(_plan_table(items, sidecar, repo_root))
+    todo = [i for i in items if i.status in (Status.NEW, Status.CONFLICT)]
+    tests = [i.source for i in items if i.reason.startswith("a q test")]
+    if not todo:
+        console.print("[green]Nothing to install:[/] every job file is already in place.")
+        _dry_run_end(dry_run)
+        return
+    # Before anything is copied, and on a dry run too: a polling feed or a
+    # backfill source whose query `--trace` cannot see is refused, not warned
+    # about - the trace is needed exactly when it is too late to add it.
+    if untraced := _untraced(todo):
+        console.print(
+            f"[red]✗ refused:[/] {len(untraced)} query line(s) send through the handle "
+            "directly, where `--trace` cannot see them:"
+        )
+        for where in untraced:
+            console.print(f"  {where}", markup=False, highlight=False)
+        console.print(
+            "Send each through .qetl.source.ipc_call[h;f;enlist cursor] (a polling feed), "
+            ".qetl.source.ipc[h;f;from;to] (a backfill source), .qetl.source.local or "
+            ".qetl.io.odbc.run_sql - or, where it must stay direct, end the line with "
+            "`/ untraced: <why>`.",
+            markup=False,
+        )
+        raise typer.Exit(code=1)
+    if dry_run:
+        console.print(dry_run_note())
+        return
+
+    if mode is None:
+        if yes:
+            _die(UqsUsageError("--yes asks nothing, so it needs --link or --copy"))
+    try:  # every question below refuses, naming --yes, with no terminal to ask on
+        mode = mode or _ask_mode()
+        replace = _resolve_conflicts(items, overwrite, yes, repo_root)
+        todo = [i for i in todo if i.status is Status.NEW or i.source in replace]
+        if not todo:
+            console.print("[yellow]Nothing installed:[/] every remaining file was kept as it is.")
+            return
+        safety.confirm(f"Install {len(todo)} file(s) as {mode.value}?", yes=yes)
+    except UqsError as exc:
+        _die(exc)
+
+    for item in todo:
+        try:
+            stack_install.install(item, mode, overwrite=item.source in replace)
+        except OSError as exc:
+            console.print(f"[red]✗[/] {item.source.name}: {exc}")
+            continue
+        console.print(
+            f"[green]✓[/] {item.source.name} → {_where(item, repo_root)} [dim]({mode.value})[/]"
+        )
+
+    # A file that does not parse, or a job whose edges do not resolve, is
+    # refused by the generators - which is the earliest the tree can say so.
+    for derived, regen in zip(_DERIVED, _regenerate_derived(repo_root), strict=True):
+        if regen.returncode == 0:
+            console.print(f"[green]✓[/] regenerated via {' '.join(derived)}")
+        else:
+            console.print(
+                f"[red]✗ could not regenerate[/] - run `{derived_command(derived)}` "
+                f"and fix what it reports:\n{regen.stdout}{regen.stderr}"
+            )
+
+    in_place = [
+        i
+        for i in items
+        if (i.status is Status.SAME or i in todo) and i.destination and i.destination.exists()
+    ]
+    declarations = _declarations(in_place)
+    _report_undefined_tables(in_place, declarations)
+    console.print(_next_steps(declarations, tests))

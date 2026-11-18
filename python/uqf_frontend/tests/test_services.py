@@ -90,7 +90,7 @@ def test_a_target_without_a_deployment_profile_is_listed(declared):
 def test_the_rows_are_uqs_target_lists(declared):
     """One reader, not a copy: the names and destinations are exactly what
     `uqs target list --json` prints for the same file."""
-    from uqs.cli.json_out import records
+    from uqs.cli.common.json_out import records
     from uqs.deploy import history
     from uqs.paths import repo_root
 

@@ -29,8 +29,8 @@ import uqs.cli.entry  # noqa: F401 - registers every command on the app
 from uqs.attach import backfill_owner, hdb_where, service
 from uqs.attach.facts import Host
 from uqs.attach.schema import TableSpec
-from uqs.cli import shared
-from uqs.cli.shared import app
+from uqs.cli.common import shared
+from uqs.cli.common.shared import app
 
 BUILD_Q = r"""
 r:hsym `$getenv`HDB;

@@ -26,7 +26,7 @@ from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
 from uqs import activity_export, activity_log
-from uqs.cli.shared import app
+from uqs.cli.common.shared import app
 
 RID = "req-0123456789"
 SESSION = "session-abc12345"
@@ -197,7 +197,7 @@ def test_a_missing_file_is_a_refusal_naming_what_writes_it(tmp_path):
 
 def test_the_file_defaults_to_the_variable_then_the_stack(monkeypatch, tmp_path):
     from uqs import paths
-    from uqs.cli import activity as cli_activity
+    from uqs.cli.fleet import activity as cli_activity
 
     monkeypatch.setenv("UQF_FRONTEND_ACTIVITY_DB", str(tmp_path / "named.sqlite3"))
     assert cli_activity._db(None) == tmp_path / "named.sqlite3"

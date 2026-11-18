@@ -28,7 +28,8 @@ from uqf_frontend import remote_helper
 from uqf_frontend.app import create_app
 from uqf_frontend.config import Settings
 from uqf_frontend.gateway import FakeGateway
-from uqs.cli import app, target_config_push
+from uqs.cli import app
+from uqs.cli.target import target_config_push
 from uqs.deploy import portal_push
 
 TOKEN = secrets.token_hex(32)

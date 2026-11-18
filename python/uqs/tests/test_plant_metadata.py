@@ -538,7 +538,7 @@ def test_a_bundle_install_and_its_removal_regenerate_the_metadata(
 def test_every_scaffold_and_install_command_regenerates_it_first():
     """`uqs job new|remove|install` and `uqs runtime prepare` run _DERIVED in
     order; the metadata comes first, since the docs generator reads it."""
-    from uqs.cli.regenerate import _DERIVED
+    from uqs.cli.job.regenerate import _DERIVED
     from uqs.paths import DERIVE_SCRIPT
 
     assert _DERIVED[0] == (str(DERIVE_SCRIPT), "plant-schema")

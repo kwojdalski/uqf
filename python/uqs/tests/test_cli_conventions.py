@@ -11,7 +11,7 @@ docs/reference/cli.md#cli-conventions states the rules; this walks every command
 - rule 5: `--json` on what reports, `--dry-run/-n` on what changes state,
   `--yes/-y` on what asks, and no bypass but `--override NAME --reason` - or
   the `--skip-<id>` the guardrail registry generates as its other spelling
-  (cli/skip_options.py, #1826), never one written by hand.
+  (cli/common/skip_options.py, #1826), never one written by hand.
 
 Each rule has an ALLOWLIST of today's exceptions, each naming the issue that
 removes it (#1727 to #1740). A rule fails on a violation that is not listed AND
@@ -45,9 +45,10 @@ from typer.testing import CliRunner
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
 from uqs import duration, paths
 from uqs.cells import cell as cell_text
-from uqs.cli import lists, rendering, safety, shared, skip_options, vocabulary
-from uqs.cli.shared import app
-from uqs.cli.target_confirm import changes_the_server, effect_of, trait_of
+from uqs.cli.common import rendering, safety, shared, skip_options, vocabulary
+from uqs.cli.common.shared import app
+from uqs.cli.common.target_confirm import changes_the_server, effect_of, trait_of
+from uqs.cli.config import lists
 from uqs.stack import alive, listing
 from uqs.stack import procs as stack_procs
 
@@ -124,7 +125,7 @@ def _hold(rule: str, found: set, allowed: dict) -> None:
 
 # --------------------------------------------------------------------- vocabulary
 
-# The verbs (CORE_VERBS, DOMAIN_VERBS) are declared in uqs/cli/vocabulary.py (#2170).
+# The verbs (CORE_VERBS, DOMAIN_VERBS) are declared in uqs/cli/common/vocabulary.py (#2170).
 
 #: Rule 1: a group named after one of these is a verb with nouns under it.
 GROUP_VERBS = set(vocabulary.CORE_VERBS) | {
@@ -349,7 +350,7 @@ def test_a_whole_partition_command_takes_whole_days_only():
         assert "whole days" in days and "never in it" in days, path
     # and each resolves it through the one refusal, never a rounding of its own
     for module in ("compress_plan", "seed", "replay", "migrate"):
-        text = inspect.getsource(__import__(f"uqs.cli.{module}", fromlist=["_"]))
+        text = inspect.getsource(__import__(f"uqs.cli.data.{module}", fromlist=["_"]))
         assert ".partition_dates(" in text or ".day(" in text, module
 
 
@@ -363,9 +364,9 @@ def test_every_data_command_names_its_hdb_the_same_ways():
     """#2237: check and alter took --hdb and --attachment, compress and replay
     --hdb only (replay's with a help of its own), migrate and seed neither. A
     `data` command that reads or writes one HDB takes both, with
-    cli/hdb_scope.py's one help each; one that cannot act on an attachment's
+    cli/data/hdb_scope.py's one help each; one that cannot act on an attachment's
     HDB refuses it saying why (hdb_scope.local_hdb), rather than not knowing it."""
-    from uqs.cli import hdb_scope
+    from uqs.cli.data import hdb_scope
 
     def helps(opt) -> str:
         return opt.__metadata__[0].help if hasattr(opt, "__metadata__") else opt.help
@@ -404,7 +405,7 @@ def test_a_data_command_that_cannot_reach_an_attachment_says_why(monkeypatch, mo
     """#2237: `No such option` was all an operator got for --attachment on
     compress, migrate, replay and seed; each now knows it, and refuses it with
     its reason before reaching anything."""
-    mod = __import__(f"uqs.cli.{module}", fromlist=["_"])
+    mod = __import__(f"uqs.cli.data.{module}", fromlist=["_"])
     died: list[Exception] = []
 
     def record(exc: Exception) -> None:
@@ -419,7 +420,7 @@ def test_a_data_command_that_cannot_reach_an_attachment_says_why(monkeypatch, mo
 
 @pytest.mark.parametrize("module", ["replay", "migrate", "seed"])
 def test_hdb_and_attachment_together_are_refused_as_check_refuses_them(monkeypatch, module):
-    mod = __import__(f"uqs.cli.{module}", fromlist=["_"])
+    mod = __import__(f"uqs.cli.data.{module}", fromlist=["_"])
     died: list[Exception] = []
 
     def record(exc: Exception) -> None:
@@ -523,7 +524,7 @@ OPTIONS = {
     # the frontend's activity history (#2000): one filter each, on list and export alike
     "--action": Meaning("an activity action, or its dotted prefix", r"dotted prefix"),
     "--db": Meaning("the activity history's SQLite file", r"activity history's SQLite file"),
-    # every stop command's escalation (cli/stop_options.py, #2689)
+    # every stop command's escalation (cli/fleet/stop_options.py, #2689)
     "--kill": Meaning("SIGKILL what outlives SIGTERM and its grace", r"^SIGKILL whatever is still"),
     "--outcome": Meaning("how an activity event ended", r"^only events that ended so"),
     "--recorded-by": Meaning("the browser or the server's audit", r"^only events recorded by"),
@@ -566,7 +567,7 @@ OPTIONS = {
     ),
     "--export": Meaning("also write the rows to FILE", r"write output to FILE"),
     "--follow": Meaning("keep streaming log lines until Ctrl-C", r"streaming (new|every)"),
-    # one unit of a job, then its outcome (cli/launch_options.py, #2798)
+    # one unit of a job, then its outcome (cli/fleet/launch_options.py, #2798)
     "--once": Meaning("run one unit of the job, then exit with its outcome", r"^run ONE unit"),
     "--once-timeout": Meaning(
         "how long a subscriber waits for its one batch", r"^with --once: duration a streaming"
@@ -679,7 +680,7 @@ OPTIONS |= {
     )
 }  # fmt: skip
 
-#: The generated `--skip-<id>` options (cli/skip_options.py, #1826, #1918): each is
+#: The generated `--skip-<id>` options (cli/common/skip_options.py, #1826, #1918): each is
 #: one guardrail's declaration on every command that declaration names, so one
 #: meaning by construction - the --override it spells, which its help names.
 OPTIONS |= {
@@ -760,7 +761,7 @@ def _is_duration(param) -> bool:
 
 
 def _term_type(param) -> str:
-    """A parameter's type as cli/vocabulary.py's TERMS spell it."""
+    """A parameter's type as cli/common/vocabulary.py's TERMS spell it."""
     if _is_duration(param):
         return "duration"
     if getattr(param, "is_flag", False):
@@ -769,7 +770,7 @@ def _term_type(param) -> str:
 
 
 def test_the_vocabulary_holds_every_command_to_its_names_and_types():
-    """cli/vocabulary.py's TERMS: an option a term names has the term's type
+    """cli/common/vocabulary.py's TERMS: an option a term names has the term's type
     on every command, and no command takes a spelling a term retired."""
     wrong, retired = set(), set()
     terms = {t.name: t for t in vocabulary.TERMS}
@@ -1060,7 +1061,7 @@ def test_rule3_one_concept_has_one_option_name():
 REPORTS, CONFIRMS, CHANGES = "reports", "confirms", "changes"
 
 #: A command's kind follows from the Effect its Click class carries
-#: (cli/safety.py, #1780), so a new command is classified by declaring it: a
+#: (cli/common/safety.py, #1780), so a new command is classified by declaring it: a
 #: read-only one reports, a confirms-on-server one reports its plan and, with
 #: --apply, changes the server after asking, and a changes-state one changes.
 BY_EFFECT = {
@@ -1142,7 +1143,7 @@ def test_rule5_every_leaf_is_classified():
     """Every leaf has a kind - its Effect, or the third kind - and every
     no_dry_run mark is on a command that changes state."""
     unmarked = sorted(p for p in LEAVES if _kind(p) is None)
-    assert not unmarked, f"no Effect on: {unmarked} - give each its cls= from cli/safety.py"
+    assert not unmarked, f"no Effect on: {unmarked} - give each its cls= from cli/common/safety.py"
     stale = sorted(p for p in NO_DRY_RUN if BY_EFFECT.get(effect_of(LEAVES[p].command)) != CHANGES)
     assert not stale, f"no_dry_run marks on commands that do not change state: {stale}"
 
@@ -1185,7 +1186,7 @@ def test_rule5a_every_json_help_is_the_one_phrasing():
     """Ten phrasings of `--json` across 36 commands (#1859): every one is
     `json_out.JSON_HELP`, then the document's shape, then a note on when it
     applies - one help, built by `json_opt` or led by JSON_HELP."""
-    from uqs.cli.json_out import JSON_HELP
+    from uqs.cli.common.json_out import JSON_HELP
 
     found = {}
     for path, cmd in LEAVES.items():
@@ -1275,8 +1276,8 @@ def test_rule5c_the_commands_that_ask_are_the_known_ones():
     """Every question is asked through safety.ask, confirm or choose (#1885):
     one default (No), one refusal without a terminal, one exit code for a no.
     Only safety itself calls a prompt."""
-    cli_dir = Path(shared.__file__).parent
-    texts = {f.stem: f.read_text() for f in cli_dir.glob("*.py")}
+    cli_dir = Path(shared.__file__).parents[1]
+    texts = {f.stem: f.read_text() for f in cli_dir.rglob("*.py")}
     direct = {
         stem
         for stem, text in texts.items()
@@ -1323,9 +1324,9 @@ def test_rule5f_json_without_yes_is_one_refusal():
     for path, test in JSON_WITHOUT_YES.items():
         file, name = test.split("::")
         assert re.search(rf"^def {name}\(", (here / file).read_text(), re.M), (path, test)
-    cli_dir = Path(shared.__file__).parent
+    cli_dir = Path(shared.__file__).parents[1]
     worded = {
-        f.stem for f in cli_dir.glob("*.py") if "cannot ask for confirmation" in f.read_text()
+        f.stem for f in cli_dir.rglob("*.py") if "cannot ask for confirmation" in f.read_text()
     }
     assert worded == {"safety"}, "the refusal is safety.json_needs_yes's alone"
 
@@ -1428,7 +1429,7 @@ def test_rule5d_every_generated_skip_is_on_the_commands_it_names():
 def test_rule5d_every_override_is_named_where_uqs_override_list_finds_it():
     """A command that takes --override takes the names `uqs override list`
     shows, and every name listed is taken by the commands it names (#1732)."""
-    from uqs.cli import safety
+    from uqs.cli.common import safety
 
     taking = {c.path for c in TREE if c.option("--override") is not None}
     named = {command for b in safety.catalog() for command in b.commands}
@@ -1470,7 +1471,7 @@ def _authorities() -> dict[tuple[str, str], tuple[str, ...]]:
     """(command, option) -> the tuple that declares the values it takes: the
     option's choices and its help are both held to it."""
     from uqs.attach import config, receiver_contract
-    from uqs.cli.external import FEEDS
+    from uqs.cli.connector.external import FEEDS
     from uqs.deploy import components, portable
     from uqs.generated import q_facts
     from uqs.model.kinds import SCAFFOLD_KINDS
@@ -1528,8 +1529,8 @@ def _defaults() -> dict[tuple[str, str], object]:
     """(command, option) -> the authority for a default its help states where
     the option's own default is not it: one a feed, a target or the scaffold
     applies when the option is not given."""
-    from uqs.cli import source_check
-    from uqs.cli.external import FEEDS
+    from uqs.cli.config import source_check
+    from uqs.cli.connector.external import FEEDS
     from uqs.deploy import config
     from uqs.scaffold import worker
 
@@ -1577,7 +1578,7 @@ def test_job_new_kind_tags_are_shapes():
     """#1893: the "(backfill)" ending a `job new` option's help is rendered from
     create_kinds.SHAPES, the table that refuses the option on any other kind;
     every SHAPES row is an option `job new` has, and so checks."""
-    from uqs.cli.create_kinds import SHAPES, for_kinds
+    from uqs.cli.job.create_kinds import SHAPES, for_kinds
     from uqs.model.kinds import SCAFFOLD_KINDS
 
     cmd = LEAVES["job new"]
@@ -1597,7 +1598,7 @@ def test_job_new_refuses_a_misplaced_option_it_was_never_told_about(monkeypatch)
     horizon job publish their own NAME, so --outputs shapes neither (#2102)."""
     from typer.testing import CliRunner
 
-    from uqs.cli import create
+    from uqs.cli.job import create
 
     refused: list[str] = []
 
@@ -1614,8 +1615,8 @@ def test_job_new_refuses_a_misplaced_option_it_was_never_told_about(monkeypatch)
 def test_status_presets_are_one_table():
     """#1893: `status --columns`'s presets - resolved, completed, refused and
     described - are summary_columns.SUMMARY_PRESETS, so the help says what each shows."""
-    from uqs.cli import completion
-    from uqs.cli.summary_columns import SUMMARY_PRESETS, resolve_columns
+    from uqs.cli.common import completion
+    from uqs.cli.summary.summary_columns import SUMMARY_PRESETS, resolve_columns
     from uqs.stack.listing import SUMMARY_ALL_COLUMNS
 
     help_ = LEAVES["status"].option("--columns").help
@@ -1629,7 +1630,7 @@ def test_status_presets_are_one_table():
 def test_connector_help_is_rendered_from_each_option():
     """#1893: a connector option's default and variable are its FeedOption's,
     rendered by it - never retyped into its help."""
-    from uqs.cli.external import FEEDS
+    from uqs.cli.connector.external import FEEDS
 
     for feed in FEEDS.values():
         for option in feed.options:
@@ -1676,13 +1677,16 @@ def _completer(param):
 NOT_A_CHOICE = {
     ("job backfill", "--mode"): "refuses `dry-run`, naming `--dry-run` (#2752), which a Choice "
     "would refuse before the command could name it",
-    ("deploy build", "--q-version"): "one name, one type (cli/vocabulary.py): on `deploy push` "
+    (
+        "deploy build",
+        "--q-version",
+    ): "one name, one type (cli/common/vocabulary.py): on `deploy push` "
     "--q-version is a free REQUIREMENT, >=4.1",
 }
 
 
 def test_an_option_with_fixed_values_is_a_choice():
-    """#1884: an option taking one of a fixed set is a Choice (cli/choices.py
+    """#1884: an option taking one of a fixed set is a Choice (cli/common/choices.py
     ChoiceOpt) - its type, completion and help from one tuple - not a free
     str with a completer and validation by hand. `--sort` takes a column the
     listing's header names; an argument may refuse with its own message."""
@@ -1722,7 +1726,7 @@ def _name(fn) -> str | None:
 
 
 def _concept_completers() -> dict[str, set[str | None]]:
-    from uqs.cli import completion as c
+    from uqs.cli.common import completion as c
 
     named = {
         "attachment": (c.attachments,),
@@ -1747,7 +1751,7 @@ NAMES_A_NEW_ONE = {
 def test_each_concept_completes_with_its_completer():
     """#1884: an attachment, a target, a profile, a job, a table or a source
     completes the same way on every command - shared aliases in
-    cli/concepts.py carry the completer."""
+    cli/common/concepts.py carry the completer."""
     completers, found = _concept_completers(), set()
     for cmd in TREE:
         for param in cmd.command.params:
@@ -1842,7 +1846,7 @@ def test_a_variable_named_as_a_fallback_is_the_one_read():
     """#1884: a `$NAME` a help names as its default is the option's own envvar
     - or, for a connector option, the variable its FeedOption reads (it
     resolves given > $env > default itself, external/feeds.py)."""
-    from uqs.cli.external import FEEDS
+    from uqs.cli.connector.external import FEEDS
 
     feed_env = {
         flag: o.env

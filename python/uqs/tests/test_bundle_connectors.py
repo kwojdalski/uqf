@@ -11,7 +11,7 @@ from test_bundles import make_bundle, repo  # noqa: F401 - the fixture
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import external as cli_external
+from uqs.cli.connector import external as cli_external
 from uqs.external import feeds
 from uqs.model import connectors, dependencies
 from uqs.paths import INSTALLED_CONNECTORS

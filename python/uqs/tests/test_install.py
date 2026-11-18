@@ -1,4 +1,4 @@
-"""Tests for `uqs job install` (stack/install.py, cli/install.py).
+"""Tests for `uqs job install` (stack/install.py, cli/job/install.py).
 
 Every test builds a fake repository root and a sidecar under tmp_path, so
 nothing here writes into this tree; the CLI tests patch `_paths` to point at
@@ -16,8 +16,8 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs import paths as stack_paths
-from uqs.cli import install as cli_install
-from uqs.cli.regenerate import _DERIVED
+from uqs.cli.job import install as cli_install
+from uqs.cli.job.regenerate import _DERIVED
 from uqs.paths import SOURCE_DIR, STREAM_DIR, WORKER_DIR
 from uqs.stack import install
 from uqs.stack.install import Kind, Mode, Status

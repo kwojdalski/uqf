@@ -229,7 +229,7 @@ def window_given(monkeypatch):
     from typer.testing import CliRunner
 
     from uqs import cli
-    from uqs.cli import source_check
+    from uqs.cli.config import source_check
 
     seen: dict = {}
     monkeypatch.setattr(source_check.live_check, "check", lambda *a, **k: seen.update(k) or [])

@@ -13,7 +13,7 @@ other.
 
 ## The problem
 
-`uqs job install <bundle>` (`cli/install_bundle.py:86`) and
+`uqs job install <bundle>` (`cli/job/install_bundle.py:86`) and
 `uqs runtime prepare` (`stack/runtime_bundles.py:138`) both end in
 `bundles.install` (`stack/bundles.py:233`). It writes:
 
@@ -27,7 +27,7 @@ other.
   | connectors (`*_feed.py`)                                                   | `src/etl/connectors/<bundle>/`                              | `bundles.py:263`, `stack/bundle_connectors.py:70`                        |
   | the evaluated plant schema                                                 | `src/etl/generated/plant_schema.json`                       | `bundles.py:271`, `stack/bundle_shadowing.py:37`                         |
 
-The CLI then runs `_DERIVED` (`cli/regenerate.py:39`) over the checkout
+The CLI then runs `_DERIVED` (`cli/job/regenerate.py:39`) over the checkout
 (`install_bundle.py:95`, `runtime_prepare.py:93`). `operational-docs` rewrites
 `docs/reference/processes.md`, `src/etl/generated/pipeline_dag.q`,
 `src/etl/generated/load_plan.q` and `scripts/processes/process_ports.csv`. So
@@ -235,16 +235,16 @@ only by accident of location.
 
 **Deletable once the cut-over lands**
 
-  | Guard                                                                                                       | Why it can go                                                                                                     |
-  | ---                                                                                                         | ---                                                                                                               |
-  | `bundle-blocks` hook (`.pre-commit-config.yaml:197`), `scripts/gates/policy/bundle_blocks.py` and its tests | nothing an install writes is in the tracked tree                                                                  |
-  | `stack/bundle_blocks.py` (`with_block`, `without_block`, `block_names`)                                     | no splicing; `BundleError` moves to `bundles.py`                                                                  |
-  | `deploy/foreign_blocks.py` and `build.py:319`                                                               | a checkout cannot carry an installed bundle                                                                       |
-  | `q_api_docs.py:115` ledger check, and its `LEDGER` (`:60`)                                                  | installed q is never under `src/`                                                                                 |
-  | `bundles.plan`'s file-ownership checks (`bundles.py:303`) and `Plan.stale`                                  | each bundle owns its own directory, and a rebuild has no stale files                                              |
-  | `runtimes` in the ledger, `runtime_bundles.prepare`'s rewrite                                               | membership is presence                                                                                            |
-  | `.gitignore:116`, `overrides.BUNDLE_FILE`, `paths.INSTALLED_CONNECTORS`, both `BUNDLE_LEDGER`s              | the files move into the overlay                                                                                   |
-  | the plain-sidecar copy into `src/etl` (`cli/install.py:359`)                                                | folded in: a folder without `bundle.json` is refused, or installs as a bundle without additions (open question 5) |
+  | Guard                                                                                                           | Why it can go                                                                                                     |
+  | ---                                                                                                             | ---                                                                                                               |
+  | `bundle-blocks` hook (`.pre-commit-config.yaml:197`), `scripts/gates/policy/bundle_blocks.py` and its tests     | nothing an install writes is in the tracked tree                                                                  |
+  | `stack/bundle_blocks.py` (`with_block`, `without_block`, `block_names`)                                         | no splicing; `BundleError` moves to `bundles.py`                                                                  |
+  | `deploy/foreign_blocks.py` and `build.py:319`                                                                   | a checkout cannot carry an installed bundle                                                                       |
+  | `q_api_docs.py:115` ledger check, and its `LEDGER` (`:60`)                                                      | installed q is never under `src/`                                                                                 |
+  | `bundles.plan`'s file-ownership checks (`bundles.py:303`) and `Plan.stale`                                      | each bundle owns its own directory, and a rebuild has no stale files                                              |
+  | `runtimes` in the ledger, `runtime_bundles.prepare`'s rewrite                                                   | membership is presence                                                                                            |
+  | `.gitignore:116`, `overrides.BUNDLE_FILE`, `paths.INSTALLED_CONNECTORS`, both `BUNDLE_LEDGER`s                  | the files move into the overlay                                                                                   |
+  | the plain-sidecar copy into `src/etl` (`cli/job/install.py:359`)                                                | folded in: a folder without `bundle.json` is refused, or installs as a bundle without additions (open question 5) |
 
 They stay: shadowing refusal (#1545), because q still upserts on a second define
 whichever directory it came from, though it no longer needs files substituted;
@@ -285,10 +285,10 @@ restores the old behaviour, because the overlay is never committed.
 ## Risks and open questions
 
 1. **`PIPELINES` is built at import** (`registry.py:178`), and `--runtime` sets
-   `UQS_RUNTIME` in a CLI callback (`cli/shared.py:164`). A per-runtime overlay
-   is only right if no command imports the registry before that callback runs.
-   If one does, `PIPELINES` must become lazy. The fallback is one overlay per
-   data root (`$UQS_DATA_ROOT/bundles`), which brings `runtimes` membership
+   `UQS_RUNTIME` in a CLI callback (`cli/common/shared.py:164`). A per-runtime
+   overlay is only right if no command imports the registry before that callback
+   runs. If one does, `PIPELINES` must become lazy. The fallback is one overlay
+   per data root (`$UQS_DATA_ROOT/bundles`), which brings `runtimes` membership
    back.
 2. **Port room.** Spans are 100 wide and the tree's lock reaches 74, leaving 25
    offsets for every bundle in a runtime. Widening spans moves every base port.

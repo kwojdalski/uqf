@@ -15,7 +15,7 @@ import pytest
 from plain_cli import PlainRunner
 
 from uqs import cli
-from uqs.cli import create, create_backfill
+from uqs.cli.job import create, create_backfill
 from uqs.model.declarations import declaration_calls, symbols
 from uqs.paths import UqsError
 from uqs.scaffold import jobs, profile, templates

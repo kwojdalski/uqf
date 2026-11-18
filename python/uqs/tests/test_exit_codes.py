@@ -23,8 +23,8 @@ import typer.main
 from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
-from uqs.cli import safety
-from uqs.cli.shared import app
+from uqs.cli.common import safety
+from uqs.cli.common.shared import app
 from uqs.paths import UqsError
 from uqs.stack import procs as stack_procs
 

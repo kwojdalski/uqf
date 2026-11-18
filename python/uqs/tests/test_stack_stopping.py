@@ -19,7 +19,7 @@ from stop_children import IGNORES, OBEYS, reap, spawn
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import lifecycle
+from uqs.cli.fleet import lifecycle
 from uqs.paths import UqsError, default_paths
 from uqs.process_stop import Stopped
 from uqs.stack import alive, generated, runtime, stopping

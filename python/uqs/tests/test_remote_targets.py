@@ -20,9 +20,10 @@ import typer
 import typer.core
 from typer.testing import CliRunner
 
-from uqs.cli import app, safety, target_confirm
-from uqs.cli import target as target_cli
-from uqs.cli.safety import ChangesState, Effect, ReadOnly
+from uqs.cli import app
+from uqs.cli.common import safety, target_confirm
+from uqs.cli.common.safety import ChangesState, Effect, ReadOnly
+from uqs.cli.target import target as target_cli
 from uqs.deploy import control, history, targets
 from uqs.paths import UqsError
 

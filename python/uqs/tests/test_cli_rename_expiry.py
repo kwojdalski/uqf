@@ -1,7 +1,7 @@
 """Every old spelling a rename keeps has a recorded window, and none outlives it
 (#1796, #1738 rule 6).
 
-`uqs.cli.rename_expiry.RENAMED_AFTER` holds, per old spelling, the stable tag
+`uqs.cli.common.rename_expiry.RENAMED_AFTER` holds, per old spelling, the stable tag
 that was the newest when its rename landed. The next stable tag shipped the
 rename with the old spelling kept, logged; the one after that must not ship the
 old spelling - "kept for one release". The stable tags are CHANGELOG.md's
@@ -20,7 +20,7 @@ import pytest
 import typer
 
 from uqs import cli
-from uqs.cli.rename_expiry import RENAMED_AFTER
+from uqs.cli.common.rename_expiry import RENAMED_AFTER
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -80,7 +80,7 @@ def test_every_old_spelling_records_when_it_was_renamed():
     missing = (kept_in_the_cli() | set(HAND_KEPT)) - set(recorded())
     assert not missing, (
         f"old spellings with no window: {sorted(missing)} - add each to "
-        "uqs/cli/rename_expiry.py RENAMED_AFTER, under the newest `## stable/` "
+        "uqs/cli/common/rename_expiry.py RENAMED_AFTER, under the newest `## stable/` "
         "heading in CHANGELOG.md"
     )
 
@@ -112,7 +112,7 @@ def test_no_old_spelling_outlives_its_one_release():
     late = overdue(recorded(), stable_tags())
     assert not late, (
         "old spellings kept past their one release - remove each, its alias or "
-        "renamed() row, and its row in uqs/cli/rename_expiry.py: "
+        "renamed() row, and its row in uqs/cli/common/rename_expiry.py: "
         + ", ".join(f"`{s}` (shipped in {t})" for s, t in sorted(late.items()))
     )
 

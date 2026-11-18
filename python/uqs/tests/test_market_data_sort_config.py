@@ -23,7 +23,7 @@ import pytest
 from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
-from uqs.cli.shared import app
+from uqs.cli.common.shared import app
 from uqs.model import plant_metadata
 from uqs.paths import repo_root
 from uqs.stack import procs

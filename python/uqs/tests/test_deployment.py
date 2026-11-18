@@ -24,7 +24,7 @@ from typer.testing import CliRunner
 
 from uqs import cli, mcp
 from uqs import paths as stack_paths
-from uqs.cli import start_warnings
+from uqs.cli.fleet import start_warnings
 from uqs.interpreter import q_interpreter
 from uqs.model import profiles
 from uqs.paths import UqsError, UqsPaths

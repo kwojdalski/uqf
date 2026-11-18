@@ -18,7 +18,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from uqs.cli import runs as cli_runs
+from uqs.cli.job import runs as cli_runs
 from uqs.generated import q_facts
 from uqs.stack import backfill, logs, run_modes, runs
 from uqs.stack.trace_render import CODE_FIELDS
@@ -183,4 +183,4 @@ def test_every_column_uqs_run_shows_is_one_q_records():
         (cli_runs._FACT_COLUMNS, q_facts.ETL_RUN_META_COLUMNS, "_FACT_COLUMNS"),
     ):
         missing = [c for c in shown if c not in ledger]
-        assert not missing, f"cli/runs.py {name} names {missing}, which the ledger lacks"
+        assert not missing, f"cli/job/runs.py {name} names {missing}, which the ledger lacks"

@@ -29,8 +29,8 @@ from pathlib import Path
 import pytest
 from test_data_compress_report import BUILD_Q, _digest, run_uqs
 
-from uqs.cli import hdb_scope
-from uqs.cli import target as target_cli
+from uqs.cli.data import hdb_scope
+from uqs.cli.target import target as target_cli
 from uqs.deploy import history, targets
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack.hdb_compression import SshHost

@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.table import Table
 from textual.widgets import DataTable
 
-from uqs.cli import table_browser
+from uqs.cli.common import table_browser
 from uqs.paths import UqsError
 
 

@@ -37,54 +37,54 @@ from __future__ import annotations
 # their own modules, under a help panel of their own (#1417).
 #
 # isort: off
-from uqs.cli import lifecycle  # noqa: F401
-from uqs.cli import backfill  # noqa: F401
-from uqs.cli import job_run  # noqa: F401
-from uqs.cli import cleanup  # noqa: F401
-from uqs.cli import runs  # noqa: F401
-from uqs.cli import receiver_contract  # noqa: F401
-from uqs.cli import gaps  # noqa: F401
-from uqs.cli import stream  # noqa: F401
-from uqs.cli import verify  # noqa: F401
-from uqs.cli import replay  # noqa: F401
-from uqs.cli import seed  # noqa: F401
-from uqs.cli import migrate  # noqa: F401
-from uqs.cli import compress  # noqa: F401
-from uqs.cli import hdb_check  # noqa: F401
-from uqs.cli import hdb_alter  # noqa: F401
-from uqs.cli import snapshot  # noqa: F401
-from uqs.cli import data_diff  # noqa: F401
-from uqs.cli import summary  # noqa: F401
-from uqs.cli import graph  # noqa: F401
-from uqs.cli import query  # noqa: F401
-from uqs.cli import inspect  # noqa: F401
-from uqs.cli import config  # noqa: F401
-from uqs.cli import logs  # noqa: F401
-from uqs.cli import runtime_diff  # noqa: F401
-from uqs.cli import runtime_prepare  # noqa: F401
-from uqs.cli import sources  # noqa: F401
-from uqs.cli import source_check  # noqa: F401
-from uqs.cli import create  # noqa: F401
-from uqs.cli import remove  # noqa: F401
-from uqs.cli import install  # noqa: F401
-from uqs.cli import attach  # noqa: F401
-from uqs.cli import attachment_show  # noqa: F401
-from uqs.cli import external  # noqa: F401
-from uqs.cli import connector_logs  # noqa: F401
-from uqs.cli import odbc  # noqa: F401
-from uqs.cli import deploy  # noqa: F401
-from uqs.cli import deploy_component  # noqa: F401
-from uqs.cli import deploy_server  # noqa: F401
-from uqs.cli import target  # noqa: F401
-from uqs.cli import target_log  # noqa: F401
-from uqs.cli import deploy_history  # noqa: F401
-from uqs.cli import target_edit  # noqa: F401
-from uqs.cli import target_adopt  # noqa: F401
-from uqs.cli import target_tunnel  # noqa: F401
-from uqs.cli import target_config  # noqa: F401
-from uqs.cli import target_config_push  # noqa: F401
-from uqs.cli import activity  # noqa: F401
-from uqs.cli import lists  # noqa: F401
+from uqs.cli.fleet import lifecycle  # noqa: F401
+from uqs.cli.job import backfill  # noqa: F401
+from uqs.cli.job import job_run  # noqa: F401
+from uqs.cli.fleet import cleanup  # noqa: F401
+from uqs.cli.job import runs  # noqa: F401
+from uqs.cli.connector import receiver_contract  # noqa: F401
+from uqs.cli.job import gaps  # noqa: F401
+from uqs.cli.job import stream  # noqa: F401
+from uqs.cli.job import verify  # noqa: F401
+from uqs.cli.data import replay  # noqa: F401
+from uqs.cli.data import seed  # noqa: F401
+from uqs.cli.data import migrate  # noqa: F401
+from uqs.cli.data import compress  # noqa: F401
+from uqs.cli.data import hdb_check  # noqa: F401
+from uqs.cli.data import hdb_alter  # noqa: F401
+from uqs.cli.data import snapshot  # noqa: F401
+from uqs.cli.data import data_diff  # noqa: F401
+from uqs.cli.summary import summary  # noqa: F401
+from uqs.cli.summary import graph  # noqa: F401
+from uqs.cli.fleet import query  # noqa: F401
+from uqs.cli.fleet import inspect  # noqa: F401
+from uqs.cli.config import config  # noqa: F401
+from uqs.cli.fleet import logs  # noqa: F401
+from uqs.cli.config import runtime_diff  # noqa: F401
+from uqs.cli.config import runtime_prepare  # noqa: F401
+from uqs.cli.config import sources  # noqa: F401
+from uqs.cli.config import source_check  # noqa: F401
+from uqs.cli.job import create  # noqa: F401
+from uqs.cli.job import remove  # noqa: F401
+from uqs.cli.job import install  # noqa: F401
+from uqs.cli.connector import attach  # noqa: F401
+from uqs.cli.connector import attachment_show  # noqa: F401
+from uqs.cli.connector import external  # noqa: F401
+from uqs.cli.connector import connector_logs  # noqa: F401
+from uqs.cli.connector import odbc  # noqa: F401
+from uqs.cli.deploy import deploy  # noqa: F401
+from uqs.cli.deploy import deploy_component  # noqa: F401
+from uqs.cli.deploy import deploy_server  # noqa: F401
+from uqs.cli.target import target  # noqa: F401
+from uqs.cli.target import target_log  # noqa: F401
+from uqs.cli.deploy import deploy_history  # noqa: F401
+from uqs.cli.target import target_edit  # noqa: F401
+from uqs.cli.target import target_adopt  # noqa: F401
+from uqs.cli.target import target_tunnel  # noqa: F401
+from uqs.cli.target import target_config  # noqa: F401
+from uqs.cli.target import target_config_push  # noqa: F401
+from uqs.cli.fleet import activity  # noqa: F401
+from uqs.cli.config import lists  # noqa: F401
 
 # isort: on
 import sys
@@ -94,8 +94,8 @@ import typer.main
 from typer import Abort
 from typer._click.exceptions import ClickException, UsageError
 
-from uqs.cli.shared import EXIT_REFUSED, EXIT_USAGE, _env_log_level, app, json_refusal
-from uqs.cli.zsh_completion import patch_zsh_completion_script
+from uqs.cli.common.shared import EXIT_REFUSED, EXIT_USAGE, _env_log_level, app, json_refusal
+from uqs.cli.common.zsh_completion import patch_zsh_completion_script
 from uqs.deploy import control
 from uqs.interpreter import removed_variables_problem
 from uqs.logger import configure_logging, get_logger, json_requested

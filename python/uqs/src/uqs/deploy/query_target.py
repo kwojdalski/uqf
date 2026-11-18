@@ -7,7 +7,7 @@ lives outside uqs.cli so the frontend can reach a target without loading the
 command line (#2655).
 
 Not the global `uqs --target TARGET query`, which runs `uqs query` on the
-server (deploy/control.py). The two are refused together - cli/target.py -
+server (deploy/control.py). The two are refused together - cli/target/target.py -
 because each means a different machine runs the query.
 
 INSPECTION MODE (#2032, #2179). Every caller says what its tunnel is for:

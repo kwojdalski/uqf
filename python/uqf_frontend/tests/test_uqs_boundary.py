@@ -50,9 +50,9 @@ def test_no_frontend_module_imports_uqs_cli():
 def test_the_scan_sees_every_spelling():
     spellings = [
         "import uqs.cli",
-        "import uqs.cli.data_diff as d",
+        "import uqs.cli.data.data_diff as d",
         "from uqs.cli import data_diff",
-        "from uqs.cli.json_out import emit",
+        "from uqs.cli.common.json_out import emit",
         "from uqs import cli",
         "def f():\n    from uqs.cli import data_diff",
     ]

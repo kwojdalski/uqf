@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uqs.cli.table_filter import filter_rows, match_row, subsequence, substring
+from uqs.cli.common.table_filter import filter_rows, match_row, subsequence, substring
 
 ROWS = [
     ["rdb1", "up", "ok"],

@@ -9,7 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import safety
+from uqs.cli.common import safety
 from uqs.paths import UqsError
 from uqs.stack import hdb_migrate
 from uqs.stack import procs as stack_procs

@@ -2,7 +2,7 @@
 
 A bare number is seconds, and a unit may be given: `30`, `1.5m`, `500ms`,
 `30s`, `5m`, `2h`, `7d`. Every place that takes a span of time reads it here -
-each duration option (cli/vocabulary.py's parsers), `--last` (timerange.py),
+each duration option (cli/common/vocabulary.py's parsers), `--last` (timerange.py),
 `job new`'s `--period`, `--horizon` and `--width` (scaffold/timespan.py, which
 also takes a q timespan as written) and every duration key of
 deploy_targets.toml (deploy/targets.py). Before, `--last` refused `30` and

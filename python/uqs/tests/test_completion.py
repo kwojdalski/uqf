@@ -1,4 +1,4 @@
-"""Tests for tab completion (cli/completion.py).
+"""Tests for tab completion (cli/common/completion.py).
 
 Driven through the same protocol a shell uses - `_UQS_COMPLETE` plus
 `COMP_WORDS`/`COMP_CWORD` - rather than by calling the completers directly,

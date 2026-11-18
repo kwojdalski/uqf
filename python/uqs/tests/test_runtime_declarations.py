@@ -15,7 +15,7 @@ from typer.testing import CliRunner
 
 from uqs import cli, runtimes
 from uqs import paths as stack_paths
-from uqs.cli import pipelines, shared
+from uqs.cli.common import pipelines, shared
 from uqs.paths import UqsError
 from uqs.runtimes import Runtime
 from uqs.stack import runtime_profiles
@@ -172,7 +172,7 @@ def _reaches(fn: Callable) -> set[str]:
 
 def _leaves(cmd: Any = None, path: tuple[str, ...] = ()) -> dict[str, Any]:
     """Every command, hidden aliases too, by path."""
-    from uqs.cli import target_confirm
+    from uqs.cli.common import target_confirm
 
     cmd = cmd if cmd is not None else target_confirm.root_command()
     subs = target_confirm.subcommands(cmd)

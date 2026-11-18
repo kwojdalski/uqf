@@ -18,7 +18,7 @@ from rich.text import Text
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli.safety import dry_run_note
+from uqs.cli.common.safety import dry_run_note
 from uqs.deploy import prune
 from uqs.deploy.config import DeployError, make_config
 
@@ -134,7 +134,7 @@ def test_a_dry_run_under_a_held_lock_plans_and_says_the_lock_is_held(dest, log_t
 def test_the_command_ends_a_dry_run_with_the_note_on_stderr_after_the_json(dest, monkeypatch):
     """#1902, #2125: under --json stdout is the one document a program parses,
     and the note goes to stderr; without it, the text and then the note."""
-    from uqs.cli import deploy_server
+    from uqs.cli.deploy import deploy_server
 
     monkeypatch.setattr(deploy_server, "Remote", lambda *a, **k: LocalRemote())
     argv = ["deploy", "prune", "--ssh", "h", "--dest", str(dest), "--keep", "0", "--dry-run"]
@@ -223,7 +223,7 @@ def test_prune_asks_with_what_would_go_and_removes_nothing_unless_told_yes(dest,
 def test_json_without_yes_is_refused_before_the_server_is_reached(dest, monkeypatch, terminal):
     """#2229: `deploy prune --json` asked on the terminal, in the middle of a
     --json run; it is refused, exit 1, as every --json command without --yes."""
-    from uqs.cli import deploy_server
+    from uqs.cli.deploy import deploy_server
 
     def never(*_a, **_k):
         raise AssertionError("the server was reached")

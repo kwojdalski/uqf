@@ -129,8 +129,8 @@ found sound: an area skipped is not an area passed.
 4. **Resource exhaustion on the host.** Logs, tickerplant logs, staging areas,
    release caches, journals and backups: what bounds each, and what deletes it.
    Processes and connections a start, a backfill or a receiver can open, and
-   what caps them (see `model/profiles.py` and `cli/start_warnings.py`). Memory
-   a single command can take on a large HDB.
+   what caps them (see `model/profiles.py` and `cli/fleet/start_warnings.py`).
+   Memory a single command can take on a large HDB.
 5. **Privilege.** What runs as root or through sudo, what the service-user path
    requires, the permissions and owner of every file and directory written
    (umask, `chmod`), and whether a release can write outside its `dest`.

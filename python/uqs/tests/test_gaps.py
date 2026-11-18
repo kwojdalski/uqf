@@ -11,7 +11,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import gaps as gaps_cli
+from uqs.cli.job import gaps as gaps_cli
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, paths_for_root
 from uqs.stack import uptime
@@ -205,7 +205,7 @@ def test_the_printed_refill_runs_through_the_backfill_cli(monkeypatch):
     run with the widened range, rather than a refusal of its bounds."""
     import shlex
 
-    from uqs.cli import backfill as backfill_cli
+    from uqs.cli.job import backfill as backfill_cli
 
     command = _printed_command(
         _gaps_cli(monkeypatch, [_NS_HOLE], ["hdb_fx_markouts_backfill"]).output

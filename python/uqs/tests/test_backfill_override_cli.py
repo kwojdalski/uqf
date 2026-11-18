@@ -27,7 +27,7 @@ from test_attach_backfill_eod_override import IN_FENCE, REASON
 from uqs import cli
 from uqs.attach import backfill_audit, backfill_owner, backfill_policy, backfill_run
 from uqs.attach import backfill_plan as planning
-from uqs.cli import skip_options
+from uqs.cli.common import skip_options
 
 BYPASSED = backfill_policy.EOD_BYPASSED
 FENCED_DEADLINE = "2026.10.16D23:00:00.000000000"

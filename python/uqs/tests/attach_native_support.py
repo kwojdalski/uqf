@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import config, facts, native_row, plan, publisher, service
-from uqs.cli import shared
+from uqs.cli.common import shared
 from uqs.paths import repo_root
 from uqs.stack import attached_publisher
 

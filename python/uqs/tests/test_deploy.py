@@ -19,9 +19,9 @@ import pytest
 import typer
 from typer.main import get_group
 
-from uqs.cli import deploy_policy
-from uqs.cli.deploy import deploy_app
-from uqs.cli.deploy_connection import config_options
+from uqs.cli.deploy import deploy_policy
+from uqs.cli.deploy.deploy import deploy_app
+from uqs.cli.deploy.deploy_connection import config_options
 from uqs.deploy import artifact, driver, preflight, verify
 from uqs.deploy import build as release_build
 from uqs.deploy import remote as remote_mod

@@ -265,7 +265,7 @@ def test_setup_odbc_env_without_a_version_names_the_new_install_command(tmp_path
         said.append(str(exc))
         raise SystemExit(1)
 
-    monkeypatch.setattr("uqs.cli.odbc._die", die)
+    monkeypatch.setattr("uqs.cli.connector.odbc._die", die)
     (tmp_path / "odbc").mkdir()
     result = CliRunner().invoke(
         cli.app, ["setup", "odbc", "env", "--odbc-home", str(tmp_path / "odbc")]

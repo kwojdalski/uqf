@@ -9,8 +9,9 @@ import pytest
 from rich.table import Table
 from textual.widgets import DataTable, Input
 
-from uqs.cli import summary_actions, table_browser
-from uqs.cli.table_browser import RowAction
+from uqs.cli.common import table_browser
+from uqs.cli.common.table_browser import RowAction
+from uqs.cli.summary import summary_actions
 from uqs.paths import UqsError
 from uqs.stack import runtime
 

@@ -33,8 +33,8 @@ def tree(tmp_path: Path, plant_tree) -> Path:
 
 
 def test_the_scaffold_readers_see_a_table_however_it_is_spelled(tree):
-    from uqs.cli.create_backfill import defined_tables
-    from uqs.cli.create_plant import plant_definitions, plant_tables
+    from uqs.cli.job.create_backfill import defined_tables
+    from uqs.cli.job.create_plant import plant_definitions, plant_tables
 
     paths = paths_for_root(tree)
     assert {"spaced", "ladder"} <= defined_tables(tree)
@@ -108,7 +108,7 @@ def test_a_worker_dataset_in_the_tree_is_specified_from_q(tree):
 
 
 def test_a_stale_tree_is_refused_by_name_not_read_as_text(tree):
-    from uqs.cli.create_backfill import defined_tables
+    from uqs.cli.job.create_backfill import defined_tables
 
     plant = tree / "src/etl/plant_tables.q"
     plant.write_text(plant.read_text() + ".qetl.plant.late:([]time:`timestamp$())\n")

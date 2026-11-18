@@ -83,7 +83,7 @@ def test_a_job_the_tree_does_not_declare_is_refused_before_q(monkeypatch):
 
 def test_the_help_s_example_names_a_streaming_job_the_tree_declares():
     """It named the hypothetical vectorize2 from docs/scaffolding/feed.md (#2617)."""
-    from uqs.cli import stream
+    from uqs.cli.job import stream
     from uqs.model.jobs import job_rows
 
     (job,) = re.findall(r"uqs job preview (\w+)", stream.preview.__doc__ or "")

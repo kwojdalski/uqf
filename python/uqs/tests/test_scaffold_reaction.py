@@ -122,7 +122,7 @@ def test_list_jobs_shows_a_reaction_where_it_runs(tmp_path):
 def _refusal(argv: list[str], monkeypatch) -> str:
     """The message, not only the exit code: `_die` logs through loguru, which
     CliRunner cannot capture, so it is recorded - as test_scaffold_options.py does."""
-    from uqs.cli import create, create_reaction
+    from uqs.cli.job import create, create_reaction
 
     refused: list[str] = []
 

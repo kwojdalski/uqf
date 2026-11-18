@@ -4,7 +4,7 @@
 `uqs job attachment add` (which starts the attached publisher once verified)
 answer the same questions - stream it, filter the stream, stop it on Ctrl-C,
 trace its source queries, report as JSON, show it without doing it - with the
-same options, each declared once (cli/launch_options.py). This holds the set on
+same options, each declared once (cli/fleet/launch_options.py). This holds the set on
 every one of them, with the same help wherever the meaning is the same; then
 what each option newly added to a command does there.
 """
@@ -20,8 +20,9 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import publisher
-from uqs.cli import backfill_attached, shared
-from uqs.cli.shared import EXIT_USAGE
+from uqs.cli.common import shared
+from uqs.cli.common.shared import EXIT_USAGE
+from uqs.cli.job import backfill_attached
 from uqs.stack import attached_logs, log_follow, runtime
 
 #: The commands that launch something, as the words that reach them.
@@ -36,7 +37,7 @@ SHARED = {
 #: (command, option) -> why that command does without it. Empty: keep it so.
 EXCEPTIONS: dict[tuple[str, str], str] = {}
 
-#: Options declared once in cli/launch_options.py: the same help on every command.
+#: Options declared once in cli/fleet/launch_options.py: the same help on every command.
 #: --json names each command's own document, --dry-run what each one shows, and
 #: --base-port/--override/--reason were each command's before #2687 (an
 #: attachment's --override names a finding on a COMPONENT): their one meaning is

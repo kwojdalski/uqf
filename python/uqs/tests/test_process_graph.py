@@ -8,8 +8,8 @@ from textual.widgets import Tree
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import graph as cli_graph
-from uqs.cli.graph_browser import browser
+from uqs.cli.summary import graph as cli_graph
+from uqs.cli.summary.graph_browser import browser
 from uqs.model import process_graph
 from uqs.model.process_graph import Edge, Node, forest, roots, unconnected
 

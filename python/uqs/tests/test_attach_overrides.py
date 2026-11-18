@@ -25,7 +25,7 @@ from uqs.attach import config, facts, live, overrides, plan, preflight, service,
 from uqs.attach.findings import Finding
 from uqs.attach.manifest import Manifest
 from uqs.attach.overrides import OverrideError
-from uqs.cli import shared
+from uqs.cli.common import shared
 from uqs.paths import UqsError, UqsUsageError, repo_root
 
 ROOT = repo_root()
@@ -701,7 +701,7 @@ def test_attachment_add_checks_its_overrides_as_every_command_does():
     """#1852: `--override NAME:COMPONENT` goes through safety.given, as every other
     command's --override does; NAME is the guardrail's spelling, never the finding
     code's (#1884, #2752)."""
-    from uqs.cli.attach import waivers
+    from uqs.cli.connector.attach import waivers
 
     assert waivers(None, "") == []
     assert waivers(["torq-version:stp1"], "known") == ["TORQ_VERSION:stp1"]

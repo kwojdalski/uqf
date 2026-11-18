@@ -51,7 +51,7 @@ from uqf_frontend.models.services import (
     TunnelPlanResponse,
 )
 from uqs import activity_export, activity_log
-from uqs.cli import json_out
+from uqs.cli.common import json_out
 from uqs.deploy import tunnel_check, tunnel_plan
 
 
@@ -270,7 +270,7 @@ def _cli_events(db: Path) -> list[dict]:
     from typer.testing import CliRunner
 
     import uqs.cli.entry  # noqa: F401 - registers every command on the app
-    from uqs.cli.shared import app as cli
+    from uqs.cli.common.shared import app as cli
 
     result = CliRunner().invoke(cli, ["activity", "list", "--db", str(db), "--json"])
     assert result.exit_code == 0, result.output

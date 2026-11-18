@@ -461,7 +461,7 @@ def test_a_push_with_no_register_registers_nothing(declared):
 
 
 def test_push_takes_no_register(declared, monkeypatch):
-    from uqs.cli import deploy as cli_deploy
+    from uqs.cli.deploy import deploy as cli_deploy
     from uqs.deploy import driver
 
     def deploy(cfg, remote, *, on_report=None, **_k):

@@ -154,7 +154,7 @@ def test_a_started_dry_run_ends_with_the_note(monkeypatch, flag, noted):
     from typer.testing import CliRunner
 
     from uqs import cli
-    from uqs.cli.safety import dry_run_note
+    from uqs.cli.common.safety import dry_run_note
 
     monkeypatch.setattr(
         backfill, "start", lambda *a, **k: subprocess.CompletedProcess([], 0, "", "")

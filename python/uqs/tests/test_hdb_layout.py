@@ -24,7 +24,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import hdb_check
+from uqs.cli.data import hdb_check
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import hdb_layout
 

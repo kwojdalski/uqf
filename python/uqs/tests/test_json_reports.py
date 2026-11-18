@@ -17,8 +17,10 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.checks import schema_view
-from uqs.cli import external, json_out, summary_table
-from uqs.cli import graph as graph_cli
+from uqs.cli.common import json_out
+from uqs.cli.connector import external
+from uqs.cli.summary import graph as graph_cli
+from uqs.cli.summary import summary_table
 from uqs.deploy import control, history, verify
 from uqs.model.process_graph import Node
 from uqs.stack import attached_logs, runtime, stream_preview
@@ -229,7 +231,7 @@ def test_deploy_verify_json_leaves_out_the_marker(monkeypatch):
 
 
 def test_summary_json_carries_the_lines_under_the_table(monkeypatch):
-    from uqs.cli import summary as summary_cli
+    from uqs.cli.summary import summary as summary_cli
 
     rows = [{"Process": "rdb1", "Status": "up", "Port": "6002"}]
     gathered = SimpleNamespace(

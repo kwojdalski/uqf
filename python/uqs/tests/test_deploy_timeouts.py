@@ -14,8 +14,8 @@ import typer.main
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import deploy as deploy_cli
-from uqs.cli import deploy_connection, deploy_server
+from uqs.cli.deploy import deploy as deploy_cli
+from uqs.cli.deploy import deploy_connection, deploy_server
 from uqs.deploy import config, stages, targets
 from uqs.deploy.selection import Selection
 

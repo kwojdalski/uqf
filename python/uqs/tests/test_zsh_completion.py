@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typer import _completion_shared
 
-from uqs.cli.zsh_completion import COMPLETION_SCRIPT_ZSH, patch_zsh_completion_script
+from uqs.cli.common.zsh_completion import COMPLETION_SCRIPT_ZSH, patch_zsh_completion_script
 
 
 def test_typer_still_exposes_the_template_we_replace() -> None:

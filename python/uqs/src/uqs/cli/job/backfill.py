@@ -1,0 +1,362 @@
+"""`uqs job backfill`: run a bounded worker over a range.
+
+Its own command rather than `uqs start <process>`, because a backfill takes
+arguments no other process does - which worker, which source release, which
+window - and they reach the process as flags on its start line. See
+stack/backfill.py.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Annotated
+
+import typer
+
+from uqs import timerange
+from uqs.attach.backfill_forced import ANY_WRITER
+from uqs.cli.common import completion, safety
+from uqs.cli.common.choices import ChoiceOpt, alternatives
+from uqs.cli.common.concepts import attach_opt
+from uqs.cli.common.json_out import JSON_HELP, emit
+from uqs.cli.common.pipelines import needs_pipelines
+from uqs.cli.common.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.common.shared import (
+    JOB_OPERATIONS_PANEL,
+    BasePortOpt,
+    _debug_requested,
+    _die,
+    _paths,
+    console,
+    job_app,
+    log,
+)
+from uqs.cli.fleet import launch_options
+from uqs.cli.fleet.launch_options import FollowOpt, LevelOpt, OnceOpt, StopOnExitOpt, TraceOpt
+from uqs.cli.job import backfill_attached
+from uqs.generated import q_facts
+from uqs.paths import UqsError, UqsUsageError
+from uqs.stack import backfill as stack_backfill
+from uqs.stack import backfill_wait as stack_backfill_wait
+from uqs.stack import once as stack_once
+from uqs.stack import run_modes
+
+_OnConflictOpt = ChoiceOpt(
+    stack_backfill.ON_CONFLICT,
+    "--on-conflict",
+    "For this run: what a write does with a row whose row_key is already there - "
+    "{values}. Default: the worker's own "
+    f"({q_facts.DEFAULT_IO_STRATEGY} unless it declares otherwise)",
+)
+_AttachOpt = attach_opt(
+    "The saved attachment whose native HDB to backfill into "
+    "(`uqs job attachment add`), taking the stack and the destination from it. plan "
+    "lists the windows, the native date partitions, the writers and the readers to "
+    "reload, and changes nothing; run and dry-run admit afresh and start the runner "
+    "(completed historical dates only)"
+)
+
+
+@job_app.command(
+    "backfill",
+    rich_help_panel=JOB_OPERATIONS_PANEL,
+    cls=needs_pipelines(
+        "runs this tree's bounded workers",
+        safety.marked(
+            safety.Effect.CHANGES_STATE,
+            dry_run_starts="its dry run starts the worker, which fetches and transforms "
+            "every window (--dry-run, #1732)",
+        ),
+    ),
+)
+def backfill(
+    ctx: typer.Context,
+    worker: Annotated[
+        str,
+        typer.Argument(
+            metavar="JOB",
+            help="The bounded worker to run, e.g. demo_deals_backfill",
+            autocompletion=completion.backfill_workers,
+        ),
+    ],
+    range_from: RangeFromOpt = None,
+    range_to: RangeToOpt = None,
+    day: DateOpt = None,
+    last: LastOpt = None,
+    version: Annotated[
+        str | None,
+        typer.Option(
+            "--source-version",
+            help="The source_version to record coverage under. Optional when the worker "
+            "declares a default; a new value re-fetches windows already covered (a restatement)",
+        ),
+    ] = None,
+    on_conflict: _OnConflictOpt = None,
+    mode: Annotated[
+        str | None,
+        typer.Option(
+            "--mode",
+            help=alternatives(
+                run_modes.MODE_OPTION_MODES,
+                {m: run_modes.NOTES[m] for m in run_modes.MODE_OPTION_MODES},
+                default=run_modes.DEFAULT_MODE,
+                quote="`",
+            )
+            + ". A dry run - fetch and transform, write nothing - is --dry-run",
+            autocompletion=completion.choices(*run_modes.MODE_OPTION_MODES),
+        ),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            "-n",
+            help="Fetch and transform every window, and write nothing",
+        ),
+    ] = False,
+    fixture: Annotated[
+        bool,
+        typer.Option(
+            "--fixture/--live",
+            help="Let a worker whose source has no credential write the source's fixture "
+            "(a demo), or (--live, the default) refuse it outside a dry run. A fixture's "
+            "coverage is recorded under <version>~fixture, so a later live run still fetches "
+            "the range",
+        ),
+    ] = False,
+    attach: _AttachOpt = None,
+    writer: Annotated[
+        str | None,
+        typer.Option(
+            "--writer",
+            metavar="HOST:PORT",
+            help="With --attachment: extract here and send each window to the receiver "
+            "`uqs job receiver start` started on the stack's machine, which writes its HDB",
+        ),
+    ] = None,
+    as_json: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help=f"{JSON_HELP}: what started (with --wait, its outcome) - or, with "
+            "--attachment, the admission plan",
+        ),
+    ] = False,
+    port: BasePortOpt = None,
+    trace: TraceOpt = False,
+    wait: Annotated[
+        bool,
+        typer.Option(
+            "--wait",
+            help="Wait for the run's outcome and exit with it: 0 for completed or idle; "
+            "1 for failed, partial, refused or a process that died; 4 for a run an operator "
+            "stopped between two windows; with --attachment, 3 "
+            "for rows written and covered that a reader has not reloaded - run the same "
+            "command again to ask the readers again. Without it, the exit code says only "
+            "whether the process started",
+        ),
+    ] = False,
+    follow: FollowOpt = False,
+    stop_on_exit: StopOnExitOpt = False,
+    level: LevelOpt = None,
+    override: safety.OverrideOpt = None,
+    reason: safety.ReasonOpt = None,
+    once: OnceOpt = False,
+) -> None:
+    """Run a bounded worker over [--from, --to), recording coverage under --source-version.
+
+    The range is required - --from/--to, --date or --last: a backfill that
+    guessed one would publish the wrong window and record it as covered.
+    --source-version is required too unless the worker declares a default
+    source_version - one whose source is never restated. Pass a new
+    --source-version to re-fetch windows already covered. The process registers with discovery, so
+    the stack has to be up, and it exits when the range is done - follow it with
+    `uqs logs <process> -f`.
+
+    e.g.
+
+        uqs job backfill demo_deals_backfill --source-version v1 --from 2026-09-13 --to 2026-09-15
+        uqs job backfill demo_deals_backfill --source-version v1 --date 2026-09-13
+
+    `--mode plan` lists the windows a run would fetch without opening the
+    source or writing anything; `--dry-run` fetches them and
+    writes nothing. Their output is in the process's log, like a run's. Every
+    mode but a run rehearses against the data directory as the stack's last
+    start left it, and never bootstraps it: on a tree not yet started it is
+    refused, naming `uqs start`.
+
+    `uqs --debug job backfill ...` starts the process with
+    `-verbose`, so its log - `uqs logs <process>` - carries DEBUG lines.
+    `--trace` starts it with `-trace`: every query sent to the source, at TRACE,
+    and the DEBUG lines `uqs --debug` would show, so each query sits beside its
+    window.
+
+    The exit code is torq.sh's: whether the process STARTED, not how the run
+    ended. `--wait` waits for the run's outcome and exits with that - what
+    a script or a scheduler wants. With `--attachment`, `--follow` (`-f`) is
+    `--wait` that also streams the run's own log as it goes; Ctrl-C stops the
+    stream and leaves the run running. `--follow --stop-on-exit` makes Ctrl-C
+    ask the run to stop instead (a stop file the run checks between windows,
+    never inside one): it finishes its current window, records `stopped`, and
+    the command exits 4 once it has; a second Ctrl-C stops following and
+    leaves the request standing. A re-run does the windows that remain.
+    `--level` filters the stream as `uqs start -f --level` does; a line the
+    run wrote without a level - a q error, its RESULT - is always shown.
+
+    `--once` runs ONE planned window - the first the range still has uncovered, through the
+    same validate, publish, checkpoint and coverage steps - then waits for the outcome and
+    exits with it; the other windows stay uncovered for the next run. A range already
+    covered at this version is no work, not a failure. A running process of the worker is
+    refused. Not with `--attachment`, `--mode validate` or `--mode plan`.
+
+    With `--attachment`, `--skip-eod-fence --reason TEXT` (`--override eod-fence`)
+    admits a plan, dry run or run within the native writers' end-of-day fence
+    and gives it no end-of-day write deadline - "EOD fence bypassed; no EOD
+    write deadline". Every other coordination check still refuses: the active
+    date, a reload in progress, an unknown clock, and the rest.
+    """
+    try:
+        waived = safety.given("job backfill", override, reason)
+    except UqsError as exc:
+        _die(exc)
+    # `--override any-writer` (a bare --any-writer until #1852) is the writer's,
+    # not a coordination waiver: it travels as `force`.
+    why = waived.pop(ANY_WRITER, None)
+    force = why is not None
+    if force:
+        log.warning("uqs job backfill: --override {} ({})", ANY_WRITER, why)
+    if waived and attach is None:
+        _die(
+            UqsUsageError(
+                f"{backfill_attached.waiver_names(waived)} is for --attachment: only a backfill "
+                "into an attached native HDB is fenced at its writers' end of day, and this one "
+                "is not"
+            )
+        )
+    if mode == "dry-run":  # one spelling of a dry run (#1858, #2752)
+        _die(UqsUsageError("`--mode dry-run` is `--dry-run`"))
+    if dry_run:
+        if mode is not None:
+            _die(UqsError(f"--dry-run is a mode of its own: not with --mode {mode}"))
+        mode = "dry-run"
+    if force and writer is None:
+        _die(
+            UqsUsageError(
+                "--override any-writer is for --writer: it writes through the process at HOST:PORT"
+            )
+        )
+    if writer is not None and attach is None:
+        _die(
+            UqsUsageError(
+                "--writer is for --attachment: it names the receiver of an attached destination"
+            )
+        )
+    refused = launch_options.refusal(follow=follow, level=level, stop_on_exit=stop_on_exit)
+    refused = refused or launch_options.once_refusal(once=once, once_timeout=None, follow=follow)
+    if refused is not None:
+        _die(refused)
+    if once and (attach is not None or mode in run_modes.READ_ONLY_MODES):
+        _die(UqsError("--once runs one window of a run in this stack: not with --attachment, "
+                      "--mode validate or --mode plan, which run none"))  # fmt: skip
+    if follow and attach is None:
+        _die(
+            UqsUsageError(
+                "--follow is for --attachment: this backfill runs as a stack process - use "
+                "--wait, and follow its log with `uqs logs <process> -f`"
+            )
+        )
+    if follow and as_json:  # stdout is one JSON document (#1685); a stream is not one
+        _die(UqsUsageError(f"{launch_options.FOLLOW_NOT_WITH_JSON}: use --wait --json"))
+    if follow and mode in run_modes.READ_ONLY_MODES:
+        _die(UqsError(f"--follow has nothing to follow with --mode {mode}: it starts no run"))
+    if wait and mode in run_modes.READ_ONLY_MODES:
+        _die(UqsError(f"--wait has nothing to wait for with --mode {mode}: it writes no status"))
+    try:
+        bound_from, bound_to = timerange.resolve(range_from, range_to, day, last).bounds
+    except UqsError as exc:
+        _die(exc)
+    if attach is not None:
+        try:
+            resolved = stack_backfill.resolve_version(worker, version)
+        except UqsError as exc:
+            _die(exc)
+        backfill_attached.run(
+            attach,
+            worker,
+            resolved,
+            bound_from,
+            bound_to,
+            mode=mode,
+            port=port,
+            fixture=fixture,
+            on_conflict=on_conflict,
+            as_json=as_json,
+            wait=wait,
+            follow=follow,
+            stop_on_exit=stop_on_exit,
+            level=level,
+            verbose=_debug_requested(ctx),
+            trace=trace,
+            writer=writer,
+            force=force,
+            waived=waived,
+        )
+        return
+    try:
+        paths = _paths()
+        resolved = stack_backfill.resolve_version(worker, version)
+        launched_at = datetime.now(UTC)
+        if once:  # never stop or reuse a running process of the worker (#2798)
+            stack_once.refuse_if_running(paths, stack_backfill.procname_for(worker), port)
+        result = stack_backfill.start(
+            paths,
+            worker,
+            resolved,
+            bound_from,
+            bound_to,
+            base_port=port,
+            verbose=_debug_requested(ctx),
+            trace=trace,
+            on_conflict=on_conflict,
+            mode=mode,
+            fixture=fixture,
+            **({"capture": True} if as_json else {}),
+            **({"once": True} if once else {}),
+        )
+        procname = stack_backfill.procname_for(worker)
+        started = {
+            "job": worker, "process": procname, "source_version": resolved,
+            "range_from": bound_from.isoformat(), "range_to": bound_to.isoformat(),
+            "mode": mode or "run", "started": result.returncode == 0,
+            "output": (result.stdout or "").splitlines() if as_json else [],
+        }  # fmt: skip
+        if once and result.returncode == 0:  # the unit's outcome is the command's exit
+            from uqs.cli.job import job_run  # noqa: PLC0415 - entry.py registers it after backfill
+
+            outcome = stack_once.wait(paths, procname, launched_at, base_port=port)
+            job_run.report(procname, worker, outcome, as_json)
+        if result.returncode != 0 or not wait:
+            if as_json:
+                emit(started)
+            elif result.returncode == 0 and dry_run:
+                console.print(safety.dry_run_note())
+            raise typer.Exit(code=result.returncode)
+        if not as_json:
+            console.print(
+                f"[dim]waiting for {procname}'s outcome (Ctrl-C stops waiting, not the run)[/]"
+            )
+        state, code, error = stack_backfill_wait.wait_for_outcome(
+            paths, procname, resolved, bound_from, bound_to, launched_at, base_port=port
+        )
+    except UqsError as exc:
+        _die(exc)
+    if as_json:
+        emit({**started, **backfill_attached.outcome(state, code), "error": error})
+        raise typer.Exit(code=code)
+    colour = "green" if code == 0 else "red"
+    console.print(f"[{colour}]{procname}: {state}[/] - `uqs logs {procname}` for its log")
+    if error:
+        console.print(f"  {error}", markup=False)
+    if code == 0 and dry_run:
+        console.print(safety.dry_run_note())
+    raise typer.Exit(code=code)

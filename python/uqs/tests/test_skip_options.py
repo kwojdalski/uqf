@@ -21,8 +21,8 @@ from plain_cli import PlainRunner
 from typer.core import TyperGroup
 
 from uqs import cli
-from uqs.cli import safety, skip_options
-from uqs.cli import target as target_cli
+from uqs.cli.common import safety, skip_options
+from uqs.cli.target import target as target_cli
 from uqs.deploy import config, control, targets
 from uqs.guardrails import Guardrail
 from uqs.paths import UqsError

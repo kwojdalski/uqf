@@ -113,7 +113,9 @@ def test_without_force_an_unverified_attachment_is_still_refused(world, monkeypa
 
 def test_force_without_a_writer_is_refused(world, monkeypatch):
     errors: list[str] = []
-    monkeypatch.setattr("uqs.cli.shared.log.error", lambda m, *a: errors.append(str(m).format(*a)))
+    monkeypatch.setattr(
+        "uqs.cli.common.shared.log.error", lambda m, *a: errors.append(str(m).format(*a))
+    )
     result = CliRunner().invoke(
         cli.app,
         ["job", "backfill", WORKER, "--attachment", "pb-uat", "--from", "2015-01-07",
@@ -127,7 +129,9 @@ def test_force_without_a_writer_is_refused(world, monkeypatch):
 
 def test_force_refuses_any_strategy_but_append(world, monkeypatch):
     errors: list[str] = []
-    monkeypatch.setattr("uqs.cli.shared.log.error", lambda m, *a: errors.append(str(m).format(*a)))
+    monkeypatch.setattr(
+        "uqs.cli.common.shared.log.error", lambda m, *a: errors.append(str(m).format(*a))
+    )
     result = CliRunner().invoke(
         cli.app,
         ["job", "backfill", WORKER, "--attachment", "pb-uat", "--from", "2015-01-07",

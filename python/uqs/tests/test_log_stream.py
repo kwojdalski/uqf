@@ -28,7 +28,7 @@ from loguru import logger
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import shared
+from uqs.cli.common import shared
 
 
 def _env(root: Path) -> dict[str, str]:

@@ -180,7 +180,7 @@ def test_a_streaming_transform_the_scaffold_cannot_write_is_refused(kw, message)
     ],
 )
 def test_transform_is_refused_where_it_does_not_apply(argv, message, monkeypatch):
-    from uqs.cli import create, create_reaction
+    from uqs.cli.job import create, create_reaction
 
     refused: list[str] = []
 
@@ -199,7 +199,7 @@ def test_transform_is_refused_where_it_does_not_apply(argv, message, monkeypatch
 def test_a_transform_mode_job_declares_its_transform_for_a_twin(mode, tmp_path):
     """#1571: the generated declaration names the transform its handler
     applies, so a later `--twin-of` reuses it instead of scaffolding its own."""
-    from uqs.cli import create_backfill
+    from uqs.cli.job import create_backfill
 
     plan = _stream("notional", mode, columns="sym:symbol, px:float")
     job = next(a for a in plan.actions if str(a.path).endswith("streaming/notional.q"))

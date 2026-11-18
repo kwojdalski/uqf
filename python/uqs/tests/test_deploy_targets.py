@@ -119,7 +119,7 @@ def test_the_file_can_live_elsewhere(tmp_path, monkeypatch):
 def _push(monkeypatch, root, argv, codes):
     """Run `uqs deploy push` with driver.deploy replaced: each call records its
     Config and returns the next of `codes`."""
-    from uqs.cli import deploy as cli_deploy
+    from uqs.cli.deploy import deploy as cli_deploy
 
     seen = []
     answers = iter(codes)
@@ -196,7 +196,7 @@ def test_a_push_records_itself_and_registers_its_server(root, monkeypatch, tmp_p
     """#956: a push by flags leaves a history entry and a target to drive it by."""
     from types import SimpleNamespace
 
-    from uqs.cli import deploy as cli_deploy
+    from uqs.cli.deploy import deploy as cli_deploy
     from uqs.deploy import history
 
     monkeypatch.delenv(targets.DECLARATION_ENV, raising=False)
@@ -256,7 +256,7 @@ def test_every_file_key_is_a_push_option_spelt_as_its_flag():
     import typer.main
 
     import uqs.cli.entry  # noqa: F401 - registers the commands
-    from uqs.cli.shared import app
+    from uqs.cli.common.shared import app
 
     root: Any = typer.main.get_command(app)
     push = root.commands["deploy"].commands["push"]
@@ -329,8 +329,8 @@ def test_every_duration_push_takes_is_a_duration_in_the_file():
     import typer.main
 
     import uqs.cli.entry  # noqa: F401 - registers the commands
-    from uqs.cli import vocabulary
-    from uqs.cli.shared import app
+    from uqs.cli.common import vocabulary
+    from uqs.cli.common.shared import app
 
     root: Any = typer.main.get_command(app)
     push = root.commands["deploy"].commands["push"]

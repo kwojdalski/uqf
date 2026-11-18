@@ -61,7 +61,7 @@ ACCEPT_JOB_Q = "accept-job-q"
 
 _PUSH = ("deploy push",)
 #: The overrides that were option-per-override before #1732, each then taking
-#: its reason as its value: their old spellings are value-taking (cli/deploy_policy.py).
+#: its reason as its value: their old spellings are value-taking (cli/deploy/deploy_policy.py).
 POLICY = (ACCEPT_DIGEST, ACCEPT_Q_VERSION, ALLOW_UNPINNED, ACCEPT_CONVERTED)
 #: Each override, as `--override NAME` gives it, and the requirement it relaxes (#1825).
 GUARDRAILS = (

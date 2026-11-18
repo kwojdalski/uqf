@@ -1,4 +1,4 @@
-"""`uqs job new ... --bundle DIR` (scaffold/bundle.py, cli/create_bundle.py).
+"""`uqs job new ... --bundle DIR` (scaffold/bundle.py, cli/job/create_bundle.py).
 
 The planners read this tree, through a scratch copy with the bundle installed;
 every test writes only into a bundle under tmp_path, and checks that the tree's
@@ -15,7 +15,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import create, create_bundle, create_reaction
+from uqs.cli.job import create, create_bundle, create_reaction
 from uqs.paths import CATALOG_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
 from uqs.scaffold import bundle as bundle_mod
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode

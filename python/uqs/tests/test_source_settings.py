@@ -185,7 +185,7 @@ def test_a_sources_transport_is_what_q_resolved():
 
 
 def test_the_cli_shows_the_selected_file(monkeypatch, tmp_path):
-    monkeypatch.setattr("uqs.cli.sources._paths", lambda: paths_for_root(tmp_path, "uqf"))
+    monkeypatch.setattr("uqs.cli.config.sources._paths", lambda: paths_for_root(tmp_path, "uqf"))
     _, serv, _ = _layers(tmp_path)
     _write(serv, HEADER + "a,odbc,PWD={secret},A_PWD\n")
     monkeypatch.delenv("A_PWD", raising=False)

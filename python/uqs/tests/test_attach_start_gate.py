@@ -33,7 +33,7 @@ from uqs.attach import config, service
 from uqs.attach.config import AttachmentError
 from uqs.attach.manifest import Manifest
 from uqs.attach.publisher import UqsPublisher
-from uqs.cli import shared
+from uqs.cli.common import shared
 from uqs.paths import UqsError, default_paths, repo_root
 from uqs.stack import (
     alive,

@@ -101,6 +101,6 @@ def log_text():
 def terminal(monkeypatch):
     """A terminal to ask on: a command's question reads the runner's input.
     Without one, `safety.ask` refuses, naming --yes (#1885)."""
-    from uqs.cli import safety
+    from uqs.cli.common import safety
 
     monkeypatch.setattr(safety, "interactive", lambda: True)
