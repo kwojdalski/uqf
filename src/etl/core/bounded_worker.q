@@ -1057,7 +1057,7 @@
     recovered:.qetl.job.bounded.recover_unfinished worker;
     replayed:.qetl.job.bounded.replay_reactions worker;
     cursor:.qetl.job.bounded.state.load_checkpoint[worker;.qetl.job.bounded.spec worker];
-    windows:.qetl.job.bounded.own[worker;`plan][];
+    windows:.qetl.job.bounded.once.limit[worker;.qetl.job.bounded.own[worker;`plan][]]; / --once: the first planned window only (bounded_once.q)
     .qetl.job.bounded.write_state[worker;`progress;@[.qetl.job.bounded.read_state[worker;`progress];`windows_planned;:;count windows]];
     if[0=count windows;
         / "ran, found no work" is a SUCCESS, not a failure. An

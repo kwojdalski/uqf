@@ -36,6 +36,10 @@
 // torq_backfill.q applies them (#1319), by the same functions; -mode plan and
 // -mode validate open nothing and write nothing, whatever -hdb says.
 //
+// -once (#2798) runs the first planned window only and exits with the --once codes: 0 done, 1
+// failed, 4 stopped, 6 no work (every window already covered), writing
+// <UQF_STATUS_DIR>/once_<worker>.json - the same runner torq_backfill.q uses (.qetl.once).
+//
 // Run from the repository root: init.q's \l lines are root-relative.
 
 if[not `worker in key .Q.opt .z.x;
@@ -104,6 +108,8 @@ if[md in `validate`plan;
         md;{[e] -1 "run_backfill: ",e; exit 2}];
     .qetl.log.ch.info[`lifecycle;string[md]," - nothing opened, nothing written";(enlist[`worker]!enlist worker),`plan _ r];
     exit 0];
+/ -once: the first planned window only, as torq_backfill.q does (#2798). A read-only mode ran no window.
+if[.qetl.once.requested .Q.opt .z.x; .qetl.job.bounded.once.request worker];
 .qdev.runbackfill.use_io[.Q.opt .z.x;worker];
 
 / Three named parameters so {...}[ns;spec] is a PROJECTION: .Q.trp calls
@@ -116,5 +122,8 @@ result:.Q.trp[{[ns;spec;ignored] (` sv ns,`init)[spec]; (` sv ns,`run)[]}[ns;s`s
         `state`error!(`failed;e)}];
 
 .qetl.log.ch.info[`lifecycle;"run_backfill finished";(enlist[`worker]!enlist worker),result];
+/ -once: the outcome file and the once exit codes (.qetl.once); conclude exits the process.
+if[.qetl.once.requested .Q.opt .z.x;
+    .qetl.job.bounded.once.conclude[.qetl.once.context[worker;worker;`bounded];result]];
 code:.qetl.job.bounded.exit_code result`state;
 exit code;

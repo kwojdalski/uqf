@@ -309,6 +309,7 @@ qetl.job.bounded,initial_state,dict,,
 qetl.job.bounded,namespace,function,1,worker
 qetl.job.bounded,no_failures,function,1,
 qetl.job.bounded,on_conflict,function,1,worker
+qetl.job.bounded,once,dict,,
 qetl.job.bounded,optional_cfg,value,,
 qetl.job.bounded,owed_reactions,function,1,worker
 qetl.job.bounded,partition_of,function,1,worker
@@ -345,6 +346,12 @@ qetl.job.bounded.batching,keys,value,,
 qetl.job.bounded.batching,plan,function,2,spec rows
 qetl.job.bounded.batching,reset_reads,function,1,
 qetl.job.bounded.batching,tick,value,,
+qetl.job.bounded.once,conclude,function,2,ctx result
+qetl.job.bounded.once,limit,function,2,worker windows
+qetl.job.bounded.once,outcome,function,1,state
+qetl.job.bounded.once,request,function,1,worker
+qetl.job.bounded.once,target,value,,
+qetl.job.bounded.once,withdraw,function,1,
 qetl.job.bounded.runtime,airflow_owned,value,,
 qetl.job.bounded.runtime,allows,function,1,effect
 qetl.job.bounded.runtime,backoff_ms,function,2,pol attempt
@@ -486,6 +493,7 @@ qetl.job.stream,namespace,function,1,job
 qetl.job.stream,next_position,function,1,job
 qetl.job.stream,normalize,function,2,name decl
 qetl.job.stream,normalizer,dict,,
+qetl.job.stream,once,dict,,
 qetl.job.stream,optional_declarations,value,,
 qetl.job.stream,optional_defaults,dict,,
 qetl.job.stream,passthrough,function,1,decl
@@ -565,6 +573,11 @@ qetl.job.stream.normalizer,defined,function,1,
 qetl.job.stream.normalizer,normalize,function,3,name src batch
 qetl.job.stream.normalizer,registry,dict,,
 qetl.job.stream.normalizer,required_keys,value,,
+qetl.job.stream.once,expire,function,2,job unused
+qetl.job.stream.once,rows,value,,
+qetl.job.stream.once,run,function,3,job tr timeout
+qetl.job.stream.once,state,dict,,
+qetl.job.stream.once,timers,dict,,
 qetl.job.stream.rolling,compute,function,4,name rows as_of covered_from
 qetl.job.stream.rolling,def,function,1,name
 qetl.job.stream.rolling,define,function,2,name decl
@@ -704,6 +717,26 @@ qetl.mapped,runs,function,2,tob syms
 qetl.mapped,sample_pairs,value,,
 qetl.mapped,sources_for,function,2,tob syms
 qetl.mapped,tob_at,function,1,arg
+qetl.once,codes,dict,,
+qetl.once,conclude,function,6,ctx outcome reason units rows detail
+qetl.once,context,function,3,instance job kind
+qetl.once,declared,function,1,
+qetl.once,default_timeout,value,,
+qetl.once,document,function,6,ctx outcome reason units rows detail
+qetl.once,exit,function,1,code
+qetl.once,fields,value,,
+qetl.once,file_prefix,value,,
+qetl.once,file_suffix,value,,
+qetl.once,instance,function,1,job
+qetl.once,kind_of,function,1,job
+qetl.once,kinds,dict,,
+qetl.once,max_timeout,value,,
+qetl.once,outcomes,value,,
+qetl.once,path,function,1,instance
+qetl.once,requested,function,1,opts
+qetl.once,timeout_from_flags,function,1,opts
+qetl.once,unowned,function,1,
+qetl.once,write,function,1,doc
 qetl.plant,adopt_vendored,function,1,path
 qetl.plant,arbitrage,table,,
 qetl.plant,bases,value,,

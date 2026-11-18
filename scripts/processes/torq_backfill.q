@@ -57,6 +57,13 @@
 /             fixture (#1082) - refused otherwise, outside a dry run.
 /             Its coverage is recorded under the release tagged ~fixture.
 /             `uqs job backfill --fixture` passes it.
+/   -once    optional: run ONE planned window and exit (#2798) - the first window
+/             the range still has uncovered, validated, published, checkpointed and
+/             covered in the order every window is. The rest stay uncovered for the
+/             next run. The process writes <status_dir>/once_<procname>.json and exits
+/             done 0, failed 1, stopped 4, or no_work 6 (every window already
+/             covered) - .qetl.once, src/etl/core/once.q. `uqs job backfill --once`
+/             passes it. Not with -mode validate or plan, which run no window.
 / .
 / -worker, -from and -to are required and refused when absent, and -version
 / unless the worker declares a default. A backfill that defaulted a
@@ -244,6 +251,12 @@
     md:.qproc.backfill.use_mode .Q.opt .z.x;
     .qetl.log.ch.info[`config;"mode";(enlist[`worker]!enlist worker),enlist[`mode]!enlist md];
     if[.qproc.backfill.use_fixture .Q.opt .z.x; .qetl.log.ch.info[`config;"fixture writes allowed for this run";(enlist[`worker]!enlist worker),enlist[`fixture_writes]!enlist 1b]];
+    / -once asks for the first planned window only, and there is none to run when nothing runs.
+    if[.qetl.once.requested .Q.opt .z.x;
+        if[md in .qetl.job.bounded.runtime.read_only_modes;
+            '"torq_backfill: -once runs one window, and -mode ",string[md]," runs none"];
+        .qetl.job.bounded.once.request worker;
+        .qetl.log.ch.info[`config;"once: one planned window";enlist[`worker]!enlist worker]];
     / validate and plan stop here: no HDB, no ledger, no lock, no source.
     if[md~`validate; :.qproc.backfill.report[worker;.qetl.job.bounded.validate[worker;spec]]];
     if[md~`plan; :.qproc.backfill.report[worker;.qetl.job.bounded.plan_only[worker;spec]]];
@@ -346,6 +359,11 @@ result:.Q.trp[{.qproc.backfill.run[]};::;{[e;bt]
     .qetl.log.ch.err[`lifecycle;"backfill process failed";enlist[`error]!enlist e];
     .qetl.log.ch.err[`lifecycle;"backtrace";enlist[`trace]!enlist .Q.sbt bt];
     `state`error!(`failed;e)}];
+/ -once: the outcome file and the once exit codes (.qetl.once). conclude exits the process;
+/ the line below it is only reached where a test has replaced the exit.
+if[.qetl.once.requested .Q.opt .z.x;
+    {[r] w:`$first (.Q.opt .z.x)`worker;
+     .qetl.job.bounded.once.conclude[.qetl.once.context[.qetl.once.instance w;w;`bounded];r]} result];
 code:.qetl.job.bounded.exit_code result`state;
 / A non-zero exit is a run that did not do its job, so it is an ERROR line - at
 / INFO, `state=failed` read as routine in a log filtered for problems.
