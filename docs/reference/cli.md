@@ -101,10 +101,13 @@ worker's log and status file are the rehearsal's output.
   | 3    | done in part, with the rest to retry                                                |
   | 4    | stopped on request                                                                  |
   | 5    | done, but what came of part of it is unknown: look before running it again          |
+  | 6    | `--once` found nothing to do: an empty poll, a range already covered, no input      |
   | 130  | Ctrl-C ended the stream of `job backfill --attachment --follow`                     |
 
 Only `job backfill` and `target config push` exit 3 or 4, only `job backfill`
-130, and only `target config push` 5. For `job backfill`:
+130, only `target config push` 5, and only `start`, `restart` and `job backfill`
+with `--once` 6 (see [One unit with `--once`](#one-unit-with---once)). For
+`job backfill`:
 
 - 3 comes from `--attachment --wait` (or `--follow`). The rows are written and
   covered, but a reader has not reloaded them. Run the same command again to ask
@@ -119,6 +122,55 @@ Only `job backfill` and `target config push` exit 3 or 4, only `job backfill`
 sent (nothing was written for it), 4 after a Ctrl-C, and 5 when a file's outcome
 is unknown: it may have been written, and is never retried, so list the
 directory before pushing it again.
+
+### One unit with `--once`
+
+`uqs start JOB --once`, `uqs restart JOB --once` and
+`uqs job backfill ... --once` run ONE unit of a job's real processing and exit,
+whatever the job is. The framework's runner for the job's kind owns the end of
+the unit: a job file never implements a one-shot loop of its own, so a job
+`uqs job new` scaffolds has `--once` the moment it exists.
+
+  | job                          | one unit is                                           |
+  | ---                          | ---                                                   |
+  | polling feed                 | one poll: fetch, normalize, publish, save the cursor  |
+  | timer-driven job             | one processing cycle                                  |
+  | streaming subscriber         | one input batch, and its processing                   |
+  | bounded worker               | one planned window: the first the range has uncovered |
+  | reaction                     | one invocation, under its parent's run                |
+
+A unit may publish nothing, and then it is still done: nothing is made up to
+fill it, and a subscriber's pending event-time state is never flushed to finish
+it. The window is the same window it always is, validated, published,
+checkpointed and covered in that order, and every rate and resource limit holds.
+The other windows of a backfill stay uncovered, so the next run plans them.
+
+The command waits for the unit and exits with how it ended: 0 done, 1 failed, 4
+a bounded run stopped on request (`stopped`), 6 no work. `--json` prints
+`{"process", "job", "kind", "outcome", "reason", "units", "rows", "detail", "exit_code", "ok"}`.
+No work is a success a scheduler can tell from a unit that ran, and `reason`
+says which: `no_new_data` (a poll found no page), `all_covered` (a backfill
+range already covered at that version) or `input_timeout`.
+
+A streaming subscriber waits for its one batch, so its wait is bounded:
+`--once-timeout DURATION`, 60 s by default and 3600 s at most. When it passes
+with no batch the unit is `no_work` with reason `input_timeout`, a wait that
+ended. It is not a cancelled query: a remote query that is cancelled is an error
+from that call and ends the unit `failed`. A batch replayed while the job
+rebuilds its state is state, not input, and does not end the wait.
+
+`--once` refuses rather than stops or reuses a process of the same job that is
+already running, and `restart --once` is the same refusal, not a stop. It takes
+one job process by name: not `all`, not `--profile`, and not an infrastructure
+service (tickerplant, RDB, HDB, gateway), which have no unit. A backfill is run
+with `uqs job backfill`, never `uqs start`. Not yet supported, and named as
+expected failures in `python/uqs/tests/test_once_contract.py`:
+`uqs job attachment add`, `uqs connector start`, `uqs job backfill --attachment`
+and `scripts/jobs/run_stream.q`. Without `--once`, nothing changes.
+
+The process writes `<status_dir>/once_<procname>.json` (the `.qetl.once` fields)
+and leaves with the same code, so `q scripts/jobs/run_backfill.q ... -once` and
+the stack's processes report one way.
 
 ### Output in a pipe
 

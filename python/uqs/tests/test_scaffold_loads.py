@@ -73,6 +73,18 @@ check["local source declares its transport"; `local~.qetl.source.def[`smokelocal
 check["local worker registered"; registered[.qetl.job.bounded.def;`smokelocal_backfill]]
 check["one-column source registered"; registered[.qetl.source.def;`smokeone]]
 check["one-column worker registered"; registered[.qetl.job.bounded.def;`smokeone_backfill]]
+/ --once (#2798): a scaffolded job is run by the framework's runner for its kind, so it has a
+/ one-unit run the moment it exists - nothing in the job file says how, and nothing could drift.
+onceable:{[job;kind] kind~@[.qetl.once.kind_of;job;{[e] `none}]}
+check["feed has a --once unit: a timer cycle"; onceable[`smokefeed;`timer]]
+check["poll feed has a --once unit: one poll"; onceable[`smokepoll;`poll]]
+check["compound poll feed has a --once unit: one poll"; onceable[`smokepollc;`poll]]
+check["etl has a --once unit: one input batch"; onceable[`smokeetl;`subscriber]]
+check["normalizer has a --once unit: one input batch"; onceable[`smokenorm;`subscriber]]
+check["horizon job has a --once unit: one input batch"; onceable[`smokehz;`subscriber]]
+check["backfill has a --once unit: one planned window"; onceable[`smokebf_backfill;`bounded]]
+check["every declared job resolves to a kind with a runner";
+    all (exec kind from .qetl.once.declared[]) in exec kind from .qetl.once.kinds]
 check["feed on_timer throws not implemented"; unwritten {.qpipe.job.smokefeed.on_timer[]}]
 check["poll feed declares poll and gets a generated timer";
     {d:.qetl.job.stream.def x; (`poll in key d) and `on_timer in key d}`smokepoll]

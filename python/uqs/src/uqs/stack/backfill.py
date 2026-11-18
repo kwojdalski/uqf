@@ -89,6 +89,7 @@ def backfill_flags(
     on_conflict: str | None = None,
     mode: str | None = None,
     fixture: bool = False,
+    once: bool = False,
 ) -> list[str]:
     """The flags torq_backfill.q reads, validated so torq.sh passes them intact.
 
@@ -139,6 +140,7 @@ def backfill_flags(
     return [
         *flags,
         *(["-fixture"] if fixture else []),
+        *(["-once"] if once else []),
         *(["-verbose"] if verbose else []),
         *(["-trace"] if trace else []),
     ]
@@ -158,6 +160,7 @@ def start(
     mode: str | None = None,
     fixture: bool = False,
     capture: bool = False,
+    once: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     """Start the process that runs `worker`, over [range_from, range_to).
 
@@ -182,6 +185,7 @@ def start(
         on_conflict=on_conflict,
         mode=mode,
         fixture=fixture,
+        once=once,
     )
     args = ["start", procname, "-extras", *flags]
     if mode in REHEARSAL_MODES:
