@@ -144,7 +144,7 @@
 / @param timeout how long a subscriber waits for its batch, a timespan
 / @return the outcome document for a poll or timer job, `waiting for a subscriber
 / @throws error when the job is not a streaming job
-/ @eg .qetl.job.stream.once.run[`demo_deals_feed;tr;0D00:01:00]
+/ @eg .qetl.job.stream.once.run[`upstream_trades_backfill;()!();0D00:01:00]  ->  throws
 .qetl.job.stream.once.run:{[job;tr;timeout]
     kind:.qetl.once.kind_of job;
     if[not kind in `poll`timer`subscriber; '"once: ",string[job]," is a ",string[kind]," job, which the stream runner does not run"];

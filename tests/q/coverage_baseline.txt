@@ -33,6 +33,10 @@
 .qpipe.source.upstream_trades.query
 # hdb_orders.query reads orders over IPC from a live HDB (#1396)
 .qpipe.source.hdb_orders.query
+# once.exit ends the process, so a test that entered it would end the run: every --once test
+# replaces it with a recorder, and the two real-process tests in test_once.q and the dev launcher's
+# in test_torq_backfill.q run it in a child q and read the exit code (#2798)
+.qetl.once.exit
 
 # --- Needs a running TorQ process --------------------------------------
 # .qtorq is the TorQ block library and .qpipe.job the subscriber processes. Both
