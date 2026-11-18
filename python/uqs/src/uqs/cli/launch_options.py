@@ -6,7 +6,8 @@ once verified). They answer the same questions with the same options, so each
 is an `Annotated` type here that every one of them names: `--follow`/`-f`
 streams what it started, `--level` filters that stream, `--stop-on-exit` makes
 Ctrl-C stop what it started, `--trace` logs every source query from before
-the first, and `--once` runs one unit of the job and exits (#2798). A test holds
+the first. `--once` runs one unit of a job and exits (#2798): `uqs job run` and
+`uqs job backfill` take it, never `start`/`restart`, which address processes. A test holds
 the set on each command (tests/test_launch_options.py); tests/test_once_contract.py
 holds `--once` to every job kind and the interfaces that carry it.
 

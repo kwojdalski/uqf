@@ -17,7 +17,7 @@
 / .
 / `-once` (#2798) runs ONE unit of the job - one poll, one timer cycle, or one input batch
 / and its processing - and exits with an outcome (.qetl.once, src/etl/core/once.q); `uqs
-/ start JOB --once` passes it. `-once_timeout SECONDS` bounds a subscriber's wait for its batch.
+/ job run JOB --once` passes it. `-once_timeout SECONDS` bounds a subscriber's wait for its batch.
 / .
 / This file is the ONLY place a streaming job meets TorQ: .qtorq for the
 / subscription, the publish handle and the timer. The job files know nothing

@@ -23,7 +23,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.cli import backfill as backfill_cli
-from uqs.cli import once_launch, shared
+from uqs.cli import job_run, shared
 from uqs.cli.shared import EXIT_REFUSED, EXIT_USAGE
 from uqs.generated import q_facts
 from uqs.model.kinds import (
@@ -138,7 +138,7 @@ def test_the_scaffold_kinds_are_exactly_the_ones_placed():
 
 
 def test_every_declared_job_is_reached_by_exactly_one_launch_interface():
-    """A streaming job by `start --once`, a bounded worker by `job backfill --once`."""
+    """A streaming job by `job run --once`, a bounded worker by `job backfill --once`."""
     from uqs.model.declarations import read_declarations
     from uqs.model.pipeline import PipelineKind
     from uqs.paths import repo_root
@@ -146,9 +146,10 @@ def test_every_declared_job_is_reached_by_exactly_one_launch_interface():
     streams = once.job_processes()
     for d in read_declarations(repo_root()):
         if d.kind is PipelineKind.BACKFILL:
-            assert d.procname not in streams, f"{d.procname}: a worker's process is not `start`'s"
+            assert d.procname not in streams, f"{d.procname}: a worker is not `job run`'s"
         else:
             assert streams[d.procname] == d.name
+            assert once.process_of(d.name) == d.procname
 
 
 # ------------------------------------------------------ what is not supported yet
@@ -200,11 +201,6 @@ GAPS: tuple[Gap, ...] = (
         _carries_once("connector", "start"),
     ),
     Gap(
-        "connector restart",
-        "an external connector has no framework runner yet",
-        _carries_once("connector", "restart"),
-    ),
-    Gap(
         "job backfill --attachment",
         "an attached backfill runs through scripts/jobs/attached_backfill.q, a different runner",
         _backfill_attachment_accepts_once,
@@ -234,8 +230,7 @@ def test_every_gap_says_why():
 
 #: What each launch interface that takes --once carries.
 LAUNCHERS = {
-    ("start",): {"--once", "--once-timeout"},
-    ("restart",): {"--once", "--once-timeout"},
+    ("job", "run"): {"--once", "--once-timeout"},
     ("job", "backfill"): {"--once"},
 }
 
@@ -246,12 +241,18 @@ def test_every_supported_launcher_carries_its_once_options(path):
     assert not missing, f"`uqs {' '.join(path)}` lacks {sorted(missing)}"
 
 
-@pytest.mark.parametrize("path", [("start",), ("restart",), ("job", "backfill")], ids=" ".join)
+@pytest.mark.parametrize("path", [("job", "run"), ("job", "backfill")], ids=" ".join)
 def test_the_option_means_the_same_on_every_launcher(path):
     helps = {" ".join(p): next(o for o in _command(*p).params if "--once" in o.opts).help
              for p in LAUNCHERS}  # fmt: skip
     assert len(set(helps.values())) == 1, "--once drifted between launchers"
     assert q_facts.ONCE_EXIT_NO_WORK.__str__() in helps[" ".join(path)], "its help states the codes"
+
+
+@pytest.mark.parametrize("verb", ["start", "restart"])
+def test_the_process_commands_take_no_once(verb):
+    """--once is a job's unit: `start` and `restart` address processes and the fleet."""
+    assert not {"--once", "--once-timeout"} & _options(verb)
 
 
 def test_the_start_flags_are_what_q_reads():
@@ -263,7 +264,7 @@ def test_the_start_flags_are_what_q_reads():
             once.flags(bad)
 
 
-# --------------------------------------------------------------- start / restart --once
+# ------------------------------------------------------------------------- job run --once
 
 
 class _ErrorLog:
@@ -286,12 +287,12 @@ def _errors(monkeypatch) -> list[str]:
 
 
 class _Launched:
-    """What `start --once` asked of the world, with the world stubbed."""
+    """What `job run --once` asked of the world, with the world stubbed."""
 
     def __init__(self, monkeypatch, *, running=(), outcome=None):
         self.torq_sh: list[list[str]] = []
         self.stopped: list[Any] = []
-        monkeypatch.setattr(once_launch, "_paths", lambda: object())
+        monkeypatch.setattr(job_run, "_paths", lambda: object())
         monkeypatch.setattr(alive, "running", lambda paths, port=None: set(running))
         monkeypatch.setattr(runtime, "stop", lambda *a, **kw: self.stopped.append(a))
 
@@ -310,26 +311,24 @@ def _outcome(name, reason="", rows=0, **doc):
     )
 
 
-def _invoke(verb, *argv):
-    return CliRunner().invoke(cli.app, [verb, *argv], catch_exceptions=False)
+def _invoke(*argv):
+    return CliRunner().invoke(cli.app, ["job", "run", *argv], catch_exceptions=False)
 
 
-@pytest.mark.parametrize("verb", ["start", "restart"])
 @pytest.mark.parametrize(
     ("name", "code"), [("done", 0), ("no_work", 6), ("failed", 1), ("stopped", 4)]
 )
-def test_the_exit_status_is_the_units_outcome(monkeypatch, verb, name, code):
+def test_the_exit_status_is_the_units_outcome(monkeypatch, name, code):
     seen = _Launched(monkeypatch, outcome=_outcome(name))
-    result = _invoke(verb, "demo_deals_feed1", "--once")
+    result = _invoke("demo_deals_feed", "--once")
     assert result.exit_code == code, result.output
     assert seen.torq_sh == [["start", "demo_deals_feed1", "-extras", "-once"]]
-    assert seen.stopped == [], "nothing was stopped, restart included"
+    assert seen.stopped == [], "nothing was stopped"
 
 
-@pytest.mark.parametrize("verb", ["start", "restart"])
-def test_json_reports_the_outcome_and_the_exit_code(monkeypatch, verb):
+def test_json_reports_the_outcome_and_the_exit_code(monkeypatch):
     _Launched(monkeypatch, outcome=_outcome("no_work", "no_new_data"))
-    result = _invoke(verb, "demo_deals_feed1", "--once", "--json")
+    result = _invoke("demo_deals_feed", "--once", "--json")
     doc = json.loads(result.stdout)
     assert result.exit_code == 6
     assert (doc["outcome"], doc["reason"], doc["exit_code"], doc["ok"]) == (
@@ -344,7 +343,7 @@ def test_json_reports_the_outcome_and_the_exit_code(monkeypatch, verb):
 
 def test_a_failure_is_not_ok_in_the_document(monkeypatch):
     _Launched(monkeypatch, outcome=_outcome("failed", "upstream refused"))
-    doc = json.loads(_invoke("start", "demo_deals_feed1", "--once", "--json").stdout)
+    doc = json.loads(_invoke("demo_deals_feed", "--once", "--json").stdout)
     assert (doc["outcome"], doc["ok"], doc["exit_code"], doc["reason"]) == (
         "failed", False, 1, "upstream refused",
     )  # fmt: skip
@@ -352,20 +351,19 @@ def test_a_failure_is_not_ok_in_the_document(monkeypatch):
 
 def test_the_input_timeout_reaches_the_start_line(monkeypatch):
     seen = _Launched(monkeypatch, outcome=_outcome("no_work", "input_timeout"))
-    _invoke("start", "fxpositions1", "--once", "--once-timeout", "90")
+    _invoke("fx_positions", "--once", "--once-timeout", "90")
     assert seen.torq_sh == [["start", "fxpositions1", "-extras", "-once", "-once_timeout", "90"]]
 
 
 def test_trace_and_once_combine(monkeypatch):
     seen = _Launched(monkeypatch, outcome=_outcome("done"))
-    _invoke("start", "demo_deals_feed1", "--once", "--trace")
+    _invoke("demo_deals_feed", "--once", "--trace")
     assert seen.torq_sh == [["start", "demo_deals_feed1", "-extras", "-trace", "-once"]]
 
 
-@pytest.mark.parametrize("verb", ["start", "restart"])
-def test_a_running_process_is_refused_and_left_alone(monkeypatch, verb):
+def test_a_running_process_is_refused_and_left_alone(monkeypatch):
     seen = _Launched(monkeypatch, running={"demo_deals_feed1"}, outcome=_outcome("done"))
-    result = _invoke(verb, "demo_deals_feed1", "--once")
+    result = _invoke("demo_deals_feed", "--once")
     assert result.exit_code == EXIT_REFUSED
     assert seen.torq_sh == [] and seen.stopped == [], "no start line was run and nothing stopped"
 
@@ -373,26 +371,25 @@ def test_a_running_process_is_refused_and_left_alone(monkeypatch, verb):
 def test_the_refusal_says_why_and_how_to_get_a_fresh_unit(monkeypatch):
     log = _errors(monkeypatch)
     _Launched(monkeypatch, running={"demo_deals_feed1"})
-    _invoke("start", "demo_deals_feed1", "--once")
+    _invoke("demo_deals_feed", "--once")
     assert any("never stops or reuses a running process" in m for m in log), log
 
 
 @pytest.mark.parametrize(
     ("argv", "says"),
     [
-        (["--once"], "name exactly one job process"),
-        (["all", "--once"], "name exactly one job process"),
-        (["demo_deals_feed1", "fxfeed1", "--once"], "name exactly one job process"),
-        (["stp1", "--once"], "not a job process"),
-        (["rdb1", "--once"], "not a job process"),
-        (["gateway1", "--once"], "not a job process"),
-        (["deals_backfill1", "--once"], "uqs job backfill"),
+        (["all", "--once"], "is not a job"),
+        (["stp1", "--once"], "is not a job"),
+        (["rdb1", "--once"], "is not a job"),
+        (["gateway1", "--once"], "is not a job"),
+        (["demo_deals_feed1", "--once"], "uqs job run demo_deals_feed --once"),
+        (["demo_deals_backfill", "--once"], "uqs job backfill demo_deals_backfill"),
     ],
 )
-def test_only_one_streaming_jobs_process_has_a_unit(monkeypatch, argv, says):
+def test_only_a_streaming_job_has_a_unit_to_run(monkeypatch, argv, says):
     log = _errors(monkeypatch)
     seen = _Launched(monkeypatch)
-    result = _invoke("start", *argv)
+    result = _invoke(*argv)
     assert result.exit_code == EXIT_REFUSED
     assert any(says in m for m in log), log
     assert seen.torq_sh == [], "refused before torq.sh was asked for anything"
@@ -401,14 +398,14 @@ def test_only_one_streaming_jobs_process_has_a_unit(monkeypatch, argv, says):
 @pytest.mark.parametrize(
     ("argv", "says"),
     [
-        (["demo_deals_feed1", "--once-timeout", "5"], "--once-timeout needs --once"),
-        (["demo_deals_feed1", "--once", "--follow"], "--follow does not apply with --once"),
+        (["demo_deals_feed"], "needs --once"),
+        (["demo_deals_feed", "--once-timeout", "5"], "--once-timeout needs --once"),
     ],
 )
 def test_options_that_do_not_fit_the_unit_are_usage_errors(monkeypatch, argv, says):
     log = _errors(monkeypatch)
     seen = _Launched(monkeypatch)
-    assert _invoke("start", *argv).exit_code == EXIT_USAGE
+    assert _invoke(*argv).exit_code == EXIT_USAGE
     assert any(says in m for m in log), log
     assert seen.torq_sh == []
 
@@ -422,30 +419,20 @@ def test_a_dry_run_shows_the_start_line_with_once_and_starts_nothing(monkeypatch
         return [start_lines.StartLine(procs, f"q torq_stream.q {' '.join(extras)}", "/log")]
 
     monkeypatch.setattr(start_lines, "plan", plan)
-    result = _invoke(
-        "start", "demo_deals_feed1", "--once", "--once-timeout", "30", "--dry-run", "--json"
-    )
+    result = _invoke("demo_deals_feed", "--once", "--once-timeout", "30", "--dry-run", "--json")
     doc = json.loads(result.stdout)
     assert result.exit_code == 0
-    assert planned == [("demo_deals_feed1", ["-once", "-once_timeout", "30"])]
+    assert planned == [("demo_deals_feed1", ["-once", "-once_timeout", "30"])], "the job's process"
     assert (doc["dry_run"], doc["once"], doc["ok"]) == (True, True, True)
     assert seen.torq_sh == [], "a dry run starts nothing"
 
 
-def test_a_profile_has_no_single_unit(monkeypatch):
-    log = _errors(monkeypatch)
+def test_a_job_takes_one_name_and_nothing_else(monkeypatch):
+    """No list, no `all`, no profile: a job run is one job's one unit."""
     _Launched(monkeypatch)
-    assert _invoke("start", "--profile", "fx", "--once").exit_code == EXIT_REFUSED
-    assert any("not --profile" in m for m in log), log
-
-
-def test_without_once_the_launch_does_not_go_through_the_once_path(monkeypatch):
-    """Without --once nothing changes: the once launcher is never entered."""
-    entered = []
-    monkeypatch.setattr(once_launch, "start", lambda *a, **kw: entered.append(1))
-    monkeypatch.setattr(runtime, "start", lambda *a, **kw: type("R", (), {"returncode": 0})())
-    _invoke("start", "demo_deals_feed1", "--dry-run")
-    assert entered == []
+    assert _invoke("demo_deals_feed", "fx_positions", "--once").exit_code == EXIT_USAGE
+    assert _invoke("--once").exit_code == EXIT_USAGE
+    assert _invoke("demo_deals_feed", "--once", "--profile", "fx").exit_code == EXIT_USAGE
 
 
 # --------------------------------------------------------------- job backfill --once

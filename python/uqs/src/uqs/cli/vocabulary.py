@@ -213,6 +213,7 @@ DOMAIN_VERBS = {
     "new": "scaffold a job into the tree",
     "install": "place files built elsewhere",
     "backfill": "run a bounded worker over a range",
+    "run": "run one unit of a job, then exit with its outcome",
     "preview": "fetch a feed's rows without publishing them",
     "gaps": "a job's missing ranges",
     "audit": "one window across runs",

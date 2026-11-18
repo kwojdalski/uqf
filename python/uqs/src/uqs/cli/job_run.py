@@ -1,30 +1,38 @@
-"""`uqs start JOB --once` and `uqs restart JOB --once`: one unit, then the outcome (#2798).
+"""`uqs job run JOB --once`: one unit of a job, then the outcome (#2798).
 
 The shared contract is stack/once.py (the q side is src/etl/core/once.q). This is the command
-line's half for the commands that start a stack process: what they refuse, the one start line
-they run, and how the outcome is printed and becomes the exit code. `uqs job backfill --once`
-reports through `report` too, so the three words - done, no work, failed - read the same wherever
-the unit ran.
+line's half: it takes a job by the name `uqs job list` shows, finds the process that runs it,
+refuses what has no single unit, runs the one start line and turns the outcome into the exit
+code. `uqs job backfill --once` reports through `report` too, so the three words - done, no
+work, failed - read the same wherever the unit ran.
 
-A restart is a stop and a start, and a running process is exactly what `--once` must not touch,
-so `restart --once` is a start that refuses a running process, as `start --once` does: with
-nothing running there is nothing to stop, and with something running the answer is no.
+`--once` is a job's, not a process's: `uqs start` and `uqs restart` manage TorQ processes and
+the fleet, where a profile, `all` or a service has no unit to run, so they take no `--once`.
+`--once` is required for now; a job run without it - the job's process in the foreground - is
+`uqs start PROCESS -f` until it earns its own form here.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, NoReturn
+from typing import Annotated, Any, NoReturn
 
 import typer
 
-from uqs.cli.json_out import emit
-from uqs.cli.safety import dry_run_note
-from uqs.cli.shared import _die, _paths, console
-from uqs.paths import UqsError
+from uqs.cli import completion, launch_options
+from uqs.cli.json_out import emit, json_opt
+from uqs.cli.launch_options import OnceOpt, OnceTimeoutOpt, TraceOpt
+from uqs.cli.lifecycle import DryRunOpt
+from uqs.cli.safety import ChangesState, dry_run_note
+from uqs.cli.shared import JOB_OPERATIONS_PANEL, BasePortOpt, _die, _paths, console, job_app
+from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import once as stack_once
 from uqs.stack import runtime, start_lines
-from uqs.stack.start_overrides import NONE, Overrides
+
+JsonOpt = json_opt(
+    '{"once", "process", "job", "outcome", "exit_code", ...}',
+    "With --dry-run, the start line",
+)
 
 #: What each outcome is called and coloured in a person's output.
 _STYLE = {"done": "green", "no_work": "yellow", "failed": "red", "stopped": "red"}
@@ -50,35 +58,53 @@ def _start_flags(trace: bool, timeout: float | None) -> list[str]:
     return [*(runtime.TRACE_EXTRAS if trace else ()), *stack_once.flags(timeout)]
 
 
-def start(
-    procs: list[str] | None,
-    port: int | None,
-    *,
-    profile: str | None,
-    trace: bool,
-    timeout: float | None,
-    skips: Overrides = NONE,
-    print_only: bool = False,
-    as_json: bool = False,
-) -> NoReturn:
-    """Start the one job process named, with `-once`, wait for its outcome and leave with its
-    code. Refused before anything is started when the process is not a job's, or is running."""
+@job_app.command("run", rich_help_panel=JOB_OPERATIONS_PANEL, cls=ChangesState)
+def run(
+    job: Annotated[
+        str,
+        typer.Argument(
+            metavar="JOB",
+            help="The job to run, as `uqs job list` names it, e.g. demo_deals_feed",
+            autocompletion=completion.streaming_jobs,
+        ),
+    ],
+    once: OnceOpt = False,
+    once_timeout: OnceTimeoutOpt = None,
+    port: BasePortOpt = None,
+    trace: TraceOpt = False,
+    print_only: DryRunOpt = False,
+    as_json: JsonOpt = False,
+) -> None:
+    """Run ONE unit of a job in a fresh process, then exit with its outcome.
+
+    Takes the job's name - `uqs job list` shows each job and the process
+    that runs it - and starts that process with `-once`: one poll (a polling
+    feed), one cycle (a timer job), or one input batch and its processing (a
+    streaming subscriber). A bounded worker needs a range, so it runs one
+    window through `uqs job backfill --once` instead.
+
+    A process of the job that is already running is refused: never stopped,
+    never reused. `--dry-run` shows the start line and runs nothing; `--json`
+    prints the outcome as one document. `--once` is required.
+    """
+    refused = launch_options.once_refusal(once=once, once_timeout=once_timeout, follow=False)
+    if refused is None and not once:
+        refused = UqsUsageError(
+            "`uqs job run` needs --once: it runs one unit of the job and exits. To keep the "
+            "job's process running, `uqs start <process>` (its process is in `uqs job list`)"
+        )
+    if refused is not None:
+        _die(refused)
     try:
-        if profile is not None:
-            raise UqsError(
-                "--once runs one unit of one job: name the job process, not --profile (a profile "
-                "is a set of processes, and a service in it has no unit)"
-            )
-        name = stack_once.require_job_process(procs)
-        job = stack_once.job_processes()[name]
-        extras = _start_flags(trace, timeout)
+        name = stack_once.process_of(job)
+        extras = _start_flags(trace, once_timeout)
         if print_only:
             _dry_run(name, port, extras, as_json)
         paths = _paths()
         stack_once.refuse_if_running(paths, name, port)
         launched_at = datetime.now(UTC)
         result = runtime.run_torq_sh(
-            paths, ["start", name, "-extras", *extras], base_port=port, capture=as_json, skips=skips
+            paths, ["start", name, "-extras", *extras], base_port=port, capture=as_json
         )
         if result.returncode:
             if as_json:

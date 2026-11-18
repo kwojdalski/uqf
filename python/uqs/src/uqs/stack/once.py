@@ -114,37 +114,37 @@ def job_processes() -> dict[str, str]:
     }
 
 
-def require_job_process(procs: list[str] | None) -> str:
-    """The one process `uqs start --once` runs, or a refusal saying what it takes.
+def process_of(job: str) -> str:
+    """The process `uqs job run JOB --once` starts for JOB, or a refusal saying what it takes.
 
-    One, and a streaming job's: `--once` is one unit of one job, so `all`, a profile and
-    several names have no single unit, and a service has no unit to run."""
-    names = [p for p in (procs or []) if p]
-    if len(names) != 1 or names[0] == "all":
+    JOB is a job's name as `uqs job list` shows it. A bounded worker needs a range, so it
+    is `uqs job backfill`'s; a process name is answered with its job's, and anything else
+    - a service such as the tickerplant, an RDB, an HDB or the gateway - runs no job."""
+    by_job = {name: procname for procname, name in job_processes().items()}
+    if job in by_job:
+        return by_job[job]
+    workers = {p.worker for p in PIPELINES if p.worker}
+    if job in workers:
         raise UqsError(
-            "--once runs one unit of one job: name exactly one job process "
-            f"(a streaming job's, e.g. {sorted(job_processes())[0]}), not `all` or a list"
+            f"{job} is a bounded worker, which needs a range: "
+            f"use `uqs job backfill {job} ... --once`"
         )
-    (name,) = names
-    if name in job_processes():
-        return name
-    backfills = {p.procname: p.worker for p in PIPELINES if p.worker}
-    if name in backfills:
+    if job in job_processes():
         raise UqsError(
-            f"{name} runs the bounded worker {backfills[name]}, which needs a range: "
-            f"use `uqs job backfill {backfills[name]} ... --once`"
+            f"{job} is a process, not a job: it runs {job_processes()[job]}, "
+            f"so run `uqs job run {job_processes()[job]} --once`"
         )
     raise UqsError(
-        f"{name} is not a job process, so it has no unit to run once - --once applies to "
-        "a streaming job's process or a bounded worker, not to infrastructure such as the "
-        "tickerplant, an RDB, an HDB or the gateway"
+        f"{job} is not a job (`uqs job list` names them, e.g. {sorted(by_job)[0]}): "
+        "--once runs one unit of a job, and infrastructure such as the tickerplant, an RDB, "
+        "an HDB or the gateway has no unit to run"
     )
 
 
 def refuse_if_running(paths: UqsPaths, procname: str, base_port: int | None) -> None:
     """Refuse, rather than stop or reuse, a process of this job that is already up.
 
-    A running service would be stopped by a restart, and a second unit run through it would
+    Stopping it would end a service someone is running, and a second unit run through it would
     not be the one this launch was asked for: either way the answer is to leave it alone."""
     if procname in alive.running(paths, base_port):
         raise UqsError(

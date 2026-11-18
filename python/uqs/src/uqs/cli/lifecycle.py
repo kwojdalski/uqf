@@ -155,23 +155,16 @@ def _launch(
     grace: float = start_check.DEFAULT_GRACE,
     trace: bool = False,
     as_json: bool = False,
-    once: bool = False,
-    once_timeout: float | None = None,
 ) -> None:
     """`start` and `restart`, which differ only in the torq.sh verb they run."""
     refused = launch_options.refusal(
         follow=follow, level=level, stop_on_exit=stop_on_exit, dry_run=print_only
-    ) or launch_options.once_refusal(once=once, once_timeout=once_timeout, follow=follow)
+    )
     if refused is None and follow and as_json:
         refused = UqsUsageError(f"{launch_options.FOLLOW_NOT_WITH_JSON}: use --json alone")
     if refused is not None:
         _die(refused)
     overrides = _overrides(verb, override, reason, profile=profile, print_only=print_only)
-    if once:  # one unit of one job, never the fleet: stack/once.py (#2798)
-        from uqs.cli import once_launch  # noqa: PLC0415 - only a --once start needs it
-
-        once_launch.start(procs, port, profile=profile, trace=trace, timeout=once_timeout,
-                          skips=overrides, print_only=print_only, as_json=as_json)  # fmt: skip
     names = _names_to_start(procs, profile, overrides)
     if print_only:
         _reject_unknown(names)
@@ -252,8 +245,6 @@ def start(
     grace: GraceOpt = start_check.DEFAULT_GRACE,
     trace: TraceOpt = False,
     as_json: start_json.JsonOpt = False,
-    once: launch_options.OnceOpt = False,
-    once_timeout: launch_options.OnceTimeoutOpt = None,
 ) -> None:
     """Start every startwithall=1 process (or specific process name(s)).
 
@@ -271,13 +262,10 @@ def start(
     `--json` prints one document instead: what it started, what was already
     running and what `--trace` did not reach - or, with `--dry-run`, the start
     lines. The same options launch `uqs job backfill` and `uqs job attachment add`.
-
-    `--once` runs ONE unit of one job's process (a poll, a timer cycle, or an input batch)
-    and reports how it ended; a process already running is refused, never stopped or reused.
     """
     _launch(
         "start", procs, port, profile, follow, level, print_only,
-        override, reason, stop_on_exit, grace, trace, as_json, once, once_timeout,
+        override, reason, stop_on_exit, grace, trace, as_json,
     )  # fmt: skip
 
 
@@ -295,8 +283,6 @@ def restart(
     grace: GraceOpt = start_check.DEFAULT_GRACE,
     trace: TraceOpt = False,
     as_json: start_json.JsonOpt = False,
-    once: launch_options.OnceOpt = False,
-    once_timeout: launch_options.OnceTimeoutOpt = None,
 ) -> None:
     """Restart every startwithall=1 process (or specific process name(s)).
 
@@ -307,7 +293,7 @@ def restart(
     """
     _launch(
         "restart", procs, port, profile, follow, level, print_only,
-        override, reason, stop_on_exit, grace, trace, as_json, once, once_timeout,
+        override, reason, stop_on_exit, grace, trace, as_json,
     )  # fmt: skip
 
 

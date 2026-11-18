@@ -42,7 +42,7 @@
 / in its own right, and ends the unit `failed`.
 / .
 / THE OUTCOME IS A FILE as well as an exit code, because the launcher
-/ (`uqs start --once`) cannot read the exit status of a process torq.sh
+/ (`uqs job run --once`) cannot read the exit status of a process torq.sh
 / detached. <status_dir>/once_<instance>.json holds one JSON object, written
 / atomically, as the status file is.
 

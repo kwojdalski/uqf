@@ -23,35 +23,35 @@ options, run `uqs <command> --help`. `-h` is `--help` everywhere.
 
 Every verb comes from one fixed vocabulary:
 
-  | verb                                          | means                                                                            |
-  | ---                                           | ---                                                                              |
-  | `status`                                      | the state of something running or installed                                      |
-  | `check`                                       | actively probe; exit non-zero on a problem                                       |
-  | `list`                                        | many records                                                                     |
-  | `show`                                        | one record                                                                       |
-  | `set`                                         | change one setting                                                               |
-  | `add` `remove`                                | create or delete one thing                                                       |
-  | `start` `stop` `restart` `logs`               | the stack's lifecycle, and a connector's                                         |
-  | `clean`                                       | delete the runtime state the stack wrote                                         |
-  | `exec`                                        | run any other torq.sh verb, passed straight through                              |
-  | `query` `graph` `schema`                      | read a running stack                                                             |
-  | `new` `install`                               | write a job into the tree, or place one built elsewhere                          |
-  | `backfill` `preview` `gaps` `audit` `receive` | operate a job and its runs                                                       |
-  | `export` `approve`                            | a receiver contract, on each side                                                |
-  | `replay` `seed` `migrate`                     | move data into the HDB                                                           |
-  | `upgrade`                                     | bring a store an older uqs wrote up to today's layout                            |
-  | `alter`                                       | change one table in every HDB partition holding it                               |
-  | `compress`                                    | an HDB's compression: report it, plan it, or run TorQ's .cmp over it             |
-  | `diff` `prepare`                              | compare runtimes, or a table on two endpoints; install a runtime's bundles       |
-  | `stub`                                        | add a placeholder source row                                                     |
-  | `env`                                         | print variables to source                                                        |
-  | `build` `push` `rollback` `prune` `history`   | releases and their deployment; `push` also files into a target's shared/config   |
-  | `shell`                                       | a shell on a target                                                              |
-  | `unset` `rename` `edit`                       | a target's settings: remove one, rename it, edit the file                        |
-  | `log` `revert`                                | a target's change log, and undoing one change in it                              |
-  | `adopt`                                       | take over a release copied onto a server by hand                                 |
-  | `restore`                                     | a config push's files back as they were, as a new push                           |
-  | `plan`                                        | what a tunnel to a target forwards, without opening it                           |
+  | verb                                                | means                                                                            |
+  | ---                                                 | ---                                                                              |
+  | `status`                                            | the state of something running or installed                                      |
+  | `check`                                             | actively probe; exit non-zero on a problem                                       |
+  | `list`                                              | many records                                                                     |
+  | `show`                                              | one record                                                                       |
+  | `set`                                               | change one setting                                                               |
+  | `add` `remove`                                      | create or delete one thing                                                       |
+  | `start` `stop` `restart` `logs`                     | the stack's lifecycle, and a connector's                                         |
+  | `clean`                                             | delete the runtime state the stack wrote                                         |
+  | `exec`                                              | run any other torq.sh verb, passed straight through                              |
+  | `query` `graph` `schema`                            | read a running stack                                                             |
+  | `new` `install`                                     | write a job into the tree, or place one built elsewhere                          |
+  | `run` `backfill` `preview` `gaps` `audit` `receive` | operate a job and its runs                                                       |
+  | `export` `approve`                                  | a receiver contract, on each side                                                |
+  | `replay` `seed` `migrate`                           | move data into the HDB                                                           |
+  | `upgrade`                                           | bring a store an older uqs wrote up to today's layout                            |
+  | `alter`                                             | change one table in every HDB partition holding it                               |
+  | `compress`                                          | an HDB's compression: report it, plan it, or run TorQ's .cmp over it             |
+  | `diff` `prepare`                                    | compare runtimes, or a table on two endpoints; install a runtime's bundles       |
+  | `stub`                                              | add a placeholder source row                                                     |
+  | `env`                                               | print variables to source                                                        |
+  | `build` `push` `rollback` `prune` `history`         | releases and their deployment; `push` also files into a target's shared/config   |
+  | `shell`                                             | a shell on a target                                                              |
+  | `unset` `rename` `edit`                             | a target's settings: remove one, rename it, edit the file                        |
+  | `log` `revert`                                      | a target's change log, and undoing one change in it                              |
+  | `adopt`                                             | take over a release copied onto a server by hand                                 |
+  | `restore`                                           | a config push's files back as they were, as a new push                           |
+  | `plan`                                              | what a tunnel to a target forwards, without opening it                           |
 
 Three verbs sit beside a near neighbour. `log` is a record's change history,
 `logs` is processes' output and `history` is what was deployed. `revert` undoes
@@ -105,8 +105,8 @@ worker's log and status file are the rehearsal's output.
   | 130  | Ctrl-C ended the stream of `job backfill --attachment --follow`                     |
 
 Only `job backfill` and `target config push` exit 3 or 4, only `job backfill`
-130, only `target config push` 5, and only `start`, `restart` and `job backfill`
-with `--once` 6 (see [One unit with `--once`](#one-unit-with---once)). For
+130, only `target config push` 5, and only `job run` and `job backfill` with
+`--once` 6 (see [One unit with `--once`](#one-unit-with---once)). For
 `job backfill`:
 
 - 3 comes from `--attachment --wait` (or `--follow`). The rows are written and
@@ -125,11 +125,12 @@ directory before pushing it again.
 
 ### One unit with `--once`
 
-`uqs start JOB --once`, `uqs restart JOB --once` and
-`uqs job backfill ... --once` run ONE unit of a job's real processing and exit,
-whatever the job is. The framework's runner for the job's kind owns the end of
-the unit: a job file never implements a one-shot loop of its own, so a job
-`uqs job new` scaffolds has `--once` the moment it exists.
+`uqs job run JOB --once` and `uqs job backfill JOB ... --once` run ONE unit of a
+job's real processing and exit, whatever the job is. JOB is the job's name as
+`uqs job list` shows it; the command finds the process that runs it. The
+framework's runner for the job's kind owns the end of the unit: a job file never
+implements a one-shot loop of its own, so a job `uqs job new` scaffolds has
+`--once` the moment it exists.
 
   | job                          | one unit is                                           |
   | ---                          | ---                                                   |
@@ -160,13 +161,15 @@ from that call and ends the unit `failed`. A batch replayed while the job
 rebuilds its state is state, not input, and does not end the wait.
 
 `--once` refuses rather than stops or reuses a process of the same job that is
-already running, and `restart --once` is the same refusal, not a stop. It takes
-one job process by name: not `all`, not `--profile`, and not an infrastructure
-service (tickerplant, RDB, HDB, gateway), which have no unit. A backfill is run
-with `uqs job backfill`, never `uqs start`. Not yet supported, and named as
-expected failures in `python/uqs/tests/test_once_contract.py`:
-`uqs job attachment add`, `uqs connector start`, `uqs job backfill --attachment`
-and `scripts/jobs/run_stream.q`. Without `--once`, nothing changes.
+already running. It is a job's option, not a process's: `uqs start` and
+`uqs restart` manage processes and the fleet, where `all`, a profile or an
+infrastructure service (tickerplant, RDB, HDB, gateway) has no unit, so neither
+takes it. `uqs job run` takes one job, and needs `--once` for now. A bounded
+worker needs a range, so it runs with `uqs job backfill`, never `uqs job run`.
+Not yet supported, and named as expected failures in
+`python/uqs/tests/test_once_contract.py`: `uqs job attachment add`,
+`uqs connector start`, `uqs job backfill --attachment` and
+`scripts/jobs/run_stream.q`. Without `--once`, nothing changes.
 
 The process writes `<status_dir>/once_<procname>.json` (the `.qetl.once` fields)
 and leaves with the same code, so `q scripts/jobs/run_backfill.q ... -once` and

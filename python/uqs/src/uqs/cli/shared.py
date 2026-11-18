@@ -43,7 +43,7 @@ log = get_logger()
 job_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Jobs: new, list, remove, install, backfill, preview, check, gaps, receiver, "
+    help="Jobs: new, list, remove, install, run, backfill, preview, check, gaps, receiver, "
     "checkpoint, runs, attachment.\n\nETL jobs: write them into the tree, and operate on them.",
 )
 #: The two help panels `uqs job --help` lists its commands under.

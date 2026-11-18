@@ -15,7 +15,7 @@ import typer
 
 from uqs import timerange
 from uqs.attach.backfill_forced import ANY_WRITER
-from uqs.cli import backfill_attached, completion, launch_options, once_launch, safety
+from uqs.cli import backfill_attached, completion, launch_options, safety
 from uqs.cli.choices import ChoiceOpt, alternatives
 from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import JSON_HELP, emit
@@ -329,8 +329,10 @@ def backfill(
             "output": (result.stdout or "").splitlines() if as_json else [],
         }  # fmt: skip
         if once and result.returncode == 0:  # the unit's outcome is the command's exit
+            from uqs.cli import job_run  # noqa: PLC0415 - entry.py registers it after backfill
+
             outcome = stack_once.wait(paths, procname, launched_at, base_port=port)
-            once_launch.report(procname, worker, outcome, as_json)
+            job_run.report(procname, worker, outcome, as_json)
         if result.returncode != 0 or not wait:
             if as_json:
                 emit(started)
