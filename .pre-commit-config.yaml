@@ -21,7 +21,9 @@ repos:
       - id: trailing-whitespace
         exclude: '(\.md$|^lib/)'  # Allow trailing spaces in markdown for line breaks
       - id: end-of-file-fixer
-        exclude: '^lib/'
+        # .claude/skills/torq-developer/ is a verbatim copy of the
+        # maintainer's global torq-developer skill; see the panache note below.
+        exclude: '^(lib/|\.claude/skills/torq-developer/)'
       - id: check-yaml
         exclude: '^lib/'
       - id: check-toml
@@ -44,7 +46,7 @@ repos:
   # nests `::: {.column}` inside `::: {.columns}`, and only a formatter
   # that parses Pandoc gets the colon counts right.
   #
-  # Three exclusions, and each would break something specific:
+  # Four exclusions, and each would break something specific:
   #   lib/          vendored TorQ and the starter pack, which are never
   #                 edited - an edit survives until the next upgrade and is
   #                 then silently lost.
@@ -56,6 +58,12 @@ repos:
   #                 `prettier --check .` over the package, web/README.md
   #                 included, and the CI job for it goes red the moment a
   #                 second formatter touches that file. One owner per file.
+  #   .claude/skills/torq-developer/
+  #                 a verbatim copy of the maintainer's global
+  #                 torq-developer skill (~/.claude/skills/torq-developer),
+  #                 only its frontmatter description narrowed for this repo.
+  #                 Reflowing it would make every re-sync a whole-file diff
+  #                 and hide what upstream actually changed.
   #
   # Style lives in .panache.toml so a manual `panache format` matches the
   # hook. `scripts/gates/check.py hook-scopes` fails a scope that matches
@@ -64,9 +72,9 @@ repos:
     rev: v3.12.0
     hooks:
       - id: panache-format
-        exclude: '^(lib/|web/|docs/reference/processes\.md$)'
+        exclude: '^(lib/|web/|docs/reference/processes\.md$|\.claude/skills/torq-developer/)'
       - id: panache-lint
-        exclude: '^(lib/|web/|docs/reference/processes\.md$)'
+        exclude: '^(lib/|web/|docs/reference/processes\.md$|\.claude/skills/torq-developer/)'
 
   # Python linting/formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit

@@ -1,13 +1,16 @@
 ---
 name: uqf-framework
 description: >-
-  The uqf framework on TorQ/kdb+: its layers, rules, verification and debugging,
-  in the form an agent can act on. TRIGGER when: working anywhere in this
-  repository (uqf) - writing or reviewing q under src/ or scripts/, a streaming
-  job, bounded worker, source, transform, normalizer or reaction, the uqs CLI
-  (python/uqs), a runtime, profile, deployment or sidecar bundle; or debugging a
-  process that is down, idle, failing or publishing nothing. SKIP: plain TorQ
-  questions with no uqf code involved (use torq-developer), and pure q-language
+  The binding rule card for uqf's q code - layering, declarations, publishing,
+  plant tables, derived artefacts, configuration, logging and the q traps - with
+  a q review checklist and the two-stage gate for a new job. TRIGGER when:
+  writing or reviewing q under src/ or scripts/ (a framework shell, a streaming
+  job, bounded worker, source, transform, normalizer or reaction, a .qtorq
+  change), or reviewing a q diff before it is committed. Load it alongside
+  uqf-developer, which is the broad map and procedures and cites these rules.
+  SKIP: orientation, the uqs CLI, tests, hooks and attestation, process.csv and
+  runtimes, deployment and debugging a stack (uqf-developer); plain TorQ
+  questions with no uqf code involved (torq-developer); pure q-language
   questions (kdb-q-conventions).
 ---
 
