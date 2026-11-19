@@ -301,7 +301,7 @@ The `new-job` skill is the procedure. The facts it rests on:
   (`python/uqs/src/uqs/model/profiles.py`, `unprofiled.py`).
 - `uqs job remove JOB --dry-run` undoes a scaffold; it refuses one whose markers
   are gone without `--override even-if-edited --reason`.
-- Code: `python/uqs/src/uqs/cli/create*.py`, `cli/remove.py`,
+- Code: `python/uqs/src/uqs/cli/job/create*.py`, `cli/job/remove.py`,
   `python/uqs/src/uqs/scaffold/`.
 
 ## 8. The Python model that reads the declarations
