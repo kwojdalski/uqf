@@ -193,7 +193,7 @@ pipelines plus the vendored plant clients rdb1, wdb1, sctp1 and metrics1 - not
 every process (`essential` is 14 processes but 4 slots). Past the cap the plant
 resets the extra handles while `uqs status` still shows them up.
 `UQS_LICENCE_CONNECTIONS` overrides the limit; PeachQ has none. Don't give a job
-`start_with_all 1b` unless asked. (`uqf-framework` J10 and `docs/faq.md` say
+`start_with_all 1b` unless asked (`uqf-q-rules.md` J14). (`docs/faq.md` says
 "every started process"; the code counts subscribers.)
 
 ## 8. Attachments - a uqf job on someone else's TorQ
@@ -271,8 +271,8 @@ uqs --target TARGET status                                 # any command, on a d
 
 ## 11. TorQ and KDB-X behaviour this tree has paid for
 
-Each is encoded in a comment at the cited line; `uqf-framework/uqf-q-traps.md`
-has the nine `.qtorq` invariants with reproductions.
+Each is encoded in a comment at the cited line; `uqf-q-traps.md` has the nine
+`.qtorq` invariants with reproductions.
 
 - `.u.upd` stamps its own `time` (`lib/torq/code/segmentedtickerplant/stplog.q`
   `updtab`); a publisher that sends one makes every row one column too wide, and

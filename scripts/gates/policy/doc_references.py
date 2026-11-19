@@ -120,19 +120,11 @@ _CALLER_SET = "set by the caller before src/etl/init.q loads; never defined in q
 
 ALLOWED_MISSING = {
     (
-        ".claude/skills/uqf-framework/SKILL.md",
+        ".claude/skills/uqf-developer/uqf-q-rules.md",
         ".qetl.load.only",
     ): _CALLER_SET,
     (
-        ".claude/skills/uqf-framework/uqf-architecture.md",
-        ".qetl.load.only",
-    ): _CALLER_SET,
-    (
-        ".claude/skills/uqf-framework/uqf-architecture.md",
-        ".qetl.load.only_sources",
-    ): _CALLER_SET,
-    (
-        ".claude/skills/uqf-framework/uqf-q-traps.md",
+        ".claude/skills/uqf-developer/uqf-q-traps.md",
         ".qetl.load.only",
     ): _CALLER_SET,
     (

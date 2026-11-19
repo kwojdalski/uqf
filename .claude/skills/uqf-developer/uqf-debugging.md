@@ -136,9 +136,9 @@ each process that died or does not own its port, with a 10-line log tail.
 1. Run `qlinter` on the file first (`CLAUDE.md`); the `qlint-reviewer` agent
    rules on its findings.
 
-2. Check `uqf-framework/uqf-q-traps.md` - the language traps that return a
-   plausible wrong value or silently do nothing, with reproductions. Measured on
-   KDB-X 5 (2026.07.23):
+2. Check `uqf-q-traps.md` - the language traps that return a plausible wrong
+   value or silently do nothing, with reproductions. Measured on KDB-X 5
+   (2026.07.23):
 
    | Expression                                                                     | Result                                                                       |
    | ---                                                                            | ---                                                                          |

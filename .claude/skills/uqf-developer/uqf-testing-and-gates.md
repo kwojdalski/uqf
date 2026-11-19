@@ -120,7 +120,7 @@ Hooks are found by literal, case-sensitive prefix: `beforeNamespace*`,
 `setUp*`, `tearDown*`. snake_case only what follows the prefix
 (`beforeNamespace_generate_trades`).
 
-### Test hygiene (from `uqf-framework` V3-V4 and its traps file)
+### Test hygiene (`uqf-q-rules.md` V2-V3 and `uqf-q-traps.md`)
 
 - Restore every global, stub, environment variable and `.qetl.load.only` you
   set: suites share one process.
@@ -136,10 +136,10 @@ Hooks are found by literal, case-sensitive prefix: `beforeNamespace*`,
 - `tests/q/peachq_known_gaps.txt`: `.suite.test_name  # reason`, plus one
   `platform: Linux-x86_64` line. A reason starts `peachq-lacks: ` or
   `tree-bug: #N` - nothing else is accepted (`scripts/peachq/full_suite.py:62`,
-  `:79-82`; `uqf-framework` V5 still lists a third, `flattening:`, which is now
-  refused). A reason that only repeats the test's message is refused. The list
-  is held both ways: a listed test that passes fails the run. Off CI's platform
-  the comparison is reported "not comparable".
+  `:79-82`; the older `flattening:` reason is now refused). A reason that only
+  repeats the test's message is refused. The list is held both ways: a listed
+  test that passes fails the run. Off CI's platform the comparison is reported
+  "not comparable".
 - `python/peachq_known_gaps.txt`: `nodeid  # reason`, free text; listed tests
   become `xfail(strict=True)` on PeachQ (`conftest.py:298-323`).
 
@@ -321,10 +321,9 @@ KDB-X), `no-commit-to-branch` (refuses master/main) and
 `python3 scripts/dev/hooks_full.py --all`; `UQF_Q_TESTS_FULL=1` runs the whole q
 suite alone. Don't use it unless asked: it is the whole suite.
 
-**Rules:** never `--no-verify`, never `git push --force`. `uqf-framework` V7
-allows `SKIP=<id>` for a hook broken on master with the reason in the commit
-message; treat that as the user's decision to make, not yours - stop and report
-a hook you cannot pass.
+**Rules:** never `--no-verify`, never `git push --force`, never `SKIP=<id>` on
+your own initiative: skipping a hook broken on master is the user's decision -
+stop and report a hook you cannot pass.
 
 ## 8. KDB-X attestation
 

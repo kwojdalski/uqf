@@ -35,9 +35,9 @@ when a specialist should take the work.
   companion file for the area you are in: `uqf-layers.md` (where things live,
   the docs map), `uqf-etl-framework.md`, `uqf-on-torq.md`, `uqf-cli.md`,
   `uqf-testing-and-gates.md`, `uqf-debugging.md`.
-- **The `uqf-framework` skill** whenever you write or review q under `src/` or
-  `scripts/` - its rules (L, J, T, D, C, G, Q, V) are binding - and its
-  `uqf-q-traps.md` when a q change works but a value is wrong.
+- **The skill's `uqf-q-rules.md`** whenever you write or review q under `src/`
+  or `scripts/` - its rules (L, J, N, K, G, Q, V) and review checklist are
+  binding - and `uqf-q-traps.md` when a q change works but a value is wrong.
 - **The `kdb-q-conventions` skill** before writing q.
 - **The `torq-developer` skill** only for TorQ's own internals (`.servers`,
   `.gw`, `.sub`, `.timer`, EOD, startup) - uqf never edits `lib/torq`.
