@@ -566,6 +566,11 @@ OPTIONS = {
     ),
     "--export": Meaning("also write the rows to FILE", r"write output to FILE"),
     "--follow": Meaning("keep streaming log lines until Ctrl-C", r"streaming (new|every)"),
+    # one unit of a job, then its outcome (cli/launch_options.py, #2798)
+    "--once": Meaning("run one unit of the job, then exit with its outcome", r"^run ONE unit"),
+    "--once-timeout": Meaning(
+        "how long a subscriber waits for its one batch", r"^with --once: duration a streaming"
+    ),
     "--force": Meaning("retired: each use gets its own name", None),
     "--from": Meaning("start of a time range", r"^start of the time range"),
     "--hdb": Meaning("an HDB directory", r"HDB directory|this database"),

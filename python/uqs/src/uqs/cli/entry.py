@@ -39,6 +39,7 @@ from __future__ import annotations
 # isort: off
 from uqs.cli import lifecycle  # noqa: F401
 from uqs.cli import backfill  # noqa: F401
+from uqs.cli import job_run  # noqa: F401
 from uqs.cli import cleanup  # noqa: F401
 from uqs.cli import runs  # noqa: F401
 from uqs.cli import receiver_contract  # noqa: F401

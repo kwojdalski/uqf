@@ -139,6 +139,44 @@ STOP_FILE_SUFFIX: str = ".stop"
 #: the exit code of a run that stopped on request - .qetl.job.bounded.stop.code
 STOP_EXIT_CODE: int = 4
 
+#: the outcomes a --once unit ends in - .qetl.once.outcomes (#2798)
+ONCE_OUTCOMES: tuple[str, ...] = (
+    "done",
+    "failed",
+    "stopped",
+    "no_work",
+)
+
+#: every job kind a --once unit is defined for - .qetl.once.kinds
+ONCE_KINDS: tuple[str, ...] = (
+    "poll",
+    "timer",
+    "subscriber",
+    "bounded",
+    "reaction",
+)
+
+#: an outcome file's name before the instance - .qetl.once.file_prefix
+ONCE_FILE_PREFIX: str = "once_"
+
+#: an outcome file's name after the instance - .qetl.once.file_suffix
+ONCE_FILE_SUFFIX: str = ".json"
+
+#: the exit code of a unit that ran to its end - .qetl.once.codes
+ONCE_EXIT_DONE: int = 0
+
+#: the exit code of a unit that failed - .qetl.once.codes
+ONCE_EXIT_FAILED: int = 1
+
+#: the exit code of a unit that found nothing to do - .qetl.once.codes
+ONCE_EXIT_NO_WORK: int = 6
+
+#: how long a subscriber waits for its one batch by default - .qetl.once.default_timeout
+ONCE_DEFAULT_TIMEOUT_SECONDS: int = 60
+
+#: the longest an input wait may be set to - .qetl.once.max_timeout
+ONCE_MAX_TIMEOUT_SECONDS: int = 3600
+
 #: dataset -> time column getdata reads it by - .qetl.job.bounded.read_time_column
 BOUNDED_DATASET_TIME_COLUMNS: dict[str, str] = {
     "book_liquidity_1m": "time",

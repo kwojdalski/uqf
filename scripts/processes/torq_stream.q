@@ -15,6 +15,10 @@
 / before this file loads, so process.csv needs nothing beyond the load
 / column. `-job` on the command line overrides it for a manual run.
 / .
+/ `-once` (#2798) runs ONE unit of the job - one poll, one timer cycle, or one input batch
+/ and its processing - and exits with an outcome (.qetl.once, src/etl/core/once.q); `uqs
+/ job run JOB --once` passes it. `-once_timeout SECONDS` bounds a subscriber's wait for its batch.
+/ .
 / This file is the ONLY place a streaming job meets TorQ: .qtorq for the
 / subscription, the publish handle and the timer. The job files know nothing
 / about any of it - they call `publish` in their own namespace, which this
@@ -131,6 +135,19 @@
         {[t;k] .qtorq.present_keys[.qtorq.reader_handle[];t;k]};
         {[t] .qtorq.with_reconnect[`.qproc.stream.h;"logged count of ",string t;.qtorq.logged_rows[;t]]})}
 
+/ Run ONE unit of the job and leave (#2798): the process's `-once` flag. The framework's runner
+/ for the job's kind owns the unit and the exit (.qetl.job.stream.once.run); this only turns a
+/ failure of the runner itself - a bad `-once_timeout`, a transport that will not connect - into
+/ the `failed outcome and its exit code, so a --once process never lingers as a half-started one.
+/ @param job the job's name
+/ @param tr the transport, from .qproc.stream.transport
+/ @return what the runner returned: the outcome document, or `waiting for a subscriber
+.qproc.stream.run_once:{[job;tr]
+    .[{[job;tr] .qetl.job.stream.once.run[job;tr;.qetl.once.timeout_from_flags .Q.opt .z.x]};(job;tr);
+        {[job;e]
+            kind:@[.qetl.once.kind_of;job;{[e] `timer}];
+            .qetl.once.conclude[.qetl.once.context[.qetl.once.instance job;job;kind];`failed;e;0;0;""]}[job]]}
+
 \d .
 
 / The HDB a restarted job reads the previous day's books from (#2460).
@@ -141,4 +158,7 @@
 
 {[job]
     .qetl.job.stream.delivery.wire[job;.qproc.stream.delivery_hooks[]];
-    .qetl.job.stream.start[job;.qproc.stream.transport[job]]} .qproc.stream.which_job[];
+    / -once (#2798): one unit of the job and exit, by the framework's runner for its kind.
+    $[.qetl.once.requested .Q.opt .z.x;
+        .qproc.stream.run_once[job;.qproc.stream.transport[job]];
+        .qetl.job.stream.start[job;.qproc.stream.transport[job]]]} .qproc.stream.which_job[];

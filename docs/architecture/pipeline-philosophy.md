@@ -338,3 +338,20 @@ not reference a declaring namespace (§9), nothing under `src/etl/` may referenc
 `.qetl.run.proc_name`. Every other file goes through those, so where the ETL
 asks TorQ, and what it does when TorQ is absent, is decided once per facility
 (#619).
+
+## 11. A unit has one owner of its end
+
+`--once` (#2798) runs one unit of a job and leaves: one poll, one timer cycle,
+one input batch, one planned window, or one reaction under its parent. What a
+unit is depends on the job's kind, and *who ends the process* does not: it is
+always the framework's runner for that kind (`.qetl.job.stream.once`,
+`.qetl.job.bounded.once`), and never the job. A job that wrote its own one-shot
+loop would be one more place for the contract to drift, so
+`python/uqs/tests/test_once_contract.py` refuses a job file that reads the flag,
+and a scaffolded job gets the runner by declaring what it always did.
+
+Two things the unit never does, because both would be a claim that is not true:
+it does not make up output to have something to show, and it does not flush an
+event-time job's pending state to finish early. A unit that found nothing is
+`no_work`, a different exit code from a unit that ran, so a scheduler is not
+told that nothing happening is the same as something happening.

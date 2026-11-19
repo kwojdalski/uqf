@@ -73,6 +73,17 @@ FACTS = {
     "STOP_EXIT_CODE": (
         "the exit code of a run that stopped on request - .qetl.job.bounded.stop.code"
     ),
+    "ONCE_OUTCOMES": "the outcomes a --once unit ends in - .qetl.once.outcomes (#2798)",
+    "ONCE_KINDS": "every job kind a --once unit is defined for - .qetl.once.kinds",
+    "ONCE_FILE_PREFIX": "an outcome file's name before the instance - .qetl.once.file_prefix",
+    "ONCE_FILE_SUFFIX": "an outcome file's name after the instance - .qetl.once.file_suffix",
+    "ONCE_EXIT_DONE": "the exit code of a unit that ran to its end - .qetl.once.codes",
+    "ONCE_EXIT_FAILED": "the exit code of a unit that failed - .qetl.once.codes",
+    "ONCE_EXIT_NO_WORK": "the exit code of a unit that found nothing to do - .qetl.once.codes",
+    "ONCE_DEFAULT_TIMEOUT_SECONDS": (
+        "how long a subscriber waits for its one batch by default - .qetl.once.default_timeout"
+    ),
+    "ONCE_MAX_TIMEOUT_SECONDS": "the longest an input wait may be set to - .qetl.once.max_timeout",
     "BOUNDED_DATASET_TIME_COLUMNS": (
         "dataset -> time column getdata reads it by - .qetl.job.bounded.read_time_column"
     ),

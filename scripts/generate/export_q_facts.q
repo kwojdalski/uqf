@@ -69,6 +69,16 @@ facts:(!) . flip (
     / A clean stop is a file beside the run's lock (bounded_stop.q, #2677): the launcher writes it.
     (`STOP_FILE_SUFFIX;       .qetl.job.bounded.stop.suffix);
     (`STOP_EXIT_CODE;         .qetl.job.bounded.stop.code);
+    / The --once contract: what a one-unit run exits with and writes (#2798).
+    (`ONCE_OUTCOMES;          .qetl.once.outcomes);
+    (`ONCE_KINDS;             exec kind from .qetl.once.kinds);
+    (`ONCE_FILE_PREFIX;       .qetl.once.file_prefix);
+    (`ONCE_FILE_SUFFIX;       .qetl.once.file_suffix);
+    (`ONCE_EXIT_DONE;         `long$.qetl.once.codes`done);
+    (`ONCE_EXIT_FAILED;       `long$.qetl.once.codes`failed);
+    (`ONCE_EXIT_NO_WORK;      `long$.qetl.once.codes`no_work);
+    (`ONCE_DEFAULT_TIMEOUT_SECONDS; `long$.qetl.once.default_timeout%1000000000);
+    (`ONCE_MAX_TIMEOUT_SECONDS;     `long$.qetl.once.max_timeout%1000000000);
     / The datasets bounded workers write, keyed by name (#1363).
     (`BOUNDED_DATASET_TIME_COLUMNS;       (!) . (asc datasets[]; string .qetl.job.bounded.read_time_column each asc datasets[]));
     (`BOUNDED_DATASET_INSTRUMENT_COLUMNS; (!) . (asc datasets[]; string .qetl.job.bounded.read_instrument_column each asc datasets[]));

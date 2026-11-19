@@ -116,6 +116,8 @@ if[not ()~key `:lib/unparse/unparse.q; system "l lib/unparse/unparse.q"];
 \l src/etl/core/bounded_batching.q
 \l src/etl/core/bounded_batch_read.q
 \l src/etl/core/bounded_flags.q
+\l src/etl/core/once.q
+\l src/etl/core/bounded_once.q
 \l src/etl/core/stream_health.q
 \l src/etl/core/uptime.q
 \l src/etl/core/retention.q
@@ -128,6 +130,7 @@ if[not ()~key `:lib/unparse/unparse.q; system "l lib/unparse/unparse.q"];
 \l src/etl/core/stream_carry_recovery.q
 \l src/etl/core/stream_delivery.q
 \l src/etl/core/stream_poll.q
+\l src/etl/core/stream_once.q
 \l src/etl/core/webhook.q
 \l src/etl/core/config_audit.q
 \l src/etl/core/normalizer.q

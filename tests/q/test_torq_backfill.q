@@ -140,3 +140,44 @@
         {.qetl.job.bounded.runtime.use_mode["run_backfill";enlist[`mode]!enlist enlist "plan"]}];
     .qunit.assertEquals[r2;(`err;"run_backfill: -mode plan would be ignored - UQF_MODE=run outranks it; unset it or drop the flag");
         "the launcher is named in the refusal"]}
+
+/ --- -once, on both launchers (#2798) -----------------------------------------------------
+/ The dev launcher runs the same framework runner torq_backfill.q does, so a real process
+/ shows the contract end to end: the first planned window, the outcome file, the exit code.
+
+/ run_dev_for over a range of three days, in the scratch root `root`, so two runs share
+/ a ledger. The status directory and the HDB are both under root.
+/ @param root a scratch directory
+/ @param extra the flags after the range
+/ @return (output lines; the exit code)
+.qt.qproc.backfill.run_dev_over:{[root;extra]
+    cmd:"env -u UQF_MODE -u UQF_ON_CONFLICT UQF_STATUS_DIR=",root,"/st ",
+        $[""~getenv `QCMD; "q"; getenv `QCMD],
+        " scripts/jobs/run_backfill.q -worker demo_deals_backfill -version v2 -from 2026.09.11D00:00:00.000000000 -to 2026.09.14D00:00:00.000000000 -fixture ",
+        extra," -hdb ",root,"/hdb < /dev/null > ",root,"/out.txt 2>&1; echo $?";
+    code:"J"$first system cmd;
+    (read0 hsym `$root,"/out.txt";code)}
+
+/ The outcome file the process left, parsed.
+.qt.qproc.backfill.outcome_in:{[root] .j.k raze read0 hsym `$root,"/st/once_demo_deals_backfill.json"}
+
+.qt.qproc.backfill.test_a_once_run_does_one_window_and_exits_done:{[t]
+    root:first system "mktemp -d";
+    r:.qt.qproc.backfill.run_dev_over[root;"-once"];
+    o:.qt.qproc.backfill.outcome_in root;
+    .qunit.assertEquals[r 1;0;"done exits 0"];
+    .qunit.assertEquals[(o`outcome;o`code;o`units;o`kind);("done";0f;1f;"bounded");"one window ran"];
+    .qunit.assertTrue[any (r 0) like\: "*once: running the first planned window only*";"and the log says the others were left"]}
+
+.qt.qproc.backfill.test_once_runs_walk_the_range_then_exit_with_the_no_work_code:{[t]
+    root:first system "mktemp -d";
+    codes:{[root;i] (.qt.qproc.backfill.run_dev_over[root;"-once"]) 1}[root] each til 4;
+    .qunit.assertEquals[codes;0 0 0 6;"three windows, one run each, then nothing left: no_work is 6"];
+    o:.qt.qproc.backfill.outcome_in root;
+    .qunit.assertEquals[(o`outcome;o`reason);("no_work";"all_covered");"and it says why"]}
+
+.qt.qproc.backfill.test_without_once_the_same_run_does_every_window_and_leaves_no_outcome_file:{[t]
+    root:first system "mktemp -d";
+    r:.qt.qproc.backfill.run_dev_over[root;""];
+    .qunit.assertEquals[r 1;0;"a plain run completes"];
+    .qunit.assertEquals[()~key hsym `$root,"/st/once_demo_deals_backfill.json";1b;"it writes no outcome file: nothing changes without --once"]}

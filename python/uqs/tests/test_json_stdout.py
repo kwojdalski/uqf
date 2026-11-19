@@ -203,6 +203,13 @@ CASES: dict[str, tuple[list[str], str]] = {
         ["target", "config", "diff", "nosuch-2002", "20261104T000000000Z-00000000"],
         "no target",
     ),
+    # a push refuses a file that is not there before it reaches the frontend (#2786)
+    "target config push": (
+        ["target", "config", "push", "nosuch-2002", "/nonexistent/x", "--yes"],
+        "no such file or folder",
+    ),
+    # one unit of a job (#2798): a name that is no job, refused before torq.sh
+    "job run": (["job", "run", "nosuch", "--once"], "is not a job"),
 }
 #: --json commands with no offline case, and why.
 NO_OFFLINE_CASE = {

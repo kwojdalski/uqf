@@ -19,7 +19,7 @@ from uqs.cli import backfill_attached, completion, launch_options, safety
 from uqs.cli.choices import ChoiceOpt, alternatives
 from uqs.cli.concepts import attach_opt
 from uqs.cli.json_out import JSON_HELP, emit
-from uqs.cli.launch_options import FollowOpt, LevelOpt, StopOnExitOpt, TraceOpt
+from uqs.cli.launch_options import FollowOpt, LevelOpt, OnceOpt, StopOnExitOpt, TraceOpt
 from uqs.cli.pipelines import needs_pipelines
 from uqs.cli.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
 from uqs.cli.shared import (
@@ -36,6 +36,7 @@ from uqs.generated import q_facts
 from uqs.paths import UqsError, UqsUsageError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import backfill_wait as stack_backfill_wait
+from uqs.stack import once as stack_once
 from uqs.stack import run_modes
 
 _OnConflictOpt = ChoiceOpt(
@@ -158,6 +159,7 @@ def backfill(
     level: LevelOpt = None,
     override: safety.OverrideOpt = None,
     reason: safety.ReasonOpt = None,
+    once: OnceOpt = False,
 ) -> None:
     """Run a bounded worker over [--from, --to), recording coverage under --source-version.
 
@@ -198,6 +200,12 @@ def backfill(
     leaves the request standing. A re-run does the windows that remain.
     `--level` filters the stream as `uqs start -f --level` does; a line the
     run wrote without a level - a q error, its RESULT - is always shown.
+
+    `--once` runs ONE planned window - the first the range still has uncovered, through the
+    same validate, publish, checkpoint and coverage steps - then waits for the outcome and
+    exits with it; the other windows stay uncovered for the next run. A range already
+    covered at this version is no work, not a failure. A running process of the worker is
+    refused. Not with `--attachment`, `--mode validate` or `--mode plan`.
 
     With `--attachment`, `--skip-eod-fence --reason TEXT` (`--override eod-fence`)
     admits a plan, dry run or run within the native writers' end-of-day fence
@@ -242,8 +250,12 @@ def backfill(
             )
         )
     refused = launch_options.refusal(follow=follow, level=level, stop_on_exit=stop_on_exit)
+    refused = refused or launch_options.once_refusal(once=once, once_timeout=None, follow=follow)
     if refused is not None:
         _die(refused)
+    if once and (attach is not None or mode in run_modes.READ_ONLY_MODES):
+        _die(UqsError("--once runs one window of a run in this stack: not with --attachment, "
+                      "--mode validate or --mode plan, which run none"))  # fmt: skip
     if follow and attach is None:
         _die(
             UqsUsageError(
@@ -292,6 +304,8 @@ def backfill(
         paths = _paths()
         resolved = stack_backfill.resolve_version(worker, version)
         launched_at = datetime.now(UTC)
+        if once:  # never stop or reuse a running process of the worker (#2798)
+            stack_once.refuse_if_running(paths, stack_backfill.procname_for(worker), port)
         result = stack_backfill.start(
             paths,
             worker,
@@ -305,6 +319,7 @@ def backfill(
             mode=mode,
             fixture=fixture,
             **({"capture": True} if as_json else {}),
+            **({"once": True} if once else {}),
         )
         procname = stack_backfill.procname_for(worker)
         started = {
@@ -313,6 +328,11 @@ def backfill(
             "mode": mode or "run", "started": result.returncode == 0,
             "output": (result.stdout or "").splitlines() if as_json else [],
         }  # fmt: skip
+        if once and result.returncode == 0:  # the unit's outcome is the command's exit
+            from uqs.cli import job_run  # noqa: PLC0415 - entry.py registers it after backfill
+
+            outcome = stack_once.wait(paths, procname, launched_at, base_port=port)
+            job_run.report(procname, worker, outcome, as_json)
         if result.returncode != 0 or not wait:
             if as_json:
                 emit(started)
