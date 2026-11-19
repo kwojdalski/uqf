@@ -28,7 +28,7 @@ from typer.testing import CliRunner
 
 from uqs import cli, timefmt
 from uqs.cells import Shown, cells
-from uqs.cli import json_out, shared
+from uqs.cli.common import json_out, shared
 from uqs.logger import core as logcore
 
 
@@ -429,7 +429,7 @@ def test_no_command_prints_json_but_through_emit():
     cli_dir = Path(cli.__file__).parent
     found = [
         f"{path.name}:{n}"
-        for path in sorted(cli_dir.glob("*.py"))
+        for path in sorted(cli_dir.rglob("*.py"))
         if path.name != "json_out.py"
         for n, line in enumerate(path.read_text().splitlines(), 1)
         if "json.dumps(" in line
@@ -561,7 +561,7 @@ def test_status_json_says_all_its_interpreter_line_says(monkeypatch):
     """With no q, the text says `not runnable (no q found)`; the document used
     to say only `{binary: null, actual: null, problem: null}`, and never gave
     the connection budget (#1882)."""
-    from uqs.cli import summary
+    from uqs.cli.summary import summary
     from uqs.interpreter import InterpreterStatus
 
     none = summary._interpreter(InterpreterStatus(None, None, None))

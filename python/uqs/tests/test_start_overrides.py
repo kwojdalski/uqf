@@ -17,7 +17,8 @@ from typer.testing import CliRunner
 
 from uqs import cli, interpreter
 from uqs import paths as stack_paths
-from uqs.cli import shared, start_override_opts, target_confirm
+from uqs.cli.common import shared, target_confirm
+from uqs.cli.fleet import start_override_opts
 from uqs.deploy import control
 from uqs.paths import UqsError
 from uqs.stack import occupancy, runtime, start_overrides, start_policy

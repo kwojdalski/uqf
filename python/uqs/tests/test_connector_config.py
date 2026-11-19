@@ -19,7 +19,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import external as cli_external
+from uqs.cli.connector import external as cli_external
 from uqs.external import connection, crypto, feeds, kafka_feed
 from uqs.paths import UqsError, UqsPaths
 from uqs.scaffold import external as scaffold_external

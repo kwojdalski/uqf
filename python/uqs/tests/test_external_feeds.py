@@ -97,7 +97,7 @@ def test_titles_and_start_messages():
 
 
 def test_the_dry_run_masks_a_secret_option(monkeypatch, capsys):
-    from uqs.cli import external as cli_external
+    from uqs.cli.connector import external as cli_external
 
     feed = _feed("vault", feeds.FeedOption("api_key", "Key", secret=True),
                  feeds.FeedOption("symbols", "Symbols", many=True))  # fmt: skip

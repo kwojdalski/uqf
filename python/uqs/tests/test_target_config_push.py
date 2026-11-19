@@ -17,7 +17,8 @@ import pytest
 from typer.testing import CliRunner
 
 from uqf_frontend import remote_helper
-from uqs.cli import app, target_config_push
+from uqs.cli import app
+from uqs.cli.target import target_config_push
 from uqs.deploy import portal_push
 from uqs.paths import UqsError
 

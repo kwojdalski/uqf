@@ -35,7 +35,7 @@ The server's word is final on every check made here first.
 
 The path rules and the per-file limit are the server's own
 (uqf_frontend.remote_helper, imported when a push is built, as
-cli/target_config.py imports it); the queue's two bounds are the browser's
+cli/target/target_config.py imports it); the queue's two bounds are the browser's
 alone, and test_target_config_push.py holds them equal to services.ts.
 """
 

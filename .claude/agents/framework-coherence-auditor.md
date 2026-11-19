@@ -71,9 +71,9 @@ Different names, signatures or implementations alone are not findings.
    a release, add a job).
 2. Trace the relevant commands to their actual decisions and side effects. The
    real command tree is the authority, not the docs: walk it with
-   `typer.main.get_command(uqs.cli.shared.app)` after `import uqs.cli.entry`
-   (`uv run python ...`), and read each command's Effect (`cli/safety.py`:
-   read-only, confirms-on-server, changes-state).
+   `typer.main.get_command(uqs.cli.common.shared.app)` after
+   `import uqs.cli.entry` (`uv run python ...`), and read each command's Effect
+   (`cli/common/safety.py`: read-only, confirms-on-server, changes-state).
 3. Compare neighbouring operations that serve the same goal.
 4. Separate the distinctions that are essential from those that leak
    implementation.

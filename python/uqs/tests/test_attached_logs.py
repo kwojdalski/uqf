@@ -10,7 +10,8 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import backfill_attached, shared
+from uqs.cli.common import shared
+from uqs.cli.job import backfill_attached
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import attached_logs, logs
 
@@ -217,7 +218,7 @@ def test_the_cli_refuses_options_that_do_not_go_together(monkeypatch, argv, said
 
 def test_the_cli_reads_the_attached_run(paths, tmp_path, monkeypatch):
     write_run(tmp_path, [INFO])
-    monkeypatch.setattr("uqs.cli.logs._paths", lambda: paths)
+    monkeypatch.setattr("uqs.cli.fleet.logs._paths", lambda: paths)
     seen: list[dict[str, str]] = []
     monkeypatch.setattr(logs, "emit", lambda log, rec, min_level: seen.append(rec))
     result = CliRunner().invoke(

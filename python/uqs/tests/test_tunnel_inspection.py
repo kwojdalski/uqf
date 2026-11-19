@@ -24,8 +24,8 @@ from typer.testing import CliRunner
 
 from uqs import runtimes
 from uqs.cli import app
-from uqs.cli import query as query_mod
-from uqs.cli import target as target_cli
+from uqs.cli.fleet import query as query_mod
+from uqs.cli.target import target as target_cli
 from uqs.deploy import control, inspection, targets
 
 # --------------------------------------------------------------- the gate
@@ -48,7 +48,7 @@ IMPLEMENTATION = {"uqs/deploy/tunnel.py", "uqs/deploy/workspace.py"}
 #: Callers that reach an inspection-only target on purpose, each with why
 #: nothing it sends can change the server. "path:function".
 READ_ONLY: dict[str, str] = {
-    "uqs/cli/inspect.py:schema": (
+    "uqs/cli/fleet/inspect.py:schema": (
         "`uqs schema --tunnel` sends only schema_view's own programs - the table "
         "list, a table's meta and its row count - never the caller's q"
     ),

@@ -12,8 +12,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from uqs.cli import app, target_confirm
-from uqs.cli import target as target_cli
+from uqs.cli import app
+from uqs.cli.common import target_confirm
+from uqs.cli.target import target as target_cli
 from uqs.deploy import control, history, inspection, targets
 from uqs.deploy.config import DeployError
 
@@ -400,10 +401,10 @@ def _calls(tree) -> set[tuple[str, str]]:
 def test_every_cli_module_that_changes_a_server_asks_inspection_first():
     import ast
 
-    cli = Path(target_cli.__file__).parent
+    cli = Path(target_cli.__file__).parents[1]
     changing: list[str] = []
     missing: list[str] = []
-    for path in sorted(cli.glob("*.py")):
+    for path in sorted(cli.rglob("*.py")):
         calls = _calls(ast.parse(path.read_text()))
         if calls & SERVER_CHANGES:
             changing.append(path.name)

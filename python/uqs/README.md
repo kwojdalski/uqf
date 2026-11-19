@@ -15,7 +15,9 @@ src/uqs/
   stack/       the RUNNING fleet: start/stop, environment, queries, logs, the
                licence's connection budget
   cli/         the `uqs` command, one module per command family on one Typer app;
-               entry.py is the entry point
+               entry.py is the entry point, and the modules sit in one folder per
+               command group: fleet/, summary/, config/, data/, job/, connector/,
+               deploy/, target/, and common/ for what they share
   scaffold/    `uqs job new`: the plan, the templates, applying them
   external/    processes this tree starts but does not own (crypto recorder,
                Databento feed)

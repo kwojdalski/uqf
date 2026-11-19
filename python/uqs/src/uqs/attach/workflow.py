@@ -8,7 +8,7 @@ stack on another machine -> reach. The stages are the existing ones (apply.py,
 verify.py, publisher.py, reach.py), called in order; nothing here re-implements
 a check. Execution never relies on an earlier
 preview: apply builds its own plan against the stack as it is when it runs,
-and verify reads it again. The CLI (cli/attach.py) renders what these return.
+and verify reads it again. The CLI (cli/connector/attach.py) renders what these return.
 """
 
 from __future__ import annotations

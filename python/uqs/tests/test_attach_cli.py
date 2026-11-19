@@ -23,7 +23,7 @@ from uqs import cli
 from uqs.attach import backfill_owner, config, facts, live, plan, publisher, service
 from uqs.attach import verify as verifying
 from uqs.attach.manifest import Manifest
-from uqs.cli import shared, target_confirm
+from uqs.cli.common import shared, target_confirm
 from uqs.deploy import control
 from uqs.paths import repo_root
 from uqs.stack import attach_inventory, attach_state, listing, runtime

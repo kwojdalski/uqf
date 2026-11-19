@@ -8,7 +8,7 @@ from uqs import guardrails
 from uqs.attach import backfill_forced as forced
 from uqs.attach import backfill_policy as backfill
 from uqs.attach import overrides as attach
-from uqs.cli import safety
+from uqs.cli.common import safety
 from uqs.deploy import overrides as deploy
 from uqs.deploy import portable
 from uqs.guardrails import Guardrail

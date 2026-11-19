@@ -21,7 +21,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import create, create_reaction
+from uqs.cli.job import create, create_reaction
 from uqs.scaffold.plan import ScaffoldPlan
 
 UQF_ROOT = Path(__file__).resolve().parents[3]

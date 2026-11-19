@@ -18,8 +18,8 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs import paths as stack_paths
-from uqs.cli import runtime_prepare
-from uqs.cli.regenerate import _DERIVED
+from uqs.cli.config import runtime_prepare
+from uqs.cli.job.regenerate import _DERIVED
 from uqs.deploy import build as release_build
 from uqs.model import runtime_members
 from uqs.paths import CATALOG_FILE, SOURCE_DIR, STREAM_DIR, TABLES_FILE, WORKER_DIR, UqsError

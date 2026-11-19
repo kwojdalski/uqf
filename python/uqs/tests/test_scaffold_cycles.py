@@ -48,7 +48,7 @@ def test_job_new_refuses_the_cycle_before_writing(monkeypatch):
     from typer.testing import CliRunner  # noqa: PLC0415
 
     from uqs import cli  # noqa: PLC0415
-    from uqs.cli import create  # noqa: PLC0415
+    from uqs.cli.job import create  # noqa: PLC0415
 
     refused: list[str] = []
 

@@ -18,7 +18,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import backfill, backfill_owner, backfill_run, backfill_stop
-from uqs.cli.shared import EXIT_STOPPED
+from uqs.cli.common.shared import EXIT_STOPPED
 from uqs.generated import q_facts
 from uqs.paths import UqsError
 
@@ -51,7 +51,7 @@ def state(tmp_path, monkeypatch):
     changed since the run launched, so nothing may derive it from the config."""
     monkeypatch.setenv("UQF_STATUS_DIR", str(tmp_path))
     monkeypatch.setattr(backfill, "state_dir_of", _moved)
-    monkeypatch.setattr("uqs.cli.runs._paths", lambda: None)
+    monkeypatch.setattr("uqs.cli.job.runs._paths", lambda: None)
     where = tmp_path / backfill.STATE_SUBDIR / f"pb-uat-{DEST}"
     where.mkdir(parents=True)
     return where
@@ -172,7 +172,7 @@ def test_a_record_naming_no_destination_is_refused(state, monkeypatch):
 def test_the_runs_listing_reads_a_live_runs_own_ledger(state, monkeypatch):
     """With a run going, `uqs job runs list --attachment` reads the ledger it writes,
     not the one the config's pins name now (#2758)."""
-    from uqs.cli import runs
+    from uqs.cli.job import runs
 
     _claim(monkeypatch, 4321)
     assert runs._where("pb-uat") == {"directory": state}

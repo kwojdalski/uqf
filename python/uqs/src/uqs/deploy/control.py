@@ -33,7 +33,7 @@ Three failures are told apart, because each needs a different fix:
   - the remote uqs failed: its own exit code and its own words, passed through.
 
 A command that may change the server asks first, naming the target, or takes
-`--yes`. Each command's own mark says whether it may (cli/target_confirm.py,
+`--yes`. Each command's own mark says whether it may (cli/common/target_confirm.py,
 #1780); an unmarked or unknown one asks, so a new command is safe before
 anyone classifies it.
 """

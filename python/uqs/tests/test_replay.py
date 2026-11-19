@@ -17,7 +17,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs import paths as stack_paths
-from uqs.cli import replay as cli_replay
+from uqs.cli.data import replay as cli_replay
 from uqs.paths import UqsError
 from uqs.stack import replay, runtime
 

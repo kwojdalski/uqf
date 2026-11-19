@@ -39,7 +39,7 @@ OVERRIDES_LOG = "start_overrides.jsonl"
 _START = ("start", "restart")
 #: The refusals a start may skip, by Overrides field; each id is the name
 #: `--override NAME` gives (#1732, #1825), and each gives `start` and `restart`
-#: a generated `--skip-<id>` (cli/skip_options.py, #1918) whose help is this
+#: a generated `--skip-<id>` (cli/common/skip_options.py, #1918) whose help is this
 #: declaration: what is waived, the risk, and what to do about it.
 GUARDRAILS = {
     "q_version": Guardrail(

@@ -300,8 +300,8 @@ def test_a_dry_run_under_a_held_lock_plans_and_warns(log_text):
 def test_the_command_ends_a_dry_run_with_the_note_on_stderr_after_the_json(monkeypatch):
     from rich.text import Text
 
-    from uqs.cli import deploy_server
-    from uqs.cli.safety import dry_run_note
+    from uqs.cli.common.safety import dry_run_note
+    from uqs.cli.deploy import deploy_server
 
     monkeypatch.setattr(deploy_server, "Remote", lambda *a, **k: _server())
     argv = ["deploy", "rollback", "--ssh", "h", "--dest", "/opt/uqf", "--dry-run"]

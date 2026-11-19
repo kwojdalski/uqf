@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 from typer.main import get_group
 
-from uqs.cli.deploy import deploy_app
+from uqs.cli.deploy.deploy import deploy_app
 from uqs.deploy import artifact, payload
 from uqs.deploy import build as release_build
 

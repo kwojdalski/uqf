@@ -14,7 +14,7 @@ import pytest
 from test_attach_cli import SECRET, TABLE, flat, new, run, world  # noqa: F401 - the attach world
 
 from uqs.attach import config, publisher
-from uqs.cli import attach_launch, attach_next
+from uqs.cli.connector import attach_launch, attach_next
 
 FOLLOW = "follow it with `uqs logs pb_ledger1 -f`"
 ROWS = f"uqs query --host testhost --port 6002 'select from {TABLE} where i >= count[i]-10'"

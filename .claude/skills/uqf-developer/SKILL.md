@@ -125,8 +125,8 @@ Specialist agents (hand work to them where they are the specialist):
   change). **Vendor, don't reinvent**: wrap upstream q rather than rewriting it,
   and surface a missing licence to the user.
 - **W10** No backward compatibility: a rename refuses the old spelling with a
-  message naming the new one (`python/uqs/src/uqs/cli/renames.py`); no alias
-  columns, no dual writes, no reader that branches on a version
+  message naming the new one (`python/uqs/src/uqs/cli/common/renames.py`); no
+  alias columns, no dual writes, no reader that branches on a version
   (`docs/architecture/markout-contract.md`, `bundle-overlay.md`).
 - **W11** The repository is public: no bank-internal table names, hosts, schemas
   or logic, in code, tests, comments or commit messages - use generic analogues

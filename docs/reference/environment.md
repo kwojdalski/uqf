@@ -150,7 +150,7 @@ without it:
 | `UQS_DEPLOY_TARGETS` | `uqs.deploy.targets` | no | `deploy_targets.toml` at the repository root. The file `uqs deploy push\|status\|rollback\|prune TARGET`, `uqs --target` and `uqs target` read their targets from. Set but absent is refused |
 | `UQS_DEPLOY_HISTORY` | `uqs.deploy.history` | no | `deploy_history.json` beside the targets file. Where `uqs deploy push` records each deployment, and `uqs deploy history` reads them |
 | `UQS_TUNNEL_CHECKS` | `uqs.deploy.tunnel_plan` | no | `tunnel_checks.json` beside the targets file. Where `uqs target tunnel check` records each mapping's last success, and `uqs target tunnel plan` reads it |
-| `VISUAL` | `uqs.cli.target_edit` | no | the editor `uqs target edit` opens the copy of `deploy_targets.toml` in, as a command line (`code --wait`). Unset: `EDITOR` |
+| `VISUAL` | `uqs.cli.target.target_edit` | no | the editor `uqs target edit` opens the copy of `deploy_targets.toml` in, as a command line (`code --wait`). Unset: `EDITOR` |
 | `EDITOR` | as above | no | the editor when `VISUAL` is unset; unset too: `vi` |
 | `UQF_FX_POSITION_LIMITS` | `.qpipe.job.fx_positions.on_start` (`src/etl/streaming/fx_positions.q`) | no | unset: `fxpositions1` starts with no limits and warns that nothing is policed. A path to a limits CSV loads it at start; a missing or malformed file stops the job from starting (#1112) |
 | `UQF_LIVE_SOURCES_REQUIRED` | `.qetl.source.live_required` (`src/etl/core/source_credentials.q`) | no | unset: a source with no credential runs on its fixture. `1` refuses that instead - a bounded worker fails at init and a polling feed publishes nothing - so no synthetic row is published or recorded as covered. `uqs deploy push --live` writes it into the release's `deploy.env` |

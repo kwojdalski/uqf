@@ -4,7 +4,7 @@
 database.q, access lists and HDB columns - because the start lines came from
 `torq.sh print`, which ran after `bootstrap()`. `uqs --target prod start
 --dry-run` then ran that on a server without asking, because --target treats
-any dry run as harmless (cli/target_confirm.py). Each dry run had its own last
+any dry run as harmless (cli/common/target_confirm.py). Each dry run had its own last
 line too, or none.
 
 So this walks every command that may change state and takes `--dry-run`, runs
@@ -32,8 +32,8 @@ from dry_run_support import Sandbox, changes, copy_repo, snapshot
 from rich.text import Text
 from test_cli_conventions import LEAVES
 
-from uqs.cli.safety import Effect, dry_run_note
-from uqs.cli.target_confirm import changes_the_server, effect_of, trait_of
+from uqs.cli.common.safety import Effect, dry_run_note
+from uqs.cli.common.target_confirm import changes_the_server, effect_of, trait_of
 
 pytestmark = pytest.mark.xdist_group("dry_run_tree")
 
@@ -43,7 +43,7 @@ APPLY_NOTE = Text.from_markup(dry_run_note("with --apply")).plain.rstrip(".")
 
 #: The commands whose dry run starts a process - the worker, to fetch and
 #: transform every window (#1732) - so `uqs --target` asks before it:
-#: those marked `dry_run_starts` (cli/safety.py, #1893). It no
+#: those marked `dry_run_starts` (cli/common/safety.py, #1893). It no
 #: longer bootstraps the data directory to do so (#1902): here, on an empty
 #: data root, it refuses and changes nothing, like every other case.
 STARTS_A_PROCESS = {path for path, cmd in LEAVES.items() if trait_of(cmd.command, "dry_run_starts")}
@@ -251,7 +251,7 @@ def test_a_dry_run_ends_with_the_note(case, shared_repo):
 
 @pytest.mark.parametrize("case", CASES, ids=_id)
 def test_target_sends_a_dry_run_unasked_only_once_it_is_walked_here(case):
-    """`uqs --target` sends a dry run without asking (cli/target_confirm.py):
+    """`uqs --target` sends a dry run without asking (cli/common/target_confirm.py):
     sound only for a dry run this file shows writes nothing. A backfill's
     still starts a process, so it asks."""
     assert changes_the_server(case.argv) is (case.command in STARTS_A_PROCESS)

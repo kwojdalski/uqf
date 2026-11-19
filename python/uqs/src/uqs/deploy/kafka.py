@@ -53,7 +53,7 @@ LIB_SUBDIR = "lib"
 NOTICE_SUBDIR = "notices"
 #: What --kfk-home must hold: the q half and the C half of KX's kfk v1.6.6.
 REQUIRED = ("kfk.q", "libkfk.so")
-#: `uqs deploy build`'s two options (uqs.cli.deploy).
+#: `uqs deploy build`'s two options (uqs.cli.deploy.deploy).
 HOME_HELP = (
     "Package KX's kfk from DIR - kfk.q, libkfk.so, the libraries it loads and the "
     "LICENSE/NOTICE files there - for every job using the native Kafka client"

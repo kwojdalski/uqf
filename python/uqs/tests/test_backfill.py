@@ -19,8 +19,8 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs import paths as stack_paths
-from uqs.cli import cleanup as cli_cleanup
-from uqs.cli import shared
+from uqs.cli.common import shared
+from uqs.cli.fleet import cleanup as cli_cleanup
 from uqs.paths import UqsError
 from uqs.stack import backfill, backfill_wait, runtime
 
@@ -714,7 +714,7 @@ def test_a_successful_run_returns_no_error(tmp_path, monkeypatch):
 
 def test_wait_with_a_mode_that_writes_no_status_is_refused(monkeypatch):
 
-    from uqs.cli import backfill as cli_backfill
+    from uqs.cli.job import backfill as cli_backfill
 
     started, refused = [], []
 

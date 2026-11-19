@@ -22,7 +22,7 @@ nor reach the HDBs to reload them.
 
 The HDB is this runtime's own: `uqs --target T data compress` runs the command
 on the release, against the release's HDB and its housekeeping1, which is how
-every confirms-on-server command reaches a target (cli/target_confirm.py).
+every confirms-on-server command reaches a target (cli/common/target_confirm.py).
 """
 
 from __future__ import annotations

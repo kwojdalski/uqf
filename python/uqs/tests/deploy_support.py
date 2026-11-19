@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 
-from uqs.cli import json_out
+from uqs.cli.common import json_out
 from uqs.deploy import driver
 from uqs.deploy.report import Report
 

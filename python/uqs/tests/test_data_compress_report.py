@@ -22,9 +22,9 @@ import pytest
 from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
-from uqs.cli import compress as compress_cli
-from uqs.cli import shared
-from uqs.cli.shared import app
+from uqs.cli.common import shared
+from uqs.cli.common.shared import app
+from uqs.cli.data import compress as compress_cli
 
 BUILD_Q = r"""
 r:hsym `$getenv`HDB;
@@ -133,7 +133,7 @@ def test_without_a_mode_it_is_a_usage_error_and_reads_nothing(tmp_path, monkeypa
 
 def _attached(monkeypatch, where: Path, ssh: str | None) -> None:
     """--attachment ATT resolving to `where`, on `ssh` (None: this machine)."""
-    from uqs.cli import hdb_scope
+    from uqs.cli.data import hdb_scope
 
     handle = hdb_scope.Handle("attach", str(where), "pinned", hdb_scope._paths())
     monkeypatch.setattr(type(handle), "ssh", property(lambda self: ssh))

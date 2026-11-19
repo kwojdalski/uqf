@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from uqs.cli.logs import lines_document
+from uqs.cli.fleet.logs import lines_document
 from uqs.generated import q_facts
 from uqs.paths import UqsPaths, UqsUsageError
 from uqs.stack import log_follow, logs

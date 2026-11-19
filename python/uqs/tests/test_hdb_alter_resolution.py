@@ -21,8 +21,10 @@ import uqs.cli.entry  # noqa: F401 - registers every command on the app
 from uqs.attach import backfill_owner, hdb_where, service
 from uqs.attach.config import AttachmentError
 from uqs.attach.facts import Host
-from uqs.cli import hdb_scope, shared, target, target_confirm
-from uqs.cli.shared import app
+from uqs.cli.common import shared, target_confirm
+from uqs.cli.common.shared import app
+from uqs.cli.data import hdb_scope
+from uqs.cli.target import target
 from uqs.deploy import control
 from uqs.paths import UqsError, paths_for_root
 from uqs.stack import hdb_remote

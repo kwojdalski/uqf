@@ -18,7 +18,7 @@ from uqs import cli
 from uqs.attach import config, facts, jobs, plan, preflight, service, topology
 from uqs.attach.findings import blockers
 from uqs.attach.schema import SchemaError, TableSpec, differences, parse_definition
-from uqs.cli import shared
+from uqs.cli.common import shared
 from uqs.paths import repo_root
 
 ROOT = repo_root()

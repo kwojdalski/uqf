@@ -244,7 +244,7 @@ def test_the_cli_is_registered():
 
 def test_the_cli_prints_json_and_exits_1_only_when_health_fails(monkeypatch):
     """The exit code is for scripts: 0 healthy (or not checked), 1 failing."""
-    from uqs.cli import deploy_server
+    from uqs.cli.deploy import deploy_server
 
     args = ["deploy", "status", "--ssh", "uqf-server", "--dest", "/opt/uqf", "--json"]
     for healthy, code in ((True, 0), (False, 1)):

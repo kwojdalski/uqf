@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from uqs.cli.create_kinds import SHAPES
+from uqs.cli.job.create_kinds import SHAPES
 from uqs.model.kinds import DECLARATION_VERBS, SCAFFOLD_KINDS, VERBS
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -52,9 +52,9 @@ def test_every_option_shape_names_a_real_kind():
 
 
 def test_every_scaffold_kind_is_dispatched_by_the_command():
-    text = (ROOT / "python/uqs/src/uqs/cli/create.py").read_text()
+    text = (ROOT / "python/uqs/src/uqs/cli/job/create.py").read_text()
     for kind in SCAFFOLD_KINDS:
-        assert f'kind == "{kind}"' in text, f"cli/create.py does not handle --kind {kind}"
+        assert f'kind == "{kind}"' in text, f"cli/job/create.py does not handle --kind {kind}"
 
 
 def test_a_kind_with_its_own_namespace_is_excepted_from_the_man_ratchet():

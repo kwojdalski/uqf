@@ -10,7 +10,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import runs as cli_runs
+from uqs.cli.job import runs as cli_runs
 from uqs.paths import UqsError
 from uqs.stack import runs as stack_runs
 

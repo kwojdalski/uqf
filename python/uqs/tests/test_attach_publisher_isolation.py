@@ -33,7 +33,7 @@ from uqs.attach import config, facts, live, native, native_row, service
 from uqs.attach.config import AttachmentError
 from uqs.attach.manifest import Manifest
 from uqs.attach.publisher import UqsPublisher, stop_publisher
-from uqs.cli import shared
+from uqs.cli.common import shared
 from uqs.model.pipelines import PIPELINE_OFFSETS
 from uqs.paths import UqsError, repo_root
 from uqs.process_stop import Stopped

@@ -50,22 +50,11 @@ from which_support import fake_which
 from uqs import cli, runtimes, timefmt
 from uqs import paths as stack_paths
 from uqs.checks import schema_view
-from uqs.cli import (
-    create_backfill,
-    json_out,
-    lifecycle,
-    pipelines,
-    safety,
-    shared,
-    sorting,
-    start_warnings,
-    summary,
-    summary_columns,
-    summary_graph,
-    summary_table,
-    table_browser,
-)
-from uqs.cli import query as query_cli
+from uqs.cli.common import json_out, pipelines, safety, shared, sorting, table_browser
+from uqs.cli.fleet import lifecycle, start_warnings
+from uqs.cli.fleet import query as query_cli
+from uqs.cli.job import create_backfill
+from uqs.cli.summary import summary, summary_columns, summary_graph, summary_table
 from uqs.external import connection, crypto, kafka_feed
 from uqs.external.crypto import (
     CRYPTO_FILLS_RECORDER_TABLE,
@@ -1140,7 +1129,7 @@ def test_an_export_path_that_cannot_be_written_is_refused_before_any_output(
 
 
 def test_a_failed_export_is_the_only_json_document(monkeypatch, tmp_path):
-    from uqs.cli import shared
+    from uqs.cli.common import shared
 
     monkeypatch.setattr(shared, "json_requested", lambda: True)  # as main() configures it
     _patch(monkeypatch, listing, "list_items", result=[{"procname": "rdb1"}])
@@ -1570,7 +1559,7 @@ def data_dir(tmp_path, monkeypatch):
     """A data directory holding an HDB, which `uqs clean` would remove."""
     from types import SimpleNamespace
 
-    from uqs.cli import cleanup
+    from uqs.cli.fleet import cleanup
 
     root = tmp_path / "torqdata"
     (root / "hdb" / "2026.09.01").mkdir(parents=True)
@@ -1796,7 +1785,7 @@ def test_connector_logs_follow_reads_the_same_file(monkeypatch, tmp_path):
 
 
 def test_connector_logs_before_a_first_start_says_so(monkeypatch, tmp_path):
-    from uqs.cli import connector_logs
+    from uqs.cli.connector import connector_logs
 
     _crypto_running(monkeypatch, False, tmp_path / "never.log")
     said = _refusals(monkeypatch, connector_logs)

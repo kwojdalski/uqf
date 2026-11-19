@@ -10,7 +10,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli.pipelines import pipelines_only
+from uqs.cli.common.pipelines import pipelines_only
 from uqs.paths import UqsError, paths_for_root
 from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
 from uqs.stack import alive, runtime_report

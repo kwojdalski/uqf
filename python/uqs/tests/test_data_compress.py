@@ -25,10 +25,10 @@ import pytest
 from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
-from uqs.cli import compress as compress_cmd
-from uqs.cli import compress_plan as data_compress
-from uqs.cli.shared import app
-from uqs.cli.target_confirm import changes_the_server, may_change_the_server
+from uqs.cli.common.shared import app
+from uqs.cli.common.target_confirm import changes_the_server, may_change_the_server
+from uqs.cli.data import compress as compress_cmd
+from uqs.cli.data import compress_plan as data_compress
 from uqs.paths import UqsError, UqsUsageError
 from uqs.paths import default_paths as real_paths
 from uqs.stack import compress as stack_compress
@@ -381,7 +381,7 @@ def test_the_json_document_carries_the_plan(cli):
 
 def test_a_target_asks_on_the_server_and_inspection_refuses_apply():
     """A dry run never changes the server; --apply asks there, and is what an
-    inspection-only target refuses (cli/target_confirm.py, #2032)."""
+    inspection-only target refuses (cli/common/target_confirm.py, #2032)."""
     assert not changes_the_server(["data", "compress"])
     assert not may_change_the_server(["data", "compress", "--table", "t"])
     assert may_change_the_server(["data", "compress", "--apply"])

@@ -10,7 +10,7 @@ its reason, and comes back as the `endpoint_unavailable` outcome.
 
 It sits in deploy/, the lowest layer that may reach both this machine's stack and
 a target, and outside uqs.cli so the frontend never loads the command line
-(#2655): cli/data_diff.py keeps only the command's options and its text.
+(#2655): cli/data/data_diff.py keeps only the command's options and its text.
 """
 
 from __future__ import annotations

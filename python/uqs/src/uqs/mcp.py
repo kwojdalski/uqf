@@ -12,7 +12,7 @@ processes) are its own: they are how it tells an operator, not refusals.
 
 The tools speak the CLI's vocabulary (#2120). Each mirrors one CLI command and
 is named after it - `uqs_config_show` is `uqs config show` - and each of its
-parameters is one of that command's, spelled as cli/vocabulary.py's
+parameters is one of that command's, spelled as cli/common/vocabulary.py's
 `spelling` spells it: `base_port` is `--base-port`, the stack's base port,
 and `port` is only ever one process's (`uqs_query`'s), as `--port` is on the
 CLI (#1729). test_mcp_vocabulary.py holds every tool to that, so the two
@@ -37,12 +37,12 @@ from collections.abc import Callable
 from typing import Any
 
 from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
-from uqs.cli import lists as cli_lists
-from uqs.cli.external import BROKEN, ENV_SUFFIX, FEEDS, _secrets_from_env, _status_record
-from uqs.cli.json_out import plain, records
-from uqs.cli.logs import lines_document
-from uqs.cli.q_login import DEFAULT_USER, q_password
-from uqs.cli.shared import _procs
+from uqs.cli.common.json_out import plain, records
+from uqs.cli.common.q_login import DEFAULT_USER, q_password
+from uqs.cli.common.shared import _procs
+from uqs.cli.config import lists as cli_lists
+from uqs.cli.connector.external import BROKEN, ENV_SUFFIX, FEEDS, _secrets_from_env, _status_record
+from uqs.cli.fleet.logs import lines_document
 from uqs.deploy import history as _registers_list_targets  # noqa: F401 - `target list`
 from uqs.external.feeds import ExternalFeed, check_options
 from uqs.mcp_server import (
@@ -224,7 +224,7 @@ def uqs_config_set(proc: str, pairs: list[str], dry_run: bool = False) -> dict[s
 
 
 def _lister(kind: str, path: str) -> None:
-    """The tool for `path`, the noun's own list of `kind` (cli/lists.py): its
+    """The tool for `path`, the noun's own list of `kind` (cli/config/lists.py): its
     rows as `--json` prints them - typed, keyed in snake_case, a process
     `process` (#1882) - taking `base_port` where the command takes --base-port."""
     key = cli_lists.JSON_KEY.get(kind, kind)

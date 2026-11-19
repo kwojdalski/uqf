@@ -1,4 +1,4 @@
-"""Tests for sidecar bundles (stack/bundles.py, cli/install_bundle.py, #800).
+"""Tests for sidecar bundles (stack/bundles.py, cli/job/install_bundle.py, #800).
 
 Each test builds a fake repository root and a bundle under tmp_path; nothing
 here writes into this tree.
@@ -15,9 +15,9 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs import paths as stack_paths
-from uqs.cli import install as cli_install
-from uqs.cli import install_bundle as cli_bundle
-from uqs.cli.regenerate import _DERIVED
+from uqs.cli.job import install as cli_install
+from uqs.cli.job import install_bundle as cli_bundle
+from uqs.cli.job.regenerate import _DERIVED
 from uqs.paths import CATALOG_FILE, REACTION_DIR, SOURCE_DIR, STREAM_DIR, TABLES_FILE, WORKER_DIR
 from uqs.stack import bundle_blocks, bundles
 from uqs.stack.bundles import LEDGER, OVERRIDES_FILE, BundleError

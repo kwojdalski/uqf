@@ -1,7 +1,7 @@
 """Time-text rules shared with readers that must not load the orchestrator.
 
 A leaf: this module imports nothing from `uqs`, so importing it costs a few
-regexes. `timestamp` is here rather than in cli/json_out.py so that
+regexes. `timestamp` is here rather than in cli/common/json_out.py so that
 stack/data_diff.py - and through it the frontend's /compare - can stamp a
 report without loading the command line (#2655).
 

@@ -17,7 +17,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import snapshot as snapshot_cli
+from uqs.cli.data import snapshot as snapshot_cli
 from uqs.paths import UqsPaths
 
 ROOT = Path(__file__).resolve().parents[3]

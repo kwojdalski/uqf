@@ -394,7 +394,7 @@ def test_uqs_connector_start_kafka_reports_the_missing_extra(no_extra, monkeypat
     from typer.testing import CliRunner
 
     from uqs import cli
-    from uqs.cli import shared
+    from uqs.cli.common import shared
 
     errors: list[str] = []
 

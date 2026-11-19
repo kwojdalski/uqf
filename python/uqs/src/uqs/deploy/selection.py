@@ -118,7 +118,7 @@ def verify_command(
     and a table `--table` on a release since #1856/#1857; one from before takes
     `--deadline`, `--procs` and `--tables`, so the release's own --help says
     which it is given, by the newest of them (`--table`) - the old spellings
-    stop parsing a release after they were renamed (cli/rename_expiry.py)."""
+    stop parsing a release after they were renamed (cli/common/rename_expiry.py)."""
 
     def argv(current: bool) -> str:
         wait = (

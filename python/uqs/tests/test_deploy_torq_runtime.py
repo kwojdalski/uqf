@@ -374,7 +374,7 @@ def test_the_cli_builds_a_runtime(tmp_path, monkeypatch):
     from typer.testing import CliRunner
 
     from uqs import cli
-    from uqs.cli import deploy_component
+    from uqs.cli.deploy import deploy_component
 
     repo = vendored(tmp_path / "repo")
     monkeypatch.setattr(deploy_component, "repo_root", lambda: repo)

@@ -23,7 +23,7 @@ from fastmcp.tools import ToolResult
 
 from uqs import cli as uqs_cli
 from uqs import paths as stack_paths
-from uqs.cli import vocabulary
+from uqs.cli.common import vocabulary
 from uqs.logger import configure_logging, get_logger
 from uqs.paths import UqsError, UqsPaths
 

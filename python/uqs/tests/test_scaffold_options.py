@@ -20,7 +20,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import create
+from uqs.cli.job import create
 from uqs.model import transports
 from uqs.model.declarations import read_file_text
 from uqs.paths import UqsError
@@ -322,7 +322,7 @@ def test_a_scaffolded_source_takes_its_words_from_the_surface(name):
 def test_an_option_that_does_not_apply_to_the_kind_is_refused(argv, message, monkeypatch):
     """The message, not only the exit code: `_die` logs through loguru, which
     CliRunner cannot capture (see test_cli.py), so it is recorded here."""
-    from uqs.cli import create
+    from uqs.cli.job import create
 
     refused: list[str] = []
 
@@ -339,7 +339,7 @@ def test_an_option_that_does_not_apply_to_the_kind_is_refused(argv, message, mon
 def test_without_q_the_contract_surface_step_is_named(tmp_path, monkeypatch):
     """No q, no export: the command says what to run instead of leaving the
     contract-surface hook to fail on the next commit unexplained."""
-    from uqs.cli import regenerate
+    from uqs.cli.job import regenerate
 
     monkeypatch.setattr(regenerate, "q_interpreter", lambda: None)
     assert regenerate._regenerate_with_q(tmp_path) is None
@@ -350,7 +350,7 @@ def test_a_scaffold_regenerates_every_file_a_new_table_or_source_makes_stale():
     tableproperties.csv - read from it - lists getdata's tables: left stale,
     their --check hooks and test_catalog.q failed straight after `uqs job new`,
     and `uqs config sources stub` refused the scaffold's own source (#2461)."""
-    from uqs.cli import regenerate
+    from uqs.cli.job import regenerate
 
     targets = [d[1] for d in (*regenerate._DERIVED, *regenerate._WITH_Q)]
     assert {"q-facts", "table-properties", "contract-surface"} <= set(targets)

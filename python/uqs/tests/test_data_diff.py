@@ -25,7 +25,7 @@ import pytest
 from plain_cli import PlainRunner
 
 from uqs import cli, timerange
-from uqs.cli import data_diff as diff_cli
+from uqs.cli.data import data_diff as diff_cli
 from uqs.deploy import diff_endpoints
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsUsageError, default_paths

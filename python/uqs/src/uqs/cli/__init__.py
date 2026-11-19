@@ -1,7 +1,7 @@
 """The `uqs` command line, one module per command family.
 
 Every module here registers its commands onto the single shared `app` in
-`shared.py` rather than onto a sub-Typer, because `uqs start` must stay
+`common/shared.py` rather than onto a sub-Typer, because `uqs start` must stay
 spelled that way - a sub-Typer would have made it `uqs lifecycle start`
 and broken every script and document that calls this CLI. `main.py` imports
 the families in the order `--help` should list them in.

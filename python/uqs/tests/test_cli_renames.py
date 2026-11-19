@@ -34,7 +34,7 @@ def test_backfill_mode_dry_run_is_refused_naming_dry_run(log_text):
 
 def test_alter_rename_is_old_colon_new_and_old_equals_new_is_refused():
     """`data alter --rename OLD:NEW`, as `data migrate` spells it (#1856)."""
-    from uqs.cli import hdb_alter
+    from uqs.cli.data import hdb_alter
 
     assert hdb_alter._rename("amt:amount") == "amt=amount"
     with pytest.raises(UqsError, match="must be OLD:NEW"):
@@ -49,7 +49,7 @@ def test_kind_external_is_no_kind():
 
 def test_an_override_is_spelled_as_a_guardrail_not_a_finding_code():
     """`--override torq-version:stp1`, never the finding code TORQ_VERSION (#1884)."""
-    from uqs.cli import attach
+    from uqs.cli.connector import attach
 
     with pytest.raises(UqsUsageError, match="--override TORQ_VERSION: spell it torq-version"):
         attach.waivers(["TORQ_VERSION:stp1"], "a reason")
@@ -64,7 +64,7 @@ def test_an_override_is_spelled_as_a_guardrail_not_a_finding_code():
     ],
 )
 def test_a_lone_word_is_proc_only_when_it_names_a_process(monkeypatch, args, proc, rest):
-    from uqs.cli import shared
+    from uqs.cli.common import shared
 
     monkeypatch.setattr(shared, "_known_procs", lambda: {"rdb1", "gateway1"})
     first, second = (args + [None])[:2]
@@ -74,7 +74,7 @@ def test_a_lone_word_is_proc_only_when_it_names_a_process(monkeypatch, args, pro
 def test_a_duration_is_seconds_bare_or_with_a_unit():
     """#1857: every span of time is a DURATION; a bare number stays seconds,
     as every duration option took before."""
-    from uqs.cli import vocabulary
+    from uqs.cli.common import vocabulary
 
     assert vocabulary.seconds("30") == 30.0
     assert vocabulary.seconds("500ms") == 0.5
@@ -87,7 +87,7 @@ def test_a_duration_is_seconds_bare_or_with_a_unit():
 def test_sources_check_window_is_refused_naming_the_range(monkeypatch):
     """`--window N` was minutes; it was read as `--last Nm` for a release, and
     is refused now, naming the shared range that replaced it (#2249)."""
-    from uqs.cli import source_check
+    from uqs.cli.config import source_check
 
     monkeypatch.setattr(source_check.live_check, "check", lambda *a, **k: pytest.fail("ran"))
     result = runner.invoke(cli.app, ["config", "sources", "check", "src1", "--window", "90"])
@@ -97,7 +97,7 @@ def test_sources_check_window_is_refused_naming_the_range(monkeypatch):
 
 
 def test_tables_are_a_repeatable_table_and_a_comma_list_works_in_one():
-    from uqs.cli.hdb_scope import tables_given
+    from uqs.cli.data.hdb_scope import tables_given
 
     assert tables_given(["trade", "quote,fx"]) == ["trade", "quote", "fx"]
     assert tables_given(None) == []

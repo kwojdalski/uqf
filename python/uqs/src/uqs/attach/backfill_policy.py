@@ -92,9 +92,9 @@ def blocker(code: str, component: str, message: str, **facts: object) -> Finding
 EOD_FENCE = "eod-fence"
 #: What a waived fence means, in the words the plan and the run print.
 EOD_BYPASSED = "EOD fence bypassed; no EOD write deadline"
-#: `uqs job backfill --skip-eod-fence` (cli/skip_options.py builds the flag from this): its
+#: `uqs job backfill --skip-eod-fence` (cli/common/skip_options.py builds the flag from this): its
 #: risk and action are POLICY's, so the text lives in one place. Only the attached path
-#: (`--attachment`, run, dry-run and plan) honours it; cli/backfill.py refuses it elsewhere.
+#: (`--attachment`, run, dry-run and plan) honours it; cli/job/backfill.py refuses it elsewhere.
 GUARDRAILS = (
     Guardrail(
         EOD_FENCE,

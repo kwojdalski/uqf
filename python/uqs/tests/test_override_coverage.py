@@ -24,8 +24,8 @@ from test_backfill_override_cli import ARGV
 from uqs import cli
 from uqs.attach import backfill_forced, backfill_policy
 from uqs.attach import overrides as attach
-from uqs.cli import safety, skip_options, target_confirm
-from uqs.cli import target as target_cli
+from uqs.cli.common import safety, skip_options, target_confirm
+from uqs.cli.target import target as target_cli
 from uqs.deploy import control, portable
 from uqs.deploy import overrides as deploy
 from uqs.paths import UqsError, repo_root
@@ -113,7 +113,7 @@ def test_every_backfill_guardrail_is_a_finding_coordination_emits_and_may_accept
 def _given_literals() -> set[str]:
     """The commands each `safety.given("<command>", ...)` call in cli/ names."""
     found: set[str] = set()
-    for path in (SRC / "cli").glob("*.py"):
+    for path in (SRC / "cli").rglob("*.py"):
         for node in ast.walk(_tree(path)):
             if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
                 continue
@@ -150,8 +150,8 @@ def test_the_start_verbs_read_their_skips_under_their_own_name():
     """#1918: `start` and `restart` reach safety.given under their own name: their
     bodies call `_launch` with it, and `_launch` passes it to overrides_from, which
     calls safety.given with it. test_start_overrides.py proves it at run time."""
-    lifecycle = (SRC / "cli" / "lifecycle.py").read_text()
-    opts = (SRC / "cli" / "start_override_opts.py").read_text()
+    lifecycle = (SRC / "cli" / "fleet" / "lifecycle.py").read_text()
+    opts = (SRC / "cli" / "fleet" / "start_override_opts.py").read_text()
     for call in VERB_READERS.values():
         assert call in lifecycle, call
     assert "_overrides(verb, override, reason" in lifecycle

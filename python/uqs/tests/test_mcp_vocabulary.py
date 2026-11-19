@@ -9,7 +9,7 @@ the CLI retired (`passwd`, `procname`, `uqs_list(kind)`, `uqs_print`,
 exception.
 
 These hold the tools to the CLI's command tree as test_cli_conventions.py
-holds the tree to cli/vocabulary.py: each tool mirrors one CLI command and is
+holds the tree to cli/common/vocabulary.py: each tool mirrors one CLI command and is
 named after it, each parameter is one of that command's spelled as
 `vocabulary.spelling` spells it with the type the CLI gives it, and every
 failure is `{"ok": false, "error"}`. A new tool or parameter that drifts fails
@@ -25,7 +25,7 @@ import pytest
 from mcp_support import call, refused, tools
 
 from uqs import mcp, mcp_server
-from uqs.cli import vocabulary
+from uqs.cli.common import vocabulary
 from uqs.paths import UqsError
 
 TOOLS = {t.name: t for t in tools()}
@@ -79,7 +79,7 @@ def test_every_parameter_is_its_cli_commands_spelling_and_type():
 
 
 def test_every_parameter_a_term_names_has_the_terms_type_and_no_retired_spelling():
-    """cli/vocabulary.py's TERMS, directly: `base_port` is an integer wherever
+    """cli/common/vocabulary.py's TERMS, directly: `base_port` is an integer wherever
     it is taken, and no tool takes a spelling a term retired unless it is
     another term's live one (PROCS is live; --procs is retired)."""
     terms = {vocabulary.identifier(t.name): t for t in vocabulary.TERMS}

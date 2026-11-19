@@ -1,7 +1,7 @@
 """`uqs deploy status|rollback|prune TARGET` (#1736): the server named once, in
 deploy_targets.toml, rather than by --ssh/--dest/--remote-user on every
 command - those flags kept as the escape for a server no target declares, and
-declared once (cli/deploy_connection.py) so every command spells them alike."""
+declared once (cli/deploy/deploy_connection.py) so every command spells them alike."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import typer.main
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import deploy_connection, deploy_server
+from uqs.cli.deploy import deploy_connection, deploy_server
 from uqs.deploy import targets
 
 FILE = """

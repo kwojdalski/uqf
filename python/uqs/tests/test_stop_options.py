@@ -3,7 +3,7 @@
 `uqs stop`, `uqs connector stop`, `uqs job receiver stop` and `uqs job
 attachment remove` each stop by uqs/process_stop.py - SIGTERM, wait until
 the process is confirmed gone, SIGKILL only with `--kill` - and each takes
-that `--kill` from cli/stop_options.py, so it means the same everywhere.
+that `--kill` from cli/fleet/stop_options.py, so it means the same everywhere.
 This holds the option on every one of them, then what each does with it -
 with a real child that ignores SIGTERM where the command signals a pid itself.
 """

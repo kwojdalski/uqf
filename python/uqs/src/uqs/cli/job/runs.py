@@ -1,0 +1,382 @@
+"""`uqs job runs ...`: reading the run ledger - which execution produced what.
+
+A group inside `job` (#1417), plural because it inspects runs rather than
+launching one. Every command here but `upgrade` asks the ledger in the status
+directory a question and prints the answer; see stack/runs.py for why that
+means a short-lived q and not a running process. `upgrade` brings a ledger an
+older uqs wrote up to today's columns; it was `job runs migrate`, which read
+as `data migrate`'s HDB schema migration (#1737), and that spelling stays for
+one release.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated
+
+import typer
+from rich.table import Table
+
+from uqs import timerange
+from uqs.cli.common import completion
+from uqs.cli.common.concepts import attach_opt, job_arg
+from uqs.cli.common.json_out import emit, json_opt, utc_times
+from uqs.cli.common.pipelines import needs_pipelines
+from uqs.cli.common.range_options import DateOpt, LastOpt, RangeFromOpt, RangeToOpt
+from uqs.cli.common.safety import ChangesState, DryRunOpt, ReadOnly, dry_run_note
+from uqs.cli.common.shared import (
+    EXIT_STOPPED,
+    JOB_OPERATIONS_PANEL,
+    ExportOpt,
+    InteractiveOpt,
+    _die,
+    _export,
+    _paths,
+    _show,
+    console,
+    job_app,
+)
+from uqs.cli.common.sorting import ReverseOpt, SortOpt, _sorted_items
+from uqs.cli.common.vocabulary import duration
+from uqs.cli.fleet.stop_options import KillOpt
+from uqs.paths import UqsError
+from uqs.stack import runs as stack_runs
+
+#: What every `job runs` command needs: a runtime without it refuses them.
+_LEDGER = "reads this tree's run ledger"
+
+runs_app = typer.Typer(
+    no_args_is_help=True,
+    add_completion=False,
+    help="The run ledger: list, show, audit, upgrade, stop.\n\n"
+    "List every run (or the unfinished ones), show one run's facts, "
+    "audit one window across runs, upgrade a ledger an older uqs wrote, "
+    "stop an attached backfill that is running.",
+)
+job_app.add_typer(runs_app, name="runs", rich_help_panel=JOB_OPERATIONS_PANEL)
+
+_RUN_COLUMNS = (
+    "run_id",
+    "worker",
+    "dataset",
+    "status",
+    "range_from",
+    "range_to",
+    "width",
+    "windows_planned",
+    "windows_completed",
+    "windows_failed",
+    "rows_published",
+    "started_at",
+    "ended_at",
+)
+_FACT_COLUMNS = ("run_id", "dataset", "range_from", "range_to", "label", "text")
+
+
+AttachOpt = attach_opt(
+    "The attachment whose destination's ledger to read (`uqs job backfill "
+    "--attachment`), instead of the runtime's own"
+)
+
+
+RunsJson = json_opt('{"runs": [{run_id, job, dataset, status, range_from, ...}]}')
+FactsJson = json_opt('{"facts": [{run_id, dataset, range_from, range_to, label, text}]}')
+ShowJson = json_opt(
+    '{"run": {run_id, job, ...}, "facts": [...], "logs": [path, ...], "rerun": command}'
+)
+
+
+def _record(row: dict, columns: tuple[str, ...]) -> dict:
+    """One ledger row as JSON: the table's columns, a whole-number count as an
+    int, and a time - `.z.p`, UTC - ISO-8601 with its offset (#1882)."""
+    out = {}
+    for col in columns:
+        value = row.get(col)
+        out[col] = int(value) if isinstance(value, float) and value.is_integer() else value
+    return utc_times(out)
+
+
+def _where(attach: str | None) -> dict:
+    """The `directory=` for the ledger reads: the attached destination's, or none (the default).
+
+    While a run is going it is the destination that run was launched into, as its owner
+    record names it (#2758): the config's pins may have changed since, and would point the
+    listing at a ledger the run never writes. With none going, the config's own."""
+    if attach is None:
+        return {}
+    from uqs.attach import backfill as attached
+    from uqs.attach import backfill_owner, backfill_stop
+
+    live = {backfill_stop.run_state_dir(_paths(), attach, r) for r in backfill_owner.active(attach)}
+    if len(live) > 1:
+        raise UqsError(
+            f"attachment {attach} has runs going into more than one destination "
+            f"({', '.join(sorted(map(str, live)))}): which ledger to read is ambiguous"
+        )
+    return {"directory": live.pop() if live else attached.state_dir_of(_paths(), attach)}
+
+
+def _cell(value: object) -> str:
+    """A ledger value for display: counts arrive as floats (see stack/runs.py),
+    and a null - a run that never finished has no counts - as blank."""
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _print(
+    title: str, rows: list[dict], columns: tuple[str, ...], empty: str, interactive: bool = False
+) -> None:
+    if not rows:
+        console.print(f"[dim]{empty}[/]")
+        return
+    table = Table(title=title)
+    for col in columns:
+        # A run id is what `uqs job runs show` takes, so it is never cut short.
+        if col == "run_id":
+            table.add_column(col, min_width=36, no_wrap=True)
+        else:
+            table.add_column(col)
+    for row in rows:
+        table.add_row(*(_cell(row.get(col)) for col in columns))
+    _show(table, interactive)
+
+
+@runs_app.command("list", cls=needs_pipelines(_LEDGER, ReadOnly))
+def list_runs(
+    interactive: InteractiveOpt = False,
+    attach: AttachOpt = None,
+    unfinished: Annotated[
+        bool,
+        typer.Option(
+            "--unfinished",
+            help="Only runs that began and never finished, interrupted ones included",
+        ),
+    ] = False,
+    range_from: RangeFromOpt = None,
+    range_to: RangeToOpt = None,
+    day: DateOpt = None,
+    last: LastOpt = None,
+    export: ExportOpt = None,
+    sort: SortOpt = None,
+    reverse: ReverseOpt = False,
+    as_json: RunsJson = False,
+) -> None:
+    """List the runs in the ledger, newest first.
+
+    Every run in the ledger - or, with --unfinished, the runs
+    that began and never finished.
+
+    `--unfinished` includes runs whose process has died: `running` on a run
+    whose process is gone means that execution was interrupted, which is what
+    it is for.
+
+    A time range keeps the runs whose window overlaps it, and the
+    list takes every listing's flags: --export, --sort, --reverse, -i.
+    """
+    try:
+        rows = (stack_runs.unfinished if unfinished else stack_runs.history)(
+            _paths(), **_where(attach)
+        )
+        if any(v is not None for v in (range_from, range_to, day, last)):
+            window = timerange.resolve(range_from, range_to, day, last, open_ended=True)
+            rows = [r for r in rows if _overlaps(r, window)]
+        rows = _sorted_items(rows, sort, reverse)
+    except UqsError as exc:
+        _die(exc)
+    _export([_record(r, _RUN_COLUMNS) for r in rows], export)
+    if as_json:
+        emit({"runs": [_record(r, _RUN_COLUMNS) for r in rows]})
+        return
+    if unfinished:
+        _print("unfinished runs", rows, _RUN_COLUMNS, "no unfinished runs", interactive)
+    else:
+        _print("runs", rows, _RUN_COLUMNS, "no runs recorded", interactive)
+
+
+def _overlaps(row: dict, window: timerange.TimeRange) -> bool:
+    """Whether a run's [range_from, range_to) meets `window`.
+
+    A run with no recorded range meets no window. q spells that null as JSON
+    `null` on PeachQ and as `""` on KDB-X (`.j.j` formats `string 0Np`), so
+    both are read as absent rather than parsed as a bound (#2471).
+    """
+    lo, hi = row.get("range_from"), row.get("range_to")
+    if not lo or not hi:
+        return False
+    start = timerange.parse_bound("range_from", str(lo))
+    end = timerange.parse_bound("range_to", str(hi))
+    return (window.end is None or start < window.end) and (
+        window.start is None or end > window.start
+    )
+
+
+@runs_app.command("upgrade", cls=needs_pipelines(_LEDGER, ChangesState))
+def upgrade(
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", "-n", help="Count the runs it would upgrade; write nothing"),
+    ] = False,
+) -> None:
+    """Upgrade a run ledger written before it recorded each run's range and counts.
+
+    Run once, when a backfill refuses to start with "etl_runs predates the
+    run's range and counts". Earlier runs keep blanks in the new columns: what
+    they were asked to do was never recorded.
+    """
+    try:
+        upgraded = stack_runs.migrate(_paths(), dry_run)
+    except UqsError as exc:
+        _die(exc)
+    if dry_run:
+        console.print(f"would upgrade {upgraded} run(s)", markup=False)
+        console.print(dry_run_note())
+    elif upgraded:
+        console.print(f"upgraded {upgraded} run(s) - the ledger is current", markup=False)
+    else:
+        console.print("the run ledger is already current - nothing to do", markup=False)
+
+
+@runs_app.command("show", cls=needs_pipelines(_LEDGER, ReadOnly))
+def show(
+    run_id: Annotated[
+        str, typer.Argument(metavar="RUN", help="A run id, from `uqs job runs list`")
+    ],
+    attach: AttachOpt = None,
+    as_json: ShowJson = False,
+) -> None:
+    """Show one run, and every fact it recorded about what it published."""
+    try:
+        run, facts = stack_runs.show(_paths(), run_id, **_where(attach))
+    except UqsError as exc:
+        _die(exc)
+    if not run:
+        _die(UqsError(f"no run {run_id} in the ledger"))
+    if as_json:
+        emit({
+            "run": _record(run[0], _RUN_COLUMNS),
+            "facts": [_record(f, _FACT_COLUMNS) for f in facts],
+            "logs": [str(_where(attach)["directory"] / "logs")] if attach
+            else [str(p) for p in stack_runs.log_files(_paths(), run[0])],
+            "rerun": stack_runs.rerun_command(run[0], attach) or None,
+        })  # fmt: skip
+        return
+    _print("run", run, _RUN_COLUMNS, "")
+    _print("facts", facts, _FACT_COLUMNS, "this run recorded no facts")
+    _print_next_steps(run[0], attach)
+
+
+def _print_next_steps(run: dict, attach: str | None = None) -> None:
+    """Where to look, and what to type: the two things a reader of a failed
+    or interrupted run wants next, without a trip through the docs."""
+    paths = _paths()
+    logs = stack_runs.log_files(paths, run)
+    if attach:
+        state = _where(attach)["directory"]
+        console.print(
+            f"\n[bold]logs[/]   {state / 'logs'}  (attached run; `uqs job attachment status`)"
+        )
+    elif logs:
+        console.print(f"\n[bold]logs[/]   uqs logs {run['process']} --level ERROR")
+        for path in logs:
+            note = "" if path.is_file() else "  [dim](not found)[/]"
+            console.print(f"         {path}{note}", soft_wrap=True)
+    else:
+        console.print(
+            "\n[bold]logs[/]   this run recorded no TorQ process - plain q logs to its console"
+        )
+    command = stack_runs.rerun_command(run, attach)
+    if command:
+        # Re-running IS the resume: coverage skips every window already covered.
+        console.print(f"[bold]re-run[/] {command}", soft_wrap=True)
+        console.print(
+            "         [dim]covered windows are skipped, so this resumes rather than repeats[/]"
+        )
+
+
+@runs_app.command("audit", cls=needs_pipelines(_LEDGER, ReadOnly))
+def audit(
+    dataset: Annotated[
+        str,
+        typer.Argument(
+            metavar="DATASET",
+            help="The dataset, e.g. demo_deals",
+            autocompletion=completion.bounded_datasets,
+        ),
+    ],
+    range_from: RangeFromOpt = None,
+    range_to: RangeToOpt = None,
+    day: DateOpt = None,
+    last: LastOpt = None,
+    as_json: FactsJson = False,
+) -> None:
+    """Show every fact recorded about one window, from every run that published it.
+
+    Two runs' facts side by side: whether two materialisations of the same
+    window agree, which is the question run identity exists to answer.
+    """
+    try:
+        window = timerange.resolve(range_from, range_to, day, last)
+        rows = stack_runs.audit(_paths(), dataset, *window.bounds)
+    except UqsError as exc:
+        _die(exc)
+    if as_json:
+        emit({"facts": [_record(r, _FACT_COLUMNS) for r in rows]})
+        return
+    _print(f"{dataset} {window}", rows, _FACT_COLUMNS, "no facts for that window")
+
+
+_StopJob = job_arg("The bounded worker whose running backfill to stop")
+_StopAttach = attach_opt(
+    "The attachment whose destination the backfill is running into", required=True
+)
+
+
+@runs_app.command("stop", cls=ChangesState)
+def stop(
+    job: _StopJob,
+    attach: _StopAttach,
+    timeout: Annotated[
+        float,
+        duration(
+            "--timeout",
+            help="Seconds (a DURATION) to wait for the run to stop at its next window boundary",
+        ),
+    ] = 60.0,
+    kill: KillOpt = False,
+    dry_run: DryRunOpt = False,
+) -> None:
+    """Stop a running attached backfill: ask it to, wait, and escalate only with --kill.
+
+    Writes the run's stop file, which it checks between windows: the window it is in
+    completes or fails as it would anyway, it releases its locks, records `stopped` and
+    exits. Without --kill a run that has not stopped by --timeout is reported as still
+    running and left alone; a re-run of the same command completes the range.
+
+    Exits 4 when the run stopped (or was killed), 1 when it is still running.
+    """
+    from uqs.attach import backfill_stop
+
+    try:
+        record = backfill_stop.find(attach, job)
+        state_dir = backfill_stop.run_state_dir(_paths(), attach, record)
+        if dry_run:
+            console.print(
+                f"would stop {job} (pid {record['pid']}) into {attach}"
+                + (f", killing it after {timeout:g}s" if kill else ""),
+                markup=False,
+            )
+            console.print(dry_run_note())
+            return
+        result = backfill_stop.stop(record, state_dir, timeout=timeout, kill=kill)
+    except UqsError as exc:
+        _die(exc)
+    if result.state == backfill_stop.STOPPED:
+        console.print(f"{job} (pid {result.pid}): stopped at a window boundary", markup=False)
+    elif result.state == backfill_stop.KILLED:
+        console.print(f"{job} (pid {result.pid}): killed after {timeout:g}s", markup=False)
+    else:
+        hint = "" if kill else "; its stop request stands - add --kill to end it now"
+        console.print(f"{job} (pid {result.pid}): still running{hint}", markup=False)
+    raise typer.Exit(code=1 if result.state == backfill_stop.RUNNING else EXIT_STOPPED)

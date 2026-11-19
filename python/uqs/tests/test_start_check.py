@@ -26,7 +26,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs import paths as stack_paths
-from uqs.cli import lifecycle
+from uqs.cli.fleet import lifecycle
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import alive, occupancy, runtime, start_check, start_policy
 

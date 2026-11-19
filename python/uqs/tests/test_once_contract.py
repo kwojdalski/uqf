@@ -22,9 +22,10 @@ import typer
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import backfill as backfill_cli
-from uqs.cli import job_run, shared
-from uqs.cli.shared import EXIT_REFUSED, EXIT_USAGE
+from uqs.cli.common import shared
+from uqs.cli.common.shared import EXIT_REFUSED, EXIT_USAGE
+from uqs.cli.job import backfill as backfill_cli
+from uqs.cli.job import job_run
 from uqs.generated import q_facts
 from uqs.model.kinds import (
     DECLARATION_VERBS,
@@ -68,7 +69,7 @@ def test_the_codes_are_q_codes_and_distinct():
 
 
 def test_no_outcome_takes_a_code_the_cli_already_means_something_else_by():
-    """2 is a usage error and 3 rows written but not yet queryable (cli/shared.py)."""
+    """2 is a usage error and 3 rows written but not yet queryable (cli/common/shared.py)."""
     assert not {shared.EXIT_USAGE, shared.EXIT_PARTIAL, shared.EXIT_UNKNOWN} & set(
         once.CODES.values()
     )
@@ -170,7 +171,7 @@ def _carries_once(*path: str) -> Callable[[], bool]:
 
 
 def _backfill_attachment_accepts_once() -> bool:
-    return False  # `uqs job backfill --once --attachment` is refused (cli/backfill.py)
+    return False  # `uqs job backfill --once --attachment` is refused (cli/job/backfill.py)
 
 
 def _run_stream_reads_once() -> bool:

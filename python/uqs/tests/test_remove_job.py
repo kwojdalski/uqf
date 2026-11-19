@@ -342,7 +342,7 @@ def test_strict_refuses_and_dry_run_only_says_it_would(tree, monkeypatch):
     from typer.testing import CliRunner
 
     from uqs import cli
-    from uqs.cli import remove as remove_cli
+    from uqs.cli.job import remove as remove_cli
 
     write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
     (tree / "docs").mkdir(exist_ok=True)
@@ -463,7 +463,7 @@ def test_a_written_job_is_removed_only_through_the_named_override(tree, monkeypa
     from typer.testing import CliRunner
 
     from uqs import cli
-    from uqs.cli import remove as remove_cli
+    from uqs.cli.job import remove as remove_cli
 
     runner = CliRunner()
     monkeypatch.setattr(remove_cli, "_paths", lambda: type("P", (), {"repo_root": tree})())
@@ -488,8 +488,8 @@ def test_a_removal_not_confirmed_exits_1_and_removes_nothing(tree, monkeypatch):
     from typer.testing import CliRunner
 
     from uqs import cli
-    from uqs.cli import remove as remove_cli
-    from uqs.cli import safety
+    from uqs.cli.common import safety
+    from uqs.cli.job import remove as remove_cli
 
     write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
     monkeypatch.setattr(remove_cli, "_paths", lambda: type("P", (), {"repo_root": tree})())

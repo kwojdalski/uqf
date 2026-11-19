@@ -149,7 +149,7 @@ def test_the_cli_builds_a_q_runtime(tmp_path, monkeypatch):
     from typer.testing import CliRunner
 
     from uqs import cli
-    from uqs.cli import deploy_component
+    from uqs.cli.deploy import deploy_component
 
     entry = peachq_entry(tmp_path / "peachq")
     monkeypatch.setattr(deploy_component, "repo_root", lambda: tmp_path)

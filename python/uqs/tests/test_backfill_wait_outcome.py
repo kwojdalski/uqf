@@ -19,8 +19,8 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import backfill_audit, backfill_remote, backfill_run, config
-from uqs.cli import backfill_attached
-from uqs.cli.shared import EXIT_PARTIAL, EXIT_REFUSED, EXIT_STOPPED, EXIT_USAGE
+from uqs.cli.common.shared import EXIT_PARTIAL, EXIT_REFUSED, EXIT_STOPPED, EXIT_USAGE
+from uqs.cli.job import backfill_attached
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import backfill_wait
 

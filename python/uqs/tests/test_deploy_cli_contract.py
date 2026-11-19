@@ -20,7 +20,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import deploy_server
+from uqs.cli.deploy import deploy_server
 from uqs.deploy import driver, history, targets
 from uqs.deploy import report as deploy_report
 from uqs.deploy.config import DeployError

@@ -14,7 +14,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.cli import shared
+from uqs.cli.common import shared
 from uqs.stack import listing, probe, runtime, startup
 from uqs.stack.startup import BANNER_BORDER, Startup
 

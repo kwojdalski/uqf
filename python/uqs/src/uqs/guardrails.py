@@ -14,7 +14,7 @@ own as `Guardrail` values, beside the code that enforces them:
 
 cli/safety.registry() gathers them in that order through `aggregate`, which
 refuses two with one id; `uqs override list` (cli/safety.catalog) reads it, and so
-does cli/skip_options.py, which gives a command a `--skip-<id>` option for
+does cli/common/skip_options.py, which gives a command a `--skip-<id>` option for
 each guardrail of it declared with `skip_flag`. This module imports nothing
 from this package, so every layer may import it (test_module_split holds it
 to that).
@@ -51,7 +51,7 @@ class Guardrail:
     #: whether a waiver names one component (`CODE:COMPONENT`) rather than the whole command
     component_scoped: bool = False
     #: whether each of `commands` takes a generated `--skip-<id>` option for it
-    #: (cli/skip_options.py, #1826) beside `--override`. Off unless the command
+    #: (cli/common/skip_options.py, #1826) beside `--override`. Off unless the command
     #: honours the waiver at run time: a flag that skips nothing is never shown.
     skip_flag: bool = False
 

@@ -15,7 +15,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from uqs.cli import external as cli_external
+from uqs.cli.connector import external as cli_external
 from uqs.external.plant_contract import plant_table_fields
 from uqs.paths import TABLES_FILE, repo_root
 

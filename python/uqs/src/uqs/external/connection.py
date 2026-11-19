@@ -10,7 +10,7 @@ connector and the scaffold template import them:
   tickerplant_port   stp1's port, from its process.csv row
   TP_CREDENTIAL      the credential option, declared once and listed in every
                      connector's options - `--tp-credential-env NAME` on the
-                     command line (cli/external.py, #1853)
+                     command line (cli/connector/external.py, #1853)
   tp_credential      the credential a start presents, resolved
   credential_env     the environment a connector's own process starts with,
                      the credential in it
@@ -94,7 +94,7 @@ def _check_credential(value: str, origin: str) -> None:
 
 
 #: The credential: one option, every connector lists it in its options=. A
-#: secret, so the CLI takes it as `--tp-credential-env NAME` (cli/external.py).
+#: secret, so the CLI takes it as `--tp-credential-env NAME` (cli/connector/external.py).
 TP_CREDENTIAL = FeedOption(
     "tp_credential",
     "user:password stp1 accepts",

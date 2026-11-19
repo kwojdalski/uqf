@@ -20,8 +20,9 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import backfill_owner, backfill_run
-from uqs.cli import backfill_attached, shared
-from uqs.cli.shared import EXIT_PARTIAL, EXIT_REFUSED, EXIT_USAGE
+from uqs.cli.common import shared
+from uqs.cli.common.shared import EXIT_PARTIAL, EXIT_REFUSED, EXIT_USAGE
+from uqs.cli.job import backfill_attached
 from uqs.stack import attached_logs
 
 
