@@ -120,7 +120,7 @@ materialise_tables:{[]
 load_tickerplant_tables:{[]
     f:"src/etl/plant_tables.q";
     / The .qetl.plant API first: the declarations call it (#2503).
-    @[{system"l src/etl/plant_registry.q"; system"l ",x; .qetl.plant.materialise .qetl.plant.own[]};f;{[e] -2 "could not load ",f,": ",e;}];
+    @[{system"l src/etl/plant_registry.q"; system"l ",x; .qetl.plant.adopt_attached .qetl.plant.vendored_path; .qetl.plant.materialise .qetl.plant.own[]};f;{[e] -2 "could not load ",f,": ",e;}];
     f}
 
 / Table schemas: column names and type characters, for every table this tree

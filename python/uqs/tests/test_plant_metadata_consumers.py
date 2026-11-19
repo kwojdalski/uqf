@@ -169,3 +169,64 @@ def test_a_stale_tree_refuses_a_schema_read_by_name(tmp_path):
     out = r.stdout + r.stderr
     assert "plant_schema.json is stale" in out
     assert plant_metadata.REGENERATE in out
+
+
+#: What an attachment persists into an attached stack's schema file (attach/persist.py):
+#: a block for a table this tree defines, and one for a table only another stack has.
+ATTACH_BLOCKS = (
+    "/ BEGIN uqs-attach example-stack tok123\n"
+    "spaced:([] time:`timestamp$(); sym:`symbol$(); px:`float$())\n"
+    '.uqfattach.owned[`spaced]:"{}";\n'
+    "/ END uqs-attach example-stack\n"
+    "/ BEGIN uqs-attach other-stack tok456\n"
+    "extprobe:([] time:`timestamp$(); sym:`symbol$(); qty:`long$())\n"
+    "/ END uqs-attach other-stack\n"
+)
+
+
+@pytest.fixture
+def attached_pack(tmp_path: Path, monkeypatch) -> Path:
+    """$TORQAPPHOME at an external install whose database.q holds attachments' blocks."""
+    from uqs.paths import repo_root
+
+    app = tmp_path / "external_app"
+    app.mkdir()
+    pack = (repo_root() / "lib" / "torq-finance-starter-pack" / "database.q").read_text()
+    (app / "database.q").write_text(pack.rstrip("\n") + "\n" + ATTACH_BLOCKS)
+    monkeypatch.setenv("TORQAPPHOME", str(app))
+    return app
+
+
+def test_a_tree_table_an_attachment_persisted_stays_the_trees(attached_pack, tmp_path, plant_tree):
+    """#2801: a block in the attached stack's database.q is not the starter pack's, so a
+    table this tree defines stays its own however the metadata was generated."""
+    meta = plant_metadata.load(plant_tree(tmp_path / "tree", TABLES))
+    assert "spaced" in meta.own()
+    assert not meta.tables["spaced"].vendored
+
+
+def test_a_table_only_another_attachment_defines_is_not_the_trees(
+    attached_pack, tmp_path, plant_tree
+):
+    meta = plant_metadata.load(plant_tree(tmp_path / "tree", TABLES))
+    assert "extprobe" not in meta.own()
+    assert meta.tables["extprobe"].vendored
+    assert {"quote", "trade"} <= {n for n, t in meta.tables.items() if t.vendored}
+
+
+def test_an_attached_backfill_finds_the_trees_definition_without_an_origin(
+    attached_pack, tmp_path, plant_tree
+):
+    """The refusal #2801 reported: `no table definition ... in the attachment's bundle or
+    this tree`, for an attachment saved with `origin: {}`."""
+    from types import SimpleNamespace
+    from typing import cast
+
+    from uqs.attach.backfill import worker_table
+    from uqs.attach.config import Attachment
+
+    tree = plant_tree(tmp_path / "tree", TABLES)
+    att = cast(Attachment, SimpleNamespace(origin={}))
+    spec = worker_table(paths_for_root(tree), att, "spaced")
+    assert spec is not None and [c for c, _ in spec.columns] == ["time", "sym", "px"]
+    assert worker_table(paths_for_root(tree), att, "extprobe") is None, "not the tree's"

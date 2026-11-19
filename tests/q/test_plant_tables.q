@@ -55,6 +55,47 @@
     .qunit.assertEquals[.qetl.plant.adopt_vendored "build/test-status/no_such_database.q";`symbol$();
         "a tree copied without the vendored pack"]};
 
+/ An attached stack's database.q (#2801): the pack's own line, a block an attachment
+/ persisted for a table this tree defines (demo_deals), and one for a table only
+/ another stack has. persist.py writes the blocks.
+.qt.qetl.plant.attached_fixture:{[]
+    f:"build/test-status/plant_attached_fixture.q";
+    system"mkdir -p build/test-status";
+    (hsym `$f) 0: (
+        "plantpack:([]time:`timestamp$(); px:`float$())";
+        "/ BEGIN uqs-attach example-stack tok123";
+        "demo_deals:([]time:`timestamp$(); sym:`symbol$())";
+        ".uqfattach.owned[`demo_deals]:\"{}\";";
+        "/ END uqs-attach example-stack";
+        "/ BEGIN uqs-attach other-stack tok456";
+        "plantforeign:([]time:`timestamp$(); qty:`long$())";
+        "/ END uqs-attach other-stack");
+    f}
+
+.qt.qetl.plant.test_a_block_is_not_the_packs:{[t]
+    r:.qetl.plant.adopt_vendored .qt.qetl.plant.attached_fixture[];
+    ![`.qetl.plant;();0b;enlist `plantpack];
+    .qunit.assertEquals[r;enlist `plantpack;"only the lines outside every uqs-attach block"]};
+
+.qt.qetl.plant.test_a_table_the_tree_defines_stays_its_own_under_a_block:{[t]
+    before:.qetl.plant.vendored;
+    mine:.qetl.plant.demo_deals;
+    r:.qetl.plant.adopt_attached .qt.qetl.plant.attached_fixture[];
+    own:.qetl.plant.own[];
+    kept:mine~.qetl.plant.demo_deals;
+    vendored:.qetl.plant.vendored;
+    .qetl.plant.vendored:before;
+    ![`.qetl.plant;();0b;enlist `plantforeign];
+    .qunit.assertEquals[r;enlist `plantforeign;"only the table the tree does not define"];
+    .qunit.assertTrue[`demo_deals in own;"the tree's table is still its own"];
+    .qunit.assertTrue[kept;"and keeps the tree's definition"];
+    .qunit.assertTrue[`plantforeign in vendored;"another stack's table is not the tree's"];
+    .qunit.assertTrue[not `plantforeign in own;"so own[] leaves it out"]};
+
+.qt.qetl.plant.test_a_block_without_its_end_runs_to_the_end_of_the_file:{[t]
+    .qunit.assertEquals[.qetl.plant.attach_block_lines ("a:1";"/ BEGIN uqs-attach s1 tok";"b:2");011b;
+        "as attach/block_text.py reads a half block"]};
+
 / What stage 2 removed, kept removed: no job file writes a plant table's
 / schema by hand. 22 such copies existed, in 12 files; any of them could
 / disagree with the plant, and one hand-written buffer did. A job takes a

@@ -332,24 +332,59 @@
             $[1<count bad; ", and ",string[count bad]," rows are wrong in all"; ""];
         ()]}
 
+/ Which lines of a tickerplant schema file lie inside a uqs-attach block:
+/ between `/ BEGIN uqs-attach <name> <token>` and `/ END uqs-attach <name>`, as
+/ python/uqs/src/uqs/attach/persist.py writes them into the file an attached
+/ stack's tickerplant starts from - which, for the starter pack, is its
+/ database.q. A BEGIN with no END runs to the end of the file, as
+/ attach/block_text.py reads it.
+/ @param lines the file's lines, as read0 returns them
+/ @return a boolean per line, true inside a block (markers included)
+/ @eg .qetl.plant.attach_block_lines ("a:1";"/ BEGIN uqs-attach s1 tok";"b:2";"/ END uqs-attach s1";"c:3")  ->  01110b
+.qetl.plant.attach_block_lines:{[lines]
+    / Plain one-wildcard patterns: KDB-X's like throws 'nyi past two wildcards.
+    b:lines like "/ BEGIN uqs-attach *";
+    e:lines like "/ END uqs-attach *";
+    (0<sums b-e) or e}
+
+/ The `name:([]...)` lines of a schema file, and the table each defines.
+/ @param lines the file's lines
+/ @return the definition lines
+.qetl.plant.definition_lines:{[lines]
+    lines where {[l] (0<count l) and (first[l] within "az") and "([]"~3#(1+l?":")_l} each lines}
+
+/ Set each definition line's table by name in .qetl.plant. Each line is split
+/ at its first colon: `value` on a whole assignment statement throws 'nyi from
+/ inside a lambda on this build (see .qtorq.safe_timer).
+/ @param defs definition lines, as .qetl.plant.definition_lines returns them
+/ @return the table names set, a symbol list even when there are none
+.qetl.plant.adopt:{[defs]
+    `symbol${[d] i:d?":"; (` sv `.qetl.plant,`$i#d) set value (i+1)_d; `$i#d} each defs}
+
+/ A schema file's lines, or none when there is no such file.
+/ @param path the file, relative to the repository root
+/ @return its lines
+.qetl.plant.schema_lines:{[path] $[()~key hsym `$path; (); read0 hsym `$path]}
+
 / The vendored starter pack's own plant tables - quote, trade, packets - read
 / from its database.q rather than copied here. uqs builds stp1's schema file
 / from that file plus this one, so both are the plant; a copy of the vendored
 / definitions would be a second place for them to drift, and that file is
-/ never edited. Each `name:([]...)` line is split at its first colon and set
-/ by name: `value` on a whole assignment statement throws 'nyi from inside a
-/ lambda on this build (see .qtorq.safe_timer).
+/ never edited.
+/ .
+/ Only the lines OUTSIDE every uqs-attach block are the pack's. A block is
+/ uqs's own write into the file (an attachment persisting a table it
+/ created), not the pack's definition: adopted here it made a table this tree
+/ defines read as vendored, and dropped it from .qetl.plant.own[] and every
+/ reader of the generated metadata (#2801). A block's tables are
+/ .qetl.plant.adopt_attached's, after this tree's own are loaded.
 / @param path the vendored database.q, relative to the repository root
 / @return the table names registered
 .qetl.plant.adopt_vendored:{[path]
     / A tree loaded without the vendored pack - a minimal copy, as the scaffold
     / tests make - has no vendored tables to register, which is not an error.
-    if[()~key hsym `$path; :`symbol$()];
-    lines:read0 hsym `$path;
-    / A plain prefix test, not a `like` pattern: KDB-X's like throws 'nyi on a
-    / bracketed `[` class and past two wildcards.
-    defs:lines where {[l] (0<count l) and (first[l] within "az") and "([]"~3#(1+l?":")_l} each lines;
-    {[d] i:d?":"; (` sv `.qetl.plant,`$i#d) set value (i+1)_d; `$i#d} each defs}
+    lines:.qetl.plant.schema_lines[path];
+    .qetl.plant.adopt[.qetl.plant.definition_lines[lines where not .qetl.plant.attach_block_lines[lines]]]}
 
 / The vendored tables' names, so a caller can tell them from this tree's own.
 / The starter pack is $TORQAPPHOME's when that is set - uqs sets it for every
@@ -360,6 +395,22 @@
 .qetl.plant.vendored_path:$[count getenv`TORQAPPHOME; getenv[`TORQAPPHOME],"/database.q";
     "lib/torq-finance-starter-pack/database.q"];
 .qetl.plant.vendored:.qetl.plant.adopt_vendored[.qetl.plant.vendored_path];
+
+/ Tables only an attachment's block in the pack's schema file defines: another
+/ attachment's table, which this tree does not declare, is the stack's and not
+/ this tree's, so it joins .qetl.plant.vendored - never .qetl.plant.own[]. A
+/ table this tree DOES define keeps its own definition and stays this tree's,
+/ which is why this runs after plant_tables.q, not with adopt_vendored (#2801):
+/ every loader of the plant calls it once the tree's tables are loaded.
+/ @param path the vendored database.q, relative to the repository root
+/ @return the table names it registered
+.qetl.plant.adopt_attached:{[path]
+    lines:.qetl.plant.schema_lines[path];
+    defs:.qetl.plant.definition_lines[lines where .qetl.plant.attach_block_lines[lines]];
+    defs:defs where not ({[d] `$(d?":")#d} each defs) in .qetl.plant.names[];
+    found:.qetl.plant.adopt[defs];
+    .qetl.plant.vendored:distinct .qetl.plant.vendored,found;
+    found}
 
 / This tree's own plant tables: every one except the vendored three.
 / @return the table names

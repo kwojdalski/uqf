@@ -737,8 +737,11 @@ qetl.once,requested,function,1,opts
 qetl.once,timeout_from_flags,function,1,opts
 qetl.once,unowned,function,1,
 qetl.once,write,function,1,doc
+qetl.plant,adopt,function,1,defs
+qetl.plant,adopt_attached,function,1,path
 qetl.plant,adopt_vendored,function,1,path
 qetl.plant,arbitrage,table,,
+qetl.plant,attach_block_lines,function,1,lines
 qetl.plant,bases,value,,
 qetl.plant,book_liquidity_1m,table,,
 qetl.plant,ccy_exposure,table,,
@@ -754,6 +757,7 @@ qetl.plant,crypto_markout,table,,
 qetl.plant,crypto_sim_fills,table,,
 qetl.plant,crypto_trades,table,,
 qetl.plant,deal_positions,table,,
+qetl.plant,definition_lines,function,1,lines
 qetl.plant,demo_deals,table,,
 qetl.plant,duckdb_deals,table,,
 qetl.plant,economic_calendar,table,,
@@ -798,6 +802,7 @@ qetl.plant,reference_data,table,,
 qetl.plant,require_clock,function,2,table_name rows
 qetl.plant,row_ids,dict,,
 qetl.plant,schema,function,1,t
+qetl.plant,schema_lines,function,1,path
 qetl.plant,shape,function,1,t
 qetl.plant,sort_rules,dict,,
 qetl.plant,sorting,function,2,table_name rule
