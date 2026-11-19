@@ -136,6 +136,22 @@ ALLOWED_MISSING = {
         ".qetl.load.only",
     ): _CALLER_SET,
     (
+        ".claude/skills/uqf-developer/uqf-debugging.md",
+        ".qetl.load.only",
+    ): _CALLER_SET,
+    (
+        ".claude/skills/uqf-developer/uqf-etl-framework.md",
+        ".qetl.load.only",
+    ): _CALLER_SET,
+    (
+        ".claude/skills/uqf-developer/uqf-etl-framework.md",
+        ".qetl.load.only_sources",
+    ): _CALLER_SET,
+    (
+        ".claude/skills/uqf-developer/uqf-testing-and-gates.md",
+        ".qetl.load.only",
+    ): _CALLER_SET,
+    (
         ".claude/agents/uqf-quant-developer.md",
         ".qf.px.options",
     ): "the intermediate public namespace the rule forbids, named as the example",
