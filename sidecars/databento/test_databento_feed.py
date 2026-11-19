@@ -492,8 +492,13 @@ def test_databento_starts_with_its_own_defaults(monkeypatch):
 
 
 def test_the_dry_run_masks_the_api_key(monkeypatch):
+    # A secret is named by its variable, never given inline (#1853).
     monkeypatch.setattr(databento_feed, "databento_feed_status", lambda p: {"running": "False"})
-    argv = ["connector", "start", "databento", "-n", "--api-key", "K", "--symbols", "A,B"]
+    monkeypatch.setenv("OPS_DATABENTO_KEY", "db-SECRET-KEY")
+    argv = ["connector", "start", "databento", "-n", "--api-key-env", "OPS_DATABENTO_KEY",
+            "--symbols", "A,B"]  # fmt: skip
     result = runner.invoke(cli.app, argv)
     assert result.exit_code == 0, result.output
-    assert "api_key=***, symbols=A,B" in result.stdout and "K," not in result.stdout
+    out = " ".join(result.stdout.split())
+    assert "api_key=*** ($OPS_DATABENTO_KEY)" in out and "symbols=A,B" in out
+    assert "db-SECRET-KEY" not in result.output

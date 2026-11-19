@@ -296,8 +296,13 @@
 
 .qt.qetl.job.stream.test_a_fill_prices_around_its_pairs_level:{[t]
     / Three pips either way, which is what makes some fills cross the spread
-    / and some improve.
+    / and some improve. The level is pinned: any on_timer before this test moves
+    / it to the clock's, so the suite in another order would compare with a
+    / level the fill was never priced from (#2808).
+    keep:.qpipe.job.fx_trades_feed.spot;
+    `.qpipe.job.fx_trades_feed.spot set .qf.demo.spot;
     rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;3;`fx1];
+    `.qpipe.job.fx_trades_feed.spot set keep;
     .qunit.assertEquals[first rows 2;
         (first .qf.demo.spot)+3%first .qpipe.job.fx_trades_feed.pip_factor;
         "the fill prints its slippage in pips from the pair's own level"]};
