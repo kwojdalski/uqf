@@ -35,6 +35,8 @@
 \l src/etl/core/log.q
 \l src/etl/plant_registry.q
 \l src/etl/plant_tables.q
+/ An attachment's tables in the pack's schema file, after the tree's own (#2801).
+.qetl.plant.adopt_attached .qetl.plant.vendored_path;
 / This script holds the tables itself, so it wants them at the root.
 .qetl.plant.materialise .qetl.plant.own[];
 

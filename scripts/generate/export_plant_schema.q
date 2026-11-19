@@ -19,6 +19,8 @@
 
 \l src/etl/plant_registry.q
 \l src/etl/plant_tables.q
+/ An attachment's tables in the pack's schema file, after the tree's own (#2801).
+.qetl.plant.adopt_attached .qetl.plant.vendored_path;
 
 / The plant's own keyed registries, which are not tables a process holds.
 .qschema.registries:`elements`sort_rules;

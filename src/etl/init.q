@@ -158,6 +158,8 @@ if[not ()~key `:lib/unparse/unparse.q; system "l lib/unparse/unparse.q"];
 / .qetl.plant API first, since the declarations call it (#2503).
 \l src/etl/plant_registry.q
 \l src/etl/plant_tables.q
+/ An attachment's tables in the pack's schema file, after the tree's own (#2801).
+.qetl.plant.adopt_attached .qetl.plant.vendored_path;
 
 / How the HDB's tables are compressed, declared against the plant just loaded.
 \l src/etl/compression_policy.q
