@@ -99,6 +99,7 @@ def test_job_help_keeps_authoring_apart_from_operations():
         "install",
     }
     assert {n for n, p in panels.items() if p == "Operations"} == {
+        "run",
         "backfill",
         "preview",
         "check",
