@@ -141,7 +141,7 @@ def test_the_plan_then_the_run_on_a_live_hdb(stack):
         stack.uqs("activity", "list", "--action", "hdb.compress", "--json").stdout
     )["events"]
     assert [e["outcome"] for e in history] == ["succeeded", "succeeded"]
-    assert sorted(i["target"] for e in history for i in e["items"]) == todo
+    assert sorted(i["subject"] for e in history for i in e["items"]) == todo
 
     again = stack.compress("--table", TABLE)
     assert not [p for p in again["partitions"] if p["compress"]], "nothing is left to compress"

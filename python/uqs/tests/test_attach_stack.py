@@ -113,13 +113,15 @@ def test_a_discovery_nobody_listens_on_is_a_refusal(stack, bundle):
     assert "Connection refused" in p.findings[0].message
 
 
-def test_a_credential_the_stack_does_not_accept_is_an_unreachable_endpoint(
-    stack, bundle, monkeypatch
-):
+def test_a_credential_the_stack_does_not_accept_is_refused_by_name(stack, bundle, monkeypatch):
     att = attachment(stack, bundle, user="nobody", password_env="ATTACH_TEST_PW")
     monkeypatch.setenv("ATTACH_TEST_PW", "wrong")
     p = plan.build(att, service.ipc_for(att), ROOT)
-    assert not p.ok and "DISCOVERY_UNREACHABLE" in {f.code for f in p.findings}
+    blockers = {(f.code, f.component) for f in p.findings if f.level == "blocker"}
+    assert not p.ok and ("STACK_REFUSES_ATTACH_CREDENTIALS", "discovery") in blockers
+    assert not any(code.endswith("UNREACHABLE") for code, _ in blockers), (
+        "a refused credential is named as one, not as an endpoint that is down (#1651)"
+    )
 
 
 def test_a_version_the_procedure_was_not_tested_on_is_refused(stack, bundle, monkeypatch):

@@ -110,11 +110,12 @@ def test_typed_and_nested_columns_survive_repeated_flushes_and_end_of_day(stack,
     upd(stack, second)
     stack.q("stp1", TRADE, None)
     stack.flush()
-    stack.q("wdb1", "{.wdb.savetodisk[]; 1b}", None)
+    # Restored BEFORE the third batch: the attached table has no .wdb.numtab entry, so
+    # at numrows 1 the wdb's own 10s save timer would write it out under the assert.
+    stack.q("wdb1", "{.wdb.numrows:100000; .wdb.savetodisk[]; 1b}", None)
     upd(stack, third)
     stack.flush()
     assert stack.rows("wdb1", BOOK) > 0, "rows are still in the wdb until end of day"
-    stack.q("wdb1", "{.wdb.numrows:100000; 1b}", None)
     stack.end_of_day(25)
 
     days = sorted(

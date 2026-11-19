@@ -227,10 +227,12 @@
 
 / The process a record is attributed to: TorQ's procname when there is one
 / (.qetl.run.proc_name, the one read of it in src/), else the runner's name.
+/ The name is read inside the trapped lambda: as @'s own argument it would be
+/ evaluated before the trap, and throw in a process without run.q (#2808).
 / @return a symbol
 / @eg .qetl.log.process[]
 .qetl.log.process:{[]
-    n:@[.qetl.run.proc_name;::;{[e] `}];
+    n:@[{.qetl.run.proc_name[]};::;{[e] `}];
     if[not null n; :n];
     if[not null .qetl.log.standalone_name; :.qetl.log.standalone_name];
     f:string @[value;`.z.f;`];
