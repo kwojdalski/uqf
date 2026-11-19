@@ -105,6 +105,10 @@ class Case:
 
 
 NOWHERE = "nosuchhost.invalid"
+#: A base port no stack listens on. `data compress` asks housekeeping1 what a run
+#: would do, and without this it asks whichever stack this machine is running: the
+#: answer then describes the sandbox's HDB through someone else's process.
+NO_STACK = ("--base-port", "39000")
 
 CASES = [
     Case("start", ("rdb1",)),
@@ -123,7 +127,7 @@ CASES = [
     # the --apply commands' defaults (#2235): each a dry run
     Case("data check", (), _hdb("uqs")),
     Case("data alter", ("quote", "--rename", "bid:bid2"), _hdb("uqs")),
-    Case("data compress", (), _hdb("uqs")),
+    Case("data compress", NO_STACK, _hdb("uqs")),
     Case("data replay", ()),
     Case("data seed", ("--from-runtime", "torq", "--date", "2015-01-07"), _hdb("uqs-torq")),
     Case("deploy build", ()),
