@@ -15,8 +15,9 @@ Implement complete, working jobs using uqf's existing framework.
 
 ## Required Workflow
 
-1. Read the uqf-framework, new-job and kdb-q-conventions skills. Follow the
-   repository instructions and the current CLI and templates.
+1. Read the new-job and kdb-q-conventions skills, and the uqf-developer skill's
+   `uqf-q-rules.md` (the q rules and the two-stage gate for a new job). Follow
+   the repository instructions and the current CLI and templates.
 
 2. Establish the source, output schema, row meaning, business identity, time
    column, timezone, correction policy and persistence semantics. State

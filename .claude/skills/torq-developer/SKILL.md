@@ -1,6 +1,6 @@
 ---
 name: torq-developer
-description: TorQ framework and kdb+/q development. TRIGGER when: file is .q or in a TorQ repo; user asks about TorQ namespaces (.servers, .gw, .sub, .lg, .timer), process.csv, tickerplant/RDB/WDB/HDB/gateway, or EOD; user writes/reviews/debugs q code; kdb+ integration with Python (PyKX), Grafana, REST, or WebSockets. SKIP: unrelated q-named tooling (e.g. Qt, Q# language); in the uqf repository, uqf's own code and stack (use uqf-developer and uqf-framework) - there, load this only for TorQ's own internals (lib/torq, the starter pack, .servers/.gw/.sub/.timer behaviour, EOD).
+description: TorQ framework and kdb+/q development. TRIGGER when: file is .q or in a TorQ repo; user asks about TorQ namespaces (.servers, .gw, .sub, .lg, .timer), process.csv, tickerplant/RDB/WDB/HDB/gateway, or EOD; user writes/reviews/debugs q code; kdb+ integration with Python (PyKX), Grafana, REST, or WebSockets. SKIP: unrelated q-named tooling (e.g. Qt, Q# language); in the uqf repository, uqf's own code and stack (use uqf-developer) - there, load this only for TorQ's own internals (lib/torq, the starter pack, .servers/.gw/.sub/.timer behaviour, EOD).
 type: skill
 ---
 

@@ -268,12 +268,11 @@ markouts and references `aj` against memory-mapped partitions, selecting by
 `scripts/processes/torq_pipeline.q` (`.qtorq`) is the only q that talks to TorQ.
 Its header lists **nine invariants**, each enforced so a job going through
 `publish` never meets them (the header's opening line still says "seven");
-`uqf-framework/uqf-q-traps.md` reproduces them. The functions: `load_uqf`,
-`subscribe_etl` (borrows the access-listed `metrics` proctype),
-`assert_publishable`, `publish` (drops `time`, unkeys, enlists atoms),
-`safe_timer` (`@[f;::;h]` around `.timer.repeat`), `install_period_handlers`
-(root `endofperiod`/`endofday`), `hdb_handle`, `reload_hdb`,
-`load_source_settings`.
+`uqf-q-traps.md` reproduces them. The functions: `load_uqf`, `subscribe_etl`
+(borrows the access-listed `metrics` proctype), `assert_publishable`, `publish`
+(drops `time`, unkeys, enlists atoms), `safe_timer` (`@[f;::;h]` around
+`.timer.repeat`), `install_period_handlers` (root `endofperiod`/`endofday`),
+`hdb_handle`, `reload_hdb`, `load_source_settings`.
 
   | Runner                                                  | Runs                                                                                                                       |
   | ---                                                     | ---                                                                                                                        |

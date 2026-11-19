@@ -2,9 +2,9 @@
 
 Read this to orient: before changing code in an area you have not worked in,
 before adding a module, and whenever the question is "where does X live" or
-"which doc answers this". `uqf-framework/uqf-architecture.md` has the
-namespace-by-namespace table of the ETL core and who owns which authority; this
-page is the whole-tree map around it.
+"which doc answers this". `uqf-etl-framework.md` has the ETL core file by file
+and `uqf-q-rules.md` who owns which authority; this page is the whole-tree map
+around them.
 
 ## 1. Four layers, one arrow
 

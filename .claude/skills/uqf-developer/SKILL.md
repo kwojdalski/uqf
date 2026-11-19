@@ -9,13 +9,14 @@ description: >-
   attestation, PeachQ), the repository workflow (a worktree per issue, claim and
   release, no shims), and debugging a running stack. TRIGGER when: doing
   development work anywhere in this repository - orienting in an unfamiliar
-  area, changing code in any layer, running or adding tests, a hook, gate or CI
-  failure, a stale generated file, a uqs command, process.csv or process
-  overrides, runtimes, profiles, attachments, deployments or bundles, finding
-  the right doc, or diagnosing a process that is down, idle or wrong. SKIP:
-  plain TorQ questions with no uqf code involved (torq-developer); q style and
-  precedence alone (kdb-q-conventions); scaffolding one job end to end (new-job,
-  then come back here to test and ship it).
+  area, changing code in any layer, writing or reviewing q under src/ or
+  scripts/, running or adding tests, a hook, gate or CI failure, a stale
+  generated file, a uqs command, process.csv or process overrides, runtimes,
+  profiles, attachments, deployments or bundles, finding the right doc, or
+  diagnosing a process that is down, idle or wrong. SKIP: plain TorQ questions
+  with no uqf code involved (torq-developer); q style and precedence alone
+  (kdb-q-conventions); scaffolding one job end to end (new-job, then come back
+  here to test and ship it).
 ---
 
 uqf is several components built **around** TorQ, not a replacement for it: a
@@ -36,15 +37,15 @@ reporting. `CLAUDE.md` is binding and is summarised in rule group W.
 
 # HOW THE GUIDANCE IS SPLIT
 
-  | Need                                                                                                                                                                                   | Go to                                                                                                                         |
-  | ---                                                                                                                                                                                    | ---                                                                                                                           |
-  | the map, the workflow, tests and gates, the CLI, TorQ integration, debugging                                                                                                           | **this skill** and its companion files                                                                                        |
-  | the binding rules for q under `src/` and `scripts/` (layering L, declarations J, tables T, derived artefacts D, config C, logging G, traps Q, verification V) and a q review checklist | `uqf-framework` - load it as well whenever you write or review q there; this skill cites its rules rather than restating them |
-  | q style: precedence, naming, sign conventions, qDoc                                                                                                                                    | `kdb-q-conventions`                                                                                                           |
-  | adding one job (feed, etl, normalizer, horizon, backfill, reaction)                                                                                                                    | `new-job` skill; the `job-developer` agent does it end to end                                                                 |
-  | TorQ itself: `.servers`, `.gw`, `.sub`, `.timer`, EOD, startup                                                                                                                         | `torq-developer`                                                                                                              |
-  | claiming and releasing an issue                                                                                                                                                        | `claim`, `release` skills                                                                                                     |
-  | a new doc page / changing an existing one                                                                                                                                              | `docs-writer` skill / `docs-maintainer` agent                                                                                 |
+  | Need                                                                                                                                                                                                          | Go to                                                                                                                         |
+  | ---                                                                                                                                                                                                           | ---                                                                                                                           |
+  | the map, the workflow, tests and gates, the CLI, TorQ integration, debugging                                                                                                                                  | **this skill** and its companion files                                                                                        |
+  | the binding rules for q under `src/` and `scripts/` (layering L, declarations J, names and tables N, config K, logging G, traps Q, verification V), a q review checklist and the two-stage gate for a new job | `uqf-q-rules.md` - read it whenever you write or review q there                                                               |
+  | q style: precedence, naming, sign conventions, qDoc                                                                                                                                                           | `kdb-q-conventions`                                                                                                           |
+  | adding one job (feed, etl, normalizer, horizon, backfill, reaction)                                                                                                                                           | `new-job` skill; the `job-developer` agent does it end to end                                                                 |
+  | TorQ itself: `.servers`, `.gw`, `.sub`, `.timer`, EOD, startup                                                                                                                                                | `torq-developer`                                                                                                              |
+  | claiming and releasing an issue                                                                                                                                                                               | `claim`, `release` skills                                                                                                     |
+  | a new doc page / changing an existing one                                                                                                                                                                     | `docs-writer` skill / `docs-maintainer` agent                                                                                 |
 
 Specialist agents (hand work to them where they are the specialist):
 
@@ -99,10 +100,9 @@ Specialist agents (hand work to them where they are the specialist):
 - **W3** Commit and push only when asked. Never commit to `master`
   (`no-commit-to-branch` refuses it); push a branch with an explicit refspec
   (`git push origin HEAD:refs/heads/<branch>`); never force-push.
-- **W4** Never `--no-verify`. `uqf-framework` V7 allows `SKIP=<id>` for a hook
-  broken on master with the reason in the commit message - that is the user's
-  decision, not yours: stop and report a hook you cannot pass.
-  (`SKIP=peachq-push git push` is the one routine skip.)
+- **W4** Never `--no-verify`, and never `SKIP=<id>` on your own initiative:
+  skipping a hook broken on master is the user's decision - stop and report a
+  hook you cannot pass. (`SKIP=peachq-push git push` is the one routine skip.)
 - **W5** Run targeted tests only - never the whole Python suite, the whole q
   suite, `scripts/peachq/full_suite.py`, `UQF_HOOKS_FULL=1` or a stack test
   unless asked; `-n 2` at most (several sessions share 11 cores). Before
@@ -136,7 +136,7 @@ Specialist agents (hand work to them where they are the specialist):
 - **W13** `UQF_PEACHQ` is refused by `uqs`, pytest and the attestation; if your
   shell exports it, run with `env -u UQF_PEACHQ`. `QCMD` alone picks the q.
 
-## Layers (L) - the full rules are `uqf-framework` L1-L6
+## Layers (L) - the full rules are `uqf-q-rules.md` L1-L6
 
 - **L1** Nothing under `src/` knows TorQ; `.lg`, `.servers` and `.proc` are read
   only in `src/etl/core/log.q`, `worker_dependencies.q` and `run.q`
@@ -150,7 +150,7 @@ Specialist agents (hand work to them where they are the specialist):
 - **L4** Python derives from q; it never restates a schema, a table list or a
   process list (`python/uqs/src/uqs/model/` reads declarations as text).
 
-## Jobs and the plant (J) - see `uqf-etl-framework.md`, `uqf-framework` J1-J11
+## Jobs and the plant (J) - see `uqf-etl-framework.md`, `uqf-q-rules.md` J1-J15
 
 - **J1** A job is one declaration file; there is no registration step. Scaffold
   with `uqs job new ... --dry-run`, then without, and follow `new-job`.
@@ -320,6 +320,12 @@ Read only when the task needs it; they are not auto-loaded.
   layout, qUnit, pytest markers and options, qlinter and the q-traps gate, every
   `check.py` gate, every `derive.py` target, the hooks by stage, KDB-X
   attestation, CI, the `scripts/dev` tools.
+- **`uqf-q-rules.md`** - the binding rules for q under `src/` and `scripts/` (L,
+  J, N, K, G, Q, V), the review checklist for a q diff, and the two-stage gate
+  for adding a job. Read before writing or reviewing q.
+- **`uqf-q-traps.md`** - each q trap with its measured reproduction, and the
+  nine TorQ invariants from `torq_pipeline.q`. Read when a q change "works" but
+  a value downstream is wrong.
 - **`uqf-debugging.md`** - the outside-in ladder, missing-data protocol, a
   failed backfill, a dead streaming job, start refusals, a failure table, q
   traps measured on KDB-X, hook and gate failures, and machine quirks.
