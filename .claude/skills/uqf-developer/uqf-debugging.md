@@ -80,6 +80,8 @@ recent errors). Two silent drops to rule out first:
 1. `uqs job runs list --unfinished` - outcomes completed, idle, partial,
    stopped, failed. `job backfill --wait` exits 0 (completed or idle), 1
    (failed, partial, refused, died), 4 (stopped), 3 (attachment not reloaded).
+   `job backfill ... --once` runs only the first uncovered window (6 when the
+   range is already covered).
 2. `uqs job runs show RUN` - the facts, log paths and the command that resumes.
    `uqs job runs audit DATASET --from T --to T` - every fact recorded about one
    window, from every run that published it.
@@ -100,7 +102,9 @@ the stretches it was down or failing and, for a job with a backfill twin, prints
 the refill commands (`uqs job new NAME --kind backfill --twin-of JOB` makes a
 twin). Gaps record uptime and failed batches, not output; a gap can be wider
 than the outage (beats are a minute apart); today cannot be refilled before end
-of day.
+of day. To reproduce one failing cycle, `uqs job run JOB --once` runs one unit
+of the job in a fresh process and exits with its outcome; it refuses while a
+process of that job is running.
 
 ## 4. `uqs start` refused, or a process died at once
 

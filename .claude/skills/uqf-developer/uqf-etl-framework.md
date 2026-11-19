@@ -24,21 +24,22 @@ under `src/` knows TorQ exists; the one namespace that does is `.qtorq`
 Precondition: `src/init.q` is loaded and the process runs from the repository
 root.
 
-1. The core, as explicit `\l` lines (`init.q:47-153`): status, state, logging,
+1. The core, as explicit `\l` lines (`init.q:47-156`): status, state, logging,
    coercion and `declared.q` first; then coverage (`intervals.q`,
    `materialisation.q`), mapped books and reference variants, run identity, the
    IO managers, ODBC, heartbeat, the job graph (`dag.q`, then the generated
    `pipeline_dag.q`), `declaration_load.q` and the generated `load_plan.q`; the
    `core/variants/` directory; worker config, runtime and dependencies; the
-   source modules; the fetch path; the bounded-worker modules and `twin.q`;
-   stream health, uptime, retention; the streaming modules (`stream_job.q`,
-   `stream_poll.q`, ...), the normalizer, Kafka, horizon, bars, rolling,
-   `tick.q`; the `verify_*.q` modules and `compare.q`. Order that is
+   source modules; the fetch path; the bounded-worker modules and `twin.q`, then
+   the `--once` contract (`once.q`, `bounded_once.q`; `stream_once.q` follows
+   `stream_poll.q`); stream health, uptime, retention; the streaming modules
+   (`stream_job.q`, `stream_poll.q`, ...), the normalizer, Kafka, horizon, bars,
+   rolling, `tick.q`; the `verify_*.q` modules and `compare.q`. Order that is
    load-bearing is explained in the header (`init.q:16-24`).
 2. `plant_registry.q`, then `plant_tables.q`, `compression_policy.q`, and
-   `synthetic_market.q` (a job filters on `.qf.demo.pairs`) (`init.q:156-164`).
+   `synthetic_market.q` (a job filters on `.qf.demo.pairs`) (`init.q:159-167`).
 3. The declarations, globbed in this directory order: `sources`, `transforms`,
-   `workers`, `streaming`, `reactions` (`init.q:200`). Sources come before
+   `workers`, `streaming`, `reactions` (`init.q:203`). Sources come before
    workers because `.qetl.job.bounded.define` resolves its source at define
    time. Within a directory files load alphabetically and **no file may depend
    on a peer at load time**: a table's schema comes from `.qetl.plant`, never
@@ -86,12 +87,37 @@ function (`src/etl/core/declared.q`).
 `--kind connector` scaffolds a Python publisher outside q plus the q job that
 reshapes what it publishes. The authority for the verbs and the kinds is
 `python/uqs/src/uqs/model/kinds.py`: `VERBS` (the six declaration verbs, with
-the sub-namespace horizon, bars and rolling install into), `LISTED_KIND` (what
-`uqs job list` prints), `REACTION`, and `SCAFFOLD_KINDS` (`streaming`,
-`backfill`, `normalizer`, `connector`, `horizon`). Add a new kind's verb there
-first; the tests then name every place that still lacks it. There is no
-continuous define verb: `.qetl.job.continuous` (`core/continuous_state.q`) is a
-cursor helper with no registry, deliberately with no path to `stage_completion`.
+the sub-namespace horizon, bars and rolling install into, and each verb's
+`once_runner`), `LISTED_KIND` (what `uqs job list` prints), `REACTION`,
+`SCAFFOLD_KINDS` (`streaming`, `backfill`, `normalizer`, `connector`, `horizon`)
+and `SCAFFOLD_VERB` (the verb each kind writes; `connector` writes none). Add a
+new kind's verb there first; the tests then name every place that still lacks
+it. There is no continuous define verb: `.qetl.job.continuous`
+(`core/continuous_state.q`) is a cursor helper with no registry, deliberately
+with no path to `stage_completion`.
+
+### One unit with `--once` (`core/once.q`, #2798)
+
+`uqs job run JOB --once` (streaming) and `uqs job backfill JOB ... --once`
+(bounded) run ONE unit of the job's real processing in a fresh process, then
+exit with an outcome. A unit is one poll, one timer cycle, one input batch and
+its processing, or one planned window (`.qetl.once.kinds`).
+
+- The framework's runner for the kind ends the process, never the job:
+  `.qetl.job.stream.once.run` (`core/stream_once.q`) and
+  `.qetl.job.bounded.once.limit` (`core/bounded_once.q`, which keeps the first
+  planned window). A job declares nothing for it, so a scaffolded job has
+  `--once` the moment it exists; never write a one-shot loop in a job.
+- Outcomes and exit codes (`.qetl.once.codes`, read by Python through
+  `q_facts`): `done` 0, `failed` 1, `stopped` 4, `no_work` 6. A unit may publish
+  nothing, and pending event-time state is never flushed to make it finish.
+- A subscriber's wait for its batch is bounded: `--once-timeout DURATION`, 60 s
+  by default, 3600 s at most; reaching it is `no_work`.
+- The process writes `<status_dir>/once_<procname>.json`. A process of the job
+  that is already running is refused, never stopped or reused.
+- A new declaration verb names its `once_runner` in `kinds.py`, or
+  `python/uqs/tests/test_once_contract.py` refuses it. The q cases are
+  `tests/q/test_once.q`.
 
 ### Streaming job keys (`core/stream_job.q`)
 
