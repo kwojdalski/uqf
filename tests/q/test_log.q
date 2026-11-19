@@ -390,6 +390,15 @@
     ![`.lg;();0b;`l`outmap`pubmap];
     .qunit.assertEquals[got;(`etl;`attached_backfill;`lifecycle);"outside TorQ the runner's own name, set once"]};
 
+.qt.qetl.log.test_a_process_without_run_q_falls_back_to_the_runner_name:{[t]
+    keep:(.qetl.run.proc_name;.qetl.log.standalone_name);
+    ![`.qetl.run;();0b;enlist `proc_name];
+    .qetl.log.set_process`housekeeping_like;
+    got:@[.qetl.log.process;::;{[e] `$"threw: ",e}];
+    `.qetl.run.proc_name set keep 0; .qetl.log.set_process keep 1;
+    .qunit.assertEquals[got;`housekeeping_like;
+        "housekeeping loads log.q without run.q: an undefined proc_name falls back, never throws (#2808)"]};
+
 .qt.qetl.log.test_a_worker_name_is_never_the_process:{[t]
     .qt.qetl.log.torq_stub[];
     keep:.qetl.log.standalone_name; .qetl.log.set_process`;
