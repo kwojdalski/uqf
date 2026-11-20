@@ -2,6 +2,52 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-11-20
+
+**Overview.** A week of making attached data honest about what it keeps, of one
+way to run a job once, and of moving the q linter from v0.16 to v0.22. The
+PeachQ pin moved to v0.92, which loads nested contexts and partitioned HDBs, so
+the tree dropped its PeachQ workarounds. The tree now lints with no findings,
+after every finding of q-lint 0.21 was checked and the real ones fixed.
+
+**Changes by area**
+
+- **Attached data (`python/uqs`, `scripts/hdb`).** A runtime-only attachment and
+  a durable one now behave as they say: `--replace` replaces only what was given
+  and is refused while a backfill or its publisher runs (#2758, #2760, #2762); a
+  re-run on a lost registration is refused (#2765, #2761); an HDB pin is held to
+  every wdb it came from, with `--repin-storage` (#2767); stops kill only a
+  publisher the attachment registered (#2757); restart-safety is judged from the
+  blocks that define a table (#2759, #2763). Attachment blocks are kept out of
+  the vendored starter-pack tables (#2801).
+- **Jobs (`src/etl`, `uqs job`).** `--once` is one option across job kinds, run
+  through the new `uqs job run JOB`, with q runners that report an outcome
+  (#2798). `uqs data sample` builds a row-limited, re-enumerated rehearsal HDB
+  (#2812). `uqs exec -- debug` is gated as a start (#2756).
+- **PeachQ v0.92 (`scripts/peachq`, `src/etl/core`).** The HDB writer, seed,
+  fill, alter and compress take the KDB-X path; nested contexts are no longer
+  flattened and `scripts/peachq/init.q` is gone; the known-gap lists shrink to
+  what v0.92 still cannot do (#2794).
+- **Linting (`.qlinter-version`, `.qlinter.toml`, `src/`, `tests/`).** The pin
+  moved through v0.16.0, v0.17.0, v0.17.1, v0.21.0 and v0.22.0 (#2791, #2796,
+  #2810, #2816, #2818). Every mixed-precedence infix line is parenthesised
+  (#2814). Dead stores, `l` locals and redundant parentheses were fixed, and the
+  rules this tree does not follow are ignored with reasons (#2816); QP006 is
+  back on now that it reports only rank-2+ juxtaposition (#2818).
+- **CLI layout (`python/uqs/src/uqs/cli`).** Modules are grouped into
+  subpackages by command group (#2800), and six modules are back under the
+  400-line budget (#2788). Files can be pushed into a target's `shared/config`
+  through the frontend API (#2786).
+- **Tests and CI.** The live_stack and release lanes are fixed: log.q's
+  proc_name trap, stale stack tests and a reverse-order leak (#2808); the ODBC
+  parity run fails or skips instead of hanging a push (#2792); the dry-run walk
+  keeps the data compress case off a running stack (#2802).
+- **Agents and skills (`.claude/`).** The uqf-developer skill and agent were
+  added, with torq-developer, and the uqf-framework skill folded into it (#2804,
+  #2806).
+
+**Files changed.** 565 files changed, 14748 insertions(+), 3682 deletions(-).
+
 ## stable/2026-11-13
 
 **Overview.** Four days of hardening what uqs does to a remote target and how
