@@ -92,6 +92,37 @@ uqs data migrate trade --date 2026-01-01 --reset-empty          # eligibility an
 uqs data migrate trade --date 2026-01-01 --reset-empty --apply  # after asking; --yes does not ask
 ```
 
+## Rehearsing a migration on a sample
+
+Rehearse a migration on a small copy before running it on production.
+`data sample` copies at most `--rows` rows of each table per day into another
+HDB, spread evenly over the day. It keeps column order, types and attributes.
+
+```bash
+uqs data sample --hdb /prod/hdb --into-hdb /tmp/hdb-rehearsal --date 2026-11-19 \
+  --table quote --table trade --rows 1000                               # the plan; writes nothing
+uqs data sample ... --apply --quiesced                                  # after asking
+uqs data alter quote --hdb /tmp/hdb-rehearsal --rename bid=bid_px --apply   # the rehearsal
+```
+
+Symbols are decoded against the source's `sym` file and enumerated into the
+destination's. A copied symbol column would decode there to the wrong values.
+
+- The source is only read.
+- The schema is checked against the destination's own table, if it has one,
+  before anything is written.
+- A table the destination already holds on a sampled day is refused. Pass
+  `--on-conflict ignore` to keep it, or `replace` to sample over it.
+- A day that has the source partition but lacks a table gets an empty table, so
+  the destination stays queryable.
+- `--apply` needs `--quiesced` (the source's writers are stopped, and its write
+  lock is not held) or `--point-in-time` (accept a copy of files that may change
+  as they are read).
+
+Each table is staged beside the destination and moved in only when it is
+complete. An interrupted run leaves no partial table visible, and the next
+`--apply` removes its stage. A segmented HDB is not sampled.
+
 ## One table, in any HDB
 
 `data check` and `data alter` also work on one table across a whole HDB: this

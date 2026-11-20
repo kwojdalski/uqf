@@ -335,7 +335,9 @@ def test_a_command_taking_a_time_range_takes_all_of_it():
 #: in whole days and refuses, never rounds, a bound off a midnight - data
 #: seed and data compress used to drop a partial first day and take a partial
 #: last one whole, past --to.
-WHOLE_DAY_COMMANDS = {"data replay", "data seed", "data compress", "data migrate"}
+WHOLE_DAY_COMMANDS = {
+    "data replay", "data seed", "data compress", "data migrate", "data sample",
+}  # fmt: skip
 
 
 def test_a_whole_partition_command_takes_whole_days_only():
@@ -349,7 +351,7 @@ def test_a_whole_partition_command_takes_whole_days_only():
         days = LEAVES[path].option("--last").help or ""
         assert "whole days" in days and "never in it" in days, path
     # and each resolves it through the one refusal, never a rounding of its own
-    for module in ("compress_plan", "seed", "replay", "migrate"):
+    for module in ("compress_plan", "seed", "replay", "migrate", "sample"):
         text = inspect.getsource(__import__(f"uqs.cli.data.{module}", fromlist=["_"]))
         assert ".partition_dates(" in text or ".day(" in text, module
 
@@ -397,6 +399,11 @@ def test_every_data_command_names_its_hdb_the_same_ways():
             "seed",
             ["data", "seed", "--from-runtime", "uqf"],
             "data seed cannot take --attachment pb-uat: a seed",
+        ),
+        (
+            "sample",
+            ["data", "sample", "--into-hdb", "/tmp/rehearsal", "--date", "2026-09-13"],
+            "data sample cannot take --attachment pb-uat: a sample",
         ),
         ("compress", ["data", "compress"], "--attachment is for --report"),
     ],
@@ -1106,7 +1113,7 @@ PROMPTING_MODULES = {
     "attach", "cleanup", "deploy_server", "hdb_scope", "install", "install_bundle", "migrate",
     "remove", "replay", "seed", "target", "target_adopt", "target_config", "target_config_push",
     "target_edit",
-    "compress_plan",
+    "compress_plan", "sample",
 }  # fmt: skip
 
 #: leaf -> the issue that adds its --json. Empty since #1731: keep it so.
@@ -1302,6 +1309,7 @@ JSON_WITHOUT_YES = {
     "data migrate": "test_hdb_migrate.py::test_json_without_yes_apply_is_refused",
     "data replay": "test_replay.py::test_json_is_the_plan_and_without_yes_apply_is_refused",
     "data seed": "test_hdb_seed.py::test_json_without_yes_apply_is_refused",
+    "data sample": "test_hdb_sample.py::test_json_without_yes_apply_is_refused",
     "deploy prune": (
         "test_deploy_prune.py::test_json_without_yes_is_refused_before_the_server_is_reached"
     ),

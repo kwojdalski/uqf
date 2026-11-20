@@ -222,6 +222,7 @@ DOMAIN_VERBS = {
     "approve": "accept a record another machine exported",
     "replay": "replay a tickerplant log into the HDB",
     "seed": "copy another runtime's HDB",
+    "sample": "copy a row-limited sample of HDB tables into another HDB",
     "migrate": "migrate an HDB partition's schema",
     "alter": "change one table in every HDB partition holding it",
     "compress": "an HDB's compression: report it, plan it, or run TorQ's .cmp over it",
