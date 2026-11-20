@@ -46,7 +46,7 @@
         `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
         (`tz_london;`ext;`ts;`ts;`ts`px;"pf";
          {[h;a;b] ()};
-         {([] ts:2026.10.25D00:30:00.000000000+0D00:30*til 8; px:8#1.5)};
+         {([] ts:2026.10.25D00:30:00.000000000+(0D00:30*til 8); px:8#1.5)};
          .qt.qetl.time_zone.london)];
     .qetl.source.define[`tz_summer;
         `source`table_name`time_column`row_key`columns`types`query`fixture`tz!
@@ -70,7 +70,7 @@
 / `sum` of a boolean vector is an INT, not a long - 999i and 999 do not
 / match under `~`, which is its own silent trap.
 .qt.qetl.time_zone.test_almost_no_timestamp_survives_a_round_trip_through_a_datetime:{[t]
-    ts:2026.09.15D00:00:00.000000000+123456789*til 1000;
+    ts:2026.09.15D00:00:00.000000000+(123456789*til 1000);
     .qunit.assertEquals[sum ts<>"p"$"z"$ts;999i;"999 of 1000 nanosecond-spaced instants come back as a different instant"]};
 
 / And this is why it survives review: every value anyone would type by hand
@@ -78,11 +78,11 @@
 / hand-check, a demo and a fixture built from round numbers all agree - and
 / only production timestamps disagree.
 .qt.qetl.time_zone.test_whole_seconds_do_survive_which_is_why_the_bug_passes_review:{[t]
-    ts:2026.09.15D00:00:00.000000000+1000000000*til 86400;
+    ts:2026.09.15D00:00:00.000000000+(1000000000*til 86400);
     .qunit.assertEquals[sum ts<>"p"$"z"$ts;0i;"a whole day of whole seconds round-trips exactly, so round-number checks never catch this"]};
 
 .qt.qetl.time_zone.test_the_round_trip_error_can_move_an_instant_backwards:{[t]
-    ts:2026.09.15D00:00:00.000000000+123456789*til 1000;
+    ts:2026.09.15D00:00:00.000000000+(123456789*til 1000);
     .qunit.assertEquals[0<max ts-"p"$"z"$ts;1b;"the rounding is not one-directional, so a row can move to an EARLIER instant and cross a window boundary"]};
 
 / `=` and `~` disagree about the same instant held as the two types. Any
@@ -104,7 +104,7 @@
 / caught by the query; it has to be caught by the contract, which is what
 / the next test asserts.
 .qt.qetl.time_zone.test_a_datetime_column_filters_without_complaint:{[t]
-    tbl:([] ts:"z"$2026.09.11D09:00:00.000000000+1D*til 5; px:5#1.5);
+    tbl:([] ts:"z"$2026.09.11D09:00:00.000000000+(1D*til 5); px:5#1.5);
     got:?[tbl;((>=;`ts;2026.09.12D00:00:00.000000000);(<;`ts;2026.09.14D00:00:00.000000000));0b;()];
     .qunit.assertEquals[count got;2;"the filter runs and returns a believable answer, so nothing upstream of the contract will notice the type"]};
 

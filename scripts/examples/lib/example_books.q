@@ -20,10 +20,10 @@
 / @return dict bid_prices, bid_sizes, ask_prices, ask_sizes - ten each
 .qf.demo.book:{[spot]
     levels:til 10;
-    bid_prices:spot-.qf.demo.pip_size*levels;
-    ask_prices:(spot+.qf.demo.pip_size)+.qf.demo.pip_size*levels;
-    bid_sizes:.qf.demo.level_size_unit*1+levels;
-    ask_sizes:(.qf.demo.level_size_unit-.qf.demo.level_size_unit%10)+.qf.demo.level_size_unit*levels;
+    bid_prices:spot-(.qf.demo.pip_size*levels);
+    ask_prices:(spot+.qf.demo.pip_size)+(.qf.demo.pip_size*levels);
+    bid_sizes:.qf.demo.level_size_unit*(1+levels);
+    ask_sizes:(.qf.demo.level_size_unit-(.qf.demo.level_size_unit%10))+(.qf.demo.level_size_unit*levels);
     `bid_prices`bid_sizes`ask_prices`ask_sizes!(bid_prices;bid_sizes;ask_prices;ask_sizes)}
 
 / One prefix's worth of zero-padded, per-level columns as a single dict
@@ -37,7 +37,7 @@
 / @return dict of symbol column names to float vectors
 .qf.demo.level_cols:{[prefix;n_levels;base;step;row_step;n_rows]
     names:{[prefix;i] `$prefix,$[i<10;"0",string i;string i]}[prefix] each til n_levels;
-    names!{[base;step;row_step;n_rows;i] (base+step*i)+row_step*til n_rows}[base;step;row_step;n_rows] each til n_levels}
+    names!{[base;step;row_step;n_rows;i] (base+(step*i))+(row_step*til n_rows)}[base;step;row_step;n_rows] each til n_levels}
 
 / Synthetic event timestamps: each lands a jittered gap after the previous one,
 / the gap drawn from Normal(mean, std) via this repo's own .qf.math.inv_ncdf
@@ -50,7 +50,7 @@
 / @param gaps dict mean, std, min - timespans
 / @return n strictly increasing timestamps
 .qf.demo.timestamps:{[example;n;start_ts;gaps]
-    p:1e-9+(1-2e-9)*n?1.0;
+    p:1e-9+((1-2e-9)*n?1.0);
     .qetl.log.ch.dbg[`lifecycle;"running: .qf.math.inv_ncdf p";enlist[`example]!enlist example];
     shock:.qf.math.inv_ncdf p;
-    start_ts+sums gaps[`min]|gaps[`mean]+gaps[`std]*shock}
+    start_ts+sums gaps[`min]|gaps[`mean]+(gaps[`std]*shock)}

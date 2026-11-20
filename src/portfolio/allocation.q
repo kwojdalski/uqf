@@ -160,7 +160,7 @@
     if[0=count lots; :enlist lot];
     open_lot:last lots;
     total:open_lot[`qty]+lot`qty;
-    weighted:((open_lot[`qty]*open_lot`price)+lot[`qty]*lot`price)%total;
+    weighted:((open_lot[`qty]*open_lot`price)+(lot[`qty]*lot`price))%total;
     (-1_lots),enlist @[open_lot;`qty`price;:;(total;weighted)]}
 
 / Private: pick the oldest open lot (fifo).

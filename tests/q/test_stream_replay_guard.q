@@ -97,7 +97,7 @@
     .qtorq.sub_sch_at[`fills]:0;
     `.qt.qetl.stream_replay_guard.got set ();
     h:{[t;x] `.qt.qetl.stream_replay_guard.got set .qt.qetl.stream_replay_guard.got,exec qty from x};
-    tm:{[n] 2026.11.06D10:00:00+n*0D00:00:01};
+    tm:{[n] 2026.11.06D10:00:00+(n*0D00:00:01)};
     msg:{[tm;n] (enlist tm n;enlist `EURUSD;enlist "f"$n)}[tm];
     `.qtorq.sub_hwm set (enlist `fills)!enlist tm 0;
     `.qtorq.sub_since set (`symbol$())!`timestamp$();
@@ -125,7 +125,7 @@
     `.sub.subscribe set {[t;insts;setschema;replaylog;proc]
         `.qt.qetl.stream_replay_guard.calls set 1+.qt.qetl.stream_replay_guard.calls;
         if[1=.qt.qetl.stream_replay_guard.calls; '"plant not ready"];
-        tm:{[n] 2026.11.06D10:00:00+n*0D00:00:01};
+        tm:{[n] 2026.11.06D10:00:00+(n*0D00:00:01)};
         {[tm;n] .qtorq.sub_upd[`rpg;{[t;x] `.qt.qetl.stream_replay_guard.got set .qt.qetl.stream_replay_guard.got,exec qty from x};`fills;(enlist tm n;enlist `EURUSD;enlist "f"$n)]}[tm] each 0 1 2 3;
         update active:1b from `.sub.SUBSCRIPTIONS;
         `ok};}

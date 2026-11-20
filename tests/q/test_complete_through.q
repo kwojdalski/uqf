@@ -17,7 +17,7 @@
         `source`table_name`time_column`row_key`columns`types`query`fixture`tz`complete_through!
         (`ct_src;`ct_events;`time;`time;`time`px;"pf";
          {[h;range_from;range_to]
-            ([] time:range_from+0D01*til "j"$(range_to-range_from)%0D01; px:1f)};
+            ([] time:range_from+(0D01*til "j"$(range_to-range_from)%0D01); px:1f)};
          {[] ([] time:enlist 2026.09.01D00:00; px:enlist 0f)};
          `UTC;
          {[h] .qt.qetl.source.complete_through.bound})];

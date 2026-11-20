@@ -144,7 +144,7 @@
     tr:.qetl.variant.reps p`transform_id;
     dpx:{[tob;names;defs;p;r] .qetl.variant.over_slice[tob;names;defs;p[`transform] r;r]}[tob;names;defs;p] each tr;
     / one flat transform per (SELECT; TRANSFORM) pair, the pair being one number
-    pid:(p`select_id)+(1+max p`select_id)*p`transform_id;
+    pid:(p`select_id)+((1+max p`select_id)*p`transform_id);
     pairs:distinct pid;
     fpx:{[js;defs;p;pid;q] r:first where pid=q; .qetl.variant.over_matched[js p[`select_id] r;defs;p[`transform] r;r]}[js;defs;p;pid] each pairs;
     / 5 COMBINE, per variant

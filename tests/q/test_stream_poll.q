@@ -10,7 +10,7 @@
 // job (.qt.qpipe.job_output_contracts needs a driver for each one that publishes).
 
 
-.qt.qetl.job.stream.poll.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.job.stream.poll.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 / The upstream a test feed polls: three rows, one a day.
 .qt.qetl.job.stream.poll.upstream:([] ts:.qt.qetl.job.stream.poll.d[1 2 3]; v:1.5 2.5 3.5)
@@ -284,7 +284,7 @@
 / Rows around NOW: 20s, 10s, 5s and 1s ago, and one a minute in the future -
 / which a window ending now must not include.
 .qt.qetl.job.stream.poll.fresh:([] ts:`timestamp$(); v:`float$())
-.qt.qetl.job.stream.poll.fresh_rows:{[] `.qt.qetl.job.stream.poll.fresh set ([] ts:.z.p+1000000000*-20 -10 -5 -1 60; v:1 2 3 4 5f);}
+.qt.qetl.job.stream.poll.fresh_rows:{[] `.qt.qetl.job.stream.poll.fresh set ([] ts:.z.p+(1000000000*-20 -10 -5 -1 60); v:1 2 3 4 5f);}
 .qt.qetl.job.stream.poll.after_fresh:{[cursor] select from .qt.qetl.job.stream.poll.fresh where ts>cursor}
 
 .qt.qetl.job.stream.poll.recent_feed:{[extra]

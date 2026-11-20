@@ -205,8 +205,8 @@
     side:`float$fr`side;
     complete:(not null first mids) & not null last mids;
     steps:{[side;complete;lo;hi] side*?[complete;hi-lo;0n]}[side;complete]'[-1_mids;1_mids];
-    total:side*(last mids)-fr`price;
-    execution:side*(first mids)-fr`price;
+    total:side*((last mids)-fr`price);
+    execution:side*((first mids)-fr`price);
     res:total-execution+(+/) steps;
     pf:`float$.qpipe.transform.fx_domain.pip_factor_of[fr`sym];
     rs:.qpipe.transform.fx_domain.residual_status[spec`tolerance;pf*res];

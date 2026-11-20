@@ -6,7 +6,7 @@
 // lifecycle on demo_deals_backfill (windows d1..d4, with its real reaction), and real streaming
 // jobs started on a fake transport that records the timers asked for and the publishes made.
 
-.qt.qetl.once.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.once.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 / the exits a runner made, in order, and the exit it replaced
 .qt.qetl.once.exits:`long$()

@@ -73,7 +73,7 @@
 /   - one order_id adds then cancels, another adds then trades, so the
 /     composite row_key has both terminal shapes present
 .qpipe.source.demo_events.fixture:{[]
-    ([] time:2026.09.11D09:00:00.000000000+1000000000*til 10;
+    ([] time:2026.09.11D09:00:00.000000000+(1000000000*til 10);
         sym:10#`EURUSD;
         action:`add`add`trade`cancel`add`cancel`add`trade`add`cancel;
         side:1 -1 1 -1 1 1 -1 -1 1 1;

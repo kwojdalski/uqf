@@ -371,7 +371,7 @@
     if[$[null last_pub; 0b; as_of<=last_pub]; :0];
     .qetl.job.stream.rolling.mark_covered[name;ns;now];
     cf:get ` sv ns,`covered_from;
-    owed:$[null last_pub; enlist as_of; last_pub+(d`period)*1+til "j"$(as_of-last_pub) div d`period];
+    owed:$[null last_pub; enlist as_of; last_pub+((d`period)*(1+til "j"$(as_of-last_pub) div d`period))];
     / one point at a time, publish before advance, so a throw resumes at the next
     n:{[name;ns;d;cf;pt]
         .qetl.job.stream.rolling.note_withheld[name;ns;pt;cf];

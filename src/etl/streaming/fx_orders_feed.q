@@ -87,7 +87,7 @@
 / @return one order's rows: order_id, sym, book, product, side, size, price, order_status
 / @eg count .qpipe.job.fx_orders_feed.order_rows[1;0;`london;`spot;1;1e6;`filled;0] -> 8
 .qpipe.job.fx_orders_feed.order_rows:{[id;i;bk;pr;side;size;status;slip_pips]
-    price:.qpipe.job.fx_orders_feed.spot[i]+slip_pips%.qpipe.job.fx_orders_feed.pip_factor[i];
+    price:.qpipe.job.fx_orders_feed.spot[i]+(slip_pips%.qpipe.job.fx_orders_feed.pip_factor[i]);
     (enlist id;enlist .qf.demo.pairs i;enlist bk;enlist pr;enlist side;
         enlist size;enlist price;enlist status)}
 
@@ -100,7 +100,7 @@
     / 1 or -1, always an ATOM: indexing `1 -1` with a possibly-empty
     / vector is how a sibling feed once produced a list, and the plant
     / read it as two rows.
-    side:1-2*rand 2;
+    side:1-(2*rand 2);
     .qpipe.job.fx_orders_feed.publish[`orders;
         .qpipe.job.fx_orders_feed.order_rows[
             .qpipe.job.fx_orders_feed.last_id;

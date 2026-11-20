@@ -407,7 +407,7 @@
             vega_val:.qf.px.gk_vega[s;k;rd;rf;sigma;t];
             $[vega_val<.qf.px.IMPLIED_VOL_VEGA_FLOOR;
                 [result:.qf.px.bisect_vol[price;s;k;rd;rf;t;is_call]; i:.qf.px.IMPLIED_VOL_MAX_ITER];
-                [sigma-:diff%vega_val; sigma:.qf.px.IMPLIED_VOL_SIGMA_FLOOR|sigma; i+:1]]]];
+                [sigma-:(diff%vega_val); sigma:.qf.px.IMPLIED_VOL_SIGMA_FLOOR|sigma; i+:1]]]];
     $[null result; .qf.px.bisect_vol[price;s;k;rd;rf;t;is_call]; result]};
 
 \d .

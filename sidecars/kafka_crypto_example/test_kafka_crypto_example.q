@@ -34,14 +34,14 @@
 
 / One trade as the publisher writes it; the price and the id vary with the offset so two rows are distinguishable.
 .qt.qpipe.job.crypto_trades_decoder.payload:{[off]
-    "{\"sym\":\"BTC-USD\",\"trade_id\":\"BTC-",(-6#"000000",string off),"\",\"ts\":\"2026-10-20T09:00:0",string[off mod 10],".250Z\",\"price\":",string[65000+0.5*off],",\"qty\":0.25,\"side\":\"buy\"}"}
+    "{\"sym\":\"BTC-USD\",\"trade_id\":\"BTC-",(-6#"000000",string off),"\",\"ts\":\"2026-10-20T09:00:0",string[off mod 10],".250Z\",\"price\":",string[65000+(0.5*off)],",\"qty\":0.25,\"side\":\"buy\"}"}
 
 / A batch as it arrives from the plant: `time` prepended, which the job must drop.
 .qt.qpipe.job.crypto_trades_decoder.batch_on:{[tp;parts;offs;payloads]
     n:count offs;
-    ([] time:.qt.qpipe.job.crypto_trades_decoder.t0+1000000000*til n;
+    ([] time:.qt.qpipe.job.crypto_trades_decoder.t0+(1000000000*til n);
         topic:n#tp; partition:parts; offset:offs; msg_key:n#enlist "";
-        broker_time:(.qt.qpipe.job.crypto_trades_decoder.t0+1000000000*til n)-0D00:00:00.002;
+        broker_time:(.qt.qpipe.job.crypto_trades_decoder.t0+(1000000000*til n))-0D00:00:00.002;
         payload:payloads)}
 
 .qt.qpipe.job.crypto_trades_decoder.push_on:{[tp;parts;offs]

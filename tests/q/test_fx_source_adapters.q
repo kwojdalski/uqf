@@ -229,14 +229,14 @@
 
 .qt.qpipe.transform.fx_source_adapters.eq_book_a:{[]
     one:{[b]
-        tm:.qt.qpipe.transform.fx_source_adapters.t+`long$1e9*b 0;
+        tm:.qt.qpipe.transform.fx_source_adapters.t+(`long$1e9*b 0);
         raze (.qt.qpipe.transform.fx_source_adapters.lvl[tm;.qt.qpipe.transform.fx_source_adapters.eurusd;b 1;`FULL_AMOUNT;`SP;`bid;0;(b 2;1e6)];.qt.qpipe.transform.fx_source_adapters.lvl[tm;.qt.qpipe.transform.fx_source_adapters.eurusd;b 1;`FULL_AMOUNT;`SP;`ask;0;(b 3;1e6)];
               .qt.qpipe.transform.fx_source_adapters.lvl[tm;.qt.qpipe.transform.fx_source_adapters.eurusd;b 1;`PARTIAL;`SP;`bid;0;(b[2]-0.01;9e6)];.qt.qpipe.transform.fx_source_adapters.lvl[tm;.qt.qpipe.transform.fx_source_adapters.eurusd;b 1;`FULL_AMOUNT;`1M;`ask;0;(b[3]-0.01;9e6)])};
     (raze one each .qt.qpipe.transform.fx_source_adapters.eq_books[]),.qt.qpipe.transform.fx_source_adapters.lvl[.qt.qpipe.transform.fx_source_adapters.t;`AAPL;`LPA;`FULL_AMOUNT;`SP;`bid;0;(190f;1f)]}
 
 .qt.qpipe.transform.fx_source_adapters.eq_quote_b:{[]
     b:.qt.qpipe.transform.fx_source_adapters.eq_books[];
-    ([] time:.qt.qpipe.transform.fx_source_adapters.t+`long$1e9*b[;0]; sym:(count b)#`EURUSD; bid:b[;2]; ask:b[;3]; bsize:(count b)#1000000; asize:(count b)#1000000; src:b[;1])}
+    ([] time:.qt.qpipe.transform.fx_source_adapters.t+(`long$1e9*b[;0]); sym:(count b)#`EURUSD; bid:b[;2]; ask:b[;3]; bsize:(count b)#1000000; asize:(count b)#1000000; src:b[;1])}
 
 .qt.qpipe.transform.fx_source_adapters.norm_a:{[] .qt.qpipe.transform.fx_source_adapters.ensure_normalizers[]; (.qetl.job.stream.normalizer.normalize[`fxa_exec;`deal_tape;.qt.qpipe.transform.fx_source_adapters.eq_exec_a[]];.qetl.job.stream.normalizer.normalize[`fxa_md;`book_levels;.qt.qpipe.transform.fx_source_adapters.eq_book_a[]])}
 .qt.qpipe.transform.fx_source_adapters.norm_b:{[] .qt.qpipe.transform.fx_source_adapters.ensure_normalizers[]; (.qetl.job.stream.normalizer.normalize[`fxa_exec;`trades;.qt.qpipe.transform.fx_source_adapters.eq_exec_b[]];.qetl.job.stream.normalizer.normalize[`fxa_md;`quote;.qt.qpipe.transform.fx_source_adapters.eq_quote_b[]])}

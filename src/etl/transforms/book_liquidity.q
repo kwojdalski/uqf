@@ -302,8 +302,8 @@
             ([] req_size:1e6 4e6));
         ([] source_time:2#2026.10.09D10:00:00; sym:2#`EURUSD; source:2#`LP_A;
             settlement:2#`spot; category:2#`standard; req_size:1e6 4e6;
-            bid_price:(1.1000;(1.1000+2*1.0999)%3); bid_qty:1e6 3e6; bid_full:10b;
-            ask_price:(1.1001;(1.1001+2*1.1002)%3); ask_qty:1e6 3e6; ask_full:10b)))];
+            bid_price:(1.1000;(1.1000+(2*1.0999))%3); bid_qty:1e6 3e6; bid_full:10b;
+            ask_price:(1.1001;(1.1001+(2*1.1002))%3); ask_qty:1e6 3e6; ask_full:10b)))];
 
 .qetl.transform.define[`book_liquidity_minute;`inputs`output`fn`examples!(
     enlist[`snapshots]!enlist .qpipe.transform.book_liquidity.windowed_shape;

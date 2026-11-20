@@ -20,11 +20,11 @@
 
 .qt.qf.px.forwards.test_fwd_simple_no_differential_is_spot:{[t]
     rs:0.01 0.03 0.07;
-    .qt.support.assertApprox[.qf.px.fwd_simple[1.10;rs;rs;1];1.10+0*rs;1e-9;"rd=rf -> forward=spot (simple)"]};
+    .qt.support.assertApprox[.qf.px.fwd_simple[1.10;rs;rs;1];1.10+(0*rs);1e-9;"rd=rf -> forward=spot (simple)"]};
 
 .qt.qf.px.forwards.test_fwd_cont_no_differential_is_spot:{[t]
     rs:0.01 0.03 0.07;
-    .qt.support.assertApprox[.qf.px.fwd_cont[1.10;rs;rs;1];1.10+0*rs;1e-9;"rd=rf -> forward=spot (continuous)"]};
+    .qt.support.assertApprox[.qf.px.fwd_cont[1.10;rs;rs;1];1.10+(0*rs);1e-9;"rd=rf -> forward=spot (continuous)"]};
 
 .qt.qf.px.forwards.test_fwd_simple_known_example:{[t] .qt.support.assertApprox[.qf.px.fwd_simple[1.10;0.05;0.02;1];1.132353;1e-5;"EURUSD-style CIRP example, 1y"]};
 .qt.qf.px.forwards.test_fwd_cont_known_example:{[t] .qt.support.assertApprox[.qf.px.fwd_cont[1.10;0.05;0.02;1];1.10*exp 0.03;1e-9;"continuous CIRP matches exp((rd-rf)*t) directly"]};
@@ -470,7 +470,7 @@
     / 500000 fits entirely inside level 0 on both sides (1000000 available
     / each), so the AUDUSD mid at this size is just the level-0 mid: (bid
     / 0.6550 + ask 0.6551)/2.
-    audusd_mid:0.5*.6550+.6551;
+    audusd_mid:0.5*(.6550+.6551);
     .qt.support.assertApprox[first r`mid;1%audusd_mid;1e-6;"USDAUD, not directly quoted, is priced as the inverse of AUDUSD"]};
 
 .qt.qf.px.forwards.test_cross_book_at_rejects_unreachable_pair:{[t]
@@ -515,8 +515,8 @@
     mk_book:{[spot]
         levels:til 5;
         `bid_prices`bid_sizes`ask_prices`ask_sizes!(
-            spot-0.0001*levels;1000000*1+levels;
-            (spot+0.0001)+0.0001*levels;1000000*1+levels)};
+            spot-(0.0001*levels);1000000*(1+levels);
+            (spot+0.0001)+(0.0001*levels);1000000*(1+levels))};
     t0:2026.01.01D00:00:00.000000000;
     audusd_q:([] time:enlist t0;sym:enlist `AUDUSD),'(enlist mk_book 0.6550);
     eurusd_q:([] time:enlist t0;sym:enlist `EURUSD),'(enlist mk_book 1.0850);
@@ -557,8 +557,8 @@
     mk_book:{[spot]
         levels:til 5;
         `bid_prices`bid_sizes`ask_prices`ask_sizes!(
-            spot-0.0001*levels;1000000*1+levels;
-            (spot+0.0001)+0.0001*levels;1000000*1+levels)};
+            spot-(0.0001*levels);1000000*(1+levels);
+            (spot+0.0001)+(0.0001*levels);1000000*(1+levels))};
     t0:2026.01.01D00:00:00.000000000;
     t1:t0+0D00:00:01;
     audusd_q:([] time:(t0;t1);sym:`AUDUSD`AUDUSD),'(mk_book each 0.6550 0.6560);
@@ -615,7 +615,7 @@
     total_from_decomp:sum decomp`contribution_pips;
     mid_t0:.qf.mkt.cross_ref_price_at[quotes;`AUDPLN;t0;1];
     mid_t1:.qf.mkt.cross_ref_price_at[quotes;`AUDPLN;t1;1];
-    actual_total:10000*mid_t1-mid_t0;
+    actual_total:10000*(mid_t1-mid_t0);
     .qt.support.assertApprox[total_from_decomp;actual_total;1e-6;"per-leg contributions sum exactly to the actual total price move"]};
 
 .qt.qf.px.forwards.test_cross_markout_decomp_flat_leg_contributes_zero:{[t]
@@ -942,7 +942,7 @@
     q:([] sym:enlist `EURUSD; spot:enlist 2f; fwd_points:enlist 2000f);
     pf:`EURUSD`USDEUR!10000 10000f;
     r:.qf.px.convert_quotes[q;(enlist `EURUSD)!enlist `USDEUR;pf];
-    .qt.support.assertApprox[first r`fwd_points;10000*(1%2.2)-1%2;1e-9;"target_pf*(1/F - 1/S), not -2000"]};
+    .qt.support.assertApprox[first r`fwd_points;10000*((1%2.2)-(1%2));1e-9;"target_pf*(1/F - 1/S), not -2000"]};
 
 .qt.qf.px.forwards.test_convert_quotes_same_pair_passes_unchanged:{[t]
     q:([] sym:enlist `EURUSD; bid:enlist 1.1; ask:enlist 1.2);

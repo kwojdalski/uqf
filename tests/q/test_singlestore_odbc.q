@@ -106,7 +106,7 @@
     / sharing a timestamp, and the ones either side of each bound.
     / start_ts/end_ts, not from/to: both are qSQL keywords, which q reserves
     start_ts:2026.09.11D09:00:00.000000500; end_ts:2026.09.11D09:00:00.000002500;
-    rows:2026.09.11D09:00:00+`timespan$1000*0 0 1 2 2 3;
+    rows:2026.09.11D09:00:00+(`timespan$1000*0 0 1 2 2 3);
     want:rows where (rows>=start_ts) & rows<end_ts;
     lo:.qt.qetl.io.odbc.as_read[.qetl.io.odbc.literal start_ts];
     hi:.qt.qetl.io.odbc.as_read[.qetl.io.odbc.literal end_ts];

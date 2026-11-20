@@ -35,7 +35,7 @@
     / the identity that makes it money: pips times pip value is the quote-currency amount of the move
     move:0.0005;
     pips:.qpipe.transform.fx_domain.pips[1;10000;move];
-    .qunit.assertTrue[1e-6>abs (pips*first .qpipe.transform.fx_domain.pip_value[enlist `EURUSD;enlist 1e6])-1e6*move;"pips x pip value = size x price move"]};
+    .qunit.assertTrue[1e-6>abs (pips*first .qpipe.transform.fx_domain.pip_value[enlist `EURUSD;enlist 1e6])-(1e6*move);"pips x pip value = size x price move"]};
 
 .qt.qpipe.transform.fx_domain.test_attribution_decomposes_the_markout_with_a_residual:{[tc]
     / one sell, two legs: mids 4.0 -> 5.0 -> 5.5, a fill at 3.99, pip factor 10000

@@ -42,7 +42,7 @@
     	 r:{{ abs ((1664525*x)+1013904223) mod 4294967296}\[y-1;x]};
     	 prds (100+((r[seed;n]) mod 11)-5)%100};
     	 c:{x mod `long$00:20:00.0t}x;   st:x-c;   cn:`long$c%1000;
-    	 ([] time:.z.d+st+1000*til cn; gold:walk[y;cn])  }[.z.t;seed]
+    	 ([] time:.z.d+st+(1000*til cn); gold:walk[y;cn])  }[.z.t;seed]
     };
 
 / @eg .man.getOHLC[`MSFT]
@@ -50,9 +50,9 @@
     seed:prd `int$string symbol;
     {  r:{{ abs ((1664525*x)+1013904223) mod 4294967296}\[y-1;x]};
 	walk:{ [r;seed;n] prds (100+((r[seed;n]) mod 11)-5)%100}[r;;];
-	c:{x mod `long$00:05:00.0t}x;   st:x-c;   cn:100+`long$c%1000;
-	t:([] time:`second$.z.d+st+1000*til cn; open:walk[y+4;cn]; close:walk[y+3;cn]);
-	-100 sublist update low:?[open > close;close;open]-(r[11;cn] mod 11)*0.02,high:?[open < close;close;open]+(r[44;cn] mod 11)*0.02,volume:(r[44;cn] mod 110) from t}[.z.t;seed]
+	c:{x mod `long$00:05:00.0t}x;   st:x-c;   cn:100+(`long$c%1000);
+	t:([] time:`second$.z.d+st+(1000*til cn); open:walk[y+4;cn]; close:walk[y+3;cn]);
+	-100 sublist update low:?[open > close;close;open]-((r[11;cn] mod 11)*0.02),high:?[open < close;close;open]+((r[44;cn] mod 11)*0.02),volume:(r[44;cn] mod 110) from t}[.z.t;seed]
     };
 
 / @eg .man.getSymbols[]

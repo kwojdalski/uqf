@@ -78,7 +78,7 @@
 
 .qt.qetl.mapped.test_asof_is_an_aj_against_the_tables_own_columns:{[t]
     tob:.qetl.mapped.arrange select sym, source, source_time, bid, ask, clock from .qt.qetl.mapped.market[600;5];
-    p:([] sym:6#`EURUSD`GBPUSD; source:6#`a`b; source_time:2026.09.16D00:00:00+0D06*til 6);
+    p:([] sym:6#`EURUSD`GBPUSD; source:6#`a`b; source_time:2026.09.16D00:00:00+(0D06*til 6));
     got:.qetl.mapped.asof[tob;p];
     ref:aj[`sym`source`source_time;p;select sym, source, source_time, quoted:source_time, bid, ask, clock from tob];
     .qunit.assertEquals[got;ref;"the probe's instant is kept; the matched book's own time comes back as quoted"];
@@ -133,7 +133,7 @@
 
 .qt.qetl.mapped.test_depth_is_read_through_the_row_number_and_only_for_the_matched_rows:{[t]
     / market_data with ladders, the flat top being their first level, as a real partition has them
-    flat:update bid:1+0.001*i, ask:2+0.001*i from .qt.qetl.mapped.market[200;8];
+    flat:update bid:1+(0.001*i), ask:2+(0.001*i) from .qt.qetl.mapped.market[200;8];
     md:.qt.support.stand_in_market_data update bid_prices:{x,x-0.001 0.002}each bid, ask_prices:{x,x+0.001 0.002}each ask from flat;
     p:([] sym:`EURUSD`GBPUSD; time:2026.09.16D12:00:00 2026.09.17D12:00:00);
     r:.qt.qetl.mapped.with_market[md;{[p]

@@ -84,7 +84,7 @@
 / --- a table with no declared key (#2065) --------------------------------
 
 / Five ticks of a table no producer declares a key for, as the plant holds it.
-.qt.qetl.compare.ticks:{[] ([] time:.qt.qetl.compare.from+0D01*1+til 5; sym:`a`b`c`d`e; px:1 2 3 4 5f)}
+.qt.qetl.compare.ticks:{[] ([] time:.qt.qetl.compare.from+(0D01*(1+til 5)); sym:`a`b`c`d`e; px:1 2 3 4 5f)}
 
 .qt.qetl.compare.nokey:{[cmp;t1;t2;given]
     a:.qt.qetl.compare.target[enlist[`nokey]!enlist t1;.qt.qetl.compare.whole];

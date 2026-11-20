@@ -51,7 +51,7 @@
 / @param ws the window's start
 / @return timestamps
 / @eg count .qpipe.job.hdb_order_quality_backfill.grid[2026.10.09D10:00:00]  ->  720
-.qpipe.job.hdb_order_quality_backfill.grid:{[ws] ws+.qpipe.job.hdb_order_quality_backfill.period*til `long$.qpipe.job.hdb_order_quality_backfill.width%.qpipe.job.hdb_order_quality_backfill.period}
+.qpipe.job.hdb_order_quality_backfill.grid:{[ws] ws+(.qpipe.job.hdb_order_quality_backfill.period*til `long$.qpipe.job.hdb_order_quality_backfill.width%.qpipe.job.hdb_order_quality_backfill.period)}
 
 / How long a window is: one aligned hour. The period is the live job's.
 .qpipe.job.hdb_order_quality_backfill.width:0D01
@@ -120,7 +120,7 @@
 / @return the expected series of the example
 .qpipe.job.hdb_order_quality_backfill.expected_rows:{[]
     ws:2026.10.09D10:00:00;
-    raze .qpipe.job.hdb_order_quality_backfill.example_at[ws;] each ws+0D00:00:05*til 720}
+    raze .qpipe.job.hdb_order_quality_backfill.example_at[ws;] each ws+(0D00:00:05*til 720)}
 
 \d .
 

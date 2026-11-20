@@ -29,10 +29,10 @@
 .qpipe.source.remote_trades.generate:{[seed;range_from;range_to]
     / In nanoseconds: PeachQ refuses a timespan `div` a timespan.
     n:0|("j"$range_to-range_from) div "j"$.qpipe.source.remote_trades.step;
-    slot:range_from+.qpipe.source.remote_trades.step*til n;
+    slot:range_from+(.qpipe.source.remote_trades.step*til n);
     k:count .qpipe.source.remote_trades.syms;
     t:([] time:raze k#'slot; sym:(n*k)#.qpipe.source.remote_trades.syms; side:(n*k)#`buy`sell;
-        qty:(n*k)#1e6; px:(n*k)#.qpipe.source.remote_trades.base*1+1e-6*seed mod 100);
+        qty:(n*k)#1e6; px:(n*k)#.qpipe.source.remote_trades.base*(1+(1e-6*seed mod 100)));
     `time`sym xasc t}
 
 .qpipe.source.remote_trades.query:{[seed;range_from;range_to] .qpipe.source.remote_trades.generate[seed;range_from;range_to]}

@@ -4,7 +4,7 @@
 / The rule under test: rows are paired by business key and compared by value and
 / multiplicity, and equal counts never pass on their own.
 
-.qt.qetl.verify.compare.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.verify.compare.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 .qt.qetl.verify.compare.rogue:`vcmp_rogue
 

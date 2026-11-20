@@ -80,7 +80,7 @@ check["a second process acquires a released lock";any out2 like\: "ACQUIRED*"];
 
 / --- resumption across a restart ----------------------------------------
 
-d:{[n] 2026.09.10D00:00:00.000000000+n*1D};
+d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)};
 spec:`source_version`range_from`range_to!(`v1;d 1;d 4);
 rworker:`restartproc;
 .qetl.job.bounded.state.clear_checkpoint rworker;

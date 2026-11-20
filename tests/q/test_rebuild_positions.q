@@ -20,7 +20,7 @@
     system"mkdir -p build/test-status";
     }
 
-.qt.qpipe.job.rebuild_positions.d:{[n] 2026.09.11D00:00:00.000000000+n*1D}
+.qt.qpipe.job.rebuild_positions.d:{[n] 2026.09.11D00:00:00.000000000+(n*1D)}
 
 / test_react.q resets .qetl.reaction between its tests, which takes this
 / production reaction with it; reloading the file re-registers it (register

@@ -10,7 +10,7 @@
 // tests/lib/qunit.q and tests/lib/support.q before this file.
 
 
-.qt.qetl.job.bounded.stop.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.job.bounded.stop.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 .qt.qetl.job.bounded.stop.spec:`source_version`range_from`range_to!(`v1;.qt.qetl.job.bounded.stop.d[1];.qt.qetl.job.bounded.stop.d[4])
 

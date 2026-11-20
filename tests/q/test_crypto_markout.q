@@ -226,9 +226,9 @@
     t0:.qt.qpipe.job.crypto_markout.t;
     btc:.qt.qpipe.job.crypto_markout.btc;
     bk:{[st;src;mid;lag] update time:st+lag from .qt.qpipe.job.crypto_markout.bk[st;`$"BTC-USDT";src;mid-1;mid+1;`venue]};
-    books:raze {[bk;st] bk[st;`a;62000f;0D00:00:00.1],bk[st;`b;62100f;0D00:00:06]}[bk] each t0+0D00:00:01*til 31;
+    books:raze {[bk;st] bk[st;`a;62000f;0D00:00:00.1],bk[st;`b;62100f;0D00:00:06]}[bk] each t0+(0D00:00:01*til 31);
     fill:.qt.qpipe.job.crypto_markout.ex[t0+0D00:00:05;t0+0D00:00:05.2;`a;btc;1;62000f;`f1;`venue];
-    n:count books; ticks:t0+0D00:00:00.1*til 600; m:count ticks;
+    n:count books; ticks:t0+(0D00:00:00.1*til 600); m:count ticks;
     / every message in receipt order, a tick after the messages of its instant
     evs:`at`k xasc ([] at:books[`time],fill[`time],ticks; k:((1+n)#0),m#1;
         tb:(n#`market_data),(enlist `executions),m#`tick; i:(til n),0,m#0N);
@@ -244,7 +244,7 @@
 
 / Books for a pair on a venue, one a second from 10:00:00 for n seconds, a spread of ask less bid around the mid.
 .qt.qpipe.job.crypto_markout.grid:{[sym;src;mid;bidoff;askoff;n]
-    ([] source_time:2026.09.17D10:00:00+1000000000*til n; sym:n#sym; source:n#src;
+    ([] source_time:2026.09.17D10:00:00+(1000000000*til n); sym:n#sym; source:n#src;
         bid:`float$mid+bidoff; ask:`float$mid+askoff; clock:n#`venue)}
 
 / Three venues quoting two pairs: a and b live throughout, with tops that differ so the best bid and the
@@ -252,8 +252,8 @@
 / then goes silent, the trap a naive "latest across venues" falls into. 45 books a venue and pair.
 .qt.qpipe.job.crypto_markout.market:{[]
     i:til 45;
-    btc_walk:(11*i mod 7)-25*i mod 4;
-    eth_walk:(3*i mod 5)-4*i mod 3;
+    btc_walk:(11*i mod 7)-(25*i mod 4);
+    eth_walk:(3*i mod 5)-(4*i mod 3);
     pair:{[g;sym;mid;i]
         a:g[sym;`a;mid;neg 4+i mod 2;4+i mod 3;45];
         b:g[sym;`b;mid;-3+i mod 3;5-i mod 2;45];
@@ -265,8 +265,8 @@
 / 10:00:40 whose 10s horizon lies past the last book (10:00:44) by more than max_age.
 .qt.qpipe.job.crypto_markout.fills:{[]
     k:til 11;
-    ([] source_time:2026.09.17D10:00:00+?[k<10;3000000000+2700000000*k;40000000000]; venue:(`a`b) (k mod 2); sym:(`$"BTC-USDT";`$"ETH-USDT") (k mod 2);
-        side:1 -1 1 1 -1 -1 1 -1 1 1 1; size:0.1+0.05*k; price:?[0=k mod 2;62000f+3*k;3000f+2*k];
+    ([] source_time:2026.09.17D10:00:00+?[k<10;3000000000+(2700000000*k);40000000000]; venue:(`a`b) (k mod 2); sym:(`$"BTC-USDT";`$"ETH-USDT") (k mod 2);
+        side:1 -1 1 1 -1 -1 1 -1 1 1 1; size:0.1+(0.05*k); price:?[0=k mod 2;62000f+(3*k);3000f+(2*k)];
         fee:(count k)#0f; fee_ccy:(count k)#`USDT; fill_id:`$"f",/:string k; clock:(count k)#`venue)}
 
 / The retired job's figure: its transform restated from the same library calls - the venues' tops of book,

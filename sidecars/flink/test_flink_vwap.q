@@ -26,8 +26,8 @@
     n:count syms;
     ([] time:n#.qt.qpipe.job.flink_vwap.t0;
         sym:syms;
-        window_end:.qt.qpipe.job.flink_vwap.t0+0D00:00:05*ks;
-        vwap:1.1+0.001*til n;
+        window_end:.qt.qpipe.job.flink_vwap.t0+(0D00:00:05*ks);
+        vwap:1.1+(0.001*til n);
         volume:n#1000000f;
         n:n#10j)}
 
@@ -45,7 +45,7 @@
     .qt.qpipe.job.flink_vwap.drive_ready[];
     .qt.qpipe.job.flink_vwap.push[`EURUSD`EURUSD;1 2];
     .qt.qpipe.job.flink_vwap.push[`EURUSD`EURUSD`EURUSD;1 2 3];
-    .qunit.assertEquals[exec window_end from .qt.qpipe.job.flink_vwap.all_rows[];.qt.qpipe.job.flink_vwap.t0+0D00:00:05*1 2 3;"windows 1 and 2 once each, then 3"]}
+    .qunit.assertEquals[exec window_end from .qt.qpipe.job.flink_vwap.all_rows[];.qt.qpipe.job.flink_vwap.t0+(0D00:00:05*1 2 3);"windows 1 and 2 once each, then 3"]}
 
 .qt.qpipe.job.flink_vwap.test_marks_are_per_sym:{[t]
     .qt.qpipe.job.flink_vwap.drive_ready[];

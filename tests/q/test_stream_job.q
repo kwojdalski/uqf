@@ -42,7 +42,7 @@
 / looks like a one-row table and quietly answers every count with 1.
 .qt.qetl.job.stream.last_rows:{[] first last exec rows from .qt.qetl.job.stream.published}
 
-.qt.qetl.job.stream.d:{[n] 2026.09.17D10:00:00.000000000+n*0D00:00:01}
+.qt.qetl.job.stream.d:{[n] 2026.09.17D10:00:00.000000000+(n*0D00:00:01)}
 
 / --- the contract ---------------------------------------------------------
 
@@ -232,7 +232,7 @@
     / bit-identical to 2*pip for any of these levels, so an exact match here
     / fails on arithmetic rather than on the spread being wrong.
     rows:.qpipe.job.fx_feed.tick_rows .qf.demo.spot;
-    .qunit.assertEquals[all 1e-12>abs (rows[2]-rows[1])-2*.qf.demo.pip;1b;
+    .qunit.assertEquals[all 1e-12>abs (rows[2]-rows[1])-(2*.qf.demo.pip);1b;
         "ask minus bid is two pips, pair by pair"]};
 
 .qt.qetl.job.stream.test_the_fx_feed_moves_its_level:{[t]
@@ -285,7 +285,7 @@
     / 1 sym + 11 bids + 11 asks. The vectorize job derives its groups from
     / its own schema, so a mismatch here is a column-count error on insert.
     rows:.qpipe.job.wide_orderbook_feed.tick_rows .qf.demo.spot;
-    .qunit.assertEquals[count rows;1+2*.qpipe.job.wide_orderbook_feed.n_levels;
+    .qunit.assertEquals[count rows;1+(2*.qpipe.job.wide_orderbook_feed.n_levels);
         "the wide book is published as one column per level per side"]};
 
 .qt.qetl.job.stream.test_the_wide_feed_column_is_as_long_as_the_pair_list:{[t]
@@ -304,7 +304,7 @@
     rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;3;`fx1];
     `.qpipe.job.fx_trades_feed.spot set keep;
     .qunit.assertEquals[first rows 2;
-        (first .qf.demo.spot)+3%first .qpipe.job.fx_trades_feed.pip_factor;
+        (first .qf.demo.spot)+(3%first .qpipe.job.fx_trades_feed.pip_factor);
         "the fill prints its slippage in pips from the pair's own level"]};
 
 / #2561: fills and orders priced off the fixed starting spot while the
@@ -711,7 +711,7 @@
 .qt.qetl.job.stream.wide_row:{[]
     flip (`time`sym,.qpipe.job.vectorize.wide_level_names)!
         (enlist .qt.qetl.job.stream.d 0;enlist `EURUSD),
-        enlist each (1.1-0.0001*til 11),(1.1002+0.0001*til 11)}
+        enlist each (1.1-(0.0001*til 11)),(1.1002+(0.0001*til 11))}
 
 .qt.qetl.job.stream.test_vectorize_folds_and_republishes_each_batch:{[t]
     .qt.qetl.job.stream.reset[];

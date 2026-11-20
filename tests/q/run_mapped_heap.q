@@ -153,7 +153,7 @@ if[mode=`measure_variants;
     probes:([] sym:execs?pairs; time:(`timestamp$day)+43200000000000+execs?3600000000000);
     reg:{[i;ns]
         n:`$"v",string i;
-        qty:1e4*1+i div 3;
+        qty:1e4*(1+i div 3);
         off:`timespan$1000000000*i mod ns;
         .qetl.reference.register[n;`venues`stale`offset`transform`combine`params!(`all;`spec;off;`vwap;`best`median`wmean i mod 3;enlist[`qty]!enlist qty)];
         n};

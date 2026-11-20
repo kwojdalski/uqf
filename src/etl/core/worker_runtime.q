@@ -123,7 +123,7 @@
 / Exponential backoff for attempt n (1-based), capped.
 / @eg .qetl.job.bounded.runtime.backoff_ms[.qetl.job.bounded.runtime.default_policy;3]  ->  1000
 .qetl.job.bounded.runtime.backoff_ms:{[pol;attempt]
-    raw:"j"$(pol`base_delay_ms)*2 xexp attempt-1;
+    raw:"j"$(pol`base_delay_ms)*(2 xexp attempt-1);
     (pol`max_delay_ms) & raw}
 
 / Private: wait, in milliseconds. Zero and negative waits do nothing, which
@@ -429,7 +429,7 @@
     span:"j"$to_ts-from_ts;
     w:"j"$width;
     n:(span div w)+0<span mod w;
-    starts:from_ts+width*til n;
+    starts:from_ts+(width*til n);
     ([] range_from:starts; range_to:to_ts&starts+width)}
 
 / ----------------------------------------------------- COVERAGE SKIPPING

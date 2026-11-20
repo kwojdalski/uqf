@@ -4,7 +4,7 @@
 
 .qt.qetl.uptime.dir:"build/test-uptime"
 .qt.qetl.uptime.t0:2026.09.13D00:00:00.000000000
-.qt.qetl.uptime.h:{[n] .qt.qetl.uptime.t0+n*0D01:00}
+.qt.qetl.uptime.h:{[n] .qt.qetl.uptime.t0+(n*0D01:00)}
 
 / A clean table and directory per test, and THIS process's sessions
 / forgotten, so no test beats another's rows.

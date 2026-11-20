@@ -220,7 +220,7 @@
     / one event a second for two hours, a tick every ten seconds, which
     / publishes the ten 1s grid points since the last (#2457)
     sizes:{[nm;s]
-        .qt.qetl.job.stream.rolling.feed[nm;.qt.qetl.job.stream.rolling.t0+0D00:00:01*s;`a;1f];
+        .qt.qetl.job.stream.rolling.feed[nm;.qt.qetl.job.stream.rolling.t0+(0D00:00:01*s);`a;1f];
         n:0N;
         if[0=s mod 10; .qt.qetl.job.stream.rolling.ns[nm;`evaluate] .qt.qetl.job.stream.rolling.clock; n:count .qt.qetl.job.stream.rolling.ns[nm;`pending]];
         n}[nm] each 1+til 7200;
@@ -233,7 +233,7 @@
 .qt.qetl.job.stream.rolling.test_a_replay_is_bounded_too:{[t]
     nm:.qt.qetl.job.stream.rolling.job`rt_j;
     `.qetl.job.stream.replaying set 1b;
-    r:@[{[nm] {[nm;s] (.qt.qetl.job.stream.rolling.ns[nm;`on_batch])[`rt_events;.qt.qetl.job.stream.rolling.row[.qt.qetl.job.stream.rolling.t0+0D00:00:01*s;.qt.qetl.job.stream.rolling.t0+0D00:00:01*s;`a;1f]]}[nm] each 1+til 7200; 1b};nm;{x}];
+    r:@[{[nm] {[nm;s] (.qt.qetl.job.stream.rolling.ns[nm;`on_batch])[`rt_events;.qt.qetl.job.stream.rolling.row[.qt.qetl.job.stream.rolling.t0+(0D00:00:01*s);.qt.qetl.job.stream.rolling.t0+(0D00:00:01*s);`a;1f]]}[nm] each 1+til 7200; 1b};nm;{x}];
     `.qetl.job.stream.replaying set 0b;
     .qunit.assertEquals[r;1b;"the replay ran"];
     .qunit.assertTrue[310>=count .qt.qetl.job.stream.rolling.ns[nm;`pending];"the log's own clock evicts: a day's log is not a day's buffer"]};
@@ -488,7 +488,7 @@
     / every 1s grid point since the one before (#2457).
     accepted:rows where (rows[`time]-rows`t)<=0D00:00:10;
     ticks:.qt.qetl.job.stream.rolling.t0+0D00:00:30 0D00:01:30 0D00:05:00 0D00:05:30 0D00:07:00;
-    owed:(enlist enlist first ticks),{[a;b] a+0D00:00:01*1+til "j"$(b-a) div 0D00:00:01}'[-1_ticks;1_ticks];
+    owed:(enlist enlist first ticks),{[a;b] a+(0D00:00:01*(1+til "j"$(b-a) div 0D00:00:01))}'[-1_ticks;1_ticks];
     twin:raze {[nm;accepted;tk;pts] .qetl.job.stream.rolling.series[nm;select from accepted where time<=tk;pts]}[nm;accepted]'[ticks;owed];
     .qunit.assertTrue[0<count twin;"the twin produces a series"];
     .qunit.assertEquals[twin;.qt.qetl.job.stream.rolling.published[];"the same input, one statistic, two lifecycles"];

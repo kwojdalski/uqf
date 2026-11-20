@@ -641,8 +641,8 @@
 
 .qt.qetl.job.stream.horizons.why:{[rows;now]
     d:.qt.qetl.job.stream.horizons.rd[];
-    h:([] sym:count[rows]#`a; source:rows[;0]; time:.qt.qetl.job.stream.horizons.t0+`timespan$1e9*rows[;1]);
-    first .qetl.job.stream.horizons.not_ready[d;.qetl.job.stream.horizons.reach[d;h];enlist .qt.qetl.job.stream.horizons.t0;enlist enlist `a;.qt.qetl.job.stream.horizons.t0+`timespan$1e9*now]}
+    h:([] sym:count[rows]#`a; source:rows[;0]; time:.qt.qetl.job.stream.horizons.t0+(`timespan$1e9*rows[;1]));
+    first .qetl.job.stream.horizons.not_ready[d;.qetl.job.stream.horizons.reach[d;h];enlist .qt.qetl.job.stream.horizons.t0;enlist enlist `a;.qt.qetl.job.stream.horizons.t0+(`timespan$1e9*now)]}
 
 .qt.qetl.job.stream.horizons.test_readiness_needs_every_source_to_reach_the_horizon:{[t]
     / a at T+11 has passed the horizon; b's last book, T+8, is inside max_age of it and has not
@@ -708,7 +708,7 @@
 .qt.qetl.job.stream.horizons.test_the_first_member_to_see_a_batch_appends_it_and_the_rest_add_nothing:{[t]
     a:.qt.qetl.job.stream.horizons.job[`hz_qa;enlist[`shared_reference]!enlist 1b];
     b:.qt.qetl.job.stream.horizons.job[`hz_qb;enlist[`shared_reference]!enlist 1b];
-    batch:.qt.qetl.job.stream.horizons.rf[`a;.qt.qetl.job.stream.horizons.t0+0D00:00:01*til 3;1 2 3f];
+    batch:.qt.qetl.job.stream.horizons.rf[`a;.qt.qetl.job.stream.horizons.t0+(0D00:00:01*til 3);1 2 3f];
     (.qt.qetl.job.stream.horizons.ns[b;`on_batch])[`hz_refs;batch];
     (.qt.qetl.job.stream.horizons.ns[a;`on_batch])[`hz_refs;batch];
     (.qt.qetl.job.stream.horizons.ns[b;`on_batch])[`hz_refs;batch];

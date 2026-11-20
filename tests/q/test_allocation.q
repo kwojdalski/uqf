@@ -492,8 +492,8 @@
     .qunit.assertEmpty[one;"a universe of one sym still matches under an empty by"]};
 
 .qt.qf.exec.allocation.test_a_fractionally_closed_lot_leaves_no_residual:{[t]
-    tr:{([] time:2026.10.13D10:00:00.000000000+0D00:01*til count x; sym:(count x)#`BTCUSD;
-        side:y; size:x; trade_price:60000f+1000f*til count x)};
+    tr:{([] time:2026.10.13D10:00:00.000000000+(0D00:01*til count x); sym:(count x)#`BTCUSD;
+        side:y; size:x; trade_price:60000f+(1000f*til count x))};
     short_close:.qf.exec.residual[tr[0.3 0.1 0.2;1 -1 -1];`fifo];
     .qunit.assertEquals[count short_close; 0; "buy 0.3, sell 0.1 and 0.2 opens no 2.8e-17 short lot"];
     long_close:.qf.exec.residual[tr[0.1 0.2 0.3;1 1 -1];`fifo];

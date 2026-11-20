@@ -104,7 +104,7 @@
 / test_source_contract.q asserts exactly that.
 .qpipe.source.demo_deals.fixture:{[]
     ([] deal_id:1 2 3 4 5j;
-        deal_time:2026.09.11D09:00:00.000000000+1D*til 5;
+        deal_time:2026.09.11D09:00:00.000000000+(1D*til 5);
         sym:`EURUSD`GBPUSD`EURUSD`USDJPY`EURUSD;
         side:`buy`sell`buy`sell`buy;
         notional:1000000 2500000 750000 3000000 1250000f;

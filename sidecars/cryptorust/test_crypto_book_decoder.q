@@ -42,9 +42,9 @@
 
 .qt.qpipe.job.crypto_book_decoder.batch:{[parts;offs;payloads]
     n:count offs;
-    ([] time:.qt.qpipe.job.crypto_book_decoder.t0+1000000000*til n;
+    ([] time:.qt.qpipe.job.crypto_book_decoder.t0+(1000000000*til n);
         topic:n#.qt.qpipe.job.crypto_book_decoder.topic; partition:parts; offset:offs; msg_key:n#enlist "binance:BTC-USDT";
-        broker_time:(.qt.qpipe.job.crypto_book_decoder.t0+1000000000*til n)-0D00:00:00.002;
+        broker_time:(.qt.qpipe.job.crypto_book_decoder.t0+(1000000000*til n))-0D00:00:00.002;
         payload:payloads)}
 
 .qt.qpipe.job.crypto_book_decoder.push:{[parts;offs;payloads]

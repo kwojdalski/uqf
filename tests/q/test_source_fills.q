@@ -33,7 +33,7 @@
     ![`.qetl.source.fills.registry;enlist (in;`name;enlist name);0b;`symbol$()];
     r}
 
-.qt.qetl.source.fills.day:{[n] 2026.02.25D00:00:00.000000000+n*1D}
+.qt.qetl.source.fills.day:{[n] 2026.02.25D00:00:00.000000000+(n*1D)}
 
 .qt.qetl.source.fills.good_row:"2026-02-25T14:30:00.020000Z,XNAS,a1,aapl,B,100,271.60,0.35,USD"
 

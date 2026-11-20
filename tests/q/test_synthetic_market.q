@@ -77,14 +77,14 @@
 / #2562: the feeds share no memory, so the level they agree on is a function
 / of the clock - the same at the same instant in every process.
 .qt.qf.demo.synthetic_market.test_the_shared_level_is_a_function_of_the_clock:{[t]
-    ts:2026.11.09D10:00:00+0D00:00:01*til 3600;
+    ts:2026.11.09D10:00:00+(0D00:00:01*til 3600);
     a:.qf.demo.level each ts;
     .qunit.assertEquals[a;.qf.demo.level each ts;"the same instant gives the same level, in any process"];
     .qunit.assertTrue[1<count distinct a;"and the level moves with the clock"]};
 
 .qt.qf.demo.synthetic_market.test_the_shared_level_stays_within_its_swing:{[t]
     / A day at one-minute steps: bounded by construction, never drifting off.
-    a:.qf.demo.level each 2026.11.09D00:00:00+0D00:01*til 1440;
+    a:.qf.demo.level each 2026.11.09D00:00:00+(0D00:01*til 1440);
     .qunit.assertTrue[all {[s;l] all (abs l%s)<=exp .qf.demo.swing}[.qf.demo.spot] each a;
         "every pair stays within swing of its spot"]};
 

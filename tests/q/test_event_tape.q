@@ -6,7 +6,7 @@
 // before this file.
 
 
-.qt.qpipe.event_tape.d:{[n] 2026.09.11D09:00:00.000000000+n*1000000000}
+.qt.qpipe.event_tape.d:{[n] 2026.09.11D09:00:00.000000000+(n*1000000000)}
 
 / A minimal tape built inline, so a test's expected value can be read off
 / the input rather than derived from the fixture. Times ascending, per the
@@ -72,7 +72,7 @@
 / VPIN bucket (VPIN read 2), shifted large_trade_threshold a rank and
 / counted as an odd lot. A negative size breaks the bucket arithmetic too.
 .qt.qpipe.event_tape.test_require_tape_refuses_an_unsized_trade:{[t]
-    tp:([] time:2026.01.02D10:00:00+1000000000*til 3; sym:3#`EURUSD; action:3#`trade; side:1 1 -1; size:5e6 0n 2e6);
+    tp:([] time:2026.01.02D10:00:00+(1000000000*til 3); sym:3#`EURUSD; action:3#`trade; side:1 1 -1; size:5e6 0n 2e6);
     .qunit.assertThrows[.qf.mkt.require_tape;tp;"require_tape: 1 trade(s) with a null or negative size*";"a trade with no size is refused"];
     .qunit.assertThrows[.qf.mkt.vpin[;5e6;1];tp;"require_tape: 1 trade(s) with a null or negative size*";"so VPIN cannot read 2"];
     .qunit.assertThrows[.qf.mkt.require_tape;update size:5e6 -1e6 2e6 from tp;"require_tape: 1 trade(s) with a null or negative size*";"nor a signed size"]};
@@ -81,7 +81,7 @@
 / a sell (one made a bucket fully one-sided, VPIN 1); side 0 counted as
 / neither side and side 2 doubled the trade's signed flow.
 .qt.qpipe.event_tape.test_require_tape_refuses_a_side_other_than_one_or_minus_one:{[t]
-    tp:([] time:2026.01.02D10:00:00+1000000000*til 4; sym:4#`EURUSD; action:4#`trade; side:1 -1 0N 1; size:5 5 10 1f);
+    tp:([] time:2026.01.02D10:00:00+(1000000000*til 4); sym:4#`EURUSD; action:4#`trade; side:1 -1 0N 1; size:5 5 10 1f);
     msg:"require_tape: 1 trade(s) with a side other than 1 or -1*";
     .qunit.assertThrows[.qf.mkt.require_tape;tp;msg;"a trade with no side is refused"];
     .qunit.assertThrows[.qf.mkt.vpin[;10f;1];tp;msg;"so VPIN cannot book it as a sell"];

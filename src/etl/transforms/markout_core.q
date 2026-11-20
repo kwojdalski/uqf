@@ -426,7 +426,7 @@
 .qpipe.transform.markout_core.chain_mid:{[books]
     bids:{x`bid} each books;
     asks:{x`ask} each books;
-    0.5*(prd bids)+prd asks}
+    0.5*((prd bids)+prd asks)}
 
 / Private: every leg's oriented book at the given instants, under the spec's reference variant: `same`, from
 / books on each row's own clock, and `any`, from every book - how a mismatch is told from a gap.
@@ -474,7 +474,7 @@
     live:b`live;
     ob:?[inverted;1f%b`ask;b`bid];
     oa:?[inverted;1f%b`bid;b`ask];
-    mid:0.5*ob+oa;
+    mid:0.5*(ob+oa);
     (ix where live;mid where live;(sum live)#src;(sum live)#sy;(b`quoted) where live)}
 
 / Private: the conversion rate of each row at the given instants, with where it
@@ -579,8 +579,8 @@
     side:`float$fr`side;
     mv:{[cause;m] ?[cause=`ok; m; 0n]};
     n:count fr;
-    c:([] ri:til n; ord:n#0; kind:n#`total; step:n#0; move:mv[k1;side*ref1-fr`price]; cause:k1; dstatus:n#`ok),
-      ([] ri:til n; ord:n#1; kind:n#`execution; step:n#0; move:mv[k0;side*ref0-fr`price]; cause:k0; dstatus:n#`ok);
+    c:([] ri:til n; ord:n#0; kind:n#`total; step:n#0; move:mv[k1;side*(ref1-fr`price)]; cause:k1; dstatus:n#`ok),
+      ([] ri:til n; ord:n#1; kind:n#`execution; step:n#0; move:mv[k0;side*(ref0-fr`price)]; cause:k0; dstatus:n#`ok);
     if[`attribute in key domain;
         a:domain[`attribute][spec;fr;lg;`at0`at1!(bk0;bk1)];
         if[not (98h=type a) and all `ri`kind`step`move in cols a; '"markout_core: attribute must return a table ri, kind, step, move"];

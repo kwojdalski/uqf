@@ -163,7 +163,7 @@
     upper_weight:$[outside and policy=`flat; `float$value_date>last dates; raw_weight];
     lower_weight:1-upper_weight;
     lower_part:lower_weight*pts i;
-    upper_part:upper_weight*pts i+1;
+    upper_part:upper_weight*(pts i+1);
     points:lower_part+upper_part;
     / on a node exactly, report that node alone
     on_node:value_date in dates;

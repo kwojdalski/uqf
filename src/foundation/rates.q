@@ -40,7 +40,7 @@
 / @eg .qf.px.simple_to_cont[0.05;1]  -> 0.04879016
 / At t=0 the growth is 1 over a zero period; the t->0 limit is r itself, returned
 / rather than the null 0%0 (? not $: t may be a vector).
-.qf.px.simple_to_cont:{[r;t] ?[t=0;r+0f*t;log[.qf.px.growth_simple[r;t]]%t]};
+.qf.px.simple_to_cont:{[r;t] ?[t=0;r+(0f*t);log[.qf.px.growth_simple[r;t]]%t]};
 
 / Convert a continuously compounded rate to the equivalent simple rate
 / over the same period t.
@@ -49,6 +49,6 @@
 / @return the simple rate with the same growth over t
 / @eg .qf.px.cont_to_simple[0.04879016;1]  -> 0.05
 / At t=0 returns r, the t->0 limit, rather than the null 0%0.
-.qf.px.cont_to_simple:{[r;t] ?[t=0;r+0f*t;(.qf.px.growth_cont[r;t]-1)%t]};
+.qf.px.cont_to_simple:{[r;t] ?[t=0;r+(0f*t);(.qf.px.growth_cont[r;t]-1)%t]};
 
 \d .

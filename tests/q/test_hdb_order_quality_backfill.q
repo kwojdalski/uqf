@@ -24,7 +24,7 @@
 / delivered a second time.
 .qt.qpipe.job.hdb_order_quality_backfill.scenario:{[]
     n:420;
-    o:([] time:2026.10.09D09:00:00+0D00:00:17*til n; order_id:1+til n; book:n#`london`newyork`london;
+    o:([] time:2026.10.09D09:00:00+(0D00:00:17*til n); order_id:1+til n; book:n#`london`newyork`london;
         product:n#`spot`fwd;
         order_status:n#`filled`filled`cancelled`rejected`filled`rejected`pending`filled);
     o:select from o where not time within (2026.10.09D10:20:00;2026.10.09D10:40:00);
@@ -56,7 +56,7 @@
     `.qetl.job.stream.rolling.zone_offset set {[] 0D};
     `.qt.qpipe.job.hdb_order_quality_backfill.sent set ();
     .qetl.job.stream.wire[`order_quality;{[t;x] .qt.qpipe.job.hdb_order_quality_backfill.sent,:enlist x; count x}];
-    pts:from_ts+p*til `long$(to_ts-from_ts)%p;
+    pts:from_ts+(p*til `long$(to_ts-from_ts)%p);
     {[o;pts;i] .qt.qpipe.job.hdb_order_quality_backfill.tick_to[o;$[i=0;-0Wp;pts i-1];pts i]}[o;pts] each til count pts;
     out:raze .qt.qpipe.job.hdb_order_quality_backfill.sent;
     `.qpipe.job.order_quality.now set .qt.qpipe.job.hdb_order_quality_backfill.saved 0;

@@ -76,7 +76,7 @@
 / @param ms epoch milliseconds
 / @return the timestamp
 / @eg .qpipe.transform.kafka_crypto_book.ts 1760950800100j  ->  2025.10.20D09:00:00.100000000
-.qpipe.transform.kafka_crypto_book.ts:{[ms] 1970.01.01D00:00:00.000000000+1000000*ms}
+.qpipe.transform.kafka_crypto_book.ts:{[ms] 1970.01.01D00:00:00.000000000+(1000000*ms)}
 
 / One column of a side: field i (0 price, 1 size) of level n, null where the book has no level n.
 / @param side per row, the list of [price,size] pairs

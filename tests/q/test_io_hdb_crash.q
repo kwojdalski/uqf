@@ -12,7 +12,7 @@
 / Unsorted rows whose sym, k and px are functions of id.
 .qt.qetl.hdb_crash.rows:{[]
     id:(7*til .qt.qetl.hdb_crash.n) mod .qt.qetl.hdb_crash.n;
-    ([] time:2026.01.02D00:00:00.000000000+1000000*id; sym:`$"s",/:string id mod 5; id:id; k:id*3; px:id%7)}
+    ([] time:2026.01.02D00:00:00.000000000+(1000000*id); sym:`$"s",/:string id mod 5; id:id; k:id*3; px:id%7)}
 
 .qt.qetl.hdb_crash.root:{[] `$":",first system"mktemp -d"}
 
@@ -161,7 +161,7 @@
     base:.qetl.io.part_path[root;2026.01.02;`hcrash];
     system"mkdir -p ",base;
     (hsym `$base,"/.d") set `time`sym`id`k`px;
-    (hsym `$base,"/time") set 2026.01.02D00:00:00.000000000+1000000*til 20;
+    (hsym `$base,"/time") set 2026.01.02D00:00:00.000000000+(1000000*til 20);
     n:.qt.qetl.hdb_crash.window m;
     q:(.qetl.io.staging root),"/quarantine/2026.01.02/hcrash";
     .qunit.assertEquals[(n;()~key hsym `$base;not ()~key hsym `$q,"/time");(0;1b;1b);
@@ -172,7 +172,7 @@
 
 / --- #2496: a later write restores a dead writer's retired copy first -----------
 
-.qt.qetl.hdb_crash.keyed_rows:{[ids] ([] time:2026.01.02D10:00:00.000000000+60000000000*ids; sym:(count ids)#`EURUSD; id:ids; px:(count ids)#1.1)}
+.qt.qetl.hdb_crash.keyed_rows:{[ids] ([] time:2026.01.02D10:00:00.000000000+(60000000000*ids); sym:(count ids)#`EURUSD; id:ids; px:(count ids)#1.1)}
 
 / A writer killed between the two renames leaves the date with no table and every row in
 / staging/old. A sibling writer under the root lock, which runs no recover, must put it back

@@ -285,7 +285,7 @@
     unit:parts 1;
     unadjusted:$[explicit; tenor;
         unit="D"; spot_date+n;
-        unit="W"; spot_date+7*n;
+        unit="W"; spot_date+(7*n);
         unit="M"; .qf.px.add_months[spot_date;n];
         .qf.px.add_months[spot_date;12*n]];
     month_tenor:unit in "MY";

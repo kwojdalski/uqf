@@ -13,7 +13,7 @@
 
 / A table that compresses well: n rows of a day, sorted by sym then time as finish leaves them.
 .qt.qetl.compression.write.batch:{[n]
-    ([] time:2026.01.02D00:00:00.000000000+1000000000*til n; sym:n?`aa`bb`cc; px:n#1.5; flag:n#0b)}
+    ([] time:2026.01.02D00:00:00.000000000+(1000000000*til n); sym:n?`aa`bb`cc; px:n#1.5; flag:n#0b)}
 
 / Run f[] with the policy registries empty and a gzip block-17 level-6 stack default; put the
 / shipped policy back whatever happens.

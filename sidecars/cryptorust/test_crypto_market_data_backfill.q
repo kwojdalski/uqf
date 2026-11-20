@@ -15,7 +15,7 @@
 / Hour n of 2026.09.11, the fixture's date. Earlier than the 2026.09.25
 / capture it is drawn from, because .qetl.io.hdb refuses rows dated today or
 / later - see the source's fixture.
-.qt.qpipe.job.crypto_market_data_backfill.h:{[n] 2026.09.11D00:00:00.000000000+n*0D01}
+.qt.qpipe.job.crypto_market_data_backfill.h:{[n] 2026.09.11D00:00:00.000000000+(n*0D01)}
 
 .qt.qpipe.job.crypto_market_data_backfill.spec_for:{[version;from_n;to_n]
     `source_version`range_from`range_to!(version;.qt.qpipe.job.crypto_market_data_backfill.h[from_n];.qt.qpipe.job.crypto_market_data_backfill.h[to_n])}

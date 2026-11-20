@@ -33,14 +33,14 @@
 .qt.qpipe.job.example_quotes_decoder.t0:2026.10.20D09:00:00.000000000
 
 / One quote as a producer writes it; the bid varies with the offset so two rows are distinguishable.
-.qt.qpipe.job.example_quotes_decoder.payload:{[off] "{\"sym\":\"EURUSD\",\"bid\":",string[1.08+0.0001*off],",\"ask\":",string[1.0802+0.0001*off],"}"}
+.qt.qpipe.job.example_quotes_decoder.payload:{[off] "{\"sym\":\"EURUSD\",\"bid\":",string[1.08+(0.0001*off)],",\"ask\":",string[1.0802+(0.0001*off)],"}"}
 
 / A batch as it arrives from the plant: `time` prepended, which the job must drop.
 .qt.qpipe.job.example_quotes_decoder.batch_on:{[tp;parts;offs;payloads]
     n:count offs;
-    ([] time:.qt.qpipe.job.example_quotes_decoder.t0+1000000000*til n;
+    ([] time:.qt.qpipe.job.example_quotes_decoder.t0+(1000000000*til n);
         topic:n#tp; partition:parts; offset:offs; msg_key:n#enlist "";
-        broker_time:(.qt.qpipe.job.example_quotes_decoder.t0+1000000000*til n)-0D00:00:00.002;
+        broker_time:(.qt.qpipe.job.example_quotes_decoder.t0+(1000000000*til n))-0D00:00:00.002;
         payload:payloads)}
 
 .qt.qpipe.job.example_quotes_decoder.push_on:{[tp;parts;offs]

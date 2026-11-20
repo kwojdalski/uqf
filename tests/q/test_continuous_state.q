@@ -12,7 +12,7 @@
 // tests/lib/qunit.q and tests/lib/support.q before this file.
 
 
-.qt.qetl.job.continuous.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.job.continuous.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 .qt.qetl.job.continuous.beforeNamespace_isolate:{[]
     setenv[`UQF_STATUS_DIR;"build/test-status"];

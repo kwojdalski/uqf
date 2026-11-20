@@ -2,7 +2,7 @@
 / only (.qetl.verify, src/etl/core/verify_capture.q and verify_snapshot.q, #1851).
 / (.qt.qetl.verify.capture).
 
-.qt.qetl.verify.capture.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.verify.capture.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 .qt.qetl.verify.capture.rogue:`vc_rogue
 
