@@ -59,7 +59,7 @@
     .qetl.reference.transforms[name]:enlist `needs`defaults`fn!(needs;defaults;fn);
     name}
 
-.qetl.reference.add_transform[`top;`top;(`symbol$())!();{[rows;params] ([] bid:rows`bid; ask:rows`ask)}];
+.qetl.reference.add_transform[`top;`top;(`symbol$())!();{[rows;unused_params] ([] bid:rows`bid; ask:rows`ask)}];
 
 / A registered transform's definition.
 / @param name a registered transform

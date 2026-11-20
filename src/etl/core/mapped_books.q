@@ -185,16 +185,16 @@
     hi:0^run`hi;
     t:probes`source_time;
     col:tob`source_time;
-    l:lo;
+    low:lo;
     h:hi;
     / lockstep bisection: the first index in [lo;hi) whose time is after the probe's
-    while[any l<h;
-        act:where l<h;
-        mid:((l act)+h act) div 2;
+    while[any low<h;
+        act:where low<h;
+        mid:((low act)+h act) div 2;
         go:(col mid)<=t act;
-        l[act]:?[go;mid+1;l act];
+        low[act]:?[go;mid+1;low act];
         h[act]:?[go;h act;mid]];
-    idx:l-1;
+    idx:low-1;
     / a null time sorts first: a run whose latest time at or before the probe is null has no book
     ok:(idx>=lo) & hi>lo;
     at:where ok;

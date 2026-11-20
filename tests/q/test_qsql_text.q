@@ -181,7 +181,6 @@
     .qunit.assertEquals[0<count ss[sent`call;"syms"];1b;"the lambda text stays as it was"]};
 
 .qt.qetl.qsql.test_trace_off_emits_nothing_and_renders_nothing:{[t]
-    n:0;
     keep:.qetl.qsql.of_call;
     `.qt.qetl.qsql.hits set 0;
     .qetl.qsql.of_call:{[f;a] .qt.qetl.qsql.hits+:1; (`qsql;"")};
@@ -190,8 +189,8 @@
     .qunit.assertEquals[(count lines;.qt.qetl.qsql.hits);(0;0);"no line, and the query is never even rendered"]};
 
 .qt.qetl.qsql.test_no_credential_reaches_the_log:{[t]
-    secret:"alice:s3cr3tpw";
-    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;"db.internal.example:5010:",secret];
+    canary:"alice:s3cr3tpw";
+    setenv[`UQF_SOURCE_CRED_DEMO_DEALS;"db.internal.example:5010:",canary];
     `.qt.qetl.qsql.h set {([] deal_id:`long$())};
     lines:.qt.qetl.qsql.logged {.qetl.source.fetch_window[`demo_deals;.qt.qetl.qsql.h;2026.09.10D00:00;2026.09.11D00:00]};
     setenv[`UQF_SOURCE_CRED_DEMO_DEALS;""];

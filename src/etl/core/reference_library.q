@@ -67,7 +67,7 @@
     s:n sublist sizes;
     $[0f<sum s; (sum p*s)%sum s; 0n]}
 
-.qetl.reference.add_transform[`micro;`depth;(`symbol$())!();{[slice;params]
+.qetl.reference.add_transform[`micro;`depth;(`symbol$())!();{[slice;unused_params]
     bs:{$[count x; first x; 0n]} each slice`bid_sizes;
     as:{$[count x; first x; 0n]} each slice`ask_sizes;
     live:(not null slice`bid) & (not null slice`ask) & (not null bs) & (not null as) & 0f<bs+as;
@@ -79,7 +79,7 @@
     if[not q>0f; '"vwap: qty must be positive"];
     ([] bid:.qetl.reference.fill_price[q]'[slice`bid_prices;slice`bid_sizes]; ask:.qetl.reference.fill_price[q]'[slice`ask_prices;slice`ask_sizes])}];
 
-.qetl.reference.add_transform[`mid_sized;`depth;(`symbol$())!();{[slice;params]
+.qetl.reference.add_transform[`mid_sized;`depth;(`symbol$())!();{[slice;unused_params]
     ([] bid:slice`bid; ask:slice`ask; w:.qetl.reference.top_size slice)}];
 
 .qetl.reference.add_transform[`topn_w;`depth;enlist[`n]!enlist 3;{[slice;params]
@@ -91,7 +91,7 @@
     ([] bid:b; ask:a; w:(sz[k] each slice`bid_sizes)+sz[k] each slice`ask_sizes)}];
 
 / A promoted variant's transform: the price its transform stored, flat, beside the book (.qetl.variant.promote).
-.qetl.reference.add_transform[`stored;`top;(`symbol$())!();{[rows;params] ([] bid:rows`bid; ask:rows`ask; w:rows`w)}];
+.qetl.reference.add_transform[`stored;`top;(`symbol$())!();{[rows;unused_params] ([] bid:rows`bid; ask:rows`ask; w:rows`w)}];
 
 / The median of each side and of the books' mids, per instant; null where no book has the side.
 .qetl.reference.combines[`median]:{[tid;px;n]

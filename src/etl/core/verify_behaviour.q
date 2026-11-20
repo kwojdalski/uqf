@@ -137,7 +137,7 @@
         r:.qetl.verify.with_recorder[job;1b;{[j] .[.qetl.job.stream.tick;enlist j;{[e] (`refused;e)}]}];
         refused:(0h=type r) and `refused~first r;
         held:ops[`load] name;
-        r2:.qetl.verify.with_recorder[job;0b;{[j] .qetl.job.stream.tick j}];
+        .qetl.verify.with_recorder[job;0b;{[j] .qetl.job.stream.tick j}];
         c2:ops[`load] name;
         ev:"publish refused: ",string[refused],"; cursor after the failure ",(-3!held),"; retry published ",string[sum .qetl.verify.sent`n]," of ",string[want]," row(s); cursor ",-3!c2;
         $[not refused; `status`reason`evidence!(`UNVERIFIED;"the injected publish failure did not surface from the tick";ev);

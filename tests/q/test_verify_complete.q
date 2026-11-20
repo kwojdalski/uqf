@@ -65,7 +65,6 @@
 
 .qt.qetl.verify.complete.test_the_gateway_reader_asks_getdata_for_the_table_and_a_padded_range:{[t]
     / a lambda stands in for the gateway handle: it is applied to (function; request) as a handle is
-    seen:enlist 0;
     fake:{[x] `.qt.qetl.verify.complete.asked set x; .qpipe.source.demo_deals.fixture[]};
     reader:.qetl.verify.getdata_reader[fake;1D];
     got:reader[`demo_deals;.qt.qetl.verify.complete.from;.qt.qetl.verify.complete.to];
