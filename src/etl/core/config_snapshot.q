@@ -213,7 +213,7 @@
     a:.qetl.snapshot.audit[];
     if[count bad:exec snapshot_id from a where not digest_ok;
         '"snapshot: the digest of ",(", " sv string bad)," does not match its content - the store was changed outside the interface"];
-    `etl_config_snapshots set (.qetl.snapshot.schema)#a;
+    `etl_config_snapshots set .qetl.snapshot.schema#a;
     `etl_config_snapshots}
 
 / Create the store if absent, and load what earlier processes recorded.
@@ -296,7 +296,7 @@
     if[count bad:r[`snapshot_id] where not r`digest_ok;
         '"snapshot: the digest of ",(", " sv string distinct bad)," does not match its content - the store was changed outside the interface"];
     .qetl.snapshot.verified::distinct .qetl.snapshot.verified,ids;
-    (.qetl.snapshot.schema)#r}
+    .qetl.snapshot.schema#r}
 
 / One snapshot, digest checked: require_many for a single id.
 / @param id the snapshot id

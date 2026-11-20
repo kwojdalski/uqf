@@ -135,10 +135,10 @@
     md:.qt.qetl.variant.books[500;29];
     sl:.qetl.variant.slice md;
     r:.qetl.variant.evaluate[`best_top`micro_median`median_top;sl;0D00:01:00;4#`EURUSD;4#2026.09.17D10:05:00;4#`venue];
-    l:.qetl.variant.long r;
-    .qunit.assertEquals[cols l;`variant`row`bid`ask`mid;"variant first, then the target and its price"];
-    .qunit.assertEquals[((exec count i by variant from l)`best_top`micro_median`median_top);3#4;"one row per variant per target"];
-    .qunit.assertEquals[(select from l where variant=`micro_median)`mid;(r[`micro_median]`same)`mid;"each variant's rows are its own"]};
+    long_rows:.qetl.variant.long r;
+    .qunit.assertEquals[cols long_rows;`variant`row`bid`ask`mid;"variant first, then the target and its price"];
+    .qunit.assertEquals[((exec count i by variant from long_rows)`best_top`micro_median`median_top);3#4;"one row per variant per target"];
+    .qunit.assertEquals[(select from long_rows where variant=`micro_median)`mid;(r[`micro_median]`same)`mid;"each variant's rows are its own"]};
 
 / --- the configuration each variant has ------------------------------------------------------------------
 

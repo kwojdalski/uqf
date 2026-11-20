@@ -178,8 +178,8 @@
     c:.qt.qetl.snapshot.content[];
     .qetl.snapshot.record[`markout;c,enlist[`datasets]!enlist `fx_markout`fx_markout_wide;"with datasets"];
     .qetl.snapshot.record[`other;c;"no datasets"];
-    l:.qetl.snapshot.list[`markout];
-    .qunit.assertEquals[(count l;first l`datasets;first l`digest_ok);(1;`fx_markout`fx_markout_wide;1b);"the markout snapshot, its datasets, digest ok"];
+    snaps:.qetl.snapshot.list[`markout];
+    .qunit.assertEquals[(count snaps;first snaps`datasets;first snaps`digest_ok);(1;`fx_markout`fx_markout_wide;1b);"the markout snapshot, its datasets, digest ok"];
     .qunit.assertEquals[count .qetl.snapshot.list[`];2;"all kinds"];
     .qunit.assertEquals[(exec first datasets from .qetl.snapshot.list[`] where kind=`other);`symbol$();"a content that names none lists none"]};
 

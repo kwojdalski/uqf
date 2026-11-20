@@ -421,6 +421,6 @@
     h:.z.exit;
     `.qetl.kafka.diag.context set ctx;
     `.qpipe.job.kafka_feed.client set 0Ni;
-    r:@[h;0;{(`failed;x)}];
+    @[h;0;{(`failed;x)}];
     `.z.exit set older;
     .qunit.assertEquals[.qt.qpipe.job.kafka_feed.exit_called;enlist `torq;"the previous projection ran on exit"]};

@@ -94,8 +94,8 @@
     a:.qpipe.transform.config_markout.pin[d;sp;"first pin"];
     b:.qpipe.transform.config_markout.pin[d;sp;"second pin"];
     .qunit.assertEquals[(a;count .qetl.snapshot.list[`]);(b;1);"pinning twice is one snapshot"];
-    l:first .qetl.snapshot.list[`markout];
-    .qunit.assertEquals[(l`snapshot_id;l`reason;l`datasets;l`digest_ok);(.qpipe.transform.fx_markout_outputs.config_id;"first pin";`fx_markout`fx_markout_wide;1b);"the id the rows will carry, the first reason, the datasets, a good digest"];
+    snap:first .qetl.snapshot.list[`markout];
+    .qunit.assertEquals[(snap`snapshot_id;snap`reason;snap`datasets;snap`digest_ok);(.qpipe.transform.fx_markout_outputs.config_id;"first pin";`fx_markout`fx_markout_wide;1b);"the id the rows will carry, the first reason, the datasets, a good digest"];
     .qunit.assertThrows[.qpipe.transform.config_markout.pin[d;;"bad"];enlist[`rate_timing]!enlist `never;"*spec is missing*";"a spec the core refuses is not recorded"];
     .qunit.assertEquals[count .qetl.snapshot.list[`];1;"and nothing was recorded for it"]};
 

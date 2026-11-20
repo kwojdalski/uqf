@@ -138,7 +138,6 @@
 .qt.qetl.io.hdb_eod.test_a_plan_clipped_for_eod_is_on_the_eod_channel:{[t]
     .qt.qetl.io.hdb_eod.setUp_clean[];
     st:.qt.qetl.io.hdb_eod.stack[];
-    D:.qt.qetl.io.hdb_eod.D;
     `.qetl.io.default set .qetl.io.hdb[st`root;`time];
     lines:.qt.support.captured_log[0b;{
         D:.qt.qetl.io.hdb_eod.D;

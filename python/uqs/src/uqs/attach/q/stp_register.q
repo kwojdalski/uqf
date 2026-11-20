@@ -98,7 +98,7 @@
  after:({};{};{};{};{};{[c] .stpm.setmeta[.stplg.dldir;.stpm.metatable]};{});
  snap:{[n] .[{(1b;value x)};enlist n;{(0b;::)}]};
  / a global that was absent before the step is deleted, not set to null; one already gone is left alone
- drop:{[n] s:string n; $["."=first s;[k:last where s="."; ns:`$k#s; l:`$(k+1)_s];[ns:`.; l:n]]; if[l in key ns;![ns;();0b;enlist l]]};
+ drop:{[n] s:string n; $["."=first s;[k:last where s="."; ns:`$k#s; nm:`$(k+1)_s];[ns:`.; nm:n]]; if[nm in key ns;![ns;();0b;enlist nm]]};
  restore:{[drop;n;v] $[first v;n set last v;drop n]}[drop];
  / every part of an undo is tried; a step counts as undone only when none of its parts threw
  try:{[f;a] .[{[f;a] f . a;0b};(f;a);{1b}]};

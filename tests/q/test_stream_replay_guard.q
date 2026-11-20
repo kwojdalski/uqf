@@ -189,6 +189,5 @@
     .qunit.assertEquals[count each cols each .qtorq.sub_cands[`fills];3 4;"one schema per log, in the order the plant opened them"];
     .qunit.assertEquals[.qtorq.sub_sch_at`fills;0;"and the search starts at the first"];
     / a plant that cannot say falls back to its current table, as before
-    broken:{[q] '"no plant"};
     .qtorq.sub_load_schemas[{[q] $[10h=type q; '"no plant"; 0#.qt.qetl.stream_replay_guard.new]};enlist `fills];
     .qunit.assertEquals[count each cols each .qtorq.sub_cands[`fills];enlist 4;"the plant's current table when the logs' schemas cannot be read"]};

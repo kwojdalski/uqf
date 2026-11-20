@@ -649,11 +649,11 @@
 / @return a domain dictionary with resolve, convert, no keys, the name `table and a revision that is the digest of the two tables
 / @eg .qpipe.transform.markout_core.table_domain[([] sym:enlist `ACME; quote_ccy:enlist `USD; legs:enlist enlist `ACME; invert:enlist enlist 0b);0#([] quote_ccy:`symbol$(); report_ccy:`symbol$(); leg:`symbol$(); invert:`boolean$())][`resolve][()!();enlist `ACME]`quote_ccy  ->  enlist `USD
 .qpipe.transform.markout_core.table_domain:{[inst;conv]
-    resolve:{[inst;spec;syms]
+    resolve:{[inst;unused_spec;syms]
         pick:{[inst;s] i:(inst`sym)?s; $[i<count inst; (1b;(inst`quote_ccy) i;(inst`legs) i;(inst`invert) i); (0b;`;`symbol$();`boolean$())]}[inst];
         rows:pick each syms;
         ([] sym:syms; ok:`boolean$rows[;0]; quote_ccy:`symbol$rows[;1]; legs:rows[;2]; invert:rows[;3])}[inst];
-    convert:{[conv;spec;qs;rep]
+    convert:{[conv;unused_spec;qs;rep]
         pick:{[conv;rep;q]
             r:select from conv where quote_ccy=q, report_ccy=rep;
             $[count r; (1b;first r`leg;first r`invert); (0b;`;0b)]}[conv;rep];

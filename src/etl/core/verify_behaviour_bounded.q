@@ -98,12 +98,11 @@
     if[not 98h=type batch; :`status`reason`evidence!(`UNVERIFIED;"empty sample - no captured rows to write twice";"")];
     if[0=count batch; :`status`reason`evidence!(`UNVERIFIED;"empty sample - no captured rows to write twice";"")];
     strategy:.qetl.job.bounded.on_conflict worker;
-    w:`range_from`range_to!(from_ts;to_ts);
     opts:`on_conflict`row_key`time_column`range_from`range_to`partition_column`partition`source_version!
         (strategy;cfg`target_key;cfg`window_column;from_ts;to_ts;cfg`partition_column;cfg`partition;`verify);
     target:`verify_conflict_sandbox;
     write:{[target;batch;opts] @[{[a] .qetl.io.write_keyed[.qetl.io.memory;a 0;a 1;a 2]};(target;batch;opts);{[e] (`refused;e)}]};
-    one:write[target;batch;opts];
+    write[target;batch;opts];
     two:write[target;batch;opts];
     held:$[target in tables `.; value target; ()];
     ks:(),cfg`target_key;

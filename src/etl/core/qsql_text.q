@@ -150,7 +150,7 @@
 / @param tree a parse tree
 / @return the quoted form of a functional call, else `tree`
 / @private
-.qetl.qsql.quote:{[tree] @[.qetl.qsql.quote0;tree;{[t;e] t}[tree]]}
+.qetl.qsql.quote:{[tree] @[.qetl.qsql.quote0;tree;{[t;unused_e] t}[tree]]}
 
 / Private: quote, unprotected.
 / @private
