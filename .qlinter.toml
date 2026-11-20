@@ -23,21 +23,19 @@ profile = "uqf"
 # shape with `x` the batch, and `uqs job new` scaffolds every job with it.
 # With an explicit parameter list `x` is an ordinary name; position changes
 # nothing (all 121 findings checked, #1243).
-# QP006 (juxtaposed-application) flags a function this file defines applied
-# as `f x` rather than `f[x]`. All 235 findings on 0.21.0 were checked
-# (#2816): every one is a one-parameter lambda, where `f x` is q's ordinary
-# form and brackets change nothing, and the tree has 345 bracketed calls to
-# the same names beside them - no bracket convention here for it to hold to.
-# The one case worth reporting, a lambda of two or more parameters applied by
-# juxtaposition (a silent projection: `add 1 2` is `add[1 2]`), is what q-lint
-# is changing the rule to report; re-select it once the pin carries that.
-ignore = ["QP006", "QS001", "QS008", "QS010"]
+ignore = ["QS001", "QS008", "QS010"]
+
+# QP006 (juxtaposed-application) is the uqf profile's, and on again since
+# q-lint 0.22 (#2818): it now reports only a lambda of two or more parameters
+# applied by juxtaposition - `add 1 2` is the projection `add[1 2]`, not a
+# call - which is a silent wrong answer, where 0.21 reported every monadic
+# `f x` (235 findings, none real, #2816). It reports nothing on this tree.
 
 # QP007 (mixed-infix-unparenthesised) is in no profile since q-lint 0.20: it
 # reports the routine mix of `*`/`%` with `+`/`-`, where q's right-to-left
 # order and school precedence agree. #2814 parenthesised every mixed line,
 # routine or trap, so the tree reads one way; selecting QP007 keeps new code
-# to that, at no cost today (0 findings on 0.21.0). QP005 still reports the
+# to that, at no cost today (0 findings on 0.22.0). QP005 still reports the
 # trap, where the two orders disagree.
 extend-select = ["QP007"]
 
@@ -74,17 +72,14 @@ extend-select = ["QP007"]
 "src/etl/core/stream_carry_recovery.q" = ["QP003"]
 
 # QS006 (lambda over 25 lines) accepted for the files that have long lambdas
-# today (#1245, and #2816 for the files the reports since 0.17 added): mostly
+# today (#1245; #2816 added the files 0.17-0.21 reported, and #2818 dropped
+# those under 26 lines of code once q-lint 0.22 counted only code): mostly
 # the job kinds' flat define checklists, fixtures and a few procedural
 # functions. A long lambda in any other file is still reported.
 # Files that already had an entry above carry QS006 there.
 "docs/man.q" = ["QS006"]
 "scripts/bench/batching.q" = ["QS006"]
 "scripts/processes/torq_backfill.q" = ["QS006"]
-"scripts/processes/torq_stream.q" = ["QS006"]
-"scripts/processes/torq_tap.q" = ["QS006"]
-"scripts/torqcode/handlers/pmusers.q" = ["QS006"]
-"src/etl/core/backfill_state.q" = ["QS006"]
 "src/etl/core/bars.q" = ["QS006"]
 "src/etl/core/bounded_worker.q" = ["QS006"]
 "src/etl/core/horizon.q" = ["QS006"]
@@ -94,50 +89,33 @@ extend-select = ["QP007"]
 "src/etl/core/kafka_topics.q" = ["QS006"]
 "src/etl/core/live_check.q" = ["QS006"]
 "src/etl/core/mapped_books.q" = ["QS006"]
-"src/etl/core/mapped_depth.q" = ["QS006"]
-"src/etl/core/normalizer.q" = ["QS006"]
-"src/etl/core/react.q" = ["QS006"]
-"src/etl/core/retention.q" = ["QS006"]
 "src/etl/core/rolling.q" = ["QS006"]
 "src/etl/core/source_credentials.q" = ["QS006"]
 "src/etl/core/source_registry.q" = ["QS006"]
 "src/etl/core/status.q" = ["QS006"]
 "src/etl/core/stream_job.q" = ["QS006"]
 "src/etl/core/stream_poll.q" = ["QS006"]
-"src/etl/core/tick.q" = ["QS006"]
 "src/etl/core/transform.q" = ["QS006"]
 "src/etl/core/verify_behaviour_bounded.q" = ["QS006"]
 "src/etl/core/verify_capture.q" = ["QS006"]
 "src/etl/core/verify_compare.q" = ["QS006"]
 "src/etl/core/verify_complete.q" = ["QS006"]
 "src/etl/core/verify_report.q" = ["QS006"]
-"src/etl/core/worker_runtime.q" = ["QS006"]
 "src/etl/streaming/cross_arbitrage.q" = ["QS006"]
-"src/etl/streaming/fx_positions.q" = ["QS006"]
-"src/etl/streaming/market_data.q" = ["QS006"]
 "src/etl/transforms/markout_core.q" = ["QS006"]
 "src/execution/execution.q" = ["QS006"]
 "src/execution/execution_attribution.q" = ["QS006"]
 "src/foundation/calendar.q" = ["QS006"]
 "src/market_data/asof.q" = ["QS006"]
-"src/market_data/dqchecks.q" = ["QS006"]
 "src/market_data/microstructure.q" = ["QS006"]
-"src/market_data/microstructure_tape.q" = ["QS006"]
 "src/metadata/metatables.q" = ["QS006"]
 "src/portfolio/allocation.q" = ["QS006"]
-"src/portfolio/desk_positions.q" = ["QS006"]
 "src/portfolio/positions.q" = ["QS006"]
 "src/pricing/cross.q" = ["QS006"]
 "src/pricing/forwards.q" = ["QS006"]
-"tests/q/test_backfill_state.q" = ["QS006"]
-"tests/q/test_dag.q" = ["QS006"]
 "tests/q/test_docstring_examples.q" = ["QS006"]
-"tests/q/test_execution.q" = ["QS006"]
 "tests/q/test_fill_hdb_partitions.q" = ["QS006"]
 "tests/q/test_kafka_provenance.q" = ["QS006"]
-"tests/q/test_man_registry.q" = ["QS006"]
 "tests/q/test_markout_core.q" = ["QS006"]
 "tests/q/test_order_quality.q" = ["QS006"]
-"tests/q/test_registries.q" = ["QS006"]
 "tests/q/test_stream_replay_guard.q" = ["QS006"]
-"tests/q/test_variant_run.q" = ["QS006"]
