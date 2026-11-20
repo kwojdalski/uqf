@@ -123,12 +123,12 @@
     / agree by accident. #413: both take timespan horizons and return the
     / same columns and types, so direct and synthetic markouts join with uj.
     t0:2026.01.01D10:00:00.000000000;
-    times:t0+0D00:00:01*0 1 10;
+    times:t0+(0D00:00:01*0 1 10);
     bids:1.1000 1.1004 1.0990;
     asks:1.1002 1.1006 1.0992;
     depth:([] time:times; sym:3#`EURUSD; bid_prices:enlist each bids; bid_sizes:3#enlist enlist 1000000f;
         ask_prices:enlist each asks; ask_sizes:3#enlist enlist 1000000f);
-    mids:([] sym:3#`EURUSD; time:times; mid:0.5*bids+asks);
+    mids:([] sym:3#`EURUSD; time:times; mid:0.5*(bids+asks));
     {[t0;depth;mids;side]
         trade:([] sym:enlist `EURUSD; time:enlist t0; side:enlist side; trade_price:enlist 1.1003; pip_factor:enlist 10000);
         horizons:0D00:00:00 0D00:00:01 0D00:00:10;
@@ -233,7 +233,7 @@
         left:n[b-u;b]; right:n[b;b+u]; whole:n[b-u;b+u];
         .qt.support.assertApprox[left;1f;1e-9;"[a;b) holds only the request before b: ",string u];
         .qt.support.assertApprox[right;0.5;1e-9;"[b;c) holds both requests at b (one hit) and not the one at c: ",string u];
-        .qt.support.assertApprox[whole*3;(left*1)+right*2;1e-9;"the windows' counts add to the combined window's: ",string u]
+        .qt.support.assertApprox[whole*3;(left*1)+(right*2);1e-9;"the windows' counts add to the combined window's: ",string u]
         }[b;] each 0D00:00:00.001000000 0D00:00:00.000001000 0D00:00:00.000000001;
     }
 
@@ -473,12 +473,12 @@
 / So full-fill probability is 4/10 and any-fill 6/10. Also bound as the
 / `fill_orders` @eg fixture.
 .qt.qf.exec.execution.mk_fill_orders:{[]
-    s:2026.01.01D10:00:00.000000000+0D00:01:00*til 10;
+    s:2026.01.01D10:00:00.000000000+(0D00:01:00*til 10);
     ([] sym:10#`EURUSD;
         submit_time:s;
         observed_until:10#0Np;
-        first_fill_time:s+0D00:00:01*30 30 30 30 20 20 0N 0N 0N 0N;
-        full_fill_time:s+0D00:00:01*30 30 30 30 0N 90 0N 0N 0N 0N;
+        first_fill_time:s+(0D00:00:01*30 30 30 30 20 20 0N 0N 0N 0N);
+        full_fill_time:s+(0D00:00:01*30 30 30 30 0N 90 0N 0N 0N 0N);
         cancel_time:10#0Np)}
 
 / Every order resolved: the last horizon ends at 10:10.
@@ -548,9 +548,9 @@
 / as_of falls 5s into their 10s horizon. Scoring those 30 while censoring
 / the other 70 read 0.46.
 .qt.qf.exec.execution.test_fill_probability_recent_orders_do_not_bias_it:{[t]
-    mk:{[t0;n] s:t0+0D00:01:00*til n; ([] submit_time:s; observed_until:n#0Np;
-        first_fill_time:s+0D00:00:02*n#1 1 1 0N 0N 0N 0N 0N 0N 0N;
-        full_fill_time:s+0D00:00:02*n#1 1 1 0N 0N 0N 0N 0N 0N 0N; cancel_time:n#0Np)};
+    mk:{[t0;n] s:t0+(0D00:01:00*til n); ([] submit_time:s; observed_until:n#0Np;
+        first_fill_time:s+(0D00:00:02*n#1 1 1 0N 0N 0N 0N 0N 0N 0N);
+        full_fill_time:s+(0D00:00:02*n#1 1 1 0N 0N 0N 0N 0N 0N 0N); cancel_time:n#0Np)};
     as_of:2026.01.01D12:00:00.000000000;
     recent:update submit_time:as_of-0D00:00:05,
         first_fill_time:?[null first_fill_time;0Np;as_of-0D00:00:03],
@@ -743,7 +743,7 @@
 / number looked the numbers up as keys and threw a bare 'length.
 .qt.qf.exec.execution.test_markout_at_horizons_accepts_keyed_trades:{[t]
     tr:([] sym:`EURUSD`EURUSD; time:2026.01.02D10:00:00.000000000 2026.01.02D10:00:05.000000000; side:1 -1; trade_price:1.1 1.1001; pip_factor:10000 10000; fill_id:`a`b);
-    qs:([] sym:4#`EURUSD; time:2026.01.02D10:00:00.000000000+1000000000*0 1 5 6; mid:1.1 1.1002 1.1001 1.0999);
+    qs:([] sym:4#`EURUSD; time:2026.01.02D10:00:00.000000000+(1000000000*0 1 5 6); mid:1.1 1.1002 1.1001 1.0999);
     r:.qf.exec.markout_at_horizons[`fill_id xkey tr;qs;0D00:00:01];
     .qunit.assertEquals[r`fill_id;`a`b;"keyed fills mark out, carrying the key"];
     .qunit.assertEquals[r;.qf.exec.markout_at_horizons[tr;qs;0D00:00:01];"the same rows as the unkeyed fills"]};

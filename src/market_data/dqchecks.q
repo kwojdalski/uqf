@@ -69,7 +69,7 @@
     bid0:t`bid;
     ask0:t`ask;
     one_sided:(null bid0) | null ask0;
-    mid:0.5*bid0+ask0;
+    mid:0.5*(bid0+ask0);
     spreads:10000*(ask0-bid0)%mid;
     / boolean-indexed status vector rather than a nested $[cond;a;b].
     / KDB-X supports a vector cond, so this is now a style choice rather
@@ -81,7 +81,7 @@
     is_wide:spreads>max_spread_bps;
     / 0 crossed, 1 ok, 2 wide - and 3 one_sided, which overrides: a null
     / spread is never crossed (guarded above) or wide (null>x is false).
-    idx:((1-is_crossed)*(1+is_wide)*not one_sided)+3*one_sided;
+    idx:((1-is_crossed)*(1+is_wide)*not one_sided)+(3*one_sided);
     result:([] time:quotes`time; sym:quotes`sym; spread_bps:spreads);
     result:update status:`crossed`ok`wide`one_sided idx from result;
     `status xasc result};

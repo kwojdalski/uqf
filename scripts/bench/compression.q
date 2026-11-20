@@ -56,7 +56,7 @@ if[`child in key opts;
         s:`$first o`shape;
         t0:.z.p;
         n:.qdev.cbench.run_shape[s;sel;p];
-        ms:1e-6*"j"$.z.p-t0;
+        ms:1e-6*("j"$.z.p-t0);
         "result|",string[ms],"|",string n};opts;{[e] "error|",e}];
     -1 r;
     exit 0];
@@ -164,7 +164,7 @@ rows:raze {[root;cand]
         `setting`shape`ms`reads!(cand`name;s;ms;reads)}[root;cand;base] each shapes}'[roots;cands];
 sizes:([] setting:{x`name} each cands; bytes:{sum x`bytes} each cb);
 sizes:update ratio:.qdev.cbench.ratio[sum logical_src`logical] each bytes from sizes;
-res:select setting, shape, bytes, ratio, ms:0.001*floor 0.5+1000*ms, reads from (([] setting:{x`setting} each rows; shape:{x`shape} each rows; ms:{x`ms} each rows; reads:{x`reads} each rows) lj `setting xkey select setting, bytes, ratio from sizes);
+res:select setting, shape, bytes, ratio, ms:0.001*(floor 0.5+(1000*ms)), reads from (([] setting:{x`setting} each rows; shape:{x`shape} each rows; ms:{x`ms} each rows; reads:{x`reads} each rows) lj `setting xkey select setting, bytes, ratio from sizes);
 
 / ------------------------------------------------------------ REPORT
 

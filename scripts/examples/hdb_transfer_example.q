@@ -44,7 +44,7 @@ mids:syms!1.0842 151.20 1.2655 0.6612
 day_trades:{[d;first_id;n]
     s:n?syms;
     ([] time:(`timestamp$d)+asc n?0D23:59:59; trade_id:first_id+til n; sym:s;
-        price:mids[s]*1+0.001*-0.5+n?1f; size:1000*1+n?5000; side:n?`buy`sell)}
+        price:mids[s]*(1+(0.001*(-0.5+n?1f))); size:1000*(1+n?5000); side:n?`buy`sell)}
 
 / Write one day's partition of `trades`, enumerating sym against the source's
 / own sym file - what .Q.dpft does, without clobbering a global `trades`
@@ -106,7 +106,7 @@ copied:raze {.qetl.source.local_read[.qhdbtx.dst;`trades_copy;`timestamp$x;`time
 show select trades:count i, notional:sum notional by date:`date$time, quote:`$-3#'string sym from copied;
 .qhdbtx.check[(count copied)=count source;"every source trade arrived: ",string count copied];
 .qhdbtx.check[(`trade_id xasc delete notional from copied)~`trade_id xasc source;"each row exactly as the source holds it"];
-.qhdbtx.check[all 1e-9>abs (copied`notional)-(copied`price)*copied`size;"notional = price * size on every row"];
+.qhdbtx.check[all 1e-9>abs (copied`notional)-((copied`price)*copied`size);"notional = price * size on every row"];
 .qhdbtx.check[3=count .qetl.source.local_dates[.qhdbtx.dst;-0Wd;0Wd];"one partition per day in the destination"];
 
 $[`keep in key .Q.opt .z.x;

@@ -23,13 +23,13 @@
     .qpipe.job.order_outcomes.on_batch[`orders;.qt.qpipe.job.order_outcomes.orders_rows[enlist .qt.qpipe.job.order_outcomes.t0;enlist 1;enlist `london;enlist `spot;enlist `filled]]}
 
 .qt.qpipe.job.order_outcomes.test_the_adapter_output_is_the_contract:{[t]
-    r:.qt.qpipe.job.order_outcomes.adapt[.qt.qpipe.job.order_outcomes.orders_rows[.qt.qpipe.job.order_outcomes.t0+0D00:00:01*til 3;1 2 3;`london`london`newyork;`spot`spot`fwd;`filled`rejected`cancelled]];
+    r:.qt.qpipe.job.order_outcomes.adapt[.qt.qpipe.job.order_outcomes.orders_rows[.qt.qpipe.job.order_outcomes.t0+(0D00:00:01*til 3);1 2 3;`london`london`newyork;`spot`spot`fwd;`filled`rejected`cancelled]];
     .qunit.assertEquals[cols r;cols .qetl.plant.published `order_outcomes;"the plant table, column for column"];
     .qunit.assertEquals[r`outcome;`filled`rejected`cancelled;"each terminal status is its own outcome"];
     .qunit.assertEquals[r`source_status;`filled`rejected`cancelled;"the source's code is kept"]};
 
 .qt.qpipe.job.order_outcomes.test_every_outcome_is_in_the_vocabulary_whatever_the_status:{[t]
-    r:.qt.qpipe.job.order_outcomes.adapt[.qt.qpipe.job.order_outcomes.orders_rows[.qt.qpipe.job.order_outcomes.t0+0D00:00:01*til 4;1 2 3 4;4#`london;4#`spot;`filled`new`partially_filled`]];
+    r:.qt.qpipe.job.order_outcomes.adapt[.qt.qpipe.job.order_outcomes.orders_rows[.qt.qpipe.job.order_outcomes.t0+(0D00:00:01*til 4);1 2 3 4;4#`london;4#`spot;`filled`new`partially_filled`]];
     .qunit.assertTrue[all r[`outcome] in .qpipe.transform.order_outcome.outcomes;"nothing outside the vocabulary"];
     .qunit.assertEquals[r`outcome;`filled`unmapped`unmapped`unmapped;"an unknown or null status is unmapped, not dropped, not guessed"];
     .qunit.assertEquals[count r;4;"and the row is kept, so the exclusion is visible"]};
@@ -46,7 +46,7 @@
     .qunit.assertEquals[type first r`source;-11h;"the scope is a column of its own, not part of a joined string"]};
 
 .qt.qpipe.job.order_outcomes.test_venue_is_null_because_orders_carries_none:{[t]
-    r:.qt.qpipe.job.order_outcomes.adapt[.qt.qpipe.job.order_outcomes.orders_rows[.qt.qpipe.job.order_outcomes.t0+0D00:00:01*til 2;1 2;`london`newyork;`spot`fwd;`filled`rejected]];
+    r:.qt.qpipe.job.order_outcomes.adapt[.qt.qpipe.job.order_outcomes.orders_rows[.qt.qpipe.job.order_outcomes.t0+(0D00:00:01*til 2);1 2;`london`newyork;`spot`fwd;`filled`rejected]];
     .qunit.assertTrue[all null r`venue;"never defaulted"];
     .qunit.assertEquals[(r`book;r`product);(`london`newyork;`spot`fwd);"book and product pass through"]};
 
@@ -60,7 +60,7 @@
     .qunit.assertEquals[(count r;cols r);(0;cols .qetl.plant.published `order_outcomes);"no rows, the right columns"]};
 
 .qt.qpipe.job.order_outcomes.test_a_row_without_an_id_is_unmapped_not_invented:{[t]
-    r:.qt.qpipe.job.order_outcomes.adapt[.qt.qpipe.job.order_outcomes.orders_rows[.qt.qpipe.job.order_outcomes.t0+0D00:00:01*til 2;1 0N;2#`london;2#`spot;`filled`filled]];
+    r:.qt.qpipe.job.order_outcomes.adapt[.qt.qpipe.job.order_outcomes.orders_rows[.qt.qpipe.job.order_outcomes.t0+(0D00:00:01*til 2);1 0N;2#`london;2#`spot;`filled`filled]];
     .qunit.assertEquals[r`outcome;`filled`unmapped;"cannot be identified, so cannot be counted"];
     .qunit.assertTrue[null last r`request_id;"and no id is fabricated"]};
 
@@ -113,7 +113,7 @@
 / As the orders feed reports them: one row, at the final status.
 .qt.qpipe.job.order_outcomes.feed_a:{[]
     n:count .qt.qpipe.job.order_outcomes.reqs;
-    .qt.qpipe.job.order_outcomes.orders_rows[.qt.qpipe.job.order_outcomes.as_of-0D00:00:01*.qt.qpipe.job.order_outcomes.reqs[;0];1+til n;.qt.qpipe.job.order_outcomes.reqs[;2];n#`spot;.qt.qpipe.job.order_outcomes.reqs[;1]]}
+    .qt.qpipe.job.order_outcomes.orders_rows[.qt.qpipe.job.order_outcomes.as_of-(0D00:00:01*.qt.qpipe.job.order_outcomes.reqs[;0]);1+til n;.qt.qpipe.job.order_outcomes.reqs[;2];n#`spot;.qt.qpipe.job.order_outcomes.reqs[;1]]}
 
 / One request's AltOMS messages as (request number; seconds before as_of; state; desk):
 / new, then a partial fill if it fills, then the terminal state. A reject has no partial.
@@ -127,7 +127,7 @@
 / delivered twice.
 .qt.qpipe.job.order_outcomes.feed_b:{[]
     m:(raze .qt.qpipe.job.order_outcomes.msgs'[til count .qt.qpipe.job.order_outcomes.reqs;.qt.qpipe.job.order_outcomes.reqs]),((1;65;`E;`london);(2;50;`Z;`london);(4;20;`F;`london));
-    t:([] msg_time:.qt.qpipe.job.order_outcomes.as_of-0D00:00:01*m[;1]; cl_ord_id:`$"A",/:string m[;0]; ord_state:m[;2]; desk:m[;3]);
+    t:([] msg_time:.qt.qpipe.job.order_outcomes.as_of-(0D00:00:01*m[;1]); cl_ord_id:`$"A",/:string m[;0]; ord_state:m[;2]; desk:m[;3]);
     update instr_class:`spot, lp:`lp1, qty:1e6, last_px:1.1 from `msg_time xasc t}
 
 / The quality transform's output over a source's outcomes at as_of.

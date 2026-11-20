@@ -7,7 +7,7 @@
 
 .qt.qpipe.job.upstream_trades_backfill.batch:{[sides]
     n:count sides;
-    ([] time:2015.01.07D00:00:01.000000000+0D00:00:01*til n; sym:n#`AAPL; ex:n#"N";
+    ([] time:2015.01.07D00:00:01.000000000+(0D00:00:01*til n); sym:n#`AAPL; ex:n#"N";
         price:n#28.73; size:n#41i; side:sides)}
 
 / #2573: every side that was not `buy imported as a sell - a null, `SELL.

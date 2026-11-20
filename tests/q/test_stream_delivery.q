@@ -7,7 +7,7 @@
 // behind on disk - the in-flight marker above all.
 
 
-.qt.qetl.job.stream.delivery.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.job.stream.delivery.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 / The upstream the test feed polls: three rows, one a day, keyed by id.
 .qt.qetl.job.stream.delivery.upstream:([] ts:.qt.qetl.job.stream.delivery.d[1 2 3]; id:`a`b`c; v:1.5 2.5 3.5)
@@ -165,7 +165,7 @@
     `.qt.qetl.job.stream.delivery.count set 0;
     (` sv .qetl.job.stream.namespace[`sdt_feed],`publish) set {[step;t;rows]
         .qt.qetl.job.stream.delivery.record[t;rows];
-        `.qt.qetl.job.stream.delivery.count set .qt.qetl.job.stream.delivery.count+step*count rows;
+        `.qt.qetl.job.stream.delivery.count set .qt.qetl.job.stream.delivery.count+(step*count rows);
         count rows}[step];
     .qetl.job.stream.delivery.wire[`sdt_feed;enlist[`logged]!enlist {[t] .qt.qetl.job.stream.delivery.count}];}
 

@@ -31,7 +31,7 @@
 .qpipe.job.mock_ticks.tick:{[now]
     saved:system"S";
     system"S ",string 1i+"i"$(("j"$now) div 1000000) mod 2147483646;
-    move:exp 0.0002*-0.5+(count .qpipe.job.mock_ticks.mids)?1f;
+    move:exp 0.0002*(-0.5+(count .qpipe.job.mock_ticks.mids)?1f);
     system"S ",string saved;
     m:.qpipe.job.mock_ticks.mids*move;
     `.qpipe.job.mock_ticks.mids set m;

@@ -252,7 +252,7 @@
 / @param bytes a long
 / @return a float
 / @eg .qdev.cbench.ratio[300;100]  ->  3f
-.qdev.cbench.ratio:{[logical;bytes] $[0=bytes; 0n; 0.01*floor 0.5+100*logical%bytes]}
+.qdev.cbench.ratio:{[logical;bytes] $[0=bytes; 0n; 0.01*(floor 0.5+(100*logical%bytes))]}
 
 / ------------------------------------------------------------ COPIES
 

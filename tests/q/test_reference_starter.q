@@ -38,7 +38,7 @@
     .qetl.reference.variants:(enlist `vwap_150_best) _ .qetl.reference.variants;
     .qunit.assertTrue[.qt.qetl.reference.starter.near[r`bid;1.2];"best bid: b's 1.2 beats a's 0.9666667"];
     .qunit.assertTrue[.qt.qetl.reference.starter.near[r`ask;305f%150];"best ask: a's 2.0333333 beats b's 2.2333333"];
-    .qunit.assertTrue[.qt.qetl.reference.starter.near[r`mid;0.5*1.2+305f%150];"mid 1.6166667"]};
+    .qunit.assertTrue[.qt.qetl.reference.starter.near[r`mid;0.5*(1.2+(305f%150))];"mid 1.6166667"]};
 
 .qt.qetl.reference.starter.test_the_size_weighted_mid_weights_each_venue_by_the_size_it_quotes_at_the_top:{[t]
     / weights: a 100 + 100 = 200; b 300 + 100 = 400. mids: a 1.5, b 1.7. (200 x 1.5 + 400 x 1.7) / 600 = 980 / 600 = 1.6333333
@@ -59,11 +59,11 @@
     / b bids (1.2 x 300 + 1.1 x 100) / 400 = 470 / 400 = 1.175; asks (2.2 + 2.3) / 2 = 2.25; depth 400 + 200 = 600
     / across venues, by depth: bid (500 x 280/300 + 600 x 1.175) / 1100; ask (500 x 2.05 + 600 x 2.25) / 1100
     r:.qt.qetl.reference.starter.price `depth3_wmean;
-    bid:((500*280f%300)+600*1.175)%1100;
-    ask:((500*2.05)+600*2.25)%1100;
+    bid:((500*280f%300)+(600*1.175))%1100;
+    ask:((500*2.05)+(600*2.25))%1100;
     .qunit.assertTrue[.qt.qetl.reference.starter.near[r`bid;bid];"bid ",string bid];
     .qunit.assertTrue[.qt.qetl.reference.starter.near[r`ask;ask];"ask ",string ask];
-    .qunit.assertTrue[.qt.qetl.reference.starter.near[r`mid;0.5*bid+ask];"mid is the mean of the two"]};
+    .qunit.assertTrue[.qt.qetl.reference.starter.near[r`mid;0.5*(bid+ask)];"mid is the mean of the two"]};
 
 .qt.qetl.reference.starter.test_asking_for_more_levels_than_the_book_has_does_not_wrap_around:{[t]
     / one level each side; n 3 must price the one level it has, not repeat it into three (3#1 2 is 1 2 1)

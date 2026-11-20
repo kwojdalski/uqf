@@ -71,7 +71,7 @@ setenv[`UQF_FIXTURE_WRITES;enlist "1"];
 setenv[`UQF_ON_CONFLICT;"append"];
 .qetl.cfg.reset[];
 spec:{[a;b] `source_version`range_from`range_to!(`v1;a;b)};
-d:{[n] 2026.09.10D00:00:00.000000000+n*1D};
+d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)};
 fixture_rows:{[a;b] count select from .qpipe.source.demo_deals.fixture[] where deal_time>=a, deal_time<b};
 
 / The first window's answer is lost after the destination committed it.

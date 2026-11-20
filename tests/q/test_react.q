@@ -15,7 +15,7 @@
 // before this file.
 
 
-.qt.qetl.reaction.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.reaction.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 / Every reaction here records into this, rather than each test inventing its
 / own global: a handler cannot close over a local (q lambdas do not capture),

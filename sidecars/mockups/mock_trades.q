@@ -63,7 +63,7 @@
 / @return a table of the declared columns
 .qpipe.source.mock_trades.pair_trades:{[slot;sym;level]
     n:count slot;
-    t:([] time:slot; sym:n#sym; side:n?`buy`sell; qty:1e6*1+n?5; px:level*exp sums 0.0002*-0.5+n?1f);
+    t:([] time:slot; sym:n#sym; side:n?`buy`sell; qty:1e6*(1+n?5); px:level*exp sums 0.0002*(-0.5+n?1f));
     t where (n?1f)<.qpipe.source.mock_trades.rate}
 
 / The window's rows: every pair's trades, in time order. Each pair starts
@@ -76,8 +76,8 @@
 .qpipe.source.mock_trades.generate:{[seed;range_from;range_to]
     / In nanoseconds: PeachQ refuses a timespan `div` a timespan.
     n:0|("j"$range_to-range_from) div "j"$.qpipe.source.mock_trades.step;
-    slot:range_from+.qpipe.source.mock_trades.step*til n;
-    cycle:1+0.002*sin 2*acos[-1]*("j"$range_from)%86400000000000*30;
+    slot:range_from+(.qpipe.source.mock_trades.step*til n);
+    cycle:1+(0.002*sin 2*acos[-1]*("j"$range_from)%86400000000000*30);
     rows:.qpipe.source.mock_trades.with_seed[.qpipe.source.mock_trades.window_seed[seed;range_from];{[slot;cycle;x] raze .qpipe.source.mock_trades.pair_trades[slot]'[.qpipe.source.mock_trades.syms;.qpipe.source.mock_trades.base*cycle]}[slot;cycle]]; / noqa: QF016 with_seed applies f to ::
     $[count rows; `time`sym xasc rows; 0#([] time:`timestamp$(); sym:`symbol$(); side:`symbol$(); qty:`float$(); px:`float$())]}
 

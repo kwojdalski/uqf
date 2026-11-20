@@ -10,7 +10,7 @@
 / against the file itself needs the driver - see the worker's header.
 
 
-.qt.qpipe.job.duckdb_deals_backfill.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qpipe.job.duckdb_deals_backfill.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 .qt.qpipe.job.duckdb_deals_backfill.spec_for:{[version;from_n;to_n]
     `source_version`range_from`range_to!(version;.qt.qpipe.job.duckdb_deals_backfill.d[from_n];.qt.qpipe.job.duckdb_deals_backfill.d[to_n])}

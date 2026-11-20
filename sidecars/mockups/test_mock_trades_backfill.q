@@ -1,7 +1,7 @@
 / test_mock_trades_backfill.q - the mock_trades source and its bounded worker (.qt.qpipe.job.mock_trades_backfill).
 
 
-.qt.qpipe.job.mock_trades_backfill.d:{[n] 2026.09.01D00:00:00.000000000+n*1D}
+.qt.qpipe.job.mock_trades_backfill.d:{[n] 2026.09.01D00:00:00.000000000+(n*1D)}
 .qt.qpipe.job.mock_trades_backfill.gen:{[seed;n] .qpipe.source.mock_trades.generate[seed;.qt.qpipe.job.mock_trades_backfill.d[n];.qt.qpipe.job.mock_trades_backfill.d[n+1]]}
 
 .qt.qpipe.job.mock_trades_backfill.setUp_worker:{[]

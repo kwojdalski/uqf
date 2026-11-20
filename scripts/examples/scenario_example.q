@@ -63,8 +63,8 @@ legs:.qf.px.ccy_pair_legs each pairs;
 mk_book_row:{[spot]
     levels:til 3;
     `bid_prices`bid_sizes`ask_prices`ask_sizes!(
-        spot-.qf.demo.pip_size*levels;.qf.demo.level_size_unit*1+levels;
-        (spot+.qf.demo.pip_size)+.qf.demo.pip_size*levels;.qf.demo.level_size_unit*1+levels)};
+        spot-(.qf.demo.pip_size*levels);.qf.demo.level_size_unit*(1+levels);
+        (spot+.qf.demo.pip_size)+(.qf.demo.pip_size*levels);.qf.demo.level_size_unit*(1+levels))};
 `market_data insert (([] time:3#t0; sym:pairs; source:3#`demo; source_time:3#t0),'
     (mk_book_row each 1.0850 0.6550 4.2500));
 .qetl.log.ch.info[`lifecycle;"market_data - ",.Q.s1[count market_data]," book snapshots";enlist[`example]!enlist `seed];

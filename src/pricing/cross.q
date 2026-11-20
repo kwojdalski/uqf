@@ -145,7 +145,7 @@
     orient:.qf.mkt.ccy_orient_cross[sym1;sym2];
     bid_r:.qf.mkt.cross_sweep_side[book1;book2;`bid;size;orient`invert1;orient`invert2];
     ask_r:.qf.mkt.cross_sweep_side[book1;book2;`ask;size;orient`invert1;orient`invert2];
-    mid_price:0.5*bid_r[`price]+ask_r[`price];
+    mid_price:0.5*(bid_r[`price]+ask_r[`price]);
     `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid!
       (size;orient`cross_sym;bid_r`price;bid_r`filled_size;bid_r`fully_filled;ask_r`price;ask_r`filled_size;ask_r`fully_filled;mid_price)};
 
@@ -281,7 +281,7 @@
     orient:.qf.mkt.ccy_orient_chain[syms];
     bid_r:.qf.mkt.cross_sweep_chain[books;`bid;size;orient`inverts];
     ask_r:.qf.mkt.cross_sweep_chain[books;`ask;size;orient`inverts];
-    mid_price:0.5*bid_r[`price]+ask_r[`price];
+    mid_price:0.5*(bid_r[`price]+ask_r[`price]);
     `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid!
       (size;orient`cross_sym;bid_r`price;bid_r`filled_size;bid_r`fully_filled;ask_r`price;ask_r`filled_size;ask_r`fully_filled;mid_price)};
 
@@ -430,7 +430,7 @@
     ask_lvl:.qf.mkt.oriented_levels[`ask;leg_book;invert];
     bid_r:.qf.mkt.sweep_price[bid_lvl 0;bid_lvl 1;size];
     ask_r:.qf.mkt.sweep_price[ask_lvl 0;ask_lvl 1;size];
-    mid_price:0.5*bid_r[`avg_price]+ask_r[`avg_price];
+    mid_price:0.5*(bid_r[`avg_price]+ask_r[`avg_price]);
     `size`sym`bid`bid_filled_size`bid_fully_filled`ask`ask_filled_size`ask_fully_filled`mid!
       (size;cross_sym;bid_r`avg_price;bid_r`filled_size;bid_r`fully_filled;ask_r`avg_price;ask_r`filled_size;ask_r`fully_filled;mid_price)};
 
@@ -551,7 +551,7 @@
     tol:hi*.qf.mkt.CROSS_SIZE_REL_TOL;
     halvings:0;
     while[((hi-lo)>tol) and halvings<.qf.mkt.CROSS_SIZE_MAX_HALVINGS;
-        probe:0.5*lo+hi;
+        probe:0.5*(lo+hi);
         $[.qf.mkt.cross_price_ok_at_size[quotes;sym;as_of;book_side;price_limit;probe]; lo:probe; hi:probe];
         halvings+:1];
     lo};

@@ -4,7 +4,7 @@
 // .qetl.coverage.require_interval, and the attribution tests read the coverage ledger.
 
 
-.qt.qetl.run.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.run.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 .qt.qetl.run.beforeNamespace_isolate:{[]
     // Set explicitly rather than inherited from whichever suite ran first.

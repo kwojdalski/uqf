@@ -5,7 +5,7 @@
 // and tests/lib/support.q before this file.
 
 
-.qt.qetl.coverage.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.coverage.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 .qt.qetl.coverage.beforeNamespace_isolate:{[]
     setenv[`UQF_STATUS_DIR;"build/test-status"];

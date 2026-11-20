@@ -17,7 +17,7 @@
 
 / One-to-one: a payload value and an optional payload time (0 = the payload has none).
 .qt.qetl.kafka.provenance.one_map:{[m]
-    ts:1970.01.01D00:00:00.000000000+1000000*m`t_ms;
+    ts:1970.01.01D00:00:00.000000000+(1000000*m`t_ms);
     ([] message_index:til count m; a:m`a; event_time:@[ts;where 0=m`t_ms;:;0Np])}
 
 / A one-to-one mapping that drops a negative record instead of refusing it: it returns the wrong number of rows.
@@ -85,7 +85,7 @@
 / Envelope rows: one per payload, offsets given, partition 0, the broker's time one second apart unless given.
 .qt.qetl.kafka.provenance.env:{[tp;offs;payloads]
     n:count offs;
-    ([] topic:n#tp; partition:n#0j; offset:offs; msg_key:n#enlist "k"; broker_time:.qt.qetl.kafka.provenance.t0+1000000000*til n; payload:payloads)}
+    ([] topic:n#tp; partition:n#0j; offset:offs; msg_key:n#enlist "k"; broker_time:.qt.qetl.kafka.provenance.t0+(1000000000*til n); payload:payloads)}
 
 .qt.qetl.kafka.provenance.one:{[a;t_ms] "{\"a\":",string[a],",\"t_ms\":",string[t_ms],"}"}
 .qt.qetl.kafka.provenance.many:{[legs;px] "{\"legs\":",string[legs],",\"px\":",string[px],"}"}

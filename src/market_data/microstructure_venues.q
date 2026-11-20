@@ -106,7 +106,7 @@
     best_bid:max per_venue[;0];
     best_ask:min 0w^per_venue[;1];
     best_ask:?[best_ask=0w;0n;best_ask];
-    mid:0.5*best_bid+best_ask;
+    mid:0.5*(best_bid+best_ask);
     ([] bid:best_bid; ask:best_ask; mid:?[null best_bid;0n;mid])}
 
 / The tops in a batch that advance each venue's held top of book: per

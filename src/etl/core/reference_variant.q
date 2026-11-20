@@ -76,7 +76,7 @@
     / max of a group with no bid at all is -0w, not null: put the null back
     best_bid:@[n#0n;g`tid;:;?[(g`b)=-0w;0n;g`b]];
     best_ask:@[n#0n;g`tid;:;?[(g`a)=0w;0n;g`a]];
-    ([] bid:best_bid; ask:best_ask; mid:?[null best_bid;0n;0.5*best_bid+best_ask])}
+    ([] bid:best_bid; ask:best_ask; mid:?[null best_bid;0n;0.5*(best_bid+best_ask)])}
 
 / The registered variants: name -> its definition, enlisted so the dictionary stays general.
 .qetl.reference.variants:(`symbol$())!()

@@ -2,7 +2,7 @@
 
 
 .qt.qpipe.job.mock_positions.t0:2026.01.02D00:00:00.000000000
-.qt.qpipe.job.mock_positions.trades:{[] ([] time:.qt.qpipe.job.mock_positions.t0+0D00:01*1 2 3; sym:`EURUSD`EURUSD`GBPUSD; side:`buy`sell`buy;
+.qt.qpipe.job.mock_positions.trades:{[] ([] time:.qt.qpipe.job.mock_positions.t0+(0D00:01*1 2 3); sym:`EURUSD`EURUSD`GBPUSD; side:`buy`sell`buy;
     qty:3e6 1e6 2e6; px:1.08 1.09 1.27)}
 
 .qt.qpipe.job.mock_positions.setUp_reaction:{[]
@@ -25,7 +25,7 @@
 
 .qt.qpipe.job.mock_positions.test_the_vwap_weights_by_quantity:{[t]
     p:.qpipe.job.mock_positions.positions[.qt.qpipe.job.mock_positions.trades[];.qt.qpipe.job.mock_positions.t0];
-    .qunit.assertEquals[first exec vwap from p where sym=`EURUSD;((1.08*3e6)+1.09*1e6)%4e6;
+    .qunit.assertEquals[first exec vwap from p where sym=`EURUSD;((1.08*3e6)+(1.09*1e6))%4e6;
         "the 3m trade counts three times the 1m one"]};
 
 .qt.qpipe.job.mock_positions.test_an_unknown_side_is_refused:{[t]

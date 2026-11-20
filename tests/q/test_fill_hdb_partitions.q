@@ -525,8 +525,8 @@
     root:.qt.qproc.fillhdb.scratch[];
     t0:2026.01.01D10:00:00.000000000;
     n:9;
-    rows:([] time:t0+1000000000*til n; sym:`EURUSD`GBPUSD`EURUSD`EURUSD`GBPUSD`EURUSD`GBPUSD`EURUSD`GBPUSD;
-        source:`b`a`a`b`b`a`a`b`a; market:n#`fx; source_time:t0+1000000000*(n-til n);
+    rows:([] time:t0+(1000000000*til n); sym:`EURUSD`GBPUSD`EURUSD`EURUSD`GBPUSD`EURUSD`GBPUSD`EURUSD`GBPUSD;
+        source:`b`a`a`b`b`a`a`b`a; market:n#`fx; source_time:t0+(1000000000*(n-til n));
         bid_prices:(1.1 1.09;1.25 1.24;1.2;`float$();1.3;1.4 1.39;1.5;1.6;1.7);
         bid_sizes:(1e6 2e6;1e6 2e6;1e6;`float$();1e6;1e6 2e6;1e6;1e6;1e6);
         ask_prices:(1.2 1.21;1.26;1.3;1.4;1.31;1.5;1.6;1.7;1.8);

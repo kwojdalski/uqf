@@ -128,7 +128,7 @@
 / @param horizon seconds
 / @return the probability of at least one fill
 / @eg .qpipe.job.crypto_mock.hazard_to_prob[0;1] -> 0f
-.qpipe.job.crypto_mock.hazard_to_prob:{[hazard;horizon] 1-exp neg hazard*horizon}
+.qpipe.job.crypto_mock.hazard_to_prob:{[hazard;horizon] 1-(exp neg hazard*horizon)}
 
 / The two sides' fill probabilities under a given toxicity - the exact
 / skew QuoteFillSimulator applies: positive toxicity is buy-heavy flow,
@@ -139,7 +139,7 @@
 / @eg .qpipe.job.crypto_mock.skewed[0.5;0f] -> 0.5 0.5
 .qpipe.job.crypto_mock.skewed:{[p;tox]
     f:.qpipe.job.crypto_mock.toxicity_factor;
-    1&0|(p*1+f*0|neg tox; p*1+f*0|tox)}
+    1&0|(p*(1+(f*0|neg tox)); p*(1+(f*0|tox)))}
 
 / Each market row's mid this tick: its sym's shared mid, moved by at most
 / venue_jitter either way.
@@ -149,7 +149,7 @@
 / @eg count .qpipe.job.crypto_mock.venue_mids[.qpipe.job.crypto_mock.market;.qpipe.job.crypto_mock.mid0] -> 6
 .qpipe.job.crypto_mock.venue_mids:{[mkt;mids]
     m:mids .qpipe.job.crypto_mock.syms?mkt`sym;
-    m*1+.qpipe.job.crypto_mock.venue_jitter*-1+2*(count m)?1f}
+    m*(1+(.qpipe.job.crypto_mock.venue_jitter*(-1+(2*(count m)?1f))))}
 
 / Walk one mid: the same symmetric random walk .qf.demo uses for FX, +/-5bp.
 / @param m the current mid
@@ -162,7 +162,7 @@
 / @param toxicity the current toxicity
 / @return the next, clipped to [-1;1]
 / @eg (.qpipe.job.crypto_mock.drift_toxicity 0f) within -1 1f -> 1b
-.qpipe.job.crypto_mock.drift_toxicity:{[toxicity] 1&-1|(0.9*toxicity)+0.1*-1+2*rand 1f}
+.qpipe.job.crypto_mock.drift_toxicity:{[toxicity] 1&-1|(0.9*toxicity)+(0.1*(-1+(2*rand 1f)))}
 
 / ------------------------------------------------------------ THE BOOK
 
@@ -187,9 +187,9 @@
     step:.qpipe.job.crypto_mock.level_step*mkt`mid;
     (count[mkt]#.z.p; mkt`venue; mkt`sym;
         .qf.demo.levels_one[;;-1;n] .' flip (mkt`mid;step);
-        {[u;n] u*1+til n}[;n] each unit;
+        {[u;n] u*(1+til n)}[;n] each unit;
         .qf.demo.levels_one[;;1;n] .' flip (mkt`mid;step);
-        {[u;n] u*1+til n}[;n] each unit)}
+        {[u;n] u*(1+til n)}[;n] each unit)}
 
 / ------------------------------------------------------------ THE FILLS
 

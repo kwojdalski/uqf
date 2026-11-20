@@ -82,10 +82,10 @@ mk_wide_row:{[spot]
     bid_sz_names:`$"bid_sz_",/:lvl_suffix;
     ask_px_names:`$"ask_px_",/:lvl_suffix;
     ask_sz_names:`$"ask_sz_",/:lvl_suffix;
-    bid_px_vals:spot-.qf.demo.pip_size*levels;
-    bid_sz_vals:.qf.demo.level_size_unit*1+levels;
-    ask_px_vals:(spot+.qf.demo.pip_size)+.qf.demo.pip_size*levels;
-    ask_sz_vals:.qf.demo.level_size_unit*1+levels;
+    bid_px_vals:spot-(.qf.demo.pip_size*levels);
+    bid_sz_vals:.qf.demo.level_size_unit*(1+levels);
+    ask_px_vals:(spot+.qf.demo.pip_size)+(.qf.demo.pip_size*levels);
+    ask_sz_vals:.qf.demo.level_size_unit*(1+levels);
     (bid_px_names,bid_sz_names,ask_px_names,ask_sz_names)!(bid_px_vals,bid_sz_vals,ask_px_vals,ask_sz_vals)};
 
 / derive_level_groups' (prefix;target_col) rules for the wide columns
@@ -113,12 +113,12 @@ output_path:`$":",output_dir,"/timer_replay_quotes";
 system "mkdir -p ",output_dir;
 
 mean_gap:0D00:00:00.200; std_gap:0D00:00:00.050; min_gap:0D00:00:00.050;
-p:1e-9+(1-2e-9)*n_ticks?1.0;
+p:1e-9+((1-2e-9)*n_ticks?1.0);
 .qetl.log.ch.dbg[`lifecycle;"running: .qf.math.inv_ncdf p";enlist[`example]!enlist `timer_replay];
 z:.qf.math.inv_ncdf p;
-gaps:min_gap|mean_gap+std_gap*z;
+gaps:min_gap|mean_gap+(std_gap*z);
 hist_ts:.z.p+sums gaps;
-hist_spots:1.0850+0.00002*til n_ticks;
+hist_spots:1.0850+(0.00002*til n_ticks);
 
 / hist_wide - the wide-form "historical feed", time/sym plus 20 scalar
 / level columns per row (bid_px_00.._04, ...). sym is deliberately a

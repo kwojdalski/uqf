@@ -6,7 +6,7 @@
 // tests/lib/qunit.q and tests/lib/support.q before this file.
 
 
-.qt.qetl.job.bounded.runtime.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.job.bounded.runtime.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 / A policy with no delay at all, so the retry tests assert on behaviour
 / rather than sleeping through their own backoff.

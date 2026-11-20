@@ -93,7 +93,7 @@ if[not `serve in key .Q.opt .z.x; system "l src/init.q"; system "l src/etl/init.
         price:1.0+n?0.5; fill_id:`$"f",/:string til n; clock:n#`venue);
     legs:distinct raze .qpipe.transform.fx_markout.legs_of[spec;exe];
     m:count legs;
-    mid:1.0+0.5*m?1f;
+    mid:1.0+(0.5*m?1f);
     s:(m*q)#legs;
     mids:(m*q)#mid;
     books:([] source_time:(t0-0D00:00:01)+asc (m*q)?span+0D00:00:20; sym:s; source:(m*q)#`a;

@@ -71,7 +71,7 @@
     bs:{$[count x; first x; 0n]} each slice`bid_sizes;
     as:{$[count x; first x; 0n]} each slice`ask_sizes;
     live:(not null slice`bid) & (not null slice`ask) & (not null bs) & (not null as) & 0f<bs+as;
-    px:?[live; ((slice[`bid]*as)+slice[`ask]*bs)%bs+as; 0n];
+    px:?[live; ((slice[`bid]*as)+(slice[`ask]*bs))%(bs+as); 0n];
     ([] bid:px; ask:px; w:.qetl.reference.top_size slice)}];
 
 .qetl.reference.add_transform[`vwap;`depth;enlist[`qty]!enlist 1000000f;{[slice;params]
@@ -95,14 +95,14 @@
 
 / The median of each side and of the books' mids, per instant; null where no book has the side.
 .qetl.reference.combines[`median]:{[tid;px;n]
-    t:([] tid:tid; bid:px`bid; ask:px`ask; mid:?[(null px`bid)|null px`ask;0n;0.5*(px`bid)+px`ask]);
+    t:([] tid:tid; bid:px`bid; ask:px`ask; mid:?[(null px`bid)|null px`ask;0n;0.5*((px`bid)+px`ask)]);
     g:0!select b:med bid, a:med ask, m:med mid by tid from t;
     ([] bid:@[n#0n;g`tid;:;g`b]; ask:@[n#0n;g`tid;:;g`a]; mid:@[n#0n;g`tid;:;g`m])};
 
 / The weighted mean of each side and of the books' mids, per instant; a book without the side adds neither weight nor price to it.
 .qetl.reference.combines[`wmean]:{[tid;px;n]
     w:$[`w in cols px; px`w; (count tid)#1f];
-    mid:?[(null px`bid)|null px`ask;0n;0.5*(px`bid)+px`ask];
+    mid:?[(null px`bid)|null px`ask;0n;0.5*((px`bid)+px`ask)];
     t:([] tid:tid; bid:px`bid; ask:px`ask; mid:mid; w:w);
     g:0!select b:(sum w*bid)%sum w*not null bid, a:(sum w*ask)%sum w*not null ask, m:(sum w*mid)%sum w*not null mid by tid from t;
     ([] bid:@[n#0n;g`tid;:;g`b]; ask:@[n#0n;g`tid;:;g`a]; mid:@[n#0n;g`tid;:;g`m])};

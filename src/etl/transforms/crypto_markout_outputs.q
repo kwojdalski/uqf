@@ -181,7 +181,7 @@
         rate_sym:n#`; rate_time:n#0Np; report_amount:1.5 1.5 3.75 1.5;
         status:n#`ok; config_id:n#.qpipe.transform.crypto_markout_outputs.config_id;
         markout_bps:10000*6 6 15 6f%62000; fee_quote:n#15.5; fee_bps:n#10f;
-        markout_net_bps:(-10+10000*6%62000;0n;-10+10000*15%62000;0n))}
+        markout_net_bps:(-10+(10000*6%62000);0n;-10+(10000*15%62000);0n))}
 
 \d .
 

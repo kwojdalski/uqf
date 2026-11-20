@@ -111,7 +111,7 @@
         g:0!select b:min bid, a:max ask by tid from ([] tid:tid; bid:px`bid; ask:px`ask);
         bb:@[n#0n;g`tid;:;g`b];
         ba:@[n#0n;g`tid;:;g`a];
-        ([] bid:bb; ask:ba; mid:0.5*bb+ba)};
+        ([] bid:bb; ask:ba; mid:0.5*(bb+ba))};
     .qetl.reference.register[`worst_top;.qt.qetl.reference.def_of[enlist[`combine]!enlist `worst]];
     r:(.qetl.reference.at[`worst_top;tob;0Wn;enlist `EURUSD;enlist 2026.09.17D10:00:01;enlist `venue])`same;
     .qt.qetl.reference.forget[enlist `worst_top;enlist `worst];

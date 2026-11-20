@@ -45,8 +45,8 @@
 .qt.qpipe.transform.book_liquidity.test_a_sweep_that_ends_inside_a_level_takes_part_of_it:{[t]
     r:.qt.qpipe.transform.book_liquidity.at[.qt.qpipe.transform.book_liquidity.snap[.qt.qpipe.transform.book_liquidity.ref_book[];enlist 4.5e6];4.5e6];
     / 1m at 1.1000, 2m at 1.0999, 1.5m at 1.0998
-    .qt.support.assertApprox[r`bid_price;(1.1000+(2*1.0999)+1.5*1.0998)%4.5;.qt.qpipe.transform.book_liquidity.tol;"bid price over three levels, the last part-consumed"];
-    .qt.support.assertApprox[r`ask_price;(1.1001+(2*1.1003)+1.5*1.1006)%4.5;.qt.qpipe.transform.book_liquidity.tol;"ask price over three levels"];
+    .qt.support.assertApprox[r`bid_price;(1.1000+(2*1.0999)+(1.5*1.0998))%4.5;.qt.qpipe.transform.book_liquidity.tol;"bid price over three levels, the last part-consumed"];
+    .qt.support.assertApprox[r`ask_price;(1.1001+(2*1.1003)+(1.5*1.1006))%4.5;.qt.qpipe.transform.book_liquidity.tol;"ask price over three levels"];
     .qunit.assertEquals[(r`bid_qty;r`bid_full);(4.5e6;1b);"filled in full"]};
 
 .qt.qpipe.transform.book_liquidity.test_a_sweep_of_exactly_the_whole_depth_is_full:{[t]
@@ -57,8 +57,8 @@
     r:.qt.qpipe.transform.book_liquidity.at[.qt.qpipe.transform.book_liquidity.snap[.qt.qpipe.transform.book_liquidity.ref_book[];enlist 10e6];10e6];
     .qunit.assertEquals[(r`bid_qty;r`ask_qty);6e6 6e6;"the quantity actually available, not the request"];
     .qunit.assertEquals[(r`bid_full;r`ask_full);(0b;0b);"a partial sweep is not executable at the request"];
-    .qt.support.assertApprox[r`bid_price;((1e6*1.1000)+(2e6*1.0999)+3e6*1.0998)%6e6;.qt.qpipe.transform.book_liquidity.tol;"the partial fill's blended price"];
-    .qt.support.assertApprox[r`ask_price;((1e6*1.1001)+(2e6*1.1003)+3e6*1.1006)%6e6;.qt.qpipe.transform.book_liquidity.tol;"the partial fill's blended price, ask"]};
+    .qt.support.assertApprox[r`bid_price;((1e6*1.1000)+(2e6*1.0999)+(3e6*1.0998))%6e6;.qt.qpipe.transform.book_liquidity.tol;"the partial fill's blended price"];
+    .qt.support.assertApprox[r`ask_price;((1e6*1.1001)+(2e6*1.1003)+(3e6*1.1006))%6e6;.qt.qpipe.transform.book_liquidity.tol;"the partial fill's blended price, ask"]};
 
 .qt.qpipe.transform.book_liquidity.test_one_side_can_be_deep_enough_while_the_other_is_not:{[t]
     r:.qt.qpipe.transform.book_liquidity.at[.qt.qpipe.transform.book_liquidity.snap[.qt.qpipe.transform.book_liquidity.mk[.qt.qpipe.transform.book_liquidity.t0;`LP_A;`spot;`standard;enlist 1.1;enlist 8e6;1.1002 1.1003;1e6 1e6];enlist 5e6];5e6];

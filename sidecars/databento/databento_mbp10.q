@@ -99,7 +99,7 @@
 / Private: one fixture row's ten levels, flattened in level_fields order.
 / Prices step one cent away from the touch per level, sizes by 100.
 / @private
-.qpipe.source.databento_mbp10.fixture_levels:{[bid;ask;sz] raze {[bid;ask;sz;i] (bid-0.01*i;sz+100*i;ask+0.01*i;sz+100*i)}[bid;ask;sz] each til 10}
+.qpipe.source.databento_mbp10.fixture_levels:{[bid;ask;sz] raze {[bid;ask;sz;i] (bid-(0.01*i);sz+(100*i);ask+(0.01*i);sz+(100*i))}[bid;ask;sz] each til 10}
 
 / Four records for two symbols, taken from the shape of the real data: an
 / add on each side and a trade, with the touch moving between them.
@@ -174,8 +174,8 @@
 / out: the fixture's levels step one cent from the touch and 100 in size.
 .qpipe.transform.eq_orderbook.example_book:{[]
     f:.qpipe.source.databento_mbp10.fixture[];
-    px:{[touch;dir] touch+dir*0.01*til 10};
-    sz:{[s] s+100*til 10};
+    px:{[touch;dir] touch+(dir*0.01*til 10)};
+    sz:{[s] s+(100*til 10)};
     ([] time:f`ts_event; sym:`AAPL`AAPL`META`META; ts_event:f`ts_event; action:`A`T`A`C; side:`B`N`A`A;
         price:271.2 271.65 643.48 643.48; size:200 21 10 10; sequence:28151775 28158778 29559422 29563793;
         bid_prices:(px[271.45;-1];px[271.45;-1];px[642f;-1];px[642f;-1]);

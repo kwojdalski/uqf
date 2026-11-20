@@ -16,12 +16,12 @@
 .qt.qf.px.rates.test_df_simple_inverts_growth_simple:{[t]
     rs:0.01 0.03 0.05 0.10;
     ts:0.25 0.5 1 2;
-    .qt.support.assertApprox[.qf.px.df_simple[rs;ts]*.qf.px.growth_simple[rs;ts];1+0*rs;1e-9;"df*growth=1 (simple) across several rate/tenor pairs"]};
+    .qt.support.assertApprox[.qf.px.df_simple[rs;ts]*.qf.px.growth_simple[rs;ts];1+(0*rs);1e-9;"df*growth=1 (simple) across several rate/tenor pairs"]};
 
 .qt.qf.px.rates.test_df_cont_inverts_growth_cont:{[t]
     rs:0.01 0.03 0.05 0.10;
     ts:0.25 0.5 1 2;
-    .qt.support.assertApprox[.qf.px.df_cont[rs;ts]*.qf.px.growth_cont[rs;ts];1+0*rs;1e-9;"df*growth=1 (continuous) across several rate/tenor pairs"]};
+    .qt.support.assertApprox[.qf.px.df_cont[rs;ts]*.qf.px.growth_cont[rs;ts];1+(0*rs);1e-9;"df*growth=1 (continuous) across several rate/tenor pairs"]};
 
 .qt.qf.px.rates.test_simple_to_cont_known:{[t] .qt.support.assertApprox[.qf.px.simple_to_cont[0.05;1];0.04879016;1e-6;"ln(1.05)"]};
 

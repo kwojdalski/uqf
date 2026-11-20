@@ -33,7 +33,7 @@
     n:count offs;
     / flip a dictionary: `key` is a keyword, so it cannot be named in a table literal.
     flip `mtype`topic`client`partition`offset`msgtime`data`key!(n#`; n#tp; n#0i; `int$parts; `long$offs;
-        2026.10.20D09:00:00.000000000+1000000000*til n; ("x"$) each payloads; n#enlist `byte$())}
+        2026.10.20D09:00:00.000000000+(1000000000*til n); ("x"$) each payloads; n#enlist `byte$())}
 
 .qt.qetl.kafka.none:{[] .qt.qetl.kafka.msgs[`t;`long$();`long$();()]}
 
@@ -445,8 +445,8 @@
     .qunit.assertEquals[st[`stats]`duplicates;0;"and not counted as one"]};
 
 .qt.qetl.kafka.test_restarted_names_a_partition_only_when_its_rows_are_below_and_newer:{[t]
-    marks:.qetl.kafka.advance[.qetl.kafka.marks_empty;update broker_time:2026.10.20D09:00:00+0D00:00:01*til 5 from .qt.qetl.kafka.env[`t;5#0;til 5;5#enlist "x"]];
-    mk:{[marks;offs;shift] .qetl.kafka.restarted[marks;update broker_time:2026.10.20D09:00:00+shift+0D00:00:01*til count offs from .qt.qetl.kafka.env[`t;(count offs)#0;offs;(count offs)#enlist "x"]]}[marks];
+    marks:.qetl.kafka.advance[.qetl.kafka.marks_empty;update broker_time:2026.10.20D09:00:00+(0D00:00:01*til 5) from .qt.qetl.kafka.env[`t;5#0;til 5;5#enlist "x"]];
+    mk:{[marks;offs;shift] .qetl.kafka.restarted[marks;update broker_time:2026.10.20D09:00:00+shift+(0D00:00:01*til count offs) from .qt.qetl.kafka.env[`t;(count offs)#0;offs;(count offs)#enlist "x"]]}[marks];
     .qunit.assertEquals[count mk[0 1 2;0D01:00:00];1;"below the mark and written later: a restart"];
     .qunit.assertEquals[count mk[0 1 2;0D00:00:00];0;"below the mark and not newer: a redelivery"];
     .qunit.assertEquals[count mk[3 4 5;0D00:00:03];0;"reaching the mark with the mark's own record: a redelivery"];
@@ -461,7 +461,7 @@
     .qunit.assertEquals[count .qetl.kafka.restarted[marks;0#e];0;"nor an empty batch"]};
 
 .qt.qetl.kafka.test_advance_keeps_the_broker_time_of_the_highest_offset:{[t]
-    e:update broker_time:2026.10.20D09:00:00+0D00:00:01*3 1 2 from .qt.qetl.kafka.env[`t;3#0;7 3 5;3#enlist "x"];
+    e:update broker_time:2026.10.20D09:00:00+(0D00:00:01*3 1 2) from .qt.qetl.kafka.env[`t;3#0;7 3 5;3#enlist "x"];
     m:.qetl.kafka.advance[.qetl.kafka.marks_empty;e];
     .qunit.assertEquals[(first exec offset from m;first exec broker_time from m);(7j;2026.10.20D09:00:03.000000000);"the time of offset 7, the highest"];
     late:update broker_time:2026.10.20D10:00:00 from .qt.qetl.kafka.env[`t;enlist 0;enlist 2;enlist "x"];

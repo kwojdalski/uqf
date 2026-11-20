@@ -16,7 +16,7 @@
     bi:where .qf.mkt.level_ok[bid_prices idx;bid_sizes idx];
     ai:where .qf.mkt.level_ok[ask_prices idx;ask_sizes idx];
     vw_mid:.qf.exec.vwap[(bid_prices bi),ask_prices ai;(bid_sizes bi),ask_sizes ai];
-    simple_mid:0.5*(bid_prices 0)+ask_prices 0;
+    simple_mid:0.5*((bid_prices 0)+ask_prices 0);
     l0_spread:(ask_prices 0)-bid_prices 0;
     $[not (0 in bi) and 0 in ai;0n;l0_spread<=0;0n;(vw_mid-simple_mid)%l0_spread]};
 
@@ -121,7 +121,7 @@
     buy_leg:.qf.mkt.sweep_price[ask_prices;ask_sizes;ask_size_target];
     sell_leg:.qf.mkt.sweep_price[bid_prices;bid_sizes;bid_size_target];
     if[not (buy_leg`fully_filled) and sell_leg`fully_filled; :0n];
-    0.5*(buy_leg`avg_price)+sell_leg`avg_price};
+    0.5*((buy_leg`avg_price)+sell_leg`avg_price)};
 
 / VAMP (volume-adjusted mid price): convert notional into a size via each
 / side's own L0 price, then sweep each side to that size with execution.q's

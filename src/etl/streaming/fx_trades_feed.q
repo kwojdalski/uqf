@@ -62,7 +62,7 @@
 / @return one fill's rows: sym, side, price, size, pip_factor, fill_id
 / @eg count .qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0;`fx1]  ->  6
 .qpipe.job.fx_trades_feed.fill_rows:{[i;side;size;slip_pips;fill_id]
-    price:.qpipe.job.fx_trades_feed.spot[i]+slip_pips%.qpipe.job.fx_trades_feed.pip_factor[i];
+    price:.qpipe.job.fx_trades_feed.spot[i]+(slip_pips%.qpipe.job.fx_trades_feed.pip_factor[i]);
     (enlist .qf.demo.pairs i;enlist side;enlist price;enlist size;
         enlist .qpipe.job.fx_trades_feed.pip_factor i;enlist fill_id)}
 
@@ -73,7 +73,7 @@
     i:rand count .qf.demo.pairs;
     / 1 or -1, always an atom - indexing `1 -1` with a possibly-empty vector
     / is how this produced a list instead, and .u.upd took it as two rows.
-    side:1-2*rand 2;
+    side:1-(2*rand 2);
     .qpipe.job.fx_trades_feed.publish[`trades;
         .qpipe.job.fx_trades_feed.fill_rows[i;side;.qpipe.job.fx_trades_feed.sizes rand count .qpipe.job.fx_trades_feed.sizes;-3+rand 7;
             .qpipe.job.fx_trades_feed.next_id[]]];

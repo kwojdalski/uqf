@@ -101,7 +101,7 @@
     .qunit.assertEquals[hx`rate_time;t+0D00:00:09;"the rate's book is the horizon's"];
     .qunit.assertEquals[xx`rate_time;t-0D00:00:01;"and the execution's book under execution timing"];
     translation:(xx`report_amount)-hx`report_amount;
-    .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[translation;50000*(1%150f)-1%150.05];"the difference is quote_amount*(rate_0-rate_h)"];
+    .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[translation;50000*((1%150f)-(1%150.05))];"the difference is quote_amount*(rate_0-rate_h)"];
     .qunit.assertTrue[(translation>0.11) and translation<0.12;"about 0.11 USD"]};
 
 .qt.qpipe.transform.markout_core.test_a_crypto_pair_ignores_a_stale_venue_and_converts_at_a_declared_rate:{[tc]
@@ -115,7 +115,7 @@
     at:.qt.qpipe.transform.markout_core.at[r;;.qt.qpipe.transform.markout_core.ten_s;];
     .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[at[`total;`ref_t0];62000f];"mid of 61990/62010 alone"];
     .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[at[`total;`ref_t1];62020f];"mid of 62010/62030"];
-    .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[at[`total;`quote_amount];0.5*62020-61998];"0.5 * 22 USDT"];
+    .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[at[`total;`quote_amount];0.5*(62020-61998)];"0.5 * 22 USDT"];
     .qunit.assertEquals[at[`total;`rate_source];`fixed;"USDT is declared, never assumed"];
     .qunit.assertTrue[null at[`total;`rate_sym];"a fixed rate has no pair"];
     .qunit.assertTrue[null at[`total;`rate_time];"and no book time"];
@@ -279,7 +279,7 @@
 .qt.qpipe.transform.markout_core.attributing:{[]
     d:.qt.qpipe.transform.markout_core.domain[];
     d,`attribute`keys!({[spec;fr;lg;books]
-        ([] ri:fr`ri; kind:`half; step:1; move:0.5*(fr`side)*(fr`ref_t1)-fr`price; status:`reconciled)};`symbol$())}
+        ([] ri:fr`ri; kind:`half; step:1; move:0.5*(fr`side)*((fr`ref_t1)-fr`price); status:`reconciled)};`symbol$())}
 
 .qt.qpipe.transform.markout_core.test_attribution_rows_get_money_and_the_domains_status_from_the_core:{[tc]
     t:.qt.qpipe.transform.markout_core.t;

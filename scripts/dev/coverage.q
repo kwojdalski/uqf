@@ -592,7 +592,7 @@ run:{[fn;params;settings]
 / "100" means every tracked character ran: rounding printed 99.95 as 100
 / beside "partial: 1". The 1e-6 keeps a float such as 100*29%100
 / (28.999999999999996) from truncating to 28.9.
-.cov.pct1:{[x] string 0.1*$[x<100f; 999&floor 1e-6+10*x; floor 10*x]}
+.cov.pct1:{[x] string 0.1*$[x<100f; 999&floor 1e-6+(10*x); floor 10*x]}
 
 / Private: a function's source with <<<>>> marks and X-prefixed lines.
 .cov.annotate:{[text;m]

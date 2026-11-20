@@ -113,7 +113,7 @@
     h:((15+((19*a)+b))-(d+g)) mod 30; i:c div 4; k:c mod 4;
     wl:(((32+(2*e)+(2*i))-h)-k) mod 7;
     m:(a+(11*h)+(22*wl)) div 451;
-    t:(114+h+wl)-7*m;
+    t:(114+h+wl)-(7*m);
     easter:(first_of[y;t div 31])+(t mod 31);
     new_year:first_of[y;1];
     ny:$[1=dow new_year;enlist new_year+1;0=dow new_year;`date$();enlist new_year];
@@ -146,7 +146,7 @@
     shut:.qpipe.transform.eq_markout_outputs.nyse_ad_hoc_closures,raze {x`holidays} each cal;
     d:d except shut;
     early:d in raze {x`early} each cal;
-    mnth:{[d;k] `date$`month$(12*(`long$`year$d)-2000)+k};
+    mnth:{[d;k] `date$`month$(12*((`long$`year$d)-2000))+k};
     first_sunday:{[x] x+`long$((1-(`long$x) mod 7) mod 7)};
     dst_from:first_sunday[7+mnth[d;2]];
     dst_to:first_sunday mnth[d;10];

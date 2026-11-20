@@ -89,7 +89,7 @@
     .qunit.assertEquals[(b`bar_start;b`snapshots);(3#.qt.qpipe.job.book_liquidity_1m.t0;3#1);"one snapshot in the minute of its source_time"];
     .qunit.assertEquals[(b`settlement;b`category);(3#`unspecified;3#`unspecified);"market_data cannot say"];
     / 1m: the best level. 5m: the book holds 3m, so it is partial. 10m: likewise
-    .qt.support.assertApprox[b`bid_price;1.1000,2#(1.1000+2*1.0999)%3;1e-9;"bid prices: the best level, then the blend of everything the book holds"];
+    .qt.support.assertApprox[b`bid_price;1.1000,2#(1.1000+(2*1.0999))%3;1e-9;"bid prices: the best level, then the blend of everything the book holds"];
     .qunit.assertEquals[b`bid_qty;1e6 3e6 3e6;"quantity actually available"];
     .qunit.assertEquals[b`bid_full_ratio;1 0 0f;"only the 1m request is filled in full"];
     .qunit.assertEquals[b`ask_full_ratio;1 0 0f;"and on the ask side"]};

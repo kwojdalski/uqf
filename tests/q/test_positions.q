@@ -263,7 +263,7 @@
     / part way through and once flat.
     deals:([] sym:`EURUSD`USDJPY`EURUSD`USDJPY`EURUSD; side:1 -1 -1 1 -1;
         size:1000000 2000000 500000 2000000 500000f; price:1.10 150.0 1.11 149.5 1.12);
-    times:2026.10.07D10:00:00+0D00:00:01*til count deals;
+    times:2026.10.07D10:00:00+(0D00:00:01*til count deals);
     pos_trades:update trade_price:price, time:times from deals;
     agree:{[pos_trades;deals;n]
         p:.qf.port.ccy_exposure .qf.port.apply_fills[.qf.port.empty_book[];n#pos_trades];
@@ -334,8 +334,8 @@
 / Fractional fills that net to zero only up to float residue (#1278).
 .qt.qf.port.positions.mk_residue_trades:{[sizes;sides]
     n:count sizes;
-    ([] time:2026.10.13D10:00:00.000000000+0D00:01*til n; sym:n#`BTCUSD; side:sides;
-        size:sizes; trade_price:60000f+1000f*til n)}
+    ([] time:2026.10.13D10:00:00.000000000+(0D00:01*til n); sym:n#`BTCUSD; side:sides;
+        size:sizes; trade_price:60000f+(1000f*til n))}
 
 .qt.qf.port.positions.test_fractional_close_leaves_a_flat_book_when_selling_in_pieces:{[t]
     b:.qf.port.apply_fills[.qf.port.empty_book[];.qt.qf.port.positions.mk_residue_trades[0.3 0.1 0.2;1 -1 -1]];

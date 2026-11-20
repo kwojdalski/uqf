@@ -38,7 +38,7 @@ mids:(
     (`EURUSD;1.1000;1.1200;1.1300);(`GBPUSD;1.2500;1.2480;1.2520);
     (`EURPLN;4.3000;4.3500;4.3400);(`EURAUD;1.6000;1.6200;1.6100);
     (`USDMXN;17.00;17.10;17.20);(`GBPPLN;5.40;5.45;5.48));
-quotes:`sym`time xasc flip flip raze {[s] (mk_row[t_zero;s 0;s 1];mk_row[t_zero+one_second;s 0;s 2];mk_row[t_zero+2*one_second;s 0;s 3])} each mids;
+quotes:`sym`time xasc flip flip raze {[s] (mk_row[t_zero;s 0;s 1];mk_row[t_zero+one_second;s 0;s 2];mk_row[t_zero+(2*one_second);s 0;s 3])} each mids;
 
 pairs:`EURUSD`GBPUSD`USDPLN`AUDPLN`EURMXN`GBPPLN;
 trades:([] time:(2*count pairs)#t_zero,t_zero+one_second; sym:raze pairs,'pairs; side:(2*count pairs)#1 -1);

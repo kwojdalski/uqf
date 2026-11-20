@@ -293,7 +293,7 @@
     `inputs`expected!(
         `book`executions!(
             .qpipe.job.fx_positions.desk_book;
-            ([] time:2026.09.17D10:00:00+0D00:00:01*til 4;
+            ([] time:2026.09.17D10:00:00+(0D00:00:01*til 4);
                 sym:`EURUSD`EURUSD`EURUSD`EURUSD;
                 side:1 -1 1 1;
                 size:1000000 400000 500000 250000f;

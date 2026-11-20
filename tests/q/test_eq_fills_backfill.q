@@ -19,7 +19,7 @@
 /   x0004  META buy 5 at 643.00, 20:59:55. At +5s the horizon is 21:00:00, exactly the close,
 /          which is not in the session [open, close): unavailable.
 
-.qt.qpipe.job.eq_fills_backfill.d:{[n] 2026.02.25D00:00:00.000000000+n*1D}
+.qt.qpipe.job.eq_fills_backfill.d:{[n] 2026.02.25D00:00:00.000000000+(n*1D)}
 
 .qt.qpipe.job.eq_fills_backfill.spec_for:{[version;from_n;to_n]
     `source_version`range_from`range_to!(version;.qt.qpipe.job.eq_fills_backfill.d[from_n];.qt.qpipe.job.eq_fills_backfill.d[to_n])}

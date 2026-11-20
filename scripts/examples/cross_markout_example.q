@@ -41,7 +41,7 @@ tick_gaps:`mean`std`min!(0D00:00:00.200;0D00:00:00.050;0D00:00:00.050);
 / one row per timestamp in time.
 mk_tick_series:{[sym;start_spot;drift_per_tick;time]
     n:count time;
-    spots:start_spot+drift_per_tick*til n;
+    spots:start_spot+(drift_per_tick*til n);
     ([] time; sym:n#sym),'(.qf.demo.book each spots)};
 
 / 6 ticks per leg over roughly a second: AUDUSD and EURPLN drift up,
@@ -105,7 +105,7 @@ decomp_total:sum decomp`contribution_pips;
 mid_t0:.qf.mkt.cross_ref_price_at[quotes;`AUDPLN;t0;1];
 .qetl.log.ch.dbg[`lifecycle;"running: .qf.mkt.cross_ref_price_at[quotes;`AUDPLN;t1;1]";enlist[`example]!enlist `cross_markout];
 mid_t1:.qf.mkt.cross_ref_price_at[quotes;`AUDPLN;t1;1];
-actual_total:10000*mid_t1-mid_t0;
+actual_total:10000*(mid_t1-mid_t0);
 .qetl.log.ch.info[`lifecycle;"decomp_total vs actual_total - ",.Q.s1[decomp_total]," vs ",.Q.s1[actual_total],", must match exactly (this is an exact decomposition, not an approximation)";enlist[`example]!enlist `cross_markout];
 if[1e-6<abs decomp_total-actual_total;
     .qetl.log.ch.err[`lifecycle;"per-leg contributions should sum exactly to the actual total move";enlist[`example]!enlist `cross_markout];

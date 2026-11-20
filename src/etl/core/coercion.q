@@ -205,7 +205,7 @@
     if[not (count[digits] in 2 4) and all digits in .Q.n; :(str;0Nn)];
     hm:"J"$(2#digits;2#2_digits,"00");
     if[(23<hm 0) or 59<hm 1; :(str;0Nn)];
-    (at#str; $["-"=str at;-1;1]*(0D01*hm 0)+0D00:01*hm 1)}
+    (at#str; $["-"=str at;-1;1]*((0D01*hm 0)+(0D00:01*hm 1)))}
 
 / Is this text a date with no time part?
 / .

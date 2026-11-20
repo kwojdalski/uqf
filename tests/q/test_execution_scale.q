@@ -26,8 +26,8 @@
     tod:n?24:00:00.000;
     size:1e5+n?4.9e7;
     size_in_millions:size%1e6;
-    liquidity_factor:1%1+size_in_millions;
-    half_spread_pips_base:0.3+2.0*liquidity_factor;
+    liquidity_factor:1%(1+size_in_millions);
+    half_spread_pips_base:0.3+(2.0*liquidity_factor);
     half_spread_pips_noise:n?0.2;
     half_spread_pips:half_spread_pips_base+half_spread_pips_noise;
     half_spread:half_spread_pips%pip_factor;
@@ -36,7 +36,7 @@
     bid:mid-half_spread;
     ask:mid+half_spread;
     side_raw:n?2;
-    side:1-2*side_raw;
+    side:1-(2*side_raw);
     trade_price:?[side=1;ask;bid];
     markout_horizon_pips:(n?30.0)-15.0;
     ref_price:mid+(markout_horizon_pips%pip_factor);

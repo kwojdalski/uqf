@@ -13,7 +13,7 @@
     px:1+n?1f;
     rows:([] sym:n?`EURUSD`GBPUSD`USDJPY; source:n?`a`b`c; source_time:t; market:n#`fx; clock:n#`venue;
         bid:px; ask:px+0.0002;
-        bid_prices:{x-0.0001*til 3}each px; bid_sizes:n#enlist 1e5 2e5 3e5; ask_prices:{x+0.0002+0.0001*til 3}each px; ask_sizes:n#enlist 1e5 2e5 3e5);
+        bid_prices:{x-(0.0001*til 3)}each px; bid_sizes:n#enlist 1e5 2e5 3e5; ask_prices:{x+0.0002+(0.0001*til 3)}each px; ask_sizes:n#enlist 1e5 2e5 3e5);
     .qt.support.stand_in_market_data rows}
 
 / Run f . args with `market_data` standing in for the mapped table, and put the root back.
@@ -26,7 +26,7 @@
     r}
 
 .qt.qetl.mapped.gather.arg:{[groups]
-    p:([] sym:12#`EURUSD`GBPUSD`USDJPY; time:2026.09.16D00:00:00+12*0D01:00:00*til 12);
+    p:([] sym:12#`EURUSD`GBPUSD`USDJPY; time:2026.09.16D00:00:00+(12*0D01:00:00*til 12));
     `probes`read_from`skew`groups`cols!(p;2026.09.14D00:00:00;1;groups;`bid_prices`bid_sizes`ask_prices`ask_sizes)}
 
 .qt.qetl.mapped.gather.test_the_gather_reads_the_ladders_of_the_distinct_books_across_every_select_and_nothing_else:{[t]

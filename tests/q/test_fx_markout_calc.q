@@ -127,11 +127,11 @@
     m:.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t;`USDJPY;`a;150.00;150.02],.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t+0D00:00:00.5;`USDJPY;`a;150.10;150.12];
     r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`JPYUSD;1;0.0066;`i1];m];
     / JPYUSD bid = 1/ask, ask = 1/bid, so the mid is the mean of 1/150.02 and 1/150.00
-    ref0:0.5*(1%150.02)+1%150.00;
-    ref1:0.5*(1%150.12)+1%150.10;
+    ref0:0.5*((1%150.02)+(1%150.00));
+    ref1:0.5*((1%150.12)+(1%150.10));
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[exec price_t1 from r where kind=`execution;enlist ref0];"the reference at the execution"];
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[exec price_t1 from r where kind=`total;enlist ref1];"and a second later"];
-    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.at[r;.qt.qpipe.transform.fx_markout.one_s;`total];10000*ref1-0.0066];"JPYUSD is a 10000-pip pair"];
+    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.at[r;.qt.qpipe.transform.fx_markout.one_s;`total];10000*(ref1-0.0066)];"JPYUSD is a 10000-pip pair"];
     .qunit.assertTrue[first exec invert from r where kind=`leg;"the one leg is USDJPY read inverted"]};
 
 / --- cross legs --------------------------------------------------------------
@@ -149,18 +149,18 @@
     .qunit.assertEquals[exec leg from r where kind=`leg;`EURPLN`EURUSD`USDTRY;"the route, in chain order"];
     .qunit.assertEquals[exec invert from r where kind=`leg;100b;"only the first leg is inverted"];
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[exec price_t0 from r where kind=`leg;4 1.25 40f];"each leg's own mid at the execution, as quoted"];
-    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.leg_at[r;.qt.qpipe.transform.fx_markout.one_s;1];10000*10-12.5];"EURPLN 4 -> 5 takes the cross from 12.5 to 10"];
-    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.leg_at[r;.qt.qpipe.transform.fx_markout.one_s;2];10000*12-10];"EURUSD 1.25 -> 1.5 then takes it to 12"];
-    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.leg_at[r;.qt.qpipe.transform.fx_markout.one_s;3];10000*15-12];"USDTRY 40 -> 50 takes it to 15"];
+    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.leg_at[r;.qt.qpipe.transform.fx_markout.one_s;1];10000*(10-12.5)];"EURPLN 4 -> 5 takes the cross from 12.5 to 10"];
+    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.leg_at[r;.qt.qpipe.transform.fx_markout.one_s;2];10000*(12-10)];"EURUSD 1.25 -> 1.5 then takes it to 12"];
+    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.leg_at[r;.qt.qpipe.transform.fx_markout.one_s;3];10000*(15-12)];"USDTRY 40 -> 50 takes it to 15"];
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.at[r;.qt.qpipe.transform.fx_markout.one_s;`execution];1000f];"bought 12.4 against a 12.5 mid"];
-    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.at[r;.qt.qpipe.transform.fx_markout.one_s;`total];10000*15-12.4];"26000 pips in all"]};
+    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.at[r;.qt.qpipe.transform.fx_markout.one_s;`total];10000*(15-12.4)];"26000 pips in all"]};
 
 .qt.qpipe.transform.fx_markout.test_the_legs_are_the_routes_own_whatever_other_books_exist:{[tc]
     / a direct PLNTRY book exists and is ignored: the convention's route is the one priced
     sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6)];
     extra:.qt.qpipe.transform.fx_markout.lk[.qt.qpipe.transform.fx_markout.t-0D00:00:01;`PLNTRY;`a;99f];
     r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`PLNTRY;1;12.4;`c1];.qt.qpipe.transform.fx_markout.three_leg_books[],extra];
-    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.at[r;.qt.qpipe.transform.fx_markout.one_s;`total];10000*15-12.4];"the 99 direct book does not move the reference"]};
+    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.at[r;.qt.qpipe.transform.fx_markout.one_s;`total];10000*(15-12.4)];"the 99 direct book does not move the reference"]};
 
 .qt.qpipe.transform.fx_markout.test_the_horizon_jobs_legs_callback_is_the_route_scoring_uses:{[tc]
     sp:.qt.qpipe.transform.fx_markout.spec_of[()!()];
@@ -219,7 +219,7 @@
     m:.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t-0D00:00:01;`EURUSD;`a;1.0990;1.1010],.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t-0D00:00:01;`EURUSD;`b;1.0995;1.1020],.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t-0D00:00:01;`EURUSD;`c;1.0980;1.1004];
     r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];m];
     / best bid 1.0995 (b), best ask 1.1004 (c)
-    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[exec price_t1 from r where kind=`execution;enlist 0.5*1.0995+1.1004];"highest bid and lowest ask across a, b and c"]};
+    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[exec price_t1 from r where kind=`execution;enlist 0.5*(1.0995+1.1004)];"highest bid and lowest ask across a, b and c"]};
 
 .qt.qpipe.transform.fx_markout.test_a_source_older_than_max_age_does_not_count:{[tc]
     m:.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t-0D00:00:30;`EURUSD;`stale;1.2000;1.2002],.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t-0D00:00:01;`EURUSD;`fresh;1.1000;1.1002];
@@ -282,7 +282,7 @@
     sp:.qt.qpipe.transform.fx_markout.spec_of[`horizons`tolerance!(enlist .qt.qpipe.transform.fx_markout.one_s;1e-6)];
     r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1;`x];.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t+0D00:00:00.5;`EURUSD;`a;1.1004;1.1006]];
     .qunit.assertEquals[exec status from r;`ok`unavailable`unavailable`unavailable;"the horizon is priced, the execution's own instant and the allocation are not"];
-    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.at[r;.qt.qpipe.transform.fx_markout.one_s;`total];10000*1.1005-1.1];"the markout needs only the horizon's reference"]};
+    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.at[r;.qt.qpipe.transform.fx_markout.one_s;`total];10000*(1.1005-1.1)];"the markout needs only the horizon's reference"]};
 
 / --- horizons: signed and zero ---------------------------------------------------
 
@@ -297,8 +297,8 @@
     m:.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t-0D00:00:03;`EURUSD;`a;1.0899;1.0901],.qt.qpipe.transform.fx_markout.bk[.qt.qpipe.transform.fx_markout.t-0D00:00:01;`EURUSD;`a;1.0999;1.1001];
     r:.qt.qpipe.transform.fx_markout.calc[sp;.qt.qpipe.transform.fx_markout.fill[.qt.qpipe.transform.fx_markout.t;`EURUSD;1;1.1001;`x];m];
     / 2s before: the 3s-old book (mid 1.0900). a buy "marked" there is 10000*(1.0900-1.1001) = -1010
-    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.at[r;-0D00:00:02;`total];10000*1.09-1.1001];"the reference at T-2s"];
-    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.leg_at[r;-0D00:00:02;1];10000*1.09-1.1];"the move from the execution back to T-2s"]};
+    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.at[r;-0D00:00:02;`total];10000*(1.09-1.1001)];"the reference at T-2s"];
+    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.near[.qt.qpipe.transform.fx_markout.leg_at[r;-0D00:00:02;1];10000*(1.09-1.1)];"the move from the execution back to T-2s"]};
 
 .qt.qpipe.transform.fx_markout.test_wait_and_lookback_follow_the_grid:{[tc]
     sp:.qt.qpipe.transform.fx_markout.spec_of[enlist[`horizons]!enlist -0D00:00:30 -0D00:00:05];

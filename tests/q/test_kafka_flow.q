@@ -70,16 +70,16 @@
 
 / One client trade as a producer writes it; the price varies with the offset
 / only so two rows are distinguishable.
-.qt.qpipe.job.kafka_flow.payload:{[off] "{\"sym\":\"EURUSD\",\"side\":\"buy\",\"qty\":1000000,\"price\":",string[1.1+0.001*off],",\"client\":\"ACME\",\"trade_id\":",string[100+off],"}"}
+.qt.qpipe.job.kafka_flow.payload:{[off] "{\"sym\":\"EURUSD\",\"side\":\"buy\",\"qty\":1000000,\"price\":",string[1.1+(0.001*off)],",\"client\":\"ACME\",\"trade_id\":",string[100+off],"}"}
 
 / A batch as it arrives FROM THE PLANT: `time` prepended, because .u.upd
 / stamped it on the way in. The job has to drop it, and a fixture without it
 / would never prove that.
 .qt.qpipe.job.kafka_flow.batch_on:{[tp;parts;offs;payloads]
     n:count offs;
-    ([] time:.qt.qpipe.job.kafka_flow.t0+1000000000*til n;
+    ([] time:.qt.qpipe.job.kafka_flow.t0+(1000000000*til n);
         topic:n#tp; partition:parts; offset:offs; msg_key:n#enlist "";
-        broker_time:(.qt.qpipe.job.kafka_flow.t0+1000000000*til n)-0D00:00:00.002;
+        broker_time:(.qt.qpipe.job.kafka_flow.t0+(1000000000*til n))-0D00:00:00.002;
         payload:payloads)}
 
 .qt.qpipe.job.kafka_flow.batch:{[parts;offs]

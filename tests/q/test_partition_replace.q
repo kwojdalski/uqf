@@ -15,7 +15,7 @@
     system"mkdir -p build/test-status";
     }
 
-.qt.qetl.partition_replace.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.partition_replace.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 .qt.qetl.partition_replace.setUp_clean:{[]
     if[`ppx in tables `.; delete ppx from `.];
@@ -35,7 +35,7 @@
 
 / n deals of symbol s, ids from `from_id`, inside the window starting at d 0.
 .qt.qetl.partition_replace.deals:{[s;from_id;n]
-    ([] deal_id:from_id+til n; deal_time:(.qt.qetl.partition_replace.d[0])+1h*1+til n; sym:n#s;
+    ([] deal_id:from_id+til n; deal_time:(.qt.qetl.partition_replace.d[0])+(1h*(1+til n)); sym:n#s;
         side:n#`buy; notional:n#1000000f; rate:n#1.1f)}
 
 / Publish one window of the worker, as the lifecycle does.

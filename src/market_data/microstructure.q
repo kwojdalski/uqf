@@ -76,7 +76,7 @@
 / @return a vector, one mid price per row - null where either L0 is not a price (see l0_price)
 / @eg .qf.mkt.mid_price[enlist 1.1000 1.0998;enlist 1.1002 1.1004]  -> ,1.1001
 .qf.mkt.mid_price:{[bid_prices;ask_prices]
-    0.5*(.qf.mkt.l0_price[bid_prices])+.qf.mkt.l0_price[ask_prices]};
+    0.5*((.qf.mkt.l0_price[bid_prices])+.qf.mkt.l0_price[ask_prices])};
 
 / Book pressure at one level: (Vbid-Vask)/(Vbid+Vask), in [-1,1]. Exactly 0
 / when both sizes are 0 at a level that DOES exist for that row - distinct
@@ -123,7 +123,7 @@
     bid_sz0:.qf.mkt.level_at[bid_sizes;0];
     ask_sz0:.qf.mkt.level_at[ask_sizes;0];
     denom:bid_sz0+ask_sz0;
-    weighted:(ask_sz0*bid_px0)+bid_sz0*ask_px0;
+    weighted:(ask_sz0*bid_px0)+(bid_sz0*ask_px0);
     fallback_mid:.qf.mkt.mid_price[bid_prices;ask_prices];
     ?[denom=0;fallback_mid;weighted%denom]};
 
@@ -239,7 +239,7 @@
 / @private
 .qf.mkt.transition:{[book_side;px;sz;prev_px;prev_sz]
     / Arithmetic, not a nested ?[]: PeachQ makes that () on no rows (#1047).
-    `move`size`prev_size!($[book_side=`bid;1;-1]*(px>prev_px)-px<prev_px;sz;prev_sz)};
+    `move`size`prev_size!($[book_side=`bid;1;-1]*((px>prev_px)-px<prev_px);sz;prev_sz)};
 
 / Private: Cont-Kukanov-Stoikov per-side flow: new size if improved, size
 / change if held, minus the prior size if worsened (that queue is gone).
@@ -527,7 +527,7 @@
     if[0=st`rows; flow:@[flow;0;:;0n]];
     ofi_hist:(st`ofi_tail),flow;
     rolled:(neg n)#msum[window;ofi_hist];
-    mid:0.5*bid_px+ask_px;
+    mid:0.5*(bid_px+ask_px);
     log_mid:log mid;
     prev_log_mid:(log st`mid),-1_log_mid;
     rets:log_mid-prev_log_mid;

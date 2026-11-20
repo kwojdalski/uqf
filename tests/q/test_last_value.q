@@ -5,7 +5,7 @@
 / independent, and a replay rebuilds the state without publishing it again.
 
 
-.qt.qpipe.job.last_value.d:{[n] 2026.09.19D10:00:00.000000000+n*0D00:00:01}
+.qt.qpipe.job.last_value.d:{[n] 2026.09.19D10:00:00.000000000+(n*0D00:00:01)}
 
 / One book per argument row: (sym; source; source_time; bid; ask). An empty
 / bid or ask is a withdrawn side.

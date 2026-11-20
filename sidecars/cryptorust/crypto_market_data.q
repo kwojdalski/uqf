@@ -200,7 +200,7 @@
 / @return the same rows as the contract declares them
 / @eg .qpipe.source.crypto_market_data.adapt[update source_time:1789160662231,local_time:1789160662231,venue:enlist "coinbase_spot",sym:enlist "BTC-USD",is_snapshot:1i,trade_side:enlist "buy" from 1#.qpipe.source.crypto_market_data.fixture[]]  ->  the same row with source_time 2026.09.11D21:04:22.231000000 and the four text columns as symbols
 .qpipe.source.crypto_market_data.adapt:{[raw]
-    t:@[raw;`source_time`local_time;{1970.01.01D00:00+1000000*x}];
+    t:@[raw;`source_time`local_time;{1970.01.01D00:00+(1000000*x)}];
     t:@[t;`venue`sym`trade_side;{`$x}];
     t:@[t;`is_snapshot;{1=x}];
     .qpipe.source.crypto_market_data.columns xcols t}
@@ -236,7 +236,7 @@
     if[0=count getenv `UQF_CRYPTO_CAPTURE_GLOB; :0Wp];
     r:.qetl.io.odbc.run_sql[h;.qpipe.source.crypto_market_data.newest_sql[]];
     ms:first r`newest;
-    $[null ms; 0Np; 1970.01.01D00:00+1000000*"j"$ms]}
+    $[null ms; 0Np; 1970.01.01D00:00+(1000000*"j"$ms)]}
 
 / Private: one row's five levels, flattened in level_fields order.
 / @param bid the best bid
@@ -246,7 +246,7 @@
 / @return the twenty level values, bid price/size then ask price/size per level
 / @private
 .qpipe.source.crypto_market_data.fixture_levels:{[bid;ask;tick;sz]
-    raze {[bid;ask;tick;sz;i] (bid-tick*i;sz;ask+tick*i;sz)}[bid;ask;tick;sz] each til 5}
+    raze {[bid;ask;tick;sz;i] (bid-(tick*i);sz;ask+(tick*i);sz)}[bid;ask;tick;sz] each til 5}
 
 / @return six recorded rows in the contract's shape
 / @eg count .qpipe.source.crypto_market_data.fixture[]  ->  6
@@ -361,7 +361,7 @@
 / @return the book the fixture folds into
 .qpipe.transform.crypto_market_data.example_book:{[]
     f:.qpipe.source.crypto_market_data.fixture[];
-    px:{[touch;tick;dir] touch+dir*tick*til 5};
+    px:{[touch;tick;dir] touch+(dir*tick*til 5)};
     bid:(px[121.5;0.01;-1];px[2681.9;0.1;-1];px[83823.74;1.68;-1];px[121.62;0.01;-1];px[2682.4;0.1;-1];px[83830.02;1.68;-1]);
     ask:(px[121.51;0.01;1];px[2681.91;0.1;1];px[83823.75;1.68;1];px[121.63;0.01;1];px[2682.41;0.1;1];px[83830.03;1.68;1]);
     sz:{[s] 5#s} each 200 1 0.09 200 1 0.09f;

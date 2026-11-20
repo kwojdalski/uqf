@@ -304,7 +304,7 @@
 .qt.qetl.io.remote.grant_rows:{[n]
     .qetl.io.remote.serve[`uat;`deals;`mgr`target`schema`max_rows`users!(.qetl.io.memory;`rdeals;.qt.qetl.io.remote.schema[];n;`symbol$())]}
 
-.qt.qetl.io.remote.four:{[] ([] time:2026.01.02D09:00:00.000000000+0D01*til 4; sym:`EURUSD`GBPUSD`USDJPY`AUDUSD; notional:1e6 2e6 3e6 4e6)}
+.qt.qetl.io.remote.four:{[] ([] time:2026.01.02D09:00:00.000000000+(0D01*til 4); sym:`EURUSD`GBPUSD`USDJPY`AUDUSD; notional:1e6 2e6 3e6 4e6)}
 
 .qt.qetl.io.remote.test_a_batch_over_max_rows_commits_in_chunks_that_keep_to_it:{[t]
     / max_rows bounds a message, not the window its chunks reassemble (#2313)
@@ -412,7 +412,7 @@
     ttl:.qetl.io.remote.stage_ttl;
     `.qetl.io.remote.stage_ttl set 0D00:00:00.3;
     slow:.qetl.io.remote.manager[{[m] r:value m; system"sleep 0.2"; r};`uat;`deals];
-    b:([] time:2026.01.02D09:00:00.000000000+0D01*til 3; sym:`EURUSD`GBPUSD`USDJPY; notional:1e6 2e6 3e6);
+    b:([] time:2026.01.02D09:00:00.000000000+(0D01*til 3); sym:`EURUSD`GBPUSD`USDJPY; notional:1e6 2e6 3e6);
     n:@[.qt.qetl.io.remote.chunked;{[mgr;b;x] .qetl.io.write_keyed[mgr;`rdeals;b;.qt.qetl.io.remote.opts[`append]]}[slow;b];{[e] e}];
     `.qetl.io.remote.stage_ttl set ttl;
     .qunit.assertEquals[n;3;"three chunks over 0.6s against a 0.3s time-to-live commit"];

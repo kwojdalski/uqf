@@ -190,7 +190,7 @@
     r:.qt.qpipe.job.fx_markout.published[`fx_markout];
     mid:first exec price_t1 from r where kind=`total, horizon=-0D00:00:01;
     .qunit.assertTrue[.qt.qpipe.job.fx_markout.near[mid;1.09];"scored against the T-3s book's mid 1.0900"];
-    .qunit.assertTrue[.qt.qpipe.job.fx_markout.near[first exec pips from r where kind=`total, horizon=-0D00:00:01;10000*1.09-1.1001];"-1010 pips"]};
+    .qunit.assertTrue[.qt.qpipe.job.fx_markout.near[first exec pips from r where kind=`total, horizon=-0D00:00:01;10000*(1.09-1.1001)];"-1010 pips"]};
 
 .qt.qpipe.job.fx_markout.test_a_zero_horizon_scores_the_execution_residual_alone:{[tc]
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;.qt.qpipe.job.fx_markout.covered[]];
@@ -217,13 +217,13 @@
 .qt.qpipe.job.fx_markout.test_the_history_is_bounded_by_what_a_pending_execution_can_still_need:{[tc]
     / an hour of per-second books for each of two sources, with no execution waiting
     n:3600;
-    stream:{[src;n] raze {[src;i] .qt.qpipe.job.fx_markout.bk[(2026.09.17D09:00:00)+0D00:00:01*i;`EURUSD;src;1.1+i*1e-6;1.1002+i*1e-6]}[src;] each til n};
+    stream:{[src;n] raze {[src;i] .qt.qpipe.job.fx_markout.bk[(2026.09.17D09:00:00)+(0D00:00:01*i);`EURUSD;src;1.1+(i*1e-6);1.1002+(i*1e-6)]}[src;] each til n};
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;stream[`a;n]];
     .qt.qpipe.job.fx_markout.feed[`fx_markout;`market_data;stream[`b;n]];
     .qt.qpipe.job.fx_markout.tick[`fx_markout;2026.09.17D10:00:30];
     h:.qt.qpipe.job.fx_markout.state[`fx_markout;`history];
     .qunit.assertEquals[asc distinct h`source;`a`b;"both sources survive"];
-    .qunit.assertTrue[(count h)<=2*(1+`long$(.qpipe.transform.fx_markout.wait[.qpipe.transform.fx_markout_outputs.job_spec;.qpipe.transform.fx_markout_outputs.settle]+.qpipe.transform.fx_markout_outputs.lateness+.qpipe.transform.fx_markout.lookback[.qpipe.transform.fx_markout_outputs.job_spec])%0D00:00:01);
+    .qunit.assertTrue[(count h)<=2*(1+(`long$(.qpipe.transform.fx_markout.wait[.qpipe.transform.fx_markout_outputs.job_spec;.qpipe.transform.fx_markout_outputs.settle]+.qpipe.transform.fx_markout_outputs.lateness+.qpipe.transform.fx_markout.lookback[.qpipe.transform.fx_markout_outputs.job_spec])%0D00:00:01));
         "a tick keeps the books a late execution could still need - the horizon, the lookback and the declared lateness - plus each source's anchor, not the hour"];
     .qunit.assertTrue[(count h)<2*n;"and far fewer than were sent"]};
 

@@ -7,7 +7,7 @@
 // tests/lib/qunit.q and tests/lib/support.q before this file.
 
 
-.qt.qetl.source.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.source.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 / A valid declaration, for mutating one field at a time. Building it here
 / rather than reusing the demo source's keeps a test's failure attributable

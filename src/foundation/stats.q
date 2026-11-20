@@ -39,10 +39,10 @@
     coeffs:1.061405429 -1.453152027 1.421413741 -0.284496736 0.254829592 0f; / a5 a4 a3 a2 a1 0, highest degree first
     s:signum x;
     z:(abs x)%sqrt 2f;
-    t:1%1+0.3275911*z;
+    t:1%(1+(0.3275911*z));
     poly:.qf.math.horner_eval[coeffs;t];
     y:1-(poly*exp neg z*z);
-    0.5*1+s*y};
+    0.5*(1+(s*y))};
 
 / Inverse standard normal CDF (probit function).
 / @param p probability, strictly within (0,1); an atom or a list of atoms
@@ -61,7 +61,7 @@
             [q:sqrt neg 2*log p;
              .qf.math.horner_eval[c;q] % .qf.math.horner_eval[d;q]];
           p>phigh;
-            [q:sqrt neg 2*log 1-p;
+            [q:sqrt neg 2*(log 1-p);
              neg .qf.math.horner_eval[c;q] % .qf.math.horner_eval[d;q]];
             [q:p-0.5; r:q*q;
              (.qf.math.horner_eval[a;r]*q) % .qf.math.horner_eval[b;r]]]};

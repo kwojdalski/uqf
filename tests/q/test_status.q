@@ -10,7 +10,7 @@
 // before this file.
 
 
-.qt.qetl.status.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.status.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 .qt.qetl.status.spec:{[] `source_version`range_from`range_to!(`v1;.qt.qetl.status.d[1];.qt.qetl.status.d[2])}
 .qt.qetl.status.progress:{[] `cursor`rows_published`windows_completed!(.qt.qetl.status.d[2];10;1)}

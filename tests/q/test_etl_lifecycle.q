@@ -18,7 +18,7 @@
 // taking a count on trust.
 
 
-.qt.qetl.job.bounded.d:{[n] 2026.09.10D00:00:00.000000000+n*1D}
+.qt.qetl.job.bounded.d:{[n] 2026.09.10D00:00:00.000000000+(n*1D)}
 
 .qt.qetl.job.bounded.spec_for:{[version;from_n;to_n]
     `source_version`range_from`range_to!(version;.qt.qetl.job.bounded.d[from_n];.qt.qetl.job.bounded.d[to_n])}

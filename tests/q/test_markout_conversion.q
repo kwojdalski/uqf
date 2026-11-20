@@ -98,7 +98,7 @@
     .qunit.assertTrue[.qt.qpipe.transform.fx_markout.conversion.near[h`report_amount;50000%150.05];"333.22 USD"];
     .qunit.assertEquals[h`rate_time;.qt.qpipe.transform.fx_markout.conversion.t+0D00:00:09;"the horizon's book"];
     translation:(base`report_amount)-h`report_amount;
-    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.conversion.near[translation;50000*(1%150f)-1%150.05];"quote_amount * (rate_0 - rate_h)"];
+    .qunit.assertTrue[.qt.qpipe.transform.fx_markout.conversion.near[translation;50000*((1%150f)-(1%150.05))];"quote_amount * (rate_0 - rate_h)"];
     .qunit.assertTrue[(translation>0.111) and translation<0.1111;"0.1110 USD"]};
 
 .qt.qpipe.transform.fx_markout.conversion.test_fx_a_missing_rate_keeps_the_price_unit_measures:{[tc]

@@ -43,7 +43,7 @@ cfg:.qpipe.job.kafka_feed.config_from env;
 .qetl.kafka.topic.define[topic;`mapping`output!(`kafka_client_flow;`client_flow)];
 
 / --- a producer of our own, on the same library
-good:{[i] "{\"sym\":\"EURUSD\",\"side\":\"buy\",\"qty\":1000000,\"price\":",string[1.1+0.001*i],",\"client\":\"ACME\",\"trade_id\":",string[100+i],"}"};
+good:{[i] "{\"sym\":\"EURUSD\",\"side\":\"buy\",\"qty\":1000000,\"price\":",string[1.1+(0.001*i)],",\"client\":\"ACME\",\"trade_id\":",string[100+i],"}"};
 pcfg:(enlist `metadata.broker.list)!enlist `$getenv `UQF_KAFKA_BROKERS;
 producer:.kfk.Producer pcfg;
 ptopic:.kfk.Topic[producer;topic;()!()];

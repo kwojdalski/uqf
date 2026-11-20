@@ -18,7 +18,7 @@
 .qt.qf.math.stats.test_ncdf_symmetry:{[t]
     xs:0.1 0.5 1 1.5 2 2.5 3;
     lhs:.qf.math.ncdf[xs]+.qf.math.ncdf[neg xs];
-    .qt.support.assertApprox[lhs;1+0*xs;1e-6;"N(x)+N(-x)=1 for several x"]};
+    .qt.support.assertApprox[lhs;1+(0*xs);1e-6;"N(x)+N(-x)=1 for several x"]};
 
 .qt.qf.math.stats.test_npdf_zero:{[t] .qt.support.assertApprox[.qf.math.npdf 0f;0.3989423;1e-6;"n(0)=1/sqrt(2*pi)"]};
 

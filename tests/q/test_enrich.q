@@ -6,7 +6,7 @@
 
 
 .qt.qetl.enrich.t0:2026.10.01D10:00:00
-.qt.qetl.enrich.s:{[n] .qt.qetl.enrich.t0+n*0D00:00:01}
+.qt.qetl.enrich.s:{[n] .qt.qetl.enrich.t0+(n*0D00:00:01)}
 
 / The lookup spec the tests share, one key.
 .qt.qetl.enrich.spec:{[tol] `keys`ref_time`event_time`attach`tolerance!(enlist `sym;`time;`time;enlist[`mid]!enlist `mid;tol)}
@@ -162,7 +162,7 @@
     while[k<n; b:.qetl.enrich.add[b;shuffled k+til 50]; k+:50];
     edge:.qt.qetl.enrich.s[n-61];
     m:200;
-    events:([] venue:m?`x`y`z; sym:m?`a`b; time:edge+(m?60)*0D00:00:01; id:til m);
+    events:([] venue:m?`x`y`z; sym:m?`a`b; time:edge+((m?60)*0D00:00:01); id:til m);
     sp:.qt.qetl.enrich.spec2;
     live:.qetl.enrich.lookup[b;events;`event_time`attach`tolerance!(`time;enlist[`mid]!enlist `mid;sp`tolerance)];
     pure:.qf.mkt.lookup[full;events;sp];

@@ -22,10 +22,10 @@
     system "S ",string seed;
     levels:n?0 1 2 3 4;
     px:1+n?1f;
-    bid_prices:{[p;l] p-0.0001*til l}'[px;levels];
-    ask_prices:{[p;l] p+0.0002+0.0001*til l}'[px;levels];
+    bid_prices:{[p;l] p-(0.0001*til l)}'[px;levels];
+    ask_prices:{[p;l] p+0.0002+(0.0001*til l)}'[px;levels];
     md:([] sym:n?`EURUSD`GBPUSD`USDJPY; source:n?`a`b`c`d; source_time:2026.09.17D10:00:00+n?600000000000;
-        bid_prices:bid_prices; bid_sizes:{[l] 1e5*1+l?9}each levels; ask_prices:ask_prices; ask_sizes:{[l] 1e5*1+l?9}each levels);
+        bid_prices:bid_prices; bid_sizes:{[l] 1e5*(1+l?9)}each levels; ask_prices:ask_prices; ask_sizes:{[l] 1e5*(1+l?9)}each levels);
     md:update bid:{$[count x; first x; 0n]} each bid_prices, ask:{$[count x; first x; 0n]} each ask_prices from md;
     md:update clock:?[source in `a`b;`venue;`receipt] from md;
     md}
@@ -83,7 +83,7 @@
     d:`venues`stale`offset`transform`combine`params!(`all;`spec;0D;`vwap;`best;enlist[`qty]!enlist 1e5);
     / 120 variants: three venue sets, three offsets, 120 quantities
     nm:`$"plan_",/:string til 120;
-    {[d;n;v;o;q] .qetl.reference.register[n;d,`venues`offset`params!(v;o;enlist[`qty]!enlist q)]}[d]'[nm;120#(`all;enlist `a;enlist `b);120#0D 0D00:00:01 0D00:00:02;1e5*1+til 120];
+    {[d;n;v;o;q] .qetl.reference.register[n;d,`venues`offset`params!(v;o;enlist[`qty]!enlist q)]}[d]'[nm;120#(`all;enlist `a;enlist `b);120#0D 0D00:00:01 0D00:00:02;1e5*(1+til 120)];
     p:.qetl.variant.plan[nm;0D00:00:05];
     g:.qetl.variant.mapped_groups p;
     .qt.qetl.variant.forget nm;

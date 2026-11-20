@@ -290,7 +290,7 @@
 
 .qt.qetl.job.stream.bars.test_the_backfill_twin_builds_the_live_bars_from_the_same_rows:{[t]
     nm:.qt.qetl.job.stream.bars.job`bt_j;
-    rows:([] source_time:.qt.qetl.job.stream.bars.t0+0D00:00:01*7 33 59 60 61 119 130 185;
+    rows:([] source_time:.qt.qetl.job.stream.bars.t0+(0D00:00:01*7 33 59 60 61 119 130 185);
         sym:`EURUSD`USDJPY`EURUSD`EURUSD`USDJPY`EURUSD`EURUSD`USDJPY;
         size:1 2 3 4 5 6 7 8f; price:1.1 150 1.2 1.15 151 1.3 1.25 149);
     .qt.qetl.job.stream.bars.feed[nm;update time:source_time from rows];

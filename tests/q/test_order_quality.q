@@ -202,7 +202,7 @@
     `.qt.qpipe.job.order_quality.clock set t0+0D01:00:20;
     .qpipe.job.order_quality.on_batch[`order_outcomes;r2];
     .qpipe.job.order_quality.evaluate t0+0D01:00:20;
-    grid:t0+0D00:00:05*til 1+`long$0D01:00:20 div 0D00:00:05;
+    grid:t0+(0D00:00:05*(til 1+`long$0D01:00:20 div 0D00:00:05));
     .qunit.assertEquals[.qt.qpipe.job.order_quality.published[];.qetl.job.stream.rolling.series[`order_quality;r1,r2;grid];
         "every grid point of the stall, each with the order still in its hour"];
     .qt.qpipe.job.order_quality.release[]};
@@ -215,7 +215,7 @@
 
 / Outcome rows: one per (second offset before as_of; outcome) for a request of a source.
 .qt.qpipe.job.order_quality.out:{[src;rid;sec;oc;bk]
-    ([] source_time:enlist .qt.qpipe.job.order_quality.as_of-0D00:00:01*sec; source:enlist src; request_id:enlist rid; outcome:enlist oc; book:enlist bk)}
+    ([] source_time:enlist .qt.qpipe.job.order_quality.as_of-(0D00:00:01*sec); source:enlist src; request_id:enlist rid; outcome:enlist oc; book:enlist bk)}
 
 / The statistic of rows as of an instant, and one group's row for a window.
 .qt.qpipe.job.order_quality.stat:{[rows;at] .qetl.job.stream.rolling.compute[`order_quality;rows;at;0Np]}
@@ -296,7 +296,7 @@
 / Six counted requests across book, product and venue, one without a venue.
 .qt.qpipe.job.order_quality.grouped:{[]
     n:6;
-    ([] source_time:.qt.qpipe.job.order_quality.as_of-0D00:00:01*10+til n; source:n#`a; request_id:`r1`r2`r3`r4`r5`r6;
+    ([] source_time:.qt.qpipe.job.order_quality.as_of-(0D00:00:01*(10+til n)); source:n#`a; request_id:`r1`r2`r3`r4`r5`r6;
         outcome:`filled`rejected`filled`filled`cancelled`rejected;
         book:`london`london`newyork`newyork`london`newyork; product:`spot`fwd`spot`spot`fwd`fwd;
         venue:`lp1`lp1`lp2``lp2`lp1; window:n#0D00:01; as_of:n#.qt.qpipe.job.order_quality.as_of; inside:n#1b)}

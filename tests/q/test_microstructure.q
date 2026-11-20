@@ -88,7 +88,7 @@
     ask_prices:enlist 1.1002 1.1010;
     ask_sizes:enlist 100 100;
     vw_mid:.qf.exec.vwap[1.1000 1.0996 1.1002 1.1010;300 100 100 100];
-    simple_mid:0.5*1.1000+1.1002;
+    simple_mid:0.5*(1.1000+1.1002);
     l0_spread:1.1002-1.1000;
     expected:(vw_mid-simple_mid)%l0_spread;
     r:.qf.mkt.vwmp_skew[bid_prices;bid_sizes;ask_prices;ask_sizes;2];
@@ -153,7 +153,7 @@
     bid_size_target:notional%1.1000;
     buy_leg:.qf.mkt.sweep_price[1.1002 1.1004;1000000 1000000;ask_size_target];
     sell_leg:.qf.mkt.sweep_price[1.1000 1.0998;1000000 1000000;bid_size_target];
-    expected:0.5*(buy_leg`avg_price)+sell_leg`avg_price;
+    expected:0.5*((buy_leg`avg_price)+sell_leg`avg_price);
     r:.qf.mkt.vamp[bid_prices;bid_sizes;ask_prices;ask_sizes;notional];
     .qt.support.assertApprox[first r;expected;1e-9;"vamp matches averaging two direct sweep_price legs"]};
 
@@ -436,7 +436,7 @@
 / trades would be silently wrong - it would not error, it would return a
 / plausible number.
 .qt.qf.mkt.microstructure.lt_tape:{[]
-    ([] time:2026.09.11D09:00:00.000000000+0D00:00:01*til 12;
+    ([] time:2026.09.11D09:00:00.000000000+(0D00:00:01*til 12);
         sym:12#`EURUSD;
         action:(10#`trade),`add`cancel;
         side:12#1;
@@ -519,7 +519,7 @@
 / round lot, not an odd one. The add and cancel rows are small on purpose -
 / if they leaked in they would count as odd lots.
 .qt.qf.mkt.microstructure.ol_tape:{[]
-    ([] time:2026.09.11D09:00:00.000000000+0D00:00:01*til 8;
+    ([] time:2026.09.11D09:00:00.000000000+(0D00:00:01*til 8);
         sym:8#`EURUSD;
         action:(6#`trade),`add`cancel;
         side:1 1 1 -1 -1 1 1 -1;
@@ -609,11 +609,11 @@
 / bid and random sizes - seeded, so the fixture is fixed.
 .qt.qf.mkt.microstructure.st_quotes_for:{[s;n;t0;seed]
     system "S ",string seed;
-    bid:1.1+0.0001*sums -1+n?3;
-    ask:bid+0.0001*1+n?2;
-    ([] time:t0+1000000000*til n; sym:n#s;
-        bid_prices:enlist each bid; bid_sizes:enlist each `float$100*1+n?5;
-        ask_prices:enlist each ask; ask_sizes:enlist each `float$100*1+n?5)}
+    bid:1.1+(0.0001*(sums -1+n?3));
+    ask:bid+(0.0001*(1+n?2));
+    ([] time:t0+(1000000000*til n); sym:n#s;
+        bid_prices:enlist each bid; bid_sizes:enlist each `float$100*(1+n?5);
+        ask_prices:enlist each ask; ask_sizes:enlist each `float$100*(1+n?5))}
 
 / Two syms interleaved, half a second apart.
 .qt.qf.mkt.microstructure.st_quotes:{[] `time xasc (.qt.qf.mkt.microstructure.st_quotes_for[`EURUSD;30;2026.01.02D10:00:00;7]),.qt.qf.mkt.microstructure.st_quotes_for[`GBPUSD;30;2026.01.02D10:00:00.5;11]}
@@ -622,8 +622,8 @@
 .qt.qf.mkt.microstructure.st_tape:{[]
     system "S 5";
     n:40;
-    ([] time:2026.01.02D10:00:00+500000000*til n; sym:n?`EURUSD`GBPUSD; action:n?`trade`trade`add;
-        side:n?-1 1; size:`float$1000*1+n?9)}
+    ([] time:2026.01.02D10:00:00+(500000000*til n); sym:n?`EURUSD`GBPUSD; action:n?`trade`trade`add;
+        side:n?-1 1; size:`float$1000*(1+n?9))}
 
 .qt.qf.mkt.microstructure.st_cfg:{[] (enlist `window)!enlist 4}
 
@@ -688,14 +688,14 @@
 / #2427: the tape was filtered to trades before rows were numbered, so `row`
 / indexed the trade events, not the tape - rows 0 1 here, an add and a trade.
 .qt.qf.mkt.microstructure.test_stream_trade_rows_index_the_tape:{[t]
-    tape:([] time:2026.01.02D10:00:00+1000000000*til 4; sym:4#`EURUSD; action:`add`trade`cancel`trade; side:1 1 -1 -1; size:100 200 300 400f);
+    tape:([] time:2026.01.02D10:00:00+(1000000000*til 4); sym:4#`EURUSD; action:`add`trade`cancel`trade; side:1 1 -1 -1; size:100 200 300 400f);
     r:.qf.mkt.stream_update[.qf.mkt.stream_init[`signed_trade_flow;::];(enlist `tape)!enlist tape;::];
     .qunit.assertEquals[r[`trades;`row];1 3;"row is the trade's index in the tape batch"];
     .qunit.assertEquals[tape[`size] r[`trades;`row];abs r[`trades;`signed_flow];"so indexing the tape by row finds each flow's trade"]};
 
 .qt.qf.mkt.microstructure.test_stream_constant_returns_have_zero_variance:{[t]
     n:12;
-    flat:([] time:2026.01.02D10:00:00+1000000000*til n; sym:n#`EURUSD;
+    flat:([] time:2026.01.02D10:00:00+(1000000000*til n); sym:n#`EURUSD;
         bid_prices:n#enlist enlist 1.1; bid_sizes:n#enlist enlist 1f; ask_prices:n#enlist enlist 1.1002; ask_sizes:n#enlist enlist 1f);
     o:(.qt.qf.mkt.microstructure.st_run[enlist `return_variance;enlist (enlist `quotes)!enlist flat]) 1;
     .qunit.assertEquals[o`return_variance;(4#0n),(n-4)#0f;"null through warm-up, then exactly 0"]};
@@ -707,7 +707,7 @@
 .qt.qf.mkt.microstructure.test_return_variance_is_null_for_a_window_with_no_return:{[t]
     n:10;
     asks:(enlist 1.1002;`float$();`float$();`float$();`float$()),enlist each 1.1004 1.1003 1.1006 1.1002 1.1005;
-    q:([] time:2026.01.02D10:00:00+0D00:00:01*til n; sym:n#`EURUSD; bid_prices:n#enlist enlist 1.1; bid_sizes:n#enlist enlist 1e6;
+    q:([] time:2026.01.02D10:00:00+(0D00:00:01*til n); sym:n#`EURUSD; bid_prices:n#enlist enlist 1.1; bid_sizes:n#enlist enlist 1e6;
         ask_prices:asks; ask_sizes:{$[count x;enlist 1e6;`float$()]} each asks);
     batch:.qf.mkt.rolling_return_variance[q;`EURUSD;3];
     .qunit.assertEquals[null batch;(8#1b),00b;"no variance until three real returns are back (rows 6 to 8)"];
@@ -811,7 +811,7 @@
 
 / A tape of trades of the given sizes, sides buy buy sell repeating.
 .qt.qf.mkt.microstructure.fr_tape:{[s] n:count s;
-    ([] time:2026.01.01D09:00:00+0D00:00:01*til n; sym:n#`BTCUSD; action:n#`trade; side:n#1 1 -1; size:s)};
+    ([] time:2026.01.01D09:00:00+(0D00:00:01*til n); sym:n#`BTCUSD; action:n#`trade; side:n#1 1 -1; size:s)};
 
 .qt.qf.mkt.microstructure.test_ten_tenths_fill_one_whole_bucket:{[t]
     / 10*0.1 sums to 0.9999999999999999; a bare floor made that 0 buckets.
@@ -858,7 +858,7 @@
 / ask's flow was null and msum read it as 0.
 
 / EURUSD with its ask withdrawn on row 1 and back on row 2.
-.qt.qf.mkt.microstructure.withdrawn:{[] ([] time:2026.01.01D10:00:00+0D00:00:01*til 4; sym:`EURUSD;
+.qt.qf.mkt.microstructure.withdrawn:{[] ([] time:2026.01.01D10:00:00+(0D00:00:01*til 4); sym:`EURUSD;
     bid_prices:4#enlist enlist 1.1; bid_sizes:4#enlist enlist 1e6;
     ask_prices:(enlist 1.1002;`float$();enlist 1.1002;enlist 1.1002);
     ask_sizes:(enlist 2e6;`float$();enlist 2e6;enlist 2e6))}

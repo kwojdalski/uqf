@@ -94,7 +94,7 @@
 / demo_deals' five deals, one a day from 2026.09.11 - the same rows that open
 / the DuckDB file - in this source's column names.
 .qpipe.source.duckdb_deals.fixture:{[]
-    ([] deal_time:2026.09.11D09:00:00.000000000+1D*til 5;
+    ([] deal_time:2026.09.11D09:00:00.000000000+(1D*til 5);
         deal_id:1 2 3 4 5j;
         sym:`EURUSD`GBPUSD`EURUSD`USDJPY`EURUSD;
         side:`buy`sell`buy`sell`buy;
