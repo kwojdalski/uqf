@@ -38,7 +38,7 @@ Every verb comes from one fixed vocabulary:
   | `new` `install`                                     | write a job into the tree, or place one built elsewhere                          |
   | `run` `backfill` `preview` `gaps` `audit` `receive` | operate a job and its runs                                                       |
   | `export` `approve`                                  | a receiver contract, on each side                                                |
-  | `replay` `seed` `migrate`                           | move data into the HDB                                                           |
+  | `replay` `seed` `migrate` `sample`                  | move data into the HDB, or a sample of it into another                           |
   | `upgrade`                                           | bring a store an older uqs wrote up to today's layout                            |
   | `alter`                                             | change one table in every HDB partition holding it                               |
   | `compress`                                          | an HDB's compression: report it, plan it, or run TorQ's .cmp over it             |
@@ -73,9 +73,9 @@ its previous release. `unset` removes a setting so the layer beneath applies.
   one: `uqs job backfill --skip-eod-fence` is `--override eod-fence`.
 
 A command that rewrites data in place (`data check`, `data alter`,
-`data compress`, `data migrate`, `data replay`, `data seed`, `target adopt`) is
-a dry run by default. It writes only with `--apply`, which shows the plan and
-asks. `--yes`/`-y` answers that question.
+`data compress`, `data migrate`, `data replay`, `data sample`, `data seed`,
+`target adopt`) is a dry run by default. It writes only with `--apply`, which
+shows the plan and asks. `--yes`/`-y` answers that question.
 
 Every deletion that cannot be undone asks first and takes `--yes`/`-y`: `clean`
 (the whole data directory, the HDB with it, unless `--match` narrows it),
@@ -199,11 +199,11 @@ Every command that takes a time range takes the same four options:
   `300` (seconds), `30s`, `1.5m`, `2h`, `7d` or `500ms`.
 
 The commands that act on whole HDB partitions (`data replay`, `data seed`,
-`data compress`, `data migrate`) take whole days only. A `--from` or `--to` that
-is not a UTC midnight is refused, and `--last` must be whole days. `--last 3d`
-is the three days before today, so today's live partition is never in it.
-`data replay` and `data migrate` take one day: `--date D`, `--from D --to D+1`,
-or `--last 1d` (yesterday).
+`data compress`, `data migrate`, `data sample`) take whole days only. A `--from`
+or `--to` that is not a UTC midnight is refused, and `--last` must be whole
+days. `--last 3d` is the three days before today, so today's live partition is
+never in it. `data replay` and `data migrate` take one day: `--date D`,
+`--from D --to D+1`, or `--last 1d` (yesterday).
 
 `config sources check` is the only command with a default range, `--last 1h`.
 Check a source that is quiet now over a window that had data, with `--date D` or
@@ -248,7 +248,8 @@ Logs go to stderr, and a refusal is the document
 a refusal and 2 for a usage error.
 
 `--json` never asks a question. A command that would ask before changing
-something (`data check`/`alter`/`compress`/`migrate`/`replay`/`seed --apply`,
+something
+(`data check`/`alter`/`compress`/`migrate`/`replay`/`sample`/`seed --apply`,
 `deploy prune`, `job attachment add`/`remove`) is refused under `--json` unless
 you add `--yes`, even at a terminal. Nothing is changed.
 

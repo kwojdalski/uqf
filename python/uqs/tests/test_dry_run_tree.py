@@ -130,6 +130,11 @@ CASES = [
     Case("data compress", NO_STACK, _hdb("uqs")),
     Case("data replay", ()),
     Case("data seed", ("--from-runtime", "torq", "--date", "2015-01-07"), _hdb("uqs-torq")),
+    Case(
+        "data sample",
+        ("--into-hdb", "/tmp/uqs-dry-run-2812", "--date", "2015-01-07", "--table", "quote"),
+        _hdb("uqs"),
+    ),
     Case("deploy build", ()),
     Case("deploy component build", ("torq",)),
     Case("deploy prune", ("--keep", "1", "--ssh", NOWHERE, "--dest", "/opt/x")),

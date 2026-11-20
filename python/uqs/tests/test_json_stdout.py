@@ -106,6 +106,7 @@ CASES: dict[str, tuple[list[str], str]] = {
         "replays one whole day",
     ),
     "data seed": (["data", "seed"], "name the runtime to copy from"),
+    "data sample": (["data", "sample", "--date", "2026-11-19"], "--into-hdb DIR"),
     # #2247: confirms on the server, like data alter
     "data migrate": (["data", "migrate", "quote", "--date", "not-a-day"], "--date"),
     "runtime diff": (["runtime", "diff", "nosuch1", "nosuch2"], "is not a runtime"),
