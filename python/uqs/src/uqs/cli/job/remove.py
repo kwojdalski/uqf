@@ -52,7 +52,8 @@ def remove_job(
     A table the job published is kept when anything else in the tree uses it,
     and a backfill's source is kept when another worker reads it. A job whose
     SCAFFOLDED markers are gone has been written, and is refused without
-    `--override even-if-edited --reason TEXT`.
+    `--override even-if-edited --reason TEXT`. Exits 1 when what the removal
+    leaves no longer regenerates.
 
     Every other line that still names what goes - an example, a docs page, a
     diagram - is listed with its line number and left alone; --strict refuses
@@ -90,4 +91,12 @@ def remove_job(
         _die(exc)
     removal.apply(repo_root)
     console.print(f"\n[green]removed {removal.name}[/]")
-    report_regeneration(repo_root)
+    if not report_regeneration(repo_root):
+        # The removal is written, but what it left does not regenerate - a
+        # tree that may no longer load must not read as success to a script (#2843).
+        _die(
+            UqsError(
+                f"removed {removal.name}, but the tree no longer regenerates - fix what is "
+                "reported above, or restore the removed files from git"
+            )
+        )

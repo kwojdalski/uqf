@@ -521,3 +521,19 @@ def test_strict_does_not_count_what_the_removal_regenerates(tree):
         (tree / rel).parent.mkdir(parents=True, exist_ok=True)
         (tree / rel).write_text(line)
     assert plan_removal(tree, "pulse").references == []
+
+
+def test_a_removal_that_breaks_regeneration_exits_nonzero(tree, monkeypatch):
+    """#2843: `could not regenerate` was printed and the exit code stayed 0."""
+    from typer.testing import CliRunner
+
+    from uqs import cli
+    from uqs.cli.job import remove as remove_cli
+
+    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
+    monkeypatch.setattr(remove_cli, "_paths", lambda: type("P", (), {"repo_root": tree})())
+    monkeypatch.setattr(remove_cli, "report_regeneration", lambda root: False)
+    result = CliRunner().invoke(cli.app, ["job", "remove", "pulse", "--yes"])
+    assert result.exit_code == 1, result.output
+    assert "removed pulse" in result.output
+    assert not (tree / "src/etl/streaming/pulse.q").exists()
