@@ -105,20 +105,29 @@
 / filter means (#2472): a timespan given as digits is a count of nanoseconds,
 / the form the frontend sends one in (q's "N"$ reads "1234" as 12:34); a
 / timestamp goes through .qetl.coerce.to_timestamp, so a Z or +hh:mm offset
-/ is applied ("P"$ drops or refuses it); a char is exactly one character.
+/ is applied ("P"$ drops or refuses it); a char is exactly one character; a
+/ boolean is true, false, 1 or 0 and a byte two hex digits (#2872): "B"$ reads
+/ "true" as 0b and "X"$ reads "zz" as 0x00, and neither type has a null to
+/ refuse them by.
 / @param ty the column's meta type character
 / @param v the value's text
 / @return the typed atom
 / @throws error when the column is nested, or the text is not one of its type
 / @eg .qetl.compare.typed["f";"1.5"]  ->  1.5
 / @eg .qetl.compare.typed["n";"1234"]  ->  0D00:00:00.000001234
+/ @eg .qetl.compare.typed["b";"true"]  ->  1b
 / @eg .qetl.compare.typed["p";"2026-09-13T06:00:00+02:00"]  ->  2026.09.13D04:00:00.000000000
 .qetl.compare.typed:{[ty;v]
     if[ty=" "; '"a nested column cannot be filtered on"];
     if[(ty="c") and not 1=count v; '"\"",v,"\" is not a ",.qetl.verify.type_name ty];
     d:$["-"=first v; 1_v; v];
+    if[(ty="b") and not (lower v) in ("true";"false";enlist "1";enlist "0");
+        '"\"",v,"\" is not a ",.qetl.verify.type_name ty];
+    if[(ty="x") and not (2=count v) and all (lower v) in .Q.n,"abcdef";
+        '"\"",v,"\" is not a ",.qetl.verify.type_name ty];
     a:$[ty="s"; `$v;
         ty="c"; first v;
+        ty="b"; (lower v) in ("true";enlist "1");
         ty="p"; .qetl.coerce.to_timestamp v;
         (ty="n") and (0<count d) and all d in .Q.n; "n"$"J"$v;
         (upper ty)$v];
