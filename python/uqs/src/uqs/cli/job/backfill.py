@@ -306,8 +306,9 @@ def backfill(
         paths = _paths()
         resolved = stack_backfill.resolve_version(worker, version)
         launched_at = datetime.now(UTC)
-        if once:  # never stop or reuse a running process of the worker (#2798)
-            stack_once.refuse_if_running(paths, stack_backfill.procname_for(worker), port)
+        # never stop or reuse a running process of the worker (#2798): torq.sh would only
+        # say it is running, exit 0, and this would report a start that never was (#2862)
+        stack_once.refuse_if_running(paths, stack_backfill.procname_for(worker), port, once=once)
         result = stack_backfill.start(
             paths,
             worker,

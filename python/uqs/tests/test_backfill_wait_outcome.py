@@ -21,8 +21,10 @@ from uqs import cli
 from uqs.attach import backfill_audit, backfill_remote, backfill_run, config
 from uqs.cli.common.shared import EXIT_PARTIAL, EXIT_REFUSED, EXIT_STOPPED, EXIT_USAGE
 from uqs.cli.job import backfill_attached
+from uqs.paths import UqsError
 from uqs.stack import backfill as stack_backfill
 from uqs.stack import backfill_wait
+from uqs.stack import once as stack_once
 
 runner = CliRunner()
 ARGV = ["job", "backfill", "demo_deals_backfill", "--source-version", "v1"]
@@ -108,3 +110,32 @@ def test_the_partial_code_is_the_clis_own_and_the_help_names_every_code():
     wait = next(p for p in backfill.params if p.name == "wait")
     for code in ("0 for completed", "1 for failed", f"{EXIT_PARTIAL} for rows written"):
         assert code in " ".join((wait.help or "").split()), code
+
+
+@pytest.mark.parametrize("extra", [[], ["--wait"], ["--mode", "plan"], ["--dry-run"]])
+def test_a_backfill_on_a_running_worker_is_refused_not_reported_started(monkeypatch, extra):
+    """torq.sh's `start` of a running process only echoes "already running"
+    and exits 0, so a second range reported `"started": true`, exit 0, and
+    never ran; with --wait it waited hours on the OTHER run (#2862)."""
+    from uqs.stack import alive
+
+    procname = stack_backfill.procname_for("demo_deals_backfill")
+    started: list = []
+    monkeypatch.setattr(alive, "running", lambda *_a, **_k: {procname})
+    monkeypatch.setattr(
+        stack_backfill,
+        "start",
+        lambda *a, **k: (
+            started.append(1)
+            or SimpleNamespace(returncode=0, stdout=f"12:00:00 | {procname} already running")
+        ),
+    )
+    abandoned = ("abandoned", 1, "its process exited without recording an outcome")
+    monkeypatch.setattr(backfill_wait, "wait_for_outcome", lambda *a, **k: abandoned)
+    argv = [a for a in ARGV if a != "--wait"]
+    result = runner.invoke(cli.app, [*argv, *extra, "--json"])
+    assert result.exit_code == EXIT_REFUSED, result.output
+    assert '"started": true' not in result.output
+    assert started == [], "torq.sh is not asked to start what is up"
+    with pytest.raises(UqsError, match=f"{procname} is already running, so this range would not"):
+        stack_once.refuse_if_running(cast(Any, None), procname, None, once=False)
