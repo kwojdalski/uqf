@@ -253,3 +253,22 @@
     .qunit.assertEquals[lv;(100f;101f);"last_value's age widened: it sees binance, posbook's mark does not move"];
     .qunit.assertEquals[pb;(99f;101.5);"posbook's age widened: its mark sees binance, last_value does not"];
     .qunit.assertEquals[.qf.mkt.reference_max_age;lib;"and the library constant was never the setting"]};
+
+/ #2885: the header's promise - a crypto sym with no live venue left has no
+/ row published for it. binance quotes, then withdraws both sides: nothing
+/ is published and the held price stands. A sym whose only venue arrives
+/ withdrawn never gets a row.
+.qt.qpipe.job.last_value.test_a_crypto_sym_with_no_live_venue_publishes_no_row:{[t]
+    .qt.qpipe.job.last_value.reset[];
+    d:.qt.qpipe.job.last_value.d;
+    btc:`$"BTC-USDT";
+    .qpipe.job.last_value.on_batch[`market_data;.qt.qpipe.job.last_value.cbook[enlist (btc;`binance;d 0;100f;101f)]];
+    held:.qt.qpipe.job.last_value.latest[];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;1;"the live venue's reference is published"];
+    .qpipe.job.last_value.on_batch[`market_data;.qt.qpipe.job.last_value.cbook[enlist (btc;`binance;d 1;0n;0n)]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;1;"its withdrawal leaves no live venue, so no row is published"];
+    .qunit.assertEquals[.qt.qpipe.job.last_value.latest[];held;"and the held price is unchanged"];
+    eth:`$"ETH-USDT";
+    .qpipe.job.last_value.on_batch[`market_data;.qt.qpipe.job.last_value.cbook[enlist (eth;`binance;d 2;0n;0n)]];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;1;"a sym whose only venue is withdrawn publishes nothing"];
+    .qunit.assertEquals[eth in exec sym from .qt.qpipe.job.last_value.latest[];0b;"and holds no row for it"]};
