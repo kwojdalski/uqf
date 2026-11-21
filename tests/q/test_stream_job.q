@@ -209,6 +209,20 @@
             `crypto_markout1;enlist `t;`symbol$();{[t;x] ()});
         "one process runs one job, so a second claim on crypto_markout1 is refused"]};
 
+/ Two job files that picked one name (#2851): q kept the last declaration, and
+/ the first job's procname then ran the second job's subscriptions.
+.qt.qetl.job.stream.test_a_name_declared_twice_is_refused_by_name:{[t]
+    .qt.support.save_stream_jobs[`.qt.qetl.job.stream.dup];
+    .qetl.job.stream.define[`sj_twice;`procname`subscribe_to`outputs`on_batch!(`sjtwice1;enlist `executions;`symbol$();{[t;x] ()})];
+    r:@[{.qetl.job.stream.define[`sj_twice;`procname`subscribe_to`outputs`on_batch!(`sjtwice2;enlist `market_data;`symbol$();{[t;x] ()})]; ""};
+        ::;{[e] e}];
+    subs:.qetl.job.stream.def[`sj_twice]`subscribe_to;
+    procs:where .qetl.job.stream.procnames=`sj_twice;
+    .qt.support.restore_stream_jobs[`.qt.qetl.job.stream.dup];
+    .qunit.assertTrue[r like "*sj_twice is already a streaming job, run as sjtwice1*";"the second declaration is refused, naming the job and the process that runs it"];
+    .qunit.assertEquals[subs;enlist `executions;"and the first declaration stands"];
+    .qunit.assertEquals[procs;enlist `sjtwice1;"with no second procname claiming it"]};
+
 .qt.qetl.job.stream.test_an_unwired_publish_throws_rather_than_dropping_rows:{[t]
     / The seam's whole point: rows going nowhere must not look like a job
     / with nothing to say.

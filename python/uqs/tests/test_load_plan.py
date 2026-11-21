@@ -144,6 +144,26 @@ def test_two_files_registering_one_source_or_transform_are_refused():
         )
 
 
+def test_two_files_declaring_one_job_are_refused_naming_both():
+    """q keeps the last declaration of a job name, so the plan refuses it (#2851),
+    whether the copy claims the same procname or another."""
+    job = (
+        ".qetl.job.stream.define[`zz_dupjob;`procname`subscribe_to`outputs`period`on_timer!"
+        "(`{proc};`symbol$();`symbol$();0D00:00:01;{{[] ()}})];\n"
+    )
+    for second in ("zzdupjob1", "zzdupjob2"):
+        with pytest.raises(
+            UqsError, match="job zz_dupjob is declared by both .*zz_a.q and .*zz_b.q"
+        ):
+            load_plan.load_plan(
+                REPO,
+                {
+                    "src/etl/streaming/zz_a.q": job.format(proc="zzdupjob1"),
+                    "src/etl/streaming/zz_b.q": job.format(proc=second),
+                },
+            )
+
+
 def test_a_job_reaches_the_helpers_of_the_transform_it_registers_by_their_name():
     """Registering transform `zz_t` must not hide `.qpipe.transform.zz_t.*`
     in another file (exec_bars, #2177)."""

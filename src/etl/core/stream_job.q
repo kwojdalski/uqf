@@ -193,6 +193,27 @@
             '"define: ",string[job]," declares state but not how it recovers - declare replay 1b to rebuild it from the day's log, or ephemeral \"<why losing it on a restart is acceptable>\""]];
     }
 
+/ Private: refuse a name another job already holds, and a procname another job
+/ runs. Both execution modes share .qpipe.job, so a name cannot belong to both;
+/ and a name declared twice (two job files that picked it) would leave q the
+/ last declaration silently, the first job's procname now running the second
+/ (#2851). A kind (bars, rolling, horizon) calls this before it writes anything
+/ in the job's namespace, so a refused re-declaration of a live job leaves its
+/ buffers and its wired publish as they were (#2858).
+/ @param who the error prefix, e.g. "define: bars job exec_bars"
+/ @param job the job's name
+/ @param decl its declaration, a dictionary
+/ @return the procname the declaration would run under
+/ @throws error naming the job that already holds the name or the procname
+/ @private
+.qetl.job.stream.refuse_taken:{[who;job;decl]
+    if[job in .qetl.job.bounded.defined[];
+        'who," is already a bounded job - job names must be unique across execution modes"];
+    if[job in key .qetl.job.stream.jobs;
+        'who," is already a streaming job, run as ",string[.qetl.job.stream.def[job]`procname],
+            " - a job name is declared once: a second declaration would replace the first, and both procnames would run the last"];
+    .qetl.job.claim_procname[who;job;decl;`]}
+
 / Declare a streaming job. Called by the job's own file as it loads, so a
 / declaration and its implementation cannot drift - there is no way to have
 / one without the other.
@@ -210,10 +231,8 @@
 / @return the job name
 / @throws error naming every missing or malformed field at once
 .qetl.job.stream.define:{[job;decl]
-    / Both execution modes share .qpipe.job, so a name cannot belong to both.
-    if[job in .qetl.job.bounded.defined[];
-        '"define: ",string[job]," is already a bounded job - job names must be unique across execution modes"];
     if[not 99h=type decl; '"define: ",string[job],"'s declaration must be a dictionary"];
+    .qetl.job.stream.refuse_taken["define: ",string job;job;decl];
     .qetl.job.stream.refuse_publishes["define: ",string job;decl];
     / A supplied ns is refused, not overwritten, as .qetl.job.bounded.define does (#2115)
     if[`ns in key decl;
