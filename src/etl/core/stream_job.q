@@ -655,15 +655,18 @@
         if[`check_publishable in key tr; tr[`check_publishable] d`outputs];
         .qetl.job.stream.wire[job;tr[`publisher][]]];
     if[count tbls;
-        live:get pub:` sv (d`ns),`publish;
+        / muted only where there is one: a job that keeps its output local (no
+        / outputs) need not define a publish at all (#2899)
+        mute:replay and `publish in key d`ns;
+        if[mute; live:get pub:` sv (d`ns),`publish; pub set {[t;x] count x}]; / noqa: QF016 publish signature, replay discards
         / a batch that fails to apply while replaying is quarantined, not fatal (#2195)
-        if[replay; pub set {[t;x] count x}; `.qetl.job.stream.replaying set 1b; .qetl.job.stream.catching_up[job;1b]]; / noqa: QF016 publish signature, replay discards
+        if[replay; `.qetl.job.stream.replaying set 1b; .qetl.job.stream.catching_up[job;1b]];
         today:.qetl.job.stream.plant_today tr;
         r:@[{[job;tr;tbls;h;replay]
                 if[replay and `carry in key .qetl.job.stream.def job; .qetl.job.stream.catch_up[job;tr;tbls;h]];
                 tr[`subscribe][tbls;h;replay]; (1b;::)}[job;tr;tbls;.qetl.job.stream.tolerant[job;.qetl.job.stream.handler[job]]];
             replay;{[e] (0b;e)}];
-        pub set live; `.qetl.job.stream.replaying set 0b; .qetl.job.stream.catching_up[job;0b];
+        if[mute; pub set live]; `.qetl.job.stream.replaying set 0b; .qetl.job.stream.catching_up[job;0b];
         if[replay and `carry in key d; .qetl.job.stream.missed_end_of_day[job;today]];
         .qetl.job.stream.replayed[job];
         if[not first r; 'last r];

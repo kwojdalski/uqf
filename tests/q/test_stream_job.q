@@ -1564,6 +1564,24 @@
     .qt.qetl.job.stream.live[`executions;.qt.qetl.job.stream.an_execution[.qt.qetl.job.stream.d[0];`EURUSD;1;1.1;1e6]];
     .qunit.assertEquals[count .qt.qetl.job.stream.published;1;"the live batch published through the transport"]};
 
+/ outputs may be empty, "for a job that keeps its output local" - and such a
+/ job has no publish to define, which start read to mute it for the replay
+/ and threw its bare name (#2899).
+.qt.qetl.job.stream.test_a_subscriber_with_no_outputs_and_no_publish_starts:{[t]
+    .qt.support.save_stream_jobs[`.qt.qetl.job.stream.sink];
+    `.qpipe.job.sj_sink.book set ([] sym:`symbol$(); qty:`float$());
+    .qetl.job.stream.define[`sj_sink;`procname`subscribe_to`outputs`on_batch`replay`state!(
+        `sjsink1;enlist `executions;`symbol$();{[t;x] `.qpipe.job.sj_sink.book insert select sym, qty:size from x};1b;enlist `book)];
+    replayed:enlist (`executions;.qt.qetl.job.stream.an_execution[.qt.qetl.job.stream.d[0];`EURUSD;1;1.1;1e6]);
+    r:@[{.qetl.job.stream.start[`sj_sink;x]; ""};.qt.qetl.job.stream.fake_transport[`sj_sink;replayed];{[e] e}];
+    book:.qpipe.job.sj_sink.book;
+    up:`sj_sink in .qetl.job.stream.running;
+    `.qetl.job.stream.running set .qetl.job.stream.running except `sj_sink;
+    .qt.support.restore_stream_jobs[`.qt.qetl.job.stream.sink];
+    .qunit.assertEquals[r;"";"start does not throw for a job with no publish"];
+    .qunit.assertTrue[up;"the job is running"];
+    .qunit.assertEquals[exec qty from book;enlist 1e6;"and its replay rebuilt its state"]};
+
 .qt.qetl.job.stream.test_a_transport_missing_a_step_is_refused:{[t]
     .qunit.assertThrows[.qetl.job.stream.start[`posbook;];`connect`publisher!({[] };{[] });
         "start: the transport is missing subscribe, timer";"named, before anything connects"]};
