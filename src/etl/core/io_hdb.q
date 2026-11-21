@@ -523,6 +523,17 @@
           `table`restored!(target;restored);{[e] (::)}]];
     restored}
 
+/ Private: restore_retired for every table under the staging area's `old`,
+/ not only the caller's. Only under the root's lock, where anything left there
+/ was left by a writer that died, and only before a .Q.chk (#2866).
+/ @return how many tables were restored
+/ @private
+.qetl.io.restore_every_retired:{[root]
+    s:(.qetl.io.staging root),"/old";
+    if[()~key hsym `$s; :0];
+    ts:distinct raze {[s;d] key hsym `$s,"/",string d}[s] each key hsym `$s;
+    sum "j"$.qetl.io.restore_retired[root;] each ts}
+
 / Private: set aside a table whose .d lists a column that has no file (#2185).
 / .
 / That is a first write a kill cut short (before the first write was staged) or
@@ -670,10 +681,13 @@
     / tables nobody asked about.
     / .Q.chk fills EVERY partition of the root, so it must not run while one
     / waits for end of day: its empty tables there are what makes movetohdb abort (#2186).
+    / Every table a dead writer left retired goes back FIRST (#2866): .Q.chk
+    / would fill its missing partition with an empty table, which its owner's
+    / sweep then took for the replacement and deleted the retired rows.
     if[not .qetl.io.is_scoped root;
         $[count w:.qetl.io.eod_waiting[root;.qetl.io.part_dates root];
             .qetl.log.ch.warn[`eod;"not filling the HDB's missing tables - a partition is still waiting for end of day";enlist[`waiting]!enlist w];
-            .Q.chk root]];
+            [.qetl.io.restore_every_retired root; .Q.chk root]]];
     `.qetl.io.touched set .qetl.io.touched except ([] hdb_root:count[todo]#root),'todo;
     count todo}
 
