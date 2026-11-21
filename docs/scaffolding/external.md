@@ -54,4 +54,6 @@ in the connector's pid file. A start, or a dry run, refuses a raw table
 `plant_tables.q` does not define.
 
 `uqs job remove NAME` takes all of it out again: both Python files, their test,
-the q job, and both tables when nothing else uses them.
+the q job, and both tables when nothing else uses them. The feed module records
+that this scaffold wrote it, so a plain job that only shares a shipped
+connector's name never takes that connector's modules.

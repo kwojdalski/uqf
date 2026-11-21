@@ -49,9 +49,11 @@ def remove_job(
 ) -> None:
     """Undo a scaffold: the job's files, its table, and every line uqs job new added.
 
-    A table the job published is kept when anything else in the tree uses it,
-    and a backfill's source is kept when another worker reads it. A job whose
-    SCAFFOLDED markers are gone has been written, and is refused without
+    Only files the scaffold wrote go. A table the job published is kept when
+    anything else in the tree uses it, and a backfill's source when anything
+    else reads it. A job another job depends on - a twin, or a reaction on
+    the dataset only it fills - is refused until that one is removed. A file
+    whose SCAFFOLDED marker is gone has been written, and is refused without
     `--override even-if-edited --reason TEXT`. Exits 1 when what the removal
     leaves no longer regenerates.
 

@@ -122,9 +122,10 @@ uqs job new <name> ... --dry-run
 
 To take a scaffold back out - a typo in the name, a wrong shape - run
 `uqs job remove <name>`. It works out every file and line the scaffold wrote
-from the tree, keeps any table or source another job still uses, and refuses a
-job that has been written (its SCAFFOLDED markers are gone) unless
-`--override even-if-edited --reason TEXT`.
+from the tree, deletes only files the scaffold wrote, keeps any table or source
+another job still uses, and refuses a job or file that has been written (its
+SCAFFOLDED markers are gone) unless `--override even-if-edited --reason TEXT`. A
+job a twin or a reaction depends on is refused until that one is removed.
 
 It only knows the files a scaffold writes, so it also lists, with line numbers,
 every other line that still names the job, its process, or a source or table it

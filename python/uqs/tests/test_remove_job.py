@@ -11,6 +11,7 @@ source another worker still uses, and a job that has been written.
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 
@@ -244,12 +245,12 @@ def test_a_source_another_worker_reads_is_kept(tree):
 
 
 def test_a_written_job_is_refused_without_force(tree):
-    """markout carries no SCAFFOLDED marker: it is real work, not a scaffold."""
+    """alert_sink carries no SCAFFOLDED marker: it is real work, not a scaffold."""
     with pytest.raises(UqsError, match="no SCAFFOLDED marker left"):
-        plan_removal(tree, "crypto_markout")
+        plan_removal(tree, "alert_sink")
     assert (
-        Path("src/etl/streaming/crypto_markout.q")
-        in plan_removal(tree, "crypto_markout", force=True).deletes
+        Path("src/etl/streaming/alert_sink.q")
+        in plan_removal(tree, "alert_sink", force=True).deletes
     )
 
 
@@ -474,12 +475,12 @@ def test_a_written_job_is_removed_only_through_the_named_override(tree, monkeypa
         raise SystemExit(1)
 
     monkeypatch.setattr(remove_cli, "_die", record)
-    refused = runner.invoke(cli.app, ["job", "remove", "crypto_markout", "--dry-run"])
+    refused = runner.invoke(cli.app, ["job", "remove", "alert_sink", "--dry-run"])
     assert refused.exit_code == 1 and any("no SCAFFOLDED marker left" in e for e in errors)
     errors.clear()
-    shown = runner.invoke(cli.app, ["job", "remove", "crypto_markout", "--dry-run", *argv])
+    shown = runner.invoke(cli.app, ["job", "remove", "alert_sink", "--dry-run", *argv])
     assert shown.exit_code == 0 and errors == [], errors
-    assert "crypto_markout.q" in shown.output
+    assert "alert_sink.q" in shown.output
 
 
 def test_a_removal_not_confirmed_exits_1_and_removes_nothing(tree, monkeypatch):
@@ -503,6 +504,144 @@ def test_a_removal_not_confirmed_exits_1_and_removes_nothing(tree, monkeypatch):
 
 
 # --------------------------- only what the scaffold provably wrote goes (#2831-#2843)
+
+
+def _with_python(tree: Path) -> Path:
+    """The tree, with the directories a connector scaffold writes into."""
+    from uqs.scaffold.external import EXTERNAL_DIR, PY_TEST_DIR
+
+    for rel in (EXTERNAL_DIR, PY_TEST_DIR):
+        (tree / rel).mkdir(parents=True, exist_ok=True)
+    return tree
+
+
+def test_a_plain_job_named_like_a_shipped_connector_leaves_its_modules(tree):
+    """#2831: a subscriber called `kafka` is not the Kafka connector: the
+    hand-written kafka_streamer.py and kafka_feed.py are not its to delete."""
+    from uqs.scaffold.external import EXTERNAL_DIR
+
+    _with_python(tree)
+    for module in ("kafka_streamer.py", "kafka_feed.py"):
+        shutil.copy2(UQF_ROOT / EXTERNAL_DIR / module, tree / EXTERNAL_DIR / module)
+    write.apply_plan(jobs.streaming_job("kafka", [], "zz_k", "sym:symbol, px:float"), tree)
+    removal = plan_removal(tree, "kafka")
+    assert not [p for p in removal.deletes if p.suffix == ".py"], removal.deletes
+    assert any("kafka_feed.py" in n for n in removal.notes), removal.notes
+    removal.apply(tree)
+    assert (tree / EXTERNAL_DIR / "kafka_streamer.py").is_file()
+    assert (tree / EXTERNAL_DIR / "kafka_feed.py").is_file()
+
+
+def _connector(tree: Path) -> None:
+    from uqs.scaffold.external import external_feed
+
+    write.apply_plan(
+        external_feed(
+            "zq_conn",
+            "zq_conn_raw",
+            "zq_conn_out",
+            "sym:symbol, px:float",
+            known_tables=set(),
+            unprofiled="a test feed",
+        ),
+        _with_python(tree),
+    )
+
+
+@pytest.mark.parametrize(
+    "written",
+    [
+        "python/uqs/src/uqs/external/zq_conn_streamer.py",
+        "python/uqs/tests/test_zq_conn_streamer.py",
+        "tests/q/test_zq_conn.q",
+        "python/uqs/src/uqs/external/zq_conn_feed.py",
+    ],
+)
+def test_a_written_file_of_a_scaffolded_job_needs_the_override(tree, written):
+    """#2832: only the job file's marker was checked, so a written streamer,
+    feed module or test went with the scaffold - silently."""
+    _connector(tree)
+    path = tree / written
+    path.write_text(path.read_text().replace("SCAFFOLDED", "written") + "\n# real work\n")
+    with pytest.raises(UqsError, match=re.escape(written)):
+        plan_removal(tree, "zq_conn")
+    assert Path(written) in plan_removal(tree, "zq_conn", force=True).deletes
+
+
+def test_an_unedited_connector_still_goes_whole(tree):
+    from uqs.scaffold.external import external_files
+
+    _connector(tree)
+    removal = plan_removal(tree, "zq_conn")
+    assert {Path(f) for f in external_files("zq_conn")} <= set(removal.deletes)
+
+
+def test_a_source_a_streaming_job_reads_is_kept(tree):
+    """#2833: only other bounded workers were asked; a streaming feed reading
+    the source through `.qetl.source.for_source` lost it, override or not."""
+    write.apply_plan(backfill.bounded_worker("zq_deals", "zq_deals_hist", "amt:float"), tree)
+    write.apply_plan(jobs.streaming_job("zq_deals_feed", [], "zq_deals_live", "amt:float"), tree)
+    feed = tree / "src/etl/streaming/zq_deals_feed.q"
+    feed.write_text(feed.read_text() + "src:.qetl.source.for_source `zq_deals\n")
+    for force in (False, True):
+        removal = plan_removal(tree, "zq_deals", force=force)
+        assert Path("src/etl/sources/zq_deals.q") not in removal.deletes
+        assert any("zq_deals_feed.q" in n for n in removal.notes), removal.notes
+
+
+def _twin(tree: Path) -> None:
+    write.apply_plan(jobs.streaming_job("zq_a", [], "zq_a_t", "sym:symbol, px:float"), tree)
+    write.apply_plan(
+        backfill.bounded_worker(
+            "zq_a_hist", "zq_a_t", "sym:symbol, px:float", twin_of="zq_a", define_table=False
+        ),
+        tree,
+    )
+
+
+def test_a_job_with_a_twin_is_refused_naming_the_twin(tree):
+    """#2834: the live job went and its twin's twin_of resolved to nothing."""
+    _twin(tree)
+    with pytest.raises(UqsError, match=r"zq_a_hist_backfill.*remove it first"):
+        plan_removal(tree, "zq_a", force=True)
+
+
+def test_a_worker_a_reaction_watches_is_refused_naming_the_reaction(tree):
+    write.apply_plan(backfill.bounded_worker("zq_bf", "zq_bf", "amt:float"), tree)
+    write.apply_plan(
+        reaction("zq_re", "zq_bf", ["zq_re"], producers={"zq_bf": ["zq_bf1"]}, taken=set()),
+        tree,
+    )
+    with pytest.raises(UqsError, match=r"zq_re.*remove it first"):
+        plan_removal(tree, "zq_bf", force=True)
+
+
+def test_a_stream_and_its_twin_removed_in_the_order_allowed_restore_the_tree(tree):
+    """#2842: both jobs gone left zq_a_t defined with no owner. The live job
+    is now refused while its twin stands, and the other order is exact."""
+    before = _snapshot(tree)
+    _twin(tree)
+    _remove(tree, "zq_a_hist")
+    _remove(tree, "zq_a")
+    after = _snapshot(tree)
+    changed = sorted(str(p) for p in set(before) | set(after) if before.get(p) != after.get(p))
+    assert not changed, f"not restored: {changed}"
+
+
+def test_the_last_job_on_a_scaffolded_table_takes_it_when_its_definer_is_gone(tree):
+    """#2842: a guest writer removed after the job that defined the table left
+    the definition with nobody to remove it."""
+    before = _snapshot(tree)
+    write.apply_plan(jobs.streaming_job("zq_def", [], "zq_shared", "px:float"), tree)
+    write.apply_plan(
+        jobs.streaming_job("zq_guest", [], "zq_shared", None, known_tables={"zq_shared"}), tree
+    )
+    assert any("kept table zq_shared" in n for n in plan_removal(tree, "zq_def").notes)
+    _remove(tree, "zq_def")
+    _remove(tree, "zq_guest")
+    after = _snapshot(tree)
+    changed = sorted(str(p) for p in set(before) | set(after) if before.get(p) != after.get(p))
+    assert not changed, f"not restored: {changed}"
 
 
 def test_a_stream_and_a_backfill_under_one_name_are_each_removable(tree):

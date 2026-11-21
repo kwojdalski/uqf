@@ -7,26 +7,35 @@ than from the command that made them, so it needs nothing but the name.
 
 WHAT IT REMOVES. The job's file and its test (nothing registers a test: the
 suite loader finds it by what it holds, so deleting the file is the whole of
-it), and the profile lines naming its process. For a backfill, its source too, when no
-other worker reads it. A table the job publishes (or fills) goes with its
+it), and the profile lines naming its process. For a backfill, its source too, when
+nothing else in the tree names it - another worker, or a streaming feed reading it
+through .qetl.source.for_source (#2833). A table the job publishes (or fills) goes with its
 definition, its `expected` entry and its catalog line - but only when nothing
 else in the tree mentions it, so a table another job reads is never taken, and
 only when this scaffold defined it (its comment opens "/ <process>'s"), so a
-table it merely publishes onto stays (#1585).
+table it merely publishes onto stays (#1585) - unless the job that defined it
+is gone and the definition is still unwritten, when the last job on it takes it
+(#2842).
 A reaction is only its file and its test: it has no process, so no table,
 profile or port.
 An external feed (#715) also loses its Python publisher, its feed module and
-their test, and the raw table the publisher writes - on the same rule as any
+their test - when its feed module says a connector scaffold of that name wrote
+it, so a plain job named like a shipped connector leaves its modules (#2831) -
+and the raw table the publisher writes - on the same rule as any
 table: only when nothing else mentions it.
 A backfill also loses the worked example its scaffold generated under
 scripts/examples/, and every process the Showcase card and stack.md comment
 its scaffold wrote (#713) - while they still say SCAFFOLDED. A hand-written
 example and written prose are left, and the reference report lists them.
 
-WHAT IT REFUSES. A job whose file carries no SCAFFOLDED marker any more: it
-has been written, and deleting written work is not undoing a scaffold.
-`--override even-if-edited --reason TEXT` overrides that, and nothing else
-(a bare `--even-if-edited` until #1852).
+WHAT IT REFUSES. A job whose file - or any file it would delete - is no
+longer as the scaffold wrote it: its SCAFFOLDED marker gone, or, for a file
+written complete (a feed module, a passthrough's test), its text changed
+(#2832). It has been written, and deleting written work is not undoing a
+scaffold. `--override even-if-edited --reason TEXT` overrides that, and nothing
+else (a bare `--even-if-edited` until #1852). And, with no override, a job
+another job resolves through: a twin's `twin_of`, or the dataset a reaction
+watches that no other worker fills (#2834). Removed, either fails the load.
 
 WHAT IT REPORTS (#717). Every line elsewhere in the tree that still names
 what it removes - an example script, a docs page, a diagram, another suite's
@@ -57,21 +66,21 @@ from uqs.paths import (
 )
 from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE, without_stubs
 from uqs.scaffold.example import GENERATED_BY, example_path
-from uqs.scaffold.external import external_files
 from uqs.scaffold.profile import PROFILES_FILE, UNPROFILED_FILE
 from uqs.scaffold.references import Reference, stale_references
-
-MARKER = "SCAFFOLDED"
-_DECLARES = DECLARATION_VERBS
-#: Files whose mention of a table is bookkeeping, not a use: the scaffold's own
-#: appends, and the generated job graph, which is regenerated after a removal.
-_BOOKKEEPING = (
-    TABLES_FILE,
-    CATALOG_FILE,
-    STACK_TABLES_TEST,
-    Path("src/etl/generated/pipeline_dag.q"),
-    Path("src/etl/generated/load_plan.q"),
+from uqs.scaffold.remove_policy import (
+    BOUNDED,
+    MARKER,
+    connector_files,
+    defined_by,
+    generated_test,
+    living_names,
+    refuse_dependents,
+    refuse_written,
+    user_of,
 )
+
+_DECLARES = DECLARATION_VERBS
 
 
 @dataclass
@@ -106,7 +115,13 @@ class Removal:
 
 
 def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
-    """What removing job `name` takes out of the tree at `repo_root`."""
+    """What removing job `name` takes out of the tree at `repo_root`.
+
+    A file goes only when the scaffold provably wrote it - its job file names
+    it, or it carries the scaffold's marker - and it is still as written;
+    one that has been written since is refused without `force` (#2832). A
+    job another job resolves through is refused outright (#2834).
+    """
     job_file = _job_file(repo_root, name)
     text = (repo_root / job_file).read_text()
     if MARKER not in text and not force:
@@ -115,14 +130,20 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
             "only undoes a scaffold. Pass --override even-if-edited --reason REASON to remove it "
             "anyway"
         )
+    # Files already shown to be the scaffold's, and files whose unedited text
+    # is known exactly - every other delete must still carry MARKER.
+    proven = {job_file}
+    exact: dict[Path, str] = {}
     if job_file.parent == REACTION_DIR:
         removal = _reaction_removal(repo_root, name, job_file)
+        refuse_written(removal.deletes, repo_root, force, proven, exact)
         return _with_references(removal, repo_root, {name})
     fn, job, fields = _declaration(job_file, text)
+    refuse_dependents(repo_root, job_file, fn, job, fields)
     proc = (symbols(fields.get("procname", "")) or (f"{job}1",))[0]
     removal = Removal(job)
     removal.deletes.append(job_file)
-    gone = {job_file}
+    gone = {job_file} | _remove_test(removal, repo_root, job)
     # Everything this takes away, by name: the argument as given (a backfill's
     # NAME, its worker being NAME_backfill), the job and its process. The
     # source and the tables join below only if they go too.
@@ -131,48 +152,55 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     # that table is kept, every mention of the name is a use of the table.
     kept: set[str] = set()
 
-    if fn == "qetl.job.bounded.define":
+    if fn == BOUNDED:
         tables = list(declared_outputs(fields, job)[:1])
-        source = symbols(fields.get("source", ""))[:1]
-        if source:
-            src_file = SOURCE_DIR / f"{source[0]}.q"
-            if _source_is_ours(repo_root, source[0], src_file, job_file, force):
-                removal.deletes.append(src_file)
-                gone.add(src_file)
-                names.add(source[0])
-            else:
-                # NAME is the source's name too: another worker reads it, so
-                # its mentions are that worker's.
-                kept.add(source[0])
         # Only the example a scaffold generated; a hand-written one is the
         # reference report's to list.
         example = example_path(job.removesuffix("_backfill"))
         if (repo_root / example).is_file() and GENERATED_BY in (repo_root / example).read_text():
             removal.deletes.append(example)
             gone.add(example)
+            proven.add(example)
+        source = symbols(fields.get("source", ""))[:1]
+        if source:
+            src_file = SOURCE_DIR / f"{source[0]}.q"
+            # Any q file that stays and names the source reads it - another
+            # worker, or a streaming feed through .qetl.source.for_source (#2833).
+            reader = user_of(repo_root, source[0], gone | {src_file})
+            if reader is None and (repo_root / src_file).is_file():
+                removal.deletes.append(src_file)
+                gone.add(src_file)
+                names.add(source[0])
+            else:
+                # NAME is the source's name too: something else reads it, so
+                # its mentions are that reader's.
+                kept.add(source[0])
+                if reader is not None:
+                    removal.notes.append(f"kept source {source[0]}: {reader} reads it")
     elif fn == "qetl.job.stream.normalize":
         tables = [job]
     else:
         tables = list(declared_outputs(fields, job))
+        generated_test(job, fields, exact)
         # An external feed (#715): its Python publisher, the feed module the CLI
         # discovers, their test - and the raw table the publisher writes, which
         # is the job's subscription. What the feed produces goes with its module
         # (#1776): there is no list elsewhere to edit.
-        py_files = [Path(f) for f in external_files(job) if (repo_root / f).is_file()]
+        py_files = connector_files(repo_root, job, fields, removal.notes, exact)
         if py_files:
             removal.deletes += py_files
             gone |= set(py_files)
             raw = list(symbols(fields.get("subscribe_to", "")))
             tables = raw + tables
 
-    gone |= _remove_test(removal, repo_root, job)
-
+    living = living_names(repo_root, job_file)
     for table in tables:
-        if _mentioned_elsewhere(repo_root, table, gone):
-            removal.notes.append(f"kept table {table}: something else in the tree uses it")
+        user = user_of(repo_root, table, gone)
+        if user is not None:
+            removal.notes.append(f"kept table {table}: {user} uses it")
             kept.add(table)
             continue
-        if not _defined_by(repo_root, table, {job, proc}):
+        if not defined_by(repo_root, table, {job, proc}, living):
             # A guest writer (#1585): the job published onto a table it did not
             # define, so the definition is someone else's to remove.
             removal.notes.append(f"kept table {table}: this scaffold did not define it")
@@ -199,6 +227,7 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     # else that names the process is listed by the reference report below.
     for page in (STACK_PAGE, SHOWCASE_PAGE):
         _edit(removal, repo_root, page, lambda t: without_stubs(t, proc))
+    refuse_written(removal.deletes, repo_root, force, proven, exact)
     return _with_references(removal, repo_root, names - kept, {job})
 
 
@@ -255,57 +284,6 @@ def _declaration(path: Path, text: str) -> tuple[str, str, dict[str, str]]:
     if len(calls) != 1:
         raise UqsError(f"{path} makes {len(calls)} job declarations - remove it by hand")
     return calls[0]
-
-
-def _source_is_ours(
-    repo_root: Path, source: str, src_file: Path, job_file: Path, force: bool
-) -> bool:
-    """Delete a source only when this worker alone reads it, and it is still a scaffold."""
-    if not (repo_root / src_file).is_file():
-        return False
-    for path in sorted((repo_root / WORKER_DIR).glob("*.q")):
-        if path.relative_to(repo_root) == job_file:
-            continue
-        for fn, _, fields in declaration_calls(path.read_text()):
-            if fn == "qetl.job.bounded.define" and symbols(fields.get("source", ""))[:1] == (
-                source,
-            ):
-                return False
-    return force or MARKER in (repo_root / src_file).read_text()
-
-
-def _mentioned_elsewhere(repo_root: Path, table: str, gone: set[Path]) -> bool:
-    """Whether any q file that stays names `table` as a symbol."""
-    pattern = re.compile(rf"`{re.escape(table)}\b")
-    for directory in ("src", "scripts", "tests"):
-        for path in (repo_root / directory).rglob("*.q"):
-            rel = path.relative_to(repo_root)
-            if rel in gone or rel in _BOOKKEEPING:
-                continue
-            if pattern.search(path.read_text(errors="replace")):
-                return True
-    return False
-
-
-def _defined_by(repo_root: Path, table: str, owners: set[str]) -> bool:
-    """Whether plant_tables.q's definition of `table` is one a scaffold of
-    `owners` wrote: the comment above it opens "/ <owner>'s", as every
-    scaffold's does. References cannot tell a table's owner from a guest that
-    publishes onto it (#1585), so an authored definition is kept."""
-    path = repo_root / TABLES_FILE
-    if not path.is_file():
-        return False
-    lines = path.read_text().splitlines()
-    at = [
-        i for i, line in enumerate(lines) if re.match(rf"(?:\.qetl\.plant\.)?{table}:\(\[\]", line)
-    ]
-    if len(at) != 1:
-        return False
-    start = at[0]
-    while start > 0 and lines[start - 1].startswith("/"):
-        start -= 1
-    comment = lines[start : at[0]]
-    return any(line.startswith(f"/ {owner}'s ") for line in comment for owner in owners)
 
 
 def _edit(removal: Removal, repo_root: Path, path: Path, change) -> None:
