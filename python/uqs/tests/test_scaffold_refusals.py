@@ -1,5 +1,5 @@
-"""`uqs job new` refuses the same things whichever way it is run (#2824, #2827,
-#2836).
+"""`uqs job new` refuses the same things whichever way it is run (#2823, #2824,
+#2827, #2836).
 
 The refusals that read the tree - a job name or procname already taken, a file
 that already exists - lived only in `write.apply_plan`: after `--dry-run`
@@ -56,6 +56,22 @@ def test_a_dry_run_refuses_what_the_real_run_refuses(monkeypatch, argv, message)
 
 
 @pytest.mark.parametrize(
+    "argv",
+    [
+        ["rdb", "--outputs", "zz_rdb_out", *_ETL],
+        ["zz_gw", "--outputs", "zz_gw_out", *_ETL, "--proc", "gateway1"],
+        ["zz_hdb", "--kind", "backfill", "--outputs", "zz_hdb", "--schema", "px:float",
+         "--proc", "hdb1"],
+    ],
+)  # fmt: skip
+def test_a_procname_the_vendored_torq_stack_runs_is_refused(monkeypatch, argv):
+    """#2823: `uqs job new rdb` took rdb1, the starter pack's RDB, and the
+    composed process rows then held rdb1 twice."""
+    _out, refused = _job_new([*argv, "--dry-run"], monkeypatch)
+    assert refused and "which the vendored TorQ stack" in refused[0], refused
+
+
+@pytest.mark.parametrize(
     ("argv", "message"),
     [
         # #2824: a procname a tree job runs
@@ -64,6 +80,8 @@ def test_a_dry_run_refuses_what_the_real_run_refuses(monkeypatch, argv, message)
         (["demo_deals_backfill", "--outputs", "zb2_out", *_ETL], "'demo_deals_backfill' already"),
         # #2836: a streaming job the tree already has
         (["fx_feed", "--outputs", "zz_x1", *_ETL], "'fx_feed' already exists"),
+        # #2823 under --bundle too
+        (["zb3", "--outputs", "zb3_out", *_ETL, "--proc", "rdb1"], "vendored TorQ stack"),
     ],
 )
 @pytest.mark.parametrize("dry_run", [[], ["--dry-run"]])

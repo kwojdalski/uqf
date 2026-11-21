@@ -61,6 +61,22 @@ NON_JOB_PIPELINES: tuple[Pipeline, ...] = (
 )
 
 
+#: The starter pack's own processes, which the stack starts beside every job.
+VENDORED_PROCESSES = Path("lib") / "torq-finance-starter-pack" / "appconfig" / "process.csv"
+
+
+def vendored_procnames(root: Path) -> frozenset[str]:
+    """The procnames the vendored TorQ stack runs (#2823): `root`'s copy, or,
+    for a partial tree (a scaffold's scratch view), the one uqs was installed
+    from - the same fallback scaffold/write.py's converter takes."""
+    path = next((b / VENDORED_PROCESSES for b in (root, repo_root())
+                 if (b / VENDORED_PROCESSES).is_file()), None)  # fmt: skip
+    if path is None:
+        return frozenset()
+    with path.open(newline="") as f:
+        return frozenset(row["procname"] for row in csv.DictReader(f))
+
+
 def refuse_taken(new: Iterable[Declaration], existing: Iterable[Declaration], root: Path) -> None:
     """Refuse a declaration whose job name or procname is already taken.
 
@@ -68,12 +84,13 @@ def refuse_taken(new: Iterable[Declaration], existing: Iterable[Declaration], ro
     bundle, real or dry run, and the bundle installer - so none admits what
     another refuses (#2824, #2835). A job name is one namespace,
     `.qpipe.job.<name>`, across kinds (#2500); a procname is one process
-    (#1572), and is taken if a declaration in `existing` claims it or a
-    NON_JOB_PIPELINES entry (tap1) runs it. Each of `new` is checked against
-    the others too.
+    (#1572), and is taken if a declaration in `existing` claims it, tap1-like
+    NON_JOB_PIPELINES run it, or the vendored TorQ stack does (#2823). Each of
+    `new` is checked against the others too.
     """
     names = {d.name: d.kind.value for d in existing}
-    taken = {p.procname: p.procname for p in NON_JOB_PIPELINES}
+    taken = {p: f"the vendored TorQ stack ({VENDORED_PROCESSES})" for p in vendored_procnames(root)}
+    taken |= {p.procname: p.procname for p in NON_JOB_PIPELINES}
     taken |= {d.procname: d.name for d in existing}
     for d in new:
         if d.name in names:
@@ -198,6 +215,8 @@ def build_pipelines(root: Path) -> tuple[Pipeline, ...]:
     duplicates = sorted({n for n in names if names.count(n) > 1})
     if duplicates:
         raise ValueError(f"procnames claimed more than once: {duplicates}")
+    if vendored := sorted(set(names) & vendored_procnames(root)):
+        raise ValueError(f"procnames the vendored TorQ stack already runs: {vendored}")
     offsets = allocate_offsets(names, read_port_lock(root))
     sole = _sole_publishes(declarations)
     built = [_pipeline(d, sole[d.procname], offsets[d.procname]) for d in declarations]
