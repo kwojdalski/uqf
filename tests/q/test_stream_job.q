@@ -1155,6 +1155,44 @@
     .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`quote_qty;-1085000f;1e-6;
         "the priced buy keeps both"]};
 
+/ #2878: order 7 filled, delivered twice (a redelivery, a later plant row),
+/ is one fill - as order_quality and the markouts count it - not two.
+/ Normalized through executions, so the fill_id is the order id.
+.qt.qetl.job.stream.redelivered_fills:{[]
+    o:([] time:.qt.qetl.job.stream.d each til 4; order_id:7 7 9 8;
+        sym:4#`EURUSD; book:4#`london; product:4#`spot; side:1 1 1 -1;
+        size:1000000 1000000 2000000 500000f; price:1.1 1.1 1.2 1.3; order_status:4#`filled);
+    / each order row as the plant delivers it, one batch per row
+    {[o] `time xcols update time:o`time from .qetl.job.stream.normalizer.normalize[`executions;`orders;enlist o]} each o}
+
+.qt.qetl.job.stream.test_positions_net_a_redelivered_fill_once:{[t]
+    .qt.qetl.job.stream.reset[];
+    saved:.qetl.log.ch.warn;
+    `.qetl.log.ch.warn set {[channel;text;fields] `.qt.qetl.job.stream.fx_warned set (channel;text;fields);};
+    r:@[{.qpipe.job.fx_positions.on_batch[`executions;] each x; 1b};.qt.qetl.job.stream.redelivered_fills[];{[saved;e] `.qetl.log.ch.warn set saved; 'e}[saved]];
+    `.qetl.log.ch.warn set saved;
+    .qunit.assertEquals[r;1b;"the batches are taken"];
+    p:.qpipe.job.fx_positions.positions[`EURUSD`london`spot];
+    .qt.support.assertApprox[p`base_qty;2500000f;1e-9;"1mm + 2mm - 500k: the redelivered 1mm is netted once"];
+    .qunit.assertEquals[p`fill_count;3j;"three fills, not four"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.fx_warned 2)`fills;1j;"the repeat is dropped and counted"]};
+
+.qt.qetl.job.stream.test_posbook_applies_a_redelivered_fill_once:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.posbook.on_batch[`executions;] each .qt.qetl.job.stream.redelivered_fills[];
+    .qunit.assertEquals[exec qty from 0!.qpipe.job.posbook.book;enlist 2500000f;"the redelivered 1mm is applied once"]};
+
+/ The same fill twice in ONE batch is also one fill; a fill with no id has
+/ no identity, so two of them are two fills.
+.qt.qetl.job.stream.test_positions_net_a_fill_repeated_within_a_batch_once:{[t]
+    .qt.qetl.job.stream.reset[];
+    b:raze .qt.qetl.job.stream.redelivered_fills[];
+    .qpipe.job.fx_positions.on_batch[`executions;update time:.qt.qetl.job.stream.d 0 from b];
+    .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;2500000f;1e-9;"one batch, the repeat netted once"];
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.fx_positions.on_batch[`executions;update fill_id:` from b];
+    .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;3500000f;1e-9;"no fill_id, no identity: every row is netted"]};
+
 / #2533: apply_desk_fills now refuses a negative size, so net_fills drops
 / it as it drops a null rather than losing the whole batch.
 .qt.qetl.job.stream.test_positions_drop_a_negative_size_fill:{[t]

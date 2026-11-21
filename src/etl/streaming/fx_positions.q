@@ -89,6 +89,13 @@
 / net_fills, which has expected tables.
 .qpipe.job.fx_positions.positions:`sym`book`product xkey .qpipe.job.fx_positions.desk_book;
 
+/ The fills the book has applied, by identity (#2878): a filled order
+/ delivered twice is one fill, as order_quality and the markouts count it,
+/ so its repeat is dropped (.qf.port.first_deliveries). Rebuilt by a replay
+/ from the fills it replays, and forgotten after `remember`.
+.qpipe.job.fx_positions.applied:.qf.port.no_fills_applied[];
+.qpipe.job.fx_positions.remember:1D
+
 / The desk's limits. Empty until something loads them - a service with no
 / limits reports positions and polices nothing, which is a legitimate way
 / to run and better than inventing caps nobody agreed to.
@@ -211,6 +218,18 @@
             (enlist[`job]!enlist `fx_positions),enlist[`variable]!enlist "UQF_FX_POSITION_LIMITS"]];
     count .qpipe.job.fx_positions.limits}
 
+/ The fills of a batch the book has not applied yet, recording them: a
+/ repeat of an applied fill is dropped and said out loud (#2878).
+/ @param x executions rows
+/ @return the rows that are first deliveries
+.qpipe.job.fx_positions.first_deliveries:{[x]
+    r:.qf.port.first_deliveries[.qpipe.job.fx_positions.applied;x;.qpipe.job.fx_positions.remember];
+    `.qpipe.job.fx_positions.applied set r`seen;
+    if[any r`repeat;
+        .qetl.log.ch.warn[`transform;"dropped fills already applied - a fill delivered again is not netted again";
+            (enlist[`job]!enlist `fx_positions),enlist[`fills]!enlist `long$sum r`repeat]];
+    x where not r`repeat}
+
 / Net one batch of fills into the book.
 / .
 / The book is replaced BEFORE anything is published, the way posbook does
@@ -226,6 +245,8 @@
         if[.qetl.job.stream.replaying; .qpipe.job.fx_positions.restore_throttle[x]];
         :()];
     if[not t=`executions; :()];
+    if[0=count x; :()];
+    x:.qpipe.job.fx_positions.first_deliveries x;
     if[0=count x; :()];
     updated:.qetl.transform.apply[`fx_positions;`book`executions!(
         0!.qpipe.job.fx_positions.positions;
@@ -344,4 +365,4 @@
     enlist `fx_limit_breach;
     `state`table!(`positions;`fx_position_open);
     "net exposure by (sym, book, product) with limit breaches. Runs here AND standalone under jobs/run_stream.q on stock kdb+ - a job is TorQ-free code and the runner decides the transport, so being runnable without TorQ is no reason not to be startable with it";
-    `positions`limits`alerts)];
+    `positions`applied`limits`alerts)];

@@ -22,9 +22,13 @@
 .qt.qetl.job.stream.endofday.d0:2026.10.08
 .qt.qetl.job.stream.endofday.t1:2026.10.09D09:00:00
 
+/ Each fill made is a fill of its own, with an id of its own: the books
+/ net a repeated (venue; fill_id) once (#2878).
+.qt.qetl.job.stream.endofday.fills_made:0
 .qt.qetl.job.stream.endofday.fill:{[s;side;size;px;bk;prod]
+    id:`$"f",string .qt.qetl.job.stream.endofday.fills_made+:1;
     ([] time:enlist .qt.qetl.job.stream.endofday.t1; source_time:enlist .qt.qetl.job.stream.endofday.t1; sym:enlist s; venue:enlist `v; side:enlist side;
-        size:enlist size; price:enlist px; fee:enlist 0f; fee_ccy:enlist `USD; fill_id:enlist `f;
+        size:enlist size; price:enlist px; fee:enlist 0f; fee_ccy:enlist `USD; fill_id:enlist id;
         book:enlist bk; product:enlist prod)}
 
 .qt.qetl.job.stream.endofday.sent:()
