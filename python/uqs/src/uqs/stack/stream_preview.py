@@ -18,6 +18,7 @@ import tempfile
 from datetime import timedelta
 from pathlib import Path
 
+from uqs import qjson
 from uqs.interpreter import q_interpreter
 from uqs.model.jobs import job_rows
 from uqs.paths import UqsError, UqsPaths
@@ -118,6 +119,7 @@ def preview(
             *(f"\\l {f}" for f in _TREE),
             *([".qetl.log.trace 1b;", ".qetl.log.debug 1b;"] if trace else []),
             f"r:@[{{[x] {_call(job, sample, window)}}};::;{{[e] enlist[`error]!enlist e}}];",
+            qjson.PRECISION,  # the sample's floats as the job would publish them (#2875)
             f'-1 "{_MARK}",.j.j r;',
             "exit 0",
             "",
