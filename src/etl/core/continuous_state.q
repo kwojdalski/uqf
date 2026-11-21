@@ -157,19 +157,23 @@
 / The tuple order a paginated source sorts by: the first field that differs
 / decides, so (09:41, B) is after (09:41, A) and before (09:42, A). Equal is
 / not after - a page that does not move the cursor re-publishes - and a first
-/ run, with no cursor, is after nothing.
+/ run, with no cursor, is after nothing. A field that is not an atom (a string
+/ id) is ordered as `iasc` orders it, lexically, rather than with `>`, which
+/ gave a boolean vector and threw at the first tie on time (#2857).
 / @param ks the fields, in sort order
 / @param current the saved cursor, a dictionary carrying ks, or (::)
 / @param proposed the cursor a page would move to
 / @return 1b when proposed is strictly after current
 / @eg .qetl.job.continuous.lexically_after[`t`id;`t`id!(1;`a);`t`id!(1;`b)]  ->  1b
 / @eg .qetl.job.continuous.lexically_after[`t`id;`t`id!(1;`b);`t`id!(1;`b)]  ->  0b
+/ @eg .qetl.job.continuous.lexically_after[`t`id;`t`id!(1;"AAB");`t`id!(1;"AB")]  ->  1b
 .qetl.job.continuous.lexically_after:{[ks;current;proposed]
     if[(::)~current; :1b];
     a:current ks;
     b:proposed ks;
     i:first where not a~'b;
-    $[null i; 0b; b[i]>a[i]]}
+    if[null i; :0b];
+    $[(0>type a i) and 0>type b i; b[i]>a[i]; 0=first iasc (a i;b i)]}
 
 / ---------------------------------------------------------------- ADVANCE
 
