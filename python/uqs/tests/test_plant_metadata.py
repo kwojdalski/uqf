@@ -172,7 +172,7 @@ def test_sorting_and_nested_declarations_are_carried(tmp_path, q_binary, pack):
 #: explicit, `sym` grouped by default and spelled `g#`, grouped columns of every
 #: other type, no `sym`, a lone `time`, one and several list columns.
 _SPECS = {
-    "rt_every_type": "sym:symbol, f:float, j:long, i:int, h:short, b:boolean, c:char, "
+    "rt_every_type": "sym:symbol, f:float, j:long, k:int, h:short, b:boolean, c:char, "
     "d:date, t:time, n:timespan, p:timestamp",
     "rt_explicit_time": "time:timestamp, sym:g#symbol, px:float",
     "rt_grouped": "venue:g#symbol, f:g#float, j:g#long, c:g#char, d:g#date",
