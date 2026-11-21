@@ -36,6 +36,7 @@ import inspect
 from collections.abc import Callable
 from typing import Any
 
+from uqs import qjson
 from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
 from uqs.cli.common.json_out import plain, records
 from uqs.cli.common.q_login import DEFAULT_USER, q_password
@@ -171,7 +172,8 @@ def uqs_query(
             raise stack_procs.unknown_processes(str(proc))
         port = int(ports[str(proc)])
     passwd = q_password(password_env)
-    result = runtime.query(expr, port, host=host, user=user, passwd=passwd)
+    # kola makes an integral 0W null: q sends it as a float infinity (#2874)
+    result = runtime.query(qjson.carried(expr), port, host=host, user=user, passwd=passwd)
     return {"expression": expr, "result": plain(result)}
 
 

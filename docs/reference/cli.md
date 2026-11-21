@@ -268,6 +268,10 @@ These rules hold for every document:
 - Data the document carries, such as a `query`'s result or `job preview`'s
   sampled rows, keeps the data's own column names.
 - A time is ISO-8601 with an explicit offset and keeps every fractional digit.
+  In data from q, a timespan is a whole number of nanoseconds.
+- An infinity from q (`0w`, `0W`, `0Wp`, `0Wn`) is the string `"inf"` or
+  `"-inf"`, never `null`, which is only a missing value. An integral column that
+  holds an infinity arrives as floats, since kola cannot carry it otherwise.
 - A log line is one record, `{time, level, message}`, plus what the command
   adds: `logs` adds `host`, `process`, `proctype` and `id`.
 - Under `--json`, `deploy push`, `prune` and `rollback` print their dry-run note

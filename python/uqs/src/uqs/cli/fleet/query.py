@@ -18,6 +18,7 @@ from typing import Annotated
 
 import typer
 
+from uqs import qjson
 from uqs.cli.common import completion
 from uqs.cli.common.choices import ChoiceOpt
 from uqs.cli.common.concepts import target_opt
@@ -341,11 +342,13 @@ def _ask(
     wrap_size, shown = size, expr
     if routed:
         try:
-            expr = stack_gateway.expression(expr, servers, size)
+            expr = stack_gateway.expression(expr, servers, size, carry=as_json)
         except UqsError as exc:
             _die(exc)
         wrap_size = None
         log.debug("routed through the gateway: {}", expr)
+    elif as_json:
+        expr = qjson.carried(expr)  # kola makes an integral 0W null (#2874)
     try:
         result = runtime.query(expr, port, host=host, user=user, passwd=passwd, render=wrap_size)
     except Exception as exc:  # kola raises its own exception types on connect/query failure

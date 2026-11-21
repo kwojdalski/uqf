@@ -18,6 +18,14 @@ That is not JSON, and json.loads refused the whole answer over one infinite
 value (#2876); here it is Python's infinity, and a null is still None, so
 the two stay apart. Only a token is read so: text that spells inf inside a
 JSON string is left as it is.
+
+The other road out of q is kola, which `uqs query` and MCP `query` take.
+kola keeps a float's 0w, but makes an integral 0W, -0W and 0N alike null, so
+a document said "no value" for "no limit" (#2874). `carried` asks q for an
+expression's result with each integral column that holds an infinity as
+floats, which kola keeps - scripts/torqcode/gateway/browse.q's
+`browse_infinity`, which does the same for the Desk (#1330), sent with the
+expression because the process asked need not have it loaded.
 """
 
 from __future__ import annotations
@@ -39,3 +47,25 @@ def loads(text: str) -> Any:
     return json.loads(
         _INFINITY.sub(lambda m: m[0] if m[0].startswith('"') else f"{m[1]}Infinity", text)
     )
+
+
+#: A q lambda of one result: each integral column (or vector, or atom) that
+#: holds 0W or -0W as floats, with those as 0w and -0w - `"f"$0W` is
+#: 9.2e18, not 0w - and anything else as it was. A table, a keyed table's
+#: two sides, and a dictionary's values are read column by column.
+CARRY_INFINITIES = (
+    '{[r] f:{[x] if[not (k:abs type x) in 5 6 7h; :x]; w:("hij"!(0Wh;0Wi;0W)) .Q.t k;'
+    ' if[not any w=abs x; :x]; ?[x=neg w;-0w;?[x=w;0w;"f"$x]]};'
+    " $[98h=type r; flip f each flip r; 99h<>type r; f r;"
+    " 98h=type key r; (flip f each flip key r)!flip f each flip value r; f each r]}"
+)
+
+
+def carried(expr: str) -> str:
+    """`expr` as q text whose result carries its integral infinities through
+    kola. `value` on the string, as stack/render.py's wrap does, so an
+    expression with its own `;` means what it would typed at a q prompt.
+    The quoting is render.quoted's, written here so that every layer can
+    import this module, which imports none."""
+    quoted = expr.replace("\\", "\\\\").replace('"', '\\"')
+    return f'{CARRY_INFINITIES} value "{quoted}"'

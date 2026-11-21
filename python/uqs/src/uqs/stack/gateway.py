@@ -14,6 +14,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from uqs import qjson
 from uqs.paths import UqsError
 from uqs.stack import render as stack_render
 
@@ -49,7 +50,10 @@ _STRING = re.compile(r'"(?:[^"\\]|\\.)*"?')
 
 
 def expression(
-    expr: str, servers: str = DEFAULT_SERVERS, render: tuple[int, int] | None = None
+    expr: str,
+    servers: str = DEFAULT_SERVERS,
+    render: tuple[int, int] | None = None,
+    carry: bool = False,
 ) -> str:
     """`expr` as the gateway should run it.
 
@@ -66,8 +70,14 @@ def expression(
     the JOIN function instead, through `.gw.syncexecj`: the gateway applies
     it to the servers' results before replying, so the deferred reply is the
     text. A call sent as typed is not deferred and is wrapped as usual.
+
+    With `carry`, for a result read as data (`--json`), the join is also
+    where its integral infinities are made floats kola keeps (qjson.carried,
+    #2874), for the same reason.
     """
     if _AS_TYPED.match(expr):
+        if carry:
+            return qjson.carried(expr)
         return expr if render is None else stack_render.wrap(expr, render)
     if _IN_PLACE.search(_STRING.sub('""', expr)):
         raise UqsError(
@@ -81,6 +91,8 @@ def expression(
         raise UqsError(f"--servers takes process types, e.g. 'rdb hdb' - not {servers!r}")
     query = f'"{stack_render.quoted(expr)}"'
     targets = "".join("`" + t for t in types)
+    if carry:
+        return f".gw.syncexecj[{query};{targets};{{{qjson.CARRY_INFINITIES} raze x}}]"
     if render is None:
         return f".gw.syncexec[{query};{targets}]"
     # raze is .gw.syncexec's own join, so the data is what it would have been.
