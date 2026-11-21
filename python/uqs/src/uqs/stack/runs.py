@@ -204,14 +204,30 @@ def _as_bound(ledger_value: str, *, upper: bool = False) -> str:
     its end. The range only widens, which is safe because a backfill skips
     the windows already covered; narrowing it would leave a sliver unfilled.
     """
+    moment = ledger_moment(ledger_value, upper=upper).replace(tzinfo=None)
+    if not moment.microsecond:
+        return moment.isoformat()
+    return f"{moment:%Y.%m.%dD%H:%M:%S}.{moment.microsecond:06d}000"
+
+
+def ledger_moment(ledger_value: str, *, upper: bool = False) -> datetime:
+    """A ledger timestamp - `.z.p`, UTC, up to nine fractional digits - as a
+    UTC datetime, which stops at the microsecond: down to it, or up (`upper`)
+    when anything finer is set.
+
+    Not `timerange.parse_bound`, which is for what an operator types and
+    refuses nine digits rather than move their bound; a ledger bound is q's,
+    and can carry them (#1253, #2864). Against a bound that is itself a whole
+    microsecond, as every datetime is, the rounding loses nothing: a start is
+    before it exactly when the start rounded down is, and an end is after it
+    exactly when the end rounded up is.
+    """
     stamp, _, fraction = ledger_value.partition(".")
     digits = fraction.ljust(9, "0")
     moment = datetime.fromisoformat(stamp) + timedelta(microseconds=int(digits[:6]))
     if upper and digits[6:].strip("0"):
         moment += timedelta(microseconds=1)
-    if not moment.microsecond:
-        return moment.isoformat()
-    return f"{moment:%Y.%m.%dD%H:%M:%S}.{moment.microsecond:06d}000"
+    return moment.replace(tzinfo=UTC) if moment.tzinfo is None else moment.astimezone(UTC)
 
 
 def untagged(version: str) -> str:

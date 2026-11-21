@@ -84,6 +84,31 @@ def test_a_run_with_no_recorded_range_meets_no_window(blank):
     assert [r["run_id"] for r in (rangeless, ranged) if cli_runs._overlaps(r, window)] == ["b"]
 
 
+@pytest.mark.parametrize(
+    ("window_from", "window_to", "meets"),
+    [
+        # the run is [06:30:00.123456789, 06:30:00.500000001)
+        ("2026-09-13T06:30:00.123456", "2026-09-13T06:30:00.123457", True),
+        ("2026-09-13T06:00:00", "2026-09-13T06:30:00.123456", False),
+        ("2026-09-13T06:30:00.500001", "2026-09-13T07:00:00", False),
+        ("2026-09-13T06:30:00.500000", "2026-09-13T07:00:00", True),
+    ],
+)
+def test_a_nanosecond_run_range_is_filtered_not_refused(window_from, window_to, meets):
+    """A ledger bound can carry nine digits (#1253). It was parsed with the
+    parser for an operator's own --from, which refuses that, so any filter
+    failed the whole list over one such run, naming an option nobody gave
+    (#2864). Read to the nanosecond, the overlap is exact."""
+    from uqs import timerange
+
+    window = timerange.resolve(window_from, window_to, None, None, open_ended=True)
+    run = {
+        "range_from": "2026-09-13T06:30:00.123456789",
+        "range_to": "2026-09-13T06:30:00.500000001",
+    }
+    assert cli_runs._overlaps(run, window) is meets
+
+
 # --- what to do next, from `uqs job runs show` (#636) -----------------------------
 
 _FAILED_RUN = {

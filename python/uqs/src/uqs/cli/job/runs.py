@@ -192,13 +192,14 @@ def _overlaps(row: dict, window: timerange.TimeRange) -> bool:
 
     A run with no recorded range meets no window. q spells that null as JSON
     `null` on PeachQ and as `""` on KDB-X (`.j.j` formats `string 0Np`), so
-    both are read as absent rather than parsed as a bound (#2471).
+    both are read as absent rather than parsed as a bound (#2471). A bound is
+    read as the ledger's own value, nine digits and all (#2864).
     """
     lo, hi = row.get("range_from"), row.get("range_to")
     if not lo or not hi:
         return False
-    start = timerange.parse_bound("range_from", str(lo))
-    end = timerange.parse_bound("range_to", str(hi))
+    start = stack_runs.ledger_moment(str(lo))
+    end = stack_runs.ledger_moment(str(hi), upper=True)
     return (window.end is None or start < window.end) and (
         window.start is None or end > window.start
     )
