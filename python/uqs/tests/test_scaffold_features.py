@@ -310,6 +310,19 @@ def test_a_profile_choice_that_cannot_stand_is_refused(kwargs, message):
         profile.membership("p1", start_with_all=False, known_profiles=KNOWN, **args)
 
 
+@pytest.mark.parametrize("name", ["essential", "feed", "full", "capture", "all"])
+def test_a_profile_that_holds_no_job_is_refused(name):
+    """#2828: essential, feed, full and capture are TorQ infrastructure alone,
+    and accepting one rewrote `"essential": (),` and turned test_profiles red.
+    #2827: `all` is derived, so the edit could only be refused later."""
+    from uqs.model.profiles import PROFILES  # noqa: PLC0415
+
+    with pytest.raises(UqsError, match=rf"--profile {name} .* a job joins one of arbitrage, "):
+        profile.membership(
+            "p1", profile=name, unprofiled=None, start_with_all=False, known_profiles=PROFILES
+        )
+
+
 def test_start_with_all_and_unprofiled_are_refused_together():
     """#1591: --start-with-all puts the process in the default profile, so an
     exemption beside it contradicts it - refused, as --profile is."""
