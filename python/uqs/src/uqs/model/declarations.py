@@ -108,17 +108,31 @@ def dictionary_fields(expr: str) -> dict[str, str]:
     Whitespace, including a newline, may sit between `!` and `(` - the worker
     files put one there - and values may be strings or nested dictionaries.
     """
+    return literal_fields(expr) or {}
+
+
+#: The keys of a literal dictionary: symbols and nothing else.
+_LITERAL_KEYS = re.compile(r"(?:`\w+)+")
+
+
+def literal_fields(expr: str) -> dict[str, str] | None:
+    """`expr` as {key: value text} when it is the one shape this reads - a
+    literal `` `k`k!(v; v) `` with as many values as keys, or a markout job's
+    pairs - else None: a name, a join onto a base dictionary, or a count
+    mismatch, which q may well load but which text cannot be read as."""
     if expr.strip().startswith(_PAIRS_CALL):
         return pair_fields(expr.strip())
     keys_text, bang, values_text = expr.partition("!")
-    if not bang:
-        return {}
-    keys = [k for k in keys_text.strip().split("`") if k]
-    values_text = values_text.strip()
+    keys_text, values_text = re.sub(r"\s+", "", keys_text), values_text.strip()
+    if not (bang and _LITERAL_KEYS.fullmatch(keys_text)):
+        return None
     if not (values_text.startswith("(") and values_text.endswith(")")):
-        return {}
+        return None
+    keys = [k for k in keys_text.split("`") if k]
     values = split_top_level(values_text[1:-1])
-    return dict(zip(keys, values, strict=False))
+    if len(keys) != len(values):
+        return None
+    return dict(zip(keys, values, strict=True))
 
 
 def symbols(value: str) -> tuple[str, ...]:
@@ -203,6 +217,8 @@ def _declared(fn: str, name: str, fields: dict[str, str], path: Path) -> Declara
         if "start_with_all" in fields:
             raise UqsError(f"{where}: a bounded worker never starts with the stack")
         proc = symbols(fields["procname"]) if "procname" in fields else (f"{name}1",)
+        if not proc:
+            raise UqsError(f"{where}: declares an empty procname")
         source = symbols(fields.get("source", ""))
         dataset = declared_outputs(fields, where)
         version = symbols(fields.get("source_version", ""))
@@ -295,7 +311,16 @@ def declaration_calls(source: str) -> list[tuple[str, str, dict[str, str]]]:
     for match in _CALL_RE.finditer(source):
         body = call_body(source, source.index("[", match.start()))
         parts = split_top_level(body)
-        fields = dictionary_fields(parts[1]) if len(parts) > 1 else {}
+        fields = literal_fields(parts[1]) if len(parts) > 1 else {}
+        if fields is None:
+            # Read as declaring nothing, it became a process with no inputs while q
+            # loaded a job that subscribes (#2850): refused, as a non-literal
+            # start_with_all already is.
+            raise UqsError(
+                f"{match.group(2)}: its declaration must be a literal `key`key!(value;value) "
+                f"dictionary with a value per key, the one shape read without q - not "
+                f"{parts[1].strip()[:60]!r}"
+            )
         found.append((match.group(1), match.group(2), fields))
     return found
 
@@ -344,7 +369,11 @@ def reaction_calls(source: str) -> list[Reaction]:
 
 def read_file_text(source: str, path: Path) -> list[Declaration]:
     """Every declaration q `source` makes, as if read from `path`."""
-    return [_declaration(fn, name, fields, path) for fn, name, fields in declaration_calls(source)]
+    try:
+        calls = declaration_calls(source)
+    except UqsError as exc:
+        raise UqsError(f"{path.name}: {exc}") from None
+    return [_declaration(fn, name, fields, path) for fn, name, fields in calls]
 
 
 def read_file(path: Path) -> list[Declaration]:

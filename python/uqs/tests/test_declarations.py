@@ -85,6 +85,31 @@ def test_autostart_and_note_are_read_and_the_note_unescaped():
     assert (d.kind, d.start_with_all, d.note) == (PipelineKind.ETL, True, 'says "hi"; twice')
 
 
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        # legal q, but a name rather than the literal the parser reads
+        ".qpipe.job.vjob.decl:`subscribe_to`outputs!(`executions;`symbol$());\n"
+        ".qetl.job.stream.define[`vjob;.qpipe.job.vjob.decl];",
+        # a base dictionary joined to more keys
+        ".qetl.job.stream.define[`vjob;base,`start_with_all!(1b)];",
+        # three keys, two values
+        ".qetl.job.stream.define[`vjob;`procname`subscribe_to`outputs!(`vjob1;`executions)];",
+    ],
+)
+def test_a_declaration_the_parser_cannot_read_is_refused_not_read_as_empty(declaration):
+    """q loads each of these as a job; the parser read no fields, or shifted
+    or dropped some, and derived a process with no subscription (#2850)."""
+    with pytest.raises(UqsError, match="vjob: its declaration must be a literal"):
+        read_file_text(declaration, Path("src/etl/streaming/vjob.q"))
+
+
+def test_a_worker_with_an_empty_procname_is_refused_as_a_streaming_job_is():
+    """It raised an uncaught IndexError where the streaming branch refuses."""
+    with pytest.raises(UqsError, match="w: declares an empty procname"):
+        _one(".qetl.job.bounded.define[`w;`procname`source`outputs!(`symbol$();`s;enlist `d)];")
+
+
 def test_an_autostart_that_is_not_a_boolean_is_refused():
     with pytest.raises(UqsError, match="start_with_all must be 1b or 0b"):
         _one(
