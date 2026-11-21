@@ -36,6 +36,7 @@ from typing import Annotated, Any
 
 import typer
 
+from uqs import qjson
 from uqs.cells import Shown
 from uqs.timefmt import timestamp
 
@@ -103,10 +104,15 @@ def utc_times(record: Mapping[str, Any], keys: tuple[str, ...] = UTC_KEYS) -> di
     return {k: timestamp(v, naive="utc") if k in keys else v for k, v in record.items()}
 
 
+#: An infinity as a document spells it: qjson.INFINITY.
+INFINITY = qjson.INFINITY
+
+
 def plain(value: Any, *, keyed: bool = True) -> Any:
     """`value` as what json.dumps takes: a table becomes records, a time its ISO text,
-    a NaN null, and anything else unknown its str. Each object's keys are
-    spelled as KEYS says unless `keyed` is False or the value is `Verbatim`."""
+    a NaN null, an infinity INFINITY's text, and anything else unknown its str.
+    Each object's keys are spelled as KEYS says unless `keyed` is False or the
+    value is `Verbatim`."""
     if value is None or isinstance(value, str | bool | int):
         return value
     if isinstance(value, Verbatim):
@@ -114,6 +120,8 @@ def plain(value: Any, *, keyed: bool = True) -> Any:
     if isinstance(value, Shown):
         return plain(value.value, keyed=keyed)
     if isinstance(value, float):
+        if math.isinf(value):
+            return INFINITY[1 if value > 0 else -1]
         return value if math.isfinite(value) else None
     if isinstance(value, dict):
         return _keyed(value) if keyed else {str(k): plain(v, keyed=False) for k, v in value.items()}
@@ -131,12 +139,24 @@ def plain(value: Any, *, keyed: bool = True) -> Any:
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return plain(dataclasses.asdict(value), keyed=keyed)
     if hasattr(value, "to_dicts"):  # a polars DataFrame: kola's table
-        return plain(value.to_dicts(), keyed=keyed)
-    if hasattr(value, "to_list"):  # a polars Series: kola's vector
-        return plain(value.to_list(), keyed=keyed)
+        return plain(_frame_rows(value), keyed=keyed)
+    if hasattr(value, "to_frame"):  # a polars Series: kola's vector
+        return [row[value.name] for row in plain(_frame_rows(value.to_frame()), keyed=keyed)]
     if hasattr(value, "item"):  # a numpy scalar
         return plain(value.item(), keyed=keyed)
     return str(value)
+
+
+def _frame_rows(frame: Any) -> list[dict[str, Any]]:
+    """A kola frame's rows, with what `to_dicts` would lose kept
+    (qjson.temporal_text, #2874). A float infinity is left to `plain`."""
+    frame, special = qjson.temporal_text(frame)
+    rows = frame.to_dicts()
+    for name, values in special.items():
+        for row, value in zip(rows, values, strict=True):
+            if value is not None:
+                row[name] = value
+    return rows
 
 
 def _keyed(obj: Mapping[Any, Any]) -> dict[str, Any]:

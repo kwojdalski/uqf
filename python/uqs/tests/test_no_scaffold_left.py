@@ -31,7 +31,11 @@ MARKER = "SCAFFOLDED"
 #: now, which `scripts` already covers, and the scaffold writes nothing into
 #: the frontend at all - so listing it would be scanning a tree this tool no
 #: longer touches.
-SCANNED = ("src", "tests", "scripts")
+#:
+#: `python/uqs/src/uqs/external` is where a connector's streamer goes, with its
+#: unwritten `batches()` (scaffold/external.py, #2853). Its generated Python
+#: test goes to python/uqs/tests, exempt below, but fails until it is rewritten.
+SCANNED = ("src", "tests", "scripts", "python/uqs/src/uqs/external")
 
 #: The two authored pages a scaffold writes a placeholder into (#713): a new
 #: process's Showcase card and its stack.md comment - scaffold/docs.py. Named
@@ -86,3 +90,13 @@ def test_the_guard_finds_a_placeholder_and_ignores_the_templates(tmp_path: Path)
     (tmp_path / "docs" / "services" / "README.md").write_text("**`x1` · SCAFFOLDED: a few**\n")
     (tmp_path / "src" / "etl" / "img.svg").write_text("SCAFFOLDED")
     assert scaffold_left(tmp_path) == ["src/etl/j.q:2", "docs/services/README.md:1"]
+
+
+def test_the_guard_finds_a_connectors_unwritten_streamer(tmp_path: Path):
+    """`uqs job new --kind connector` writes python/uqs/src/uqs/external/NAME_streamer.py,
+    whose `batches()` is a SCAFFOLDED placeholder; the guard scanned no Python
+    package, so the one file holding the unwritten function was off its list (#2853)."""
+    external = tmp_path / "python" / "uqs" / "src" / "uqs" / "external"
+    external.mkdir(parents=True)
+    (external / "seamconn_streamer.py").write_text('"""SCAFFOLDED: connect here"""\n')
+    assert scaffold_left(tmp_path) == ["python/uqs/src/uqs/external/seamconn_streamer.py:1"]

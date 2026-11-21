@@ -158,7 +158,7 @@ def test_every_connector_declares_the_shared_credential_option():
 
 def test_a_scaffolded_connector_takes_the_shared_credential_too(tmp_path):
     module = types.ModuleType("uqs.external.zz_feed")
-    source = scaffold_external._feed("zz", "zz_raw", "zz_out")
+    source = scaffold_external.feed_module("zz", "zz_raw", "zz_out")
     exec(compile(source, "zz_feed.py", "exec"), module.__dict__)  # noqa: S102 - our own template
     assert connection.TP_CREDENTIAL in module.FEED.options
     assert connection.DEMO_TP_CREDENTIAL not in source
@@ -261,7 +261,7 @@ def test_every_connector_declares_the_shared_base_port_option():
     assert all(connection.BASE_PORT in f.options for f in declared), [
         f.name for f in declared if connection.BASE_PORT not in f.options
     ]
-    template = scaffold_external._feed("demo", "demo_raw", "demo")
+    template = scaffold_external.feed_module("demo", "demo_raw", "demo")
     assert "connection.BASE_PORT" in template
     assert 'tickerplant_port(paths, options["base_port"])' in template
 

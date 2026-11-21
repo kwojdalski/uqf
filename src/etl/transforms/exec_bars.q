@@ -17,11 +17,25 @@
 / One bar per sym per window: open and close are the first and last fill by
 / source_time (not arrival order), vwap is size-weighted, volume the summed size.
 / A window with no fills has no row.
+/ .
+/ A fill with a null price, or a null, zero or negative size, is not a trade a
+/ bar can be built from (#2880): a negative size weighted the vwap outside the
+/ bar's range, a null size still set its high, and zero-size fills alone made
+/ a zero-volume bar the twin's check refuses. fx_positions and posbook drop
+/ the null and negative ones too (#2565); a zero-size fill moves no position.
+/ Such a fill is dropped here, in the one aggregation the live job and its
+/ twin share, and said out loud.
 / @param x fills carrying source_time, sym, size, price and bar_start
 / @return the bars, in exec_bar's columns without time
 / @eg count .qpipe.transform.exec_bars.bars ([] source_time:2#2026.10.09D10:00:05; sym:2#`EURUSD; size:1 2f; price:1.1 1.2; bar_start:2#2026.10.09D10:00:00)  ->  1
+/ @eg count .qpipe.transform.exec_bars.bars ([] source_time:2#2026.10.09D10:00:05; sym:2#`EURUSD; size:0 -1f; price:1.1 1.2; bar_start:2#2026.10.09D10:00:00)  ->  0
 .qpipe.transform.exec_bars.bars:{[x]
     shape:.qetl.plant.published `exec_bar;
+    bad:(null x`price) or not 0<x`size;
+    if[any bad;
+        .qetl.log.ch.warn[`transform;"dropped fills with a null price or a size that is not positive - they cannot be barred";
+            (enlist[`transform]!enlist `exec_bars),enlist[`fills]!enlist `long$sum bad];
+        x:x where not bad];
     if[0=count x; :shape];
     x:`source_time xasc x;
     b:0!select open:first price, high:max price, low:min price, close:last price,

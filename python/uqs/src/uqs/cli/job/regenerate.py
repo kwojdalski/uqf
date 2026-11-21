@@ -90,24 +90,26 @@ def _regenerate_with_q(repo_root: Path) -> list[subprocess.CompletedProcess[str]
     ]
 
 
-def _report(derived: tuple[str, ...], regen: subprocess.CompletedProcess[str]) -> None:
+def _report(derived: tuple[str, ...], regen: subprocess.CompletedProcess[str]) -> bool:
     if regen.returncode == 0:
         console.print(f"[green]regenerated[/] via {' '.join(derived)}")
-    else:
-        console.print(
-            f"[red]could not regenerate[/] - run `{derived_command(derived)}` "
-            f"and fix what it reports:\n{regen.stdout}{regen.stderr}"
-        )
+        return True
+    console.print(
+        f"[red]could not regenerate[/] - run `{derived_command(derived)}` "
+        f"and fix what it reports:\n{regen.stdout}{regen.stderr}"
+    )
+    return False
 
 
-def report_regeneration(repo_root: Path) -> None:
-    """Regenerate everything a tree edit made stale, saying what each run did.
+def report_regeneration(repo_root: Path) -> bool:
+    """Regenerate everything a tree edit made stale, saying what each run did;
+    whether every run that could run succeeded.
 
-    Not fatal: the edit is already written, and a refusal here (the generator
+    The edit is already written either way, and a refusal here (the generator
     verifies every declared edge first) is information about the tree to act
-    on, not a reason to pretend the edit did not happen."""
-    for derived, regen in zip(_DERIVED, _regenerate_derived(repo_root), strict=True):
-        _report(derived, regen)
+    on, not a reason to pretend the edit did not happen. Whether it fails the
+    command is the caller's to decide: `uqs job remove` does (#2843)."""
+    ok = [_report(d, r) for d, r in zip(_DERIVED, _regenerate_derived(repo_root), strict=True)]
     with_q = _regenerate_with_q(repo_root)
     if with_q is None:
         steps = ", ".join(f"`{derived_command(d)}`" for d in _WITH_Q)
@@ -115,9 +117,9 @@ def report_regeneration(repo_root: Path) -> None:
             f"[yellow]no q on PATH[/] - run {steps} where q is installed, or their "
             "--check hooks fail on the next commit"
         )
-        return
-    for derived, regen in zip(_WITH_Q, with_q, strict=True):
-        _report(derived, regen)
+        return all(ok)
+    ok += [_report(d, r) for d, r in zip(_WITH_Q, with_q, strict=True)]
+    return all(ok)
 
 
 def write_plan(plan: ScaffoldPlan, repo_root: Path, *, dry_run: bool) -> None:

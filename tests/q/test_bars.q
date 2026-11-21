@@ -301,6 +301,29 @@
     .qunit.assertEquals[twin`time;twin[`bar_start]+0D00:01;"the twin stamps the window's end"];
     .qunit.assertEquals[count live;6;"EURUSD in minutes 0, 1, 2 and USDJPY in 0, 1, 3: no bar where a sym had no fill"]};
 
+/ #2880: a fill with a null price or a size that is not positive builds no
+/ bar, live or in the twin, so the vwap stays inside the bar's range and the
+/ live job publishes no zero-volume bar its twin's check would refuse.
+.qt.qetl.job.stream.bars.test_an_unusable_fill_builds_no_bar_live_or_in_the_twin:{[t]
+    nm:.qt.qetl.job.stream.bars.job`bt_bad;
+    t0:.qt.qetl.job.stream.bars.t0;
+    rows:([] source_time:t0+0D00:00:01*10 20 30 70 80 90 100;
+        sym:`EURUSD`EURUSD`EURUSD`EURUSD`EURUSD`EURUSD`EURUSD;
+        size:1e6 -1e6 1e6 0 0 0n 1e6; price:1.1 5.0 1.2 1.1 1.2 9.9 0n);
+    saved:.qetl.log.ch.warn;
+    `.qetl.log.ch.warn set {[channel;text;fields] `.qt.qetl.job.stream.bars.warned set (channel;text;fields);};
+    r:@[{[nm;rows] .qt.qetl.job.stream.bars.feed[nm;update time:source_time from rows];
+        .qt.qetl.job.stream.bars.ns[nm;`close_ready][.qt.qetl.job.stream.bars.t0+0D00:10:00];
+        .qpipe.job.hdb_exec_bars_backfill.bars rows}[nm];rows;{[saved;e] `.qetl.log.ch.warn set saved; 'e}[saved]];
+    `.qetl.log.ch.warn set saved;
+    live:.qt.qetl.job.stream.bars.published[];
+    .qunit.assertEquals[count live;1;"minute 0 has a bar; minute 1, all of whose fills are unusable, has none"];
+    .qunit.assertEquals[first each live`volume`trades`low`high;(2e6;2;1.1;1.2);"only the two usable fills are barred"];
+    .qt.support.assertApprox[first live`vwap;1.15;1e-12;"and the vwap is inside the bar's range"];
+    .qunit.assertEquals[(cols live)#r;live;"the twin builds the same bar"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.bars.warned 2)`fills;5j;"the dropped fills are counted"];
+    .qunit.assertEquals[count .qpipe.job.hdb_exec_bars_backfill.quality_check r;0;"and the twin's check passes what the live job publishes"]};
+
 / --- the quality gate (#1232) -----------------------------------------------
 
 / A quality gate that names the whole batch as offending when flagged, and

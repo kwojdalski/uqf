@@ -141,16 +141,29 @@ def process_of(job: str) -> str:
     )
 
 
-def refuse_if_running(paths: UqsPaths, procname: str, base_port: int | None) -> None:
+def refuse_if_running(
+    paths: UqsPaths, procname: str, base_port: int | None, *, once: bool = True
+) -> None:
     """Refuse, rather than stop or reuse, a process of this job that is already up.
 
     Stopping it would end a service someone is running, and a second unit run through it would
-    not be the one this launch was asked for: either way the answer is to leave it alone."""
-    if procname in alive.running(paths, base_port):
+    not be the one this launch was asked for: either way the answer is to leave it alone.
+
+    Not only for --once (`once` False): torq.sh's `start` of a running process only echoes
+    "already running" and exits 0, so a backfill of a second range was reported started and
+    never ran (#2862)."""
+    if procname not in alive.running(paths, base_port):
+        return
+    if once:
         raise UqsError(
             f"{procname} is already running: --once never stops or reuses a running process. "
             f"Stop it first (`uqs stop {procname}`) if one unit in a fresh process is what you want"
         )
+    raise UqsError(
+        f"{procname} is already running, so this range would not start: a worker runs one "
+        f"range at a time. Wait for it (`uqs job runs list --unfinished`), or stop it "
+        f"(`uqs stop {procname}`), then run this again"
+    )
 
 
 def _stamp(value: str) -> datetime:

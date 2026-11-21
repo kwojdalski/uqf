@@ -117,7 +117,9 @@ def declared(monkeypatch):
     zz_any (zz_any1) on every q; the q is whatever `q` is set to."""
     jobs = read_file_text(STREAM.replace("kdbx>=4.1 peachq", "kdbx>=5"), Path("zz_job.q"))
     jobs += read_file_text(
-        STREAM.replace("zz_job", "zz_any").replace("`q!(", "!(").replace('; "kdbx>=5"', ""),
+        STREAM.replace("zz_job", "zz_any")
+        .replace("`q!(", "!(")
+        .replace('; "kdbx>=4.1 peachq"', ""),
         Path("zz_any.q"),
     )
     asked = SimpleNamespace(q=(KDBX, "4.1"), count=0)

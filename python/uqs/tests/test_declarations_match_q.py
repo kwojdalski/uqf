@@ -11,16 +11,17 @@ the registry and docs, and nothing would notice.
 This loads the ETL tree in q, the way a process does, and diffs q's own
 registries against the parser, field by field, for every job:
 
-    streaming job, normalizer   procname, subscribe_to, outputs, transform
+    streaming job, normalizer   procname, subscribe_to, outputs, transform, start_with_all, note
     bounded worker              procname, dataset, source_version, source, transform
 
 `source` is what `stack/capabilities.refuse_unsupported` picks the PeachQ gate
 by, and `transform` what `uqs job new --twin-of` copies, so a parser that
 misread either would make a wrong decision with nothing to notice it.
 
-Not `start_with_all` or `note`: those are deployment facts only the registry
-reads, and q's declaration functions validate and then drop them, so there is
-nothing in q to compare them with.
+A streaming job's `start_with_all` and `note` too: q keeps both on the job's
+definition (an undeclared `start_with_all` is false, a missing `note` empty),
+and a parser that read neither once derived a process with no inputs for a
+job q loads subscribed (#2850).
 
 Needs q, so it skips without one - like test_scaffold_loads.py - and runs
 wherever the q lanes do.
@@ -48,7 +49,8 @@ _DUMP = """
 \\l src/init.q
 \\l src/etl/init.q
 s:{[j] d:.qetl.job.stream.def j;
-    `procname`subscribe_to`outputs`transform!(d`procname;(),d`subscribe_to;(),d`outputs;d`transform)
+    a:$[`start_with_all in key d; d`start_with_all; 0b]; n:$[`note in key d; d`note; ""];
+    `procname`subscribe_to`outputs`transform`start_with_all`note!(d`procname;(),d`subscribe_to;(),d`outputs;d`transform;a;n)
   } each key .qetl.job.stream.jobs;
 b:{[w] c:.qetl.job.bounded.def w;
     `procname`dataset`source_version`source`transform!(c`procname;c`dataset;c`source_version;c`source;c`transform)
@@ -76,6 +78,8 @@ def _parser_view(root: Path) -> dict[str, dict[str, dict]]:
                 "subscribe_to": sorted(d.subscribe_to),
                 "outputs": sorted(d.publishes),
                 "transform": d.transform,
+                "start_with_all": d.start_with_all,
+                "note": d.note,
             }
     for path in sorted((root / WORKER_DIR).glob("*.q")):
         for fn, name, fields in declaration_calls(path.read_text()):

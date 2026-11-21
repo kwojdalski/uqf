@@ -36,7 +36,7 @@
 / An executions batch of one buy of 1mm EURUSD at px.
 .qt.qpipe.job.posbook.fill:{[st;px]
     ([] time:enlist st; source_time:enlist st; sym:enlist `EURUSD; venue:enlist `fx; side:enlist 1;
-        size:enlist 1e6; price:enlist px; fee:enlist 0f; fee_ccy:enlist `; fill_id:enlist `f1)}
+        size:enlist 1e6; price:enlist px; fee:enlist 0f; fee_ccy:enlist `; fill_id:enlist `$string st)}
 
 / The position rows published so far.
 .qt.qpipe.job.posbook.positions:{[]

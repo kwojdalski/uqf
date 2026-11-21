@@ -114,7 +114,7 @@ _SEED = """\
 .qproc.standalone.declare_schemas[];
 .qetl.tick.open_log["LOGDIR";`uqflocal;.z.D];
 fill:{[s;px] ([] source_time:enlist .z.p; sym:enlist s; venue:enlist `fx; side:enlist 1;
-    size:enlist 1e6; price:enlist px; fee:enlist 0f; fee_ccy:enlist `USD; fill_id:enlist `f;
+    size:enlist 1e6; price:enlist px; fee:enlist 0f; fee_ccy:enlist `USD; fill_id:enlist s;
     book:enlist `desk; product:enlist `spot; clock:enlist `venue)};
 .qetl.tick.publish[`executions;fill[`EURUSD;1.1]];
 .qetl.tick.record[(`upd;`executions;([] time:enlist .z.p; sym:enlist `GBPUSD))];

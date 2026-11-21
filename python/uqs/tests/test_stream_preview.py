@@ -8,6 +8,7 @@ script it sends, the result line it reads, and the exit code.
 from __future__ import annotations
 
 import json
+import math
 import re
 import subprocess
 from datetime import timedelta
@@ -17,6 +18,7 @@ import pytest
 from typer.testing import CliRunner
 
 from uqs import cli, timerange
+from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, default_paths
 from uqs.stack import stream_preview
 
@@ -31,7 +33,8 @@ PAGE = {
     "next_cursor": "2026-09-14T00:00:00.000000000",
     "advances": True,
     "rows": {"wide_orderbook": 3},
-    "sample": {"wide_orderbook": [{"sym": "EURUSD", "mid": 1.08}]},
+    # q at `\P 0` sends every digit: a rate 3e-8 from its neighbour stays itself
+    "sample": {"wide_orderbook": [{"sym": "EURUSD", "mid": 1.26310001}]},
     "failures": [],
 }
 
@@ -339,3 +342,38 @@ def test_an_empty_window_says_so(monkeypatch):
     result = runner.invoke(cli.app, ["job", "preview", "vectorize2", "--last", "30s"])
     assert result.exit_code == 0
     assert "nothing in the window" in result.output
+
+
+needs_q = pytest.mark.skipif(q_interpreter() is None, reason="no q interpreter")
+
+
+def _real_page(monkeypatch, sample: str) -> dict:
+    """The preview's own script run by a real q, with the job's page replaced
+    by `sample` - a q dict of table name to rows - so what is tested is the
+    crossing: what the child prints and what Python reads of it."""
+    page = f"`job`state`sample!(`vectorize2;`previewed;enlist[`t]!enlist {sample})"
+    monkeypatch.setattr(stream_preview, "_call", lambda *a: page)
+    return stream_preview.preview(default_paths(), "vectorize2")
+
+
+@needs_q
+def test_a_sampled_float_reaches_python_with_every_digit(monkeypatch):
+    """q prints a float at 7 significant digits unless told otherwise, so the
+    preview showed a notional of 12345678.9 as 12345680.0 and two rates 3e-8
+    apart as one (#2875)."""
+    page = _real_page(monkeypatch, "([] notional:12345678.9 1.0; rate:1.26310001 1.26310004)")
+    rows = page["sample"]["t"]
+    assert [r["notional"] for r in rows] == [12345678.9, 1.0]
+    assert [r["rate"] for r in rows] == [1.26310001, 1.26310004]
+
+
+@needs_q
+def test_a_sampled_float_infinity_is_read_not_a_traceback(monkeypatch):
+    """`.j.j` writes 0w as the bare token `inf`, which is not JSON: one
+    infinite quote in the sample made the whole preview a JSONDecodeError
+    (#2876). It reads back as an infinity, and a null as None."""
+    page = _real_page(monkeypatch, '([] bid:1.5 0w 0n; ask:-0w 2.5 3.5; note:("inf";"x";"-inf"))')
+    rows = page["sample"]["t"]
+    assert [r["bid"] for r in rows] == [1.5, math.inf, None]
+    assert [r["ask"] for r in rows] == [-math.inf, 2.5, 3.5]
+    assert [r["note"] for r in rows] == ["inf", "x", "-inf"], "text that spells inf is still text"

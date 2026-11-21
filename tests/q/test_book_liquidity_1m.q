@@ -194,3 +194,48 @@
 .qt.qpipe.job.book_liquidity_1m.test_the_transform_output_is_the_published_plant_shape:{[t]
     out:.qetl.transform.apply[`book_liquidity_1m;first[(.qetl.transform.def["test";`book_liquidity_1m])`examples]`inputs];
     .qunit.assertEquals[0#out;.qetl.plant.published `book_liquidity_1m;"the transform's output is the plant table, minus time"]};
+
+/ --- the twin's quality check (#2882) -------------------------------------
+
+/ The twin's minutes over its source's fixture: rows the check passes.
+.qt.qpipe.job.book_liquidity_1m.twin_minutes:{[]
+    .qpipe.job.hdb_book_liquidity_1m_backfill.minutes .qpipe.source.hdb_market_data.fixture[]}
+
+/ The check's verdict on the fixture's minutes with row 0 amended by f.
+.qt.qpipe.job.book_liquidity_1m.check_with:{[f]
+    m:.qt.qpipe.job.book_liquidity_1m.twin_minutes[];
+    .qpipe.job.hdb_book_liquidity_1m_backfill.quality_check (enlist f first m),1_m}
+
+/ What the check returns for n offending rows.
+.qt.qpipe.job.book_liquidity_1m.refused:{[n]
+    ([] check:enlist `liquidity_range; status:enlist `fail;
+        detail:enlist string[n]," row(s) with more observations than snapshots, a quantity outside [0; req_size] or a ratio outside [0; 1]")}
+
+.qt.qpipe.job.book_liquidity_1m.test_the_twin_check_passes_its_fixture_and_a_row_at_the_bounds:{[t]
+    .qunit.assertEquals[count .qpipe.job.hdb_book_liquidity_1m_backfill.quality_check .qt.qpipe.job.book_liquidity_1m.twin_minutes[];0;
+        "the fixture's minutes pass"];
+    at_bounds:{[r] r[`bid_qty]:r`req_size; r[`ask_obs]:r`snapshots; r[`bid_full_ratio]:1f; r[`ask_full_ratio]:0f; r};
+    .qunit.assertEquals[count .qt.qpipe.job.book_liquidity_1m.check_with at_bounds;0;
+        "a quantity of exactly req_size, observations equal to snapshots and ratios of 0 and 1 pass"];
+    / a mean of floats can land an ulp over its bound: the slack lets it through
+    an_ulp_over:{[r] r[`ask_qty]:r[`req_size]*1+1e-12; r[`ask_full_ratio]:1+1e-12; r};
+    .qunit.assertEquals[count .qt.qpipe.job.book_liquidity_1m.check_with an_ulp_over;0;
+        "a hair over req_size or 1 passes"]};
+
+.qt.qpipe.job.book_liquidity_1m.test_the_twin_check_refuses_more_observations_than_snapshots:{[t]
+    .qunit.assertEquals[.qt.qpipe.job.book_liquidity_1m.check_with {[r] r[`bid_obs]:1+r`snapshots; r};
+        .qt.qpipe.job.book_liquidity_1m.refused 1;"bid_obs over snapshots"];
+    .qunit.assertEquals[.qt.qpipe.job.book_liquidity_1m.check_with {[r] r[`ask_obs]:1+r`snapshots; r};
+        .qt.qpipe.job.book_liquidity_1m.refused 1;"ask_obs over snapshots"]};
+
+.qt.qpipe.job.book_liquidity_1m.test_the_twin_check_refuses_a_quantity_outside_the_request:{[t]
+    .qunit.assertEquals[.qt.qpipe.job.book_liquidity_1m.check_with {[r] r[`bid_qty]:1.001*r`req_size; r};
+        .qt.qpipe.job.book_liquidity_1m.refused 1;"bid_qty over req_size"];
+    .qunit.assertEquals[.qt.qpipe.job.book_liquidity_1m.check_with {[r] r[`ask_qty]:-1f; r};
+        .qt.qpipe.job.book_liquidity_1m.refused 1;"a negative ask_qty"]};
+
+.qt.qpipe.job.book_liquidity_1m.test_the_twin_check_refuses_a_ratio_outside_zero_one:{[t]
+    .qunit.assertEquals[.qt.qpipe.job.book_liquidity_1m.check_with {[r] r[`bid_full_ratio]:1.5; r};
+        .qt.qpipe.job.book_liquidity_1m.refused 1;"a ratio of 1.5"];
+    .qunit.assertEquals[.qt.qpipe.job.book_liquidity_1m.check_with {[r] r[`ask_full_ratio]:-0.1; r};
+        .qt.qpipe.job.book_liquidity_1m.refused 1;"a negative ratio"]};
