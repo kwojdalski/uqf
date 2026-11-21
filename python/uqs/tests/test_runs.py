@@ -153,6 +153,18 @@ def test_a_run_that_never_finished_has_no_counts(ledger, paths):
     assert row["windows_completed"] is None and row["rows_published"] is None
 
 
+def test_a_run_still_going_has_no_end(ledger, paths):
+    """Not `.qetl.run.not_ended`'s 0Wp, which `.j.j` spells as an instant in
+    the year 2292 that a reader takes for an end time (#2865). q spells the
+    null as "" on KDB-X and null on PeachQ (#2471)."""
+    (running,) = runs.unfinished(paths, directory=ledger)
+    rows = {r["worker"]: r for r in runs.history(paths, directory=ledger)}
+    (shown,), _ = runs.show(paths, running["run_id"], directory=ledger)
+    for row in (running, rows["interrupted_worker"], shown):
+        assert row["ended_at"] in ("", None), row["ended_at"]
+    assert rows["deals_a"]["ended_at"].startswith("20"), "a finished run keeps its end"
+
+
 _OLD_LEDGER = """
 \\l src/init.q
 \\l src/etl/core/backfill_state.q

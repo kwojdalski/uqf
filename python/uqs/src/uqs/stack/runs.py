@@ -43,6 +43,12 @@ _LOADS = (
 _GUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
+#: A ledger table as it is shown: a run still going ends at
+#: `.qetl.run.not_ended`, a 0Wp sentinel `.j.j` spells as the instant
+#: 2292-04-10T23:47:16.854775807, which a reader took for an end time
+#: (#2865). It is shown as no end, as the same run's counts are.
+_SHOWN = "{[tbl] update ended_at:?[ended_at=.qetl.run.not_ended;0Np;ended_at] from tbl}"
+
 
 def status_dir(paths: UqsPaths, env: dict[str, str] | None = None) -> Path:
     """Where the fleet's processes keep the ledger: `$UQF_STATUS_DIR`, else
@@ -163,12 +169,12 @@ def migrate(paths: UqsPaths, dry_run: bool = False, **kw) -> int:
 
 def unfinished(paths: UqsPaths, **kw) -> list[dict]:
     """Runs that began and never finished - interrupted executions included."""
-    return query(paths, ".qetl.run.unfinished[]", **kw)
+    return query(paths, f"{_SHOWN} .qetl.run.unfinished[]", **kw)
 
 
 def history(paths: UqsPaths, **kw) -> list[dict]:
     """Every run, newest first."""
-    return query(paths, ".qetl.run.history[]", **kw)
+    return query(paths, f"{_SHOWN} .qetl.run.history[]", **kw)
 
 
 def show(paths: UqsPaths, run_id: str, **kw) -> tuple[list[dict], list[dict]]:
@@ -179,7 +185,7 @@ def show(paths: UqsPaths, run_id: str, **kw) -> tuple[list[dict], list[dict]]:
         )
     literal = f'"G"$"{run_id}"'
     return (
-        query(paths, f".qetl.run.of_run[{literal}]", **kw),
+        query(paths, f"{_SHOWN} .qetl.run.of_run[{literal}]", **kw),
         query(paths, f".qetl.run.facts_of[{literal}]", **kw),
     )
 
