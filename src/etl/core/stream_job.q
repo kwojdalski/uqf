@@ -452,9 +452,9 @@
 / offending rows, the bounded worker's failure shape (check, status, detail -
 / .qetl.job.bounded.no_failures) with one optional column: `row`, the index in
 / the batch of the row that offends. Under `drop` the rows named by `row` are
-/ withheld and the rest published; a failure that names no row, and every
-/ failure under `hold`, withholds the whole batch - never publishing a row
-/ that might be the bad one.
+/ withheld and the rest published; a failure that names no row or a row
+/ outside the batch, and every failure under `hold`, withholds the whole
+/ batch - never publishing a row that might be the bad one.
 / .
 / A check that THROWS is a failure of the whole batch under either choice:
 / rows nobody could vouch for are not published. Every withheld batch is
@@ -479,8 +479,12 @@
     / sides, and indexing a missing column throws on PeachQ
     named:$[tbl and (`drop=mode) and `row in cols f; not any null f`row; 0b];
     rows:$[named; distinct "j"$f`row; til n];
+    / a row outside the batch is no row of it: the check meant one that cannot be
+    / told, so the whole batch is withheld, as for a failure naming none (#2860)
+    outside:$[named; any not rows within (0;n-1); 0b];
+    if[outside; rows:til n];
     clean:$[tbl; x where not (til n) in rows; ()];
-    .qetl.job.stream.withhold[job;t;x;"check failed: ",string[count f]," failure(s)";f;count rows];
+    .qetl.job.stream.withhold[job;t;x;"check failed: ",string[count f]," failure(s)",$[outside;", naming a row outside the batch - withheld whole";""];f;count rows];
     $[tbl and count clean; publisher[t;clean]; ::]}
 
 / Private: log and count a batch the check withheld, in whole or part.

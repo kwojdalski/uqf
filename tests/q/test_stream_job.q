@@ -1643,6 +1643,18 @@
     .qunit.assertEquals[h`failed;1;"the batch is counted as failed, so the job reads failing"];
     .qunit.assertEquals[h`last_error;`$"check failed: 2 failure(s)";"and the reason is kept"]};
 
+/ A check that numbers rows from 1, or from another table, names a row the
+/ batch does not have: drop published every row, the bad one among them,
+/ while the log and the health count said one was withheld (#2860).
+.qt.qetl.job.stream.test_drop_withholds_the_whole_batch_when_a_failure_names_a_row_outside_it:{[t]
+    chk:{[x] ([] check:enlist `probe; status:enlist `fail; detail:enlist "row 7"; row:enlist 7)};
+    pub:.qt.qetl.job.stream.check_probe[`sj_check_range;`sjcheckrange1;`drop;chk];
+    lines:.qt.qetl.job.stream.logged[`sj_check_range;{[pub;x] (get pub)[`probe_out;([] v:1 2 3)]}[pub]];
+    fields:last first lines where "publish check withheld rows"~/:lines[;1];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"no row is published: which one the check meant cannot be told"];
+    .qunit.assertEquals[fields`withheld;3;"and the log says all three were withheld"];
+    .qunit.assertTrue[(string (.qetl.stream_health.of`sj_check_range)`last_error) like "*outside the batch*";"saying why the whole batch was"]};
+
 .qt.qetl.job.stream.test_hold_withholds_the_whole_batch:{[t]
     pub:.qt.qetl.job.stream.check_probe[`sj_check_hold;`sjcheckhold1;`hold;.qt.qetl.job.stream.neg_check];
     (get pub)[`probe_out;([] v:1 -2 3)];
