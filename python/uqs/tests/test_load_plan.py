@@ -65,6 +65,27 @@ def test_a_closure_takes_in_sources_transforms_and_reactions(plan):
     assert "src/etl/reactions/rebuild_positions.q" in plan.for_job("demo_deals_backfill")
 
 
+ON_WORKER = {
+    "src/etl/reactions/chain_events.q": (
+        ".qetl.reaction.on_worker[`demo_deals;`demo_events_backfill;"
+        "{[f;t] `source_version`range_from`range_to!(`v1;f;t)}];\n"
+    ),
+}
+
+
+def test_an_on_worker_reaction_loads_with_what_fills_its_dataset_and_its_worker():
+    """`on_worker` is a reaction like `on`, registered in whichever process
+    writes its dataset; the reader saw only `on` and `on_writing`, so a
+    selective load of demo_deals_backfill left it out and it never fired,
+    where a full load registered it (#2848). It needs its worker's
+    declaration, so that comes too - and it defines no job of that name."""
+    plan = load_plan.LoadPlan(load_plan.read_facts(REPO, ON_WORKER))
+    closure = plan.for_job("demo_deals_backfill")
+    assert "src/etl/reactions/chain_events.q" in closure
+    assert plan.jobs["demo_events_backfill"] in closure
+    assert plan.jobs["demo_events_backfill"].startswith("src/etl/workers/")
+
+
 def test_a_reference_in_a_comment_or_example_pulls_nothing_in(plan):
     # arbitrage.q's @eg lines name .qpipe.job.superbook; its code does not.
     assert plan.for_job("arbitrage") == ["src/etl/streaming/arbitrage.q"]

@@ -302,12 +302,14 @@ def declaration_calls(source: str) -> list[tuple[str, str, dict[str, str]]]:
 
 #: A reaction's registration. Positional rather than a dictionary - dataset
 #: first, then the reaction's name - which is why it is not a `_CALL_RE` shape.
-_REACTION_RE = re.compile(r"\.qetl\.reaction\.(on|on_writing)\[")
+#: `on_worker[dataset;worker;spec_fn]` has the same two first: its reaction is
+#: named by the worker it runs (src/etl/core/react.q), and was missed (#2848).
+_REACTION_RE = re.compile(r"\.qetl\.reaction\.(on|on_writing|on_worker)\[")
 
 
 @dataclass(frozen=True)
 class Reaction:
-    """One `.qetl.reaction.on`/`on_writing` registration, as its q file makes it.
+    """One `.qetl.reaction.on`/`on_writing`/`on_worker` registration, as its q file makes it.
 
     NOT a Declaration: a reaction has no process of its own - it runs inside
     whichever process publishes `dataset` - so it must never reach the process
@@ -318,6 +320,9 @@ class Reaction:
     dataset: str
     #: What `on_writing` claims the handler's outputs are; empty for `on`.
     outputs: tuple[str, ...]
+    #: The bounded worker an `on_worker` reaction runs, which is also its
+    #: name; empty for the others. Its declaration is in the worker's file.
+    worker: str = ""
 
 
 def reaction_calls(source: str) -> list[Reaction]:
@@ -332,7 +337,8 @@ def reaction_calls(source: str) -> list[Reaction]:
         if len(dataset) != 1 or len(name) != 1:
             continue
         outputs = symbols(parts[2]) if match.group(1) == "on_writing" else ()
-        found.append(Reaction(name[0], dataset[0], outputs))
+        worker = name[0] if match.group(1) == "on_worker" else ""
+        found.append(Reaction(name[0], dataset[0], outputs, worker))
     return found
 
 
