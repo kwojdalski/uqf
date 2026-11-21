@@ -7,16 +7,18 @@ description: >-
   bundles, the vendored lib/), how uqf sits on TorQ, the generated files and
   their generators, testing and gates (qUnit, pytest, qlinter, git hooks, KDB-X
   attestation, PeachQ), the repository workflow (a worktree per issue, claim and
-  release, no shims), and debugging a running stack. TRIGGER when: doing
-  development work anywhere in this repository - orienting in an unfamiliar
-  area, changing code in any layer, writing or reviewing q under src/ or
-  scripts/, running or adding tests, a hook, gate or CI failure, a stale
+  release, no shims), and debugging a running stack. Anything the framework
+  declares - a job, table, source, transform, reaction or process - starts from
+  `uqs job new`. TRIGGER when: adding a job, feed, backfill, table or pipeline
+  stage; doing development work anywhere in this repository - orienting in an
+  unfamiliar area, changing code in any layer, writing or reviewing q under src/
+  or scripts/, running or adding tests, a hook, gate or CI failure, a stale
   generated file, a uqs command, process.csv or process overrides, runtimes,
   profiles, attachments, deployments or bundles, finding the right doc, or
   diagnosing a process that is down, idle or wrong. SKIP: plain TorQ questions
   with no uqf code involved (torq-developer); q style and precedence alone
-  (kdb-q-conventions); scaffolding one job end to end (new-job, then come back
-  here to test and ship it).
+  (kdb-q-conventions). For the step-by-step of one job, this skill hands off to
+  new-job and takes it back to test and ship.
 ---
 
 uqf is several components built **around** TorQ, not a replacement for it: a
@@ -81,6 +83,10 @@ Specialist agents (hand work to them where they are the specialist):
 5. **Verify against a real q, and only what you touched.** KDB-X is the
    reference interpreter. Run the tests your change reaches, at most `-n 2`; the
    hooks and CI run the rest.
+6. **Scaffold, then fill.** New framework objects come from `uqs job new`, and
+   new behaviour comes from a framework kind before a hand-written handler. The
+   scaffold is the current template and wires every list a job touches; a
+   hand-copied declaration is a fork of an old one. See SCAFFOLD FIRST.
 
 --------------------------------------------------------------------------------
 
@@ -152,8 +158,8 @@ Specialist agents (hand work to them where they are the specialist):
 
 ## Jobs and the plant (J) - see `uqf-etl-framework.md`, `uqf-q-rules.md` J1-J15
 
-- **J1** A job is one declaration file; there is no registration step. Scaffold
-  with `uqs job new ... --dry-run`, then without, and follow `new-job`.
+- **J1** A job is one declaration file; there is no registration step. It is
+  scaffolded, never hand-started: see SCAFFOLD FIRST below.
 - **J2** A job calls its own `publish`, never `.u.upd`, never publishes `time`,
   and publishes only tables defined in `src/etl/plant_tables.q` (unkeyed, `time`
   first).
@@ -202,6 +208,44 @@ Specialist agents (hand work to them where they are the specialist):
 
 --------------------------------------------------------------------------------
 
+# SCAFFOLD FIRST
+
+uqf is a strict framework: windowing, retries, coverage, checkpoints, carry, end
+of day, the job graph, ports, profiles, the catalog and the contract tests are
+already written. A new job's code is its declaration and its handler body, and
+nothing else. The scaffold is how a job enters that framework: it is **red** on
+purpose (the handler throws, the test fails) until the job is real.
+
+**Which shape.** Ask where the rows come from (`docs/scaffolding/README.md`),
+then walk the **kind ladder** in `new-job` Step 1: a horizon, bars, rolling,
+normalizer or transform kind before a custom `on_batch`. A custom handler is the
+last rung, and its commit message names the rungs ruled out.
+
+**The scaffold toolbox**, in the order a job meets it:
+
+  | Step                         | Command                                                                          | What it gives you                                                                             |
+  | ---                          | ---                                                                              | ---                                                                                           |
+  | see the plan                 | `uqs job new NAME ... --dry-run`                                                 | every file and line it would write; show it to the user                                       |
+  | write it                     | the same without `--dry-run`                                                     | job, table, process, port, catalog, docs card, failing test; derived files regenerated        |
+  | the to-do list               | `uv run pytest -q python/uqs/tests/test_no_scaffold_left.py`                     | every `SCAFFOLDED` placeholder as `path:line`                                                 |
+  | first run, no stack          | `q scripts/examples/NAME_example.q` (backfill)                                   | the worker on its fixture into a throwaway HDB; exit 1 unless it published                    |
+  | one page of a polling feed   | `uqs job preview JOB`                                                            | what it would publish and where the cursor would move, nothing saved                          |
+  | one unit in a real process   | `uqs job run JOB`                                                                | one poll, one cycle or one batch with `-once`, then the outcome                               |
+  | verify a dataset             | `uqs job check DATASET`                                                          | schema, behaviour, cross-mode equivalence, completeness: PASS, FAIL or UNVERIFIED             |
+  | refill a streaming job       | `uqs job new NAME --kind backfill --twin-of JOB`, then `uqs job gaps JOB`        | a twin worker applying the job's own transform; gaps names its refill commands                |
+  | outside the tree             | `uqs job new ... --bundle DIR`, then `uqs job install` (never in a checkout, W8) | the same scaffold into a sidecar bundle                                                       |
+  | undo                         | `uqs job remove NAME --dry-run`, then without                                    | every scaffolded line taken back; other lines naming the job listed                           |
+  | see what exists              | `uqs job list`                                                                   | every streaming job, normalizer and worker, with its process                                  |
+
+**When the scaffold falls short.** A shape it cannot write (bars and rolling
+today), a flag it lacks, or a scaffold that does not load is a **scaffold gap**:
+scaffold the nearest shape, convert by hand from the model file `new-job` names,
+and report the gap (or file it) so the next job gets it for free. The scaffolder
+is `python/uqs/src/uqs/scaffold/` with `cli/job/create*.py`, and its kinds are
+declared in `python/uqs/src/uqs/model/kinds.py` (`SCAFFOLD_KINDS`).
+
+--------------------------------------------------------------------------------
+
 # THE DEVELOPMENT LOOP
 
 1. **Claim and isolate** (W1). Read the issue and the code it names, in the
@@ -215,7 +259,9 @@ Specialist agents (hand work to them where they are the specialist):
 3. **Find what exists before writing.** Primitives in the file you are editing,
    a framework kind that already does it (`.qetl.job.stream.at_horizons`,
    `at_bars`, `at_rolling`, normalizers, reactions), an upstream tree in `lib/`.
-   A loop over days in a job means you are rebuilding `.qetl.job.bounded`.
+   A loop over days in a job means you are rebuilding `.qetl.job.bounded`. If
+   the change adds a job, table, source, transform or reaction, the first
+   command is `uqs job new ... --dry-run` (SCAFFOLD FIRST).
 
 4. **Change the source of truth**, then regenerate what derives from it in the
    same commit (D1).
@@ -251,9 +297,11 @@ Specialist agents (hand work to them where they are the specialist):
 2. **One home per fact** - no hand-kept list of tables, processes, ports,
    sources or env names; generated outputs regenerated in the same commit; a doc
    table derived or gated.
-3. **Declarations** - one file per job, scaffolded; `publish`, not `.u.upd`; no
-   `time` column; published tables in `plant_tables.q`; half-open windows;
-   parameterised queries; deterministic fixtures.
+3. **Declarations** - one file per job, scaffolded (the `SCAFFOLDED` markers
+   were there and are gone, not never written); the highest rung of the kind
+   ladder that fits, or a commit message naming the rungs ruled out; `publish`,
+   not `.u.upd`; no `time` column; published tables in `plant_tables.q`;
+   half-open windows; parameterised queries; deterministic fixtures.
 4. **q correctness** - no builtin as a name, no parameter named after a column
    it filters, `@[f;::;h]` for niladics, explicit parentheses for mixed
    arithmetic, no bare `/` line; qlinter clean at the pinned version.

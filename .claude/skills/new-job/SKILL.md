@@ -37,6 +37,38 @@ expensive to undo.
   | Examples                            | a backfill, a nightly window, a restatement              | a tickerplant feed, a poller                       |
   | Shell                               | `.qetl.job.bounded`                                      | `.qetl.job.stream` / `.qetl.job.continuous`        |
 
+### Walk the kind ladder before you write a handler
+
+A hand-written `on_batch` is the last rung, not the default. Each rung above it
+is a framework kind that already owns lateness, carry, end of day, recovery and
+the contract test, which a custom handler has to re-earn. Take the first rung
+that fits what the job does:
+
+  | The job ...                                               | Kind                                    | Scaffold                                                          | Model in the tree                    |
+  | ---                                                       | ---                                     | ---                                                               | ---                                  |
+  | copies or reshapes one table into one table               | streaming + transform                   | `--subscribe-to T --outputs U --transform passthrough\|derive`    | `docs/scaffolding/etl.md`            |
+  | merges several tables that carry one fact                 | normalizer                              | `--kind normalizer --subscribe-to A,B`                            | `executions.q`, `market_data.q`      |
+  | judges each event once a horizon has passed               | horizon                                 | `--kind horizon --horizon 0D00:01:00`                             | `fx_markout.q`, `eq_markout.q`       |
+  | rolls events into time bars                               | bars (`.qetl.job.stream.at_bars`)       | none yet: scaffold the etl, then convert                          | `exec_bars.q`, `book_liquidity_1m.q` |
+  | keeps rolling-window statistics                           | rolling (`.qetl.job.stream.at_rolling`) | none yet: scaffold the etl, then convert                          | `order_quality.q`                    |
+  | polls an API or a database page by page                   | polling feed                            | `--poll [--cursor-fields ts,id]`                                  | `demo_deals_feed.q`                  |
+  | is published from outside q (a broker, a vendor SDK)      | connector                               | `--kind connector --raw-table T`                                  | `docs/scaffolding/external.md`       |
+  | fills a past window                                       | backfill                                | `--kind backfill`, plus `--twin-of JOB` to refill a streaming job | `hdb_exec_bars_backfill.q`           |
+  | recomputes when a worker publishes a window               | reaction                                | `--triggered-by DATASET`                                          | `rebuild_positions.q`                |
+  | none of the above                                         | streaming, custom `on_batch`/`on_timer` | `--subscribe-to ... --outputs ...`                                | `superbook.q`, `posbook.q`           |
+
+When you land on the last rung, say in the commit message which rungs you ruled
+out and why: a reviewer reads that line first. Seventeen of the tree's 29
+streaming jobs are custom handlers. Seven are synthetic or vendor feeds on a
+timer, and several predate the kind that would now fit them, so the custom
+handlers show what a handler can do but are a weak precedent for a new job.
+
+For bars and rolling, scaffold the etl shape (it writes the table, process,
+catalog, docs and tests), then replace its `.qetl.job.stream.define` with the
+kind's verb, following the model file. The verbs and their required keys are in
+`uqf-developer`'s `uqf-etl-framework.md` §3. Report the missing `--kind` as a
+scaffold gap rather than skipping the scaffold.
+
 ```bash
 # continuous: subscribes to two tables, publishes one
 uqs job new markout2 --subscribe-to trades,quote \
