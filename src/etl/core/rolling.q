@@ -55,7 +55,10 @@
 / EVICTION. A row is kept while it is newer than the longest window plus the
 / lateness behind the clock; older, it can be in no future window, and goes.
 / The buffer is therefore bounded by that span of input, however long the
-/ process runs, and so is a replay (its clock is the log's).
+/ process runs, and so is a replay (its clock is the log's) once it has seen
+/ the job's own output. Before that it keeps every row: the grid points still
+/ owed are not yet known, and TorQ's per-table logs can replay the events
+/ before the output (#2894). The first evaluate after it bounds the buffer.
 / .
 / COST. A publication re-aggregates the buffered rows once per window length:
 / O(W x R) with W window lengths and R rows in the longest window, every
@@ -317,6 +320,11 @@
         / earlier grid point not yet published, which the next tick catches up (#2457)
         anchor:(d`period) xbar max stamps;
         owed:(get ` sv ns,`last_as_of)+d`period;
+        / replaying with nothing of its own output seen yet, the grid points still
+        / owed are unknown: TorQ's per-table logs can replay the events before the
+        / output that says what was published (#2894), so nothing is evicted until
+        / it has - or until the first evaluate after the replay bounds the buffer
+        if[.qetl.job.stream.replaying and null owed; :()];
         keep_from:$[null owed; anchor; anchor&owed]-span;
         .qetl.job.stream.evict[pq;((get pq) tc)<=keep_from]];
     }
