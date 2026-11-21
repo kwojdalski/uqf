@@ -387,7 +387,7 @@ def test_no_streamer_takes_the_credential_as_an_argument():
         REPO / "sidecars/flink/flink_vwap_streamer.py",
     ]
     texts = [p.read_text() for p in streamers]
-    texts.append(scaffold_external._streamer("zz", "zz_raw", ["a"]))
+    texts.append(scaffold_external._streamer("zz", "zz_raw", {"a": "f"}))
     for text in texts:
         assert '"--credential"' not in text and "credential_from_env" in text
 

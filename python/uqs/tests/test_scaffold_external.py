@@ -15,6 +15,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.external import feeds
+from uqs.external.kafka_streamer import ACCEPT_Q
 from uqs.model import dependencies
 from uqs.paths import CATALOG_FILE, STACK_TABLES_TEST, TABLES_FILE, UqsError
 from uqs.scaffold import write
@@ -62,7 +63,9 @@ def test_the_generated_python_compiles_and_never_sends_time():
     streamer = _body(plan, "ws_streamer.py")
     compile(streamer, "ws_streamer.py", "exec")
     compile(_body(plan, "ws_feed.py"), "ws_feed.py", "exec")
-    assert 'FIELDS = ["sym", "px"]' in streamer, ".u.upd stamps time; the publisher must not"
+    assert 'WIRE = {"sym": "s", "px": "f"}' in streamer, (
+        ".u.upd stamps time; the publisher must not"
+    )
     assert "SCAFFOLDED" in streamer and "NotImplementedError" in streamer
 
 
@@ -93,29 +96,70 @@ def test_the_generated_python_passes_the_repos_ruff(name):
             assert result.returncode == 0, f"ruff {check[0]} {action.path}:\n{result.stdout}"
 
 
+class _Q:
+    """kola.Q, recording each sync and answering as the plant would."""
+
+    sent: list[tuple] = []
+    answer: object = True
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def connect(self):
+        pass
+
+    def sync(self, *args):
+        _Q.sent.append(args)
+        return _Q.answer
+
+
+def _streamer(monkeypatch, schema: str = "sym:symbol, px:float") -> dict:
+    _Q.sent, _Q.answer = [], True
+    monkeypatch.setitem(sys.modules, "kola", types.SimpleNamespace(Q=_Q))
+    plan = external_feed("ws", "ws_raw", "ws_quotes", schema, known_tables={"quote"},
+                         unprofiled="a test feed")  # fmt: skip
+    streamer: dict = {"__name__": "ws_streamer"}
+    exec(compile(_body(plan, "ws_streamer.py"), "ws_streamer.py", "exec"), streamer)
+    monkeypatch.setenv("UQF_TP_CREDENTIAL", "u:p")  # from its launcher, never argv (#1853)
+    return streamer
+
+
 def test_the_generated_publisher_sends_a_list_of_columns_in_field_order(monkeypatch):
     """#1580: .u.upd gets one list per column, by position. The segmented
     tickerplant prepends its time column with `(enlist ...),x`, which a list
     accepts and a dictionary answers with `type`."""
-    sent: list[tuple] = []
-
-    class Q:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def connect(self):
-            pass
-
-        def sync(self, *args):
-            sent.append(args)
-
-    monkeypatch.setitem(sys.modules, "kola", types.SimpleNamespace(Q=Q))
-    streamer: dict = {"__name__": "ws_streamer"}
-    exec(compile(_body(_plan(), "ws_streamer.py"), "ws_streamer.py", "exec"), streamer)
+    streamer = _streamer(monkeypatch)
     streamer["batches"] = lambda: iter([[{"px": 1.0, "sym": "BTC"}, {"px": 2.0, "sym": "ETH"}]])
-    monkeypatch.setenv("UQF_TP_CREDENTIAL", "u:p")  # from its launcher, never argv (#1853)
     assert streamer["main"](["--port", "5010"]) == 0
-    assert sent == [(".u.upd", "ws_raw", [["BTC", "ETH"], [1.0, 2.0]])]
+    ((fn, table, columns),) = _Q.sent
+    assert (fn, table) == (ACCEPT_Q, "ws_raw")
+    assert [c.to_list() for c in columns] == [["BTC", "ETH"], [1.0, 2.0]]
+
+
+def test_the_generated_publisher_types_each_column_as_the_raw_table_declares(monkeypatch):
+    """#2873: a float column of whole numbers went as longs, an int beside a
+    float as a general list, a None as `::` - each refused by the plant."""
+    import polars as pl  # noqa: PLC0415
+
+    streamer = _streamer(monkeypatch, "sym:symbol, px:float, n:long, ok:boolean, c:char")
+    rows = [{"sym": "A", "px": 100, "n": None, "ok": True, "c": "x"},
+            {"sym": "B", "px": 100.5, "n": 7, "ok": False, "c": "y"}]  # fmt: skip
+    sym, px, n, ok, c = streamer["to_columns"](rows)
+    assert (sym.dtype, px.dtype, n.dtype, ok.dtype) == (pl.Categorical, pl.Float64, pl.Int64,
+                                                        pl.Boolean)  # fmt: skip
+    assert px.to_list() == [100.0, 100.5] and n.to_list() == [None, 7]
+    assert c == b"xy"
+
+
+def test_the_generated_publisher_raises_for_a_batch_the_plant_refused(monkeypatch):
+    """#2873: the bare `.u.upd` returned for an update the tickerplant sent to
+    its error log, so the author's acknowledgement after it ran and the batch
+    was gone. ACCEPT_Q answers the error text, and publish raises on it."""
+    streamer = _streamer(monkeypatch)
+    _Q.answer = "type"
+    streamer["batches"] = lambda: iter([[{"px": 1.0, "sym": "BTC"}]])
+    with pytest.raises(UqsError, match="refused the ws_raw batch .* NOT stored.*: type"):
+        streamer["main"](["--port", "5010"])
 
 
 def test_the_feed_module_declares_itself_for_the_cli():
@@ -215,6 +259,7 @@ def test_a_scaffolded_feed_names_its_raw_table_where_the_stack_looks(tree):
 _HELP_WITH_A_SCAFFOLDED_FEED = """
 import dataclasses, pkgutil, sys, types
 from uqs.external import feeds
+from uqs.external.kafka_streamer import ACCEPT_Q
 module = types.ModuleType("uqs.external.ws_feed")
 exec(compile(sys.stdin.read(), "ws_feed.py", "exec"), module.__dict__)
 option = feeds.FeedOption("ws_url", "Websocket to subscribe to", default="wss://x")

@@ -18,12 +18,12 @@ uqs job new ws_quotes --kind connector --raw-table ws_quotes_raw \
 
 It writes:
 
-  | File                                           | What it is                                                                                                                                                                |
-  | ---                                            | ---                                                                                                                                                                       |
-  | `python/uqs/src/uqs/external/NAME_streamer.py` | the publisher process. Write **`batches()`**, which yields lists of records from the source. Connecting, converting to columns and `.u.upd` are done.                     |
-  | `python/uqs/src/uqs/external/NAME_feed.py`     | its lifecycle, on the shared `DetachedProcess`, and a `FEED` that `uqs connector start\|stop\|restart\|status\|logs NAME` finds with no CLI edit                          |
-  | `python/uqs/tests/test_NAME_streamer.py`       | a test that fails until it's written                                                                                                                                      |
-  | the raw table and `src/etl/streaming/NAME.q`   | the q job subscribing to `--raw-table` and publishing `--outputs`, with its own failing test                                                                              |
+  | File                                           | What it is                                                                                                                                                                 |
+  | ---                                            | ---                                                                                                                                                                        |
+  | `python/uqs/src/uqs/external/NAME_streamer.py` | the publisher process. Write **`batches()`**, which yields lists of records from the source. Connecting, typing the columns and publishing are done.                       |
+  | `python/uqs/src/uqs/external/NAME_feed.py`     | its lifecycle, on the shared `DetachedProcess`, and a `FEED` that `uqs connector start\|stop\|restart\|status\|logs NAME` finds with no CLI edit                           |
+  | `python/uqs/tests/test_NAME_streamer.py`       | a test that fails until it's written                                                                                                                                       |
+  | the raw table and `src/etl/streaming/NAME.q`   | the q job subscribing to `--raw-table` and publishing `--outputs`, with its own failing test                                                                               |
 
 Both tables start with the same `--schema`. The q job is where they come to
 differ, as `databento1` folds 40 per-level columns into four vectors.
@@ -31,10 +31,15 @@ differ, as `databento1` folds 40 per-level columns into four vectors.
 ## Acknowledge after the publish
 
 If the source can replay (a Kafka offset, a cursor, a sequence number), mark a
-record consumed only **after** `.u.upd` returns for it. A crash in between then
-re-sends it, which the q job can detect and drop if every record carries a key
-unique at the source. The other order loses records without a trace. See
-`kafka_streamer.py` for the worked case.
+record consumed only **after** `publish` returns for it. `publish` sends through
+`ACCEPT_Q` rather than a bare `.u.upd`: the segmented tickerplant hands an
+update it refuses to its error log and returns, so a bare `.u.upd` answers
+success for a batch that was never stored. `publish` raises instead, and
+`to_columns` types each column as the raw table declares it, so a float column
+of whole numbers is not sent as longs and refused. A crash between the publish
+and the acknowledgement re-sends the record, which the q job can detect and drop
+if every record carries a key unique at the source. The other order loses
+records without a trace. See `kafka_streamer.py` for the worked case.
 
 ## Running it
 
