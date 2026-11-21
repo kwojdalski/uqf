@@ -687,3 +687,19 @@ def test_a_passthrough_from_a_reused_source_of_the_targets_shape_is_planned():
 def test_a_derivation_from_a_reused_source_is_still_planned():
     plan = _second_worker("deals_eu", "demo_deals", "demo_deals", None, "derive")
     assert plan.name == "deals_eu_backfill"
+
+
+def test_a_passthrough_from_a_one_column_source_the_scaffold_wrote_is_planned(tmp_path):
+    """#2829: the scaffold writes one column as `columns:enlist `time`, which
+    the reader could not parse - so a passthrough of the same shape was refused
+    as "cannot read source"."""
+    from uqs.scaffold.write import flat_source  # noqa: PLC0415
+
+    source = next(
+        a for a in backfill.bounded_worker("bf7", "bf7", "time:timestamp").actions
+        if a.path.parent.name == "sources"
+    )  # fmt: skip
+    (tmp_path / source.path).parent.mkdir(parents=True)
+    (tmp_path / source.path).write_text(flat_source(source.body, UQF_ROOT))
+    assert ".qpipe.source.bf7.columns:enlist `time" in (tmp_path / source.path).read_text()
+    create_backfill.check_reused_passthrough(tmp_path, "bf8", "bf7", [("time", "`timestamp$()")])
