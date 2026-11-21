@@ -300,6 +300,12 @@
         .qetl.job.stream.require_arity[job;`on_timer;decl`on_timer;1;"a niladic function (or one taking the tick)"]];
     .qetl.job.stream.check_optional[job;decl];
     .qetl.job.stream.check_replay[job;decl]; .qetl.twin.check_live[job;decl];
+    / The TorQ plant sends end of day only to the handles that subscribed
+    / (pubsub.q's allsubhandles), so a job subscribing to nothing - a feed, a
+    / timer-only job - would never have its hook called there, though
+    / run_stream calls it in-process (#2898).
+    if[(`on_endofday in key decl) and 0=count distinct (),(decl`subscribe_to),$[`restore_from in key decl; decl`restore_from; `symbol$()],$[`carry in key decl; enlist decl[`carry]`table; `symbol$()];
+        '"define: ",string[job]," declares on_endofday but subscribes to nothing - the TorQ plant sends end of day only to its subscribers, so the hook would never be called there; do the work on the job's timer instead"];
     decl:.qetl.job.stream.with_defaults decl;  / after the checks above, which tell declared from absent (#2657)
     .qetl.job.stream.jobs[job]:enlist decl;
     .qetl.job.stream.procnames[decl`procname]:job;

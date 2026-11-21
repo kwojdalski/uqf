@@ -54,17 +54,18 @@
     .qetl.job.stream.reset each `fx_positions`posbook;
     }
 
-.qt.qetl.job.stream.endofday.feed:{[nm;eod] `procname`subscribe_to`outputs`period`on_timer`on_endofday!(
-    `$string[nm],"1";`symbol$();`symbol$();0D00:00:01;{[] };eod)}
+/ A subscriber: the TorQ plant sends end of day only to those (#2898).
+.qt.qetl.job.stream.endofday.subscriber:{[nm;eod] `procname`subscribe_to`outputs`on_batch`on_endofday!(
+    `$string[nm],"1";enlist `executions;`symbol$();{[t;x] };eod)}
 
 .qt.qetl.job.stream.endofday.test_on_endofday_must_be_a_function:{[t]
-    .qunit.assertThrows[.qetl.job.stream.define[`eod_a;];@[.qt.qetl.job.stream.endofday.feed[`eod_a;{[d] }];`on_endofday;:;1];
+    .qunit.assertThrows[.qetl.job.stream.define[`eod_a;];@[.qt.qetl.job.stream.endofday.subscriber[`eod_a;{[d] }];`on_endofday;:;1];
         "*on_endofday must be a function of the date that ended*";"refused at declaration"]};
 
 .qt.qetl.job.stream.endofday.test_end_of_day_calls_each_running_job_and_survives_one_that_throws:{[t]
     `.qt.qetl.job.stream.endofday.seen set ();
-    if[not `eod_b in key .qetl.job.stream.jobs; .qetl.job.stream.define[`eod_b;.qt.qetl.job.stream.endofday.feed[`eod_b;{[d] '"boom"}]]];
-    if[not `eod_c in key .qetl.job.stream.jobs; .qetl.job.stream.define[`eod_c;.qt.qetl.job.stream.endofday.feed[`eod_c;{[d] .qt.qetl.job.stream.endofday.seen,:d}]]];
+    if[not `eod_b in key .qetl.job.stream.jobs; .qetl.job.stream.define[`eod_b;.qt.qetl.job.stream.endofday.subscriber[`eod_b;{[d] '"boom"}]]];
+    if[not `eod_c in key .qetl.job.stream.jobs; .qetl.job.stream.define[`eod_c;.qt.qetl.job.stream.endofday.subscriber[`eod_c;{[d] .qt.qetl.job.stream.endofday.seen,:d}]]];
     `.qetl.job.stream.running set `eod_b`eod_c;
     ok:.qetl.job.stream.end_of_day .qt.qetl.job.stream.endofday.d0;
     .qunit.assertEquals[ok;enlist `eod_c;"the one that threw is not reported as done"];
@@ -72,7 +73,7 @@
 
 .qt.qetl.job.stream.endofday.test_a_job_that_is_not_running_is_not_called:{[t]
     `.qt.qetl.job.stream.endofday.seen set ();
-    if[not `eod_c in key .qetl.job.stream.jobs; .qetl.job.stream.define[`eod_c;.qt.qetl.job.stream.endofday.feed[`eod_c;{[d] .qt.qetl.job.stream.endofday.seen,:d}]]];
+    if[not `eod_c in key .qetl.job.stream.jobs; .qetl.job.stream.define[`eod_c;.qt.qetl.job.stream.endofday.subscriber[`eod_c;{[d] .qt.qetl.job.stream.endofday.seen,:d}]]];
     `.qetl.job.stream.running set `symbol$();
     .qetl.job.stream.end_of_day .qt.qetl.job.stream.endofday.d0;
     .qunit.assertEquals[count .qt.qetl.job.stream.endofday.seen;0;"declared but not started in this process"]};

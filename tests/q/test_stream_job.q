@@ -254,6 +254,17 @@
         "a carried variable that does not exist would fail every end of day's snapshot"];
     .qunit.assertFalse[`sj_badcarry in .qetl.job.stream.defined[];"and the job is not registered"]};
 
+/ The TorQ plant sends end of day only to the handles that subscribed
+/ (pubsub.q's allsubhandles): a feed's on_endofday ran under run_stream and
+/ never on the plant (#2898), so it is refused where it cannot be delivered.
+.qt.qetl.job.stream.test_an_on_endofday_on_a_job_that_subscribes_to_nothing_is_refused:{[t]
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_feed_eod;x]};
+        `procname`subscribe_to`outputs`period`on_timer`on_endofday!(
+            `sjfeedeod1;`symbol$();`symbol$();0D00:00:01;{[] ()};{[dt] ()});
+        "*sj_feed_eod declares on_endofday but subscribes to nothing - the TorQ plant sends end of day only to its subscribers*";
+        "a hook the production plant never calls is refused, saying why"];
+    .qunit.assertFalse[`sj_feed_eod in .qetl.job.stream.defined[];"and the job is not registered"]};
+
 .qt.qetl.job.stream.test_an_unwired_publish_throws_rather_than_dropping_rows:{[t]
     / The seam's whole point: rows going nowhere must not look like a job
     / with nothing to say.
