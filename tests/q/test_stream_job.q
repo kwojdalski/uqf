@@ -1116,6 +1116,15 @@
     .qunit.assertTrue[any not .qpipe.job.fx_orders_feed.statuses=.qpipe.job.executions.filled_status;
         "order flow carries cancels and rejects, not only fills"]};
 
+/ #2888: as the trades feed - the orders feed is the only source of desk
+/ fills with a book, so one that only bought would make fx_positions' demo
+/ book only grow.
+.qt.qetl.job.stream.test_the_orders_feed_produces_both_sides:{[t]
+    .qt.qetl.job.stream.reset[];
+    do[64;.qpipe.job.fx_orders_feed.on_timer[]];
+    sides:raze {first[x] 4} each exec rows from .qt.qetl.job.stream.published;
+    .qunit.assertEquals[asc distinct sides;-1 1;"buys and sells, and no other side"]};
+
 .qt.qetl.job.stream.test_an_order_id_is_unique_within_a_run:{[t]
     .qt.qetl.job.stream.reset[];
     .qpipe.job.fx_orders_feed.on_timer[];
