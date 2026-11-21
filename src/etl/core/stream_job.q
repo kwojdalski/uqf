@@ -395,7 +395,7 @@
     / A declared check sits in the seam itself, so every route a row takes out
     / of the job - batch handler, timer, poll, on_replayed - passes through it.
     / The plant's contract sits under the check, at the transport (#1074).
-    p:.qetl.job.stream.contracted[job;(),(d`outputs) inter .qetl.plant.names[];publisher];
+    p:.qetl.job.stream.contracted[job;(),d`outputs;.qetl.plant.names[];publisher];
     (` sv (d`ns),`publish) set $[`check in key d; .qetl.job.stream.checked[job;d`check;d`on_fail;p]; p];
     .[{.qetl.log.ch.dbg[`config;y;(enlist[`job]!enlist x),z]};(job;"publish seam wired";enlist[`outputs]!enlist d`outputs);::];
     job}
@@ -408,10 +408,15 @@
 / stored wrong and never refused: this refuses it before it is sent. A
 / refused batch is withheld whole - logged, and counted in stream_health -
 / like one a job's own check fails. A table the plant does not carry is the
-/ job's own business and passes as it is.
+/ job's own business and passes as it is. A plant table the job does not
+/ declare in `outputs` is withheld whole, naming it (#2897): check_publishable
+/ and the job graph read outputs only, so the batch would reach a table nothing
+/ had checked the job may write - and it used to skip the contract too.
 / @private
-.qetl.job.stream.contracted:{[job;plant;publisher;t;x]
+.qetl.job.stream.contracted:{[job;outs;plant;publisher;t;x]
     if[not t in plant; :publisher[t;x]];
+    if[not t in outs;
+        :.qetl.job.stream.withhold[job;t;x;string[t]," is a plant table the job does not declare in outputs - add it there, so its contract, check_publishable and the job graph hold it";();.qetl.job.stream.row_count[t;x]]];
     if[count f:.qetl.job.stream.contract_problems[t;x];
         :.qetl.job.stream.withhold[job;t;x;"plant contract: ","; " sv f;();.qetl.job.stream.row_count[t;x]]];
     publisher[t;x]}

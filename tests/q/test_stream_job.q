@@ -1946,6 +1946,20 @@
     .qt.qetl.job.stream.ob_publish[`sjtest_local;([] anything:1 2)];
     .qunit.assertEquals[count .qt.qetl.job.stream.published;1;"a job's own table is its business"]};
 
+/ #2897: a plant table the job did not list in outputs skipped the contract,
+/ so a quote with bid and ask swapped reached the plant, stored positionally.
+/ It is withheld, named, and counted - the contract, check_publishable and the
+/ job graph all read outputs, so an undeclared plant table is a declaration bug.
+.qt.qetl.job.stream.test_a_plant_table_missing_from_outputs_is_withheld_by_name:{[t]
+    q1:([] sym:enlist `EURUSD; bid:enlist 1.1; ask:enlist 1.2; bsize:enlist 1; asize:enlist 2; mode:enlist " "; ex:enlist "N"; src:enlist `x);
+    q1:(cols[.qetl.plant.published `quote] inter cols q1)#q1;
+    before:.qetl.stream_health.of[`fx_orderbook_feed]`failed;
+    .qt.qetl.job.stream.ob_publish[`quote;`sym`ask`bid xcols q1];
+    h:.qetl.stream_health.of`fx_orderbook_feed;
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"nothing reaches the plant"];
+    .qunit.assertEquals[h`failed;before+1;"the batch is counted as failed"];
+    .qunit.assertTrue[(string h`last_error) like "*quote is a plant table the job does not declare in outputs*";"naming the table and the fix"]};
+
 / #1073: state says how it survives a restart - rebuilt by replay, or
 / declared ephemeral with the reason - or the job is refused where it is
 / declared.
