@@ -61,3 +61,25 @@
 .qt.qpipe.job.hdb_exec_bars_backfill.test_the_declared_grain_is_the_live_bar_width:{[t]
     .qunit.assertEquals[(.qetl.job.bounded.def `hdb_exec_bars_backfill)`align;.qpipe.transform.exec_bars.width;
         "the worker cuts to the live job's bar width"]};
+
+/ #2881: the quality check is the worker's gate. A bar with no volume, or a
+/ high below its low, is refused as bar_range, each on its own; a sound bar,
+/ and a one-fill bar whose high equals its low, pass.
+.qt.qpipe.job.hdb_exec_bars_backfill.sound_bar:{[]
+    .qpipe.job.hdb_exec_bars_backfill.bars .qt.qpipe.job.hdb_exec_bars_backfill.two_window_fills[]}
+
+.qt.qpipe.job.hdb_exec_bars_backfill.test_the_check_passes_sound_bars:{[t]
+    .qunit.assertEquals[count .qpipe.job.hdb_exec_bars_backfill.quality_check .qt.qpipe.job.hdb_exec_bars_backfill.sound_bar[];0;
+        "two one-fill bars, each with volume and high = low: no failure"]};
+
+.qt.qpipe.job.hdb_exec_bars_backfill.test_the_check_refuses_a_bar_with_no_volume:{[t]
+    b:update volume:0 1e6 from .qt.qpipe.job.hdb_exec_bars_backfill.sound_bar[];
+    .qunit.assertEquals[.qpipe.job.hdb_exec_bars_backfill.quality_check b;
+        ([] check:enlist `bar_range; status:enlist `fail; detail:enlist "1 bar(s) with no volume or a high below the low");
+        "a zero-volume bar is refused, and counted"]};
+
+.qt.qpipe.job.hdb_exec_bars_backfill.test_the_check_refuses_a_bar_whose_high_is_below_its_low:{[t]
+    b:update high:low-0.01 from .qt.qpipe.job.hdb_exec_bars_backfill.sound_bar[];
+    .qunit.assertEquals[.qpipe.job.hdb_exec_bars_backfill.quality_check b;
+        ([] check:enlist `bar_range; status:enlist `fail; detail:enlist "2 bar(s) with no volume or a high below the low");
+        "a high below the low is refused, with volume present"]};
