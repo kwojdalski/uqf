@@ -1137,6 +1137,7 @@ qetl.venue,venues_of,function,1,market
 qetl.verify,armed,value,,
 qetl.verify,basis,function,1,dataset
 qetl.verify,behaviour_gaps,function,1,producers
+qetl.verify,bounded_findings,function,4,producer dataset output basis
 qetl.verify,capture,function,3,dataset from_ts to_ts
 qetl.verify,capture_bounded,function,3,worker from_ts to_ts
 qetl.verify,capture_one,function,4,prod dataset from_ts to_ts

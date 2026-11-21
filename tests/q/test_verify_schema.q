@@ -101,3 +101,31 @@
 .qt.qetl.verify.schema.test_the_pair_agrees_on_its_key:{[t]
     .qunit.assertEquals[count .qetl.verify.key_findings[`demo_deals;.qetl.verify.producers `demo_deals];0;
         "both key on deal_id, a column the destination takes"]};
+
+/ #2837: a bounded batch may carry the plant's `time` - the HDB writer partitions by
+/ it - so `uqs job check` failed every scaffolded backfill, and hdb_transfer_backfill,
+/ on the column the scaffold keeps.
+.qt.qetl.verify.schema.capture:{[p] `producers`captures!(p;(p`producer)!count[p]#enlist ([] rows:enlist (); failures:enlist ()))}
+
+.qt.qetl.verify.schema.test_a_bounded_producer_may_carry_the_time_the_destination_generates:{[t]
+    p:.qetl.verify.producers `trades_copy;
+    .qunit.assertEquals[(p`producer;p`mode);(enlist `hdb_transfer_backfill;enlist `bounded);"one worker fills it"];
+    .qunit.assertEquals[`time in cols first p`declared;1b;"its transform keeps time, as the scaffold's does"];
+    r:.qetl.verify.schema_result[`trades_copy;.qt.qetl.verify.schema.capture p];
+    .qunit.assertEquals[first r;`PASS;"no time: extra finding - ",", " sv last r]};
+
+.qt.qetl.verify.schema.test_a_bounded_producer_s_time_is_held_to_the_destination_s_type:{[t]
+    r:update time:`date$time from .qetl.plant.shape `trades_copy;
+    f:.qetl.verify.bounded_findings[`w;`trades_copy;r;`declared];
+    .qunit.assertEquals[(f`column;f`problem;f`expected;f`actual);
+        (enlist `time;enlist `type;enlist "timestamp (p)";enlist "date (d)");"carried, so typed as the plant's"]};
+
+.qt.qetl.verify.schema.test_a_stream_producer_sending_time_is_still_extra:{[t]
+    f:.qetl.verify.schema_findings[`s;`trades_copy;.qetl.plant.shape `trades_copy;`declared];
+    .qunit.assertEquals[(f`column;f`problem);(enlist `time;enlist `extra);".u.upd stamps a stream's time"]};
+
+.qt.qetl.verify.schema.test_a_bounded_producer_may_key_on_time:{[t]
+    p:update key_cols:enlist `time`trade_id from .qetl.verify.producers `trades_copy;
+    .qunit.assertEquals[count .qetl.verify.key_findings[`trades_copy;p];0;"time is in the rows it writes"];
+    s:update mode:`stream from p;
+    .qunit.assertEquals[(.qetl.verify.key_findings[`trades_copy;s])`column;enlist `time;"but not in a stream's"]};
