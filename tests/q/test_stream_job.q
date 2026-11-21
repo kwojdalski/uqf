@@ -244,6 +244,16 @@
         "*sj_arity's on_replayed takes 2 parameter(s)*";"an on_replayed of two would never run"];
     .qunit.assertFalse[`sj_arity in .qetl.job.stream.defined[];"and nothing was registered"]};
 
+/ The same mistake under state is refused at define; under carry it was
+/ accepted and failed at the first end of day, so no snapshot was written (#2859).
+.qt.qetl.job.stream.test_a_carry_naming_a_variable_the_job_lacks_is_refused:{[t]
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_badcarry;x]};
+        `procname`subscribe_to`outputs`on_batch`replay`carry!(
+            `sjbadcarry1;enlist `executions;enlist `sj_badcarry_open;{[t;x] ()};1b;`state`table!(`nosuchbook;`sj_badcarry_open));
+        "*carry's state names nosuchbook, which .qpipe.job.sj_badcarry does not define*";
+        "a carried variable that does not exist would fail every end of day's snapshot"];
+    .qunit.assertFalse[`sj_badcarry in .qetl.job.stream.defined[];"and the job is not registered"]};
+
 .qt.qetl.job.stream.test_an_unwired_publish_throws_rather_than_dropping_rows:{[t]
     / The seam's whole point: rows going nowhere must not look like a job
     / with nothing to say.

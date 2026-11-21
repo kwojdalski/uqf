@@ -61,6 +61,8 @@
     if[not replays; 'who," needs replay 1b - the snapshot is read back by a replay"];
     .qetl.declared.refuse_unknown[who;"a carry";c;`state`table`cap];
     if[$[`cap in key c; not (-7h=type c`cap) and 0<c`cap; 0b]; 'who,"'s cap must be a positive long, the rows a replay may hold"];
+    / as `state` is checked: a name that is not there fails every end of day's snapshot (#2859)
+    if[not (c`state) in key decl`ns; 'who,"'s state names ",string[c`state],", which ",string[decl`ns]," does not define"];
     }
 
 / The handler a job's batches go through: its guarded on_batch, behind its
