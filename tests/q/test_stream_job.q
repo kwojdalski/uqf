@@ -607,6 +607,20 @@
     .qunit.assertEquals[(.qt.qetl.job.stream.pb_warned 2)`fills;1j;"it is dropped and counted"];
     .qunit.assertEquals[exec qty from 0!.qpipe.job.posbook.book;1e6 -1e6;"and both good fills are in the book"]};
 
+/ #2884: a negative size would apply as the opposite side (#2533), so posbook
+/ drops it as fx_positions does, and keeps the good fill beside it.
+.qt.qetl.job.stream.test_posbook_drops_a_negative_size_fill:{[t]
+    .qt.qetl.job.stream.reset[];
+    saved:.qetl.log.ch.warn;
+    `.qetl.log.ch.warn set {[channel;text;fields] `.qt.qetl.job.stream.pb_warned set (channel;text;fields);};
+    ex:.qt.qetl.job.stream.an_execution;
+    b:ex[.qt.qetl.job.stream.d 0;`EURUSD;1;1.1;1e6],ex[.qt.qetl.job.stream.d 1;`EURUSD;1;1.105;-4e5];
+    r:@[{.qpipe.job.posbook.on_batch[`executions;x]; 1b};b;{[saved;e] `.qetl.log.ch.warn set saved; 'e}[saved]];
+    `.qetl.log.ch.warn set saved;
+    .qunit.assertEquals[r;1b;"a negative-size fill does not throw the batch away"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.pb_warned 2)`fills;1j;"it is dropped and counted"];
+    .qunit.assertEquals[exec qty from 0!.qpipe.job.posbook.book;enlist 1e6;"and only the good buy is in the book"]};
+
 .qt.qetl.job.stream.test_posbook_publishes_nothing_for_a_book:{[t]
     .qt.qetl.job.stream.reset[];
     .qpipe.job.posbook.on_batch[`market_data;.qt.qetl.job.stream.a_book[`EURUSD;1.1001]];
