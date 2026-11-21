@@ -54,6 +54,14 @@
         (`time`trade_id`sym`price`size`side)#t where (t[`time]>=from_ts) & t[`time]<to_ts};
         range_from;range_to]}
 
+/ How far the source HDB vouches for its trades: through its newest date
+/ partition. A date it has not received yet is not "closed data" - claimed
+/ empty, it would never be copied once it arrived (#2867).
+/ @param h the source HDB's root, as the local transport hands it over
+/ @return the start of the day after the newest date holding trades
+/ @throws error when no partition holds trades
+.qpipe.source.hdb_transfer.complete_through:{[h] `timestamp$1+(.qetl.source.local_latest_part[h;`trades])`date}
+
 / Must satisfy the same contract as the live source, and be DETERMINISTIC:
 / a fixture that changes between runs makes a failing assertion impossible
 / to attribute. Used when no credential is configured - a stated demo path,
@@ -69,7 +77,7 @@
 
 / Register on load, so the declaration and the implementation cannot drift.
 .qetl.source.define[.qpipe.source.hdb_transfer.source_name;
-    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example!
-    (.qpipe.source.hdb_transfer.source_name;`trades;.qpipe.source.hdb_transfer.time_column;.qpipe.source.hdb_transfer.row_key;.qpipe.source.hdb_transfer.columns;.qpipe.source.hdb_transfer.types;.qpipe.source.hdb_transfer.query;.qpipe.source.hdb_transfer.fixture;.qpipe.source.hdb_transfer.tz;.qpipe.source.hdb_transfer.transport;.qpipe.source.hdb_transfer.credential_example)];
+    `source`table_name`time_column`row_key`columns`types`query`fixture`tz`transport`credential_example`complete_through!
+    (.qpipe.source.hdb_transfer.source_name;`trades;.qpipe.source.hdb_transfer.time_column;.qpipe.source.hdb_transfer.row_key;.qpipe.source.hdb_transfer.columns;.qpipe.source.hdb_transfer.types;.qpipe.source.hdb_transfer.query;.qpipe.source.hdb_transfer.fixture;.qpipe.source.hdb_transfer.tz;.qpipe.source.hdb_transfer.transport;.qpipe.source.hdb_transfer.credential_example;.qpipe.source.hdb_transfer.complete_through)];
 
 \d .

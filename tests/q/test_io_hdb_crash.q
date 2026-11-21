@@ -187,6 +187,26 @@
     .qunit.assertEquals[(fired;asc got`id);(1b;1 2 4);"the rows the killed writer retired are back, with the new key"];
     .qunit.assertEquals[key hsym `$(.qetl.io.staging root),"/old/2026.01.02";`symbol$();"and nothing is left in staging"]};
 
+/ #2866: the owner killed between its finish's renames, then ANOTHER table's
+/ finish on the same root. Its .Q.chk filled the date's missing table with an
+/ empty one, and the owner's recover took the fill for a replacement and
+/ deleted the retired rows.
+.qt.qetl.hdb_crash.test_another_tables_finish_does_not_fill_over_a_retired_partition:{[t]
+    root:.qt.qetl.hdb_crash.root[]; m:.qetl.io.hdb[root;`time];
+    o:`on_conflict`row_key`time_column`range_from`range_to!(`upsert;`sym`id;`time;2026.01.02D00:00:00.000000000;2026.01.03D00:00:00.000000000);
+    / a later date holding the table too: .Q.chk fills from the last date's tables
+    next_day:update time:time+1D from .qt.qetl.hdb_crash.keyed_rows[7 8];
+    m[`write_keyed][`hkeyed;.qt.qetl.hdb_crash.keyed_rows[1 2],next_day;o]; m[`finish][];
+    m[`write_keyed][`hkeyed;.qt.qetl.hdb_crash.keyed_rows[enlist 3];o];
+    fired:.qt.qetl.hdb_crash.kill_at[`live_retired;{[m;u] m[`finish][]}[m]];
+    / the killed process is gone, and what it had touched with it
+    delete from `.qetl.io.touched where tbl=`hkeyed;
+    m[`write_keyed][`hother;update time:time+1D from .qt.qetl.hdb_crash.keyed_rows[enlist 9];o]; m[`finish][];
+    m[`recover][`hkeyed;2026.01.02D00:00:00.000000000;2026.01.03D00:00:00.000000000];
+    got:.qt.qetl.hdb_crash.read[root;`hkeyed];
+    .qunit.assertEquals[(fired;asc got`id);(1b;1 2 3);"the retired rows are back, not a .Q.chk fill"];
+    .qunit.assertEquals[key hsym `$(.qetl.io.staging root),"/old/2026.01.02";`symbol$();"and nothing is left in staging"]};
+
 / --- #2187: every path is one shell word -------------------------------------
 
 .qt.qetl.hdb_crash.test_a_root_with_a_space_touches_only_its_own_paths:{[t]

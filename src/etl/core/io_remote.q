@@ -39,7 +39,9 @@
 / .
 /   committed with this id     the retry is acknowledged as `duplicate and
 /                              nothing is written - the lost-acknowledgement
-/                              case
+/                              case - while the manager still holds its
+/                              partitions; once they are removed it is
+/                              written again (#2845)
 /   pending with this id       a write that died mid-way. Under upsert,
 /                              replace or ignore, writing it again is
 /                              harmless, so it is. Under append or fail it is
@@ -272,14 +274,39 @@
     .qetl.io.remote.persist[];
     }
 
+/ Private: whether the grant's manager still holds a batch's rows, one boolean
+/ per partition it falls on. A manager that cannot say (no holds), or an empty
+/ batch, which no removal can lose, is taken at the journal's word.
+/ @private
+.qetl.io.remote.holds:{[g;target;batch]
+    $[(0=count batch) or not `holds in key g`mgr; enlist 1b; (g[`mgr][`holds])[target;batch]]}
+
+/ Private: is a committed batch still in the destination? Then a re-send is a
+/ duplicate. Once its partitions are removed (retention, retire) it holds
+/ nothing, so it is marked superseded and written again, as a direct write
+/ would be (#2845) - under append or fail only when NONE of them is held.
+/ @return 1b for a duplicate; 0b when the batch is to be written again
+/ @throws error when part is gone under append or fail
+/ @private
+.qetl.io.remote.still_held:{[g;req;id]
+    o:req`opts;
+    h:.qetl.io.remote.holds[g;req`target;req`batch];
+    if[all h; :1b];
+    if[(any h) and not o[`on_conflict] in .qetl.io.remote.idempotent;
+        '"remote: batch ",string[id]," was committed but part of it is gone from ",string[g`target],
+         "; under ",string[o`on_conflict]," writing it again could double the rest - check ",
+         string[g`target]," and withdraw the batch with .qetl.io.remote.forget"];
+    `.qetl.io.remote.journal set update state:`superseded from .qetl.io.remote.journal where batch_id=id;
+    0b}
+
 / Private: whether the journal already settles this batch - `duplicate when
 / it was committed - refusing what could double rows (RETRIES above).
 / @private
 .qetl.io.remote.require_fresh:{[g;req;id]
     o:req`opts;
     held:select from .qetl.io.remote.journal where batch_id=id;
+    if[(count held) and `committed=first held`state; if[.qetl.io.remote.still_held[g;req;id]; :`duplicate]];
     if[count held;
-        if[`committed=first held`state; :`duplicate];
         if[(`pending=first held`state) and not o[`on_conflict] in .qetl.io.remote.idempotent;
             '"remote: batch ",string[id]," was pending when the receiver stopped; under ",
              string[o`on_conflict]," writing it again could double its rows - check ",string[g`target],

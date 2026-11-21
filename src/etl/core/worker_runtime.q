@@ -488,7 +488,9 @@
     published:.qetl.job.bounded.runtime.commit[dry;`publish_rows;publish;()];
     rows:$[`done~first published; last published; 0];
     wrote:$[`done~first published; .qetl.io.touched_since seen; `date$()];
-    covered:.qetl.job.bounded.runtime.commit[dry;`publish_coverage;.qetl.coverage.stage_written;
+    / a window the publish overwrote is no longer another source_version's (#2846)
+    overwrote:$[worker in .qetl.job.bounded.defined[]; .qetl.job.bounded.on_conflict[worker] in `upsert`replace; 0b];
+    covered:.qetl.job.bounded.runtime.commit[dry;`publish_coverage;$[overwrote; .qetl.coverage.stage_overwriting; .qetl.coverage.stage_written];
         (ds;part;spec`source_version;from_ts;to_ts;rows;wrote)];
     / written; queryable now, or when the deployment says so (#1094)
     if[`done~first covered; .qetl.coverage.note_written[ds;part;spec`source_version; .qetl.io.defers_ready .qetl.io.for_cfg $[worker in .qetl.job.bounded.defined[]; .qetl.job.bounded.def worker; ()!()]]];

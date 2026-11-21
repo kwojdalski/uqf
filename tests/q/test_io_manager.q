@@ -212,6 +212,19 @@
     .qunit.assertEquals[type .qt.qetl.io.part[root;2026.01.02;`iodeals]`notional;9h;"and the rows already there keep their type"];
     .qunit.assertTrue[()~key hsym `$.qetl.io.part_path[root;2026.01.01;`iodeals];"the batch's other date is not written either"]};
 
+/ #2869: a general-list column on disk was taken to accept anything, so a
+/ typed batch column passed the check, upsert wrote the other columns and
+/ threw 'type on it - the torn partition #2329 was written to stop.
+.qt.qetl.io.test_an_append_of_a_typed_column_onto_a_general_list_is_refused_whole:{[t]
+    root:.qt.qetl.io.hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write[m;`iodeals;update note:(::;::) from 2#.qt.qetl.io.deals[]];
+    b:([] deal_time:enlist 2026.01.02D11:00:00.000000000; sym:enlist `AUDUSD; notional:enlist 5e6; note:enlist 1.5);
+    .qunit.assertThrows[.qetl.io.write[m;`iodeals];b;"*note: partition a general list, batch f*";"refused, not torn"];
+    base:.qetl.io.part_path[root;2026.01.02;`iodeals];
+    .qunit.assertEquals[{[base;c] count get hsym `$base,"/",string c}[base] each `time`deal_time`sym`notional`note;5#2;
+        "every column still ends at the partition's own two rows"]};
+
 .qt.qetl.io.test_hdb_refuses_today:{[t]
     root:.qt.qetl.io.hdb_dir[];
     b:([] deal_time:enlist .z.p; sym:enlist `EURUSD; notional:enlist 1e6);
@@ -634,6 +647,23 @@
     .qetl.io.write_keyed[.qetl.io.hdb[ig;`deal_time];`iodeals;twice;.qt.qetl.io.hdb_opts`ignore];
     .qunit.assertEquals[(.qt.qetl.io.part[up;2026.01.02;`iodeals]`notional;.qt.qetl.io.part[ig;2026.01.02;`iodeals]`notional);(enlist 6e6;enlist 5e6);
         "upsert keeps the last, ignore the first - one row either way"]};
+
+/ #2870: a keyed write returns the rows it WROTE - write_keyed's own @return -
+/ not the rows it was handed. The count is rows_published, which the ledger
+/ records and .qf.util.reconcile compares with the rows on disk.
+.qt.qetl.io.test_a_keyed_write_returns_the_rows_it_wrote_not_the_batch:{[t]
+    twice:([] deal_time:2026.01.02D12:00:00.000000000 2026.01.02D12:00:00.000000000 2026.01.02D13:00:00.000000000; sym:`AUDUSD`AUDUSD`NZDUSD; notional:5 6 7e6);
+    root:.qt.qetl.io.hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qunit.assertEquals[.qetl.io.write_keyed[m;`iodeals;twice;.qt.qetl.io.hdb_opts`upsert];2;"fast path: three rows, two keys, two written"];
+    .qunit.assertEquals[.qetl.io.write_keyed[m;`iodeals;twice;.qt.qetl.io.hdb_opts`upsert];2;"full path: both keys restated"];
+    .qunit.assertEquals[.qetl.io.write_keyed[m;`iodeals;twice;.qt.qetl.io.hdb_opts`ignore];0;"ignore over keys already there writes none"];
+    .qunit.assertEquals[count .qt.qetl.io.part[root;2026.01.02;`iodeals];2;"and the day holds the two"];
+    if[`iorows in tables `.; delete iorows from `.];
+    o:`on_conflict`row_key!(`upsert;`sym);
+    .qunit.assertEquals[.qetl.io.write_keyed[.qetl.io.memory;`iorows;twice;o];2;"memory: two written"];
+    .qunit.assertEquals[.qetl.io.write_keyed[.qetl.io.memory;`iorows;twice;@[o;`on_conflict;:;`ignore]];0;"memory: ignore writes none"];
+    delete iorows from `.};
 
 / #1142: a key on both sides of midnight is two rows - the fast path (fresh
 / HDB) must fold per date like the full path (the 2nd already holds a key).

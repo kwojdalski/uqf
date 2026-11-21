@@ -84,7 +84,8 @@
 / remainder stays uncovered and the next run picks it up. It is EXCLUSIVE, like
 / every window end. A null answer means "nothing is complete yet", not
 / "unbounded"; unbounded is 0Wp, the default. The fixture path has no source
-/ and is closed data, so it is never clipped. A settle lag (a per-worker
+/ and is closed data, so it is never clipped by it - but nothing after now is
+/ complete, live or fixture (#2867). A settle lag (a per-worker
 / allowance for late rows below the bound) is deliberately not built: add it
 / when a source shows rows arriving behind its own bound.
 
