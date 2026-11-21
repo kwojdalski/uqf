@@ -614,6 +614,21 @@
     .qt.support.set_field[`.qetl.source.sources;`demo_deals;`fixture;orig];
     .qunit.assertEquals[0=count value `etl_coverage;1b;"a source missing declared columns records no coverage, rather than publishing nulls as complete"]};
 
+/ #2847: validate threw out of fetch, so one window that broke the contract
+/ aborted the run and the windows after it were never attempted. It fails
+/ that window, as fetch's own header says, and the run moves on.
+.qt.qpipe.job.demo_deals_backfill.test_one_contract_breaking_window_fails_only_that_window:{[t]
+    .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
+    .qt.qpipe.job.demo_deals_backfill.calls:0;
+    orig:.qt.qpipe.job.demo_deals_backfill.swap_fixture {[]
+        .qt.qpipe.job.demo_deals_backfill.calls+:1;
+        r:.qpipe.source.demo_deals.fixture[];
+        $[1=.qt.qpipe.job.demo_deals_backfill.calls; update deal_id:"f"$deal_id from r; r]};
+    r:@[{.qpipe.job.demo_deals_backfill.run[]};::;{`state`error!(`threw;x)}];
+    .qt.qpipe.job.demo_deals_backfill.swap_fixture[orig];
+    .qunit.assertEquals[(r`state;r`windows_completed;r`windows_failed);(`partial;2;1);
+        "the first window fails its contract; the two after it are still filled"]};
+
 / --- the source query runs under the retry policy -----------------------
 
 / Private: swap the source's fixture for f, returning the original. The

@@ -917,7 +917,8 @@
 / Every fetched window is validated against the source contract.
 / Not belt-and-braces: a source that dropped a column returns rows where the
 / missing column reads as a NULL in most q code, so without this the worker
-/ publishes nulls and records the window as covered.
+/ publishes nulls and records the window as covered. A refusal fails THAT
+/ window, not the run, so the windows after it are still attempted (#2847).
 .qetl.job.bounded.fetch:{[worker;from_ts;to_ts]
     cfg:.qetl.job.bounded.def worker;
     h:.qetl.job.bounded.read_state[worker;`handle];
@@ -935,8 +936,7 @@
         (enlist[`worker]!enlist worker),`range_from`range_to`state`attempts`rows!(from_ts;to_ts;r`state;r`attempts;
             $[`ok~r`state; count .qetl.source.primary[cfg`source;r`result]; 0N])];
     if[`failed~r`state; :r];
-    .qetl.source.validate[cfg`source;r`result];
-    r}
+    $[count e:@[{[src;rows] .qetl.source.validate[src;rows]; ""}[cfg`source];r`result;{x}]; `state`kind`attempts`result`error!(`failed;`data;r`attempts;::;e); r]}
 
 / Publish a window's rows into the worker's dataset.
 / .
