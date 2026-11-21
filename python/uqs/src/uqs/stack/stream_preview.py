@@ -10,7 +10,6 @@ read from the same status directory the running feed writes, and only read.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import subprocess
@@ -152,7 +151,7 @@ def preview(
         raise PreviewFailed(
             f"the preview did not run:\n{(result.stdout + result.stderr).strip()[-1500:]}", traced
         )
-    answer = json.loads(found[-1])
+    answer = qjson.loads(found[-1])
     if "error" in answer:
         raise PreviewFailed(f"preview {job}: {answer['error']}", traced)
     if trace:

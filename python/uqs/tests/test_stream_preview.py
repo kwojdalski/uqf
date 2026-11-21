@@ -8,6 +8,7 @@ script it sends, the result line it reads, and the exit code.
 from __future__ import annotations
 
 import json
+import math
 import re
 import subprocess
 from datetime import timedelta
@@ -364,3 +365,15 @@ def test_a_sampled_float_reaches_python_with_every_digit(monkeypatch):
     rows = page["sample"]["t"]
     assert [r["notional"] for r in rows] == [12345678.9, 1.0]
     assert [r["rate"] for r in rows] == [1.26310001, 1.26310004]
+
+
+@needs_q
+def test_a_sampled_float_infinity_is_read_not_a_traceback(monkeypatch):
+    """`.j.j` writes 0w as the bare token `inf`, which is not JSON: one
+    infinite quote in the sample made the whole preview a JSONDecodeError
+    (#2876). It reads back as an infinity, and a null as None."""
+    page = _real_page(monkeypatch, '([] bid:1.5 0w 0n; ask:-0w 2.5 3.5; note:("inf";"x";"-inf"))')
+    rows = page["sample"]["t"]
+    assert [r["bid"] for r in rows] == [1.5, math.inf, None]
+    assert [r["ask"] for r in rows] == [-math.inf, 2.5, 3.5]
+    assert [r["note"] for r in rows] == ["inf", "x", "-inf"], "text that spells inf is still text"
