@@ -500,3 +500,24 @@ def test_a_removal_not_confirmed_exits_1_and_removes_nothing(tree, monkeypatch):
     declined = runner.invoke(cli.app, ["job", "remove", "pulse"], input="n\n")
     assert declined.exit_code == safety.EXIT_DECLINED == 1
     assert (tree / "src/etl/streaming/pulse.q").is_file(), "and nothing was removed"
+
+
+# --------------------------- only what the scaffold provably wrote goes (#2831-#2843)
+
+
+#: The files the removal regenerates, each as a scaffold leaves it naming the job.
+_REGENERATED = {
+    "python/uqs/src/uqs/generated/q_facts.py": '    "pulse": ("pulse",),\n',
+    "python/uqf_airflow_provider/src/uqf_airflow_provider/q_facts.py": '    "pulse": ("pulse",),\n',
+    "scripts/torqconfig/dataaccess/tableproperties.csv": ",pulse,time,sym,sym,,,,\n",
+}
+
+
+def test_strict_does_not_count_what_the_removal_regenerates(tree):
+    """#2838: q_facts.py and tableproperties.csv name every scaffolded table,
+    so --strict refused every job with one."""
+    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
+    for rel, line in _REGENERATED.items():
+        (tree / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tree / rel).write_text(line)
+    assert plan_removal(tree, "pulse").references == []
