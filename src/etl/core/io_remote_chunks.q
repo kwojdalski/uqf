@@ -111,7 +111,8 @@
     .qetl.io.remote.require_admitted[g;whole;user;g`max_rows];
     id:req`batch_id;
     held:exec rows from .qetl.io.remote.journal where batch_id=id, state=`committed;
-    if[count held; :`status`batch_id`rows!(`duplicate;id;first held)];
+    / a chunk whose partitions are gone is staged, and the whole batch judged by take (#2845)
+    if[(count held) and all .qetl.io.remote.holds[g;req`target;req`rows]; :`status`batch_id`rows!(`duplicate;id;first held)];
     .qetl.io.remote.expire_staged[.z.p];
     .qetl.io.remote.require_room[id;req];
     e:$[id in key .qetl.io.remote.staged; .qetl.io.remote.staged id;

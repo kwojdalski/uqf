@@ -84,6 +84,44 @@
     .qunit.assertEquals[(r`status;exec notional from rdeals);(`committed;1e6 2e6);"X is written again, as a direct write would"];
     .qunit.assertEquals[.qetl.io.remote.accept[first_req;`]`status;`duplicate;"and a retry of the latest batch is still a duplicate"]};
 
+/ #2845: the other half of #2495's title - the batch's partition was removed
+/ (retention, retire) and the refill, the same batch, was still answered
+/ `duplicate: nothing written, the window recorded as covered over nothing.
+.qt.qetl.io.remote.test_a_resend_after_its_partition_was_removed_is_written:{[t]
+    .qt.qetl.io.remote.reset[];
+    root:`$":",first system"mktemp -d";
+    .qt.qetl.io.remote.grant[.qetl.io.hdb[root;`time];`symbol$()];
+    req:.qt.qetl.io.remote.request[`append;.qt.qetl.io.remote.batch[]];
+    .qetl.io.remote.accept[req;`];
+    .qetl.io.retire[root;2026.01.02;`rdeals];
+    r:.qetl.io.remote.accept[req;`];
+    .qunit.assertEquals[(r`status;r`rows);(`committed;2);"written again, not answered duplicate"];
+    .qunit.assertEquals[count get hsym `$.qetl.io.part_path[root;2026.01.02;`rdeals],"/";2;"and the partition holds it"];
+    .qunit.assertEquals[.qetl.io.remote.accept[req;`]`status;`duplicate;"a retry while it is held is still a duplicate"]};
+
+.qt.qetl.io.remote.test_an_append_resend_with_part_of_it_removed_is_refused_as_in_doubt:{[t]
+    .qt.qetl.io.remote.reset[];
+    root:`$":",first system"mktemp -d";
+    .qt.qetl.io.remote.grant[.qetl.io.hdb[root;`time];`symbol$()];
+    o:@[.qt.qetl.io.remote.opts[`append];`range_to;:;2026.01.04D00:00:00.000000000];
+    b:update time:time+0 1D from .qt.qetl.io.remote.batch[];
+    req:.qetl.io.remote.request_keys!(`uat;`deals;`rdeals;.qetl.io.remote.batch_id[`uat;`deals;`rdeals;o;b];o;b);
+    .qetl.io.remote.accept[req;`];
+    .qetl.io.retire[root;2026.01.02;`rdeals];
+    .qunit.assertThrows[.qetl.io.remote.accept[;`];req;"*was committed but part of it is gone from rdeals*";
+        "01-03 still holds its row: appending the batch again would double it"];
+    .qunit.assertEquals[count get hsym `$.qetl.io.part_path[root;2026.01.03;`rdeals],"/";1;"and nothing was written"]};
+
+.qt.qetl.io.remote.test_a_resend_whose_first_chunk_was_removed_is_not_answered_duplicate:{[t]
+    .qt.qetl.io.remote.reset[];
+    root:`$":",first system"mktemp -d";
+    .qt.qetl.io.remote.grant[.qetl.io.hdb[root;`time];`symbol$()];
+    req:.qt.qetl.io.remote.request[`upsert;.qt.qetl.io.remote.batch[]];
+    .qetl.io.remote.accept[req;`];
+    .qetl.io.retire[root;2026.01.02;`rdeals];
+    c:.qetl.io.remote.chunk_keys!(`uat;`deals;`rdeals;req`batch_id;req`opts;0;1;req`batch);
+    .qunit.assertEquals[.qetl.io.remote.accept_chunk[c;`]`status;`committed;"its one chunk is written again"]};
+
 .qt.qetl.io.remote.test_a_restatement_is_a_new_window:{[t]
     .qt.qetl.io.remote.reset[];
     .qt.qetl.io.remote.grant[.qetl.io.memory;`symbol$()];

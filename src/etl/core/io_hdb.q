@@ -135,7 +135,7 @@
     / the arguments, not projections of `locked`: a fully-applied projection
     / is a CALL, and would run the write before the lock is taken.
     / finish takes a second, ignored argument so it stays a function of one.
-    `write`write_keyed`flush`finish`recover`eod_waiting`days_of!(
+    `write`write_keyed`flush`finish`recover`eod_waiting`days_of`holds!(
         {[r;p;t;b] .qetl.io.locked[r;.qetl.io.write_hdb;(r;p;t;b)]}[root;partition_col];
         {[r;p;t;b;o] .qetl.io.locked[r;.qetl.io.write_hdb_keyed;(r;p;t;b;o)]}[root;partition_col];
         {[r;u] .qetl.io.locked[r;.qetl.io.flush_hdb;(r;u)]}[root];
@@ -144,7 +144,18 @@
         / which dates end of day has not yet handed over - the plan reads it (#2186)
         .qetl.io.eod_waiting[root];
         / the root's own partition calendar, so a plan's range maps to the dates written (#2193)
-        .qetl.io.days_of[root])}
+        .qetl.io.days_of[root];
+        / whether a batch's partitions are still there - a remote receiver asks (#2845)
+        .qetl.io.holds_hdb[root;partition_col])}
+
+/ Private: is `target` present on each date `batch`'s rows fall on? What a
+/ remote receiver asks before it answers a re-sent batch `duplicate (#2845): a
+/ partition retention or retire removed holds none of the rows it journalled.
+/ @return one boolean per distinct date of the batch
+/ @private
+.qetl.io.holds_hdb:{[root;partition_col;target;batch]
+    tc:$[.qetl.plant.time_column in cols batch; .qetl.plant.time_column; partition_col];
+    {[root;target;d] not ()~key hsym `$.qetl.io.part_path[root;d;target]}[root;target] each distinct .qetl.io.days_of[root;batch tc]}
 
 / The partition date of each time: the calendar date, except in a root a scoped manager was made
 / for, where it is the native stack's own (.qetl.io.scoped_day_of, #2193).
