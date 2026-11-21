@@ -97,6 +97,9 @@
     .qetl.job.stream.refuse_publishes[who;decl];
     decl:.qetl.job.stream.with_lateness[who;decl];
     .qetl.declared.refuse_unknown[who;"a bars job";decl;.qetl.job.stream.bars.required_keys,.qetl.job.stream.bars.optional_keys];
+    / before anything is written in the job's namespace: a refused re-declaration
+    / of a live job must leave its buffers and wired publish as they were (#2858)
+    .qetl.job.stream.refuse_taken[who;name;decl];
     missing:.qetl.job.stream.bars.required_keys where not .qetl.job.stream.bars.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     if[not all -11h=type each decl`events`transform;
@@ -116,9 +119,12 @@
     d:`by`event_time!(enlist `sym;`time);
     d:d,decl,enlist[`by]!enlist (),$[`by in key decl; decl`by; `sym];
     in_cols:cols first value t`inputs;
+    if[not -11h=type d`event_time; 'who,"'s event_time must be one column name, a symbol"];
     needs:distinct d[`by],(d`event_time),`bar_start;
     if[count lacks:needs except in_cols;
         'who,"'s transform input carries no ",(", " sv string lacks)];
+    / the windows are cut on it: any other type throws a bare 'type on every batch (#2855)
+    .qetl.job.stream.require_timestamp[who;`event_time;d`event_time;first value t`inputs;"the transform's input"];
     if[count lacks:(d[`by],`bar_start) except cols t`output;
         'who,"'s transform output carries no ",(", " sv string lacks)," - they name the window the bar closes"];
     d[`input]:first key t`inputs;

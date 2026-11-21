@@ -18,7 +18,8 @@
 / as an outage, so a session ends at the beat before one (beat, #832).
 / .
 / ONE ROW PER SESSION - one start of one job in one process. A session opens
-/ once the job is wired and subscribed (.qetl.job.stream.start), and a timer
+/ once the job is wired and, if it subscribes, subscribed - a polling feed or
+/ timer-only job too (#2896) - in .qetl.job.stream.start, and a timer
 / moves its last_seen every `period`. Nothing closes it: a clean exit and a
 / crash look the same, ending at the last beat. That UNDER-claims by at most
 / one period at each session's end, which is the safe direction - a gap
@@ -80,8 +81,10 @@
         `etl_stream_uptime insert (id;job;.qetl.run.proc_name[];.z.h;.z.i;now;now)};
         (id;job;now)];
     `.qetl.uptime.mine set .qetl.uptime.mine,id;
-    / failures before the session opened (a replay's) are not this session's
-    `.qetl.uptime.failed_seen set .qetl.uptime.failed_seen,enlist[job]!enlist .qetl.stream_health.of[job]`failed;
+    / failed_seen is left where the last beat put it (none, in a fresh process):
+    / a batch the replay before this session quarantined lost rows as surely as
+    / a live one, so the first beat ends the session and writes the job failing
+    / (#2895). Taken as seen here, they never read failing anywhere.
     id}
 
 / Each job's failed-batch count at the last beat, to tell what failed since.

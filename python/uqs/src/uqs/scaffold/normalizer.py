@@ -154,7 +154,7 @@ from_{src}:{{[batch]
     else:
         mapping = "`" + "`".join(sources) + "!`" + "`".join(transforms)
     swa_key, swa_value = start_with_all_field(start_with_all)
-    body = f"""/ {name}.q - the `{name}` normalizer: <one line: the one fact, from every source>
+    body = f"""/ {name}.q - normalizer. SCAFFOLDED: <one line: the one fact, from every source>
 / (.qpipe.job.{name}).
 / .
 / Reads {", ".join(f"`{s}`" for s in sources)}; publishes `{name}`.
@@ -185,7 +185,7 @@ publish:.qetl.job.stream.unwired `{name};
         FileAction(STREAM_DIR / f"{name}.q", body),
         FileAction(
             TABLES_FILE,
-            f"\n/ {proc}'s canonical output. <one line: what a row means>\n"
+            f"\n/ {proc}'s canonical output. SCAFFOLDED: <one line: what a row means>\n"
             f"{plant_declarations(name, shape)}",
             mode=WriteMode.APPEND,
         ),

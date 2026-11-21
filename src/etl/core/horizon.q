@@ -139,6 +139,9 @@
         'who,"'s events input carries no ",string[d`event_time]," - the horizon is measured from it"];
     if[not (d`reference_time) in ref_cols;
         'who,"'s reference input carries no ",string[d`reference_time]];
+    / the horizon is measured on them: a float event_time scored every event on arrival (#2855)
+    .qetl.job.stream.require_timestamp[who;`event_time;d`event_time;first value ins;"the events input"];
+    .qetl.job.stream.require_timestamp[who;`reference_time;d`reference_time;last value ins;"the reference input"];
     if[not $[-16h=type d`lookback; 0D<=d`lookback; 0b];
         'who,"'s lookback must be a timespan, how far before an event its window reaches"];
     if[not $[-16h=type d`lateness; 0D<=d`lateness; 0b];
@@ -212,6 +215,9 @@
     .qetl.job.stream.refuse_publishes[who;decl];
     decl:.qetl.job.stream.with_lateness[who;decl];
     .qetl.declared.refuse_unknown[who;"a horizon job";decl;.qetl.job.stream.horizons.required_keys,.qetl.job.stream.horizons.optional_keys];
+    / before anything is written in the job's namespace: a refused re-declaration
+    / of a live job must leave its buffers and wired publish as they were (#2858)
+    .qetl.job.stream.refuse_taken[who;name;decl];
     missing:.qetl.job.stream.horizons.required_keys where not .qetl.job.stream.horizons.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     if[not all -11h=type each decl`events`reference`transform;
@@ -365,7 +371,8 @@
         ins:key .qetl.transform.def["horizon job ",string name;d`transform]`inputs;
         ready:pending where mask;
         out:.qetl.transform.apply[d`transform;ins!(ready;get hq)];
-        (get ` sv ns,`publish)[first d`outputs;out];
+        / nothing for an empty score, as bars and rolling publish nothing (#2890)
+        if[count out; (get ` sv ns,`publish)[first d`outputs;out]];
         if[`identity in key d; cq insert ([] id:.qetl.job.stream.horizons.ids_of[d;ready]; at:(count ready)#now)];
         .qetl.job.stream.evict[pq;mask]];
     if[`expire_after in key d;

@@ -17,7 +17,7 @@ from pathlib import Path
 from uqs import paths
 from uqs.model.declarations import read_declarations, read_file_text
 from uqs.model.load_plan import facts, read_facts
-from uqs.model.registry import NON_JOB_PIPELINES
+from uqs.model.registry import refuse_taken
 from uqs.paths import (
     ETL_DIR,
     STACK_TABLES_LIST,
@@ -76,16 +76,38 @@ def flat_source(text: str, repo_root: Path) -> str:
 def apply_plan(plan: ScaffoldPlan, repo_root: Path) -> list[Path]:
     """Write a plan, or refuse the whole thing.
 
-    Every file's resulting content is computed BEFORE anything is written: a
-    scaffold that created three files and then refused the fourth would leave
-    a tree that neither loads nor reverts cleanly, and the half of it that did
-    land registers itself on load. An append can refuse on what its file holds
-    (a profile line past the limit, a list it cannot find), so existence alone
-    is not enough to check (#1568). A write that fails part way is undone.
+    Every file's resulting content is computed BEFORE anything is written (see
+    `prepare`). A write that fails part way is undone.
     """
+    contents, created = prepare(plan, repo_root)
+    _write_all(contents, created, repo_root)
+    return [action.path for action in plan.actions]
+
+
+def check_plan(plan: ScaffoldPlan, repo_root: Path) -> None:
+    """Every refusal that reads only the plan and the tree it is planned
+    against: a filename too long, a job name or procname taken, a transform
+    registered twice. `plan`'s paths are the TREE's: a --bundle scaffold runs
+    this on its plan before it is redirected into the bundle, against the
+    planning root (the tree with the bundle installed), so a bundle job is
+    judged by the same rules as a tree one (#2824, #2836)."""
     _check_filenames(plan)
     _check_processes(plan, repo_root)
     _check_transforms(plan, repo_root)
+
+
+def prepare(plan: ScaffoldPlan, repo_root: Path) -> tuple[dict[Path, str], set[Path]]:
+    """Every file `plan` would write, with its resulting content - or the
+    refusal. Writes nothing, so --dry-run runs it too: a dry run that printed a
+    plan the real run then refused told the author to run it again (#2827).
+
+    A scaffold that created three files and then refused the fourth would leave
+    a tree that neither loads nor reverts cleanly, and the half of it that did
+    land registers itself on load. An append can refuse on what its file holds
+    (a profile line past the limit, a list it cannot find), so existence alone
+    is not enough to check (#1568).
+    """
+    check_plan(plan, repo_root)
     contents: dict[Path, str] = {}
     created: set[Path] = set()
     for action in plan.actions:
@@ -112,8 +134,7 @@ def apply_plan(plan: ScaffoldPlan, repo_root: Path) -> list[Path]:
                 # been silently appended instead of refused.
                 raise UqsError(f"unknown write mode {action.mode!r} for {action.path}")
 
-    _write_all(contents, created, repo_root)
-    return [action.path for action in plan.actions]
+    return contents, created
 
 
 def _write_all(contents: dict[Path, str], created: set[Path], repo_root: Path) -> None:
@@ -176,7 +197,8 @@ def _check_processes(plan: ScaffoldPlan, repo_root: Path) -> None:
     rather than by the load or the registry after it. Job names share one
     namespace, `.qpipe.job.<name>`, across kinds: a streaming job named like a
     bounded worker has no file of its name to clash with, and `.qetl.job.*.define`
-    refuses it only when the tree next loads.
+    refuses it only when the tree next loads. The rule itself is
+    model/registry.py's `refuse_taken`, which the bundle installer asks too.
     """
     new = [
         d
@@ -188,21 +210,7 @@ def _check_processes(plan: ScaffoldPlan, repo_root: Path) -> None:
     ]
     if not new:
         return
-    existing = read_declarations(repo_root)
-    names = {d.name: d.kind.value for d in existing}
-    taken = {p.procname: p.procname for p in NON_JOB_PIPELINES}
-    taken |= {d.procname: d.name for d in existing}
-    for d in new:
-        if d.name in names:
-            raise UqsError(
-                f"a job called {d.name!r} already exists (a {names[d.name]} job), and every job "
-                f"shares one namespace (.qpipe.job.{d.name}) - pick another name"
-            )
-        if d.procname in taken:
-            raise UqsError(
-                f"{d.name} would run as {d.procname}, which {taken[d.procname]} already runs - "
-                "one process runs one job: pick another --proc"
-            )
+    refuse_taken(new, read_declarations(repo_root), repo_root)
 
 
 def _check_transforms(plan: ScaffoldPlan, repo_root: Path) -> None:

@@ -237,6 +237,13 @@ class LoadPlan:
         self.topics: dict[str, str] = {}
         for f in self.files:
             for name, procname in f.jobs:
+                # q keeps the last declaration of a name (#2851): refused for the
+                # reason a source or transform declared twice is (#1545).
+                if name in self.jobs and self.jobs[name] != f.path:
+                    raise UqsError(
+                        f"job {name} is declared by both {self.jobs[name]} and {f.path} - "
+                        "q would silently keep one, and which depends on what loads"
+                    )
                 self.jobs[name] = f.path
                 self.procs.setdefault(procname, []).append(name)
             for topic in f.topics:

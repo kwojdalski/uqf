@@ -77,6 +77,21 @@
     .qunit.assertEquals[.qt.qpipe.job.rebuild_positions.positions[];.qt.qpipe.job.rebuild_positions.expected;
         "two releases of the same range: one row per pair and window, not two"]};
 
+/ #2879: the reaction was handed the window's rows BEFORE the worker's upsert
+/ folded them to one per deal_id, so a duplicated deal and a corrected one
+/ were each netted twice while demo_deals kept one of each.
+.qt.qpipe.job.rebuild_positions.test_a_repeated_deal_is_netted_once_as_it_is_stored:{[t]
+    orig:(.qetl.source.def `demo_deals)`fixture;
+    .qt.support.set_field[`.qetl.source.sources;`demo_deals;`fixture;{[]
+        fx:.qpipe.source.demo_deals.fixture[];
+        fx,(fx 0),update notional:500000f from fx 2}];
+    r:.qt.qpipe.job.rebuild_positions.run_worker `rp2879;
+    .qt.support.set_field[`.qetl.source.sources;`demo_deals;`fixture;orig];
+    .qunit.assertEquals[(r`state;.qt.qpipe.job.rebuild_positions.positions[]);
+        (`completed;update net_notional:@[net_notional;1;:;500000f] from .qt.qpipe.job.rebuild_positions.expected);
+        "deal 1 once, deal 3 at its correction - one deal each, as demo_deals holds them"];
+    .qunit.assertEquals[r`rows_published;5;"and five rows published, the five stored"]};
+
 / What replace does that upsert would not: a pair the corrected window no
 / longer trades is removed, rather than keeping its old position.
 .qt.qpipe.job.rebuild_positions.test_a_pair_gone_from_a_republished_window_loses_its_row:{[t]

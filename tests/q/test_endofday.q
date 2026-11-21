@@ -58,17 +58,18 @@
     .qetl.job.stream.reset each `fx_positions`posbook;
     }
 
-.qt.qetl.job.stream.endofday.feed:{[nm;eod] `procname`subscribe_to`outputs`period`on_timer`on_endofday!(
-    `$string[nm],"1";`symbol$();`symbol$();0D00:00:01;{[] };eod)}
+/ A subscriber: the TorQ plant sends end of day only to those (#2898).
+.qt.qetl.job.stream.endofday.subscriber:{[nm;eod] `procname`subscribe_to`outputs`on_batch`on_endofday!(
+    `$string[nm],"1";enlist `executions;`symbol$();{[t;x] };eod)}
 
 .qt.qetl.job.stream.endofday.test_on_endofday_must_be_a_function:{[t]
-    .qunit.assertThrows[.qetl.job.stream.define[`eod_a;];@[.qt.qetl.job.stream.endofday.feed[`eod_a;{[d] }];`on_endofday;:;1];
+    .qunit.assertThrows[.qetl.job.stream.define[`eod_a;];@[.qt.qetl.job.stream.endofday.subscriber[`eod_a;{[d] }];`on_endofday;:;1];
         "*on_endofday must be a function of the date that ended*";"refused at declaration"]};
 
 .qt.qetl.job.stream.endofday.test_end_of_day_calls_each_running_job_and_survives_one_that_throws:{[t]
     `.qt.qetl.job.stream.endofday.seen set ();
-    if[not `eod_b in key .qetl.job.stream.jobs; .qetl.job.stream.define[`eod_b;.qt.qetl.job.stream.endofday.feed[`eod_b;{[d] '"boom"}]]];
-    if[not `eod_c in key .qetl.job.stream.jobs; .qetl.job.stream.define[`eod_c;.qt.qetl.job.stream.endofday.feed[`eod_c;{[d] .qt.qetl.job.stream.endofday.seen,:d}]]];
+    if[not `eod_b in key .qetl.job.stream.jobs; .qetl.job.stream.define[`eod_b;.qt.qetl.job.stream.endofday.subscriber[`eod_b;{[d] '"boom"}]]];
+    if[not `eod_c in key .qetl.job.stream.jobs; .qetl.job.stream.define[`eod_c;.qt.qetl.job.stream.endofday.subscriber[`eod_c;{[d] .qt.qetl.job.stream.endofday.seen,:d}]]];
     `.qetl.job.stream.running set `eod_b`eod_c;
     ok:.qetl.job.stream.end_of_day .qt.qetl.job.stream.endofday.d0;
     .qunit.assertEquals[ok;enlist `eod_c;"the one that threw is not reported as done"];
@@ -76,7 +77,7 @@
 
 .qt.qetl.job.stream.endofday.test_a_job_that_is_not_running_is_not_called:{[t]
     `.qt.qetl.job.stream.endofday.seen set ();
-    if[not `eod_c in key .qetl.job.stream.jobs; .qetl.job.stream.define[`eod_c;.qt.qetl.job.stream.endofday.feed[`eod_c;{[d] .qt.qetl.job.stream.endofday.seen,:d}]]];
+    if[not `eod_c in key .qetl.job.stream.jobs; .qetl.job.stream.define[`eod_c;.qt.qetl.job.stream.endofday.subscriber[`eod_c;{[d] .qt.qetl.job.stream.endofday.seen,:d}]]];
     `.qetl.job.stream.running set `symbol$();
     .qetl.job.stream.end_of_day .qt.qetl.job.stream.endofday.d0;
     .qunit.assertEquals[count .qt.qetl.job.stream.endofday.seen;0;"declared but not started in this process"]};
@@ -309,6 +310,29 @@
     f:.qt.qetl.job.stream.endofday.fill[`EURUSD;1;1e6;1.1;`london;`spot];
     .qt.qetl.job.stream.endofday.replay[`eod_cap;((`executions;f);(`executions;f);(`eodx_open;([] time:enlist .qt.qetl.job.stream.endofday.t1; sym:`EURUSD; qty:3e6; carried_to:enlist 0Np)))];
     }
+
+/ #2893: a carried snapshot that cannot be restored (the state gained a column
+/ since it was published) was quarantined by the replay and counted nowhere -
+/ guarded wraps on_batch, and the carry table never reaches it - and
+/ missed_end_of_day stayed quiet, so the job came up healthy on a flat book.
+.qt.qetl.job.stream.endofday.test_a_carried_snapshot_that_cannot_be_restored_is_counted_and_said:{[t]
+    if[not `eod_shape in key .qetl.job.stream.jobs;
+        `.qpipe.job.eod_shape.book set ([] sym:`symbol$(); qty:`float$(); avg_px:`float$());
+        .qetl.job.stream.define[`eod_shape;`procname`subscribe_to`outputs`on_batch`replay`carry!(
+            `eodshape1;enlist `executions;enlist `eodx_open;{[t;x] `.qpipe.job.eod_shape.book upsert select sym, qty:size, avg_px:price from x};1b;
+            `state`table!(`book;`eodx_open))]];
+    `.qpipe.job.eod_shape.book set 0#.qpipe.job.eod_shape.book;
+    before:.qetl.stream_health.of[`eod_shape]`failed;
+    / yesterday's snapshot, published before the book had an avg_px
+    snap:([] time:enlist .qt.qetl.job.stream.endofday.t1; sym:enlist `EURUSD; qty:enlist 5e6; carried_to:enlist 0Np);
+    msgs:((`eodx_open;snap);(`executions;.qt.qetl.job.stream.endofday.fill[`USDJPY;1;1e6;150f;`london;`spot]));
+    tr:`connect`publisher`subscribe`timer`recovery!({[] };{[] {[t;x] count x}};
+        {[msgs;tbls;h;replay] if[replay; {[h;m] h . m}[h] each msgs];}[msgs];{[n;p;f] };0b);
+    e:.qt.qetl.job.stream.endofday.errors[.qt.support.captured_log[0b] {[tr;unused] .qetl.job.stream.start[`eod_shape;tr]}[tr]];
+    h:.qetl.stream_health.of`eod_shape;
+    .qunit.assertEquals[h`failed;before+1;"the snapshot that could not be restored is counted, so the job reads failing"];
+    .qunit.assertTrue[(string h`last_error) like "*lacks avg_px*";"naming the column the snapshot lacks"];
+    .qunit.assertTrue[any e[;2] like "*snapshot was replayed but could not be restored*";"and the restart says the carried state is missing"]};
 
 .qt.qetl.job.stream.endofday.test_a_snapshot_after_the_cap_is_logged_as_an_error:{[t]
     e:.qt.qetl.job.stream.endofday.errors[.qt.support.captured_log[0b] .qt.qetl.job.stream.endofday.capped];

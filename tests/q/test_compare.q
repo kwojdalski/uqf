@@ -218,6 +218,15 @@
     .qunit.assertEquals[.qetl.compare.typed["c";"A"];"A";"one character"];
     .qunit.assertThrows[.qetl.compare.typed["c"];"ABC";"\"ABC\" is not a char (c)";"never its first character"]};
 
+/ #2872: q's "B"$ reads "true" as 0b and a boolean has no null, so flag=true
+/ filtered on false; "X"$ reads "zz" as 0x00. Both must be read or refused.
+.qt.qetl.compare.test_a_boolean_or_byte_filter_is_read_or_refused:{[t]
+    .qunit.assertEquals[.qetl.compare.typed["b"] each ("true";"1";"false";"0");1100b;"true/1 and false/0"];
+    .qunit.assertThrows[.qetl.compare.typed["b"];"maybe";"\"maybe\" is not a boolean (b)";"never false"];
+    .qunit.assertThrows[.qetl.compare.typed["b"];"yes";"\"yes\" is not a boolean (b)";"only true, false, 1 or 0"];
+    .qunit.assertEquals[.qetl.compare.typed["x";"ff"];0xff;"two hex digits"];
+    .qunit.assertThrows[.qetl.compare.typed["x"];"zz";"\"zz\" is not a byte (x)";"never 0x00"]};
+
 / demo_deals with a venue column the other side does not have (#2069).
 .qt.qetl.compare.with_venue:{[] update venue:`X from .qt.qetl.compare.deals[]}
 

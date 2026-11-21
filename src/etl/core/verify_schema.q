@@ -172,8 +172,29 @@
     out,:raze .qetl.verify.nested_findings[producer;dataset;got;;basis] each common where wt[common]=" ";
     out}
 
-/ The row-key findings: a key column the destination does not take, and producers
-/ that declare different keys for one dataset.
+/ What is wrong with a BOUNDED producer's output: as schema_findings, except that it
+/ may carry the columns the destination generates (`time`) itself. A stream's are
+/ stamped by .u.upd, so one it sends is extra; a bounded batch goes straight to the
+/ HDB writer, which partitions by the batch's own `time` when it has one
+/ (.qetl.io.hdb) - so one it carries is held to the destination's type instead (#2837).
+/ @param producer the producer's name
+/ @param dataset the destination
+/ @param output what the producer outputs: its declared (empty) table or the rows it returned
+/ @param basis `declared or `sample
+/ @return a findings table, empty when the output fits the destination
+/ @eg count .qetl.verify.bounded_findings[`p;`trades_copy;.qetl.plant.shape `trades_copy;`declared]  ->  0
+.qetl.verify.bounded_findings:{[producer;dataset;output;basis]
+    st:exec c!t from meta .qetl.plant.shape dataset;
+    got:0!output;
+    gt:exec c!t from meta got;
+    gen:(cols got) inter (.qetl.verify.destination dataset)`generated;
+    out:.qetl.verify.no_findings[];
+    out,:raze {[p;d;st;gt;b;c] .qetl.verify.finding[p;d;c;`type;.qetl.verify.type_name[st c];.qetl.verify.type_name[gt c];b]}[producer;dataset;st;gt;basis] each gen where st[gen]<>gt gen;
+    out,.qetl.verify.schema_findings[producer;dataset;$[count gen; ![got;();0b;gen]; got];basis]}
+
+/ The row-key findings: a key column the destination does not take (a bounded
+/ producer's may be a generated one, #2837), and producers that declare different
+/ keys for one dataset.
 / @param dataset the destination
 / @param producers .qetl.verify.producers' table
 / @return a findings table
@@ -181,12 +202,14 @@
 .qetl.verify.key_findings:{[dataset;producers]
     want:cols .qetl.plant.published dataset;
     out:.qetl.verify.no_findings[];
-    out,:raze {[w;d;pr;i]
+    / a bounded producer's rows carry the generated columns too (bounded_findings)
+    gen:$[(::)~d:.qetl.verify.destination dataset; `symbol$(); d`generated];
+    out,:raze {[w;gen;d;pr;i]
         k:(),(pr`key_cols) i;
-        bad:k where not k in w;
+        bad:k where not k in w,$[`bounded=(pr`mode) i; gen; `symbol$()];
         $[count bad;
             raze {[d;p;k] .qetl.verify.finding[p;d;k;`key;"a key column the destination takes";"not a destination column";`declared]}[d;(pr`producer) i] each bad;
-            .qetl.verify.no_findings[]]}[want;dataset;producers] each til count producers;
+            .qetl.verify.no_findings[]]}[want;gen;dataset;producers] each til count producers;
     / (), because a table column of one-symbol lists comes back as atoms
     kc:(),/:producers`key_cols;
     ks:{asc x} each kc where 0<count each kc;

@@ -438,3 +438,24 @@ def test_a_table_the_vendored_pack_defines_is_refused(
     (bundle / "tables.q").write_text("fills:([]time:`timestamp$())\n")
     with pytest.raises(BundleError, match="fills is already defined in the tree"):
         bundles.plan(bundles.read_bundle(bundle), repo)
+
+
+def test_a_procname_a_tree_job_runs_is_refused_before_anything_is_written(
+    bundle: Path, repo: Path
+) -> None:
+    """#2835: the bundle installed fully, then the registry, `uqs job list`
+    and the q load all refused the procname claimed twice. (A job NAME the
+    tree has is refused already, by stack/install.py.)"""
+    (repo / STREAM_DIR / "tree_spread.q").write_text(
+        ".qetl.job.stream.define[`tree_spread;`procname`subscribe_to`outputs!"
+        "(`piggy_spread1;enlist `quote;enlist `quote)];\n"
+    )
+    with pytest.raises(BundleError, match="piggy_spread1, which tree_spread already runs"):
+        bundles.plan(bundles.read_bundle(bundle), repo)
+
+
+def test_a_procname_the_vendored_stack_runs_is_refused(bundle: Path, repo: Path) -> None:
+    (bundle / "piggy_spread.q").write_text(STREAM.replace("piggy_spread1", "rdb1"))
+    (bundle / "process_overrides.csv").unlink()
+    with pytest.raises(BundleError, match="rdb1, which the vendored TorQ stack"):
+        bundles.plan(bundles.read_bundle(bundle), repo)

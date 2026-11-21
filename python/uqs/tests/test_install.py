@@ -250,3 +250,36 @@ def test_cli_installs_a_direct_line_that_says_why(sidecar: Path, cli_repo: Path)
     code, out = _run(str(sidecar), "--copy", "--yes")
     assert code == 0, out
     assert (cli_repo / SOURCE_DIR / "acme.q").exists()
+
+
+def test_cli_exits_non_zero_when_a_file_fails_to_copy(
+    sidecar: Path, cli_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#2839: one file copied, one refused by the filesystem - and the install
+    printed "Next steps: check it is up and running" and exited 0."""
+    real = install.install
+
+    def refuse_streaming(item: install.Item, mode: Mode, overwrite: bool = False) -> None:
+        if item.kind is Kind.STREAMING:
+            raise PermissionError(13, "Permission denied", str(item.destination))
+        real(item, mode, overwrite=overwrite)
+
+    monkeypatch.setattr(cli_install.stack_install, "install", refuse_streaming)
+    code, out = _run(str(sidecar), "--copy", "--yes")
+    assert code == 1, out
+    assert "✗ acme_spread.q" in out and "install incomplete" in out
+    assert "Next steps" not in out
+
+
+def test_cli_exits_non_zero_when_a_regeneration_fails(
+    sidecar: Path, cli_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#2839: as the bundle installer does."""
+    monkeypatch.setattr(
+        cli_install,
+        "_regenerate_derived",
+        lambda _root: [subprocess.CompletedProcess([], 1, "", "boom")] * len(_DERIVED),
+    )
+    code, out = _run(str(sidecar), "--copy", "--yes")
+    assert code == 1, out
+    assert "Next steps" not in out

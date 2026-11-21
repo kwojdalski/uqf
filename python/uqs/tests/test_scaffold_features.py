@@ -141,9 +141,22 @@ def test_into_an_existing_target_the_partition_column_is_the_targets():
         )  # fmt: skip
 
 
-def test_a_partition_that_is_not_a_symbol_is_refused():
+@pytest.mark.parametrize("partition", ["EUR/USD", "_spot", "_"])
+def test_a_partition_that_is_not_a_symbol_is_refused(partition):
+    """#2825: `_spot passed the old pattern, and q reads it as ` _ spot - the
+    worker was written, and the whole tree stopped loading with `spot`."""
     with pytest.raises(UqsError, match="must be a q symbol"):
-        backfill.bounded_worker("fx", "fx_rates", "sym:symbol,px:float", partition="EUR/USD")
+        backfill.bounded_worker("fx", "fx_rates", "sym:symbol,px:float", partition=partition)
+    assert backfill.bounded_worker("fx", "fx_rates", "sym:symbol,px:float", partition="1m_spot")
+
+
+@pytest.mark.parametrize("column", ["_sym", "Sym", "9sym"])
+def test_a_partition_column_is_held_to_the_column_name_rule(column):
+    """#2825: --slice-column names an output column."""
+    with pytest.raises(UqsError, match="must name a column"):
+        backfill.bounded_worker(
+            "fx", "fx_rates", "sym:symbol,px:float", partition="EURUSD", partition_column=column
+        )
 
 
 def test_check_scaffolds_a_throwing_quality_check_and_declares_it():
@@ -295,6 +308,19 @@ def test_a_profile_choice_that_cannot_stand_is_refused(kwargs, message):
     args = {"profile": None, "unprofiled": None, **kwargs}
     with pytest.raises(UqsError, match=message):
         profile.membership("p1", start_with_all=False, known_profiles=KNOWN, **args)
+
+
+@pytest.mark.parametrize("name", ["essential", "feed", "full", "capture", "all"])
+def test_a_profile_that_holds_no_job_is_refused(name):
+    """#2828: essential, feed, full and capture are TorQ infrastructure alone,
+    and accepting one rewrote `"essential": (),` and turned test_profiles red.
+    #2827: `all` is derived, so the edit could only be refused later."""
+    from uqs.model.profiles import PROFILES  # noqa: PLC0415
+
+    with pytest.raises(UqsError, match=rf"--profile {name} .* a job joins one of arbitrage, "):
+        profile.membership(
+            "p1", profile=name, unprofiled=None, start_with_all=False, known_profiles=PROFILES
+        )
 
 
 def test_start_with_all_and_unprofiled_are_refused_together():
@@ -661,3 +687,69 @@ def test_a_passthrough_from_a_reused_source_of_the_targets_shape_is_planned():
 def test_a_derivation_from_a_reused_source_is_still_planned():
     plan = _second_worker("deals_eu", "demo_deals", "demo_deals", None, "derive")
     assert plan.name == "deals_eu_backfill"
+
+
+def test_a_passthrough_from_a_one_column_source_the_scaffold_wrote_is_planned(tmp_path):
+    """#2829: the scaffold writes one column as `columns:enlist `time`, which
+    the reader could not parse - so a passthrough of the same shape was refused
+    as "cannot read source"."""
+    from uqs.scaffold.write import flat_source  # noqa: PLC0415
+
+    source = next(
+        a for a in backfill.bounded_worker("bf7", "bf7", "time:timestamp").actions
+        if a.path.parent.name == "sources"
+    )  # fmt: skip
+    (tmp_path / source.path).parent.mkdir(parents=True)
+    (tmp_path / source.path).write_text(flat_source(source.body, UQF_ROOT))
+    assert ".qpipe.source.bf7.columns:enlist `time" in (tmp_path / source.path).read_text()
+    create_backfill.check_reused_passthrough(tmp_path, "bf8", "bf7", [("time", "`timestamp$()")])
+
+
+def test_a_new_source_s_row_key_is_the_time_and_every_symbol_column_marked_as_a_guess():
+    """#2889: `row_key:`time` for any schema folded two symbols ticking at one
+    timestamp into one row, with nothing marking it as the scaffold's guess."""
+    plan = backfill.bounded_worker("fx", "fx_rates", "sym:symbol, venue:g#symbol, mid:float")
+    body = _body(plan, "sources/fx.q")
+    assert "\nrow_key:`time`sym`venue\n" in body
+    claim = body[: body.index("\nrow_key:")].rsplit("\n\n", 1)[1]
+    assert "SCAFFOLDED" in claim, claim
+    assert any("row_key is guessed as `time`sym`venue" in n for n in plan.notes)
+    no_symbols = backfill.bounded_worker("ticks", "ticks", "px:float")
+    assert "\nrow_key:`time\n" in _body(no_symbols, "sources/ticks.q")
+
+
+def test_a_sliced_source_s_fixture_row_is_in_the_slice():
+    """#2830: the fixture row's sym was `SCAFFOLD, so with --slice EURUSD the
+    example the scaffold says to run refused it at publish and exited 1."""
+    plan = backfill.bounded_worker("fx", "fx_rates", "sym:symbol, mid:float", partition="EURUSD")
+    assert "sym:enlist `EURUSD;" in _body(plan, "sources/fx.q")
+    other = backfill.bounded_worker(
+        "fx", "fx_rates", "sym:symbol, pair:symbol, mid:float", partition="EURUSD",
+        partition_column="pair",
+    )  # fmt: skip
+    assert "sym:enlist `SCAFFOLD; pair:enlist `EURUSD;" in _body(other, "sources/fx.q")
+
+
+def test_every_one_line_placeholder_carries_the_marker():
+    """#2852: `<one line: what a row means>` was written without SCAFFOLDED,
+    so test_no_scaffold_left could not list it - and two reached master."""
+    from uqs.scaffold.horizon import horizon_job  # noqa: PLC0415
+
+    cols = [("sym", "`symbol$()"), ("px", "`float$()")]
+    plans = [
+        jobs.streaming_job("p1", [], "p1_out", "sym:symbol, px:float", unprofiled="t"),
+        backfill.bounded_worker("p2", "p2", "sym:symbol, px:float"),
+        normalizer("p3", ["quote"], parse_columns("sym:symbol, px:float"), {"quote": cols},
+                   known_tables={"quote"}, unprofiled="t"),
+        horizon_job("p4", ["trades", "quote"], parse_columns("sym:symbol, px:float"),
+                    {"trades": cols, "quote": cols}, "5s", known_tables={"trades", "quote"},
+                    unprofiled="t"),
+    ]  # fmt: skip
+    lines = [
+        ln for p in plans for a in p.actions for ln in a.body.splitlines() if "<one line" in ln
+    ]
+    assert len(lines) >= 8, lines
+    assert [ln for ln in lines if "SCAFFOLDED" not in ln] == []
+    left = [f"{p.relative_to(UQF_ROOT)}:{i}" for p in sorted((UQF_ROOT / "src").rglob("*.q"))
+            for i, ln in enumerate(p.read_text().splitlines(), 1) if "<one line" in ln]  # fmt: skip
+    assert left == []

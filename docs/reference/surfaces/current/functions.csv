@@ -125,12 +125,14 @@ qetl.coverage,require_interval,function,2,range_from range_to
 qetl.coverage,require_schema,function,1,
 qetl.coverage,schema,value,,
 qetl.coverage,stage_completion,function,6,dataset partition source_version range_from range_to rows_published
+qetl.coverage,stage_overwriting,function,7,dataset partition source_version range_from range_to rows_published touched
 qetl.coverage,stage_written,function,7,dataset partition source_version range_from range_to rows_published touched
 qetl.coverage,still_current,value,,
 qetl.coverage,supersede,function,5,ds part version from_ts to_ts
 qetl.coverage,unready,table,,
 qetl.coverage,unreleased,function,1,at
 qetl.coverage,with_lock,function,2,f args
+qetl.coverage,withdraw_other_versions,function,5,ds part version from_ts to_ts
 qetl.dag,adopt_all,function,1,
 qetl.dag,adopt_feeders,function,1,
 qetl.dag,adopt_pipelines,function,1,
@@ -208,6 +210,7 @@ qetl.io,hdb_lock,function,1,root
 qetl.io,hdb_lock_wait,value,,
 qetl.io,hdb_scoped,function,3,root partition_col bounds
 qetl.io,is_scoped,function,1,root
+qetl.io,kept,function,3,strategy batch row_key
 qetl.io,memory,dict,,
 qetl.io,native_day_fn,function,1,times
 qetl.io,odbc,dict,,
@@ -465,6 +468,7 @@ qetl.job.stream,carry_end_of_day,function,2,dt j
 qetl.job.stream,carry_log,dict,,
 qetl.job.stream,carry_marker_path,function,1,job
 qetl.job.stream,catch_up,function,4,job tr tbls h
+qetl.job.stream,catch_up_restore,function,4,job tr tbls h
 qetl.job.stream,catching_up,function,2,job on
 qetl.job.stream,catchup_position,dict,,
 qetl.job.stream,caught_up,dict,,
@@ -472,6 +476,7 @@ qetl.job.stream,clock,function,1,x
 qetl.job.stream,clock_of,function,2,now x
 qetl.job.stream,cursor_name,function,1,job
 qetl.job.stream,cursor_ops,function,1,job
+qetl.job.stream,day_marker_path,function,1,job
 qetl.job.stream,def,function,1,job
 qetl.job.stream,define,function,2,job decl
 qetl.job.stream,defined,function,1,
@@ -487,7 +492,9 @@ qetl.job.stream,horizons,dict,,
 qetl.job.stream,initial,dict,,
 qetl.job.stream,job_root,value,,
 qetl.job.stream,jobs,dict,,
+qetl.job.stream,last_day_ran,function,1,job
 qetl.job.stream,last_end_seen,function,1,job
+qetl.job.stream,mark_day_ran,function,2,job day
 qetl.job.stream,missed_end_of_day,function,2,job today
 qetl.job.stream,namespace,function,1,job
 qetl.job.stream,next_position,function,1,job
@@ -513,6 +520,7 @@ qetl.job.stream,replaying,value,,
 qetl.job.stream,require_recovery,function,2,job tr
 qetl.job.stream,required_declarations,value,,
 qetl.job.stream,reset,function,1,job
+qetl.job.stream,restores,function,1,job
 qetl.job.stream,rolling,dict,,
 qetl.job.stream,running,value,,
 qetl.job.stream,snapshot,function,1,job
@@ -522,6 +530,7 @@ qetl.job.stream,tick,function,1,job
 qetl.job.stream,tolerant,function,4,job h t x
 qetl.job.stream,transport_keys,value,,
 qetl.job.stream,trapping,value,,
+qetl.job.stream,unrestored,dict,,
 qetl.job.stream,unwired,function,1,job
 qetl.job.stream,watch_subscription,function,2,job tr
 qetl.job.stream,wire,function,2,job publisher
@@ -1137,6 +1146,7 @@ qetl.venue,venues_of,function,1,market
 qetl.verify,armed,value,,
 qetl.verify,basis,function,1,dataset
 qetl.verify,behaviour_gaps,function,1,producers
+qetl.verify,bounded_findings,function,4,producer dataset output basis
 qetl.verify,capture,function,3,dataset from_ts to_ts
 qetl.verify,capture_bounded,function,3,worker from_ts to_ts
 qetl.verify,capture_one,function,4,prod dataset from_ts to_ts
@@ -2221,6 +2231,7 @@ qpipe.source.hdb_orders,time_column,value,,
 qpipe.source.hdb_orders,types,value,,
 qpipe.source.hdb_orders,tz,value,,
 qpipe.source.hdb_transfer,columns,value,,
+qpipe.source.hdb_transfer,complete_through,function,1,h
 qpipe.source.hdb_transfer,credential_example,value,,
 qpipe.source.hdb_transfer,fixture,function,1,
 qpipe.source.hdb_transfer,query,function,3,h range_from range_to

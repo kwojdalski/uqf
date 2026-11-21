@@ -127,10 +127,11 @@ def write_plan(plan: ScaffoldPlan, repo_root: Path, *, dry_run: bool) -> None:
     makes stale. The same for every shape."""
     console.print(plan.render())
     console.print("  then regenerate: " + ", ".join(" ".join(d) for d in (*_DERIVED, *_WITH_Q)))
-    if dry_run:
-        console.print(dry_run_note())
-        return
     try:
+        if dry_run:
+            write.prepare(plan, repo_root)  # a dry run refuses what the real run would (#2827)
+            console.print(dry_run_note())
+            return
         written = write.apply_plan(plan, repo_root)
     except UqsError as exc:
         _die(exc)

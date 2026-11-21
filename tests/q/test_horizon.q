@@ -72,6 +72,45 @@
 
 / --- declaring -----------------------------------------------------------
 
+/ A job file loaded twice re-declares a live job (#2858): the refusal must
+/ leave its pending events and its wired publish as they were.
+/ The horizon is measured from event_time: a float column was accepted and
+/ every event was scored the moment it arrived (#2855).
+.qt.qetl.job.stream.horizons.test_an_event_time_that_is_not_a_timestamp_column_is_refused:{[t]
+    .qt.qetl.job.stream.horizons.define_transform[];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_x;];.qt.qetl.job.stream.horizons.decl[],`event_time`lateness!(`px;0D);
+        "*horizon job hz_x's event_time px is not a timestamp column of the events input - it is of type f*";"a float column"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_x;];.qt.qetl.job.stream.horizons.decl[],enlist[`reference_time]!enlist `mid;
+        "*horizon job hz_x's reference_time mid is not a timestamp column of the reference input - it is of type f*";"nor the reference's clock"];
+    .qunit.assertFalse[`hz_x in .qetl.job.stream.defined[];"and nothing is registered"]};
+
+/ A score that keeps no row publishes nothing (#2890): the job used to send the
+/ plant an empty table every tick it scored, which the output-contract gate then
+/ counted as the table published.
+.qt.qetl.job.stream.horizons.test_a_score_that_keeps_no_row_publishes_nothing:{[t]
+    .qt.qetl.job.stream.horizons.define_transform[];
+    if[not `horizontest_none in .qetl.transform.defined[];
+        .qetl.transform.define[`horizontest_none;`inputs`output`fn`examples!(
+            `events`refs!(.qt.qetl.job.stream.horizons.events;.qt.qetl.job.stream.horizons.refs);
+            .qt.qetl.job.stream.horizons.priced;
+            {[e;r] 0#.qt.qetl.job.stream.horizons.priced};
+            enlist `inputs`expected!(
+                `events`refs!(.qt.qetl.job.stream.horizons.ev[`a;.qt.qetl.job.stream.horizons.t0];.qt.qetl.job.stream.horizons.refs);
+                .qt.qetl.job.stream.horizons.priced))]];
+    .qt.qetl.job.stream.horizons.job[`hz_none;enlist[`transform]!enlist `horizontest_none];
+    (.qt.qetl.job.stream.horizons.ns[`hz_none;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.ev[`a;.qt.qetl.job.stream.horizons.t0]];
+    (.qt.qetl.job.stream.horizons.ns[`hz_none;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:05;
+    .qunit.assertEquals[count .qt.qetl.job.stream.horizons.ns[`hz_none;`pending];0;"the event was scored"];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.sent;();"and nothing was sent for the empty result"]};
+
+.qt.qetl.job.stream.horizons.test_a_refused_redeclaration_leaves_the_live_job_as_it_was:{[t]
+    .qt.qetl.job.stream.horizons.job[`hz_redecl;()!()];
+    (.qt.qetl.job.stream.horizons.ns[`hz_redecl;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.ev[`a;.qt.qetl.job.stream.horizons.t0]];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_redecl;];.qt.qetl.job.stream.horizons.decl_for `hz_redecl;
+        "*horizon job hz_redecl is already a streaming job*";"the second declaration is refused by name"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.horizons.ns[`hz_redecl;`pending];1;"the pending event is still there"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.horizons.ns[`hz_redecl;`publish])[`hz_priced;([] a:1 2)];2;"and publish still reaches what it was wired to"]};
+
 .qt.qetl.job.stream.horizons.test_a_declaration_missing_a_key_is_refused_by_name:{[t]
     .qt.qetl.job.stream.horizons.define_transform[];
     .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_a;];`horizon _ .qt.qetl.job.stream.horizons.decl[];

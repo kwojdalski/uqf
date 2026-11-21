@@ -43,8 +43,9 @@
         if[(p[`mode] i) in `stream`bounded;
             r:first (cap`captures) n;
             decl:p[`declared] i;
-            if[98h=type decl; found,:.qetl.verify.schema_findings[n;dataset;decl;`declared]; compared,:n];
-            if[(98h=type r`rows) and 0<count r`rows; found,:.qetl.verify.schema_findings[n;dataset;r`rows;`sample]; compared,:n];
+            fits:$[`bounded=p[`mode] i; .qetl.verify.bounded_findings; .qetl.verify.schema_findings];
+            if[98h=type decl; found,:fits[n;dataset;decl;`declared]; compared,:n];
+            if[(98h=type r`rows) and 0<count r`rows; found,:fits[n;dataset;r`rows;`sample]; compared,:n];
             if[count r`failures; found,:raze {[n;d;m] .qetl.verify.finding[n;d;`;`contract;"the plant's contract";m;`sample]}[n;dataset] each r`failures]];
         if[(p[`mode] i)=`reaction; notes,:enlist string[n]," is a reaction: its output is not captured, so its schema was not compared"];
         i+:1];

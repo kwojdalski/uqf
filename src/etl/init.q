@@ -52,6 +52,7 @@
 \l src/etl/core/venue_market.q
 \l src/etl/core/intervals.q
 \l src/etl/core/materialisation.q
+\l src/etl/core/materialisation_versions.q
 \l src/etl/core/mapped_books.q
 \l src/etl/core/mapped_depth.q
 \l src/etl/core/reference_variant.q
@@ -122,6 +123,7 @@ if[not ()~key `:lib/unparse/unparse.q; system "l lib/unparse/unparse.q"];
 \l src/etl/core/uptime.q
 \l src/etl/core/retention.q
 \l src/etl/core/stream_job.q
+\l src/etl/core/stream_carry.q
 \l src/etl/core/stream_hdb.q
 \l src/etl/core/stream_defaults.q
 \l src/etl/core/stream_replay_guard.q

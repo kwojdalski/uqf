@@ -33,6 +33,10 @@
 / The part past the bound is NOT covered, so the next run, once the bound has
 / advanced, plans it. The clip is logged at WARN so a stalled feed shows as
 / a repeating line rather than as a window that silently never completes.
+/ .
+/ NOTHING AFTER NOW IS COMPLETE, whatever the source says (#2867): "closed
+/ data", the default, describes the past. A window that ends after now was
+/ fetched empty and claimed with zero rows, for good.
 / @param worker the worker's name, for the log
 / @param source a registered source name
 / @param h the open handle (ignored on the fixture)
@@ -42,7 +46,7 @@
 / @throws as complete_through_of
 / @eg .qetl.source.clip_to_complete[`w;`demo_deals;0Ni;0b;2026.09.11D00:00]  ->  2026.09.11D00:00:00.000000000
 .qetl.source.clip_to_complete:{[worker;source;h;live;range_to]
-    bound:.qetl.source.complete_through_of[source;h;live];
+    bound:.z.p&.qetl.source.complete_through_of[source;h;live];
     if[bound>=range_to; :range_to];
     .qetl.log.ch.warn[`source;"range clipped to the source's complete_through - the rest stays uncovered for the next run";
         `worker`source`complete_through`requested_to!(worker;source;bound;range_to)];

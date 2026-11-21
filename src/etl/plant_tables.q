@@ -382,7 +382,9 @@ if[not `nested in key `.qetl.plant; '"plant_tables.q: load src/etl/plant_registr
 / start, which is what the HDB writer partitions by.
 .qetl.plant.deal_positions:([]time:`timestamp$(); sym:`g#`symbol$(); window:`timestamp$(); net_notional:`float$(); deals:`long$())
 
-/ hdb_transfer_backfill1's target. <one line: what a row means>
+/ hdb_transfer_backfill1's target: one row per trade copied from another kdb+ HDB
+/ (source hdb_transfer), as the source holds it plus its notional, price*size in the
+/ pair's quote currency.
 .qetl.plant.trades_copy:([]time:`timestamp$(); trade_id:`long$(); sym:`g#`symbol$(); price:`float$(); size:`long$(); side:`symbol$(); notional:`float$())
 
 / crypto_markout1's output (#1936): the crypto markout dataset of the markout contract
@@ -415,7 +417,9 @@ if[not `nested in key `.qetl.plant; '"plant_tables.q: load src/etl/plant_registr
 / the domain's rules revision - src/etl/core/config_snapshot.q, #1999).
 .qetl.plant.eq_markout:([]time:`timestamp$(); source_time:`timestamp$(); clock:`symbol$(); venue:`symbol$(); fill_id:`symbol$(); sym:`g#`symbol$(); side:`long$(); size:`float$(); horizon:`timespan$(); kind:`symbol$(); step:`long$(); price:`float$(); quote_ccy:`symbol$(); ref_t0:`float$(); ref_t1:`float$(); move:`float$(); quote_amount:`float$(); rate:`float$(); rate_source:`symbol$(); rate_sym:`symbol$(); rate_time:`timestamp$(); report_amount:`float$(); status:`symbol$(); config_id:`symbol$(); markout_bps:`float$())
 
-/ last_value1's output. <one line: what a row means>
+/ last_value1's output: one row per change to a sym's latest top of book - the current
+/ price of a sym is its last row (`select by sym from last_value`). A crypto sym's row is
+/ the best bid and ask across live venues, with source `venues.
 .qetl.plant.last_value:([]time:`timestamp$(); sym:`g#`symbol$(); market:`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid:`float$(); ask:`float$(); mid:`float$())
 
 / fxmarkout1's output (#1395): the normalized FX markout calculation, one row per execution,

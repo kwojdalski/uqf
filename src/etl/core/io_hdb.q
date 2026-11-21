@@ -135,7 +135,7 @@
     / the arguments, not projections of `locked`: a fully-applied projection
     / is a CALL, and would run the write before the lock is taken.
     / finish takes a second, ignored argument so it stays a function of one.
-    `write`write_keyed`flush`finish`recover`eod_waiting`days_of!(
+    `write`write_keyed`flush`finish`recover`eod_waiting`days_of`holds!(
         {[r;p;t;b] .qetl.io.locked[r;.qetl.io.write_hdb;(r;p;t;b)]}[root;partition_col];
         {[r;p;t;b;o] .qetl.io.locked[r;.qetl.io.write_hdb_keyed;(r;p;t;b;o)]}[root;partition_col];
         {[r;u] .qetl.io.locked[r;.qetl.io.flush_hdb;(r;u)]}[root];
@@ -144,7 +144,18 @@
         / which dates end of day has not yet handed over - the plan reads it (#2186)
         .qetl.io.eod_waiting[root];
         / the root's own partition calendar, so a plan's range maps to the dates written (#2193)
-        .qetl.io.days_of[root])}
+        .qetl.io.days_of[root];
+        / whether a batch's partitions are still there - a remote receiver asks (#2845)
+        .qetl.io.holds_hdb[root;partition_col])}
+
+/ Private: is `target` present on each date `batch`'s rows fall on? What a
+/ remote receiver asks before it answers a re-sent batch `duplicate (#2845): a
+/ partition retention or retire removed holds none of the rows it journalled.
+/ @return one boolean per distinct date of the batch
+/ @private
+.qetl.io.holds_hdb:{[root;partition_col;target;batch]
+    tc:$[.qetl.plant.time_column in cols batch; .qetl.plant.time_column; partition_col];
+    {[root;target;d] not ()~key hsym `$.qetl.io.part_path[root;d;target]}[root;target] each distinct .qetl.io.days_of[root;batch tc]}
 
 / The partition date of each time: the calendar date, except in a root a scoped manager was made
 / for, where it is the native stack's own (.qetl.io.scoped_day_of, #2193).
@@ -193,7 +204,9 @@
 / column of another type threw part-way and left the partition's columns of
 / different lengths. scripts/jobs/attached_forced.q makes the
 / same check for its writer (#2208). Every column the partition has must be
-/ in the batch with its type; a general-list column on disk takes anything.
+/ in the batch with its type. A general-list column on disk takes only a
+/ general list (#2869): a typed vector appended to one throws 'type after the
+/ columns before it were written - the same torn partition.
 / `meta get part`, not `meta part`: PeachQ v0.92 still throws 'type on meta of a
 / directory, and on KDB-X the two are the same.
 / @private
@@ -202,10 +215,10 @@
     native:exec c!t from meta get part;
     batch:exec c!t from meta rows;
     k:key native;
-    bad:k where not (" "=native k) or native[k]=batch k;
+    bad:k where not (k in key batch) and native[k]=batch k;
     if[0=count bad; :1b];
     '"hdb: the batch does not match the partition ",(1_string part)," - nothing was written; ",
-        "; " sv {[n;b;c] string[c],": partition ",n[c],", batch ",$[not c in key b; "(absent)"; " "=b c; "a general list"; b c]}[native;batch] each bad}
+        "; " sv {[n;b;c] string[c],": partition ",$[" "=n c; "a general list"; n c],", batch ",$[not c in key b; "(absent)"; " "=b c; "a general list"; b c]}[native;batch] each bad}
 
 / Private: the batch with the plant's `time` column, refused when it cannot
 / be partitioned, would land in the tickerplant's dates, or would land in a
@@ -277,7 +290,7 @@
             if[()~key part; :1b];
             if[not (exec t from meta rows)~exec t from meta get part; :0b];
             not any (kc#rows) in ?[part;();0b;kc!kc]}[root;target;kc]'[folds;dates];
-        if[all clean; .qetl.io.write_hdb[root;partition_col;target;fold]; :count batch]];
+        if[all clean; .qetl.io.write_hdb[root;partition_col;target;fold]; :count fold]];
     if[`replace=strategy;
         span:{[f;t] f+til 1+t-f}[.qetl.io.days_of[root;opts`range_from];.qetl.io.days_of[root;opts[`range_to]-1]];
         dates:distinct dates,span where (span<.z.d) and
@@ -302,8 +315,11 @@
         / 'splay), and turns an enumerated sym into plain symbols (so the
         / splayed `set` below throws 'type). Indexing keeps the enumeration.
         existing:$[()~key part; 0#rows; flip {x til count x} each flip select from get part];
-        (part;d;.qetl.io.plain .qetl.io.resolve[strategy;existing;rows;o])
+        r:.qetl.io.resolve[strategy;existing;rows;o];
+        (part;d;.qetl.io.plain r;.qetl.io.written[strategy;existing;rows;r;o`row_key])
         }[root;target;data;days;strategy;o] each dates;
+    / the rows written, not the batch: a repeated key folds (#2870)
+    n:sum "j"$plan[;3];
     if[(`replace=strategy) and not any (`time,opts`time_column) in (),opts`row_key;
         plan,:.qetl.io.spill[root;target;data;opts;dates]];
     / STAGED, THEN SWAPPED. Writing `set` straight onto the live partition
@@ -314,7 +330,7 @@
     / renamed into place, one directory at a time.
     {[root;target;step] .qetl.io.stage[root;step 1;target;step 2]}[root;target] each plan;
     {[root;target;step] .qetl.io.swap[root;step 1;target]; `.qetl.io.touched upsert (root;step 1;target);}[root;target] each plan;
-    count batch}
+    n}
 
 / Private: the partition after a `replace window, without the window's late-filed twins:
 / rows whose key the window wrote AND whose time column lies inside the window.
@@ -442,7 +458,11 @@
 / puts back (the partition reads as it did, and retention, which supersedes
 / coverage BEFORE it removes, simply removes it again). A date directory left
 / with no table at all is removed too: the HDB loads every directory under its
-/ root and an empty one fails a reload.
+/ root and an empty one fails a reload. For the same reason a date that still
+/ holds OTHER tables keeps this one, emptied (#2871): an HDB needs every table
+/ in every date, and a missing one throws on any query across dates. The
+/ empty splay is staged and swapped in like any write, so it replaces the
+/ rows in one rename.
 / .
 / Does not tell a running HDB to reload; that needs the stack (see on_ready).
 / @param root the HDB root, a file symbol
@@ -454,12 +474,17 @@
     .qetl.io.restore_retired[root;t];
     live:.qetl.io.part_path[root;d;t];
     if[()~key hsym `$live; :0b];
+    datedir:(neg 1+count string t)_live;
+    / emptied, its symbols re-enumerated against root: the mapped enumeration's domain is not loaded here
+    if[1<count key hsym `$datedir;
+        .qetl.io.stage[root;d;t;.Q.en[root;] .qetl.io.plain flip {$[(type x) within 20 76h; `symbol$(); 0#x]} each flip select from get hsym `$live,"/"];
+        .qetl.io.swap[root;d;t];
+        :1b];
     old:.qetl.io.staged[root;`old;d;t];
     .qetl.io.sh["rm -rf";old];
     .qetl.io.sh["mkdir -p";(.qetl.io.staging[root]),"/old/",string d];
     .qetl.io.sh["mv";(live;old)];
     .qetl.io.sh["rm -rf";old];
-    datedir:(neg 1+count string t)_live;
     if[0=count key hsym `$datedir; .qetl.io.sh["rmdir";datedir]];
     1b}
 
@@ -517,6 +542,17 @@
         @[{.qetl.log.ch.warn[`storage;"restored a partition a killed write left in staging";x]};
           `table`restored!(target;restored);{[e] (::)}]];
     restored}
+
+/ Private: restore_retired for every table under the staging area's `old`,
+/ not only the caller's. Only under the root's lock, where anything left there
+/ was left by a writer that died, and only before a .Q.chk (#2866).
+/ @return how many tables were restored
+/ @private
+.qetl.io.restore_every_retired:{[root]
+    s:(.qetl.io.staging root),"/old";
+    if[()~key hsym `$s; :0];
+    ts:distinct raze {[s;d] key hsym `$s,"/",string d}[s] each key hsym `$s;
+    sum "j"$.qetl.io.restore_retired[root;] each ts}
 
 / Private: set aside a table whose .d lists a column that has no file (#2185).
 / .
@@ -665,10 +701,13 @@
     / tables nobody asked about.
     / .Q.chk fills EVERY partition of the root, so it must not run while one
     / waits for end of day: its empty tables there are what makes movetohdb abort (#2186).
+    / Every table a dead writer left retired goes back FIRST (#2866): .Q.chk
+    / would fill its missing partition with an empty table, which its owner's
+    / sweep then took for the replacement and deleted the retired rows.
     if[not .qetl.io.is_scoped root;
         $[count w:.qetl.io.eod_waiting[root;.qetl.io.part_dates root];
             .qetl.log.ch.warn[`eod;"not filling the HDB's missing tables - a partition is still waiting for end of day";enlist[`waiting]!enlist w];
-            .Q.chk root]];
+            [.qetl.io.restore_every_retired root; .Q.chk root]]];
     `.qetl.io.touched set .qetl.io.touched except ([] hdb_root:count[todo]#root),'todo;
     count todo}
 

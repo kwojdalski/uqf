@@ -97,6 +97,19 @@ def test_a_q_word_is_refused_as_a_column_name(word):
         parse_raw_columns(f"ID:long, {word}:float")
 
 
+@pytest.mark.parametrize(
+    ("col", "reason"),
+    [("i", "virtual row index"), ("date", "partition column"), ("month", "partition column"),
+     ("year", "partition column"), ("int", "partition column")],
+)  # fmt: skip
+def test_a_column_q_sql_answers_itself_is_refused(col, reason):
+    """#2822: `date` and `i` load, and then every query reads the partition's
+    date or the row number instead of the stored value."""
+    with pytest.raises(UqsError, match=f"column '{col}' is .*{reason}.*e\\.g\\. '{col}_'"):
+        parse_columns(f"sym:symbol, {col}:long")
+    assert parse_columns(f"{col}_:long")
+
+
 def test_the_example_a_bad_column_points_at_is_itself_accepted():
     with pytest.raises(UqsError, match=r"e\.g\. '(\w+):(\w+)'") as err:
         parse_columns("nocolon")

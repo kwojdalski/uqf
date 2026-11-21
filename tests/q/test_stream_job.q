@@ -209,6 +209,62 @@
             `crypto_markout1;enlist `t;`symbol$();{[t;x] ()});
         "one process runs one job, so a second claim on crypto_markout1 is refused"]};
 
+/ Two job files that picked one name (#2851): q kept the last declaration, and
+/ the first job's procname then ran the second job's subscriptions.
+.qt.qetl.job.stream.test_a_name_declared_twice_is_refused_by_name:{[t]
+    .qt.support.save_stream_jobs[`.qt.qetl.job.stream.dup];
+    .qetl.job.stream.define[`sj_twice;`procname`subscribe_to`outputs`on_batch!(`sjtwice1;enlist `executions;`symbol$();{[t;x] ()})];
+    r:@[{.qetl.job.stream.define[`sj_twice;`procname`subscribe_to`outputs`on_batch!(`sjtwice2;enlist `market_data;`symbol$();{[t;x] ()})]; ""};
+        ::;{[e] e}];
+    subs:.qetl.job.stream.def[`sj_twice]`subscribe_to;
+    procs:where .qetl.job.stream.procnames=`sj_twice;
+    .qt.support.restore_stream_jobs[`.qt.qetl.job.stream.dup];
+    .qunit.assertTrue[r like "*sj_twice is already a streaming job, run as sjtwice1*";"the second declaration is refused, naming the job and the process that runs it"];
+    .qunit.assertEquals[subs;enlist `executions;"and the first declaration stands"];
+    .qunit.assertEquals[procs;enlist `sjtwice1;"with no second procname claiming it"]};
+
+/ A lambda with one parameter too many returns a projection instead of running:
+/ an on_batch that never ran was counted as a batch handled (#2856). One too
+/ few threw a bare 'rank on every batch. Both are refused at define.
+.qt.qetl.job.stream.test_a_handler_taking_the_wrong_number_of_parameters_is_refused:{[t]
+    base:`procname`subscribe_to`outputs`on_batch!(`sjarity1;enlist `executions;`symbol$();{[t;x] ()});
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_arity;x]};@[base;`on_batch;:;{[t;x;extra] ()}];
+        "*sj_arity's on_batch takes 3 parameter(s) - it must be a function taking (table name; rows)*";"an on_batch of three would never run"];
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_arity;x]};@[base;`on_batch;:;{[x] ()}];
+        "*sj_arity's on_batch takes 1 parameter(s)*";"an on_batch of one throws 'rank on every batch"];
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_arity;x]};base,`period`on_timer!(0D00:00:01;{[a;b] ()});
+        "*sj_arity's on_timer takes 2 parameter(s) - it must be a niladic function*";"an on_timer of two would never run"];
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_arity;x]};base,`check`on_fail!({[rows;extra] ()};`drop);
+        "*sj_arity's check takes 2 parameter(s)*";"a check of two would withhold every row with no failure named"];
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_arity;x]};base,enlist[`on_endofday]!enlist {[a;b] ()};
+        "*sj_arity's on_endofday takes 2 parameter(s)*";"an on_endofday of two would never run"];
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_arity;x]};base,enlist[`on_start]!enlist {[a;b] ()};
+        "*sj_arity's on_start takes 2 parameter(s)*";"an on_start of two would never run"];
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_arity;x]};base,`replay`on_replayed!(1b;{[a;b] ()});
+        "*sj_arity's on_replayed takes 2 parameter(s)*";"an on_replayed of two would never run"];
+    .qunit.assertFalse[`sj_arity in .qetl.job.stream.defined[];"and nothing was registered"]};
+
+/ The same mistake under state is refused at define; under carry it was
+/ accepted and failed at the first end of day, so no snapshot was written (#2859).
+.qt.qetl.job.stream.test_a_carry_naming_a_variable_the_job_lacks_is_refused:{[t]
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_badcarry;x]};
+        `procname`subscribe_to`outputs`on_batch`replay`carry!(
+            `sjbadcarry1;enlist `executions;enlist `sj_badcarry_open;{[t;x] ()};1b;`state`table!(`nosuchbook;`sj_badcarry_open));
+        "*carry's state names nosuchbook, which .qpipe.job.sj_badcarry does not define*";
+        "a carried variable that does not exist would fail every end of day's snapshot"];
+    .qunit.assertFalse[`sj_badcarry in .qetl.job.stream.defined[];"and the job is not registered"]};
+
+/ The TorQ plant sends end of day only to the handles that subscribed
+/ (pubsub.q's allsubhandles): a feed's on_endofday ran under run_stream and
+/ never on the plant (#2898), so it is refused where it cannot be delivered.
+.qt.qetl.job.stream.test_an_on_endofday_on_a_job_that_subscribes_to_nothing_is_refused:{[t]
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_feed_eod;x]};
+        `procname`subscribe_to`outputs`period`on_timer`on_endofday!(
+            `sjfeedeod1;`symbol$();`symbol$();0D00:00:01;{[] ()};{[dt] ()});
+        "*sj_feed_eod declares on_endofday but subscribes to nothing - the TorQ plant sends end of day only to its subscribers*";
+        "a hook the production plant never calls is refused, saying why"];
+    .qunit.assertFalse[`sj_feed_eod in .qetl.job.stream.defined[];"and the job is not registered"]};
+
 .qt.qetl.job.stream.test_an_unwired_publish_throws_rather_than_dropping_rows:{[t]
     / The seam's whole point: rows going nowhere must not look like a job
     / with nothing to say.
@@ -1590,6 +1646,48 @@
     .qt.qetl.job.stream.live[`executions;.qt.qetl.job.stream.an_execution[.qt.qetl.job.stream.d[0];`EURUSD;1;1.1;1e6]];
     .qunit.assertEquals[count .qt.qetl.job.stream.published;1;"the live batch published through the transport"]};
 
+/ outputs may be empty, "for a job that keeps its output local" - and such a
+/ job has no publish to define, which start read to mute it for the replay
+/ and threw its bare name (#2899).
+.qt.qetl.job.stream.test_a_subscriber_with_no_outputs_and_no_publish_starts:{[t]
+    .qt.support.save_stream_jobs[`.qt.qetl.job.stream.sink];
+    `.qpipe.job.sj_sink.book set ([] sym:`symbol$(); qty:`float$());
+    .qetl.job.stream.define[`sj_sink;`procname`subscribe_to`outputs`on_batch`replay`state!(
+        `sjsink1;enlist `executions;`symbol$();{[t;x] `.qpipe.job.sj_sink.book insert select sym, qty:size from x};1b;enlist `book)];
+    replayed:enlist (`executions;.qt.qetl.job.stream.an_execution[.qt.qetl.job.stream.d[0];`EURUSD;1;1.1;1e6]);
+    r:@[{.qetl.job.stream.start[`sj_sink;x]; ""};.qt.qetl.job.stream.fake_transport[`sj_sink;replayed];{[e] e}];
+    book:.qpipe.job.sj_sink.book;
+    up:`sj_sink in .qetl.job.stream.running;
+    `.qetl.job.stream.running set .qetl.job.stream.running except `sj_sink;
+    .qt.support.restore_stream_jobs[`.qt.qetl.job.stream.sink];
+    .qunit.assertEquals[r;"";"start does not throw for a job with no publish"];
+    .qunit.assertTrue[up;"the job is running"];
+    .qunit.assertEquals[exec qty from book;enlist 1e6;"and its replay rebuilt its state"]};
+
+/ A job subscribing to nothing (every polling feed, every timer-only job) got
+/ no uptime session and no beat, so its health file was never written; and a
+/ timer tick that threw was counted nowhere, so a feed failing every tick read
+/ ok 0 failed 0 (#2896).
+.qt.qetl.job.stream.test_a_job_that_subscribes_to_nothing_beats_and_counts_a_failing_tick:{[t]
+    .qt.support.save_stream_jobs[`.qt.qetl.job.stream.feedhealth];
+    .qetl.job.stream.define[`sj_feed_health;`procname`subscribe_to`outputs`period`on_timer!(
+        `sjfeedhealth1;`symbol$();`symbol$();0D00:00:01;{[] '"upstream 500"})];
+    `.qt.qetl.job.stream.timers set (`symbol$())!();
+    tr:`connect`publisher`subscribe`timer!({[] };{[] {[t;x] count x}};{[tbls;h;replay] };{[n;p;f] .qt.qetl.job.stream.timers[n]:f;});
+    before:.qetl.stream_health.of[`sj_feed_health]`failed;
+    .qetl.job.stream.start[`sj_feed_health;tr];
+    tick:@[.qt.qetl.job.stream.timers`sj_feed_health;::;{[e] e}];
+    h:.qetl.stream_health.of`sj_feed_health;
+    .qetl.uptime.beat[];
+    file:hsym `$.qetl.status.status_dir[],"/stream_health_sj_feed_health.txt";
+    got:$[()~key file; ()!(); .j.k first read0 file];
+    `.qetl.job.stream.running set .qetl.job.stream.running except `sj_feed_health;
+    .qt.support.restore_stream_jobs[`.qt.qetl.job.stream.feedhealth];
+    .qunit.assertTrue[`sj_feed_health_uptime in key .qt.qetl.job.stream.timers;"the job's uptime is beaten"];
+    .qunit.assertEquals[tick;"upstream 500";"a tick that throws still throws, for the runner to log"];
+    .qunit.assertEquals[(h`failed;h`last_error);(before+1;`$"upstream 500");"and is counted, with why"];
+    .qunit.assertEquals[got`failing;1b;"so the health file uqs status reads says failing"]};
+
 .qt.qetl.job.stream.test_a_transport_missing_a_step_is_refused:{[t]
     .qunit.assertThrows[.qetl.job.stream.start[`posbook;];`connect`publisher!({[] };{[] });
         "start: the transport is missing subscribe, timer";"named, before anything connects"]};
@@ -1650,6 +1748,18 @@
     h:.qetl.stream_health.of`sj_check_drop;
     .qunit.assertEquals[h`failed;1;"the batch is counted as failed, so the job reads failing"];
     .qunit.assertEquals[h`last_error;`$"check failed: 2 failure(s)";"and the reason is kept"]};
+
+/ A check that numbers rows from 1, or from another table, names a row the
+/ batch does not have: drop published every row, the bad one among them,
+/ while the log and the health count said one was withheld (#2860).
+.qt.qetl.job.stream.test_drop_withholds_the_whole_batch_when_a_failure_names_a_row_outside_it:{[t]
+    chk:{[x] ([] check:enlist `probe; status:enlist `fail; detail:enlist "row 7"; row:enlist 7)};
+    pub:.qt.qetl.job.stream.check_probe[`sj_check_range;`sjcheckrange1;`drop;chk];
+    lines:.qt.qetl.job.stream.logged[`sj_check_range;{[pub;x] (get pub)[`probe_out;([] v:1 2 3)]}[pub]];
+    fields:last first lines where "publish check withheld rows"~/:lines[;1];
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"no row is published: which one the check meant cannot be told"];
+    .qunit.assertEquals[fields`withheld;3;"and the log says all three were withheld"];
+    .qunit.assertTrue[(string (.qetl.stream_health.of`sj_check_range)`last_error) like "*outside the batch*";"saying why the whole batch was"]};
 
 .qt.qetl.job.stream.test_hold_withholds_the_whole_batch:{[t]
     pub:.qt.qetl.job.stream.check_probe[`sj_check_hold;`sjcheckhold1;`hold;.qt.qetl.job.stream.neg_check];
@@ -1963,6 +2073,20 @@
 .qt.qetl.job.stream.test_a_table_the_plant_does_not_carry_passes_unchecked:{[t]
     .qt.qetl.job.stream.ob_publish[`sjtest_local;([] anything:1 2)];
     .qunit.assertEquals[count .qt.qetl.job.stream.published;1;"a job's own table is its business"]};
+
+/ #2897: a plant table the job did not list in outputs skipped the contract,
+/ so a quote with bid and ask swapped reached the plant, stored positionally.
+/ It is withheld, named, and counted - the contract, check_publishable and the
+/ job graph all read outputs, so an undeclared plant table is a declaration bug.
+.qt.qetl.job.stream.test_a_plant_table_missing_from_outputs_is_withheld_by_name:{[t]
+    q1:([] sym:enlist `EURUSD; bid:enlist 1.1; ask:enlist 1.2; bsize:enlist 1; asize:enlist 2; mode:enlist " "; ex:enlist "N"; src:enlist `x);
+    q1:(cols[.qetl.plant.published `quote] inter cols q1)#q1;
+    before:.qetl.stream_health.of[`fx_orderbook_feed]`failed;
+    .qt.qetl.job.stream.ob_publish[`quote;`sym`ask`bid xcols q1];
+    h:.qetl.stream_health.of`fx_orderbook_feed;
+    .qunit.assertEquals[count .qt.qetl.job.stream.published;0;"nothing reaches the plant"];
+    .qunit.assertEquals[h`failed;before+1;"the batch is counted as failed"];
+    .qunit.assertTrue[(string h`last_error) like "*quote is a plant table the job does not declare in outputs*";"naming the table and the fix"]};
 
 / #1073: state says how it survives a restart - rebuilt by replay, or
 / declared ephemeral with the reason - or the job is refused where it is
