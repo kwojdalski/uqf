@@ -79,13 +79,24 @@ That wrote the skeleton: a source, a worker, the `trades_copy` table in
   ```
 
 - **Without the stack.** `scripts/jobs/run_backfill.q` runs the same worker in
-  one q process. Its `-hdb` flag names the destination directory:
+  one q process. Its `-hdb` flag names the destination directory, and
+  `UQF_STATUS_DIR` the status directory that belongs with it:
 
   ```bash
-  UQF_SOURCE_CRED_HDB_TRANSFER=/data/source_hdb q scripts/jobs/run_backfill.q \
+  UQF_SOURCE_CRED_HDB_TRANSFER=/data/source_hdb UQF_STATUS_DIR=/data/destination_status \
+      q scripts/jobs/run_backfill.q \
       -worker hdb_transfer_backfill -version v1 -from 2026.01.05D00:00 -to 2026.01.08D00:00 \
       -hdb /data/destination_hdb
   ```
+
+  The status directory holds the coverage ledger, which says which windows this
+  destination already holds; a run plans only what it lacks. Give each
+  destination its own: with the stack's ledger, the command above would find the
+  range the stack command filled already covered and copy nothing into
+  `/data/destination_hdb`. `-hdb` without `UQF_STATUS_DIR` is refused for that
+  reason (#2844). Without `-hdb` the rows stay in the process and are gone at
+  exit, and the run records its coverage in a private directory it names, so it
+  never answers for a real fill.
 
 The source needs a `trades` table with `time`, `trade_id`, `sym`, `price`,
 `size` and `side`. Change the query's `select`, the source's `columns`, and the

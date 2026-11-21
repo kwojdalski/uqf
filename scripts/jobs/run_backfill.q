@@ -32,6 +32,14 @@
 // unchanged. -hdb is the one addition: without it the rows stay in this
 // process (.qetl.io.memory) and are gone at exit, which is what you want when
 // the question is "does the query work", not "fill the database".
+//
+// THE LEDGER BELONGS WITH THE DESTINATION (#2844). Coverage says which rows a
+// destination holds, and a run plans only what its ledger lacks. So a run with
+// no -hdb records into a private status directory, made for it and named in
+// the log, never UQF_STATUS_DIR: its claims are for rows nothing keeps, and in
+// a shared ledger they made the real fill that followed plan nothing. And a
+// run with -hdb needs UQF_STATUS_DIR set: the old default, output/uqs/status,
+// is the default stack runtime's, whose claims are for another HDB.
 // -mode (validate, plan, dry_run, run) and -on_conflict are applied the way
 // torq_backfill.q applies them (#1319), by the same functions; -mode plan and
 // -mode validate open nothing and write nothing, whatever -hdb says.
@@ -65,7 +73,7 @@ if[not `worker in key .Q.opt .z.x;
 / @return the io manager now installed as the default
 .qdev.runbackfill.use_io:{[opts;worker]
     if[not `hdb in key opts;
-        .qetl.log.ch.info[`storage;"writing into this process only - pass -hdb <root> to keep the rows";()!()];
+        .qetl.log.ch.info[`storage;"writing into this process only - pass -hdb <root> to keep the rows";enlist[`status_dir]!enlist getenv `UQF_STATUS_DIR];
         :.qetl.io.default:.qetl.io.memory];
     root:hsym `$first opts`hdb;
     col:(.qetl.source.def (.qetl.job.bounded.def worker)`source)`time_column;
@@ -74,13 +82,19 @@ if[not `worker in key .Q.opt .z.x;
 
 \d .
 
-/ A status directory is required by the lock and the checkpoint. Defaulted
-/ here rather than refused, because TORQDATA is unset outside a TorQ process
-/ and the bare fallback is "/status", which is not writable and fails with a
-/ bare 'os halfway through init.
-if[""~getenv `UQF_STATUS_DIR;
-    setenv[`UQF_STATUS_DIR;"output/uqs/status"];
-    -1 "run_backfill: UQF_STATUS_DIR was unset, using output/uqs/status"];
+/ A status directory is required by the lock, the checkpoint and the coverage
+/ ledger, and it must be the one that belongs with where the rows go (#2844,
+/ THE LEDGER above). No -hdb: a private one, so the claims die with the rows.
+/ -hdb: the operator's, refused when unset rather than defaulted to a ledger
+/ that another destination's claims fill.
+$[not `hdb in key .Q.opt .z.x;
+    [setenv[`UQF_STATUS_DIR;first system "mktemp -d"];
+     -1 "run_backfill: no -hdb - the rows stay in this process, and their coverage goes to a private status directory no other run reads: ",getenv `UQF_STATUS_DIR];
+  ""~getenv `UQF_STATUS_DIR;
+    [-1 "run_backfill: -hdb needs UQF_STATUS_DIR - set it to the status directory that belongs with ",(first (.Q.opt .z.x)`hdb),
+        ": its coverage ledger says which rows that HDB holds, and a run plans only what it lacks";
+     exit 2];
+  ::];
 system "mkdir -p ",getenv `UQF_STATUS_DIR;
 
 / Caught rather than thrown: a bad flag reaching q's own handler prints a

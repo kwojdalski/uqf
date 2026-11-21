@@ -181,3 +181,36 @@
     r:.qt.qproc.backfill.run_dev_over[root;""];
     .qunit.assertEquals[r 1;0;"a plain run completes"];
     .qunit.assertEquals[()~key hsym `$root,"/st/once_demo_deals_backfill.json";1b;"it writes no outcome file: nothing changes without --once"]}
+
+/ --- run_backfill.q's coverage belongs with its destination (#2844) -------------------------
+/ A run with no -hdb keeps its rows in memory, gone at exit, yet recorded durable claims in
+/ the shared ledger, so the real fill that followed planned nothing. And an -hdb run with no
+/ UQF_STATUS_DIR defaulted to the default stack runtime's ledger, which another HDB's claims
+/ then answered for.
+
+/ Run run_backfill.q for the demo worker over three days, without -fixture's -hdb.
+/ @param envs "VAR=value " prefixes for the child's environment, after UQF_STATUS_DIR is unset
+/ @param extra the flags after the range
+/ @param root a scratch directory: the child runs with UQF_STATUS_DIR=<root>/st unless envs unsets it
+/ @return (output lines; the exit code)
+.qt.qproc.backfill.run_dev_bare:{[root;envs;extra]
+    cmd:"env -u UQF_MODE -u UQF_ON_CONFLICT ",envs,
+        $[""~getenv `QCMD; "q"; getenv `QCMD],
+        " scripts/jobs/run_backfill.q -worker demo_deals_backfill -version v2 -from 2026.09.11D00:00:00.000000000 -to 2026.09.14D00:00:00.000000000 -fixture ",
+        extra," < /dev/null > ",root,"/out.txt 2>&1; echo $?";
+    code:"J"$first system cmd;
+    (read0 hsym `$root,"/out.txt";code)}
+
+.qt.qproc.backfill.test_a_run_with_no_hdb_records_no_coverage_in_the_status_directory:{[t]
+    root:first system "mktemp -d";
+    r:.qt.qproc.backfill.run_dev_bare[root;"UQF_STATUS_DIR=",root,"/st ";""];
+    .qunit.assertEquals[r 1;0;"the run completes"];
+    .qunit.assertTrue[()~key hsym `$root,"/st/etl_coverage";"and leaves no claim in the ledger a real run reads"];
+    .qunit.assertTrue[any (r 0) like\: "*private status directory*";"saying where its claims went"]}
+
+.qt.qproc.backfill.test_an_hdb_run_with_no_status_directory_is_refused:{[t]
+    root:first system "mktemp -d";
+    r:.qt.qproc.backfill.run_dev_bare[root;"-u UQF_STATUS_DIR ";"-hdb ",root,"/hdb"];
+    .qunit.assertEquals[r 1;2;"refused, not run"];
+    .qunit.assertTrue[any (r 0) like\: "run_backfill: -hdb needs UQF_STATUS_DIR*";"naming what to set"];
+    .qunit.assertFalse[.qt.qproc.backfill.hdb_written root,"/hdb";"and nothing written"]}
