@@ -111,6 +111,43 @@
 .qf.port.apply_fills:{[pos;trades]
     {[pos;row] .qf.port.apply_fill[pos;row`sym;row`size;row`trade_price;row`side]}/[pos;`time xasc trades]};
 
+/ An empty record of the fills a book has applied: (venue; fill_id) -> the
+/ plant `time` of the row that first applied it. See first_deliveries.
+/ @return an empty keyed table
+/ @eg count .qf.port.no_fills_applied[]  ->  0
+.qf.port.no_fills_applied:{[] ([venue:`symbol$(); fill_id:`symbol$()] time:`timestamp$())}
+
+/ Split a batch of fills into first deliveries and repeats of a fill the
+/ book has already applied (#2878).
+/ .
+/ A fill's identity is (venue; fill_id), the identity the markout family
+/ and order_quality already count a fill by: the same filled order
+/ delivered twice is ONE fill, and netting it twice puts a position, its
+/ P&L and its limit breaches wrong by the whole fill. A row is a repeat
+/ when its identity was applied by a row stamped EARLIER (by plant `time`),
+/ or by an earlier row of the same batch. A row stamped at the same time as
+/ the one that applied it is the same logged row applied again - a replay
+/ re-applying what a carried snapshot lacks - and is not a repeat. A fill
+/ with a null fill_id has no identity and is never a repeat.
+/ .
+/ The record is threaded in and out like a book. Identities applied more
+/ than `keep` before the newest row are forgotten, by the rows' own
+/ stamps, so live and replay forget the same ones.
+/ @param seen the record so far (no_fills_applied)
+/ @param batch fills with time, venue and fill_id
+/ @param keep how long an identity is remembered
+/ @return `repeat`seen!(one boolean per row; the record after the batch)
+/ @eg (.qf.port.first_deliveries[.qf.port.no_fills_applied[];([] time:2#2026.09.17D10:00:00; venue:2#`fx; fill_id:2#`7);1D])`repeat  ->  01b
+.qf.port.first_deliveries:{[seen;batch;keep]
+    if[0=count batch; :`repeat`seen!(`boolean$();seen)];
+    ids:select venue, fill_id from batch;
+    applied_at:(seen ids)`time;
+    has:not null batch`fill_id;
+    / a null stamp is below every other, so it must not read as earlier
+    repeat:has & ((til count ids)<>ids?ids) or (not null applied_at) & applied_at<batch`time;
+    seen:seen upsert select venue, fill_id, time from batch where has & not repeat;
+    `repeat`seen!(repeat;select from seen where time>=max[time]-keep)}
+
 / Recompute a position book from a trades table (via apply_fills) and diff
 / it, per sym, against an independent reference book - e.g. a broker/prime
 / broker statement, or any other qty/avg_price snapshot not itself derived

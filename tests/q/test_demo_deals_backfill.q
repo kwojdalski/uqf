@@ -1305,12 +1305,30 @@
     .qunit.assertEquals[count .qetl.job.bounded.run_check[`demo_events_backfill;.qpipe.source.demo_deals.fixture[]];0;
         "a worker that declares no check reports no failures"]};
 
+/ Run the worker's check over its fixture with the check swapped for c, put
+/ back thrown or not; rethrows what run_check threw.
+.qt.qpipe.job.demo_deals_backfill.run_check_with:{[c]
+    orig:.qetl.job.bounded.def[`demo_deals_backfill]`check;
+    .qt.support.set_field[`.qetl.job.bounded.worker_cfg;`demo_deals_backfill;`check;c];
+    r:@[{(1b;.qetl.job.bounded.run_check[`demo_deals_backfill;x])};.qpipe.source.demo_deals.fixture[];{(0b;x)}];
+    .qt.support.set_field[`.qetl.job.bounded.worker_cfg;`demo_deals_backfill;`check;orig];
+    $[r 0; r 1; 'r 1]}
+
 .qt.qpipe.job.demo_deals_backfill.test_a_non_function_check_is_refused:{[t]
     / Refused at run time rather than silently skipped: a check declared as
     / the wrong thing is a mistake worth hearing about, and skipping it would
-    / leave the worker reading as protected when it is not.
-    .qunit.assertError[{.qetl.job.bounded.run_check[`demo_deals_backfill;x]};`not_a_table;
-        "a check must return a table of failures"]};
+    / leave the worker reading as protected when it is not. define refuses
+    / one too (test_declared.q); this is the refusal a check swapped after
+    / define meets. Each assertion names its own message (#2849): the batch
+    / is the worker's real fixture, so no other error can stand in for it.
+    .qunit.assertThrows[.qt.qpipe.job.demo_deals_backfill.run_check_with;"not a function";
+        "run_check: demo_deals_backfill's check must be a function taking the batch";
+        "a check that is not a function is refused by name"];
+    .qunit.assertThrows[.qt.qpipe.job.demo_deals_backfill.run_check_with;{[batch] count batch};
+        "run_check: demo_deals_backfill's check must return a table of failures*";
+        "a check that returns an atom is refused, not truth-tested"];
+    .qunit.assertEquals[count .qt.qpipe.job.demo_deals_backfill.run_check_with .qpipe.job.demo_deals_backfill.quality_check;0;
+        "and the worker's own check is back, passing its fixture"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_a_zero_width_is_refused:{[t]
     .qunit.assertError[{.qetl.job.bounded.define[`zero_width;x]};

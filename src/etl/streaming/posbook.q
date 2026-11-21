@@ -150,6 +150,13 @@
 / through a computation that has expected tables.
 .qpipe.job.posbook.book:1!.qpipe.job.posbook.position_book;
 
+/ The fills the book has applied, by identity (#2878): a filled order
+/ delivered twice is one fill, as order_quality and the markouts count it,
+/ so its repeat is dropped (.qf.port.first_deliveries). Rebuilt by a replay
+/ from the fills it replays, and forgotten after `remember`.
+.qpipe.job.posbook.applied:.qf.port.no_fills_applied[];
+.qpipe.job.posbook.remember:1D
+
 / How far back, before a sym's (or venue's) newest book, its history is kept
 / - see HOW FAR BACK in the header.
 .qpipe.job.posbook.history_retention:0D00:01:00
@@ -214,6 +221,14 @@
 / @param x the executions rows, as a table
 / @return nothing
 .qpipe.job.posbook.apply_fills:{[x]
+    / a fill delivered again is one fill, not two (#2878)
+    r:.qf.port.first_deliveries[.qpipe.job.posbook.applied;x;.qpipe.job.posbook.remember];
+    `.qpipe.job.posbook.applied set r`seen;
+    if[any r`repeat;
+        .qetl.log.ch.warn[`transform;"dropped fills already applied - a fill delivered again is not applied again";
+            (enlist[`job]!enlist `posbook),enlist[`fills]!enlist `long$sum r`repeat];
+        x:x where not r`repeat];
+    if[0=count x; :()];
     trades:.qpipe.job.posbook.as_trades[x];
     / apply_fill refuses a fill it cannot apply (#2380, #2533), and a throw
     / here loses the whole batch for good - it is not redelivered. So the
@@ -362,4 +377,4 @@
     .qpipe.job.posbook.on_replayed;
     `state`table!(`book;`position_open);
     "reads the normalizers' outputs - executions and market_data, not trades and quote - so one book carries FX and crypto and a new market is a mapping, not a job";
-    `book`mid_history`crypto_tob)];
+    `book`applied`mid_history`crypto_tob)];

@@ -1354,10 +1354,12 @@ qf.port,dimensions,function,1,book
 qf.port,empty_book,function,1,
 qf.port,empty_desk_book,function,1,dims
 qf.port,evaluate,function,2,measured limits
+qf.port,first_deliveries,function,3,seen batch keep
 qf.port,flat_tolerance,value,,
 qf.port,is_flat,function,1,qty
 qf.port,measure,function,2,book metrics
 qf.port,no_alerts,function,1,
+qf.port,no_fills_applied,function,1,
 qf.port,non_scope_cols,value,,
 qf.port,pip_value,function,2,notional pip_factor
 qf.port,pnl,function,4,notional entry_rate exit_rate side
@@ -1740,9 +1742,11 @@ qpipe.job.fx_orders_feed,spot,value,,
 qpipe.job.fx_orders_feed,statuses,value,,
 qpipe.job.fx_positions,alert_period,value,,
 qpipe.job.fx_positions,alerts,dict,,
+qpipe.job.fx_positions,applied,dict,,
 qpipe.job.fx_positions,desk_book,table,,
 qpipe.job.fx_positions,desk_fills,table,,
 qpipe.job.fx_positions,dimensions,value,,
+qpipe.job.fx_positions,first_deliveries,function,1,x
 qpipe.job.fx_positions,fresh_breaches,function,1,now
 qpipe.job.fx_positions,fx_limit_breach,table,,
 qpipe.job.fx_positions,fx_position,table,,
@@ -1756,6 +1760,7 @@ qpipe.job.fx_positions,policed,value,,
 qpipe.job.fx_positions,positions,dict,,
 qpipe.job.fx_positions,publish,value,,
 qpipe.job.fx_positions,read_limits,function,1,path
+qpipe.job.fx_positions,remember,value,,
 qpipe.job.fx_positions,restore_throttle,function,1,x
 qpipe.job.fx_trades_feed,fill_rows,function,5,i side size slip_pips fill_id
 qpipe.job.fx_trades_feed,last_id,value,,
@@ -2020,6 +2025,7 @@ qpipe.job.order_quality,outcome_rows,table,,
 qpipe.job.order_quality,pending,table,,
 qpipe.job.order_quality,publish,value,,
 qpipe.job.order_quality,withheld,value,,
+qpipe.job.posbook,applied,dict,,
 qpipe.job.posbook,apply_fills,function,1,x
 qpipe.job.posbook,as_trades,function,1,x
 qpipe.job.posbook,book,dict,,
@@ -2039,6 +2045,7 @@ qpipe.job.posbook,position_book,table,,
 qpipe.job.posbook,position_trades,table,,
 qpipe.job.posbook,publish,value,,
 qpipe.job.posbook,reference_max_age,value,,
+qpipe.job.posbook,remember,value,,
 qpipe.job.posbook,seed_lookback,value,,
 qpipe.job.posbook,seed_mids,function,1,before
 qpipe.job.rebuild_positions,as_fills,function,1,deals

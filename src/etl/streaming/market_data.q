@@ -75,12 +75,18 @@
 / which market it reads, so no reader downstream guesses it from how a sym
 / is spelled (#886) - a venue spelling a pair XBTEUR stays crypto. And the
 / clock is `venue for the same reason: that is whose stamp source_time is.
+/ .
+/ A book that carries no venue stamp - a recorder that sent none - falls back
+/ to the plant's `time` on the `receipt clock, as executions' crypto mapping
+/ does for a fill (#2883). Published with a null stamp on the `venue clock, it
+/ was a book no consumer could place: last_value never showed it and
+/ book_liquidity_1m dropped it as late.
 / @param batch crypto_book rows
 / @return complete market_data snapshots, one per venue and sym
 / @eg count .qpipe.job.market_data.from_crypto_book[.qpipe.job.market_data.crypto_book] -> 0
 .qpipe.job.market_data.from_crypto_book:{[batch]
-    .qetl.plant.with_flat select sym, source:venue, market:`crypto, source_time,
-        bid_prices, bid_sizes, ask_prices, ask_sizes, clock:`venue from batch}
+    .qetl.plant.with_flat select sym, source:venue, market:`crypto, source_time:time^source_time,
+        bid_prices, bid_sizes, ask_prices, ask_sizes, clock:(`venue`receipt) "j"$null source_time from batch}
 
 / The rows market_data is about to publish, held to the .qf.mkt check (#944)
 / for a crossed book (bid through the ask; a locked one, bid at the ask,
@@ -89,7 +95,9 @@
 / price by .qf.mkt.level_ok (`bad_level), and a source_time further ahead of
 / this host than .qpipe.job.market_data.max_clock_lead (`bad_time), and a book superbook
 / could not hold (#2564): a price ladder and its size ladder of different
-/ lengths, or a null source (`malformed) - left in, superbook threw on it
+/ lengths, or a null source, sym or source_time (`malformed, #2883: a book
+/ that names no instrument or no time is one each consumer would place
+/ differently) - left in, superbook threw on it
 / and dropped the whole batch, good books included. A book with an empty side is NOT a failure - the
 / withdrawal is how a venue pulls its book, and `one_sided is the check's
 / word for it - and a wide spread is a thin market, not bad data, so neither
@@ -128,9 +136,12 @@
     timed:([] check:count[ahead]#`bad_time; status:count[ahead]#`future;
         detail:count[ahead]#enlist "source_time is further ahead of this host than .qpipe.job.market_data.max_clock_lead"; row:ahead);
     uneven:((count each rows`bid_prices)<>count each rows`bid_sizes) or (count each rows`ask_prices)<>count each rows`ask_sizes;
-    bad:where uneven or null rows`source;
+    blank:{[rows;c] null rows c}[rows] each `source`sym`source_time;
+    bad:where uneven or any blank;
+    why:{[u;b] $[u; "a price ladder and its size ladder differ in length";
+        "the ",(", " sv string `source`sym`source_time where b)," is null"]};
     shape:([] check:count[bad]#`malformed_book; status:count[bad]#`malformed;
-        detail:{[u] $[u; "a price ladder and its size ladder differ in length"; "the source is null"]} each uneven bad; row:bad);
+        detail:why'[uneven bad;flip blank[;bad]]; row:bad);
     crossed,level,timed,shape}
 
 \d .

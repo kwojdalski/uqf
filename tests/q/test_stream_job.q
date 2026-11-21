@@ -294,6 +294,18 @@
     .qunit.assertEquals[distinct count each rows;enlist count .qf.demo.pairs;
         "every column carries one value per pair"]};
 
+/ #2886: a two-sided ladder - every bid below the mid, every ask above it,
+/ each side stepping away from the mid level by level.
+.qt.qetl.job.stream.test_the_wide_feed_puts_bids_below_the_mid_and_asks_above:{[t]
+    n:.qpipe.job.wide_orderbook_feed.n_levels;
+    rows:.qpipe.job.wide_orderbook_feed.tick_rows .qf.demo.spot;
+    bids:rows 1+til n;
+    asks:rows 1+n+til n;
+    .qunit.assertTrue[all first[bids]<.qf.demo.spot;"level-0 bids are below each pair's mid"];
+    .qunit.assertTrue[all first[asks]>.qf.demo.spot;"level-0 asks are above it"];
+    .qunit.assertTrue[all raze (1_bids)<-1_bids;"each bid level is below the one before it"];
+    .qunit.assertTrue[all raze (1_asks)>-1_asks;"each ask level is above the one before it"]};
+
 .qt.qetl.job.stream.test_a_fill_prices_around_its_pairs_level:{[t]
     / Three pips either way, which is what makes some fills cross the spread
     / and some improve. The level is pinned: any on_timer before this test moves
@@ -333,6 +345,15 @@
     rows:.qpipe.job.fx_trades_feed.fill_rows[0;1;1e6;0;`fx1];
     .qunit.assertEquals[distinct count each rows;enlist 1;
         "every column of a fill is a one-element vector, never an atom"]};
+
+/ #2887: the feed's side is +1 buy / -1 sell, its contract with executions,
+/ and a feed that only bought would make every demo position only grow. Over
+/ 64 ticks both appear (all one side by chance: 2^-63).
+.qt.qetl.job.stream.test_the_trades_feed_produces_both_sides:{[t]
+    .qt.qetl.job.stream.reset[];
+    do[64;.qpipe.job.fx_trades_feed.on_timer[]];
+    sides:raze {first[x] 1} each exec rows from .qt.qetl.job.stream.published;
+    .qunit.assertEquals[asc distinct sides;-1 1;"buys and sells, and no other side"]};
 
 .qt.qetl.job.stream.test_the_trades_feed_publishes_one_fill_a_tick:{[t]
     .qt.qetl.job.stream.reset[];
@@ -606,6 +627,20 @@
     .qunit.assertEquals[r;1b;"a null-priced fill does not throw the batch away"];
     .qunit.assertEquals[(.qt.qetl.job.stream.pb_warned 2)`fills;1j;"it is dropped and counted"];
     .qunit.assertEquals[exec qty from 0!.qpipe.job.posbook.book;1e6 -1e6;"and both good fills are in the book"]};
+
+/ #2884: a negative size would apply as the opposite side (#2533), so posbook
+/ drops it as fx_positions does, and keeps the good fill beside it.
+.qt.qetl.job.stream.test_posbook_drops_a_negative_size_fill:{[t]
+    .qt.qetl.job.stream.reset[];
+    saved:.qetl.log.ch.warn;
+    `.qetl.log.ch.warn set {[channel;text;fields] `.qt.qetl.job.stream.pb_warned set (channel;text;fields);};
+    ex:.qt.qetl.job.stream.an_execution;
+    b:ex[.qt.qetl.job.stream.d 0;`EURUSD;1;1.1;1e6],ex[.qt.qetl.job.stream.d 1;`EURUSD;1;1.105;-4e5];
+    r:@[{.qpipe.job.posbook.on_batch[`executions;x]; 1b};b;{[saved;e] `.qetl.log.ch.warn set saved; 'e}[saved]];
+    `.qetl.log.ch.warn set saved;
+    .qunit.assertEquals[r;1b;"a negative-size fill does not throw the batch away"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.pb_warned 2)`fills;1j;"it is dropped and counted"];
+    .qunit.assertEquals[exec qty from 0!.qpipe.job.posbook.book;enlist 1e6;"and only the good buy is in the book"]};
 
 .qt.qetl.job.stream.test_posbook_publishes_nothing_for_a_book:{[t]
     .qt.qetl.job.stream.reset[];
@@ -1081,6 +1116,15 @@
     .qunit.assertTrue[any not .qpipe.job.fx_orders_feed.statuses=.qpipe.job.executions.filled_status;
         "order flow carries cancels and rejects, not only fills"]};
 
+/ #2888: as the trades feed - the orders feed is the only source of desk
+/ fills with a book, so one that only bought would make fx_positions' demo
+/ book only grow.
+.qt.qetl.job.stream.test_the_orders_feed_produces_both_sides:{[t]
+    .qt.qetl.job.stream.reset[];
+    do[64;.qpipe.job.fx_orders_feed.on_timer[]];
+    sides:raze {first[x] 4} each exec rows from .qt.qetl.job.stream.published;
+    .qunit.assertEquals[asc distinct sides;-1 1;"buys and sells, and no other side"]};
+
 .qt.qetl.job.stream.test_an_order_id_is_unique_within_a_run:{[t]
     .qt.qetl.job.stream.reset[];
     .qpipe.job.fx_orders_feed.on_timer[];
@@ -1154,6 +1198,44 @@
         "and the unpriced 400k sale is in neither leg of london's book"];
     .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`quote_qty;-1085000f;1e-6;
         "the priced buy keeps both"]};
+
+/ #2878: order 7 filled, delivered twice (a redelivery, a later plant row),
+/ is one fill - as order_quality and the markouts count it - not two.
+/ Normalized through executions, so the fill_id is the order id.
+.qt.qetl.job.stream.redelivered_fills:{[]
+    o:([] time:.qt.qetl.job.stream.d each til 4; order_id:7 7 9 8;
+        sym:4#`EURUSD; book:4#`london; product:4#`spot; side:1 1 1 -1;
+        size:1000000 1000000 2000000 500000f; price:1.1 1.1 1.2 1.3; order_status:4#`filled);
+    / each order row as the plant delivers it, one batch per row
+    {[o] `time xcols update time:o`time from .qetl.job.stream.normalizer.normalize[`executions;`orders;enlist o]} each o}
+
+.qt.qetl.job.stream.test_positions_net_a_redelivered_fill_once:{[t]
+    .qt.qetl.job.stream.reset[];
+    saved:.qetl.log.ch.warn;
+    `.qetl.log.ch.warn set {[channel;text;fields] `.qt.qetl.job.stream.fx_warned set (channel;text;fields);};
+    r:@[{.qpipe.job.fx_positions.on_batch[`executions;] each x; 1b};.qt.qetl.job.stream.redelivered_fills[];{[saved;e] `.qetl.log.ch.warn set saved; 'e}[saved]];
+    `.qetl.log.ch.warn set saved;
+    .qunit.assertEquals[r;1b;"the batches are taken"];
+    p:.qpipe.job.fx_positions.positions[`EURUSD`london`spot];
+    .qt.support.assertApprox[p`base_qty;2500000f;1e-9;"1mm + 2mm - 500k: the redelivered 1mm is netted once"];
+    .qunit.assertEquals[p`fill_count;3j;"three fills, not four"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.fx_warned 2)`fills;1j;"the repeat is dropped and counted"]};
+
+.qt.qetl.job.stream.test_posbook_applies_a_redelivered_fill_once:{[t]
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.posbook.on_batch[`executions;] each .qt.qetl.job.stream.redelivered_fills[];
+    .qunit.assertEquals[exec qty from 0!.qpipe.job.posbook.book;enlist 2500000f;"the redelivered 1mm is applied once"]};
+
+/ The same fill twice in ONE batch is also one fill; a fill with no id has
+/ no identity, so two of them are two fills.
+.qt.qetl.job.stream.test_positions_net_a_fill_repeated_within_a_batch_once:{[t]
+    .qt.qetl.job.stream.reset[];
+    b:raze .qt.qetl.job.stream.redelivered_fills[];
+    .qpipe.job.fx_positions.on_batch[`executions;update time:.qt.qetl.job.stream.d 0 from b];
+    .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;2500000f;1e-9;"one batch, the repeat netted once"];
+    .qt.qetl.job.stream.reset[];
+    .qpipe.job.fx_positions.on_batch[`executions;update fill_id:` from b];
+    .qt.support.assertApprox[.qpipe.job.fx_positions.positions[`EURUSD`london`spot]`base_qty;3500000f;1e-9;"no fill_id, no identity: every row is netted"]};
 
 / #2533: apply_desk_fills now refuses a negative size, so net_fills drops
 / it as it drops a null rather than losing the whole batch.
@@ -1707,6 +1789,28 @@
     f:select from .qpipe.job.market_data.check rows where check=`malformed_book;
     .qunit.assertEquals[f`row;1 2;"uneven ladders and a null source are withheld; the good book is not"];
     .qunit.assertEquals[f`detail;("a price ladder and its size ladder differ in length";"the source is null");"each says why"]};
+
+/ #2883: a crypto book with no venue stamp is published on the receipt clock
+/ at the plant's time, as a crypto fill is; a book with a null sym or
+/ source_time is withheld as malformed.
+.qt.qetl.job.stream.test_market_data_puts_an_unstamped_crypto_book_on_the_receipt_clock:{[t]
+    cb:([] time:2#2026.09.17D14:32:09; source_time:(2026.09.17D10:00:01;0Np);
+        venue:2#`binance_spot; sym:2#`$"BTC-USDT";
+        bid_prices:2#enlist 61999 61998f; bid_sizes:2#enlist 0.5 1f;
+        ask_prices:2#enlist 62001 62002f; ask_sizes:2#enlist 0.5 1f);
+    md:.qpipe.job.market_data.from_crypto_book cb;
+    .qunit.assertEquals[md`source_time;2026.09.17D10:00:01 2026.09.17D14:32:09;"the venue's stamp, else the plant's"];
+    .qunit.assertEquals[md`clock;`venue`receipt;"each on its own clock"];
+    .qunit.assertEquals[count .qpipe.job.market_data.check md;0;"and both books pass the check"]};
+
+.qt.qetl.job.stream.test_market_data_check_withholds_a_book_with_no_sym_or_time:{[t]
+    now:.z.p;
+    book:{[s;ts] ([] sym:enlist s; source:enlist `binance_spot; market:enlist `crypto; source_time:enlist ts;
+        bid_prices:enlist enlist 100f; bid_sizes:enlist enlist 1f; ask_prices:enlist enlist 101f; ask_sizes:enlist enlist 1f; clock:enlist `venue)};
+    rows:raze (book[`$"BTC-USDT";now];book[`;now];book[`$"BTC-USDT";0Np]);
+    f:select from .qpipe.job.market_data.check rows where check=`malformed_book;
+    .qunit.assertEquals[f`row;1 2;"a null sym and a null source_time are withheld; the good book is not"];
+    .qunit.assertEquals[f`detail;("the sym is null";"the source_time is null");"each says why"]};
 
 / #2418: a quote that pulls a side (null price, zero size) is a withdrawal, an
 / empty ladder, and is published with its live side - not a one-level ladder
