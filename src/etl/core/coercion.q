@@ -138,7 +138,14 @@
 / A SLASHED date is refused: "05/09/2026" is 5 September or 9 May, q reads it
 / as the latter, and "15/09/2026" as null - so which day a source meant would
 / depend on the day of the month. Like "1,234" in to_float, ambiguous is null.
-/ @return the timestamp in UTC, or 0Np when empty, malformed, date-only or slashed
+/ .
+/ So is anything that does not START WITH ITS YEAR (#2868): "P"$ reads a
+/ day-first dashed "05-02-2026" as 2 May and "25-02-2026" as null - the same
+/ trap - and digit-only text (epoch milliseconds, a compact 20260915103000) as
+/ a timestamp decades away, never null. The text must open with a four-digit
+/ year and a "-" or "." and carry a T, D or space before its clock.
+/ @return the timestamp in UTC, or 0Np when empty, malformed, date-only,
+/ slashed, digit-only or not year-first
 / @eg .qetl.coerce.to_timestamp["2026-09-15T09:30:00"]  ->  2026.09.15D09:30:00
 / @eg .qetl.coerce.to_timestamp["2026-09-15T11:30:00+02:00"]  ->  2026.09.15D09:30:00
 / @eg .qetl.coerce.to_timestamp["2026-09-15"]           ->  0Np
@@ -154,6 +161,7 @@
     / a T/D/space with no digit after it: that is a date, not a clock.
     if[.qetl.coerce.is_date_only[first zoned]; :0Np];
     if[not .qetl.coerce.has_clock first zoned; :0Np];
+    if[not .qetl.coerce.is_year_first first zoned; :0Np];
     / ISO uses "-" between date parts and "T" before the time; q uses "." and
     / "D". Normalise the separators rather than branching on format, so a
     / mixed source does not need two code paths.
@@ -161,6 +169,17 @@
     parsed:"P"$normalised;
     if[not .qetl.coerce.clock_in_range normalised; :0Np];
     parsed - last zoned}
+
+/ Does this timestamp text open with a four-digit year and a "-" or ".", and
+/ carry a T, D or space before its clock? Epoch digits and a day- or
+/ month-first date do not, and "P"$ misreads both rather than refusing them.
+/ @param str timestamp text, zone suffix already stripped
+/ @return 1b when the text is year-first with a date/time separator
+/ @eg .qetl.coerce.is_year_first each ("2026-09-15T09:30:00";"1772029800020";"05-02-2026 14:30:00")  ->  100b
+/ @private
+.qetl.coerce.is_year_first:{[str]
+    if[5>count str; :0b];
+    (all (4#str) in .Q.n) and ((str 4) in "-.") and any str in "TD "}
 
 / Does this text carry a clock, if it has a time separator at all? "2026-09-15T"
 / has the separator and nothing after it, which "P"$ reads as midnight.

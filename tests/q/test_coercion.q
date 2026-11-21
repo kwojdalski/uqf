@@ -156,6 +156,16 @@
     p:.qetl.coerce.to_timestamp each ("05/09/2026 09:30:00";"15/09/2026 09:30:00";"2026/09/15D09:30:00");
     .qunit.assertEquals[(null d;null p);(111b;111b);"no slashed date reaches a parse"]};
 
+/ #2868: "P"$ reads digit-only text and a day-first dashed date as something
+/ else, never null: epoch milliseconds "1772029800020" became 2006.03.14, and
+/ "05-02-2026" 2 May while "25-02-2026" was null - the slashed date's trap.
+.qt.qetl.coerce.test_digit_only_and_day_first_text_is_refused:{[t]
+    r:.qetl.coerce.to_timestamp each ("1772029800020";"1694772000000";"20260915103000";"05-02-2026 14:30:00";"25-02-2026 14:30:00";"09-15-2026 10:30:00");
+    .qunit.assertEquals[null r;111111b;"no epoch, compact or day/month-first text reaches a parse"]};
+
+.qt.qetl.coerce.test_a_space_separated_iso_timestamp_still_parses:{[t]
+    .qunit.assertEquals[.qetl.coerce.to_timestamp["2026-09-15 09:30:00"];2026.09.15D09:30:00.000000000;"a space is a separator"]};
+
 .qt.qetl.coerce.test_unslashed_dates_still_parse:{[t]
     d:.qetl.coerce.to_date_as_midnight each ("2026-09-15";"2026.09.15");
     .qunit.assertEquals[d;2#2026.09.15D00:00:00.000000000;"ISO and dotted dates are unaffected"]};
