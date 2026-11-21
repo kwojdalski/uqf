@@ -1746,6 +1746,28 @@
     .qunit.assertEquals[f`row;1 2;"uneven ladders and a null source are withheld; the good book is not"];
     .qunit.assertEquals[f`detail;("a price ladder and its size ladder differ in length";"the source is null");"each says why"]};
 
+/ #2883: a crypto book with no venue stamp is published on the receipt clock
+/ at the plant's time, as a crypto fill is; a book with a null sym or
+/ source_time is withheld as malformed.
+.qt.qetl.job.stream.test_market_data_puts_an_unstamped_crypto_book_on_the_receipt_clock:{[t]
+    cb:([] time:2#2026.09.17D14:32:09; source_time:(2026.09.17D10:00:01;0Np);
+        venue:2#`binance_spot; sym:2#`$"BTC-USDT";
+        bid_prices:2#enlist 61999 61998f; bid_sizes:2#enlist 0.5 1f;
+        ask_prices:2#enlist 62001 62002f; ask_sizes:2#enlist 0.5 1f);
+    md:.qpipe.job.market_data.from_crypto_book cb;
+    .qunit.assertEquals[md`source_time;2026.09.17D10:00:01 2026.09.17D14:32:09;"the venue's stamp, else the plant's"];
+    .qunit.assertEquals[md`clock;`venue`receipt;"each on its own clock"];
+    .qunit.assertEquals[count .qpipe.job.market_data.check md;0;"and both books pass the check"]};
+
+.qt.qetl.job.stream.test_market_data_check_withholds_a_book_with_no_sym_or_time:{[t]
+    now:.z.p;
+    book:{[s;ts] ([] sym:enlist s; source:enlist `binance_spot; market:enlist `crypto; source_time:enlist ts;
+        bid_prices:enlist enlist 100f; bid_sizes:enlist enlist 1f; ask_prices:enlist enlist 101f; ask_sizes:enlist enlist 1f; clock:enlist `venue)};
+    rows:raze (book[`$"BTC-USDT";now];book[`;now];book[`$"BTC-USDT";0Np]);
+    f:select from .qpipe.job.market_data.check rows where check=`malformed_book;
+    .qunit.assertEquals[f`row;1 2;"a null sym and a null source_time are withheld; the good book is not"];
+    .qunit.assertEquals[f`detail;("the sym is null";"the source_time is null");"each says why"]};
+
 / #2418: a quote that pulls a side (null price, zero size) is a withdrawal, an
 / empty ladder, and is published with its live side - not a one-level ladder
 / withheld as bad_level, which left the pulled side live downstream.
