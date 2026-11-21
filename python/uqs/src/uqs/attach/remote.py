@@ -115,8 +115,11 @@ class KolaIpc:
             raise IpcError(
                 endpoint, op, f"{endpoint.host} does not resolve from this machine"
             ) from None
+        # kola's timeout is whole seconds, and 0 waits forever: milliseconds handed over as
+        # they were made a 3 s probe a 50-minute one (#2877). A part second rounds up.
+        seconds = max(1, -(-self._timeout // 1000))
         try:
-            conn = kola.Q(host, endpoint.port, user=user, passwd=password, timeout=self._timeout)
+            conn = kola.Q(host, endpoint.port, user=user, passwd=password, timeout=seconds)
         except Exception as exc:  # noqa: BLE001 - kola raises its own, untyped, errors
             raise _failure(endpoint, op, exc, user, "cannot connect") from None
         try:
