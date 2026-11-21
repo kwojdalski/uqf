@@ -18,7 +18,8 @@
 / as an outage, so a session ends at the beat before one (beat, #832).
 / .
 / ONE ROW PER SESSION - one start of one job in one process. A session opens
-/ once the job is wired and subscribed (.qetl.job.stream.start), and a timer
+/ once the job is wired and, if it subscribes, subscribed - a polling feed or
+/ timer-only job too (#2896) - in .qetl.job.stream.start, and a timer
 / moves its last_seen every `period`. Nothing closes it: a clean exit and a
 / crash look the same, ending at the last beat. That UNDER-claims by at most
 / one period at each session's end, which is the safe direction - a gap

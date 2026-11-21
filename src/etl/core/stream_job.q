@@ -637,6 +637,15 @@
     .[.qetl.stream_health.record;(job;1b;"");::];
     r}
 
+/ Private: the job's on_timer, counting a tick that throws in
+/ .qetl.stream_health before re-raising it for the runner to log (#2896): a
+/ polling feed whose fetch fails on every tick read `ok 0 failed 0`, and its
+/ beat could not say it was failing. A tick that returns counts nothing - it
+/ is not a batch.
+/ @private
+.qetl.job.stream.timed:{[job;f;tick]
+    @[f;tick;{[job;e] .[.qetl.stream_health.record;(job;0b;e);::]; 'e}[job]]}
+
 / Start a job on a transport: the one sequence every runner uses.
 / .
 / IN THIS ORDER, and the order is the point.
@@ -650,7 +659,8 @@
 /      what was published before the restart.
 /   4. on_replayed, with publish live again, for what the replay left owed.
 /   5. Uptime: a session in .qetl.uptime, beaten on a timer - the record of
-/      when the job was up and subscribed, which `uqs job gaps` reads (#630).
+/      when the job was up (and subscribed, for a job that subscribes), which
+/      `uqs job gaps` reads (#630), and what writes its health file.
 /   6. Timers: the job's, and the configuration audit's.
 / .
 / Both runners used to do this themselves, differently (#data-platform
@@ -694,14 +704,16 @@
         if[replay and `carry in key d; .qetl.job.stream.missed_end_of_day[job;today]];
         .qetl.job.stream.replayed[job];
         if[not first r; 'last r];
-        if[`on_replayed in key d; (d`on_replayed)[]];
-        / Protected: a record that cannot be written must never stop the job
-        / it records. Logged, so a missing session is explained.
-        .[{[tr;job] .qetl.uptime.begin job;
-            tr[`timer][`$(string job),"_uptime";.qetl.uptime.period;{[job;tr;unused] .qetl.job.stream.watch_subscription[job;tr]; @[.qetl.uptime.beat;::;{[e] .qetl.log.ch.warn[`lifecycle;"could not record a beat";enlist[`error]!enlist e];}]}[job;tr]]};
-          (tr;job);
-          {[job;e] .qetl.log.ch.warn[`lifecycle;"could not open an uptime session - its gaps will read as down";(enlist[`job]!enlist job),enlist[`error]!enlist e];}[job]]];
-    if[`period in key d; tr[`timer][job;d`period;d`on_timer]];
+        if[`on_replayed in key d; (d`on_replayed)[]]];
+    / Protected: a record that cannot be written must never stop the job
+    / it records. Logged, so a missing session is explained. Every job, not
+    / only a subscriber: the beat is what writes the health file, and a feed
+    / that subscribes to nothing had none (#2896).
+    .[{[tr;job] .qetl.uptime.begin job;
+        tr[`timer][`$(string job),"_uptime";.qetl.uptime.period;{[job;tr;unused] .qetl.job.stream.watch_subscription[job;tr]; @[.qetl.uptime.beat;::;{[e] .qetl.log.ch.warn[`lifecycle;"could not record a beat";enlist[`error]!enlist e];}]}[job;tr]]};
+      (tr;job);
+      {[job;e] .qetl.log.ch.warn[`lifecycle;"could not open an uptime session - its gaps will read as down";(enlist[`job]!enlist job),enlist[`error]!enlist e];}[job]];
+    if[`period in key d; tr[`timer][job;d`period;.qetl.job.stream.timed[job;d`on_timer]]];
     if[count .qetl.cfg.audit.watching job;
         `.qetl.cfg.audit.owner_here set job;
         tr[`timer][`$(string job),"_config";.qetl.cfg.audit.period;.qetl.cfg.audit.poll_and_publish]];

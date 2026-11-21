@@ -1582,6 +1582,30 @@
     .qunit.assertTrue[up;"the job is running"];
     .qunit.assertEquals[exec qty from book;enlist 1e6;"and its replay rebuilt its state"]};
 
+/ A job subscribing to nothing (every polling feed, every timer-only job) got
+/ no uptime session and no beat, so its health file was never written; and a
+/ timer tick that threw was counted nowhere, so a feed failing every tick read
+/ ok 0 failed 0 (#2896).
+.qt.qetl.job.stream.test_a_job_that_subscribes_to_nothing_beats_and_counts_a_failing_tick:{[t]
+    .qt.support.save_stream_jobs[`.qt.qetl.job.stream.feedhealth];
+    .qetl.job.stream.define[`sj_feed_health;`procname`subscribe_to`outputs`period`on_timer!(
+        `sjfeedhealth1;`symbol$();`symbol$();0D00:00:01;{[] '"upstream 500"})];
+    `.qt.qetl.job.stream.timers set (`symbol$())!();
+    tr:`connect`publisher`subscribe`timer!({[] };{[] {[t;x] count x}};{[tbls;h;replay] };{[n;p;f] .qt.qetl.job.stream.timers[n]:f;});
+    before:.qetl.stream_health.of[`sj_feed_health]`failed;
+    .qetl.job.stream.start[`sj_feed_health;tr];
+    tick:@[.qt.qetl.job.stream.timers`sj_feed_health;::;{[e] e}];
+    h:.qetl.stream_health.of`sj_feed_health;
+    .qetl.uptime.beat[];
+    file:hsym `$.qetl.status.status_dir[],"/stream_health_sj_feed_health.txt";
+    got:$[()~key file; ()!(); .j.k first read0 file];
+    `.qetl.job.stream.running set .qetl.job.stream.running except `sj_feed_health;
+    .qt.support.restore_stream_jobs[`.qt.qetl.job.stream.feedhealth];
+    .qunit.assertTrue[`sj_feed_health_uptime in key .qt.qetl.job.stream.timers;"the job's uptime is beaten"];
+    .qunit.assertEquals[tick;"upstream 500";"a tick that throws still throws, for the runner to log"];
+    .qunit.assertEquals[(h`failed;h`last_error);(before+1;`$"upstream 500");"and is counted, with why"];
+    .qunit.assertEquals[got`failing;1b;"so the health file uqs status reads says failing"]};
+
 .qt.qetl.job.stream.test_a_transport_missing_a_step_is_refused:{[t]
     .qunit.assertThrows[.qetl.job.stream.start[`posbook;];`connect`publisher!({[] };{[] });
         "start: the transport is missing subscribe, timer";"named, before anything connects"]};
