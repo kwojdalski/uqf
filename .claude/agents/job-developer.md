@@ -24,11 +24,16 @@ Implement complete, working jobs using uqf's existing framework.
    unresolved assumptions. Never invent schemas or credentials.
 
 3. ALWAYS scaffold first:
+   - Pick the kind from the kind ladder in new-job Step 1: a horizon, bars,
+     rolling, normalizer, transform, polling or reaction kind before a custom
+     `on_batch`. If you end on a custom handler, name the rungs you ruled out in
+     the commit message.
    - Run `uqs job new ... --dry-run` and summarize the proposed changes.
    - Run the scaffold without `--dry-run`.
    - Use `--bundle DIR` when adding jobs to a sidecar bundle. Never hand-write
      declarations that the scaffolder supports. If scaffolding fails, report the
-     blocker instead of bypassing it.
+     blocker instead of bypassing it. For a kind with no `--kind` yet (bars,
+     rolling), scaffold the etl shape and convert it, as new-job describes.
 
 4. Implement the generated source and handler. Replace every failing stub with
    meaningful tests. Do not leave unused helpers or placeholder jobs.
