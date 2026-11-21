@@ -4,6 +4,12 @@
 / .
 / The same namespace as stream_job.q, which runs these from `start` (and
 / writes the marker from `end_of_day`); loaded straight after it.
+/ .
+/ A job that rebuilds from its own output instead (restore_from: a bars or
+/ rolling job) has the same hole without a carry (#2854): its open windows of
+/ the day that ended are in that day's log, and a restart replays only the
+/ new day's. It keeps a marker of its own - the last plant day it ran on -
+/ and catch_up_restore replays the logs from that day to yesterday first.
 
 \d .
 
@@ -132,13 +138,18 @@
 / is found and this is quiet; so is a catch_up that read every log from the day
 / after the marker, snapshot or not (#1189: the book was flat at the marker).
 / It speaks when that log could not be read (a transport without earlier_days
-/ or has_log, or logs since cleared), and when the marker itself cannot be
-/ (#2310).
+/ or has_log, or logs since cleared), when the marker itself cannot be
+/ (#2310), and when a snapshot was replayed but could not be restored (#2893).
 / @param job the job's name
 / @param today the date the replayed log is for (the plant's, see plant_today)
 / @return 1b when an end of day was missed, after logging it as an ERROR
 / @eg .qetl.job.stream.missed_end_of_day[`fx_positions;.z.D]
 .qetl.job.stream.missed_end_of_day:{[job;today]
+    / a snapshot that arrived and could not be restored is missing state whatever the marker says (#2893)
+    if[job in key .qetl.job.stream.unrestored;
+        .qetl.log.ch.err[`eod;"a carried snapshot was replayed but could not be restored - the state carried from before today is missing, and the next end of day would carry the loss forward";
+            (enlist[`job]!enlist job),`error`today`table!(string .qetl.job.stream.unrestored job;today;.qetl.job.stream.def[job][`carry]`table)];
+        :1b];
     if[(first $[job in key .qetl.job.stream.carry_log; .qetl.job.stream.carry_log job; enlist `none]) in `restored`restored_full; :0b];
     if[job in key .qetl.job.stream.caught_up; if[.qetl.job.stream.caught_up job; :0b]];
     r:@[{(1b;.qetl.job.stream.last_end_seen[x])};job;{(0b;x)}];
@@ -157,6 +168,88 @@
 / @param job the job's name
 / @return the job's name
 / @eg .qetl.job.stream.replayed[`fx_positions]  ->  `fx_positions
-.qetl.job.stream.replayed:{[job] .qetl.job.stream.carry_log::(enlist job) _ .qetl.job.stream.carry_log; .qetl.job.stream.caught_up::(enlist job) _ .qetl.job.stream.caught_up; job}
+.qetl.job.stream.replayed:{[job]
+    .qetl.job.stream.carry_log::(enlist job) _ .qetl.job.stream.carry_log;
+    .qetl.job.stream.caught_up::(enlist job) _ .qetl.job.stream.caught_up;
+    .qetl.job.stream.unrestored::(enlist job) _ .qetl.job.stream.unrestored;
+    job}
+
+/ ------------------------------------------------------ RESTORE_FROM JOBS
+
+/ Where a job that restores from its output records the last plant day it ran
+/ on (#2854), beside the carry marker.
+/ @param job the job's name
+/ @return the file path
+/ @eg .qetl.job.stream.day_marker_path `exec_bars
+.qetl.job.stream.day_marker_path:{[job] (.qetl.job.bounded.state.lock_dir[]),"/ran_",string job}
+
+/ The last plant day a job that restores from its output ran on, 0Nd when
+/ none was recorded (a first start).
+/ @param job the job's name
+/ @return a date, or 0Nd
+/ @throws error when the marker and its .bak are both unreadable
+/ @eg .qetl.job.stream.last_day_ran `nothing_ran_as_this
+.qetl.job.stream.last_day_ran:{[job]
+    p:.qetl.job.stream.day_marker_path[job];
+    if[()~key hsym `$p; :0Nd];
+    first (.qetl.job.bounded.state.durable_get p)`day}
+
+/ Record the plant day a job that restores from its output is running on: at
+/ start, once its replay is done, and at each end of day it closed, the day
+/ after. Never stops the job: a marker that cannot be written is a warning.
+/ @param job the job's name
+/ @param day the plant's day
+/ @return 1b when it was written
+/ @eg .qetl.job.stream.mark_day_ran[`eg_job;0Nd]  ->  0b
+.qetl.job.stream.mark_day_ran:{[job;day]
+    if[null day; :0b];
+    / a one-row table, not a bare date: PeachQ cannot read a `set atom back
+    @[{[day;j] .qetl.job.bounded.state.durable_set[.qetl.job.stream.day_marker_path[j];([] day:enlist day)]; 1b}[day];job;
+        {[j;e] .qetl.log.ch.warn[`eod;"could not record the day it ran on";(enlist[`job]!enlist j),enlist[`error]!enlist e]; 0b}[job]]}
+
+/ Does this job rebuild from its own output (restore_from), without a carry,
+/ and so keep the day marker?
+/ @param job the job's name
+/ @return a boolean
+/ @eg .qetl.job.stream.restores `exec_bars  ->  1b
+.qetl.job.stream.restores:{[job] d:.qetl.job.stream.def job; (d`replay) and (0<count d`restore_from) and not `carry in key d}
+
+/ Before a job that restores from its output replays today's log, replay the
+/ logs of the days since the last one it ran on (#2854): from that day itself,
+/ whose windows it may have held open when it stopped, to yesterday, through
+/ the same handler and with publish muted, as today's. A bars job then holds
+/ the open windows of the day that ended - its replayed bars evict the closed
+/ ones - and its first tick publishes them. A transport without earlier_days
+/ cannot, and that is logged as an ERROR naming the days; so is a missed day
+/ with no log.
+/ @param job the job's name
+/ @param tr the transport
+/ @param tbls the tables subscribed to
+/ @param h the handler to replay through
+/ @return how many messages were replayed
+/ @eg .qetl.job.stream.catch_up_restore[`eg_job;()!();`executions`exec_bars;{[t;x]}]  ->  0
+.qetl.job.stream.catch_up_restore:{[job;tr;tbls;h]
+    r:@[{(1b;.qetl.job.stream.last_day_ran x)};job;{(0b;x)}];
+    today:.qetl.job.stream.plant_today[tr];
+    if[not first r;
+        .qetl.log.ch.err[`eod;"the marker of the last day this job ran on cannot be read - whether it was down across an end of day cannot be told, so windows of an earlier day may never be published";
+            (enlist[`job]!enlist job),`error`today!(last r;today)];
+        :0];
+    last_day:last r;
+    if[(null last_day) or last_day>=today; :0];
+    if[not `earlier_days in key tr;
+        .qetl.log.ch.err[`eod;"down across an end of day, and this transport cannot replay earlier days - what the job held open of those days is never published";
+            (enlist[`job]!enlist job),`last_day_ran`today!(last_day;today)];
+        :0];
+    if[`has_log in key tr;
+        days:last_day+til today-last_day;
+        if[count missing:days where not tr[`has_log] each days;
+            .qetl.log.ch.err[`eod;"no log for some of the days it was down across - what it held open of them is never published";
+                (enlist[`job]!enlist job),`last_day_ran`through`missing!(last_day;today-1;missing)]]];
+    msgs:tr[`earlier_days][tbls;last_day;today-1];
+    {[h;m] h . m}[h] each msgs;
+    .qetl.log.ch.info[`eod;"replayed the logs of the days it was down across, to rebuild what it held open";
+        (enlist[`job]!enlist job),`last_day_ran`through`messages!(last_day;today-1;count msgs)];
+    count msgs}
 
 \d .

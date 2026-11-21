@@ -55,7 +55,10 @@
 / EVICTION. A row is kept while it is newer than the longest window plus the
 / lateness behind the clock; older, it can be in no future window, and goes.
 / The buffer is therefore bounded by that span of input, however long the
-/ process runs, and so is a replay (its clock is the log's).
+/ process runs, and so is a replay (its clock is the log's) once it has seen
+/ the job's own output. Before that it keeps every row: the grid points still
+/ owed are not yet known, and TorQ's per-table logs can replay the events
+/ before the output (#2894). The first evaluate after it bounds the buffer.
 / .
 / COST. A publication re-aggregates the buffered rows once per window length:
 / O(W x R) with W window lengths and R rows in the longest window, every
@@ -140,6 +143,9 @@
     .qetl.job.stream.refuse_publishes[who;decl];
     decl:.qetl.job.stream.with_lateness[who;decl];
     .qetl.declared.refuse_unknown[who;"a rolling job";decl;.qetl.job.stream.rolling.required_keys,.qetl.job.stream.rolling.optional_keys];
+    / before anything is written in the job's namespace: a refused re-declaration
+    / of a live job must leave its buffers and wired publish as they were (#2858)
+    .qetl.job.stream.refuse_taken[who;name;decl];
     missing:.qetl.job.stream.rolling.required_keys where not .qetl.job.stream.rolling.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     if[not all -11h=type each decl`events`transform;
@@ -164,8 +170,11 @@
     if[count bad:(key .qetl.job.stream.rolling.shell_columns) where not (value .qetl.job.stream.rolling.shell_columns)=types key .qetl.job.stream.rolling.shell_columns;
         'who,"'s transform input types ",(", " sv string bad)," wrongly - window is a timespan, as_of a timestamp, inside a boolean"];
     if[count clash:d[`by] inter key .qetl.job.stream.rolling.shell_columns; 'who,"'s by names ",(", " sv string clash),", which the shell adds"];
+    if[not -11h=type d`event_time; 'who,"'s event_time must be one column name, a symbol"];
     if[count lacks:(distinct d[`by],d`event_time) except key types;
         'who,"'s transform input carries no ",(", " sv string lacks)];
+    / the windows are cut on it: any other type drops every row as late (#2855)
+    .qetl.job.stream.require_timestamp[who;`event_time;d`event_time;ev0;"the transform's input"];
     if[count lacks:(d[`by],`window`as_of) except cols t`output;
         'who,"'s transform output carries no ",(", " sv string lacks)," - they name the window the row describes"];
     d[`input]:first key t`inputs;
@@ -311,6 +320,11 @@
         / earlier grid point not yet published, which the next tick catches up (#2457)
         anchor:(d`period) xbar max stamps;
         owed:(get ` sv ns,`last_as_of)+d`period;
+        / replaying with nothing of its own output seen yet, the grid points still
+        / owed are unknown: TorQ's per-table logs can replay the events before the
+        / output that says what was published (#2894), so nothing is evicted until
+        / it has - or until the first evaluate after the replay bounds the buffer
+        if[.qetl.job.stream.replaying and null owed; :()];
         keep_from:$[null owed; anchor; anchor&owed]-span;
         .qetl.job.stream.evict[pq;((get pq) tc)<=keep_from]];
     }

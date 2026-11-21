@@ -279,6 +279,16 @@
     .qunit.assertEquals[(f[`t`id!(1;`a);`t`id!(1;`b)];f[`t`id!(1;`b);`t`id!(2;`a)];f[`t`id!(1;`b);`t`id!(1;`b)];f[(::);`t`id!(0;`a)]);
         1101b;"a tie on time goes to the next field; equal is not after; a first run is after nothing"]};
 
+/ A string tiebreak (an id kept "as a q value") compared with `>` gave a boolean
+/ vector, so the feed's advance check threw 'type - or 'length for ids of
+/ different lengths - at the first timestamp tie, and every tick after (#2857).
+.qt.qetl.job.stream.poll.test_lexically_after_orders_a_string_field:{[t]
+    f:.qetl.job.continuous.lexically_after[`ts`id];
+    ts:2026.09.10D09:41:00;
+    .qunit.assertEquals[(f[`ts`id!(ts;"AAA");`ts`id!(ts;"AAB")];f[`ts`id!(ts;"AAB");`ts`id!(ts;"AB")];
+            f[`ts`id!(ts;"AB");`ts`id!(ts;"AAB")];f[`ts`id!(ts;"AAB");`ts`id!(ts;"AAB")]);
+        1100b;"a later id is after, whatever its length; an earlier or equal one is not"]};
+
 / --- a recent-data window (#681) ------------------------------------------
 
 / Rows around NOW: 20s, 10s, 5s and 1s ago, and one a minute in the future -

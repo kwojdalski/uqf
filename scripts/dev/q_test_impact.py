@@ -194,6 +194,7 @@ DYNAMIC_REVIEWED: dict[str, tuple[str, str]] = {
         "a delivery's definition under .qetl.job.stream.delivery and a job's publish",
     ),
     "src/etl/core/stream_job.q": ("job-state", "a stream job's state, publish and buffer tables"),
+    "src/etl/core/stream_carry.q": ("job-state", "a carrying stream job's state and its snapshot"),
     "src/etl/core/tick.q": ("data", "the tick log file"),
     "src/etl/plant_registry.q": (
         "own",

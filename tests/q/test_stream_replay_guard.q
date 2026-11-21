@@ -49,6 +49,19 @@
     .qunit.assertFalse[.qetl.job.stream.trapping;"trapping ends with the replay: a live failure raises as before"];
     .qt.qetl.stream_replay_guard.undefine[]};
 
+/ The guard's header promises the next beat shows the job failing. The session
+/ opened after the replay took the replay's failures as already seen, so every
+/ beat wrote "failing":false and no gap was ever recorded (#2895).
+.qt.qetl.stream_replay_guard.test_a_batch_quarantined_in_the_replay_reads_failing_at_the_first_beat:{[t]
+    .qt.qetl.stream_replay_guard.define[];
+    .qetl.job.stream.start[`rpg;.qt.qetl.stream_replay_guard.transport[.qt.qetl.stream_replay_guard.log[];{[] 1b}]];
+    .qetl.uptime.beat[];
+    got:.j.k first read0 hsym `$.qetl.status.status_dir[],"/stream_health_rpg.txt";
+    open_:exec count i from .qetl.uptime.sessions[] where session in .qetl.uptime.mine, job=`rpg, last_seen>started_at;
+    .qt.qetl.stream_replay_guard.undefine[];
+    .qunit.assertTrue[got`failing;"the health file says failing, so uqs status does"];
+    .qunit.assertEquals[open_;0;"and the session that began over the lost batch claims no time up"]};
+
 .qt.qetl.stream_replay_guard.test_a_live_batch_that_fails_still_raises:{[t]
     .qt.qetl.stream_replay_guard.define[];
     .qetl.job.stream.start[`rpg;.qt.qetl.stream_replay_guard.transport[();{[] 1b}]];

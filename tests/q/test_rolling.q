@@ -85,6 +85,26 @@
 
 / --- declaring -----------------------------------------------------------
 
+/ A job file loaded twice re-declares a live job (#2858): the refusal must
+/ leave its buffer and its wired publish as they were.
+/ The windows are cut on event_time: a float column was accepted and every row
+/ was then dropped as late (#2855).
+.qt.qetl.job.stream.rolling.test_an_event_time_that_is_not_one_timestamp_column_is_refused:{[t]
+    .qt.qetl.job.stream.rolling.define_transform[];
+    .qunit.assertThrows[.qetl.job.stream.at_rolling[`rt_x;];@[.qt.qetl.job.stream.rolling.decl[];`event_time;:;`v];
+        "*rolling job rt_x's event_time v is not a timestamp column of the transform's input - it is of type f*";"a float column"];
+    .qunit.assertThrows[.qetl.job.stream.at_rolling[`rt_x;];@[.qt.qetl.job.stream.rolling.decl[];`event_time;:;`t`k];
+        "*rolling job rt_x's event_time must be one column name, a symbol*";"a list of columns"];
+    .qunit.assertFalse[`rt_x in .qetl.job.stream.defined[];"and nothing is registered"]};
+
+.qt.qetl.job.stream.rolling.test_a_refused_redeclaration_leaves_the_live_job_as_it_was:{[t]
+    .qt.qetl.job.stream.rolling.job `rt_redecl;
+    .qt.qetl.job.stream.rolling.feed[`rt_redecl;.qt.qetl.job.stream.rolling.t0+0D00:00:30;`a;2f];
+    .qunit.assertThrows[.qetl.job.stream.at_rolling[`rt_redecl;];@[.qt.qetl.job.stream.rolling.decl[];`procname;:;`rt_redecl1];
+        "*rolling job rt_redecl is already a streaming job*";"the second declaration is refused by name"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.rolling.ns[`rt_redecl;`pending];1;"the buffered row is still there"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.rolling.ns[`rt_redecl;`publish])[`rt_out;([] a:1 2)];2;"and publish still reaches what it was wired to"]};
+
 .qt.qetl.job.stream.rolling.test_a_declaration_missing_a_key_is_refused_by_name:{[t]
     .qt.qetl.job.stream.rolling.define_transform[];
     .qunit.assertThrows[.qetl.job.stream.at_rolling[`rt_x;];`lateness _ .qt.qetl.job.stream.rolling.decl[];
@@ -230,13 +250,30 @@
     .qunit.assertTrue[biggest>=300;"and not fewer: the window's own rows are kept"];
     .qunit.assertEquals[count distinct (.qt.qetl.job.stream.rolling.published[])`as_of;7191;"every grid point from the first tick on, the nine between ticks too"]};
 
+/ Bounded once the replay has seen the job's own output, which says what is
+/ still owed; before that every row is kept (#2894) until the first evaluate.
 .qt.qetl.job.stream.rolling.test_a_replay_is_bounded_too:{[t]
+    nm:.qt.qetl.job.stream.rolling.job`rt_j;
+    `.qetl.job.stream.replaying set 1b;
+    / the job's output logged as it ran: a publication a minute, the last second's grid point
+    r:@[{[nm] {[nm;s]
+        at:.qt.qetl.job.stream.rolling.t0+0D00:00:01*s;
+        if[0=s mod 60; (.qt.qetl.job.stream.rolling.ns[nm;`on_batch])[`rt_out;([] k:enlist `a; window:enlist 0D00:01; as_of:enlist at-0D00:00:01; n:enlist 0; total:enlist 0f; mean:enlist 0n)]];
+        (.qt.qetl.job.stream.rolling.ns[nm;`on_batch])[`rt_events;.qt.qetl.job.stream.rolling.row[at;at;`a;1f]]}[nm] each 1+til 7200; 1b};nm;{x}];
+    `.qetl.job.stream.replaying set 0b;
+    .qunit.assertEquals[r;1b;"the replay ran"];
+    .qunit.assertTrue[380>=count .qt.qetl.job.stream.rolling.ns[nm;`pending];"the log's own clock evicts: a day's log is not a day's buffer"]};
+
+.qt.qetl.job.stream.rolling.test_a_replay_with_none_of_its_output_is_bounded_by_the_first_evaluate:{[t]
     nm:.qt.qetl.job.stream.rolling.job`rt_j;
     `.qetl.job.stream.replaying set 1b;
     r:@[{[nm] {[nm;s] (.qt.qetl.job.stream.rolling.ns[nm;`on_batch])[`rt_events;.qt.qetl.job.stream.rolling.row[.qt.qetl.job.stream.rolling.t0+(0D00:00:01*s);.qt.qetl.job.stream.rolling.t0+(0D00:00:01*s);`a;1f]]}[nm] each 1+til 7200; 1b};nm;{x}];
     `.qetl.job.stream.replaying set 0b;
+    held:count .qt.qetl.job.stream.rolling.ns[nm;`pending];
+    .qt.qetl.job.stream.rolling.ns[nm;`evaluate] .qt.qetl.job.stream.rolling.t0+0D02:00:00;
     .qunit.assertEquals[r;1b;"the replay ran"];
-    .qunit.assertTrue[310>=count .qt.qetl.job.stream.rolling.ns[nm;`pending];"the log's own clock evicts: a day's log is not a day's buffer"]};
+    .qunit.assertEquals[held;7200;"what is owed is unknown until the output is seen, so the replay keeps every row"];
+    .qunit.assertTrue[310>=count .qt.qetl.job.stream.rolling.ns[nm;`pending];"and the first evaluate bounds the buffer"]};
 
 .qt.qetl.job.stream.rolling.test_a_batch_after_the_boundary_does_not_evict_what_the_next_grid_point_needs:{[t]
     / no lateness, a 10s grid: a batch lands 0.5s after the boundary, before the timer
@@ -374,6 +411,31 @@
         not running~before,.qt.qetl.job.stream.rolling.published[]}[sc;running] each 1+til count sc;
     .qunit.assertTrue[0<count running;"the script publishes"];
     .qunit.assertTrue[0=sum bad;"a restart at any step publishes the same series (restart points that differ)"]};
+
+/ #2894: TorQ's tabperiod keeps a log per table, replayed whole in name order,
+/ so the events can replay before the job's own output. With no output yet,
+/ last_as_of was null and each events batch evicted down to its own latest
+/ stamp: the output then said 00:03 was the last grid point, and the restart
+/ published the outage's points over a buffer that no longer held their windows.
+.qt.qetl.job.stream.rolling.test_a_restart_replaying_its_events_before_its_output_publishes_the_outage:{[t]
+    t0:.qt.qetl.job.stream.rolling.t0;
+    dc:@[.qt.qetl.job.stream.rolling.decl[];`period;:;0D00:00:10];
+    ev:{[at] (at;`rt_events;.qt.qetl.job.stream.rolling.row[at;at;`a;1f])} each t0+0D00:00:05*1+til 120;
+    tk:{[at] (at;`tick;())} each t0+0D00:00:10*1+til 60;
+    sc:(ev,tk) iasc (2*`long$(ev,tk)[;0])+`tick=(ev,tk)[;1];
+    nm:.qt.qetl.job.stream.rolling.jobwith[`rt_tab;dc];
+    .qt.qetl.job.stream.rolling.live[nm;sc];
+    want:select from .qt.qetl.job.stream.rolling.published[] where as_of>t0+0D00:03;
+    / down from 00:03 to 00:10, while the plant logged its events
+    nm:.qt.qetl.job.stream.rolling.jobwith[`rt_tab;dc];
+    .qt.qetl.job.stream.rolling.live[nm;sc where sc[;0]<=t0+0D00:03];
+    lg:.qt.qetl.job.stream.rolling.wal,{(`rt_events;x 2)} each ev where ev[;0]>t0+0D00:03;
+    .qt.qetl.job.stream.rolling.restart[nm;(lg where `rt_events=lg[;0]),lg where `rt_out=lg[;0]];
+    `.qt.qetl.job.stream.rolling.sent set ();
+    .qt.qetl.job.stream.rolling.ns[nm;`evaluate] t0+0D00:10;
+    got:.qt.qetl.job.stream.rolling.published[];
+    .qunit.assertEquals[count distinct got`as_of;count distinct want`as_of;"every grid point of the outage is published"];
+    .qunit.assertEquals[`k`window`as_of xasc got;`k`window`as_of xasc want;"with what the uninterrupted job published at each"]};
 
 .qt.qetl.job.stream.rolling.test_a_restart_after_midnight_withholds_the_windows_it_cannot_cover:{[t]
     / the new day's log holds 00:02:30 onward; the job restarts at 00:03 and ticks

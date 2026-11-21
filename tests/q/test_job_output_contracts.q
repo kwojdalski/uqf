@@ -242,6 +242,20 @@
     .qunit.assertEquals[(key .qt.qpipe.job_output_contracts.drivers) except .qt.qpipe.job_output_contracts.publishing[];`symbol$();
         "every driver drives a registered job that publishes"]};
 
+/ The tables one job's run published at least one row onto. A batch of no rows
+/ is nothing published (#2890): a handler whose rows never survive - a filter
+/ matching nothing, a join on the wrong key - publishes empty tables, and
+/ counting those let the test below pass on a job that sends the plant nothing.
+/ @param run one job's (tbl; rows) table, each rows cell its batch enlisted
+/ @return the tables, a symbol list
+.qt.qpipe.job_output_contracts.published_tables:{[run]
+    distinct (exec tbl from run) where 0<{[t;cell] .qetl.job.stream.row_count[t;first cell]}'[run`tbl;run`rows]}
+
+.qt.qpipe.job_output_contracts.test_a_batch_of_no_rows_is_not_counted_as_published:{[t]
+    run:([] tbl:`a`b`c; rows:(enlist ([] v:1 2);enlist ([] v:`long$());enlist (enlist `x;enlist 1f)));
+    .qunit.assertEquals[.qt.qpipe.job_output_contracts.published_tables run;`a`c;
+        "a table, or a list of column vectors, with rows counts; an empty table does not"]};
+
 .qt.qpipe.job_output_contracts.test_every_declared_table_is_actually_published:{[t]
     / A driver that publishes nothing would pass the shape check below
     / vacuously, so each declared table must turn up at least once.
@@ -249,7 +263,7 @@
     excused:{[p] `$string[p 0],"/",string p 1} each .qt.qpipe.job_output_contracts.not_built;
     `.qt.qpipe.job_output_contracts.bad set ();
     {[r;excused;j]
-        seen:distinct exec tbl from r j;
+        seen:.qt.qpipe.job_output_contracts.published_tables r j;
         owed:((),.qetl.job.stream.def[j]`outputs) except seen;
         owed:owed where not ({`$string[x],"/",string y}[j] each owed) in excused;
         if[count owed; `.qt.qpipe.job_output_contracts.bad set .qt.qpipe.job_output_contracts.bad,enlist string[j]," never published ",", " sv string owed]
