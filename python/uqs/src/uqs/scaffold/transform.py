@@ -49,6 +49,32 @@ def fixture_row(cols: list[tuple[str, str]]) -> str:
     return "([] " + "; ".join(f"{c}:enlist {sample_value(lit)}" for c, lit in cols) + ")"
 
 
+#: Two distinct values per column type, by `meta` character, none of them an
+#: identity (no 0, no 1): a derive example on one row of 1s cannot tell
+#: `price*size` from `price`, `price%size` or a constant (#2891).
+_TWO_VALUES = {
+    "p": "2026.01.01D00:00:01.000000000 2026.01.01D00:00:02.000000000",
+    "s": "`SCAFFOLD_A`SCAFFOLD_B",
+    "f": "2.0 3.0",
+    "j": "5 7j",
+    "i": "5 7i",
+    "h": "5 7h",
+    "b": "01b",
+    "c": '"ab"',
+    "d": "2026.01.02 2026.01.03",
+    "t": "00:00:02.000 00:00:03.000",
+    "n": "0D00:00:02 0D00:00:03",
+    " ": "(2 3f;5 7f)",
+}
+
+
+def fixture_rows(cols: list[tuple[str, str]]) -> str:
+    """Two rows of `cols` whose every column differs, as a q table literal."""
+    if not cols:
+        raise UqsError("a transform's input needs at least one column besides time")
+    return "([] " + "; ".join(f"{c}:{_TWO_VALUES[type_char(lit)]}" for c, lit in cols) + ")"
+
+
 # ------------------------------------------------------------------ BACKFILL
 
 
@@ -182,15 +208,24 @@ derive:{{[batch]
         if mode == "derive"
         else ""
     )
+    if mode == "derive":
+        fixture = f"""/ SCAFFOLDED. Two {sub} rows, every value distinct and none 0 or 1: the
+/ transform's example input, and what the generated tests drive the handler
+/ with. Replace them with rows that exercise what derive does - the example
+/ is the only check of its values.
+/ @return a table of input's shape
+fixture:{{[] {fixture_rows(in_cols)}}}"""
+    else:
+        fixture = f"""/ One deterministic {sub} row: the transform's example input, and what the
+/ generated tests drive the handler with.
+/ @return a one-row table of input's shape
+fixture:{{[] {fixture_row(in_cols)}}}"""
     inside = f"""/ The shapes the handler moves rows between: what {sub} carries and what
 / {pub} takes, both without `time` - the plant stamps its own (invariant 1).
 input:.qetl.plant.published `{sub}
 output:.qetl.plant.published `{pub}
 
-/ One deterministic {sub} row: the transform's example input, and what the
-/ generated tests drive the handler with.
-/ @return a one-row table of input's shape
-fixture:{{[] {fixture_row(in_cols)}}}
+{fixture}
 {derive}
 / Route one batch. Only {sub} is accepted - another table is refused rather
 / than forwarded - and an empty batch publishes nothing. The plant's `time`
