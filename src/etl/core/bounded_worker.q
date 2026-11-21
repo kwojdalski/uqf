@@ -954,7 +954,8 @@
     strategy:.qetl.job.bounded.runtime.write_strategy[worker;w]; .qetl.job.bounded.runtime.require_inside_partition[worker;batch];
     if[`replace=strategy; .qetl.job.bounded.runtime.require_inside_window[worker;batch;w]];
     opts:.qetl.job.bounded.runtime.write_opts[worker;strategy;w];
-    .qetl.io.write_keyed[.qetl.io.for_cfg cfg;cfg`dataset;batch;opts]}
+    n:.qetl.io.write_keyed[.qetl.io.for_cfg cfg;cfg`dataset;batch;opts];
+    .qetl.job.bounded.write_state[worker;`last_batch;.qetl.io.kept[strategy;batch;opts`row_key]]; n}
 
 / The conflict strategy this run writes under: the operator's override when
 / one is set - on_conflict in config, UQF_ON_CONFLICT, or `uqs job backfill
@@ -1311,13 +1312,12 @@
     / Protected like begin_run for the same reason - react.q is not a load
     / time dependency and a minimal loader must still run a worker.
     if[.qetl.job.bounded.runtime.allows`notify_reactions;
-        / The batch and the IO manager go with it: a reaction reads what was
-        / published rather than wherever it was written, and writes its own
-        / output where this worker wrote - under .qetl.io.hdb there is no
-        / root table to read back, and a table kept in memory dies with the
-        / process (#541).
+        / The rows written - last_batch, which publish folds as the write did
+        / (#2879) - and the IO manager go with it: a reaction reads what was
+        / published, and writes its own output where this worker wrote - no
+        / root table to read back under .qetl.io.hdb (#541).
         @[{[a] .qetl.reaction.notify_published_for . a};
-          (cfg`dataset;cfg`partition;(.qetl.job.bounded.spec worker)`source_version;w`range_from;w`range_to;out;.qetl.io.for_cfg cfg);
+          (cfg`dataset;cfg`partition;(.qetl.job.bounded.spec worker)`source_version;w`range_from;w`range_to;.qetl.job.bounded.read_state[worker;`last_batch];.qetl.io.for_cfg cfg);
           {[e] (::)}]];
     .qetl.job.bounded.write_state[worker;`progress;
         @[@[@[.qetl.job.bounded.read_state[worker;`progress];`windows_completed;+;1];`rows_published;+;r`rows_published];

@@ -635,6 +635,23 @@
     .qunit.assertEquals[(.qt.qetl.io.part[up;2026.01.02;`iodeals]`notional;.qt.qetl.io.part[ig;2026.01.02;`iodeals]`notional);(enlist 6e6;enlist 5e6);
         "upsert keeps the last, ignore the first - one row either way"]};
 
+/ #2870: a keyed write returns the rows it WROTE - write_keyed's own @return -
+/ not the rows it was handed. The count is rows_published, which the ledger
+/ records and .qf.util.reconcile compares with the rows on disk.
+.qt.qetl.io.test_a_keyed_write_returns_the_rows_it_wrote_not_the_batch:{[t]
+    twice:([] deal_time:2026.01.02D12:00:00.000000000 2026.01.02D12:00:00.000000000 2026.01.02D13:00:00.000000000; sym:`AUDUSD`AUDUSD`NZDUSD; notional:5 6 7e6);
+    root:.qt.qetl.io.hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qunit.assertEquals[.qetl.io.write_keyed[m;`iodeals;twice;.qt.qetl.io.hdb_opts`upsert];2;"fast path: three rows, two keys, two written"];
+    .qunit.assertEquals[.qetl.io.write_keyed[m;`iodeals;twice;.qt.qetl.io.hdb_opts`upsert];2;"full path: both keys restated"];
+    .qunit.assertEquals[.qetl.io.write_keyed[m;`iodeals;twice;.qt.qetl.io.hdb_opts`ignore];0;"ignore over keys already there writes none"];
+    .qunit.assertEquals[count .qt.qetl.io.part[root;2026.01.02;`iodeals];2;"and the day holds the two"];
+    if[`iorows in tables `.; delete iorows from `.];
+    o:`on_conflict`row_key!(`upsert;`sym);
+    .qunit.assertEquals[.qetl.io.write_keyed[.qetl.io.memory;`iorows;twice;o];2;"memory: two written"];
+    .qunit.assertEquals[.qetl.io.write_keyed[.qetl.io.memory;`iorows;twice;@[o;`on_conflict;:;`ignore]];0;"memory: ignore writes none"];
+    delete iorows from `.};
+
 / #1142: a key on both sides of midnight is two rows - the fast path (fresh
 / HDB) must fold per date like the full path (the 2nd already holds a key).
 .qt.qetl.io.test_hdb_fast_path_keeps_a_key_either_side_of_midnight:{[t]

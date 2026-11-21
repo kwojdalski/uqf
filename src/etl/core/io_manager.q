@@ -199,6 +199,35 @@
         inside:inside and (existing opts`partition_column)=opts`partition];
     (existing where not hit or inside),fresh}
 
+/ The batch as a keyed write folds it: one row per key, the last - the first
+/ under `ignore - as resolve keeps them; `append keeps every row. What a
+/ reaction is handed as published, so it sees the rows the target holds and
+/ not the ones the fold took away (#2879).
+/ @param strategy one of `strategies`
+/ @param batch the rows
+/ @param row_key the key columns
+/ @return the rows that are written
+/ @eg .qetl.io.kept[`upsert;([] id:1 1 2; v:1 2 3);`id]  ->  ([] id:1 2; v:2 3)
+.qetl.io.kept:{[strategy;batch;row_key]
+    if[`append=strategy; :batch];
+    k:(),row_key;
+    batch where $[`ignore=strategy; .qetl.io.first_seen; .qetl.io.last_seen] k#batch}
+
+/ Private: how many rows of `batch` a keyed write put in the target - what
+/ write_keyed returns, recorded as rows_published (#2870). Not count batch: a
+/ key the batch repeats folds to one row, and under `ignore a key the target
+/ already held writes nothing.
+/ @param strategy the strategy written under
+/ @param existing what the target held before
+/ @param batch the rows written
+/ @param resolved what resolve made of them
+/ @param row_key the key columns
+/ @private
+.qetl.io.written:{[strategy;existing;batch;resolved;row_key]
+    $[`append=strategy; count batch;
+      `ignore=strategy; count[resolved]-count existing;
+      count .qetl.io.kept[strategy;batch;row_key]]}
+
 / ------------------------------------------------------------- MANAGERS
 
 / Private: append a batch to a root table, creating it from the batch's own
@@ -220,8 +249,8 @@
     / The range is the window's, and opts`time_column is the column the window
     / was cut on, as the batch holds it (#972) - not `time, which a transform
     / may have moved.
-    target set .qetl.io.resolve[opts`on_conflict;existing;batch;opts,enlist[`target]!enlist target];
-    count batch}
+    target set r:.qetl.io.resolve[opts`on_conflict;existing;batch;opts,enlist[`target]!enlist target];
+    .qetl.io.written[opts`on_conflict;existing;batch;r;opts`row_key]}
 
 / The default: an in-process table, which is exactly what every worker did
 / before this file existed. Named so a worker can declare it explicitly and

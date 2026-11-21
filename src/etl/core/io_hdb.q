@@ -277,7 +277,7 @@
             if[()~key part; :1b];
             if[not (exec t from meta rows)~exec t from meta get part; :0b];
             not any (kc#rows) in ?[part;();0b;kc!kc]}[root;target;kc]'[folds;dates];
-        if[all clean; .qetl.io.write_hdb[root;partition_col;target;fold]; :count batch]];
+        if[all clean; .qetl.io.write_hdb[root;partition_col;target;fold]; :count fold]];
     if[`replace=strategy;
         span:{[f;t] f+til 1+t-f}[.qetl.io.days_of[root;opts`range_from];.qetl.io.days_of[root;opts[`range_to]-1]];
         dates:distinct dates,span where (span<.z.d) and
@@ -302,8 +302,11 @@
         / 'splay), and turns an enumerated sym into plain symbols (so the
         / splayed `set` below throws 'type). Indexing keeps the enumeration.
         existing:$[()~key part; 0#rows; flip {x til count x} each flip select from get part];
-        (part;d;.qetl.io.plain .qetl.io.resolve[strategy;existing;rows;o])
+        r:.qetl.io.resolve[strategy;existing;rows;o];
+        (part;d;.qetl.io.plain r;.qetl.io.written[strategy;existing;rows;r;o`row_key])
         }[root;target;data;days;strategy;o] each dates;
+    / the rows written, not the batch: a repeated key folds (#2870)
+    n:sum "j"$plan[;3];
     if[(`replace=strategy) and not any (`time,opts`time_column) in (),opts`row_key;
         plan,:.qetl.io.spill[root;target;data;opts;dates]];
     / STAGED, THEN SWAPPED. Writing `set` straight onto the live partition
@@ -314,7 +317,7 @@
     / renamed into place, one directory at a time.
     {[root;target;step] .qetl.io.stage[root;step 1;target;step 2]}[root;target] each plan;
     {[root;target;step] .qetl.io.swap[root;step 1;target]; `.qetl.io.touched upsert (root;step 1;target);}[root;target] each plan;
-    count batch}
+    n}
 
 / Private: the partition after a `replace window, without the window's late-filed twins:
 / rows whose key the window wrote AND whose time column lies inside the window.

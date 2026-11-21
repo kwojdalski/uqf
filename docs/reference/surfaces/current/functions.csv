@@ -208,6 +208,7 @@ qetl.io,hdb_lock,function,1,root
 qetl.io,hdb_lock_wait,value,,
 qetl.io,hdb_scoped,function,3,root partition_col bounds
 qetl.io,is_scoped,function,1,root
+qetl.io,kept,function,3,strategy batch row_key
 qetl.io,memory,dict,,
 qetl.io,native_day_fn,function,1,times
 qetl.io,odbc,dict,,
