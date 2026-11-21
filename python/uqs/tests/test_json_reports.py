@@ -10,20 +10,24 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import subprocess
 from types import SimpleNamespace
 
 import polars as pl
+import pytest
 from typer.testing import CliRunner
 
-from uqs import cli
+from uqs import cli, qjson
 from uqs.checks import schema_view
 from uqs.cli.common import json_out
 from uqs.cli.connector import external
 from uqs.cli.summary import graph as graph_cli
 from uqs.cli.summary import summary_table
 from uqs.deploy import control, history, verify
+from uqs.interpreter import q_interpreter
 from uqs.model.process_graph import Node
 from uqs.stack import attached_logs, runtime, stream_preview
+from uqs.stack import gateway as stack_gateway
 from uqs.stack import logs as stack_logs
 from uqs.stack import procs as stack_procs
 from uqs.stack import runs as stack_runs
@@ -50,9 +54,61 @@ def test_snake_turns_column_titles_into_keys():
     ]
 
 
-def test_plain_makes_a_kola_table_records_and_a_nan_null():
-    frame = pl.DataFrame({"sym": ["a"], "px": [float("nan")]})
+def test_plain_makes_a_kola_table_records_and_a_null_null():
+    """kola hands a float 0n over as a null, not a NaN."""
+    frame = pl.DataFrame({"sym": ["a"], "px": [None]}, schema={"sym": pl.String, "px": pl.Float64})
     assert json_out.plain({"t": frame}) == {"t": [{"sym": "a", "px": None}]}
+
+
+needs_q = pytest.mark.skipif(q_interpreter() is None, reason="no q interpreter")
+
+
+def _through_kola(tmp_path, table: str) -> pl.DataFrame:
+    """`table`, a q expression, evaluated by a real q and read back by kola's
+    own decoder: the frame `uqs query` gets, short of the socket."""
+    import kola
+
+    script = tmp_path / "t.q"
+    script.write_text(f'(hsym `$"{tmp_path}/t") set {table};\nexit 0\n')
+    q = q_interpreter()
+    done = subprocess.run([str(q), str(script), "-q"], capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0, done.stdout + done.stderr
+    return kola.read_binary6(str(tmp_path / "t"))
+
+
+@needs_q
+def test_a_q_table_reaches_json_with_its_nanoseconds_and_its_infinities(tmp_path):
+    """`uqs query --json` and MCP `query` cut every timestamp to the
+    microsecond, printed a timespan below one as 0:00:00, and made a float
+    0w and 0n alike null (#2874)."""
+    frame = _through_kola(
+        tmp_path,
+        "([] time:(2026.09.13D06:30:00.123456700;2026.09.13D06:30:00.123456800;0Wp;0Np);"
+        " left:(0D00:00:00.000000001;0Wn;0Nn;neg 0Wn); price:1.23456789 0w 0n -0w;"
+        " size:9007199254740993 1 2 3)",
+    )
+    rows = json_out.plain({"result": json_out.Verbatim(frame)})["result"]
+    assert [r["time"] for r in rows] == [
+        "2026-09-13T06:30:00.123456700+00:00",
+        "2026-09-13T06:30:00.123456800+00:00",
+        "inf",
+        None,
+    ]
+    assert [r["left"] for r in rows] == [1, "inf", None, "-inf"], "a timespan in nanoseconds"
+    assert [r["price"] for r in rows] == [1.23456789, "inf", None, "-inf"]
+    assert rows[0]["size"] == 9007199254740993
+
+
+@needs_q
+def test_an_integral_infinity_survives_kola_as_a_float_one(tmp_path):
+    """kola makes a long 0W, -0W and 0N all null, so `--json` asks q for the
+    result through `qjson.carried`: a column holding an infinity as floats,
+    every other column as it was (#2874)."""
+    frame = _through_kola(tmp_path, qjson.carried('([] n:5 0W 0N -0W; i:"i"$1 0W 2 3; m:1 2 3 4)'))
+    rows = json_out.plain(json_out.Verbatim(frame))
+    assert [r["n"] for r in rows] == [5.0, "inf", None, "-inf"]
+    assert [r["i"] for r in rows] == [1.0, "inf", 2.0, 3.0]
+    assert [r["m"] for r in rows] == [1, 2, 3, 4], "a column with no infinity keeps its type"
 
 
 def test_a_summary_row_loses_its_markup_and_lists_its_graph():
@@ -182,6 +238,17 @@ def test_schema_prints_tables_or_named_columns(monkeypatch):
     assert _doc(["schema", "q"])["columns"] == [{"table": "q", "column": "sym", "type": "symbol"}]
 
 
+def test_query_json_asks_q_to_carry_its_integral_infinities(monkeypatch):
+    sent = []
+    monkeypatch.setattr(runtime, "query", lambda expr, *_a, **_k: sent.append(expr) or 1)
+    _doc(["query", "--port", "6002", "select from t"])
+    assert sent == [qjson.carried("select from t")]
+    routed = stack_gateway.expression("select from t", carry=True)
+    assert routed.startswith(".gw.syncexecj[") and qjson.CARRY_INFINITIES in routed, (
+        "routed, the gateway's deferred reply skips a wrapper: it goes in the join"
+    )
+
+
 def test_query_prints_the_result_as_data(monkeypatch):
     monkeypatch.setattr(
         runtime, "query", lambda *_a, **_k: pl.DataFrame({"sym": ["a", "b"], "n": [1, 2]})
@@ -242,3 +309,25 @@ def test_summary_json_carries_the_lines_under_the_table(monkeypatch):
     doc = _doc(["status"])
     assert doc["processes"] == [{"process": "rdb1", "status": "up", "port": 6002}]
     assert doc["silent"] == ["rdb1"] and doc["heartbeats_collected"] is False
+
+
+@needs_q
+def test_query_export_csv_writes_the_values_the_json_writes(monkeypatch, tmp_path):
+    """`--export x.csv` wrote a long 0W as an empty cell, the same as 0N, and
+    0Wp as 2262-04-11T23:47:16.854775807 (#2874). The expression the command
+    sends is evaluated by a real q and read back by kola's decoder, then the
+    real export writes it."""
+    table = "([] time:(2026.09.13D06:30:00.123456789;0Wp;0Np); n:1 0W 0N; m:-0W 5 6; px:1.5 0w 0n)"
+    work = tmp_path / "q"
+    work.mkdir()
+    monkeypatch.setattr(runtime, "query", lambda expr, *_a, **_k: _through_kola(work, expr))
+    out = tmp_path / "x.csv"
+    result = runner.invoke(cli.app, ["query", "--port", "6002", table, "--export", str(out)])
+    assert result.exit_code == 0, result.output
+    rows = out.read_text().splitlines()
+    assert rows[0] == "time,n,m,px"
+    assert rows[1:] == [
+        "2026-09-13T06:30:00.123456789+00:00,1.0,-inf,1.5",
+        "inf,inf,5.0,inf",
+        ",,6.0,",
+    ]

@@ -17,7 +17,6 @@ a ledger written before etl_runs gained each run's range and counts.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import subprocess
@@ -25,6 +24,7 @@ import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from uqs import qjson
 from uqs.generated.q_facts import FIXTURE_TAG, REVISION_TAG
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
@@ -43,11 +43,11 @@ _LOADS = (
 _GUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
-#: Printed for the reader instead of the table itself: every integer column as
-#: a float. A run that never finished has null counts, and a float null is
-#: what `.j.j` writes as JSON null. `tbl`, not `t`: `meta`'s own type column
-#: is `t`, and a parameter of that name would shadow it inside the where.
-_FOR_JSON = '{[tbl] ints:exec c from meta tbl where t in "hij"; @[tbl;ints;"f"$]}'
+#: A ledger table as it is shown: a run still going ends at
+#: `.qetl.run.not_ended`, a 0Wp sentinel `.j.j` spells as the instant
+#: 2292-04-10T23:47:16.854775807, which a reader took for an end time
+#: (#2865). It is shown as no end, as the same run's counts are.
+_SHOWN = "{[tbl] update ended_at:?[ended_at=.qetl.run.not_ended;0Np;ended_at] from tbl}"
 
 
 def status_dir(paths: UqsPaths, env: dict[str, str] | None = None) -> Path:
@@ -111,7 +111,12 @@ def _query(
         [
             *(f"\\l {f}" for f in loads),
             *([".qetl.run.attach[];"] if attach else []),
-            f"-1 .j.j {_FOR_JSON} 0!{expr};",
+            # The table as it is: `.j.j` writes a long exactly and a null long
+            # as null. Every integer column was cast to float for the null's
+            # sake, and a float leaves q at 7 digits - 12345678 rows were
+            # listed as 12345680 (#2861), a twin's align as a float (#2863).
+            qjson.PRECISION,
+            f"-1 .j.j 0!{expr};",
             "exit 0",
             "",
         ]
@@ -136,7 +141,7 @@ def _query(
         text = (result.stdout + result.stderr).strip()
         shown = text if len(text) <= 1500 else f"{text[:300]}\n...\n{text[-1200:]}"
         raise UqsError(f"reading the run ledger failed:\n{shown}")
-    return json.loads(lines[-1])
+    return qjson.loads(lines[-1])
 
 
 def migration_plan(paths: UqsPaths, **kw) -> dict:
@@ -164,12 +169,12 @@ def migrate(paths: UqsPaths, dry_run: bool = False, **kw) -> int:
 
 def unfinished(paths: UqsPaths, **kw) -> list[dict]:
     """Runs that began and never finished - interrupted executions included."""
-    return query(paths, ".qetl.run.unfinished[]", **kw)
+    return query(paths, f"{_SHOWN} .qetl.run.unfinished[]", **kw)
 
 
 def history(paths: UqsPaths, **kw) -> list[dict]:
     """Every run, newest first."""
-    return query(paths, ".qetl.run.history[]", **kw)
+    return query(paths, f"{_SHOWN} .qetl.run.history[]", **kw)
 
 
 def show(paths: UqsPaths, run_id: str, **kw) -> tuple[list[dict], list[dict]]:
@@ -180,7 +185,7 @@ def show(paths: UqsPaths, run_id: str, **kw) -> tuple[list[dict], list[dict]]:
         )
     literal = f'"G"$"{run_id}"'
     return (
-        query(paths, f".qetl.run.of_run[{literal}]", **kw),
+        query(paths, f"{_SHOWN} .qetl.run.of_run[{literal}]", **kw),
         query(paths, f".qetl.run.facts_of[{literal}]", **kw),
     )
 
@@ -199,14 +204,30 @@ def _as_bound(ledger_value: str, *, upper: bool = False) -> str:
     its end. The range only widens, which is safe because a backfill skips
     the windows already covered; narrowing it would leave a sliver unfilled.
     """
+    moment = ledger_moment(ledger_value, upper=upper).replace(tzinfo=None)
+    if not moment.microsecond:
+        return moment.isoformat()
+    return f"{moment:%Y.%m.%dD%H:%M:%S}.{moment.microsecond:06d}000"
+
+
+def ledger_moment(ledger_value: str, *, upper: bool = False) -> datetime:
+    """A ledger timestamp - `.z.p`, UTC, up to nine fractional digits - as a
+    UTC datetime, which stops at the microsecond: down to it, or up (`upper`)
+    when anything finer is set.
+
+    Not `timerange.parse_bound`, which is for what an operator types and
+    refuses nine digits rather than move their bound; a ledger bound is q's,
+    and can carry them (#1253, #2864). Against a bound that is itself a whole
+    microsecond, as every datetime is, the rounding loses nothing: a start is
+    before it exactly when the start rounded down is, and an end is after it
+    exactly when the end rounded up is.
+    """
     stamp, _, fraction = ledger_value.partition(".")
     digits = fraction.ljust(9, "0")
     moment = datetime.fromisoformat(stamp) + timedelta(microseconds=int(digits[:6]))
     if upper and digits[6:].strip("0"):
         moment += timedelta(microseconds=1)
-    if not moment.microsecond:
-        return moment.isoformat()
-    return f"{moment:%Y.%m.%dD%H:%M:%S}.{moment.microsecond:06d}000"
+    return moment.replace(tzinfo=UTC) if moment.tzinfo is None else moment.astimezone(UTC)
 
 
 def untagged(version: str) -> str:

@@ -155,8 +155,11 @@ def facts(rel: str, text: str) -> FileFacts:
         writes |= set(declared_outputs(fields, name))
     for d in read_file_text(text, Path(rel)):
         jobs.append((d.name, d.procname))
-    watches = {r.dataset for r in reaction_calls(text)}
-    defines |= {f"job:{r.name}" for r in reaction_calls(text)}
+    reactions = reaction_calls(text)
+    watches = {r.dataset for r in reactions}
+    defines |= {f"job:{r.name}" for r in reactions if not r.worker}
+    # an on_worker reaction runs a worker another file declares (#2848)
+    refers |= {f"job:{r.worker}" for r in reactions if r.worker}
     topics = _topics(rel, code, jobs)
     refers |= {f"transform:{m.group('mapping')}" for m in _TOPIC_DEF.finditer(code)}
     return FileFacts(

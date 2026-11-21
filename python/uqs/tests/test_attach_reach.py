@@ -340,3 +340,30 @@ def test_bounded_passes_on_an_answer_and_an_error_unchanged():
     with pytest.raises(IpcError, match="q error: type") as err:
         bounded.call(ep, "boom", {})
     assert not err.value.unresponsive
+
+
+@pytest.mark.parametrize(("timeout_ms", "seconds"), [(3000, 3), (8000, 8), (1500, 2), (200, 1)])
+def test_kola_is_given_the_timeout_in_seconds_its_own_unit(monkeypatch, timeout_ms, seconds):
+    """`timeout_ms` is milliseconds and kola's `timeout` is seconds: a probe
+    meant to give up after 3 s was allowed 3000 s (#2877). A part second is
+    rounded up, never down to kola's 0, which waits forever."""
+    import sys
+    import types
+
+    given: list = []
+
+    class Q:
+        def __init__(self, *a, timeout=0, **k):
+            given.append(timeout)
+
+        def sync(self, *_a):
+            return '{"ok": true}'
+
+        def disconnect(self):
+            pass
+
+    monkeypatch.setitem(sys.modules, "kola", types.SimpleNamespace(Q=Q))
+    KolaIpc("u", "p", timeout_ms=timeout_ms).call(
+        Endpoint("rdb1", "127.0.0.1", 5000), "writer_state", {}
+    )
+    assert given == [seconds]

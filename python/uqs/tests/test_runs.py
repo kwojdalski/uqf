@@ -153,6 +153,18 @@ def test_a_run_that_never_finished_has_no_counts(ledger, paths):
     assert row["windows_completed"] is None and row["rows_published"] is None
 
 
+def test_a_run_still_going_has_no_end(ledger, paths):
+    """Not `.qetl.run.not_ended`'s 0Wp, which `.j.j` spells as an instant in
+    the year 2292 that a reader takes for an end time (#2865). q spells the
+    null as "" on KDB-X and null on PeachQ (#2471)."""
+    (running,) = runs.unfinished(paths, directory=ledger)
+    rows = {r["worker"]: r for r in runs.history(paths, directory=ledger)}
+    (shown,), _ = runs.show(paths, running["run_id"], directory=ledger)
+    for row in (running, rows["interrupted_worker"], shown):
+        assert row["ended_at"] in ("", None), row["ended_at"]
+    assert rows["deals_a"]["ended_at"].startswith("20"), "a finished run keeps its end"
+
+
 _OLD_LEDGER = """
 \\l src/init.q
 \\l src/etl/core/backfill_state.q
@@ -253,6 +265,11 @@ _STATES = {
     "current": ".qetl.run.attach[]; .qetl.run.begin[`w;()!()]",
     "previous": f'(hsym `$"%s/etl_runs") set {_PREVIOUS}',
     "unsupported": '(hsym `$"%s/etl_runs") set ([] run_id:enlist 0Ng; worker:enlist `w)',
+    "large": (
+        ".qetl.run.attach[]; .qetl.run.begin[`w;()!()]; .qetl.run.finish[`completed;"
+        "`windows_planned`windows_completed`windows_failed`rows_published!"
+        "12345678 987654321 0 9007199254740993]"
+    ),
 }
 
 
@@ -344,3 +361,15 @@ def test_a_q_failure_is_a_failure_not_nothing_to_migrate(tmp_path, paths):
     (d / "etl_runs").write_bytes(b"not a q file")
     with pytest.raises(UqsError, match="reading the run ledger failed"):
         runs.migrate(paths, dry_run=True, directory=d)
+
+
+def test_a_count_is_read_back_exactly_however_large(tmp_path, paths):
+    """Every integer column was cast to float for `.j.j`, which prints a float
+    at 7 significant digits: 12345678 rows were listed as 12345680 (#2861)."""
+    d = tmp_path / "status"
+    d.mkdir()
+    _ledger_in(d, "large")
+    (row,) = runs.history(paths, directory=d)
+    counts = [row[c] for c in ("windows_planned", "windows_completed", "rows_published")]
+    assert counts == [12345678, 987654321, 9007199254740993]
+    assert all(type(c) is int for c in counts), "a count is an int, as the ledger holds it"

@@ -38,11 +38,11 @@ def test_a_migrate_refusal_exits_one(monkeypatch):
 
 @pytest.mark.parametrize(
     ("value", "shown"),
-    [(None, ""), (3.0, "3"), (2.5, "2.5"), ("demo_deals", "demo_deals")],
+    [(None, ""), (3, "3"), (12345678, "12345678"), ("demo_deals", "demo_deals")],
 )
 def test_a_cell_shows_counts_as_whole_numbers_and_nulls_as_blank(value, shown):
-    """Counts reach Python as floats, so a JSON null can stand for a run that
-    never finished; a reader should still see 3, not 3.0."""
+    """Counts reach Python as the ints the ledger holds, and a run that never
+    finished as null (#2861)."""
     assert cli_runs._cell(value) == shown
 
 
@@ -55,16 +55,16 @@ def test_list_shows_each_runs_range_and_counts(monkeypatch):
         "range_from": "2026-09-13T00:00:00.000000000",
         "range_to": "2026-09-15T00:00:00.000000000",
         "width": "1D00:00:00.000000000",
-        "windows_planned": 2.0,
-        "windows_completed": 2.0,
-        "windows_failed": 0.0,
-        "rows_published": 42.0,
+        "windows_planned": 2,
+        "windows_completed": 2,
+        "windows_failed": 0,
+        "rows_published": 12345678,
     }
     monkeypatch.setattr(stack_runs, "history", lambda paths: [row])
     result = runner.invoke(cli.app, ["job", "runs", "list"], env={"COLUMNS": "400"})
     assert result.exit_code == 0, result.output
     assert "demo_deals_backfill" in result.output
-    assert "42" in result.output and "42.0" not in result.output
+    assert "12345678" in result.output
 
 
 @pytest.mark.parametrize("blank", [None, ""])
@@ -82,6 +82,31 @@ def test_a_run_with_no_recorded_range_meets_no_window(blank):
         "range_to": "2100-01-01T00:00:00.000000000",
     }
     assert [r["run_id"] for r in (rangeless, ranged) if cli_runs._overlaps(r, window)] == ["b"]
+
+
+@pytest.mark.parametrize(
+    ("window_from", "window_to", "meets"),
+    [
+        # the run is [06:30:00.123456789, 06:30:00.500000001)
+        ("2026-09-13T06:30:00.123456", "2026-09-13T06:30:00.123457", True),
+        ("2026-09-13T06:00:00", "2026-09-13T06:30:00.123456", False),
+        ("2026-09-13T06:30:00.500001", "2026-09-13T07:00:00", False),
+        ("2026-09-13T06:30:00.500000", "2026-09-13T07:00:00", True),
+    ],
+)
+def test_a_nanosecond_run_range_is_filtered_not_refused(window_from, window_to, meets):
+    """A ledger bound can carry nine digits (#1253). It was parsed with the
+    parser for an operator's own --from, which refuses that, so any filter
+    failed the whole list over one such run, naming an option nobody gave
+    (#2864). Read to the nanosecond, the overlap is exact."""
+    from uqs import timerange
+
+    window = timerange.resolve(window_from, window_to, None, None, open_ended=True)
+    run = {
+        "range_from": "2026-09-13T06:30:00.123456789",
+        "range_to": "2026-09-13T06:30:00.500000001",
+    }
+    assert cli_runs._overlaps(run, window) is meets
 
 
 # --- what to do next, from `uqs job runs show` (#636) -----------------------------
