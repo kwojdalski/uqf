@@ -83,6 +83,79 @@
         "*bars job bt_x's event_time must be one column name, a symbol*";"a list of columns"];
     .qunit.assertFalse[`bt_x in .qetl.job.stream.defined[];"and nothing is registered"]};
 
+/ #2854: a bars job down while the plant rolled restarted into the new day's log
+/ alone, so the windows of the day that ended it held open (or that filled while
+/ it was down) were never published, and nothing said so.
+.qt.qetl.job.stream.bars.midnight_transport:{[]
+    `connect`publisher`subscribe`timer`earlier_days`plant_day`has_log`recovery!(
+        {[] };
+        {[] {[t;x] .qt.qetl.job.stream.bars.sent,:enlist (t;x); count x}};
+        {[tbls;h;replay] .qetl.tick.replay[.qetl.tick.log_path;{[tbls;h;t;r] if[t in tbls; h[t;r]]}[tbls;h]]};
+        {[n;p;f] };
+        {[tbls;a;b] .qetl.tick.earlier_days[tbls;a;b]};
+        {[] .qetl.tick.plant_day[]};
+        {[dt] .qetl.tick.has_log dt};
+        0b)}
+
+.qt.qetl.job.stream.bars.test_a_job_down_across_the_roll_publishes_the_windows_of_the_day_that_ended:{[t]
+    dir:"build/test-bars-midnight";
+    system"rm -rf ",dir; system"mkdir -p ",dir;
+    setenv[`UQF_STATUS_DIR;dir,"/status"];
+    d1:2026.10.08; d2:2026.10.09;
+    fill:.qt.qetl.job.stream.bars.fill;
+    .qetl.tick.reset[];
+    .qetl.tick.open_log[dir;`midn;d1];
+    / up on d1 until 23:58:30, holding the 23:58 window open
+    .qetl.tick.record (`upd;`bt_fills;fill[d1+0D23:58:10;`EURUSD;1f;1.10]);
+    nm:.qt.qetl.job.stream.bars.job `bt_midnight;
+    `.qt.qetl.job.stream.bars.clock set d1+0D23:58:30;
+    r1:@[{.qetl.job.stream.start[x;.qt.qetl.job.stream.bars.midnight_transport[]]; ""};nm;{[e] e}];
+    / down: a 23:59 fill, the roll, a fill of the new day
+    .qetl.tick.record (`upd;`bt_fills;fill[d1+0D23:59:20;`EURUSD;1f;1.11]);
+    .qetl.tick.roll d2;
+    .qetl.tick.record (`upd;`bt_fills;fill[d2+0D00:00:40;`EURUSD;1f;1.12]);
+    / restarted at 00:01:10, ticking at 00:02:10
+    .qt.qetl.job.stream.bars.job nm;
+    `.qt.qetl.job.stream.bars.clock set d2+0D00:01:10;
+    r2:@[{.qetl.job.stream.start[x;.qt.qetl.job.stream.bars.midnight_transport[]]; ""};nm;{[e] e}];
+    `.qt.qetl.job.stream.bars.clock set d2+0D00:02:10;
+    (.qt.qetl.job.stream.bars.ns[nm;`on_timer])[::];
+    bars:exec bar_start from .qt.qetl.job.stream.bars.published[];
+    .qetl.tick.reset[];
+    `.qetl.job.stream.running set .qetl.job.stream.running except nm;
+    .qunit.assertEquals[(r1;r2);("";"");"both starts come up"];
+    .qunit.assertEquals[asc bars;(d1+0D23:58 0D23:59),d2+0D00:00;"the two windows of the day that ended are published, and the new day's"]};
+
+.qt.qetl.job.stream.bars.test_a_transport_that_cannot_replay_earlier_days_says_what_is_lost:{[t]
+    dir:"build/test-bars-midnight-nolog";
+    system"rm -rf ",dir;
+    setenv[`UQF_STATUS_DIR;dir];
+    .qetl.job.stream.mark_day_ran[`bt_midnight_x;2026.10.08];
+    tr:enlist[`plant_day]!enlist {[] 2026.10.09};
+    lines:.qt.support.captured_log[0b] {[tr;unused] .qetl.job.stream.catch_up_restore[`bt_midnight_x;tr;enlist `bt_fills;{[t;x]}]}[tr];
+    e:lines where `ERROR=first each lines;
+    .qunit.assertEquals[count e;1;"one error"];
+    .qunit.assertTrue[e[0;2] like "*down across an end of day, and this transport cannot replay earlier days*";"saying what is never published"];
+    .qunit.assertEquals[e[0;3]`last_day_ran;2026.10.08;"from which day"]};
+
+/ An end of day the job closed moves its marker on; one whose on_endofday threw keeps it.
+.qt.qetl.job.stream.bars.test_an_end_of_day_moves_the_day_it_ran_on_only_when_it_closed:{[t]
+    dir:"build/test-bars-midnight-eod";
+    system"rm -rf ",dir;
+    setenv[`UQF_STATUS_DIR;dir];
+    nm:.qt.qetl.job.stream.bars.job `bt_midnight;
+    keep:.qetl.job.stream.running;
+    `.qetl.job.stream.running set enlist nm;
+    .qetl.job.stream.end_of_day 2026.10.08;
+    closed:.qetl.job.stream.last_day_ran nm;
+    .qetl.job.stream.wire[nm;{[t;x] '"plant gone"}];
+    .qt.qetl.job.stream.bars.feed[nm;.qt.qetl.job.stream.bars.fill[2026.10.09D23:59:00;`EURUSD;1f;1.1]];
+    .qetl.job.stream.end_of_day 2026.10.09;
+    failed:.qetl.job.stream.last_day_ran nm;
+    `.qetl.job.stream.running set keep;
+    .qunit.assertEquals[closed;2026.10.09;"the day after the one it closed"];
+    .qunit.assertEquals[failed;2026.10.09;"and not moved past a day whose windows it could not publish"]};
+
 .qt.qetl.job.stream.bars.test_a_zero_width_is_refused:{[t]
     .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[.qt.qetl.job.stream.bars.decl[];`width;:;0D];
         "*bt_x's width must be a positive timespan*";"a window has to have an extent"]};

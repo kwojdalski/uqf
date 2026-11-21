@@ -699,12 +699,14 @@
         today:.qetl.job.stream.plant_today tr;
         r:@[{[job;tr;tbls;h;replay]
                 if[replay and `carry in key .qetl.job.stream.def job; .qetl.job.stream.catch_up[job;tr;tbls;h]];
+                if[.qetl.job.stream.restores job; .qetl.job.stream.catch_up_restore[job;tr;tbls;h]];
                 tr[`subscribe][tbls;h;replay]; (1b;::)}[job;tr;tbls;.qetl.job.stream.tolerant[job;.qetl.job.stream.handler[job]]];
             replay;{[e] (0b;e)}];
         if[mute; pub set live]; `.qetl.job.stream.replaying set 0b; .qetl.job.stream.catching_up[job;0b];
         if[replay and `carry in key d; .qetl.job.stream.missed_end_of_day[job;today]];
         .qetl.job.stream.replayed[job];
         if[not first r; 'last r];
+        if[.qetl.job.stream.restores job; .qetl.job.stream.mark_day_ran[job;today]];
         if[`on_replayed in key d; (d`on_replayed)[]]];
     / Protected: a record that cannot be written must never stop the job
     / it records. Logged, so a missing session is explained. Every job, not
@@ -747,6 +749,10 @@
     js:.qetl.job.stream.running where {[j] `on_endofday in key .qetl.job.stream.def j} each .qetl.job.stream.running;
     ok:{[dt;j] @[{[dt;j] (.qetl.job.stream.def[j]`on_endofday) dt; 1b}[dt];j;
         {[dt;j;e] .qetl.log.ch.err[`lifecycle;"on_endofday failed";(enlist[`job]!enlist j),`date`error!(dt;e)]; 0b}[dt;j]]}[dt] each js;
+    / a job that restores from its output has closed the day: it now runs on the
+    / next. One whose on_endofday threw keeps the day, so a restart replays it (#2854)
+    rs:.qetl.job.stream.running where .qetl.job.stream.restores each .qetl.job.stream.running;
+    .qetl.job.stream.mark_day_ran[;dt+1] each rs except js where not ok;
     js where ok}
 
 .qetl.job.stream.unwired:{[job]
