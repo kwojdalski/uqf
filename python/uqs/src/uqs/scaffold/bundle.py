@@ -100,11 +100,19 @@ def check_folder(bundle_dir: Path) -> None:
         return
     if bundle_dir.exists() and not bundle_dir.is_dir():
         raise UqsError(f"--bundle {bundle_dir} is a file, not a folder")
-    if not bundles.NAME.fullmatch(bundle_dir.name):
+    # The name into_bundle writes into bundle.json: the folder's, resolved - a
+    # symlink's target, `.` the current folder - not as typed (#2841).
+    name = bundle_name(bundle_dir)
+    if not bundles.NAME.fullmatch(name):
         raise UqsError(
             f"--bundle {bundle_dir}: a new bundle is named after its folder, and "
-            f"{bundle_dir.name!r} is not lower_snake_case"
+            f"{name!r} is not lower_snake_case"
         )
+
+
+def bundle_name(bundle_dir: Path) -> str:
+    """The name a new bundle at `bundle_dir` takes: its resolved folder's."""
+    return bundle_dir.resolve().name
 
 
 def into_bundle(plan: ScaffoldPlan, bundle_dir: Path) -> ScaffoldPlan:
@@ -129,7 +137,7 @@ def into_bundle(plan: ScaffoldPlan, bundle_dir: Path) -> ScaffoldPlan:
         )
     actions: list[FileAction] = []
     if not bundles.is_bundle(bundle_dir):
-        manifest = {"name": bundle_dir.resolve().name, "version": FIRST_VERSION}
+        manifest = {"name": bundle_name(bundle_dir), "version": FIRST_VERSION}
         actions.append(FileAction(bundle_dir / bundles.MANIFEST, json.dumps(manifest) + "\n"))
     dropped: list[Path] = []
     for action in plan.actions:
