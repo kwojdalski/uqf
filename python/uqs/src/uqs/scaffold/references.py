@@ -35,22 +35,27 @@ _SKIP_DIRS = {
     ".ruff_cache",
 }
 
-#: Files the removal regenerates or deliberately keeps naming the job.
+#: Files the removal regenerates (cli/job/regenerate.py) or deliberately keeps
+#: naming the job. q_facts.py and tableproperties.csv name every table a
+#: scaffold adds, so leaving them out made --strict refuse every such job (#2838).
 _SKIP_FILES = {
-    Path("src/etl/generated/pipeline_dag.q"),
-    Path("src/etl/generated/load_plan.q"),
     Path("docs/reference/processes.md"),
+    Path("python/uqs/src/uqs/generated/q_facts.py"),
+    Path("python/uqf_airflow_provider/src/uqf_airflow_provider/q_facts.py"),
+    Path("scripts/torqconfig/dataaccess/tableproperties.csv"),
     Path("scripts/processes/process_ports.csv"),
 }
 
 #: Trees skipped at their own path - not any directory of that name, since
 #: tests/lib holds the suite's helpers: the vendored TorQ trees, build and run
-#: output, and the contract surface, which is re-exported after a removal.
+#: output, the contract surface, which is re-exported after a removal, and
+#: the job graph and load plan, which are regenerated.
 _SKIP_PREFIXES = (
     Path("lib"),
     Path("build"),
     Path("scripts/output"),
     Path("docs/reference/surfaces"),
+    Path("src/etl/generated"),
 )
 
 #: What is searched: source, tests, docs, config. A rendered .svg is not - its

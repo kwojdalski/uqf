@@ -39,6 +39,7 @@ from pathlib import Path
 from uqs.paths import CATALOG_FILE, TABLES_FILE, UqsError
 from uqs.scaffold.columns import Columns, as_columns, plant_declarations
 from uqs.scaffold.docs import EXTERNAL
+from uqs.scaffold.example import GENERATED_BY
 from uqs.scaffold.jobs import _check_name, _expected_table_action, streaming_job
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 
@@ -47,12 +48,22 @@ PY_TEST_DIR = "python/uqs/tests"
 
 
 def external_files(name: str) -> list[str]:
-    """The Python files an external scaffold owns - what `uqs job remove` deletes."""
+    """The Python files an external scaffold writes - what `uqs job remove` deletes."""
     return [
         f"{EXTERNAL_DIR}/{name}_streamer.py",
         f"{EXTERNAL_DIR}/{name}_feed.py",
         f"{PY_TEST_DIR}/test_{name}_streamer.py",
     ]
+
+
+def connector_mark(name: str) -> str:
+    """The line in NAME_feed.py that says a connector scaffold of `name` wrote
+    it (#2831). A job that merely shares a shipped connector's name - a
+    subscriber called `kafka` - finds no such line in kafka_feed.py, so
+    `uqs job remove` leaves the hand-written modules alone. Unlike the
+    streamer's SCAFFOLDED, it stays when the feed is edited: it records who
+    wrote the file, not that nobody has touched it since."""
+    return f"{GENERATED_BY} {name} --kind connector`"
 
 
 def external_feed(
@@ -122,7 +133,7 @@ def external_feed(
     ]
     python = [
         FileAction(Path(f"{EXTERNAL_DIR}/{name}_streamer.py"), _streamer(name, raw_table, fields)),
-        FileAction(Path(f"{EXTERNAL_DIR}/{name}_feed.py"), _feed(name, raw_table, publishes)),
+        FileAction(Path(f"{EXTERNAL_DIR}/{name}_feed.py"), feed_module(name, raw_table, publishes)),
         FileAction(Path(f"{PY_TEST_DIR}/test_{name}_streamer.py"), _py_test(name)),
     ]
     notes = [
@@ -205,8 +216,12 @@ if __name__ == "__main__":  # pragma: no cover - process entry point
 '''
 
 
-def _feed(name: str, raw_table: str, publishes: str) -> str:
+def feed_module(name: str, raw_table: str, publishes: str) -> str:
+    """NAME_feed.py as the scaffold writes it. It holds no placeholder to fill,
+    so `uqs job remove` compares against this text to tell it is unedited."""
     return f'''"""{name}_feed.py - start, stop and report the {name} publisher.
+
+{connector_mark(name)}: `uqs job remove {name}` removes it with the job.
 
 A process outside TorQ: not a process.csv row, so `uqs connector start|stop|restart|status|logs
 {name}` drives it, through FEED below - the CLI finds it without an edit.
