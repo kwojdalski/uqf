@@ -87,6 +87,16 @@
 
 / A job file loaded twice re-declares a live job (#2858): the refusal must
 / leave its buffer and its wired publish as they were.
+/ The windows are cut on event_time: a float column was accepted and every row
+/ was then dropped as late (#2855).
+.qt.qetl.job.stream.rolling.test_an_event_time_that_is_not_one_timestamp_column_is_refused:{[t]
+    .qt.qetl.job.stream.rolling.define_transform[];
+    .qunit.assertThrows[.qetl.job.stream.at_rolling[`rt_x;];@[.qt.qetl.job.stream.rolling.decl[];`event_time;:;`v];
+        "*rolling job rt_x's event_time v is not a timestamp column of the transform's input - it is of type f*";"a float column"];
+    .qunit.assertThrows[.qetl.job.stream.at_rolling[`rt_x;];@[.qt.qetl.job.stream.rolling.decl[];`event_time;:;`t`k];
+        "*rolling job rt_x's event_time must be one column name, a symbol*";"a list of columns"];
+    .qunit.assertFalse[`rt_x in .qetl.job.stream.defined[];"and nothing is registered"]};
+
 .qt.qetl.job.stream.rolling.test_a_refused_redeclaration_leaves_the_live_job_as_it_was:{[t]
     .qt.qetl.job.stream.rolling.job `rt_redecl;
     .qt.qetl.job.stream.rolling.feed[`rt_redecl;.qt.qetl.job.stream.rolling.t0+0D00:00:30;`a;2f];

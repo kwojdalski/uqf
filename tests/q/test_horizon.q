@@ -74,6 +74,16 @@
 
 / A job file loaded twice re-declares a live job (#2858): the refusal must
 / leave its pending events and its wired publish as they were.
+/ The horizon is measured from event_time: a float column was accepted and
+/ every event was scored the moment it arrived (#2855).
+.qt.qetl.job.stream.horizons.test_an_event_time_that_is_not_a_timestamp_column_is_refused:{[t]
+    .qt.qetl.job.stream.horizons.define_transform[];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_x;];.qt.qetl.job.stream.horizons.decl[],`event_time`lateness!(`px;0D);
+        "*horizon job hz_x's event_time px is not a timestamp column of the events input - it is of type f*";"a float column"];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_x;];.qt.qetl.job.stream.horizons.decl[],enlist[`reference_time]!enlist `mid;
+        "*horizon job hz_x's reference_time mid is not a timestamp column of the reference input - it is of type f*";"nor the reference's clock"];
+    .qunit.assertFalse[`hz_x in .qetl.job.stream.defined[];"and nothing is registered"]};
+
 .qt.qetl.job.stream.horizons.test_a_refused_redeclaration_leaves_the_live_job_as_it_was:{[t]
     .qt.qetl.job.stream.horizons.job[`hz_redecl;()!()];
     (.qt.qetl.job.stream.horizons.ns[`hz_redecl;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.ev[`a;.qt.qetl.job.stream.horizons.t0]];

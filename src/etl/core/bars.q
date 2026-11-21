@@ -119,9 +119,12 @@
     d:`by`event_time!(enlist `sym;`time);
     d:d,decl,enlist[`by]!enlist (),$[`by in key decl; decl`by; `sym];
     in_cols:cols first value t`inputs;
+    if[not -11h=type d`event_time; 'who,"'s event_time must be one column name, a symbol"];
     needs:distinct d[`by],(d`event_time),`bar_start;
     if[count lacks:needs except in_cols;
         'who,"'s transform input carries no ",(", " sv string lacks)];
+    / the windows are cut on it: any other type throws a bare 'type on every batch (#2855)
+    .qetl.job.stream.require_timestamp[who;`event_time;d`event_time;first value t`inputs;"the transform's input"];
     if[count lacks:(d[`by],`bar_start) except cols t`output;
         'who,"'s transform output carries no ",(", " sv string lacks)," - they name the window the bar closes"];
     d[`input]:first key t`inputs;

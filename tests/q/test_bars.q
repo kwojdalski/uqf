@@ -74,6 +74,15 @@
     .qunit.assertEquals[count .qt.qetl.job.stream.bars.ns[`bt_redecl;`pending];1;"the open window's row is still buffered"];
     .qunit.assertEquals[(.qt.qetl.job.stream.bars.ns[`bt_redecl;`publish])[`bt_bar;([] a:1 2)];2;"and publish still reaches what it was wired to"]};
 
+/ The windows are cut on event_time: a float column was accepted and every
+/ batch then threw a bare 'type, as did a list of two columns (#2855).
+.qt.qetl.job.stream.bars.test_an_event_time_that_is_not_one_timestamp_column_is_refused:{[t]
+    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[.qt.qetl.job.stream.bars.decl[];`event_time;:;`price];
+        "*bars job bt_x's event_time price is not a timestamp column of the transform's input - it is of type f*";"a float column"];
+    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[.qt.qetl.job.stream.bars.decl[];`event_time;:;`source_time`sym];
+        "*bars job bt_x's event_time must be one column name, a symbol*";"a list of columns"];
+    .qunit.assertFalse[`bt_x in .qetl.job.stream.defined[];"and nothing is registered"]};
+
 .qt.qetl.job.stream.bars.test_a_zero_width_is_refused:{[t]
     .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[.qt.qetl.job.stream.bars.decl[];`width;:;0D];
         "*bt_x's width must be a positive timespan*";"a window has to have an extent"]};

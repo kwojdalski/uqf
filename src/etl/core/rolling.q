@@ -167,8 +167,11 @@
     if[count bad:(key .qetl.job.stream.rolling.shell_columns) where not (value .qetl.job.stream.rolling.shell_columns)=types key .qetl.job.stream.rolling.shell_columns;
         'who,"'s transform input types ",(", " sv string bad)," wrongly - window is a timespan, as_of a timestamp, inside a boolean"];
     if[count clash:d[`by] inter key .qetl.job.stream.rolling.shell_columns; 'who,"'s by names ",(", " sv string clash),", which the shell adds"];
+    if[not -11h=type d`event_time; 'who,"'s event_time must be one column name, a symbol"];
     if[count lacks:(distinct d[`by],d`event_time) except key types;
         'who,"'s transform input carries no ",(", " sv string lacks)];
+    / the windows are cut on it: any other type drops every row as late (#2855)
+    .qetl.job.stream.require_timestamp[who;`event_time;d`event_time;ev0;"the transform's input"];
     if[count lacks:(d[`by],`window`as_of) except cols t`output;
         'who,"'s transform output carries no ",(", " sv string lacks)," - they name the window the row describes"];
     d[`input]:first key t`inputs;

@@ -139,6 +139,9 @@
         'who,"'s events input carries no ",string[d`event_time]," - the horizon is measured from it"];
     if[not (d`reference_time) in ref_cols;
         'who,"'s reference input carries no ",string[d`reference_time]];
+    / the horizon is measured on them: a float event_time scored every event on arrival (#2855)
+    .qetl.job.stream.require_timestamp[who;`event_time;d`event_time;first value ins;"the events input"];
+    .qetl.job.stream.require_timestamp[who;`reference_time;d`reference_time;last value ins;"the reference input"];
     if[not $[-16h=type d`lookback; 0D<=d`lookback; 0b];
         'who,"'s lookback must be a timespan, how far before an event its window reaches"];
     if[not $[-16h=type d`lateness; 0D<=d`lateness; 0b];

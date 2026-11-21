@@ -117,6 +117,21 @@
     if[n=got:count (value f) 1; :()];
     '"define: ",string[job],"'s ",string[k]," takes ",string[got]," parameter(s) - it must be ",shape}
 
+/ Private: refuse an event-time column that is not a timestamp (#2855). A
+/ kind (bars, rolling, horizon) cuts its windows or measures its horizon on
+/ it, and checked only that the column was there: a float column passed define
+/ and then threw on every batch, or dropped or scored every row at once.
+/ @param who the error prefix, e.g. "define: bars job exec_bars"
+/ @param k the key naming the column, e.g. `event_time
+/ @param col the column, known to be in schema
+/ @param schema the empty table carrying it (a transform input's schema)
+/ @param what what schema is, for the message
+/ @return nothing - it throws naming the column and its type
+/ @private
+.qetl.job.stream.require_timestamp:{[who;k;col;schema;what]
+    if["p"=ty:(exec c!t from 0!meta schema) col; :()];
+    'who,"'s ",string[k]," ",string[col]," is not a timestamp column of ",what," - it is of type ",$[null ty;"general";enlist ty]}
+
 / Private: refuse a malformed optional key - deployment facts, transform,
 / check and on_fail. Split out of `define`, whose single body was too big
 / for q to compile once the coverage tool instrumented it ('limit).
