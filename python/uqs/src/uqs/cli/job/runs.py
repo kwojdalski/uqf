@@ -86,13 +86,9 @@ ShowJson = json_opt(
 
 
 def _record(row: dict, columns: tuple[str, ...]) -> dict:
-    """One ledger row as JSON: the table's columns, a whole-number count as an
-    int, and a time - `.z.p`, UTC - ISO-8601 with its offset (#1882)."""
-    out = {}
-    for col in columns:
-        value = row.get(col)
-        out[col] = int(value) if isinstance(value, float) and value.is_integer() else value
-    return utc_times(out)
+    """One ledger row as JSON: the table's columns, and a time - `.z.p`, UTC -
+    ISO-8601 with its offset (#1882)."""
+    return utc_times({col: row.get(col) for col in columns})
 
 
 def _where(attach: str | None) -> dict:
@@ -116,13 +112,9 @@ def _where(attach: str | None) -> dict:
 
 
 def _cell(value: object) -> str:
-    """A ledger value for display: counts arrive as floats (see stack/runs.py),
-    and a null - a run that never finished has no counts - as blank."""
-    if value is None:
-        return ""
-    if isinstance(value, float) and value.is_integer():
-        return str(int(value))
-    return str(value)
+    """A ledger value for display: a null - a run that never finished has no
+    counts - as blank."""
+    return "" if value is None else str(value)
 
 
 def _print(

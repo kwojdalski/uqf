@@ -253,6 +253,11 @@ _STATES = {
     "current": ".qetl.run.attach[]; .qetl.run.begin[`w;()!()]",
     "previous": f'(hsym `$"%s/etl_runs") set {_PREVIOUS}',
     "unsupported": '(hsym `$"%s/etl_runs") set ([] run_id:enlist 0Ng; worker:enlist `w)',
+    "large": (
+        ".qetl.run.attach[]; .qetl.run.begin[`w;()!()]; .qetl.run.finish[`completed;"
+        "`windows_planned`windows_completed`windows_failed`rows_published!"
+        "12345678 987654321 0 9007199254740993]"
+    ),
 }
 
 
@@ -344,3 +349,15 @@ def test_a_q_failure_is_a_failure_not_nothing_to_migrate(tmp_path, paths):
     (d / "etl_runs").write_bytes(b"not a q file")
     with pytest.raises(UqsError, match="reading the run ledger failed"):
         runs.migrate(paths, dry_run=True, directory=d)
+
+
+def test_a_count_is_read_back_exactly_however_large(tmp_path, paths):
+    """Every integer column was cast to float for `.j.j`, which prints a float
+    at 7 significant digits: 12345678 rows were listed as 12345680 (#2861)."""
+    d = tmp_path / "status"
+    d.mkdir()
+    _ledger_in(d, "large")
+    (row,) = runs.history(paths, directory=d)
+    counts = [row[c] for c in ("windows_planned", "windows_completed", "rows_published")]
+    assert counts == [12345678, 987654321, 9007199254740993]
+    assert all(type(c) is int for c in counts), "a count is an int, as the ledger holds it"

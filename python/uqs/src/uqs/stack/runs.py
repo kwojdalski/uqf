@@ -17,7 +17,6 @@ a ledger written before etl_runs gained each run's range and counts.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import subprocess
@@ -25,6 +24,7 @@ import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from uqs import qjson
 from uqs.generated.q_facts import FIXTURE_TAG, REVISION_TAG
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
@@ -42,12 +42,6 @@ _LOADS = (
 #: A run id as the ledger prints it: a guid.
 _GUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 _NAME = re.compile(r"^[a-z][a-z0-9_]*$")
-
-#: Printed for the reader instead of the table itself: every integer column as
-#: a float. A run that never finished has null counts, and a float null is
-#: what `.j.j` writes as JSON null. `tbl`, not `t`: `meta`'s own type column
-#: is `t`, and a parameter of that name would shadow it inside the where.
-_FOR_JSON = '{[tbl] ints:exec c from meta tbl where t in "hij"; @[tbl;ints;"f"$]}'
 
 
 def status_dir(paths: UqsPaths, env: dict[str, str] | None = None) -> Path:
@@ -111,7 +105,12 @@ def _query(
         [
             *(f"\\l {f}" for f in loads),
             *([".qetl.run.attach[];"] if attach else []),
-            f"-1 .j.j {_FOR_JSON} 0!{expr};",
+            # The table as it is: `.j.j` writes a long exactly and a null long
+            # as null. Every integer column was cast to float for the null's
+            # sake, and a float leaves q at 7 digits - 12345678 rows were
+            # listed as 12345680 (#2861), a twin's align as a float (#2863).
+            qjson.PRECISION,
+            f"-1 .j.j 0!{expr};",
             "exit 0",
             "",
         ]
@@ -136,7 +135,7 @@ def _query(
         text = (result.stdout + result.stderr).strip()
         shown = text if len(text) <= 1500 else f"{text[:300]}\n...\n{text[-1200:]}"
         raise UqsError(f"reading the run ledger failed:\n{shown}")
-    return json.loads(lines[-1])
+    return qjson.loads(lines[-1])
 
 
 def migration_plan(paths: UqsPaths, **kw) -> dict:

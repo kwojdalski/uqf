@@ -251,6 +251,18 @@ def test_the_declared_grain_of_each_twin_is_read_from_its_declaration(status, mo
     assert twins == {"hdb_exec_bars_backfill": _MINUTE_NS}
     _, twins, _ = uptime.gaps(paths_for_root(UQF_ROOT), "crypto_book_1s", *DAY)
     assert twins == {"hdb_crypto_book_backfill": 10**9}
+    assert type(twins["hdb_crypto_book_backfill"]) is int, "a grain in nanoseconds is an int"
+
+
+def test_an_aligned_twins_refill_is_printed_from_what_q_really_sends(status, monkeypatch):
+    """The real query, not a stub: align came back a float, so `gaps` printed
+    the table and then died formatting the refill with `:09d` (#2863)."""
+    monkeypatch.setenv("UQF_STATUS_DIR", str(status))
+    result = runner.invoke(
+        cli.app, ["job", "gaps", "exec_bars", "--date", "2026-09-13"], env={"COLUMNS": "200"}
+    )
+    assert result.exit_code == 0, result.output
+    assert "uqs job backfill hdb_exec_bars_backfill --from 2026-09-13" in result.output
 
 
 @pytest.mark.parametrize(
