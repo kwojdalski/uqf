@@ -7,34 +7,65 @@ outputs are new, never the edges themselves - so a cycle was found only after
 the files were written. This reads the tree's streaming declarations and the
 plan's own, joins them on the tables between them, and refuses before writing.
 
-Only jobs that subscribe to tables can close a cycle here: a bounded worker
-reads its source's remote table, which the q graph keys apart from the local
-one of the same name, so it only ever writes into the graph.
+Only jobs that read tables can close a cycle here: a bounded worker reads its
+source's remote table, which the q graph keys apart from the local one of the
+same name, so it only ever writes into the graph. A reaction reads the dataset
+it is triggered by and writes what `on_writing` claims - q registers it as the
+job `<dataset>~<name>` - so two reactions writing each other's trigger close
+one (#2826).
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
-from uqs.model.declarations import Declaration, read_declarations, read_file_text
-from uqs.paths import UqsError
+from uqs.model.declarations import reaction_calls, read_declarations, read_file_text
+from uqs.model.producers import reaction_job
+from uqs.paths import REACTION_DIR, UqsError
 from uqs.scaffold.plan import ScaffoldPlan
 
 
-def planned_declarations(plan: ScaffoldPlan) -> list[Declaration]:
-    """The jobs the plan's q files declare, read as the tree would read them."""
-    found: list[Declaration] = []
+@dataclass(frozen=True)
+class Node:
+    """One job in the graph: what it reads and what it writes."""
+
+    name: str
+    subscribe_to: tuple[str, ...]
+    publishes: tuple[str, ...]
+
+
+def _reaction_nodes(source: str) -> list[Node]:
+    return [Node(reaction_job(r.dataset, r.name), (r.dataset,), r.outputs)
+            for r in reaction_calls(source)]  # fmt: skip
+
+
+def planned_declarations(plan: ScaffoldPlan) -> list[Node]:
+    """The jobs and reactions the plan's q files declare, read as the tree
+    would read them."""
+    found: list[Node] = []
     for action in plan.actions:
         if action.path.suffix == ".q":
-            found += read_file_text(action.body, action.path)
+            found += [Node(d.name, d.subscribe_to, d.publishes)
+                      for d in read_file_text(action.body, action.path)]  # fmt: skip
+            found += _reaction_nodes(action.body)
     return found
 
 
-def dependency_cycle(declarations: list[Declaration]) -> list[str] | None:
+def tree_nodes(root: Path) -> list[Node]:
+    """Every job and reaction the tree at `root` declares."""
+    found = [Node(d.name, d.subscribe_to, d.publishes) for d in read_declarations(root)]
+    for path in sorted((root / REACTION_DIR).glob("*.q")):
+        found += _reaction_nodes(path.read_text())
+    return found
+
+
+def dependency_cycle(declarations: list[Node]) -> list[str] | None:
     """One cycle as [job, table, job, table, ..., job], or None when acyclic.
 
-    A job depends on another when it subscribes to a table the other
-    publishes - the edge `.qetl.dag.topological` orders by.
+    A job depends on another when it reads (subscribes to, or for a reaction
+    is triggered by) a table the other writes - the edge
+    `.qetl.dag.topological` orders by.
     """
     writers: dict[str, list[str]] = {}
     for d in declarations:
@@ -91,7 +122,7 @@ def refuse_cycles(root: Path, plan: ScaffoldPlan) -> None:
                 f"{d.name} would subscribe to {', '.join(overlap)} and publish it too - a job "
                 "that reads its own output is a cycle, and the tree would not load"
             )
-    tree = [d for d in read_declarations(root) if d.name not in names]
+    tree = [d for d in tree_nodes(root) if d.name not in names]
     cycle = dependency_cycle(tree + new)
     if cycle:
         raise UqsError(
