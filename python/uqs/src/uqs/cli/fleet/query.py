@@ -340,15 +340,18 @@ def _ask(
     # directly, while a routed expression carries its own layout - the
     # gateway's deferred reply skips any wrapper (stack/gateway.expression).
     wrap_size, shown = size, expr
+    # kola makes an integral 0W null: the JSON and a CSV, which spell it, ask q
+    # to send it as a float infinity; Parquet keeps the column's type (#2874)
+    carry = as_json or (export is not None and export.suffix.lower() == ".csv")
     if routed:
         try:
-            expr = stack_gateway.expression(expr, servers, size, carry=as_json)
+            expr = stack_gateway.expression(expr, servers, size, carry=carry)
         except UqsError as exc:
             _die(exc)
         wrap_size = None
         log.debug("routed through the gateway: {}", expr)
-    elif as_json:
-        expr = qjson.carried(expr)  # kola makes an integral 0W null (#2874)
+    elif carry:
+        expr = qjson.carried(expr)
     try:
         result = runtime.query(expr, port, host=host, user=user, passwd=passwd, render=wrap_size)
     except Exception as exc:  # kola raises its own exception types on connect/query failure

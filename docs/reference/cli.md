@@ -272,6 +272,8 @@ These rules hold for every document:
 - An infinity from q (`0w`, `0W`, `0Wp`, `0Wn`) is the string `"inf"` or
   `"-inf"`, never `null`, which is only a missing value. An integral column that
   holds an infinity arrives as floats, since kola cannot carry it otherwise.
+  `uqs query --export x.csv` writes the same values, with an empty cell only for
+  a null.
 - A log line is one record, `{time, level, message}`, plus what the command
   adds: `logs` adds `host`, `process`, `proctype` and `id`.
 - Under `--json`, `deploy push`, `prune` and `rollback` print their dry-run note

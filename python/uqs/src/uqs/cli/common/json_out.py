@@ -36,6 +36,7 @@ from typing import Annotated, Any
 
 import typer
 
+from uqs import qjson
 from uqs.cells import Shown
 from uqs.timefmt import timestamp
 
@@ -103,15 +104,8 @@ def utc_times(record: Mapping[str, Any], keys: tuple[str, ...] = UTC_KEYS) -> di
     return {k: timestamp(v, naive="utc") if k in keys else v for k, v in record.items()}
 
 
-#: An infinity as a document spells it, by its sign: q's 0w/0W/0Wp/0Wn, kept
-#: apart from a null - the Desk's spelling (uqf_frontend routes/common.py).
-INFINITY = {1: "inf", -1: "-inf"}
-
-#: kola's 0Wp and -0Wp, as nanoseconds since 1970: 0Wp is int64's largest, and
-#: -0Wp is -0Wp's q value moved by the 30 years between q's epoch and Unix's.
-_STAMP_INFINITY = {2**63 - 1: 1, -(2**63 - 1) + 946_684_800 * 10**9: -1}
-#: kola's 0Wn, in nanoseconds; -0Wn is its negation.
-_SPAN_INFINITY = 2**63 - 1
+#: An infinity as a document spells it: qjson.INFINITY.
+INFINITY = qjson.INFINITY
 
 
 def plain(value: Any, *, keyed: bool = True) -> Any:
@@ -154,45 +148,15 @@ def plain(value: Any, *, keyed: bool = True) -> Any:
 
 
 def _frame_rows(frame: Any) -> list[dict[str, Any]]:
-    """A kola frame's rows, with what `to_dicts` would lose kept (#2874).
-
-    A timestamp goes as UTC text to the nanosecond: as a Python datetime it
-    stopped at the microsecond, so rows 100 ns apart printed one time. A
-    timespan goes as a whole number of nanoseconds, where a timedelta showed
-    one below a microsecond as 0:00:00. 0Wp/-0Wp and 0Wn/-0Wn go as INFINITY
-    rather than as the dates in 2262 and 1677 their bits spell. A float
-    infinity is left to `plain`.
-    """
-    import polars as pl
-
-    special: dict[str, list[str | None]] = {}
-    columns = []
-    for name, kind in frame.schema.items():
-        if isinstance(kind, pl.Datetime):
-            column = pl.col(name)
-            if kind.time_zone is not None:
-                column = column.dt.convert_time_zone("UTC").dt.replace_time_zone(None)
-            column = column.dt.cast_time_unit("ns")
-            nanos = frame.select(column.cast(pl.Int64)).to_series().to_list()
-            special[name] = [_infinity(_STAMP_INFINITY.get(n)) for n in nanos]
-            columns.append(column.dt.to_string("%Y-%m-%dT%H:%M:%S.%9f+00:00").alias(name))
-        elif isinstance(kind, pl.Duration):
-            nanos = frame.select(pl.col(name).dt.total_nanoseconds()).to_series().to_list()
-            special[name] = [
-                _infinity(None if n is None or abs(n) != _SPAN_INFINITY else (n > 0) - (n < 0))
-                for n in nanos
-            ]
-            columns.append(pl.col(name).dt.total_nanoseconds())
-    rows = frame.with_columns(columns).to_dicts() if columns else frame.to_dicts()
+    """A kola frame's rows, with what `to_dicts` would lose kept
+    (qjson.temporal_text, #2874). A float infinity is left to `plain`."""
+    frame, special = qjson.temporal_text(frame)
+    rows = frame.to_dicts()
     for name, values in special.items():
         for row, value in zip(rows, values, strict=True):
             if value is not None:
                 row[name] = value
     return rows
-
-
-def _infinity(sign: int | None) -> str | None:
-    return None if sign is None else INFINITY[sign]
 
 
 def _keyed(obj: Mapping[Any, Any]) -> dict[str, Any]:

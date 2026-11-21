@@ -69,3 +69,53 @@ def carried(expr: str) -> str:
     import this module, which imports none."""
     quoted = expr.replace("\\", "\\\\").replace('"', '\\"')
     return f'{CARRY_INFINITIES} value "{quoted}"'
+
+
+#: An infinity as a document or an export spells it, by its sign: q's
+#: 0w/0W/0Wp/0Wn, kept apart from a null - the Desk's spelling
+#: (uqf_frontend routes/common.py).
+INFINITY = {1: "inf", -1: "-inf"}
+
+#: kola's 0Wp and -0Wp, as nanoseconds since 1970: 0Wp is int64's largest, and
+#: -0Wp is -0Wp's q value moved by the 30 years between q's epoch and Unix's.
+_STAMP_INFINITY = {2**63 - 1: 1, -(2**63 - 1) + 946_684_800 * 10**9: -1}
+#: kola's 0Wn, in nanoseconds; -0Wn is its negation.
+_SPAN_INFINITY = 2**63 - 1
+
+
+def temporal_text(frame: Any) -> tuple[Any, dict[str, list[str | None]]]:
+    """A kola frame with what Python's own types would lose kept, and, per
+    column, the INFINITY text each row's value stands for (None where it is
+    an ordinary value or a null).
+
+    A timestamp becomes UTC text to the nanosecond: as a Python datetime it
+    stopped at the microsecond, so rows 100 ns apart printed one time. A
+    timespan becomes a whole number of nanoseconds. 0Wp/-0Wp and 0Wn/-0Wn are
+    named as infinities rather than as the dates in 2262 and 1677 their bits
+    spell (#2874). `uqs query --json` and `--export x.csv` both write this.
+    """
+    import polars as pl
+
+    special: dict[str, list[str | None]] = {}
+    columns = []
+    for name, kind in frame.schema.items():
+        if isinstance(kind, pl.Datetime):
+            column = pl.col(name)
+            if kind.time_zone is not None:
+                column = column.dt.convert_time_zone("UTC").dt.replace_time_zone(None)
+            column = column.dt.cast_time_unit("ns")
+            nanos = frame.select(column.cast(pl.Int64)).to_series().to_list()
+            special[name] = [_named(_STAMP_INFINITY.get(n)) for n in nanos]
+            columns.append(column.dt.to_string("%Y-%m-%dT%H:%M:%S.%9f+00:00").alias(name))
+        elif isinstance(kind, pl.Duration):
+            nanos = frame.select(pl.col(name).dt.total_nanoseconds()).to_series().to_list()
+            special[name] = [
+                _named(None if n is None or abs(n) != _SPAN_INFINITY else (n > 0) - (n < 0))
+                for n in nanos
+            ]
+            columns.append(pl.col(name).dt.total_nanoseconds())
+    return (frame.with_columns(columns) if columns else frame), special
+
+
+def _named(sign: int | None) -> str | None:
+    return None if sign is None else INFINITY[sign]

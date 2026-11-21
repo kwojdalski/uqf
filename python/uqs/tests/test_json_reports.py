@@ -309,3 +309,25 @@ def test_summary_json_carries_the_lines_under_the_table(monkeypatch):
     doc = _doc(["status"])
     assert doc["processes"] == [{"process": "rdb1", "status": "up", "port": 6002}]
     assert doc["silent"] == ["rdb1"] and doc["heartbeats_collected"] is False
+
+
+@needs_q
+def test_query_export_csv_writes_the_values_the_json_writes(monkeypatch, tmp_path):
+    """`--export x.csv` wrote a long 0W as an empty cell, the same as 0N, and
+    0Wp as 2262-04-11T23:47:16.854775807 (#2874). The expression the command
+    sends is evaluated by a real q and read back by kola's decoder, then the
+    real export writes it."""
+    table = "([] time:(2026.09.13D06:30:00.123456789;0Wp;0Np); n:1 0W 0N; m:-0W 5 6; px:1.5 0w 0n)"
+    work = tmp_path / "q"
+    work.mkdir()
+    monkeypatch.setattr(runtime, "query", lambda expr, *_a, **_k: _through_kola(work, expr))
+    out = tmp_path / "x.csv"
+    result = runner.invoke(cli.app, ["query", "--port", "6002", table, "--export", str(out)])
+    assert result.exit_code == 0, result.output
+    rows = out.read_text().splitlines()
+    assert rows[0] == "time,n,m,px"
+    assert rows[1:] == [
+        "2026-09-13T06:30:00.123456789+00:00,1.0,-inf,1.5",
+        "inf,inf,5.0,inf",
+        ",,6.0,",
+    ]

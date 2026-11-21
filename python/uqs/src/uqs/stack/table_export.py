@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from uqs import qjson
 from uqs.cells import cell
 from uqs.paths import UqsError, UqsUsageError
 
@@ -58,6 +59,7 @@ def export_table(rows: Any, path: Path) -> None:
     # a missing or unwritable directory is a refusal, not polars' traceback (#2606)
     try:
         if suffix == ".csv":
+            df = _csv_values(df)
             nested = [c for c, t in df.schema.items() if t.is_nested()]
             df = df.with_columns(
                 pl.Series(c, [cell(v) for v in df[c].to_list()], dtype=pl.String) for c in nested
@@ -67,3 +69,22 @@ def export_table(rows: Any, path: Path) -> None:
             df.write_parquet(path)
     except (OSError, pl.exceptions.PolarsError) as exc:
         raise UqsError(f"cannot write {path}: {exc}") from None
+
+
+def _csv_values(df: Any) -> Any:
+    """`df` with the values `uqs query --json` writes (qjson.temporal_text):
+    a timestamp as UTC text to the nanosecond, 0Wp and 0Wn as inf, never a
+    date in 2262. A float infinity is written inf by polars itself, and an
+    integral one reaches here as that float (qjson.carried). Empty is only a
+    null (#2874)."""
+    import polars as pl
+
+    df, special = qjson.temporal_text(df)
+    for name, named in special.items():
+        if any(named):
+            text = [
+                n if n is not None else (None if v is None else str(v))
+                for v, n in zip(df[name].to_list(), named, strict=True)
+            ]
+            df = df.with_columns(pl.Series(name, text, dtype=pl.String))
+    return df
