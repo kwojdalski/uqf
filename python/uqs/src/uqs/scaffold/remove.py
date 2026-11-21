@@ -234,13 +234,14 @@ def _remove_test(removal: Removal, repo_root: Path, job: str) -> set[Path]:
 
 
 def _job_file(repo_root: Path, name: str) -> Path:
-    candidates = [
-        STREAM_DIR / f"{name}.q",
-        WORKER_DIR / f"{name}.q",
-        WORKER_DIR / f"{name}_backfill.q",
-        REACTION_DIR / f"{name}.q",
+    """The one job file `name` names. A job named exactly wins over the
+    NAME_backfill convenience, or a stream job sharing its name with a
+    backfill could never be removed by the name `uqs job list` gives it (#2840)."""
+    exact = [STREAM_DIR / f"{name}.q", WORKER_DIR / f"{name}.q", REACTION_DIR / f"{name}.q"]
+    candidates = [*exact, WORKER_DIR / f"{name}_backfill.q"]
+    found = [c for c in exact if (repo_root / c).is_file()] or [
+        c for c in candidates if (repo_root / c).is_file()
     ]
-    found = [c for c in candidates if (repo_root / c).is_file()]
     if len(found) != 1:
         where = ", ".join(str(c) for c in candidates)
         raise UqsError(

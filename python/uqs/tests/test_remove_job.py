@@ -505,6 +505,15 @@ def test_a_removal_not_confirmed_exits_1_and_removes_nothing(tree, monkeypatch):
 # --------------------------- only what the scaffold provably wrote goes (#2831-#2843)
 
 
+def test_a_stream_and_a_backfill_under_one_name_are_each_removable(tree):
+    """#2840: `zq_s` matched the stream and zq_s_backfill both, so the stream
+    had no name that removed it."""
+    write.apply_plan(jobs.streaming_job("zq_s", [], "zq_s_t", "px:float"), tree)
+    write.apply_plan(backfill.bounded_worker("zq_s", "zq_s_hist", "amt:float"), tree)
+    assert Path("src/etl/streaming/zq_s.q") in plan_removal(tree, "zq_s").deletes
+    assert Path("src/etl/workers/zq_s_backfill.q") in plan_removal(tree, "zq_s_backfill").deletes
+
+
 #: The files the removal regenerates, each as a scaffold leaves it naming the job.
 _REGENERATED = {
     "python/uqs/src/uqs/generated/q_facts.py": '    "pulse": ("pulse",),\n',
