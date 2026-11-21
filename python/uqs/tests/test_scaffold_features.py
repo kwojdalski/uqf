@@ -703,3 +703,16 @@ def test_a_passthrough_from_a_one_column_source_the_scaffold_wrote_is_planned(tm
     (tmp_path / source.path).write_text(flat_source(source.body, UQF_ROOT))
     assert ".qpipe.source.bf7.columns:enlist `time" in (tmp_path / source.path).read_text()
     create_backfill.check_reused_passthrough(tmp_path, "bf8", "bf7", [("time", "`timestamp$()")])
+
+
+def test_a_new_source_s_row_key_is_the_time_and_every_symbol_column_marked_as_a_guess():
+    """#2889: `row_key:`time` for any schema folded two symbols ticking at one
+    timestamp into one row, with nothing marking it as the scaffold's guess."""
+    plan = backfill.bounded_worker("fx", "fx_rates", "sym:symbol, venue:g#symbol, mid:float")
+    body = _body(plan, "sources/fx.q")
+    assert "\nrow_key:`time`sym`venue\n" in body
+    claim = body[: body.index("\nrow_key:")].rsplit("\n\n", 1)[1]
+    assert "SCAFFOLDED" in claim, claim
+    assert any("row_key is guessed as `time`sym`venue" in n for n in plan.notes)
+    no_symbols = backfill.bounded_worker("ticks", "ticks", "px:float")
+    assert "\nrow_key:`time\n" in _body(no_symbols, "sources/ticks.q")

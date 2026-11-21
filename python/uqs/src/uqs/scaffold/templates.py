@@ -99,6 +99,14 @@ raw:{raw_contract(table, cols)}
     return decl, "`raw", ";raw"
 
 
+def row_key(cols: list[tuple[str, str]]) -> str:
+    """The scaffold's guess at a source's row key, as q: the time column and
+    every symbol column. `time` alone (#2889) folded every row sharing a
+    timestamp - two symbols ticking together - into one at write."""
+    key = [TIME_COLUMN, *(c for c, lit in cols if c != TIME_COLUMN and type_char(lit) == "s")]
+    return "`" + "`".join(key)
+
+
 def source_body(
     src: str,
     dataset: str,
@@ -141,9 +149,12 @@ types:{types}
 / The column the window is taken on.
 time_column:`{TIME_COLUMN}
 
-/ What identifies a row uniquely. Only correct if the source guarantees it:
-/ a source that reuses ids after a purge silently merges unrelated rows.
-row_key:`{TIME_COLUMN}
+/ SCAFFOLDED: what identifies a row uniquely - guessed as the time and every
+/ symbol column. Rows sharing all of them are folded into one when written, so
+/ name the source's real key (an id, a venue and its fill id) before trusting a
+/ run. Only correct if the source guarantees it: a source that reuses ids
+/ after a purge silently merges unrelated rows.
+row_key:{row_key(cols)}
 
 / A claim, not a default. An unstated zone is the shape of the bug - every
 / later reader assumes UTC while the source hands over local wall-clock time.
