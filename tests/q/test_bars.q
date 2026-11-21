@@ -64,6 +64,16 @@
     .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];`lateness _ .qt.qetl.job.stream.bars.decl[];
         "*bars job bt_x is missing lateness*";"the key it lacks"]};
 
+/ A job file loaded twice re-declares a live job (#2858): the refusal must
+/ leave its open windows buffered and its publish wired, not reset them.
+.qt.qetl.job.stream.bars.test_a_refused_redeclaration_leaves_the_live_job_as_it_was:{[t]
+    .qt.qetl.job.stream.bars.job `bt_redecl;
+    .qt.qetl.job.stream.bars.feed[`bt_redecl;.qt.qetl.job.stream.bars.fill[.qt.qetl.job.stream.bars.t0+0D00:00:30;`EURUSD;1f;1.1]];
+    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_redecl;];@[.qt.qetl.job.stream.bars.decl[];`procname;:;`bt_redecl1];
+        "*bars job bt_redecl is already a streaming job*";"the second declaration is refused by name"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.bars.ns[`bt_redecl;`pending];1;"the open window's row is still buffered"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.bars.ns[`bt_redecl;`publish])[`bt_bar;([] a:1 2)];2;"and publish still reaches what it was wired to"]};
+
 .qt.qetl.job.stream.bars.test_a_zero_width_is_refused:{[t]
     .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_x;];@[.qt.qetl.job.stream.bars.decl[];`width;:;0D];
         "*bt_x's width must be a positive timespan*";"a window has to have an extent"]};

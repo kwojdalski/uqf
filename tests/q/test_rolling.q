@@ -85,6 +85,16 @@
 
 / --- declaring -----------------------------------------------------------
 
+/ A job file loaded twice re-declares a live job (#2858): the refusal must
+/ leave its buffer and its wired publish as they were.
+.qt.qetl.job.stream.rolling.test_a_refused_redeclaration_leaves_the_live_job_as_it_was:{[t]
+    .qt.qetl.job.stream.rolling.job `rt_redecl;
+    .qt.qetl.job.stream.rolling.feed[`rt_redecl;.qt.qetl.job.stream.rolling.t0+0D00:00:30;`a;2f];
+    .qunit.assertThrows[.qetl.job.stream.at_rolling[`rt_redecl;];@[.qt.qetl.job.stream.rolling.decl[];`procname;:;`rt_redecl1];
+        "*rolling job rt_redecl is already a streaming job*";"the second declaration is refused by name"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.rolling.ns[`rt_redecl;`pending];1;"the buffered row is still there"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.rolling.ns[`rt_redecl;`publish])[`rt_out;([] a:1 2)];2;"and publish still reaches what it was wired to"]};
+
 .qt.qetl.job.stream.rolling.test_a_declaration_missing_a_key_is_refused_by_name:{[t]
     .qt.qetl.job.stream.rolling.define_transform[];
     .qunit.assertThrows[.qetl.job.stream.at_rolling[`rt_x;];`lateness _ .qt.qetl.job.stream.rolling.decl[];

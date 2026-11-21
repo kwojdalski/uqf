@@ -72,6 +72,16 @@
 
 / --- declaring -----------------------------------------------------------
 
+/ A job file loaded twice re-declares a live job (#2858): the refusal must
+/ leave its pending events and its wired publish as they were.
+.qt.qetl.job.stream.horizons.test_a_refused_redeclaration_leaves_the_live_job_as_it_was:{[t]
+    .qt.qetl.job.stream.horizons.job[`hz_redecl;()!()];
+    (.qt.qetl.job.stream.horizons.ns[`hz_redecl;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.ev[`a;.qt.qetl.job.stream.horizons.t0]];
+    .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_redecl;];.qt.qetl.job.stream.horizons.decl_for `hz_redecl;
+        "*horizon job hz_redecl is already a streaming job*";"the second declaration is refused by name"];
+    .qunit.assertEquals[count .qt.qetl.job.stream.horizons.ns[`hz_redecl;`pending];1;"the pending event is still there"];
+    .qunit.assertEquals[(.qt.qetl.job.stream.horizons.ns[`hz_redecl;`publish])[`hz_priced;([] a:1 2)];2;"and publish still reaches what it was wired to"]};
+
 .qt.qetl.job.stream.horizons.test_a_declaration_missing_a_key_is_refused_by_name:{[t]
     .qt.qetl.job.stream.horizons.define_transform[];
     .qunit.assertThrows[.qetl.job.stream.at_horizons[`hz_a;];`horizon _ .qt.qetl.job.stream.horizons.decl[];

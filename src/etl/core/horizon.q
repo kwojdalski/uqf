@@ -212,6 +212,9 @@
     .qetl.job.stream.refuse_publishes[who;decl];
     decl:.qetl.job.stream.with_lateness[who;decl];
     .qetl.declared.refuse_unknown[who;"a horizon job";decl;.qetl.job.stream.horizons.required_keys,.qetl.job.stream.horizons.optional_keys];
+    / before anything is written in the job's namespace: a refused re-declaration
+    / of a live job must leave its buffers and wired publish as they were (#2858)
+    .qetl.job.stream.refuse_taken[who;name;decl];
     missing:.qetl.job.stream.horizons.required_keys where not .qetl.job.stream.horizons.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     if[not all -11h=type each decl`events`reference`transform;
