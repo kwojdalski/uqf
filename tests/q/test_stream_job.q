@@ -294,6 +294,18 @@
     .qunit.assertEquals[distinct count each rows;enlist count .qf.demo.pairs;
         "every column carries one value per pair"]};
 
+/ #2886: a two-sided ladder - every bid below the mid, every ask above it,
+/ each side stepping away from the mid level by level.
+.qt.qetl.job.stream.test_the_wide_feed_puts_bids_below_the_mid_and_asks_above:{[t]
+    n:.qpipe.job.wide_orderbook_feed.n_levels;
+    rows:.qpipe.job.wide_orderbook_feed.tick_rows .qf.demo.spot;
+    bids:rows 1+til n;
+    asks:rows 1+n+til n;
+    .qunit.assertTrue[all first[bids]<.qf.demo.spot;"level-0 bids are below each pair's mid"];
+    .qunit.assertTrue[all first[asks]>.qf.demo.spot;"level-0 asks are above it"];
+    .qunit.assertTrue[all raze (1_bids)<-1_bids;"each bid level is below the one before it"];
+    .qunit.assertTrue[all raze (1_asks)>-1_asks;"each ask level is above the one before it"]};
+
 .qt.qetl.job.stream.test_a_fill_prices_around_its_pairs_level:{[t]
     / Three pips either way, which is what makes some fills cross the spread
     / and some improve. The level is pinned: any on_timer before this test moves
