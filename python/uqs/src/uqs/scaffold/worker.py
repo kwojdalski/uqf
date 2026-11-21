@@ -13,7 +13,7 @@ import re
 from uqs.model import transports
 from uqs.paths import SOURCE_DIR, TABLES_FILE, TEST_DIR, WORKER_DIR, UqsError
 from uqs.scaffold.catalog import catalog_actions
-from uqs.scaffold.columns import Columns, as_columns, plant_declarations
+from uqs.scaffold.columns import Columns, as_columns, plant_declarations, type_char
 from uqs.scaffold.docs import BACKFILLS, doc_stub_actions
 from uqs.scaffold.example import example_body, example_path
 from uqs.scaffold.jobs import (
@@ -38,6 +38,17 @@ from uqs.scaffold.transform import check_mode
 _PARTITION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_]*$")
 #: The partition column must name an output column, so it is held to their rule.
 _PARTITION_COLUMN = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def _slice_sample(
+    cols: list[tuple[str, str]], partition: str | None, column: str | None
+) -> dict[str, str]:
+    """The fixture value a slice needs: the slice itself, in its column when the
+    source has it as a symbol. A fixture row outside the slice is refused at
+    publish, so the example the scaffold says to run failed on it (#2830)."""
+    if partition is None or not any(c == column and type_char(lit) == "s" for c, lit in cols):
+        return {}
+    return {str(column): f"`{partition}"}
 
 
 def check_width(width: str) -> str:
@@ -204,9 +215,13 @@ def bounded_worker(
             )
 
     actions: list[FileAction] = []
+    slice_sample = _slice_sample(cols, partition, partition_column)
     if not reuse_source:
         actions.append(
-            FileAction(SOURCE_DIR / f"{src}.q", source_body(src, dataset, cols, transport, raw))
+            FileAction(
+                SOURCE_DIR / f"{src}.q",
+                source_body(src, dataset, cols, transport, raw, samples=slice_sample),
+            )
         )
     actions.append(
         FileAction(

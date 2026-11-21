@@ -716,3 +716,15 @@ def test_a_new_source_s_row_key_is_the_time_and_every_symbol_column_marked_as_a_
     assert any("row_key is guessed as `time`sym`venue" in n for n in plan.notes)
     no_symbols = backfill.bounded_worker("ticks", "ticks", "px:float")
     assert "\nrow_key:`time\n" in _body(no_symbols, "sources/ticks.q")
+
+
+def test_a_sliced_source_s_fixture_row_is_in_the_slice():
+    """#2830: the fixture row's sym was `SCAFFOLD, so with --slice EURUSD the
+    example the scaffold says to run refused it at publish and exited 1."""
+    plan = backfill.bounded_worker("fx", "fx_rates", "sym:symbol, mid:float", partition="EURUSD")
+    assert "sym:enlist `EURUSD;" in _body(plan, "sources/fx.q")
+    other = backfill.bounded_worker(
+        "fx", "fx_rates", "sym:symbol, pair:symbol, mid:float", partition="EURUSD",
+        partition_column="pair",
+    )  # fmt: skip
+    assert "sym:enlist `SCAFFOLD; pair:enlist `EURUSD;" in _body(other, "sources/fx.q")
