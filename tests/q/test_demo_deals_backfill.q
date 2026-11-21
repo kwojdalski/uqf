@@ -629,6 +629,32 @@
     .qunit.assertEquals[(r`state;r`windows_completed;r`windows_failed);(`partial;2;1);
         "the first window fails its contract; the two after it are still filled"]};
 
+/ #2846: the destination holds ONE copy of a window, but the ledger kept every
+/ version's claim. v2 upserting over v1's window left v1's claim current, so
+/ v1 again (a rolled-back release) was idle over v2's rows, and v1 coverage
+/ admitted a consumer to rows that were v2's.
+.qt.qpipe.job.demo_deals_backfill.run_at:{[v]
+    .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[v;1;3]];
+    r:.qpipe.job.demo_deals_backfill.run[];
+    .qpipe.job.demo_deals_backfill.cleanup[];
+    r}
+
+.qt.qpipe.job.demo_deals_backfill.covered_at:{[v] .qetl.coverage.is_covered[`demo_deals;`;`$string[v],"~fixture";.z.p;.qt.qpipe.job.demo_deals_backfill.d 1;.qt.qpipe.job.demo_deals_backfill.d 3]}
+
+.qt.qpipe.job.demo_deals_backfill.test_a_later_version_overwriting_a_window_withdraws_the_earlier_claim:{[t]
+    .qt.qpipe.job.demo_deals_backfill.run_at `v1;
+    .qt.qpipe.job.demo_deals_backfill.run_at `v2;
+    .qunit.assertEquals[.qt.qpipe.job.demo_deals_backfill.covered_at each `v1`v2;01b;"the window holds v2's rows, so only v2 claims it"];
+    r:.qt.qpipe.job.demo_deals_backfill.run_at `v1;
+    .qunit.assertEquals[(r`state;r`windows_completed);(`completed;2);"rolling back to v1 writes it again, not idle"];
+    .qunit.assertEquals[.qt.qpipe.job.demo_deals_backfill.covered_at each `v1`v2;10b;"and v1 claims it now"]};
+
+.qt.qpipe.job.demo_deals_backfill.test_an_append_keeps_every_versions_claim:{[t]
+    .qetl.cfg.set_override[`on_conflict;"append"];
+    .qt.qpipe.job.demo_deals_backfill.run_at `v1;
+    .qt.qpipe.job.demo_deals_backfill.run_at `v2;
+    .qunit.assertEquals[.qt.qpipe.job.demo_deals_backfill.covered_at each `v1`v2;11b;"append keeps both versions' rows, so both claims hold"]};
+
 / --- the source query runs under the retry policy -----------------------
 
 / Private: swap the source's fixture for f, returning the original. The
@@ -1382,8 +1408,12 @@
         "the new logic redoes the range rather than finding it covered"];
     .qunit.assertEquals[.qetl.coverage.is_covered[`demo_deals;`;`$"v1@r2~fixture";.z.p;.qt.qpipe.job.demo_deals_backfill.d[1];.qt.qpipe.job.demo_deals_backfill.d[4]];1b;
         "recorded under the release and its revision"];
-    .qunit.assertEquals[.qetl.coverage.is_covered[`demo_deals;`;.qt.qpipe.job.demo_deals_backfill.fv;.z.p;.qt.qpipe.job.demo_deals_backfill.d[1];.qt.qpipe.job.demo_deals_backfill.d[4]];1b;
-        "and the old claims keep their own identity"]};
+    / Kept in the ledger under their own release, never relabelled - and no longer
+    / current: the r2 run upserted over every window, so the destination holds r2's
+    / rows, not r1's (#2846).
+    h:.qetl.coverage.history[`demo_deals;`;.qt.qpipe.job.demo_deals_backfill.fv];
+    .qunit.assertEquals[(count h;all h[`superseded_at]<.qetl.coverage.still_current);(3;1b);
+        "and the old claims keep their own identity, withdrawn by the overwrite"]};
 
 .qt.qpipe.job.demo_deals_backfill.test_the_same_revision_is_idle_the_second_time:{[t]
     r:.qt.qpipe.job.demo_deals_backfill.with_revision[2;{[] .qt.qpipe.job.demo_deals_backfill.full_run[]; .qt.qpipe.job.demo_deals_backfill.full_run[]}];

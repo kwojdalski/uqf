@@ -52,6 +52,7 @@
 \l src/etl/core/venue_market.q
 \l src/etl/core/intervals.q
 \l src/etl/core/materialisation.q
+\l src/etl/core/materialisation_versions.q
 \l src/etl/core/mapped_books.q
 \l src/etl/core/mapped_depth.q
 \l src/etl/core/reference_variant.q
