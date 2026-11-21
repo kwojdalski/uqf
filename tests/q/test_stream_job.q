@@ -346,6 +346,15 @@
     .qunit.assertEquals[distinct count each rows;enlist 1;
         "every column of a fill is a one-element vector, never an atom"]};
 
+/ #2887: the feed's side is +1 buy / -1 sell, its contract with executions,
+/ and a feed that only bought would make every demo position only grow. Over
+/ 64 ticks both appear (all one side by chance: 2^-63).
+.qt.qetl.job.stream.test_the_trades_feed_produces_both_sides:{[t]
+    .qt.qetl.job.stream.reset[];
+    do[64;.qpipe.job.fx_trades_feed.on_timer[]];
+    sides:raze {first[x] 1} each exec rows from .qt.qetl.job.stream.published;
+    .qunit.assertEquals[asc distinct sides;-1 1;"buys and sells, and no other side"]};
+
 .qt.qetl.job.stream.test_the_trades_feed_publishes_one_fill_a_tick:{[t]
     .qt.qetl.job.stream.reset[];
     .qpipe.job.fx_trades_feed.on_timer[];
