@@ -32,8 +32,11 @@ from uqs.scaffold.templates import (
 from uqs.scaffold.timespan import q_timespan
 from uqs.scaffold.transform import check_mode
 
-#: A partition is a q symbol: `EURUSD, `binance_spot.
-_PARTITION = re.compile(r"^[A-Za-z0-9_]+$")
+#: A partition is a q symbol: `EURUSD, `binance_spot. Not starting with an
+#: underscore, which q reads as the `_` operator: `_spot is ` _ spot (#2825).
+_PARTITION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_]*$")
+#: The partition column must name an output column, so it is held to their rule.
+_PARTITION_COLUMN = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 def check_width(width: str) -> str:
@@ -132,14 +135,17 @@ def bounded_worker(
     if partition is not None and not _PARTITION.fullmatch(partition):
         raise UqsError(
             f"--slice {partition!r} must be a q symbol - letters, digits and underscores, "
-            "e.g. EURUSD"
+            "not starting with an underscore, e.g. EURUSD"
         )
     if partition_column is not None and partition is None:
         raise UqsError("--slice-column needs --slice: it names the column holding it")
     if partition is not None:
         partition_column = partition_column or DEFAULT_PARTITION_COLUMN
-        if not _PARTITION.fullmatch(partition_column):
-            raise UqsError(f"--slice-column {partition_column!r} must be a q symbol")
+        if not _PARTITION_COLUMN.fullmatch(partition_column):
+            raise UqsError(
+                f"--slice-column {partition_column!r} must name a column - lower-case, "
+                "starting with a letter, then letters, digits and underscores"
+            )
     worker = f"{name}_backfill"
     proc = _check_name(procname or f"{name}_backfill1", "procname")
     # Columns shape what is WRITTEN - a new source's fields, a new table - so

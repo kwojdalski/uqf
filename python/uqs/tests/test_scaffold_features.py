@@ -141,9 +141,22 @@ def test_into_an_existing_target_the_partition_column_is_the_targets():
         )  # fmt: skip
 
 
-def test_a_partition_that_is_not_a_symbol_is_refused():
+@pytest.mark.parametrize("partition", ["EUR/USD", "_spot", "_"])
+def test_a_partition_that_is_not_a_symbol_is_refused(partition):
+    """#2825: `_spot passed the old pattern, and q reads it as ` _ spot - the
+    worker was written, and the whole tree stopped loading with `spot`."""
     with pytest.raises(UqsError, match="must be a q symbol"):
-        backfill.bounded_worker("fx", "fx_rates", "sym:symbol,px:float", partition="EUR/USD")
+        backfill.bounded_worker("fx", "fx_rates", "sym:symbol,px:float", partition=partition)
+    assert backfill.bounded_worker("fx", "fx_rates", "sym:symbol,px:float", partition="1m_spot")
+
+
+@pytest.mark.parametrize("column", ["_sym", "Sym", "9sym"])
+def test_a_partition_column_is_held_to_the_column_name_rule(column):
+    """#2825: --slice-column names an output column."""
+    with pytest.raises(UqsError, match="must name a column"):
+        backfill.bounded_worker(
+            "fx", "fx_rates", "sym:symbol,px:float", partition="EURUSD", partition_column=column
+        )
 
 
 def test_check_scaffolds_a_throwing_quality_check_and_declares_it():
