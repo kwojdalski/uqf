@@ -99,6 +99,24 @@
 / @eg .qetl.job.stream.namespace `crypto_markout  ->  `.qpipe.job.crypto_markout
 .qetl.job.stream.namespace:{[job] ` sv .qetl.job.stream.job_root,job}
 
+/ Private: refuse a lambda that takes the wrong number of parameters (#2856).
+/ One parameter too many and q hands back a projection instead of running the
+/ body - an on_batch that never ran, counted as a batch handled; one too few
+/ throws a bare 'rank on every call. q reads the parameter list of a lambda
+/ only, so a projection or composition is taken on trust (declared.q); a
+/ niladic lambda's list is one null name, so it counts as one.
+/ @param job the job's name
+/ @param k the key, e.g. `on_batch
+/ @param f the declared value, already known to be callable
+/ @param n the parameters it must take
+/ @param shape what it must be, for the message
+/ @return nothing - it throws naming the job, the key and the count
+/ @private
+.qetl.job.stream.require_arity:{[job;k;f;n;shape]
+    if[not .qetl.declared.lambda f; :()];
+    if[n=got:count (value f) 1; :()];
+    '"define: ",string[job],"'s ",string[k]," takes ",string[got]," parameter(s) - it must be ",shape}
+
 / Private: refuse a malformed optional key - deployment facts, transform,
 / check and on_fail. Split out of `define`, whose single body was too big
 / for q to compile once the coverage tool instrumented it ('limit).
@@ -118,10 +136,12 @@
     / reset whatever state it carries. Called with the date that ended.
     if[(`on_endofday in key decl) and not .qetl.declared.callable decl`on_endofday;
         '"define: ",string[job],"'s on_endofday must be a function of the date that ended"];
+    if[`on_endofday in key decl; .qetl.job.stream.require_arity[job;`on_endofday;decl`on_endofday;1;"a function of the date that ended"]];
     / What the job loads before it runs (#1112): configuration a running
     / process needs and a declaration cannot hold, such as a limits file.
     if[(`on_start in key decl) and not .qetl.declared.callable decl`on_start;
         '"define: ",string[job],"'s on_start must be a niladic function"];
+    if[`on_start in key decl; .qetl.job.stream.require_arity[job;`on_start;decl`on_start;1;"a niladic function"]];
     / The shared transform the job applies, when it applies one: what a twin
     / refilling its table must apply too, and what `uqs job new --twin-of`
     / scaffolds into one (#884). Checked here, so a declared name cannot
@@ -140,6 +160,7 @@
     if[`check in key decl;
         if[not .qetl.declared.callable decl`check;
             '"define: ",string[job],"'s check must be a function of the rows about to be published, returning the offending rows"];
+        .qetl.job.stream.require_arity[job;`check;decl`check;1;"a function of the rows about to be published"];
         if[not (`on_fail in key decl) and -11h=type decl`on_fail;
             '"define: ",string[job]," declares a check but no on_fail - say `drop (publish the clean rows) or `hold (withhold the whole batch)"];
         if[not (decl`on_fail) in `drop`hold;
@@ -168,6 +189,7 @@
     if[`on_replayed in key decl;
         if[not .qetl.declared.callable decl`on_replayed;
             '"define: ",string[job],"'s on_replayed must be a niladic function"];
+        .qetl.job.stream.require_arity[job;`on_replayed;decl`on_replayed;1;"a niladic function"];
         if[not replays;
             '"define: ",string[job]," declares on_replayed without replay 1b - it would never be called"]];
     if[replays and not `on_batch in key decl;
@@ -254,6 +276,7 @@
     if[`poll in key decl; decl:.qetl.job.stream.poll_declared[job;decl]];
     if[(`on_batch in key decl) and not .qetl.declared.callable decl`on_batch;
         '"define: ",string[job],"'s on_batch must be a function taking (table name; rows), [t;x] as in TorQ's upd"];
+    if[`on_batch in key decl; .qetl.job.stream.require_arity[job;`on_batch;decl`on_batch;2;"a function taking (table name; rows), [t;x] as in TorQ's upd"]];
     / A subscriber with no handler receives every batch and drops it, and a
     / job with neither handler nor timer runs nothing at all - both look
     / healthy from outside, which is why each is refused by name here.
@@ -273,7 +296,8 @@
         if[not (decl`period)>0D00:00;
             '"define: ",string[job],"'s period must be positive"];
         if[not .qetl.declared.callable decl`on_timer;
-            '"define: ",string[job],"'s on_timer must be a niladic function"]];
+            '"define: ",string[job],"'s on_timer must be a niladic function"];
+        .qetl.job.stream.require_arity[job;`on_timer;decl`on_timer;1;"a niladic function (or one taking the tick)"]];
     .qetl.job.stream.check_optional[job;decl];
     .qetl.job.stream.check_replay[job;decl]; .qetl.twin.check_live[job;decl];
     decl:.qetl.job.stream.with_defaults decl;  / after the checks above, which tell declared from absent (#2657)

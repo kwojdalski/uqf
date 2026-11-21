@@ -223,6 +223,27 @@
     .qunit.assertEquals[subs;enlist `executions;"and the first declaration stands"];
     .qunit.assertEquals[procs;enlist `sjtwice1;"with no second procname claiming it"]};
 
+/ A lambda with one parameter too many returns a projection instead of running:
+/ an on_batch that never ran was counted as a batch handled (#2856). One too
+/ few threw a bare 'rank on every batch. Both are refused at define.
+.qt.qetl.job.stream.test_a_handler_taking_the_wrong_number_of_parameters_is_refused:{[t]
+    base:`procname`subscribe_to`outputs`on_batch!(`sjarity1;enlist `executions;`symbol$();{[t;x] ()});
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_arity;x]};@[base;`on_batch;:;{[t;x;extra] ()}];
+        "*sj_arity's on_batch takes 3 parameter(s) - it must be a function taking (table name; rows)*";"an on_batch of three would never run"];
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_arity;x]};@[base;`on_batch;:;{[x] ()}];
+        "*sj_arity's on_batch takes 1 parameter(s)*";"an on_batch of one throws 'rank on every batch"];
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_arity;x]};base,`period`on_timer!(0D00:00:01;{[a;b] ()});
+        "*sj_arity's on_timer takes 2 parameter(s) - it must be a niladic function*";"an on_timer of two would never run"];
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_arity;x]};base,`check`on_fail!({[rows;extra] ()};`drop);
+        "*sj_arity's check takes 2 parameter(s)*";"a check of two would withhold every row with no failure named"];
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_arity;x]};base,enlist[`on_endofday]!enlist {[a;b] ()};
+        "*sj_arity's on_endofday takes 2 parameter(s)*";"an on_endofday of two would never run"];
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_arity;x]};base,enlist[`on_start]!enlist {[a;b] ()};
+        "*sj_arity's on_start takes 2 parameter(s)*";"an on_start of two would never run"];
+    .qunit.assertThrows[{.qetl.job.stream.define[`sj_arity;x]};base,`replay`on_replayed!(1b;{[a;b] ()});
+        "*sj_arity's on_replayed takes 2 parameter(s)*";"an on_replayed of two would never run"];
+    .qunit.assertFalse[`sj_arity in .qetl.job.stream.defined[];"and nothing was registered"]};
+
 .qt.qetl.job.stream.test_an_unwired_publish_throws_rather_than_dropping_rows:{[t]
     / The seam's whole point: rows going nowhere must not look like a job
     / with nothing to say.
