@@ -84,6 +84,25 @@
         "*horizon job hz_x's reference_time mid is not a timestamp column of the reference input - it is of type f*";"nor the reference's clock"];
     .qunit.assertFalse[`hz_x in .qetl.job.stream.defined[];"and nothing is registered"]};
 
+/ A score that keeps no row publishes nothing (#2890): the job used to send the
+/ plant an empty table every tick it scored, which the output-contract gate then
+/ counted as the table published.
+.qt.qetl.job.stream.horizons.test_a_score_that_keeps_no_row_publishes_nothing:{[t]
+    .qt.qetl.job.stream.horizons.define_transform[];
+    if[not `horizontest_none in .qetl.transform.defined[];
+        .qetl.transform.define[`horizontest_none;`inputs`output`fn`examples!(
+            `events`refs!(.qt.qetl.job.stream.horizons.events;.qt.qetl.job.stream.horizons.refs);
+            .qt.qetl.job.stream.horizons.priced;
+            {[e;r] 0#.qt.qetl.job.stream.horizons.priced};
+            enlist `inputs`expected!(
+                `events`refs!(.qt.qetl.job.stream.horizons.ev[`a;.qt.qetl.job.stream.horizons.t0];.qt.qetl.job.stream.horizons.refs);
+                .qt.qetl.job.stream.horizons.priced))]];
+    .qt.qetl.job.stream.horizons.job[`hz_none;enlist[`transform]!enlist `horizontest_none];
+    (.qt.qetl.job.stream.horizons.ns[`hz_none;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.ev[`a;.qt.qetl.job.stream.horizons.t0]];
+    (.qt.qetl.job.stream.horizons.ns[`hz_none;`score_ready]) .qt.qetl.job.stream.horizons.t0+0D00:00:05;
+    .qunit.assertEquals[count .qt.qetl.job.stream.horizons.ns[`hz_none;`pending];0;"the event was scored"];
+    .qunit.assertEquals[.qt.qetl.job.stream.horizons.sent;();"and nothing was sent for the empty result"]};
+
 .qt.qetl.job.stream.horizons.test_a_refused_redeclaration_leaves_the_live_job_as_it_was:{[t]
     .qt.qetl.job.stream.horizons.job[`hz_redecl;()!()];
     (.qt.qetl.job.stream.horizons.ns[`hz_redecl;`on_batch])[`hz_events;.qt.qetl.job.stream.horizons.ev[`a;.qt.qetl.job.stream.horizons.t0]];

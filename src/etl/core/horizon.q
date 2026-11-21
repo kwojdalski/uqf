@@ -371,7 +371,8 @@
         ins:key .qetl.transform.def["horizon job ",string name;d`transform]`inputs;
         ready:pending where mask;
         out:.qetl.transform.apply[d`transform;ins!(ready;get hq)];
-        (get ` sv ns,`publish)[first d`outputs;out];
+        / nothing for an empty score, as bars and rolling publish nothing (#2890)
+        if[count out; (get ` sv ns,`publish)[first d`outputs;out]];
         if[`identity in key d; cq insert ([] id:.qetl.job.stream.horizons.ids_of[d;ready]; at:(count ready)#now)];
         .qetl.job.stream.evict[pq;mask]];
     if[`expire_after in key d;
