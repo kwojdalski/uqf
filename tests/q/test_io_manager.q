@@ -212,6 +212,19 @@
     .qunit.assertEquals[type .qt.qetl.io.part[root;2026.01.02;`iodeals]`notional;9h;"and the rows already there keep their type"];
     .qunit.assertTrue[()~key hsym `$.qetl.io.part_path[root;2026.01.01;`iodeals];"the batch's other date is not written either"]};
 
+/ #2869: a general-list column on disk was taken to accept anything, so a
+/ typed batch column passed the check, upsert wrote the other columns and
+/ threw 'type on it - the torn partition #2329 was written to stop.
+.qt.qetl.io.test_an_append_of_a_typed_column_onto_a_general_list_is_refused_whole:{[t]
+    root:.qt.qetl.io.hdb_dir[];
+    m:.qetl.io.hdb[root;`deal_time];
+    .qetl.io.write[m;`iodeals;update note:(::;::) from 2#.qt.qetl.io.deals[]];
+    b:([] deal_time:enlist 2026.01.02D11:00:00.000000000; sym:enlist `AUDUSD; notional:enlist 5e6; note:enlist 1.5);
+    .qunit.assertThrows[.qetl.io.write[m;`iodeals];b;"*note: partition a general list, batch f*";"refused, not torn"];
+    base:.qetl.io.part_path[root;2026.01.02;`iodeals];
+    .qunit.assertEquals[{[base;c] count get hsym `$base,"/",string c}[base] each `time`deal_time`sym`notional`note;5#2;
+        "every column still ends at the partition's own two rows"]};
+
 .qt.qetl.io.test_hdb_refuses_today:{[t]
     root:.qt.qetl.io.hdb_dir[];
     b:([] deal_time:enlist .z.p; sym:enlist `EURUSD; notional:enlist 1e6);

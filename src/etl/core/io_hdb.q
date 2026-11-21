@@ -193,7 +193,9 @@
 / column of another type threw part-way and left the partition's columns of
 / different lengths. scripts/jobs/attached_forced.q makes the
 / same check for its writer (#2208). Every column the partition has must be
-/ in the batch with its type; a general-list column on disk takes anything.
+/ in the batch with its type. A general-list column on disk takes only a
+/ general list (#2869): a typed vector appended to one throws 'type after the
+/ columns before it were written - the same torn partition.
 / `meta get part`, not `meta part`: PeachQ v0.92 still throws 'type on meta of a
 / directory, and on KDB-X the two are the same.
 / @private
@@ -202,10 +204,10 @@
     native:exec c!t from meta get part;
     batch:exec c!t from meta rows;
     k:key native;
-    bad:k where not (" "=native k) or native[k]=batch k;
+    bad:k where not (k in key batch) and native[k]=batch k;
     if[0=count bad; :1b];
     '"hdb: the batch does not match the partition ",(1_string part)," - nothing was written; ",
-        "; " sv {[n;b;c] string[c],": partition ",n[c],", batch ",$[not c in key b; "(absent)"; " "=b c; "a general list"; b c]}[native;batch] each bad}
+        "; " sv {[n;b;c] string[c],": partition ",$[" "=n c; "a general list"; n c],", batch ",$[not c in key b; "(absent)"; " "=b c; "a general list"; b c]}[native;batch] each bad}
 
 / Private: the batch with the plant's `time` column, refused when it cannot
 / be partitioned, would land in the tickerplant's dates, or would land in a
