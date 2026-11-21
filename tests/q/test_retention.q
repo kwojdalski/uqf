@@ -124,6 +124,22 @@
         "retention is idempotent"];
     .qunit.assertEquals[count .qetl.retention.history[];2;"and records nothing for nothing"]};
 
+/ #2871: retention of one table of several left dates holding the others but
+/ not it, and an HDB needs every table in every date: a reload then threw on
+/ any query of the pruned table across dates. It leaves an empty splay.
+.qt.qetl.retention.test_pruning_one_table_of_several_leaves_it_empty_not_missing:{[t]
+    root:.qt.qetl.retention.hdb[];
+    .qetl.io.write[.qetl.io.hdb[root;`deal_time];`rtother;([] deal_time:2026.01.02D08:00:00.000000000 2026.02.20D08:00:00.000000000; sym:`USDJPY`USDJPY; px:150 151f)];
+    .qt.qetl.retention.declare[`rt_two;root];
+    p:.qetl.retention.run[`rt_two;.qt.qetl.retention.as_at;enlist[`apply]!enlist 1b];
+    .qunit.assertEquals[p`item;`2026.01.02`2026.01.03;"both old days are pruned"];
+    .qunit.assertEquals[.qetl.retention.part_rows[root;2026.01.02;`rtdeals];0;"01-02 holds rtother, so rtdeals is left there empty"];
+    .qunit.assertEquals[cols get hsym `$.qetl.io.part_path[root;2026.01.02;`rtdeals],"/";cols get hsym `$.qetl.io.part_path[root;2026.02.20;`rtdeals],"/";
+        "with the table's columns"];
+    .qunit.assertTrue[()~key hsym `$1_string[root],"/2026.01.03";"01-03 held rtdeals alone and is gone"];
+    .qunit.assertEquals[count .qetl.retention.run[`rt_two;.qt.qetl.retention.as_at;enlist[`apply]!enlist 1b];0;
+        "and the empty table is not pruned again"]};
+
 .qt.qetl.retention.test_a_removal_killed_after_the_rename_is_put_back_by_recovery:{[t]
     root:.qt.qetl.retention.hdb[];
     / The state a kill leaves between retire's rename and its delete: the

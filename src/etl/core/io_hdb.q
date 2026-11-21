@@ -447,7 +447,11 @@
 / puts back (the partition reads as it did, and retention, which supersedes
 / coverage BEFORE it removes, simply removes it again). A date directory left
 / with no table at all is removed too: the HDB loads every directory under its
-/ root and an empty one fails a reload.
+/ root and an empty one fails a reload. For the same reason a date that still
+/ holds OTHER tables keeps this one, emptied (#2871): an HDB needs every table
+/ in every date, and a missing one throws on any query across dates. The
+/ empty splay is staged and swapped in like any write, so it replaces the
+/ rows in one rename.
 / .
 / Does not tell a running HDB to reload; that needs the stack (see on_ready).
 / @param root the HDB root, a file symbol
@@ -459,12 +463,17 @@
     .qetl.io.restore_retired[root;t];
     live:.qetl.io.part_path[root;d;t];
     if[()~key hsym `$live; :0b];
+    datedir:(neg 1+count string t)_live;
+    / emptied, its symbols re-enumerated against root: the mapped enumeration's domain is not loaded here
+    if[1<count key hsym `$datedir;
+        .qetl.io.stage[root;d;t;.Q.en[root;] .qetl.io.plain flip {$[(type x) within 20 76h; `symbol$(); 0#x]} each flip select from get hsym `$live,"/"];
+        .qetl.io.swap[root;d;t];
+        :1b];
     old:.qetl.io.staged[root;`old;d;t];
     .qetl.io.sh["rm -rf";old];
     .qetl.io.sh["mkdir -p";(.qetl.io.staging[root]),"/old/",string d];
     .qetl.io.sh["mv";(live;old)];
     .qetl.io.sh["rm -rf";old];
-    datedir:(neg 1+count string t)_live;
     if[0=count key hsym `$datedir; .qetl.io.sh["rmdir";datedir]];
     1b}
 

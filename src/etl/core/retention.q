@@ -184,7 +184,9 @@
     dts:asc dts where not null dts;
     dts:dts where (`timestamp$dts+1)<=cutoff;
     dts:dts where dts<.z.d;
-    dts:dts where {[root;tbl;d] not ()~key hsym `$.qetl.io.part_path[root;d;tbl]}[root;tbl] each dts;
+    / an empty table beside others is what retire leaves (#2871): nothing to prune
+    dts:dts where {[root;tbl;d] p:.qetl.io.part_path[root;d;tbl];
+        $[()~key hsym `$p; 0b; (0<.qetl.retention.part_rows[root;d;tbl]) or 1=count key hsym `$(neg 1+count string tbl)_p]}[root;tbl] each dts;
     if[0=count dts; :.qetl.retention.no_plan[]];
     raze {[name;decl;root;tbl;d]
         f:`timestamp$d;
