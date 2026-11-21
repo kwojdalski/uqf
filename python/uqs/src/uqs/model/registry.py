@@ -27,6 +27,7 @@ Two things are not read from a declaration:
 from __future__ import annotations
 
 import csv
+from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
 
@@ -38,7 +39,7 @@ from uqs.model.pipeline import (
     Pipeline,
     PipelineKind,
 )
-from uqs.paths import PROCESS_PORTS_FILE, repo_root
+from uqs.paths import PROCESS_PORTS_FILE, UqsError, repo_root
 from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
 
 #: The default runtime's base port. Every other default is that runtime's
@@ -58,6 +59,35 @@ NON_JOB_PIPELINES: tuple[Pipeline, ...] = (
         note="diagnostic subscriber - started on demand, not with the whole stack",
     ),
 )
+
+
+def refuse_taken(new: Iterable[Declaration], existing: Iterable[Declaration], root: Path) -> None:
+    """Refuse a declaration whose job name or procname is already taken.
+
+    THE one rule, asked by every writer - `uqs job new` into the tree or a
+    bundle, real or dry run, and the bundle installer - so none admits what
+    another refuses (#2824, #2835). A job name is one namespace,
+    `.qpipe.job.<name>`, across kinds (#2500); a procname is one process
+    (#1572), and is taken if a declaration in `existing` claims it or a
+    NON_JOB_PIPELINES entry (tap1) runs it. Each of `new` is checked against
+    the others too.
+    """
+    names = {d.name: d.kind.value for d in existing}
+    taken = {p.procname: p.procname for p in NON_JOB_PIPELINES}
+    taken |= {d.procname: d.name for d in existing}
+    for d in new:
+        if d.name in names:
+            raise UqsError(
+                f"a job called {d.name!r} already exists (a {names[d.name]} job), and every job "
+                f"shares one namespace (.qpipe.job.{d.name}) - pick another name"
+            )
+        if d.procname in taken:
+            raise UqsError(
+                f"{d.name} would run as {d.procname}, which {taken[d.procname]} already runs - "
+                "one process runs one job: pick another --proc"
+            )
+        names[d.name] = d.kind.value
+        taken[d.procname] = d.name
 
 
 def read_port_lock(root: Path) -> dict[str, int]:

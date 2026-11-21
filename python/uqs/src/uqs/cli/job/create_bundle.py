@@ -30,6 +30,16 @@ def planning_root(repo_root: Path, bundle: Path | None) -> Iterator[Path]:
         yield root
 
 
+def check_bundle_plan(plan: ScaffoldPlan, root: Path, bundle: Path | None) -> None:
+    """For --bundle, the refusals a tree scaffold meets in `write.prepare`, run
+    on the plan while its paths are still the tree's and against `root`, the
+    tree with the bundle installed (#2824, #2836): once redirected into the
+    bundle its job files are no longer under src/etl/, so nothing would read
+    them as jobs. A tree plan is checked by `write.prepare` itself."""
+    if bundle is not None:
+        write.check_plan(plan, root)
+
+
 def refuse_tree_only(options: dict[str, bool]) -> None:
     """Options that write into the tree's own registrations mean nothing for a
     bundle job, so they are refused rather than dropped."""
@@ -51,10 +61,11 @@ def write_bundle_plan(plan: ScaffoldPlan, bundle: Path, *, dry_run: bool) -> Non
     except UqsError as exc:
         _die(exc)
     console.print(plan.render())
-    if dry_run:
-        console.print(dry_run_note())
-        return
     try:
+        if dry_run:
+            write.prepare(plan, Path.cwd())  # a dry run refuses what the real run would (#2827)
+            console.print(dry_run_note())
+            return
         written = write.apply_plan(plan, Path.cwd())
     except UqsError as exc:
         _die(exc)
