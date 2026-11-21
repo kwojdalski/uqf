@@ -132,13 +132,18 @@
 / is found and this is quiet; so is a catch_up that read every log from the day
 / after the marker, snapshot or not (#1189: the book was flat at the marker).
 / It speaks when that log could not be read (a transport without earlier_days
-/ or has_log, or logs since cleared), and when the marker itself cannot be
-/ (#2310).
+/ or has_log, or logs since cleared), when the marker itself cannot be
+/ (#2310), and when a snapshot was replayed but could not be restored (#2893).
 / @param job the job's name
 / @param today the date the replayed log is for (the plant's, see plant_today)
 / @return 1b when an end of day was missed, after logging it as an ERROR
 / @eg .qetl.job.stream.missed_end_of_day[`fx_positions;.z.D]
 .qetl.job.stream.missed_end_of_day:{[job;today]
+    / a snapshot that arrived and could not be restored is missing state whatever the marker says (#2893)
+    if[job in key .qetl.job.stream.unrestored;
+        .qetl.log.ch.err[`eod;"a carried snapshot was replayed but could not be restored - the state carried from before today is missing, and the next end of day would carry the loss forward";
+            (enlist[`job]!enlist job),`error`today`table!(string .qetl.job.stream.unrestored job;today;.qetl.job.stream.def[job][`carry]`table)];
+        :1b];
     if[(first $[job in key .qetl.job.stream.carry_log; .qetl.job.stream.carry_log job; enlist `none]) in `restored`restored_full; :0b];
     if[job in key .qetl.job.stream.caught_up; if[.qetl.job.stream.caught_up job; :0b]];
     r:@[{(1b;.qetl.job.stream.last_end_seen[x])};job;{(0b;x)}];
@@ -157,6 +162,10 @@
 / @param job the job's name
 / @return the job's name
 / @eg .qetl.job.stream.replayed[`fx_positions]  ->  `fx_positions
-.qetl.job.stream.replayed:{[job] .qetl.job.stream.carry_log::(enlist job) _ .qetl.job.stream.carry_log; .qetl.job.stream.caught_up::(enlist job) _ .qetl.job.stream.caught_up; job}
+.qetl.job.stream.replayed:{[job]
+    .qetl.job.stream.carry_log::(enlist job) _ .qetl.job.stream.carry_log;
+    .qetl.job.stream.caught_up::(enlist job) _ .qetl.job.stream.caught_up;
+    .qetl.job.stream.unrestored::(enlist job) _ .qetl.job.stream.unrestored;
+    job}
 
 \d .

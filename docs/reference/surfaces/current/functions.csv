@@ -522,6 +522,7 @@ qetl.job.stream,tick,function,1,job
 qetl.job.stream,tolerant,function,4,job h t x
 qetl.job.stream,transport_keys,value,,
 qetl.job.stream,trapping,value,,
+qetl.job.stream,unrestored,dict,,
 qetl.job.stream,unwired,function,1,job
 qetl.job.stream,watch_subscription,function,2,job tr
 qetl.job.stream,wire,function,2,job publisher

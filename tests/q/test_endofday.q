@@ -307,6 +307,29 @@
     .qt.qetl.job.stream.endofday.replay[`eod_cap;((`executions;f);(`executions;f);(`eodx_open;([] time:enlist .qt.qetl.job.stream.endofday.t1; sym:`EURUSD; qty:3e6; carried_to:enlist 0Np)))];
     }
 
+/ #2893: a carried snapshot that cannot be restored (the state gained a column
+/ since it was published) was quarantined by the replay and counted nowhere -
+/ guarded wraps on_batch, and the carry table never reaches it - and
+/ missed_end_of_day stayed quiet, so the job came up healthy on a flat book.
+.qt.qetl.job.stream.endofday.test_a_carried_snapshot_that_cannot_be_restored_is_counted_and_said:{[t]
+    if[not `eod_shape in key .qetl.job.stream.jobs;
+        `.qpipe.job.eod_shape.book set ([] sym:`symbol$(); qty:`float$(); avg_px:`float$());
+        .qetl.job.stream.define[`eod_shape;`procname`subscribe_to`outputs`on_batch`replay`carry!(
+            `eodshape1;enlist `executions;enlist `eodx_open;{[t;x] `.qpipe.job.eod_shape.book upsert select sym, qty:size, avg_px:price from x};1b;
+            `state`table!(`book;`eodx_open))]];
+    `.qpipe.job.eod_shape.book set 0#.qpipe.job.eod_shape.book;
+    before:.qetl.stream_health.of[`eod_shape]`failed;
+    / yesterday's snapshot, published before the book had an avg_px
+    snap:([] time:enlist .qt.qetl.job.stream.endofday.t1; sym:enlist `EURUSD; qty:enlist 5e6; carried_to:enlist 0Np);
+    msgs:((`eodx_open;snap);(`executions;.qt.qetl.job.stream.endofday.fill[`USDJPY;1;1e6;150f;`london;`spot]));
+    tr:`connect`publisher`subscribe`timer`recovery!({[] };{[] {[t;x] count x}};
+        {[msgs;tbls;h;replay] if[replay; {[h;m] h . m}[h] each msgs];}[msgs];{[n;p;f] };0b);
+    e:.qt.qetl.job.stream.endofday.errors[.qt.support.captured_log[0b] {[tr;unused] .qetl.job.stream.start[`eod_shape;tr]}[tr]];
+    h:.qetl.stream_health.of`eod_shape;
+    .qunit.assertEquals[h`failed;before+1;"the snapshot that could not be restored is counted, so the job reads failing"];
+    .qunit.assertTrue[(string h`last_error) like "*lacks avg_px*";"naming the column the snapshot lacks"];
+    .qunit.assertTrue[any e[;2] like "*snapshot was replayed but could not be restored*";"and the restart says the carried state is missing"]};
+
 .qt.qetl.job.stream.endofday.test_a_snapshot_after_the_cap_is_logged_as_an_error:{[t]
     e:.qt.qetl.job.stream.endofday.errors[.qt.support.captured_log[0b] .qt.qetl.job.stream.endofday.capped];
     .qunit.assertEquals[count e;1;"one error for the abandoned recording"];

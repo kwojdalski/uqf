@@ -373,6 +373,7 @@
     .qetl.job.stream.carried_to::(enlist job) _ .qetl.job.stream.carried_to;
     .qetl.job.stream.carry_log::(enlist job) _ .qetl.job.stream.carry_log;
     .qetl.job.stream.caught_up::(enlist job) _ .qetl.job.stream.caught_up;
+    .qetl.job.stream.unrestored::(enlist job) _ .qetl.job.stream.unrestored;
     job}
 
 / Every registered job, for the runner and for tests.

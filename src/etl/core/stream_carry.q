@@ -49,6 +49,11 @@
 / job -> the plant `time` of the last batch its carried state applied.
 .qetl.job.stream.carried_to:(`symbol$())!`timestamp$()
 
+/ job -> why its carried snapshot, replayed, could not be restored (#2893):
+/ what missed_end_of_day reports once the replay is over. Cleared with the
+/ replay's other records (`replayed`).
+.qetl.job.stream.unrestored:(`symbol$())!`symbol$()
+
 / Private: refuse a malformed carry, naming it.
 / @private
 .qetl.job.stream.check_carry:{[job;decl;replays]
@@ -80,7 +85,15 @@
 .qetl.job.stream.carried:{[job;h;t;x]
     c:.qetl.job.stream.def[job]`carry;
     if[t=c`table;
-        if[.qetl.job.stream.replaying; .qetl.job.stream.restore[job;h;x]];
+        / counted and logged as guarded counts an on_batch, then re-raised for the
+        / replay to quarantine: the batch that holds the whole carried state must
+        / not be the one failure nothing counts (#2893)
+        if[.qetl.job.stream.replaying;
+            .[.qetl.job.stream.restore;(job;h;x);{[job;t;e]
+                .qetl.job.stream.unrestored[job]:`$e;
+                .[.qetl.stream_health.record;(job;0b;e);::];
+                .[{.qetl.log.ch.err[`eod;y;(enlist[`job]!enlist x),z]};(job;"carried snapshot could not be restored";`table`error!(t;e));::];
+                'e}[job;t]]];
         :()];
     h[t;x];
     if[(`time in cols x) and count x; .qetl.job.stream.carried_to[job]:max (.qetl.job.stream.carried_to job;max x`time)];
@@ -116,6 +129,8 @@
             (enlist[`job]!enlist job),`table`held`cap!(c`table;r 1;.qetl.job.stream.carry_cap[job])]];
     v:` sv (.qetl.job.stream.def[job]`ns),c`state;
     cur:get v;
+    if[count lacks:(cols 0!cur) except cols x;
+        '"carry snapshot on ",string[c`table]," lacks ",(", " sv string lacks),", which ",string[c`state]," now has - the state changed shape since it was published"];
     rows:(cols 0!cur)#x;
     v set $[99h=type cur; (keys cur) xkey rows; rows];
     / The state now holds what the snapshot applied, so the next snapshot says
