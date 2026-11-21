@@ -45,10 +45,10 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.model import q_support
-from uqs.model.declarations import read_file
+from uqs.model import q_support, registry
+from uqs.model.declarations import read_declarations, read_file
 from uqs.model.pipeline import PipelineKind
-from uqs.paths import BUNDLE_LEDGER, CATALOG_FILE, TABLES_FILE
+from uqs.paths import BUNDLE_LEDGER, CATALOG_FILE, TABLES_FILE, UqsError
 from uqs.stack import bundle_additions, bundle_connectors, bundle_shadowing
 from uqs.stack import install as stack_install
 from uqs.stack import overrides as override_files
@@ -191,13 +191,19 @@ def plan(bundle: Bundle, root: Path) -> Plan:
     catalog_body = bundle_additions.catalog_lines(
         bundle, tables, bundle_additions.described(catalog_text)
     )
-    procnames = {
-        d.procname
-        for i in items
-        if i.kind in (Kind.WORKER, Kind.STREAMING)
-        for d in read_file(i.source)
-        if d.kind is not PipelineKind.BACKFILL
-    }
+    declared = [d for i in items if i.kind in (Kind.WORKER, Kind.STREAMING)
+                for d in read_file(i.source)]  # fmt: skip
+    # A name or procname the tree already has, or the vendored stack runs, is
+    # refused by the scaffolder's own rule (#2835): found after the copy, it
+    # broke the registry, `uqs job list` and the q load. This bundle's own
+    # installed files are not a clash with themselves.
+    replaced = mine | {i.destination for i in items}
+    existing = [d for d in read_declarations(root) if d.path not in replaced]
+    try:
+        registry.refuse_taken(declared, existing, root)
+    except UqsError as exc:
+        raise BundleError(f"bundle {bundle.name}: {exc}") from None
+    procnames = {d.procname for d in declared if d.kind is not PipelineKind.BACKFILL}
     overrides = bundle_additions.override_rows(bundle, procnames)
     stale = sorted(p for p in mine if p not in {i.destination for i in items} and p.suffix == ".q")
     bundle_shadowing.refuse(root, items, stale)
