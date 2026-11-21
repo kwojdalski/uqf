@@ -47,6 +47,21 @@ def bundle_route(proc: str) -> str:
     )
 
 
+#: The profile model/profiles.py derives, as the union of the others.
+ALL_PROFILE = "all"
+
+
+def _holds_no_job(profile: str) -> str | None:
+    """Why a job cannot be written into `profile`, or None (#2827, #2828)."""
+    from uqs.model.infra import PROFILE_INFRA
+
+    if profile == ALL_PROFILE:
+        return "is derived, the union of the other profiles: a job is in it once it is in one"
+    if profile in PROFILE_INFRA:
+        return "is TorQ infrastructure alone (model/infra.py's PROFILE_INFRA) and holds no job"
+    return None
+
+
 def profile_names(known: Iterable[str] | None) -> tuple[str, ...]:
     """The profile names to validate against: the caller's, or the registry's."""
     if known is not None:
@@ -82,6 +97,9 @@ def membership(
         raise UqsError(
             f"--profile {profile!r} is not a profile - there are {', '.join(sorted(known))}"
         )
+    if profile is not None and (why := _holds_no_job(profile)):
+        joinable = sorted(p for p in known if not _holds_no_job(p))
+        raise UqsError(f"--profile {profile} {why} - a job joins one of {', '.join(joinable)}")
     if profile == DEFAULT_PROFILE and not start_with_all:
         raise UqsError(
             "--profile default is what `uqs start all` runs, so it needs --start-with-all too"

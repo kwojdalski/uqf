@@ -101,9 +101,12 @@ the published table, plus the `contract_driver`.
   `.qetl.transform.passthrough`, so it is refused unless both tables have the
   same columns and types, `time` aside. Its tests pass as written.
 - `derive` declares a `.qetl.transform.define` from the input's shape to the
-  output's, with a fixture row as its example and an EMPTY expected output
-  marked `SCAFFOLDED`. The file loads; `derive` throws and the example fails
-  `.qetl.transform.verify` until you write both.
+  output's, with a fixture as its example and an EMPTY expected output, both
+  marked `SCAFFOLDED`. The fixture is two rows whose values all differ and none
+  is 0 or 1, so a wrong formula cannot match by accident - replace them with
+  rows that exercise what `derive` does. The file loads; `derive` throws and the
+  example fails `.qetl.transform.verify` until you write it and its expected
+  rows.
 
 Only one subscribed and one published table, and no `--period`: a join, a buffer
 or a timer is the job's own logic, so `--transform` refuses them, as it refuses

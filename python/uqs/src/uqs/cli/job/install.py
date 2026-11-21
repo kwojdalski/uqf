@@ -345,11 +345,15 @@ def install_jobs(
     except UqsError as exc:
         _die(exc)
 
+    # Counted, not just printed: a deploy script reads the exit code, and a
+    # partial install that exited 0 under "Next steps" read as done (#2839).
+    failed = 0
     for item in todo:
         try:
             stack_install.install(item, mode, overwrite=item.source in replace)
         except OSError as exc:
             console.print(f"[red]✗[/] {item.source.name}: {exc}")
+            failed += 1
             continue
         console.print(
             f"[green]✓[/] {item.source.name} → {_where(item, repo_root)} [dim]({mode.value})[/]"
@@ -365,6 +369,10 @@ def install_jobs(
                 f"[red]✗ could not regenerate[/] - run `{derived_command(derived)}` "
                 f"and fix what it reports:\n{regen.stdout}{regen.stderr}"
             )
+            failed += 1
+    if failed:
+        console.print(f"[red]✗ install incomplete:[/] {failed} step(s) above failed")
+        raise typer.Exit(code=1)
 
     in_place = [
         i

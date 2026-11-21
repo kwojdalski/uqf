@@ -25,7 +25,7 @@ from dataclasses import dataclass
 
 from uqs.generated.q_facts import Q_TYPE_CHARS
 from uqs.model import plant_metadata, schemas
-from uqs.model.qnames import Q_WORDS, reserved_reason
+from uqs.model.qnames import Q_WORDS, column_reserved_reason, reserved_reason
 from uqs.paths import TABLES_FILE, UqsError
 
 #: The column every plant table leads with: `.u.upd` stamps it, and every
@@ -141,6 +141,8 @@ def parse_columns(spec: str) -> list[tuple[str, str]]:
                 "letters, digits and underscores"
             )
         refuse_q_word(col, "column")
+        if reason := column_reserved_reason(col):
+            raise UqsError(f"column {col!r} is {reason} - call it something else, e.g. '{col}_'")
         grouped = qtype.startswith("g#")
         ctype = _BY_NAME.get(qtype.removeprefix("g#"))
         if ctype is None:

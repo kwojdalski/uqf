@@ -13,7 +13,7 @@ import re
 from uqs.model import transports
 from uqs.paths import SOURCE_DIR, TABLES_FILE, TEST_DIR, WORKER_DIR, UqsError
 from uqs.scaffold.catalog import catalog_actions
-from uqs.scaffold.columns import Columns, as_columns, plant_declarations
+from uqs.scaffold.columns import Columns, as_columns, plant_declarations, type_char
 from uqs.scaffold.docs import BACKFILLS, doc_stub_actions
 from uqs.scaffold.example import example_body, example_path
 from uqs.scaffold.jobs import (
@@ -25,6 +25,7 @@ from uqs.scaffold.jobs import (
 from uqs.scaffold.plan import FileAction, ScaffoldPlan, WriteMode
 from uqs.scaffold.templates import (
     credential_var,
+    row_key,
     source_body,
     test_stub,
     worker_body,
@@ -32,8 +33,22 @@ from uqs.scaffold.templates import (
 from uqs.scaffold.timespan import q_timespan
 from uqs.scaffold.transform import check_mode
 
-#: A partition is a q symbol: `EURUSD, `binance_spot.
-_PARTITION = re.compile(r"^[A-Za-z0-9_]+$")
+#: A partition is a q symbol: `EURUSD, `binance_spot. Not starting with an
+#: underscore, which q reads as the `_` operator: `_spot is ` _ spot (#2825).
+_PARTITION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_]*$")
+#: The partition column must name an output column, so it is held to their rule.
+_PARTITION_COLUMN = re.compile(r"^[a-z][a-z0-9_]*$")
+
+
+def _slice_sample(
+    cols: list[tuple[str, str]], partition: str | None, column: str | None
+) -> dict[str, str]:
+    """The fixture value a slice needs: the slice itself, in its column when the
+    source has it as a symbol. A fixture row outside the slice is refused at
+    publish, so the example the scaffold says to run failed on it (#2830)."""
+    if partition is None or not any(c == column and type_char(lit) == "s" for c, lit in cols):
+        return {}
+    return {str(column): f"`{partition}"}
 
 
 def check_width(width: str) -> str:
@@ -132,14 +147,17 @@ def bounded_worker(
     if partition is not None and not _PARTITION.fullmatch(partition):
         raise UqsError(
             f"--slice {partition!r} must be a q symbol - letters, digits and underscores, "
-            "e.g. EURUSD"
+            "not starting with an underscore, e.g. EURUSD"
         )
     if partition_column is not None and partition is None:
         raise UqsError("--slice-column needs --slice: it names the column holding it")
     if partition is not None:
         partition_column = partition_column or DEFAULT_PARTITION_COLUMN
-        if not _PARTITION.fullmatch(partition_column):
-            raise UqsError(f"--slice-column {partition_column!r} must be a q symbol")
+        if not _PARTITION_COLUMN.fullmatch(partition_column):
+            raise UqsError(
+                f"--slice-column {partition_column!r} must name a column - lower-case, "
+                "starting with a letter, then letters, digits and underscores"
+            )
     worker = f"{name}_backfill"
     proc = _check_name(procname or f"{name}_backfill1", "procname")
     # Columns shape what is WRITTEN - a new source's fields, a new table - so
@@ -197,9 +215,13 @@ def bounded_worker(
             )
 
     actions: list[FileAction] = []
+    slice_sample = _slice_sample(cols, partition, partition_column)
     if not reuse_source:
         actions.append(
-            FileAction(SOURCE_DIR / f"{src}.q", source_body(src, dataset, cols, transport, raw))
+            FileAction(
+                SOURCE_DIR / f"{src}.q",
+                source_body(src, dataset, cols, transport, raw, samples=slice_sample),
+            )
         )
     actions.append(
         FileAction(
@@ -223,7 +245,7 @@ def bounded_worker(
         actions += [
             FileAction(
                 TABLES_FILE,
-                f"\n/ {proc}'s target. <one line: what a row means>\n"
+                f"\n/ {proc}'s target. SCAFFOLDED: <one line: what a row means>\n"
                 f"{plant_declarations(dataset, columns or cols)}",
                 mode=WriteMode.APPEND,
             ),
@@ -243,6 +265,8 @@ def bounded_worker(
             " (see src/etl/core/source_contract.q)",
             f"write .qpipe.source.{src}.fixture - deterministic, same contract as the live source",
             f"declared columns: {', '.join(c for c, _ in cols)}",
+            f"row_key is guessed as {row_key(cols)}: rows sharing it are folded into one when "
+            f"written - set .qpipe.source.{src}.row_key to what identifies a row",
             f"to go live, give {src} a row in sources.csv - `uqs config sources stub {src}` "
             f"adds one to fill in ({transports.get(transport).expects}); "
             f"{credential_var(src)} overrides it for one run. "

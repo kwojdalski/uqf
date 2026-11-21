@@ -124,6 +124,17 @@ def test_a_derive_writes_the_handler_and_leaves_only_the_transform():
     assert "test_derived_rows_reach_out" in test
 
 
+def test_a_derive_s_fixture_can_tell_a_formula_from_a_constant():
+    """#2891: one row of 1s and `SCAFFOLD, unmarked - `price*size`, `price`,
+    `price%size` and the constant 1f all matched one expected row of 1f."""
+    plan = _stream("notional", "derive", columns="sym:symbol, notional:float")
+    body = _body(plan, "notional.q")
+    fixture = body[body.index("fixture:{[] ") :].split("\n", 1)[0]
+    assert fixture == "fixture:{[] ([] sym:`SCAFFOLD_A`SCAFFOLD_B; px:2.0 3.0)}", fixture
+    claim = body[: body.index("fixture:{[] ")].rsplit("\n\n", 1)[1]
+    assert claim.startswith("/ SCAFFOLDED."), claim
+
+
 def test_a_passthrough_between_different_shapes_is_refused_with_both_shapes():
     with pytest.raises(
         UqsError, match=r"ticks has sym:s, px:f; out has sym:s, n:j.*--transform derive"

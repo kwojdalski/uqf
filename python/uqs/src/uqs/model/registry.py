@@ -27,6 +27,7 @@ Two things are not read from a declaration:
 from __future__ import annotations
 
 import csv
+from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
 
@@ -38,7 +39,7 @@ from uqs.model.pipeline import (
     Pipeline,
     PipelineKind,
 )
-from uqs.paths import PROCESS_PORTS_FILE, repo_root
+from uqs.paths import PROCESS_PORTS_FILE, UqsError, repo_root
 from uqs.runtimes import DEFAULT_RUNTIME, RUNTIMES
 
 #: The default runtime's base port. Every other default is that runtime's
@@ -58,6 +59,52 @@ NON_JOB_PIPELINES: tuple[Pipeline, ...] = (
         note="diagnostic subscriber - started on demand, not with the whole stack",
     ),
 )
+
+
+#: The starter pack's own processes, which the stack starts beside every job.
+VENDORED_PROCESSES = Path("lib") / "torq-finance-starter-pack" / "appconfig" / "process.csv"
+
+
+def vendored_procnames(root: Path) -> frozenset[str]:
+    """The procnames the vendored TorQ stack runs (#2823): `root`'s copy, or,
+    for a partial tree (a scaffold's scratch view), the one uqs was installed
+    from - the same fallback scaffold/write.py's converter takes."""
+    path = next((b / VENDORED_PROCESSES for b in (root, repo_root())
+                 if (b / VENDORED_PROCESSES).is_file()), None)  # fmt: skip
+    if path is None:
+        return frozenset()
+    with path.open(newline="") as f:
+        return frozenset(row["procname"] for row in csv.DictReader(f))
+
+
+def refuse_taken(new: Iterable[Declaration], existing: Iterable[Declaration], root: Path) -> None:
+    """Refuse a declaration whose job name or procname is already taken.
+
+    THE one rule, asked by every writer - `uqs job new` into the tree or a
+    bundle, real or dry run, and the bundle installer - so none admits what
+    another refuses (#2824, #2835). A job name is one namespace,
+    `.qpipe.job.<name>`, across kinds (#2500); a procname is one process
+    (#1572), and is taken if a declaration in `existing` claims it, tap1-like
+    NON_JOB_PIPELINES run it, or the vendored TorQ stack does (#2823). Each of
+    `new` is checked against the others too.
+    """
+    names = {d.name: d.kind.value for d in existing}
+    taken = {p: f"the vendored TorQ stack ({VENDORED_PROCESSES})" for p in vendored_procnames(root)}
+    taken |= {p.procname: p.procname for p in NON_JOB_PIPELINES}
+    taken |= {d.procname: d.name for d in existing}
+    for d in new:
+        if d.name in names:
+            raise UqsError(
+                f"a job called {d.name!r} already exists (a {names[d.name]} job), and every job "
+                f"shares one namespace (.qpipe.job.{d.name}) - pick another name"
+            )
+        if d.procname in taken:
+            raise UqsError(
+                f"{d.name} would run as {d.procname}, which {taken[d.procname]} already runs - "
+                "one process runs one job: pick another --proc"
+            )
+        names[d.name] = d.kind.value
+        taken[d.procname] = d.name
 
 
 def read_port_lock(root: Path) -> dict[str, int]:
@@ -168,6 +215,8 @@ def build_pipelines(root: Path) -> tuple[Pipeline, ...]:
     duplicates = sorted({n for n in names if names.count(n) > 1})
     if duplicates:
         raise ValueError(f"procnames claimed more than once: {duplicates}")
+    if vendored := sorted(set(names) & vendored_procnames(root)):
+        raise ValueError(f"procnames the vendored TorQ stack already runs: {vendored}")
     offsets = allocate_offsets(names, read_port_lock(root))
     sole = _sole_publishes(declarations)
     built = [_pipeline(d, sole[d.procname], offsets[d.procname]) for d in declarations]

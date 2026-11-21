@@ -19,7 +19,7 @@ from uqs.cli.job.regenerate import write_plan
 from uqs.model.declarations import read_declarations
 from uqs.model.jobs import bounded_producers, job_rows
 from uqs.paths import UqsError, UqsUsageError
-from uqs.scaffold import reaction
+from uqs.scaffold import cycles, reaction
 
 #: `job new`'s option of a reaction's own (its outputs are the shared `--outputs`).
 TriggeredByOpt = Annotated[
@@ -65,6 +65,9 @@ def scaffold_reaction(
                 taken={row["job"] for row in job_rows(root)},
                 streaming_tables={t for d in read_declarations(root) for t in d.publishes},
             )
+            # A reaction writing a table that triggers, through others, a
+            # reaction to its own dataset closes a cycle too (#2826).
+            cycles.refuse_cycles(root, plan)
     except UqsError as exc:
         _die(exc)
     if bundle is not None:

@@ -74,3 +74,19 @@ def reserved_reason(name: str) -> str | None:
     if name in _PARTITION_NAMES:
         return "a partition name of the hdb (it would break date-filtered queries of every table)"
     return None
+
+
+def column_reserved_reason(name: str) -> str | None:
+    """Why `name` cannot be a plant table's column although q loads it, or
+    None (#2822). Both are names q-sql answers itself, so the stored values are
+    never what a query returns: `i` is the virtual row index of every table,
+    and a partition name is the column the hdb adds to every partitioned table
+    from the partition, which a stored column of that name is shadowed by."""
+    if name == "i":
+        return "q-sql's virtual row index (`select i from t` returns row numbers, not the column)"
+    if name in _PARTITION_NAMES:
+        return (
+            "the hdb's partition column, which q adds to every partitioned table "
+            "(queries would read the partition's value, not the stored one)"
+        )
+    return None

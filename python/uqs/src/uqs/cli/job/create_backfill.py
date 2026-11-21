@@ -195,7 +195,8 @@ def check_reused_passthrough(
     stops the whole tree loading."""
     text = strip_q_comments((repo_root / SOURCE_DIR / f"{source}.q").read_text())
     ns = re.escape(f".qpipe.source.{source}.")
-    names = re.search(rf"^{ns}columns\s*:\s*((?:`\w+)+)\s*$", text, re.MULTILINE)
+    # `enlist `time` is how the scaffold writes one column (#2829), as for types.
+    names = re.search(rf"^{ns}columns\s*:\s*(?:enlist\s*)?((?:`\w+)+)\s*$", text, re.MULTILINE)
     types = re.search(rf'^{ns}types\s*:\s*(?:enlist\s*)?"([^"]*)"', text, re.MULTILINE)
     want = _meta(target)
     cols = names.group(1).strip("`").split("`") if names else []

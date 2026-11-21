@@ -136,7 +136,7 @@ def horizon_job(
     ev = [(c, lit.replace("`g#", "")) for c, lit in source_columns[events]]
     ref = [(c, lit.replace("`g#", "")) for c, lit in source_columns[reference]]
     swa_key, swa_value = start_with_all_field(start_with_all)
-    body = f"""/ {name}.q - the `{name}` horizon job: <one line: what is evaluated, and when>
+    body = f"""/ {name}.q - horizon job. SCAFFOLDED: <one line: what is evaluated, and when>
 / (.qpipe.job.{name}).
 / .
 / Evaluates each `{events}` row {horizon} after it, against `{reference}`;
@@ -195,7 +195,8 @@ score:{{[events;reference]
         FileAction(STREAM_DIR / f"{name}.q", body),
         FileAction(
             TABLES_FILE,
-            f"\n/ {proc}'s output. <one line: what a row means>\n{plant_declarations(name, shape)}",
+            f"\n/ {proc}'s output. SCAFFOLDED: <one line: what a row means>\n"
+            f"{plant_declarations(name, shape)}",
             mode=WriteMode.APPEND,
         ),
         _expected_table_action(name),

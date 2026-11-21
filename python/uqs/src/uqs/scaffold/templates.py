@@ -99,16 +99,26 @@ raw:{raw_contract(table, cols)}
     return decl, "`raw", ";raw"
 
 
+def row_key(cols: list[tuple[str, str]]) -> str:
+    """The scaffold's guess at a source's row key, as q: the time column and
+    every symbol column. `time` alone (#2889) folded every row sharing a
+    timestamp - two symbols ticking together - into one at write."""
+    key = [TIME_COLUMN, *(c for c, lit in cols if c != TIME_COLUMN and type_char(lit) == "s")]
+    return "`" + "`".join(key)
+
+
 def source_body(
     src: str,
     dataset: str,
     cols: list[tuple[str, str]],
     transport: str | None = None,
     raw: tuple[str, list[tuple[str, str]]] | None = None,
+    samples: dict[str, str] | None = None,
 ) -> str:
     """The source file. `raw` is (physical table, its columns) for an adapter
     whose output is not its input: declared, not guessed, since only the
-    author knows the mapping."""
+    author knows the mapping. `samples` is {column: q value} where the
+    fixture's row must hold a given value: a slice's, in its column (#2830)."""
     transport = transport or transports.default()
     names = [c for c, _ in cols]
     extra_decls, extra_keys, extra_values = _transport_block(src, transport)
@@ -123,8 +133,9 @@ def source_body(
     types = "".join(type_char(literal) for _, literal in cols)
     types = f'enlist "{types}"' if len(types) == 1 else f'"{types}"'
     # The fixture is a real empty table of the declared shape - see its comment.
-    fixture_cols = "; ".join(f"{c}:enlist {sample_value(lit)}" for c, lit in cols)
-    return f"""/ {src}.q - <one line: what this source is> (.qpipe.source.{src}).
+    samples = samples or {}
+    fixture_cols = "; ".join(f"{c}:enlist {samples.get(c) or sample_value(lit)}" for c, lit in cols)
+    return f"""/ {src}.q - SCAFFOLDED: <one line: what this source is> (.qpipe.source.{src}).
 / .
 / SCAFFOLDED. `query` and `fixture` throw until they are written.
 
@@ -141,9 +152,12 @@ types:{types}
 / The column the window is taken on.
 time_column:`{TIME_COLUMN}
 
-/ What identifies a row uniquely. Only correct if the source guarantees it:
-/ a source that reuses ids after a purge silently merges unrelated rows.
-row_key:`{TIME_COLUMN}
+/ SCAFFOLDED: what identifies a row uniquely - guessed as the time and every
+/ symbol column. Rows sharing all of them are folded into one when written, so
+/ name the source's real key (an id, a venue and its fill id) before trusting a
+/ run. Only correct if the source guarantees it: a source that reuses ids
+/ after a purge silently merges unrelated rows.
+row_key:{row_key(cols)}
 
 / A claim, not a default. An unstated zone is the shape of the bug - every
 / later reader assumes UTC while the source hands over local wall-clock time.

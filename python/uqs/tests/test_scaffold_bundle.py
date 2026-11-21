@@ -145,6 +145,23 @@ def test_a_folder_that_cannot_name_a_bundle_is_refused(tmp_path):
         bundle_mod.check_folder(tmp_path / "Mock-Ups")
 
 
+def test_a_symlink_is_judged_by_the_name_its_manifest_would_take(tmp_path):
+    """#2841: the folder name was checked as typed and written resolved, so a
+    link `mockups` -> `Real-Dir` wrote a manifest the next step refused."""
+    (tmp_path / "Real-Dir").mkdir()
+    (tmp_path / "mockups").symlink_to(tmp_path / "Real-Dir")
+    with pytest.raises(UqsError, match="'Real-Dir' is not lower_snake_case"):
+        bundle_mod.check_folder(tmp_path / "mockups")
+
+
+def test_dot_names_a_bundle_after_the_current_folder(tmp_path, monkeypatch):
+    """#2841: `--bundle .` inside a validly named folder was refused, as ''."""
+    (tmp_path / "mockups").mkdir()
+    monkeypatch.chdir(tmp_path / "mockups")
+    bundle_mod.check_folder(Path("."))
+    assert bundle_mod.bundle_name(Path(".")) == "mockups"
+
+
 def test_tree_registrations_are_dropped_and_named():
     plan = ScaffoldPlan(
         "x",

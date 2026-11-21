@@ -27,7 +27,12 @@ from uqs.cli.common.shared import (
 )
 from uqs.cli.common.vocabulary import q_timespan
 from uqs.cli.job.create_backfill import backfill_plan
-from uqs.cli.job.create_bundle import planning_root, refuse_tree_only, write_bundle_plan
+from uqs.cli.job.create_bundle import (
+    check_bundle_plan,
+    planning_root,
+    refuse_tree_only,
+    write_bundle_plan,
+)
 from uqs.cli.job.create_kinds import DEFAULT_KIND, KindOpt, for_kinds, given_options, misplaced
 from uqs.cli.job.create_plant import plant_shapes
 from uqs.cli.job.create_reaction import TriggeredByOpt, scaffold_reaction
@@ -385,6 +390,7 @@ def new_job(
         with planning_root(repo_root, bundle) as root:
             plan = _plan(root)
             cycles.refuse_cycles(root, plan)
+            check_bundle_plan(plan, root, bundle)
     except UqsError as exc:
         _die(exc)
     if bundle is not None:

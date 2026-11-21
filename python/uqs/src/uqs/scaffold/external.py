@@ -37,7 +37,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from uqs.paths import CATALOG_FILE, TABLES_FILE, UqsError
-from uqs.scaffold.columns import Columns, as_columns, plant_declarations
+from uqs.scaffold.columns import Columns, as_columns, plant_declarations, type_char
 from uqs.scaffold.docs import EXTERNAL
 from uqs.scaffold.example import GENERATED_BY
 from uqs.scaffold.jobs import _check_name, _expected_table_action, streaming_job
@@ -92,7 +92,7 @@ def external_feed(
             "--raw-table and --outputs must differ: the q job reads one, writes the other"
         )
     cols = as_columns(columns)
-    fields = [c for c, _ in cols if c != "time"]
+    wire = {c: type_char(lit) for c, lit in cols if c != "time"}
 
     # The q half is an ordinary etl job; it is told the raw table exists so it
     # does not refuse a subscription to a table this same plan defines.
@@ -132,32 +132,39 @@ def external_feed(
         ),
     ]
     python = [
-        FileAction(Path(f"{EXTERNAL_DIR}/{name}_streamer.py"), _streamer(name, raw_table, fields)),
+        FileAction(Path(f"{EXTERNAL_DIR}/{name}_streamer.py"), _streamer(name, raw_table, wire)),
         FileAction(Path(f"{EXTERNAL_DIR}/{name}_feed.py"), feed_module(name, raw_table, publishes)),
         FileAction(Path(f"{PY_TEST_DIR}/test_{name}_streamer.py"), _py_test(name)),
     ]
     notes = [
         f"write {EXTERNAL_DIR}/{name}_streamer.py's batches(): yield lists of records from "
-        "the outside source - and acknowledge the source only AFTER .u.upd returns",
+        "the outside source - and acknowledge the source only AFTER publish() returns, "
+        "which it does only for a batch the plant stored",
         f"to run it: start the q job {name} with the stack, then `uqs connector start {name}`",
         *job.notes,
     ]
     return ScaffoldPlan(name=name, actions=raw + python + job.actions, notes=notes)
 
 
-def _streamer(name: str, raw_table: str, fields: list[str]) -> str:
+def _streamer(name: str, raw_table: str, wire: dict[str, str]) -> str:
+    """The publisher. `wire` is {field: its q type character}, in plant order:
+    what to_columns types each column as, so a column reaches the plant as the
+    type it declares rather than as kola infers it from Python values (#2873)."""
     return f'''"""{name}_streamer.py - hold the {name} source's subscription and push its
 records at the tickerplant. Started by `uqs connector start {name}` ({name}_feed.py).
 
 SCAFFOLDED: write `batches()`. Connecting, converting and publishing are done.
 
-## Delivery: acknowledge AFTER the publish
+## Delivery: acknowledge AFTER the plant has stored it
 
 If the source can replay - a Kafka offset, a cursor, a sequence number - mark a
-record consumed only after `.u.upd` has returned for it (see kafka_streamer.py).
-A crash in between then re-sends it, which the q job `{name}` can detect and
-drop if every record carries a key unique at the source; the other order loses
-it without a trace.
+record consumed only after `publish` has returned for it (see kafka_streamer.py).
+`publish` sends through ACCEPT_Q, not a bare `.u.upd`: the segmented
+tickerplant hands an update it refuses to its error log and RETURNS, so a bare
+`.u.upd` answers success for a batch that was never stored (#2192). `publish`
+raises instead, and the batch is not acknowledged. A crash in between then
+re-sends it, which the q job `{name}` can detect and drop if every record
+carries a key unique at the source; the other order loses it without a trace.
 """
 
 from __future__ import annotations
@@ -167,9 +174,13 @@ import sys
 from collections.abc import Iterator
 from typing import Any
 
-#: The raw table `{raw_table}`'s columns in plant order. `time` is not sent:
-#: .u.upd stamps it.
-FIELDS = {json.dumps(fields)}
+from uqs.external.kafka_streamer import ACCEPT_Q
+from uqs.paths import UqsError
+
+#: The raw table `{raw_table}`'s columns in plant order, each with its q type
+#: character. `time` is not sent: .u.upd stamps it.
+WIRE = {json.dumps(wire)}
+FIELDS = list(WIRE)
 
 
 def batches() -> Iterator[list[dict[str, Any]]]:
@@ -178,12 +189,42 @@ def batches() -> Iterator[list[dict[str, Any]]]:
     raise NotImplementedError("{name}_streamer.batches: not implemented")
 
 
-def to_columns(records: list[dict[str, Any]]) -> list[list[Any]]:
+def to_columns(records: list[dict[str, Any]]) -> list[Any]:
     """Records as .u.upd wants them: a LIST of columns, one per field, in FIELDS
     order - .u.upd places columns by position, not by name. Not a dict: the
     segmented tickerplant prepends its time column with `(enlist ...),x`, which
-    a dictionary answers with `type` (#1580)."""
-    return [[record[field] for record in records] for field in FIELDS]
+    a dictionary answers with `type` (#1580).
+
+    Each column TYPED as the raw table declares it. A Python list goes as kola
+    infers it - a float column of whole numbers as longs, an int beside a float
+    as a general list, a None as `::` - and the plant refuses each with `type`.
+    A date or time column goes as a list, so it must hold no None."""
+    import polars as pl  # kola's own dependency
+
+    typed = {{
+        "p": pl.Datetime("ns"), "s": pl.Categorical, "f": pl.Float64, "j": pl.Int64,
+        "i": pl.Int32, "h": pl.Int16, "b": pl.Boolean, "n": pl.Duration("ns"),
+    }}  # fmt: skip
+    out: list[Any] = []
+    for field, char in WIRE.items():
+        values = [record[field] for record in records]
+        if char in typed:
+            out.append(pl.Series(field, values, dtype=typed[char]))
+        elif char == "c":
+            out.append("".join(values).encode())  # bytes reach q as a char vector
+        else:
+            out.append(values)
+    return out
+
+
+def publish(q: Any, table: str, records: list[dict[str, Any]]) -> None:
+    """Send `records` through ACCEPT_Q, raising unless the plant STORED them."""
+    answer = q.sync(ACCEPT_Q, table, to_columns(records))
+    if isinstance(answer, str):
+        raise UqsError(
+            f"the tickerplant refused the {{table}} batch - it is in the tickerplant's error "
+            f"log and was NOT stored, so do not acknowledge it: {{answer}}"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -206,8 +247,8 @@ def main(argv: list[str] | None = None) -> int:
     q.connect()
     for batch in batches():
         if batch:
-            q.sync(".u.upd", args.table, to_columns(batch))
-            # acknowledge the batch to the source HERE, after the publish
+            publish(q, args.table, batch)
+            # acknowledge the batch to the source HERE: publish returned, so it is stored
     return 0
 
 

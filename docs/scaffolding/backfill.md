@@ -93,6 +93,7 @@ scaffold fxprobe_backfill:
   note: write .qpipe.source.fxprobe.query - parameterised, never concatenated (see src/etl/core/source_contract.q)
   note: write .qpipe.source.fxprobe.fixture - deterministic, same contract as the live source
   note: declared columns: time, sym, mid
+  note: row_key is guessed as `time`sym: rows sharing it are folded into one when written - set .qpipe.source.fxprobe.row_key to what identifies a row
   note: to go live, give fxprobe a row in sources.csv - `uqs config sources stub fxprobe` adds one to fill in (host:port, or host:port:user:password); UQF_SOURCE_CRED_FXPROBE overrides it for one run. With neither, the worker runs on the fixture, and warns that it is
   note: the window is half-open [from;to): >= on the lower bound, < on the upper
   note: optional: a quality check that fails a window on bad rows - rerun with --check, or see quality_check in src/etl/workers/demo_deals_backfill.q
@@ -145,6 +146,13 @@ in a number that is quietly too big.
 
 Two rules, two numbers, both on `query`. Keeping them apart is why the generated
 file states them in separate paragraphs.
+
+**`row_key` --- what identifies a row.** The write keeps one row per key, so
+rows that share one are folded together. The scaffold cannot know the source's
+key and writes a guess marked `SCAFFOLDED`: the time column and every symbol
+column (`` `time`sym `` here), so two symbols ticking at one timestamp stay two
+rows. Name the real key - an id, or a venue and its fill id - before trusting a
+run.
 
 ## Fixture
 
