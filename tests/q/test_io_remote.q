@@ -104,7 +104,7 @@
     root:`$":",first system"mktemp -d";
     .qt.qetl.io.remote.grant[.qetl.io.hdb[root;`time];`symbol$()];
     o:@[.qt.qetl.io.remote.opts[`append];`range_to;:;2026.01.04D00:00:00.000000000];
-    b:update time:time+0 1D from .qt.qetl.io.remote.batch[];
+    b:update time:time+0D 1D from .qt.qetl.io.remote.batch[];
     req:.qetl.io.remote.request_keys!(`uat;`deals;`rdeals;.qetl.io.remote.batch_id[`uat;`deals;`rdeals;o;b];o;b);
     .qetl.io.remote.accept[req;`];
     .qetl.io.retire[root;2026.01.02;`rdeals];
