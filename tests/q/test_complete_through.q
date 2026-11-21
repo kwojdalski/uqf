@@ -86,6 +86,22 @@
     .qunit.assertThrows[{.qetl.source.clip_to_complete[`w;`ct_src;7i;1b;x]};2026.09.03D00:00;
         "complete_through: ct_src returned type -7, not a timestamp atom";"named, not compared"]};
 
+/ #2867: a window that has not happened yet was planned, fetched empty and
+/ claimed with zero rows for good. Nothing after now is complete, whatever the
+/ source - live or fixture - says.
+.qt.qetl.source.complete_through.test_nothing_after_now_is_complete:{[t]
+    later:.z.p+2D;
+    .qunit.assertTrue[.z.p>=.qetl.source.clip_to_complete[`w;`ct_src;7i;1b;later];"an unbounded live source stops at now"];
+    .qunit.assertTrue[.z.p>=.qetl.source.clip_to_complete[`w;`ct_src;0Ni;0b;later];"and so does the fixture"]};
+
+.qt.qetl.source.complete_through.test_planning_never_reaches_past_now:{[t]
+    .qpipe.job.ct_backfill.init[`source_version`range_from`range_to!(`v1;`timestamp$.z.d-1;`timestamp$.z.d+2)];
+    .qetl.job.bounded.write_state[`ct_backfill;`source_version;`v1];
+    .qetl.job.bounded.write_state[`ct_backfill;`handle;7i];
+    .qetl.job.bounded.write_state[`ct_backfill;`live;1b];
+    w:.qpipe.job.ct_backfill.plan 0Np;
+    .qunit.assertTrue[(count w) and .z.p>=max w`range_to;"no planned window ends after now"]};
+
 / --- the declaration -------------------------------------------------------
 
 .qt.qetl.source.complete_through.test_the_default_is_unbounded:{[t]

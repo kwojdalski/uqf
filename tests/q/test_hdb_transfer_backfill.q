@@ -16,6 +16,13 @@
     {[t;d] (` sv .qt.qpipe.job.hdb_transfer_backfill.root,(`$string d),`trades,`) set .Q.en[.qt.qpipe.job.hdb_transfer_backfill.root;select from t where d=`date$time]}[t] each 2026.01.05 2026.01.06;
     }
 
+/ #2867: a growing source HDB vouches only through its newest date partition.
+/ With the default (closed data) a date it had not received yet was fetched
+/ empty and claimed with zero rows, and never copied once it arrived.
+.qt.qpipe.job.hdb_transfer_backfill.test_the_source_is_complete_through_its_newest_date:{[t]
+    .qunit.assertEquals[.qpipe.source.hdb_transfer.complete_through .qt.qpipe.job.hdb_transfer_backfill.root;2026.01.07D00:00:00.000000000;
+        "the day after 2026.01.06, its newest partition"]};
+
 .qt.qpipe.job.hdb_transfer_backfill.test_the_query_reads_one_window_half_open_with_symbols_decoded:{[t]
     r:.qpipe.source.hdb_transfer.query[.qt.qpipe.job.hdb_transfer_backfill.root;2026.01.05D00:00;2026.01.06D00:00];
     .qunit.assertEquals[(r`trade_id;r`sym);(1 2;`EURUSD`USDJPY);

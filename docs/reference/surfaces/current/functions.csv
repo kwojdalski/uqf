@@ -2215,6 +2215,7 @@ qpipe.source.hdb_orders,time_column,value,,
 qpipe.source.hdb_orders,types,value,,
 qpipe.source.hdb_orders,tz,value,,
 qpipe.source.hdb_transfer,columns,value,,
+qpipe.source.hdb_transfer,complete_through,function,1,h
 qpipe.source.hdb_transfer,credential_example,value,,
 qpipe.source.hdb_transfer,fixture,function,1,
 qpipe.source.hdb_transfer,query,function,3,h range_from range_to
