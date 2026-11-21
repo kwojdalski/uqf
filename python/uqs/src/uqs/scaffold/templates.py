@@ -135,7 +135,7 @@ def source_body(
     # The fixture is a real empty table of the declared shape - see its comment.
     samples = samples or {}
     fixture_cols = "; ".join(f"{c}:enlist {samples.get(c) or sample_value(lit)}" for c, lit in cols)
-    return f"""/ {src}.q - <one line: what this source is> (.qpipe.source.{src}).
+    return f"""/ {src}.q - SCAFFOLDED: <one line: what this source is> (.qpipe.source.{src}).
 / .
 / SCAFFOLDED. `query` and `fixture` throw until they are written.
 

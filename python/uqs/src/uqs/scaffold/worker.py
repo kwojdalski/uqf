@@ -245,7 +245,7 @@ def bounded_worker(
         actions += [
             FileAction(
                 TABLES_FILE,
-                f"\n/ {proc}'s target. <one line: what a row means>\n"
+                f"\n/ {proc}'s target. SCAFFOLDED: <one line: what a row means>\n"
                 f"{plant_declarations(dataset, columns or cols)}",
                 mode=WriteMode.APPEND,
             ),

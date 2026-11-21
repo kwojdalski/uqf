@@ -728,3 +728,28 @@ def test_a_sliced_source_s_fixture_row_is_in_the_slice():
         partition_column="pair",
     )  # fmt: skip
     assert "sym:enlist `SCAFFOLD; pair:enlist `EURUSD;" in _body(other, "sources/fx.q")
+
+
+def test_every_one_line_placeholder_carries_the_marker():
+    """#2852: `<one line: what a row means>` was written without SCAFFOLDED,
+    so test_no_scaffold_left could not list it - and two reached master."""
+    from uqs.scaffold.horizon import horizon_job  # noqa: PLC0415
+
+    cols = [("sym", "`symbol$()"), ("px", "`float$()")]
+    plans = [
+        jobs.streaming_job("p1", [], "p1_out", "sym:symbol, px:float", unprofiled="t"),
+        backfill.bounded_worker("p2", "p2", "sym:symbol, px:float"),
+        normalizer("p3", ["quote"], parse_columns("sym:symbol, px:float"), {"quote": cols},
+                   known_tables={"quote"}, unprofiled="t"),
+        horizon_job("p4", ["trades", "quote"], parse_columns("sym:symbol, px:float"),
+                    {"trades": cols, "quote": cols}, "5s", known_tables={"trades", "quote"},
+                    unprofiled="t"),
+    ]  # fmt: skip
+    lines = [
+        ln for p in plans for a in p.actions for ln in a.body.splitlines() if "<one line" in ln
+    ]
+    assert len(lines) >= 8, lines
+    assert [ln for ln in lines if "SCAFFOLDED" not in ln] == []
+    left = [f"{p.relative_to(UQF_ROOT)}:{i}" for p in sorted((UQF_ROOT / "src").rglob("*.q"))
+            for i, ln in enumerate(p.read_text().splitlines(), 1) if "<one line" in ln]  # fmt: skip
+    assert left == []

@@ -370,7 +370,7 @@ def test_a_guest_writer_does_not_take_an_authored_table(tree):
     tables = tree / TABLES_FILE
     # Make the table authored: the scaffold's comment rewritten by hand.
     text = tables.read_text().replace(
-        "/ audit_existing1's output. <one line: what a row means>",
+        "/ audit_existing1's output. SCAFFOLDED: <one line: what a row means>",
         "/ Hand-written: an audit print, one row per check.",
     )
     tables.write_text(text)

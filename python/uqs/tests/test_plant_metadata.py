@@ -295,8 +295,10 @@ def test_a_copied_table_keeps_its_whole_shape_through_two_cycles(tmp_path, q_bin
     assert sources["trades"].sorting == (("sym", "p"),)
     assert sources["kafka_message"].nested == {"msg_key": "C", "payload": "C"}
     assert sources["config_change"].nested == {"old": " ", "new": " "}
-    # Nothing was guessed, so nothing is left for the user to fill in.
-    assert "SCAFFOLDED" not in first + second, first + second
+    # Nothing was guessed, so nothing is left for the user to fill in but the
+    # one-line comment every new table gets (#2852).
+    declared = [ln for ln in (first + second).splitlines() if not ln.startswith("/ ")]
+    assert not any("SCAFFOLDED" in ln for ln in declared), first + second
 
 
 def test_a_keyed_plant_table_is_refused_not_dropped(tmp_path, q_binary, pack):

@@ -287,7 +287,7 @@ def streaming_job(
     reads = "nothing" if is_feed else ", ".join(f"`{t}`" for t in subscribe_to)
     writes = ", ".join(f"`{t}`" for t in pubs) if pubs else "nothing - it keeps its output local"
 
-    body = f"""/ {name}.q - <one line: what this job is for> (.qpipe.job.{name}).
+    body = f"""/ {name}.q - SCAFFOLDED: <one line: what this job is for> (.qpipe.job.{name}).
 / .
 / Reads {reads}; publishes {writes}.
 / .
@@ -334,7 +334,7 @@ publish:.qetl.job.stream.unwired `{name};
         actions.append(
             FileAction(
                 TABLES_FILE,
-                f"\n/ {proc}'s output. <one line: what a row means>\n"
+                f"\n/ {proc}'s output. SCAFFOLDED: <one line: what a row means>\n"
                 f"{plant_declarations(new_tables[0], columns)}",
                 mode=WriteMode.APPEND,
             )
