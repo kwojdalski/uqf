@@ -40,7 +40,7 @@ from pathlib import Path
 #: (file from the repo root, registry name) -> why its values are not dicts.
 NOT_DICTS: dict[tuple[str, str], str] = {
     ("src/etl/core/react.q", "reactions"): "dataset -> a table of reactions, upserted",
-    ("src/etl/core/stream_job.q", "carry_log"): "job -> a (status; rows; batches) list",
+    ("src/etl/core/stream_carry.q", "carry_log"): "job -> a (status; rows; batches) list",
     ("src/etl/core/tick.q", "schemas"): "table -> its empty schema, a table",
     ("src/etl/core/config_audit.q", "watched"): "owner -> a symbol list of globals",
     ("src/etl/core/worker_dependencies.q", "declared_dependencies"): "worker -> a symbol list",
