@@ -236,13 +236,20 @@ uv run pytest python/ -q                  # the declaration reads back as a proc
 uv run python scripts/gates/check.py q-traps
 ```
 
-Then load the tree on its own, because the unit suite is not the same thing:
+Then load the tree on its own, because the unit suite is not the same thing.
+Each kind registers in its own place, so ask the line for the one you
+scaffolded:
 
 ```bash
 q -q <<'EOF'
 \l src/init.q
 \l src/etl/init.q
+/ a streaming job, normalizer or horizon
 -1 "loaded, registered: ",string `<name> in key .qetl.job.stream.jobs;
+/ a backfill: the worker is <name>_backfill
+-1 "loaded, registered: ",string `<name>_backfill in key .qetl.job.bounded.worker_cfg;
+/ a reaction: it is registered under its DATASET
+-1 "loaded, registered: ",string `<name> in exec name from .qetl.reaction.for_dataset `<dataset>;
 exit 0
 EOF
 ```

@@ -229,6 +229,9 @@ errors.
    env -u UQF_PEACHQ q -q <<'EOF'
    \l src/init.q
    \l src/etl/init.q
+   / a streaming job, normalizer or horizon; a backfill is `NAME_backfill in
+   / key .qetl.job.bounded.worker_cfg, a reaction is `NAME in
+   / exec name from .qetl.reaction.for_dataset `DATASET
    -1 "loaded: ",string `NAME in key .qetl.job.stream.jobs;
    exit 0
    EOF
