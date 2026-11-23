@@ -2073,6 +2073,21 @@
     .qunit.assertTrue[(string h`last_error) like "plant contract: fx_orderbook.bid_sizes row 0 holds a value of type 7h*";
         "naming the table, column and row"]};
 
+.qt.qetl.job.stream.test_the_withheld_log_line_says_why_and_which_gate:{[t]
+    / #2954: a contract refusal logged "publish check withheld rows" with failures="" and nothing else
+    bad:@[.qt.qetl.job.stream.ob[];2;:;enlist 1 2];
+    lines:.qt.qetl.job.stream.logged[`fx_orderbook_feed;{[bad;x] .qt.qetl.job.stream.ob_publish[`fx_orderbook;bad]}[bad]];
+    l:first lines where "plant contract withheld rows"~/:lines[;1];
+    .qunit.assertTrue[(last l)[`reason] like "plant contract: fx_orderbook.bid_sizes row 0 holds a value of type 7h*";
+        "the refusal reason is in the log line, no longer only in stream health"];
+    .qunit.assertFalse[any "publish check withheld rows"~/:lines[;1];"and a contract refusal does not claim a check ran"]};
+
+.qt.qetl.job.stream.test_a_failing_check_is_logged_as_a_check_with_its_reason:{[t]
+    pub:.qt.qetl.job.stream.check_probe[`sj_check_why;`sjcheckwhy1;`hold;.qt.qetl.job.stream.neg_check];
+    lines:.qt.qetl.job.stream.logged[`sj_check_why;{[pub;x] (get pub)[`probe_out;([] v:1 -2 3)]}[pub]];
+    l:first lines where "publish check withheld rows"~/:lines[;1];
+    .qunit.assertEquals[(last l)`reason;"check failed: 1 failure(s)";"the reason a check withheld the batch"]};
+
 .qt.qetl.job.stream.test_columns_out_of_the_plant_order_are_withheld:{[t]
     book_rows:flip `sym`bid_prices`bid_sizes`ask_prices`ask_sizes!.qt.qetl.job.stream.ob[];
     .qt.qetl.job.stream.ob_publish[`fx_orderbook;`sym`ask_prices`ask_sizes`bid_prices`bid_sizes xcols book_rows];

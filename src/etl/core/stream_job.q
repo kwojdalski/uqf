@@ -532,8 +532,9 @@
 / @private
 .qetl.job.stream.withhold:{[job;t;x;msg;f;n]
     .[.qetl.stream_health.record;(job;0b;msg);::];
-    .[{.qetl.log.ch.err[`transform;y;(enlist[`job]!enlist x),z]};(job;"publish check withheld rows";
-        `table`rows`withheld`failures!(t;.qetl.job.stream.row_count[t;x];n;$[.Q.qt f;300 sublist .Q.s1 5 sublist f;""]));::];
+    / the reason is the one stream health holds, and which gate withheld it - a contract refusal ran no check (#2954)
+    .[{.qetl.log.ch.err[`transform;y;(enlist[`job]!enlist x),z]};(job;$[msg like "check *"; "publish check withheld rows"; "plant contract withheld rows"];
+        `table`rows`withheld`failures`reason!(t;.qetl.job.stream.row_count[t;x];n;$[.Q.qt f;300 sublist .Q.s1 5 sublist f;""];300 sublist msg));::];
     .qetl.job.stream.withheld_n::.qetl.job.stream.withheld_n+1;
     ::}
 
