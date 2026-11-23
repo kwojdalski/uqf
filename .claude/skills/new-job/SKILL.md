@@ -35,7 +35,7 @@ expensive to undo.
   | You know the range before you start | yes                                                      | no                                                 |
   | It finishes and exits               | yes                                                      | never                                              |
   | Examples                            | a backfill, a nightly window, a restatement              | a tickerplant feed, a poller                       |
-  | Shell                               | `.qetl.job.bounded`                                      | `.qetl.job.stream` / `.qetl.job.continuous`        |
+  | Shell                               | `.qetl.job.bounded`                                      | `.qetl.job.stream`                                 |
 
 ```bash
 # continuous: subscribes to two tables, publishes one
@@ -110,10 +110,11 @@ several tables in or out are refused - use the custom-handler scaffold there.
 
 To undo a scaffold, `uqs job remove NAME --dry-run` shows everything it would
 take back out, then run it without `--dry-run`. It refuses a job whose
-SCAFFOLDED markers are gone, and keeps any table or source something else still
-uses. It also lists every other line that still names the job (an example, a
-docs page, a diagram) - those are yours to edit - and `--strict` refuses while
-any remain.
+SCAFFOLDED markers are gone (one whose handler is written) unless
+`--override even-if-edited --reason TEXT` says the edits may go, and keeps any
+table or source something else still uses. It also lists every other line that
+still names the job (an example, a docs page, a diagram) - those are yours to
+edit - and `--strict` refuses while any remain.
 
 `--proc` names the process (default `NAME1`, or `NAME_backfill1`), and
 `--start-with-all` puts a streaming job or normalizer in `uqs start all`. Leave
@@ -151,9 +152,10 @@ process reporting `up` while publishing nothing.
 So after scaffolding, the tree is in a known state:
 
 - `src/etl/init.q` still LOADS --- the one thing the scaffold never breaks
-- `q tests/run_tests.q` fails on your stub, which is where the work starts -
-  and, for a job that subscribes and publishes, on its `contract_driver` too
-- `uv run pytest python/uqs` fails on `test_no_scaffold_left.py`, which lists
+- `q tests/run_tests.q -files test_<name>.q` fails on your stub, which is where
+  the work starts - and, for a job that subscribes and publishes, on its
+  `contract_driver` too
+- `uv run pytest -q python/uqs/tests/test_no_scaffold_left.py` fails, and lists
   every placeholder still carrying `SCAFFOLDED`, by `path:line`. That list is
   the to-do list: the handler, the test, the job's `note`, the process's card in
   `docs/services/README.md` and its comment in `docs/architecture/stack.md`
@@ -198,7 +200,8 @@ in your job. Say so rather than working around it.
 
 ## Step 3 --- implement, smallest piece first
 
-Write in this order, and run the suite between each:
+Write in this order, and run the job's own suite
+(`q tests/run_tests.q -files test_<name>.q`) between each:
 
 1. **The transform or handler body.** For a streaming job that is
    `on_batch[t;x]` or `on_timer[]`; for a bounded worker it is the source's
@@ -230,19 +233,31 @@ Write in this order, and run the suite between each:
 ## Step 4 --- verify against a real q, not just the unit suite
 
 ```bash
-q tests/run_tests.q                       # the suite; the scaffolded test must be gone
-uv run pytest tests/qrun/test_documented_examples.py  # every @eg you wrote actually runs
-uv run pytest python/ -q                  # the declaration reads back as a process
+q tests/run_tests.q -files test_<name>.q   # the job's suite; the scaffolded test must be gone
+uv run pytest -q tests/qrun/test_documented_examples.py  # every @eg you wrote actually runs
+uv run pytest -q -n 2 python/uqs/tests/test_declarations_match_q.py  # the declaration reads back as a process
 uv run python scripts/gates/check.py q-traps
 ```
 
-Then load the tree on its own, because the unit suite is not the same thing:
+Those are the targeted forms: the whole q and Python suites stay out of this
+loop (`uqf-developer` W5).
+`uv run pytest -q tests/qrun/test_q_suite.py::test_the_q_suite_passes --q-files test_<name>.q`
+is the same selection through pytest.
+
+Then load the tree on its own, because the unit suite is not the same thing.
+Each kind registers in its own place, so ask the line for the one you
+scaffolded:
 
 ```bash
 q -q <<'EOF'
 \l src/init.q
 \l src/etl/init.q
+/ a streaming job, normalizer or horizon
 -1 "loaded, registered: ",string `<name> in key .qetl.job.stream.jobs;
+/ a backfill: the worker is <name>_backfill
+-1 "loaded, registered: ",string `<name>_backfill in key .qetl.job.bounded.worker_cfg;
+/ a reaction: it is registered under its DATASET
+-1 "loaded, registered: ",string `<name> in exec name from .qetl.reaction.for_dataset `<dataset>;
 exit 0
 EOF
 ```
@@ -293,7 +308,9 @@ Say this back to the user, because it is the part that surprises people:
 - The job needs a new pricing or execution function under `src/foundation/`,
   `pricing/`, `portfolio/`, `execution/` or `market_data/`. That is
   `uqf-quant-developer`'s.
-- The port budget is full. The licence caps a q process at 16 concurrent
-  connections and every streaming job opens one to the plant; past that the cap,
-  not the configuration, decides what runs. `uqs start` warns, but check before
-  adding the seventeenth.
+- The port budget is full. The licence caps a q process's concurrent
+  connections, and every streaming job opens one to the plant; the stack's own
+  subscribers (rdb1, wdb1, sctp1, metrics1) hold some before any job starts.
+  `uqs profile list` shows each profile's slots against its allowance. A
+  `uqs start --profile` over the allowance is refused and a positional start
+  only warns, so check before adding a streaming job.

@@ -48,8 +48,11 @@ Implement complete, working jobs using uqf's existing framework.
 
 8. Verify loading, schema conversion, selection, time boundaries, identities,
    retries, corrections and actual publication. Assert the expected refusal
-   messages, not merely that an error occurred. Run focused real-q tests and the
-   bundle installation and test path.
+   messages, not merely that an error occurred. Run focused real-q tests, then
+   the bundle's own suite with
+   `uv run python scripts/dev/bundle_suite.py <bundle>`: it installs the bundle
+   into a throwaway copy and runs its tests there. In this checkout
+   `uqs job install <bundle>` is refused and only `--dry-run` runs.
 
 9. Do not hand-edit generated artifacts, modify vendored TorQ, change unrelated
    jobs or silently alter the framework. Keep bank-specific code in private

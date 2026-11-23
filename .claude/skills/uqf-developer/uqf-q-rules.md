@@ -101,7 +101,7 @@ D (generated files), T (tests) and C (the CLI), and summarises L and J.
 - **J14** `start_with_all 1b` only when the user asks. The licence leaves 14
   connection slots on the tickerplant, and each **tickerplant subscriber** -
   every started non-backfill pipeline, plus rdb1, wdb1, sctp1 and metrics1 -
-  spends one; a process that subscribes to nothing spends none
+  spends one, a feed included; only a backfill spends none
   (`model/pipeline_edges.py`; `uqf-on-torq.md` §7). `uqs profile list` shows
   each profile's slots.
 - **J15** Job names are unique across streaming and bounded jobs: they share
@@ -229,6 +229,9 @@ errors.
    env -u UQF_PEACHQ q -q <<'EOF'
    \l src/init.q
    \l src/etl/init.q
+   / a streaming job, normalizer or horizon; a backfill is `NAME_backfill in
+   / key .qetl.job.bounded.worker_cfg, a reaction is `NAME in
+   / exec name from .qetl.reaction.for_dataset `DATASET
    -1 "loaded: ",string `NAME in key .qetl.job.stream.jobs;
    exit 0
    EOF
@@ -250,5 +253,6 @@ scaffold bug: report it, don't work around it.
    runs (V5).
 4. Run the new job's q suite and Python tests (`-n 2` at most), `qlinter` on the
    new files and `python3 scripts/gates/check.py q-traps`.
-5. Run it for real when asked: `uqs start NAME -f`, then `uqs status` shows it
-   `up` and wired; or, on stock kdb+, `q scripts/jobs/run_stream.q -job NAME`.
+5. Run it for real when asked: `uqs start NAME1 -f` (the job's process,
+   `uqs process list` names it), then `uqs status` shows it `up` and wired; or,
+   on stock kdb+, `q scripts/jobs/run_stream.q -job NAME`.

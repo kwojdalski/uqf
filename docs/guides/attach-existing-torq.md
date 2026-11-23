@@ -235,8 +235,8 @@ start if that fails. `uqs job attachment show NAME` lists the entries.
 - `uqs job attachment status` shows each destination's worker, state, outcome
   and log, and what to do next when the rows are not queryable.
 - `uqs logs --attachment NAME --worker WORKER [-f]` shows the latest run's log
-  for that worker, or for `<dataset>.receiver`. `--run` picks an older run.
-- `uqs job runs list | status | show --attachment NAME` reads the run ledger.
+  for that worker, or for `<dataset>.receiver`. `--stamp` picks an older run.
+- `uqs job runs list | show --attachment NAME` reads the run ledger.
 - `uqs job attachment show NAME` lists each waiver used.
 
 ## Detach
@@ -445,12 +445,13 @@ uqs job backfill piggybank_ledger_backfill --attachment pb-uat --writer uat-host
 
 ### Without a receiver
 
-`--force` with `--writer` skips the receiver and everything it checks. HOST:PORT
-is then any q process of the stack, usually its wdb.
+`--override any-writer --reason TEXT` with `--writer` skips the receiver and
+everything it checks. HOST:PORT is then any q process of the stack, usually its
+wdb.
 
 ```bash
 uqs job backfill piggybank_ledger_backfill --attachment pb-uat \
-    --writer uat-host:6055 --force \
+    --writer uat-host:6055 --override any-writer --reason "completed history" \
     --from 2026-10-01 --to 2026-10-02 --source-version historical-v1 --wait
 ```
 
