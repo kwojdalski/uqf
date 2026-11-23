@@ -69,6 +69,19 @@
         `symbol$();
         "no publishes means no round trip"]};
 
+/ A subscription to a table the plant lacks is refused naming the job, the
+/ table and what to do, not left to q's bare undefined-name error (#2933).
+.qt.qtorq.pipeline.test_a_subscription_to_a_table_the_plant_lacks_names_the_job_and_the_fix:{[t]
+    h:.qt.qtorq.pipeline.plant[`trades`quote];
+    .qunit.assertThrows[{.qtorq.assert_subscribable[`job_a;x;`quote`tbl_typo]};h;
+        "qtorq.assert_subscribable: job_a subscribes to tbl_typo, which the tickerplant does not define*";
+        "the job and the missing table are in the message"];
+    .qunit.assertThrows[{.qtorq.assert_subscribable[`job_a;x;`tbl_typo]};h;
+        "*add the table to src/etl/plant_tables.q and restart the stack";
+        "and so is the remedy"];
+    .qunit.assertEquals[.qtorq.assert_subscribable[`job_a;h;`quote`trades];`quote`trades;
+        "tables the plant defines pass and are handed back"]};
+
 / --- the handlers the plant calls on a period boundary -------------------
 
 / These exist because every uqf process was throwing `'endofperiod` once a

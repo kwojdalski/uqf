@@ -161,6 +161,7 @@
         'who,"'s period must be a positive timespan"];
     t:.qetl.transform.def[who;decl`transform];
     if[1<>count t`inputs; 'who,"'s transform takes ",string[count t`inputs]," inputs - it takes one: the events plus window, as_of and inside"];
+    .qetl.job.stream.refuse_output_mismatch[who;decl`outputs;t`output];
     d:`by`event_time!(enlist `sym;`time);
     d:d,decl,`by`windows!(((),$[`by in key decl; decl`by; `sym]);asc distinct ws);
     ev0:first value t`inputs;

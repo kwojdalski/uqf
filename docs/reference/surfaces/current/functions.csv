@@ -292,6 +292,7 @@ qetl.job,claim_procname,function,4,who name decl self
 qetl.job,continuous,dict,,
 qetl.job,default_procname,function,1,name
 qetl.job,procname_of,function,2,name decl
+qetl.job,refuse_name,function,2,who name
 qetl.job,stream,dict,,
 qetl.job.bounded,batching,dict,,
 qetl.job.bounded,checkpoint,function,2,worker cursor

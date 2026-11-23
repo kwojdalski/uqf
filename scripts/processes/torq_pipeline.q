@@ -489,6 +489,27 @@ assert_publishable:{[h;pub_tables]
             "src/etl/plant_tables.q and restart the stack"];
     pub_tables}
 
+/ Refuse to start when the plant has no table for something this job
+/ subscribes to: the subscription twin of assert_publishable. Without it the
+/ recorded-schema fallback in sub_load_schemas asks the plant for the table
+/ and the process stops with q's bare undefined-name error - the table's name
+/ and nothing else (#2933). A subscriber of a table the plant lacks would
+/ otherwise wait forever on a typo or on a table nobody added to the plant.
+/ @param job the job's name
+/ @param h the plant handle
+/ @param tbls the table(s) the job subscribes to
+/ @return tbls
+/ @throws error naming the job and every subscribed table the plant does not define
+assert_subscribable:{[job;h;tbls]
+    want:(),tbls;
+    if[0=count want; :tbls];
+    missing:want except h"tables[]";
+    if[count missing;
+        '"qtorq.assert_subscribable: ",string[job]," subscribes to ",(", " sv string missing),
+            ", which the tickerplant does not define - check the name in subscribe_to for a typo, or add the table to ",
+            "src/etl/plant_tables.q and restart the stack"];
+    tbls}
+
 / Publish handle only, for a feed process that produces rows but subscribes
 / to nothing (torq_fx_feed.q / torq_quotes_feed.q / torq_wide_book_feed.q /
 / torq_fx_trades_feed.q all open with exactly these two lines).

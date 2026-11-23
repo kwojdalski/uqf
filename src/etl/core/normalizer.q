@@ -64,6 +64,7 @@
 .qetl.job.stream.normalizer.define:{[name;decl]
     who:"define: normalizer ",string[name];
     if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
+    .qetl.job.refuse_name[who;name];
     .qetl.declared.refuse_unknown[who;"a normalizer";decl;.qetl.job.stream.normalizer.required_keys,`procname,.qetl.job.stream.passthrough_keys];
     missing:.qetl.job.stream.normalizer.required_keys where not .qetl.job.stream.normalizer.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
@@ -77,6 +78,7 @@
         'who,"'s input must be a dictionary of source table -> transform name, symbols both"];
     if[0=count srcs; 'who," has no input - a normalizer of nothing normalizes nothing"];
     .qetl.job.stream.normalizer.check_source[who;out]'[key srcs;value srcs];
+    .qetl.job.stream.refuse_output_mismatch[who;enlist name;out];
     / The dispatcher is ALSO set as .qpipe.job.<name>.on_batch, so a normalizer
     / instance has the same surface as every other job - a reader, a test
     / or the runner reaching for a job's handler finds it in the one place.

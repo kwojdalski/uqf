@@ -251,6 +251,27 @@
             " - a job name is declared once: a second declaration would replace the first, and both procnames would run the last"];
     .qetl.job.claim_procname[who;job;decl;`]}
 
+/ Refuse an output that is a plant table the job's own output does not fit.
+/ .
+/ The plant's contract is held at run time (contracted), where a mismatch
+/ withholds every batch while the job reports itself running (#2934). The
+/ declaration already holds both sides - the table it names and the schema it
+/ produces - so the same comparison is made here, as .qetl.twin does for a
+/ backfill. `time` is the plant's to stamp, so it is not compared. A table the
+/ plant does not carry is the job's own business and passes.
+/ @param who the error prefix, e.g. "define: bars job exec_bars"
+/ @param outs the declared outputs
+/ @param schema an empty table of what the job publishes
+/ @return the outputs
+/ @throws error naming the table and the columns that differ
+/ @private
+.qetl.job.stream.refuse_output_mismatch:{[who;outs;schema]
+    s:(cols[schema] except `time)#0!schema;
+    {[who;s;t]
+        p:.qetl.plant.problems[t;s];
+        if[count p; 'who," publishes onto plant table ",string[t]," but its output does not fit it: ",("; " sv p)," - fix outputs, or the table in src/etl/plant_tables.q"]}[who;s] each (),outs where (),outs in .qetl.plant.names[];
+    outs}
+
 / Declare a streaming job. Called by the job's own file as it loads, so a
 / declaration and its implementation cannot drift - there is no way to have
 / one without the other.
