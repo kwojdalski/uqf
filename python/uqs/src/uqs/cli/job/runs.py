@@ -166,7 +166,8 @@ def list_runs(
         bool,
         typer.Option(
             "--unfinished",
-            help="Only runs that began and never finished, interrupted ones included",
+            help="Only runs that did not finish their range: still going or interrupted, "
+            "stopped, partial or failed",
         ),
     ] = False,
     range_from: RangeFromOpt = None,
@@ -180,12 +181,13 @@ def list_runs(
 ) -> None:
     """List the runs in the ledger, newest first.
 
-    Every run in the ledger - or, with --unfinished, the runs
-    that began and never finished.
+    Every run in the ledger - or, with --unfinished, the runs that did not
+    finish their range: every one but those that ended completed or idle.
 
     `--unfinished` includes runs whose process has died: `running` on a run
-    whose process is gone means that execution was interrupted, which is what
-    it is for.
+    whose process is gone means that execution was interrupted. It includes
+    runs that ended with work left too - stopped, partial or failed - which the
+    same backfill command again resumes.
 
     A time range keeps the runs whose window overlaps it, and the
     list takes every listing's flags: --export, --sort, --reverse, -i.
