@@ -171,6 +171,19 @@ def _err_log() -> str:
         return str(where)
 
 
+def _in_no_profile(procs: list[str]) -> list[str]:
+    """The `procs` no profile reaches and UNPROFILED does not exempt - each fails
+    test_every_standing_process_is_reachable_or_exempt_with_a_reason, as a
+    `uqs job new` given neither answer notes (scaffold/profile.py, #2947)."""
+    from uqs.model.profiles import PROFILES, resolve
+    from uqs.model.unprofiled import UNPROFILED
+
+    reached = {leaf for leaves in PROFILES.values() for leaf in leaves}
+    for name in PROFILES:
+        reached |= set(resolve([name]))
+    return [p for p in procs if p not in reached and p not in UNPROFILED]
+
+
 def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> Panel:
     streaming = [d.procname for d in declarations if d.kind is not PipelineKind.BACKFILL]
     workers = [d.name for d in declarations if d.kind is PipelineKind.BACKFILL]
@@ -184,6 +197,12 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
         steps.add_row(f"{len(steps.rows) + 1}.", what, command)
 
     step("The registry sees them", "uqs process list")
+    for proc in _in_no_profile(streaming):
+        step(
+            f"Put {proc} in a profile, or exempt it",
+            "PROFILES in model/profiles.py, or UNPROFILED with the reason in "
+            "model/unprofiled.py - `uqs profile list` shows the sets and their budget",
+        )
     step("The exact start line", f"uqs start --dry-run {procs}")
     if streaming or not workers:
         step("Start them", f"uqs start {procs}")
