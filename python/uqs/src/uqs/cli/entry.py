@@ -42,6 +42,7 @@ from uqs.cli.job import backfill  # noqa: F401
 from uqs.cli.job import job_run  # noqa: F401
 from uqs.cli.fleet import cleanup  # noqa: F401
 from uqs.cli.job import runs  # noqa: F401
+from uqs.cli.job import runs_stop  # noqa: F401
 from uqs.cli.connector import receiver_contract  # noqa: F401
 from uqs.cli.job import gaps  # noqa: F401
 from uqs.cli.job import stream  # noqa: F401
