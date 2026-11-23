@@ -199,7 +199,7 @@ def reload_readers(where: AttachedHdb, ipc: Ipc) -> list[dict[str, Any]]:
             out.append(reader_row(r.procname, "skipped", r.detail))
             continue
         try:
-            said = ipc.call(Endpoint(r.procname, where.att.stack.host, r.port), "hdb_reload", {})
+            said = ipc.call(Endpoint(r.procname, r.host, r.port), "hdb_reload", {})
         except IpcError as exc:
             out.append(reader_row(r.procname, "failed", exc.reason))
             continue

@@ -260,7 +260,7 @@ class FakeStack:
             {
                 "procname": p["procname"],
                 "proctype": p["proctype"],
-                "hpup": f":testhost:{abs(p['port'])}",
+                "hpup": f":{p.get('host', 'testhost')}:{abs(p['port'])}",
             }
             for p in listed
         ]
@@ -557,6 +557,28 @@ class FakeStack:
         for name in ("rdb1", "wdb1"):
             self.named(name).setdefault("rows", {})
             self.named(name)["rows"][table] = self.named(name)["rows"].get(table, 0) + rows
+
+
+class ListedHosts:
+    """An Ipc over a FakeStack that runs on more than one machine: a process
+    answers only at the host discovery lists it on (its `host`, then
+    `refresh_discovery`), and nothing listens on its port anywhere else."""
+
+    def __init__(self, fake: FakeStack) -> None:
+        self.fake = fake
+        #: (procname, host, operation) of every call, answered or not
+        self.asked: list[tuple[str, str, str]] = []
+
+    def call(self, endpoint: Endpoint, op: str, request: dict[str, Any]) -> dict[str, Any]:
+        self.asked.append((endpoint.procname, endpoint.host, op))
+        listed = {
+            abs(p["port"]): p.get("host", "testhost")
+            for p in self.fake.procs.values()
+            if p["proctype"] != "discovery"
+        }
+        if not endpoint.local and listed.get(endpoint.port, endpoint.host) != endpoint.host:
+            raise IpcError(endpoint, op, "cannot connect: Connection refused")
+        return self.fake.call(endpoint, op, request)
 
 
 class FaultIpc:

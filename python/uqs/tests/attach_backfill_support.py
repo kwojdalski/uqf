@@ -87,6 +87,8 @@ class HdbStack(FakeStack):
             reader = next(p for k, p in self.procs.items() if k < 0 and p["procname"] == name)
             self.procs.pop(-reader["port"])
             reader["port"] = port
+            # a real process a test started on this machine: listed where it listens
+            reader["host"] = "localhost"
             self.procs[-port] = reader
         self.refresh_discovery()
 
