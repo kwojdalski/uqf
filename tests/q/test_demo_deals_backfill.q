@@ -1485,3 +1485,19 @@
     id:exec last run_id from .qetl.run.runs[] where worker=`demo_deals_backfill;
     .qunit.assertEquals[asc exec label from .qetl.run.facts_of id;`dry_run`rows`source_version;"the framework's facts are recorded"];
     .qunit.assertTrue[any {[l] (`ERROR=l 0) and l[2] like "facts function returned*"} each lines;"and the bad facts are logged at ERROR"]};
+
+/ #2951: a dry run's `rows fact was finish_window's rows_published, 0 because
+/ nothing was published - so a range holding data read like an empty source.
+/ It is the rows each window would publish, and they add up to the real run's.
+.qt.qpipe.job.demo_deals_backfill.test_a_dry_runs_facts_count_the_rows_it_would_publish:{[t]
+    setenv[`UQF_DRY_RUN;"true"];
+    lines:.qt.support.captured_log[0b;{[x]
+        .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
+        .qpipe.job.demo_deals_backfill.run[]}];
+    setenv[`UQF_DRY_RUN;""];
+    would:sum {[l] l[3][`facts]`rows} each lines where lines[;2] like "dry run - facts not recorded";
+    .qunit.assertEquals[count value `demo_deals;0;"setup: the dry run published nothing"];
+    .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
+    r:.qpipe.job.demo_deals_backfill.run[];
+    .qunit.assertTrue[0<r`rows_published;"setup: the range holds rows"];
+    .qunit.assertEquals[would;r`rows_published;"the dry run's rows are the rows the run publishes"]};

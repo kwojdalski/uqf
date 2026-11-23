@@ -1448,8 +1448,8 @@
 / precondition.
 / @private
 .qetl.job.bounded.record_facts:{[worker;cfg;w;batch;r]
-    framework:`rows`source_version`dry_run!
-        (r`rows_published;(.qetl.job.bounded.spec worker)`source_version;r`dry_run);
+    framework:`rows`source_version`dry_run!  / a dry run's rows: those it would publish (#2951)
+        ($[r`dry_run; count batch; r`rows_published];(.qetl.job.bounded.spec worker)`source_version;r`dry_run);
     declared:$[(::)~cfg`facts;
         ()!();
         @[{[f;b] f b}[cfg`facts;];batch;
