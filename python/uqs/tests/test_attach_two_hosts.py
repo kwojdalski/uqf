@@ -242,4 +242,37 @@ def test_the_tickerplant_reads_the_stacks_disk_for_publication(hosts):
     assert answer == {
         "logs": [{"name": "stp1_quote20261015T00000", "size": 400}],
         "partitions": [False, True],
+        "unread": [],
+    }
+
+
+def test_the_tickerplant_reads_zipped_logs_and_a_segmented_hdb(hosts):
+    """#2913: an earlier day's log gzipped in place by housekeeping, sized as the
+    plant wrote it, and a partition in a segment the HDB's par.txt names, where
+    TorQ's wdb moves it; what cannot be read is named."""
+    import gzip
+
+    root = hosts.schema.parent
+    logs = root / "logs" / "stp1_2026.10.15"
+    logs.mkdir(parents=True)
+    (logs / "stp1_quote20261015T00000.gz").write_bytes(gzip.compress(b"x" * 400))
+    (logs / "stp1_quote20261015T00001.gz").write_bytes(gzip.compress(b"x" * 8))
+    (logs / "stp1_quote20261015T00002.gz").write_bytes(b"ab")
+    (root / "seg1" / "2026.10.15" / "quote").mkdir(parents=True)
+    (root / "hdb").mkdir()
+    (root / "hdb" / "par.txt").write_text("../seg1\n")
+    (root / "wdb" / "par.txt").mkdir(parents=True)  # there, and cannot be read
+    request = {"logdir": str(logs.parent), "plant": "stp1", "table": "quote",
+               "dirs": [str(root / "wdb"), str(root / "hdb")]}  # fmt: skip
+    answer = hosts.ipc.call(hosts.stp, "disk_marks", request)
+    assert answer == {
+        "logs": [
+            {"name": "stp1_quote20261015T00000.gz", "size": 400},
+            {"name": "stp1_quote20261015T00001.gz", "size": 8},
+        ],
+        "partitions": [False, True],
+        "unread": [
+            f"the earlier log {logs / 'stp1_quote20261015T00002.gz'} cannot be read",
+            f"the par.txt in {root / 'wdb'} cannot be read",
+        ],
     }

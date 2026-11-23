@@ -405,6 +405,58 @@ def test_a_partition_in_the_hdb_or_the_wdb_is_publication_too(world, tmp_path):
     )
 
 
+def test_a_partition_in_a_segment_par_txt_names_is_publication_too(world, tmp_path):
+    """#2913: TorQ's wdb moves a partition into a segment of a segmented HDB
+    (`.Q.par`), not under the HDB itself; a relative segment is read from the HDB."""
+    fake, make, state, schema, log = world
+    att = make()
+    apply_(att, fake, state)
+    (tmp_path / "seg1" / "2026.10.15" / TABLE).mkdir(parents=True)
+    (tmp_path / "hdb" / "par.txt").write_text(f"{tmp_path / 'seg0'}\n\n../seg1\n")
+    result = detach_(att, fake, state)
+    assert result.outcome == "detached" and result.evidence.reasons == [
+        f"{TABLE}: the HDB holds a partition of it"
+    ]
+    assert fake.named("stp1")["schemas"][TABLE], "so nothing was removed"
+
+
+def test_a_par_txt_that_cannot_be_read_counts_as_publication(world, tmp_path):
+    fake, make, state, schema, log = world
+    att = make()
+    apply_(att, fake, state)
+    (tmp_path / "hdb" / "par.txt").mkdir()  # there, and not a file that can be read
+    result = detach_(att, fake, state)
+    assert result.outcome == "detached"
+    par = tmp_path / "hdb" / "par.txt"
+    assert result.evidence.unknown == [
+        f"{TABLE}: the HDB's par.txt cannot be read: [Errno 21] Is a directory: '{par}'"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("written", "published"), [(b"x" * 200, True), (b"x" * 8, False)], ids=["rows", "empty"]
+)
+def test_a_gzipped_log_of_an_earlier_day_is_read_as_it_was_written(
+    world, tmp_path, written, published
+):
+    """#2913: housekeeping gzips an earlier day's log in place (`tplogzip`); its
+    size is what the plant wrote, so a zipped empty log is still empty."""
+    import gzip
+
+    fake, make, state, schema, log = world
+    att = make()
+    apply_(att, fake, state)
+    day = tmp_path / "tplogs" / "stp1_2026.10.15"
+    day.mkdir()
+    (day / f"stp1_{TABLE}20261015120000.gz").write_bytes(gzip.compress(written))
+    result = detach_(att, fake, state)
+    assert result.outcome == ("detached" if published else "rolled_back")
+    if published:
+        assert result.evidence.reasons == [
+            f"{TABLE}: an earlier log stp1_{TABLE}20261015120000.gz holds 200 bytes"
+        ]
+
+
 def test_after_detaching_a_published_attachment_applying_again_adopts_what_stayed(world):
     fake, make, state, schema, log = world
     att = make()

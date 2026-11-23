@@ -375,6 +375,20 @@ def test_publication_is_read_off_the_stacks_disk_by_the_tickerplant(bundle, tmp_
     assert asked["dirs"] == ["/data/wdbhdb", "/data/hdb"] and asked["logdir"] == "/data/tplogs"
 
 
+def test_what_the_tickerplant_cannot_read_on_the_stacks_disk_counts_as_publication(
+    bundle, tmp_path
+):
+    """#2913: a par.txt or a log there that the tickerplant cannot read."""
+    fake, att = _fake(), _att(bundle)
+    pub = Publisher()
+    assert _run(att, fake, tmp_path, pub).ok
+    fake.stack_unread.append("the par.txt in /data/hdb cannot be read")
+    result = _detach(att, fake, pub, tmp_path)
+    assert result.outcome == "detached" and result.evidence.unknown == [
+        f"{TABLE}: on uat-box.example, the par.txt in /data/hdb cannot be read"
+    ]
+
+
 @pytest.mark.parametrize(("process", "writer"), [("stp1", "tickerplant"), ("", "cli")])
 def test_a_kept_block_names_the_writer_that_appended_it(bundle, monkeypatch, process, writer):
     """The --transient refusal after publication names the writer recorded with the
