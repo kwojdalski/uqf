@@ -116,6 +116,7 @@
         'who,"'s lateness must be a timespan, 0D for none"];
     t:.qetl.transform.def[who;decl`transform];
     if[1<>count t`inputs; 'who,"'s transform takes ",string[count t`inputs]," inputs - it takes one: the events plus bar_start"];
+    .qetl.job.stream.refuse_output_mismatch[who;decl`outputs;t`output];
     d:`by`event_time!(enlist `sym;`time);
     d:d,decl,enlist[`by]!enlist (),$[`by in key decl; decl`by; `sym];
     in_cols:cols first value t`inputs;

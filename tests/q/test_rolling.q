@@ -97,6 +97,12 @@
         "*rolling job rt_x's event_time must be one column name, a symbol*";"a list of columns"];
     .qunit.assertFalse[`rt_x in .qetl.job.stream.defined[];"and nothing is registered"]};
 
+/ #2934: outputs naming a plant table the transform's rows do not fit is refused at declaration.
+.qt.qetl.job.stream.rolling.test_outputs_naming_a_plant_table_the_rows_do_not_fit_is_refused:{[t]
+    .qunit.assertThrows[.qetl.job.stream.at_rolling[`rt_mism;];@[.qt.qetl.job.stream.rolling.decl[];`outputs`procname;:;(enlist `quote;`rtmism1)];
+        "*rolling job rt_mism publishes onto plant table quote but its output does not fit it: quote has columns*";
+        "the table and the columns that differ are named"]};
+
 .qt.qetl.job.stream.rolling.test_a_refused_redeclaration_leaves_the_live_job_as_it_was:{[t]
     .qt.qetl.job.stream.rolling.job `rt_redecl;
     .qt.qetl.job.stream.rolling.feed[`rt_redecl;.qt.qetl.job.stream.rolling.t0+0D00:00:30;`a;2f];

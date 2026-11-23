@@ -46,6 +46,15 @@
     .qunit.assertTrue[`nt_a in .qetl.job.stream.normalizer.defined[];"and it is a defined normalizer"];
     .qt.qetl.job.stream.normalizer.forget[`nt_a]};
 
+/ #2934: a normalizer named after a plant table its canonical output does not match.
+.qt.qetl.job.stream.normalizer.test_a_name_that_is_a_plant_table_the_output_does_not_fit_is_refused:{[t]
+    .qt.qetl.job.stream.normalizer.mk_xf[`normtest_good;.qt.qetl.job.stream.normalizer.canon;.qt.qetl.job.stream.normalizer.good];
+    .qunit.assertThrows[.qetl.job.stream.normalize[`quote;];
+        `procname`output`input!(`ntq1;.qt.qetl.job.stream.normalizer.canon;(enlist `src)!enlist `normtest_good);
+        "*normalizer quote publishes onto plant table quote but its output does not fit it: quote has columns a b*";
+        "the table and the columns that differ are named"];
+    .qunit.assertTrue[not `quote in .qetl.job.stream.defined[];"and nothing was registered"]};
+
 .qt.qetl.job.stream.normalizer.test_a_missing_key_is_named:{[t]
     .qunit.assertThrows[.qetl.job.stream.normalize[`nt_b;];`procname`output!(`ntb1;.qt.qetl.job.stream.normalizer.canon);
         "*is missing input*";"a normalizer with no sources is refused by the key it lacks"]};
