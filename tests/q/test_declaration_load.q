@@ -45,6 +45,11 @@
     delete only, only_sources from `.qetl.load;
     .qunit.assertEquals[r;want;"both selections, in init.q's order"]};
 
+.qt.qetl.load.test_a_file_with_a_space_in_its_name_is_refused_by_name:{[t]
+    / #2954: a duplicate a file manager leaves beside a declaration failed the whole load as a bare nyi
+    .qunit.assertThrows[.qetl.load.one;"src/etl/streaming/my_job copy.q";
+        "etl load: src/etl/streaming/my_job copy.q has a space in its name*";"the name says what to do"]};
+
 .qt.qetl.load.test_a_failed_load_names_the_file:{[t]
     .qunit.assertThrows[.qetl.load.one;"src/etl/streaming/nosuch.q";
         "etl load: src/etl/streaming/nosuch.q failed: *";"which file stopped the load"];
