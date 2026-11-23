@@ -90,6 +90,7 @@
             / a message that cannot be named is quarantined, not fatal.
             .qtorq.sub_arm_resubscribe[`.qproc.stream.h];
             `.qtorq.sub_job set job;
+            .qtorq.assert_subscribable[job;.qproc.stream.h;tbls];
             .qtorq.sub_load_schemas[.qproc.stream.h;tbls];
             / A job that does not replay never asked for history: a later
             / resubscription replays what came after it started, not the day.
