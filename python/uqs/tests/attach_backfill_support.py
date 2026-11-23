@@ -395,9 +395,9 @@ class Receivers:
         self.pids: list[int] = []
 
     def start(self, paths, attachment: str, contract: str, *, port: int, ipc) -> dict[str, Any]:
-        from uqs.attach import backfill_remote
+        from uqs.attach import backfill_receiver
 
-        started = backfill_remote.receive(paths, attachment, contract, port=port, ipc=ipc)
+        started = backfill_receiver.receive(paths, attachment, contract, port=port, ipc=ipc)
         self.pids.append(started["pid"])
         return started
 

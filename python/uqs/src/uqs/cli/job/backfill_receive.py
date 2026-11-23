@@ -5,7 +5,7 @@ stack's machine,
 starts the receiver for a receiver contract approved there (`uqs job attachment contract`);
 `uqs job backfill JOB --attachment ATTACHMENT --writer HOST:P ...`, on the source's
 machine, extracts and sends to it. What each decides is in
-uqs.attach.backfill_remote.
+uqs.attach.backfill_remote and uqs.attach.backfill_receiver.
 """
 
 from __future__ import annotations
@@ -15,7 +15,14 @@ from typing import Annotated
 
 import typer
 
-from uqs.attach import backfill_audit, backfill_remote, backfill_run, config, service
+from uqs.attach import (
+    backfill_audit,
+    backfill_receiver,
+    backfill_remote,
+    backfill_run,
+    config,
+    service,
+)
 from uqs.cli.common.concepts import attach_opt
 from uqs.cli.common.json_out import emit, json_opt
 from uqs.cli.common.safety import ChangesState, dry_run_note
@@ -213,7 +220,7 @@ def receiver_stop(
     An extractor then fails its next window without covering it. One still
     running after SIGTERM and its grace keeps its ownership, is named, and the
     exit is 1 - unless `--kill` SIGKILLs it."""
-    runs = backfill_remote.stop_receivers(attach, dry_run=dry_run, kill=kill)
+    runs = backfill_receiver.stop_receivers(attach, dry_run=dry_run, kill=kill)
     stopped = [r for r in runs if dry_run or r["outcome"] != "still running"]
     running = [r for r in runs if r not in stopped]
     if as_json:
@@ -254,7 +261,7 @@ def _start(attach: str, contract: str | None, port: int | None, dry_run: bool, a
         )
     try:
         att = config.load(attach)
-        out = backfill_remote.receive(
+        out = backfill_receiver.receive(
             _paths(), attach, contract, port=port, ipc=service.ipc_for(att), dry_run=dry_run
         )
     except UqsError as exc:

@@ -21,7 +21,7 @@ from stop_children import IGNORES, reap, spawn
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.attach import backfill_owner, backfill_remote, publisher
+from uqs.attach import backfill_owner, backfill_receiver, publisher
 from uqs.external import crypto
 from uqs.paths import UqsError, default_paths
 from uqs.stack import runtime
@@ -115,14 +115,14 @@ def receiver(monkeypatch, tmp_path):
 def test_a_receiver_that_survives_keeps_its_ownership(receiver):
     """Ownership was released at once, so a detach went ahead beside a live receiver."""
     child, released = receiver
-    [run] = backfill_remote.stop_receivers("pb-uat", grace=0.5)
+    [run] = backfill_receiver.stop_receivers("pb-uat", grace=0.5)
     assert run["outcome"] == "still running" and released == []
     assert child.poll() is None
 
 
 def test_a_receiver_is_released_once_kill_has_ended_it(receiver):
     child, released = receiver
-    [run] = backfill_remote.stop_receivers("pb-uat", grace=0.5, kill=True)
+    [run] = backfill_receiver.stop_receivers("pb-uat", grace=0.5, kill=True)
     assert run["outcome"] == "killed" and released == ["pb_ledger.receiver"]
 
 
@@ -134,7 +134,7 @@ def test_receiver_stop_names_a_survivor_and_exits_one(monkeypatch):
         seen.append(kill)
         return [dict(survivor)]
 
-    monkeypatch.setattr(backfill_remote, "stop_receivers", stop)
+    monkeypatch.setattr(backfill_receiver, "stop_receivers", stop)
     words = ["job", "receiver", "stop", "--attachment", "pb-uat", "--kill"]
     result = runner.invoke(cli.app, words)
     assert result.exit_code == 1 and seen == [True]
