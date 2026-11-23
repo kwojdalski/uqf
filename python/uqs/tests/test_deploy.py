@@ -1547,6 +1547,33 @@ def test_allow_low_disk_pushes_below_the_floor_and_is_recorded(tmp_path):
     assert "/srv (holding /opt/uqf) has 4.0 KiB free and needs 1.0 GiB found; reason: pr" in said
 
 
+def _run_user_checks(uid: str) -> subprocess.CompletedProcess:
+    """PREFLIGHT's account checks alone, with `id` answering `uid`."""
+    start = PREFLIGHT.index('echo "user=')
+    body = PREFLIGHT[start : PREFLIGHT.index('if [ -e "$dest" ]')]
+    script = (
+        f'id() {{ if [ "$1" = -u ]; then echo {uid}; else echo svc; fi; }}\n'
+        "expected_user=''\n"
+        'fail() { echo "$*" >&2; exit 1; }\n' + body + "echo through\n"
+    )
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False)
+
+
+def test_preflight_refuses_root():
+    """#2739: every process runs as the deploying account, and any q session
+    can run `system` - so never as root."""
+    r = _run_user_checks("0")
+    assert r.returncode == 1 and "through" not in r.stdout
+    assert "running as root (uid 0) - every process would run as root" in r.stderr, r.stderr
+    assert "push as an unprivileged account, or add --remote-user" in r.stderr
+
+
+def test_preflight_passes_an_unprivileged_account():
+    r = _run_user_checks("1000")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines() == ["user=svc", "through"]
+
+
 def test_preflight_reports_free_space_on_the_nearest_existing_directory(tmp_path):
     """PREFLIGHT's df step alone, run here: a --dest not made yet is judged
     by the filesystem it would be made on."""
