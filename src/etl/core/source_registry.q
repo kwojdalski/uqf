@@ -376,17 +376,30 @@
         `source`columns`time_column`tz`transport`row_key!(source;decl`columns;decl`time_column;decl`tz;tr;key_cols));::];
     source}
 
-/ Private: refuse a source declaration's names that are not symbols, which would
-/ fail with a bare 'type further in (#2953). Split out of define, whose locals are
-/ at q's limit once coverage instruments it.
+/ Private: refuse the values of a source declaration that contradict it, or that
+/ would fail with a bare 'type further in (#2953). Split out of define, whose
+/ locals are at q's limit once coverage instruments it.
+/ .
+/ The zone's spelling is checked only for UTC: the zone table loads after the
+/ declaration, so no other zone can be looked up here, but `utc` is a typo of
+/ `UTC` that the table's lookup would answer with a request to load a table.
 / @param source the name the source is declared under
-/ @param decl the declaration
+/ @param decl the declaration, whose columns and types are already known well-formed
 / @return nothing - it throws naming the source and the key
 / @private
 .qetl.source.check_values:{[source;decl]
     who:"define: ",string source;
+    if[not source~decl`source;
+        'who," declares source ",.Q.s1[decl`source],", which is not its name - the registry is keyed on the name it is defined under"];
     .qetl.declared.require_symbol[who;`table_name;decl`table_name;"the external table's name"];
-    .qetl.declared.require_symbol[who;`time_column;decl`time_column;"the column the window is taken on"]}
+    .qetl.declared.require_symbol[who;`time_column;decl`time_column;"the column the window is taken on"];
+    g:group decl`columns;
+    if[count rep:where 1<count each g;
+        'who,"'s columns repeat ",(", " sv string rep)," - a field is declared once"];
+    if[not all (decl`types) in .Q.t,upper .Q.t;
+        'who,"'s types holds ",(distinct (decl`types) where not (decl`types) in .Q.t,upper .Q.t)," - not a q type character"];
+    if[(not `UTC~decl`tz) and `UTC~`$upper string decl`tz;
+        'who,"'s tz is ",string[decl`tz],", which is not UTC - zone names are case-sensitive, so write `UTC"]}
 
 / Private: refuse a query or fixture lambda of the wrong arity - now, rather
 / than at the first live window's bare 'rank (#2484). Only a lambda's parameter

@@ -55,6 +55,26 @@
     .qunit.assertThrows[.qetl.source.define[`t;];@[.qt.qetl.source.decl[];`time_column;:;"ts"];
         "define: t's time_column must be the column the window is taken on, a symbol";"time_column"]};
 
+/ #2953: values that contradict each other were accepted and surfaced at a fetch or a validate.
+.qt.qetl.source.test_a_source_key_that_is_not_the_name_is_refused:{[t]
+    .qunit.assertThrows[.qetl.source.define[`other;];.qt.qetl.source.decl[];
+        "define: other declares source `t, which is not its name*";"the registry is keyed on the name argument"]};
+
+.qt.qetl.source.test_repeated_columns_are_refused_naming_them:{[t]
+    .qunit.assertThrows[.qetl.source.define[`t;];@[.qt.qetl.source.decl[];`columns`types;:;(`ts`px`px;"pff")];
+        "define: t's columns repeat px - a field is declared once";"validate_fixture accepted a table with a repeated column"]};
+
+.qt.qetl.source.test_a_types_character_that_is_not_a_q_type_is_refused_at_declaration:{[t]
+    .qunit.assertThrows[.qetl.source.define[`t;];@[.qt.qetl.source.decl[];`types;:;"pq"];
+        "define: t's types holds q - not a q type character";"it used to be found only when a fixture was validated"];
+    .qunit.assertEquals[.qetl.source.define[`t;@[.qt.qetl.source.decl[];`types;:;"p "]];`t;"a space, a general column, is a type character"]};
+
+.qt.qetl.source.test_a_tz_that_differs_from_utc_only_by_case_is_refused_saying_so:{[t]
+    .qunit.assertThrows[.qetl.source.define[`t;];@[.qt.qetl.source.decl[];`tz;:;`utc];
+        "define: t's tz is utc, which is not UTC - zone names are case-sensitive, so write `UTC";
+        "the fetch's own refusal sent the operator to load a zone table"];
+    .qunit.assertEquals[.qetl.source.define[`t;@[.qt.qetl.source.decl[];`tz;:;`$"Europe/London"]];`t;"another zone is the zone table's to judge, at fetch"]};
+
 / Registration validates NOW, unlike .qetl.job.bounded.state.register which defers. The
 / asymmetry is deliberate: a worker's methods appear as its file loads, so
 / early validation would force declaration order; a declaration is one
