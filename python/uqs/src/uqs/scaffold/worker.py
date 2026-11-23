@@ -316,9 +316,12 @@ def bounded_worker(
     if check:
         notes.append(f"write .qpipe.job.{worker}.quality_check - every window fails until you do")
     else:
+        # Not "rerun with --check": the worker just written is what refuses that rerun,
+        # as a second worker on one dataset and slice (#2944).
         notes.append(
-            "optional: a quality check that fails a window on bad rows - rerun with --check, "
-            "or see quality_check in src/etl/workers/demo_deals_backfill.q"
+            "optional: a quality check that fails a window on bad rows - write one and "
+            "declare it as the worker's `check`, as src/etl/workers/demo_deals_backfill.q "
+            f"does, or `uqs job remove {name}` and scaffold again with --check"
         )
     actions.append(
         FileAction(

@@ -731,6 +731,18 @@ def test_the_query_note_cites_the_rule_that_actually_says_it():
     assert "Half-open" not in query_notes[0], "the interval rule is not this one"
 
 
+def test_the_quality_check_note_names_a_route_that_is_not_refused():
+    """#2944: the note said "rerun with --check", and the rerun is refused -
+    the worker just written already fills the dataset, and a second one on
+    the same dataset and slice is refused. It now names the routes that work:
+    write the check by hand, or remove the job and scaffold it again."""
+    plan = backfill.bounded_worker("citeprobe", "cite_probe", "sym:symbol, mid:float")
+    (note,) = [n for n in plan.notes if "quality check" in n]
+    assert "rerun with --check" not in note
+    assert "`uqs job remove citeprobe` and scaffold again with --check" in note
+    assert "src/etl/workers/demo_deals_backfill.q" in note
+
+
 def test_the_source_template_keeps_the_two_rules_apart():
     """Both apply to `query`, and they are different rules. One sentence
     carrying both invites exactly the confusion the note above had."""
