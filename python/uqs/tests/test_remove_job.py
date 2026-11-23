@@ -136,6 +136,49 @@ def test_a_reaction_round_trips_exactly(tree):
     assert _snapshot(tree) == before
 
 
+def test_a_feed_whose_file_is_gone_is_still_removed_by_name(tree):
+    """#2945: with the job file deleted by hand, its registrations stayed, each
+    refused `uqs job new`'s rerun in turn, and remove found no job. They are
+    found by name now, and the round trip is exact."""
+    before = _snapshot(tree)
+    write.apply_plan(
+        jobs.streaming_job("half", [], "half_out", "sym:symbol, px:float", unprofiled="on demand"),
+        tree,
+    )
+    (tree / "src/etl/streaming/half.q").unlink()
+    removal = plan_removal(tree, "half")
+    assert "no job file for half" in removal.notes[0]
+    removal.apply(tree)
+    assert _snapshot(tree) == before
+
+
+def test_a_backfill_whose_worker_is_gone_takes_its_source_and_example(tree):
+    before = _snapshot(tree)
+    write.apply_plan(backfill.bounded_worker("ledger", "ledger", "sym:symbol, amt:float"), tree)
+    (tree / "src/etl/workers/ledger_backfill.q").unlink()
+    _remove(tree, "ledger")
+    assert _snapshot(tree) == before
+
+
+def test_a_name_with_nothing_left_is_still_refused_as_no_job(tree):
+    with pytest.raises(UqsError, match="0 job files match 'nosuchjob'"):
+        plan_removal(tree, "nosuchjob")
+
+
+def test_a_written_test_left_behind_is_refused_without_the_override(tree):
+    """The leftovers go on the rule the job file's would: a file no longer
+    as the scaffold wrote it is written work."""
+    write.apply_plan(
+        jobs.streaming_job("half", [], "half_out", "sym:symbol, px:float", unprofiled="x"), tree
+    )
+    (tree / "src/etl/streaming/half.q").unlink()
+    test = tree / "tests/q/test_half.q"
+    test.write_text(test.read_text().replace("SCAFFOLDED", "written"))
+    with pytest.raises(UqsError, match="tests/q/test_half.q no longer read as the scaffold"):
+        plan_removal(tree, "half")
+    assert plan_removal(tree, "half", force=True).deletes == [Path("tests/q/test_half.q")]
+
+
 _FEED = "sym:symbol, px:float"
 _FEED_TABLE = table_definition("rt_ticks", parse_columns(_FEED))
 _REF_TABLE = table_definition("rt_ref", parse_columns(_FEED))
