@@ -106,8 +106,13 @@ def clean(match: MatchOpt = None, dry_run: DryRunOpt = False, yes: YesOpt = Fals
     Lists what would go, with sizes, and asks first, because this is not
     reversible; `--yes` does not ask, and without a terminal it is
     needed. `--dry-run` lists and removes nothing.
+
+    Refused while the stack is running or a start, stop or restart is under
+    way: `uqs stop` first. `--match` reaches tplogs/ only by naming it.
     """
     try:
+        if not dry_run:
+            stack_clean.refuse_while_running(_paths())  # before asking, not after a yes
         if not dry_run and not yes:
             planned = stack_clean.clean(_paths(), match=match, dry_run=True)
             if planned:
