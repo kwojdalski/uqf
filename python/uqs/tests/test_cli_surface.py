@@ -26,6 +26,13 @@ def test_config_set_takes_several_field_value_pairs_and_unset_removes_one(monkey
     monkeypatch.setattr(type(paths), "repo_root", tmp_path, raising=False)  # no bundle rows
     monkeypatch.setattr(type(paths), "orchestrator_dir", tmp_path, raising=False)
     monkeypatch.setattr(stack_procs, "list_process_names", lambda _p: ["rdb1"])
+    # the rows a port is checked against (#2927): rdb1 alone, so 6061 is free
+    monkeypatch.setattr(
+        stack_procs,
+        "effective_process_rows",
+        lambda _p: [{"procname": "rdb1", "host": "localhost", "port": "6060"}],
+    )
+    monkeypatch.setattr(stack_procs, "build_env", lambda _p: {"KDBBASEPORT": "6050"})
     ok = runner.invoke(cli.app, ["config", "set", "rdb1", "startwithall=0", "port=6061"])
     assert ok.exit_code == 0, ok.output
     text = (tmp_path / "o.csv").read_text()

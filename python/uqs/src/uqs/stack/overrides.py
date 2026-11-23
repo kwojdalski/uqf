@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import csv
 import io
+from collections.abc import Mapping
 from pathlib import Path
 
+from uqs import portexpr
 from uqs.paths import PACKAGE_DIR, UqsError, UqsPaths
 from uqs.stack.bundle_blocks import BundleError
 
@@ -51,6 +53,29 @@ def refuse_taken_name(names: list[str], procname: str, field: str, value: str) -
             f"{procname}.procname cannot be {value}: {value} is another process's name, "
             "and a process name is what discovery, ports, logs and pid files find it by"
         )
+
+
+def refuse_taken_port(
+    rows: list[dict[str, str]], env: Mapping[str, str], procname: str, field: str, value: str
+) -> None:
+    """Refuse a port another process of this stack already resolves to, on
+    the same host: the second q to start cannot bind it, and nothing before
+    the start said so (#2927). *rows* are the effective process rows and
+    *env* what their placeholders resolve against."""
+    if field != "port" or (port := portexpr.evaluate(value, env)) is None:
+        return
+    host = next(r.get("host") for r in rows if r["procname"] == procname)
+    for row in rows:
+        if (
+            row["procname"] != procname
+            and row.get("host") == host
+            and portexpr.evaluate(row.get("port"), env) == port
+        ):
+            raise UqsError(
+                f"{procname}.port cannot be {value}: that is port {port}, which "
+                f"{row['procname']} already listens on - two processes cannot bind one "
+                "port; `uqs process list` shows each one's"
+            )
 
 
 def _rows(path: Path) -> dict[tuple[str, str], str]:

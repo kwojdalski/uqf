@@ -300,6 +300,27 @@ def test_set_process_config_refuses_a_rename_onto_another_process(fake_paths: Uq
     assert names.count("stp1") == 1 and "discovery1" in names
 
 
+def test_set_process_config_refuses_a_port_another_process_has(fake_paths: UqsPaths):
+    """Two processes of one stack cannot bind one port, so a port another row
+    already resolves to is refused, naming that row - as an expression or as
+    the number it comes to (#2927)."""
+    fxfeed = stack_procs.get_process_config(fake_paths, "fxfeed1", resolve=False)["port"]
+    taken = stack_procs.get_process_config(fake_paths, "fxfeed1")["port"]
+    for value in (fxfeed, taken):
+        with pytest.raises(UqsError, match=r"discovery1\.port cannot be .*fxfeed1 already"):
+            stack_procs.set_process_config(fake_paths, "discovery1", "port", value)
+    assert not fake_paths.overrides_path.exists()
+    # its own port is not another process's: setting it again is no clash
+    stack_procs.set_process_config(fake_paths, "fxfeed1", "port", taken)
+
+
+def test_a_port_on_another_host_is_not_taken(fake_paths: UqsPaths):
+    """A port is one host's: a process moved to another host may reuse it (#2927)."""
+    stack_procs.set_process_config(fake_paths, "discovery1", "host", "remote.example.com")
+    taken = stack_procs.get_process_config(fake_paths, "fxfeed1")["port"]
+    stack_procs.set_process_config(fake_paths, "discovery1", "port", taken)
+
+
 def test_a_renamed_process_is_set_under_its_new_name(fake_paths: UqsPaths):
     """An override is keyed by the row's own procname, so one set through the
     new name must land there, or it is reported as set and never applied
@@ -431,7 +452,7 @@ def test_set_process_config_refuses_what_eval_would_comment_or_glob(fake_paths: 
         ("load", "${KDBCODE}/processes/x.q ${UQF_SCRIPTS}/a_b-c.q"),
         ("U", "${TORQDATA}/gateway_accesslist.txt"),
         ("qcmd", "/opt/kdbx/q"),
-        ("port", "{KDBBASEPORT}+1"),
+        ("port", "{KDBBASEPORT}+900"),  # an offset no fake row has (#2927)
         ("port", "9999"),
         ("extras", "-cpus 3:5"),
         ("startwithall", "0"),
