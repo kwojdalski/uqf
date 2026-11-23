@@ -28,10 +28,11 @@ question is asked here, before anything is written.
 have chosen.
 
 `--kind` names five of them --- `streaming` (the default), `normalizer`,
-`horizon`, `backfill`, `external`. There is no `--kind feed`: a streaming job
-that subscribes to nothing *is* a feed, and the scaffold derives that rather
-than asking twice. A reaction is `--triggered-by DATASET`, and is the one shape
-with no process of its own: it runs inside the process that publishes `DATASET`.
+`horizon`, `backfill`, `connector` (the **external** row). There is no
+`--kind feed`: a streaming job that subscribes to nothing *is* a feed, and the
+scaffold derives that rather than asking twice. A reaction is
+`--triggered-by DATASET`, and is the one shape with no process of its own: it
+runs inside the process that publishes `DATASET`.
 
 For a backfill taken all the way from scaffold to a filled database, see the
 worked example [from one kdb+ database to another](hdb-transfer.md). One script
