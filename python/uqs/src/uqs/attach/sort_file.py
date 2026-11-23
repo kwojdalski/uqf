@@ -17,7 +17,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from uqs.attach.config import AttachmentError, atomic_write
+from uqs.attach.config import AttachmentError, atomic_write, file_locked
 from uqs.attach.schema import TableSpec
 
 #: sort.csv's columns as TorQ's loader requires them: `sort` last, as the `B` it parses.
@@ -159,16 +159,20 @@ def _replace(target: Path, text: str, backup_dir: Path) -> str:
 
 def add(path: Path, expected: str, table: str, keys: list[Key], backup_dir: Path) -> dict:
     """Append `keys` for `table` to the file at `path` - which must still hash to
-    `expected` - and say exactly what was added. Raises AttachmentError otherwise."""
-    current = read(path)
-    if current.sha != expected:
-        raise AttachmentError(
-            f"{path} changed since it was planned (another edit is in progress, or was made): "
-            "nothing was written - plan again"
-        )
-    sep, run = current.separator(), current.run(table, keys)
-    after = current.text + sep + run
-    backup = _replace(path, after, backup_dir)
+    `expected` - and say exactly what was added. Raises AttachmentError otherwise.
+    The file's lock is held from that check to the replace: the file is shared
+    by every attachment on the stack, and one's rows must not be lost to
+    another's write landing in between (#2909)."""
+    with file_locked(path):
+        current = read(path)
+        if current.sha != expected:
+            raise AttachmentError(
+                f"{path} changed since it was planned (another edit is in progress, or was "
+                "made): nothing was written - plan again"
+            )
+        sep, run = current.separator(), current.run(table, keys)
+        after = current.text + sep + run
+        backup = _replace(path, after, backup_dir)
     return {
         "path": str(path),
         "run": run,
@@ -218,16 +222,20 @@ def removal_problems(post: dict, table: str) -> list[str]:
 
 
 def remove(post: dict, table: str, backup_dir: Path) -> dict:
-    """Take out the rows recorded in `post` - only if removal_problems is empty."""
-    if found := removal_problems(post, table):
-        raise AttachmentError("; ".join(found))
+    """Take out the rows recorded in `post` - only if removal_problems is empty -
+    under the file's lock from that check to the replace (#2909)."""
     path, run, sep = Path(post["path"]), post["run"], post.get("separator", "")
-    text = read(path).text
-    (at,) = _whole_line_matches(text, run)
-    rest = text[:at] + text[at + len(run) :]
-    if sep and at == len(rest) and rest.endswith(sep):
-        rest = rest[: -len(sep)]  # the line ending this attachment added before its run
-    backup = _replace(path, rest, backup_dir)
+    if not path.is_file():
+        raise AttachmentError(f"{path} no longer exists")
+    with file_locked(path):
+        if found := removal_problems(post, table):
+            raise AttachmentError("; ".join(found))
+        text = read(path).text
+        (at,) = _whole_line_matches(text, run)
+        rest = text[:at] + text[at + len(run) :]
+        if sep and at == len(rest) and rest.endswith(sep):
+            rest = rest[: -len(sep)]  # the line ending this attachment added before its run
+        backup = _replace(path, rest, backup_dir)
     return {"sha_removed": sha(rest), "removal_backup": backup}
 
 

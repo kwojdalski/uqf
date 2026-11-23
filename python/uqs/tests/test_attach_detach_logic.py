@@ -1170,8 +1170,8 @@ def _stopped_after_the_block_was_written(att, fake, state, monkeypatch) -> None:
     """Apply, stopped between the schema file's write and its journal entry."""
     replace = schema_files.LocalFile._replace
 
-    def stop(self, text: str) -> None:
-        replace(self, text)
+    def stop(self, before: str, text: str) -> None:
+        replace(self, before, text)
         raise KeyboardInterrupt
 
     with monkeypatch.context() as patched:

@@ -274,6 +274,40 @@ def test_two_operations_on_one_attachment_cannot_overlap(tmp_path):
         pass
 
 
+def test_one_shared_file_is_changed_by_one_uqs_at_a_time(tmp_path):
+    """#2909: `file_locked` is one lock per file, whatever the attachment; a
+    waiter that queued on the file replaced under it ends up holding the new one."""
+    import threading
+
+    target = tmp_path / "sort.csv"
+    target.write_text("a\n")
+    entered, release, got = threading.Event(), threading.Event(), []
+
+    def holder():
+        with config.file_locked(target):
+            entered.set()
+            release.wait(5)
+            config.atomic_write(target, "b\n")
+
+    def waiter():
+        with config.file_locked(target):
+            got.append(target.read_text())
+            config.atomic_write(target, got[0] + "c\n")
+
+    first = threading.Thread(target=holder)
+    first.start()
+    assert entered.wait(5)
+    second = threading.Thread(target=waiter)
+    second.start()
+    second.join(0.3)
+    assert second.is_alive() and not got, "the second waits for the first"
+    release.set()
+    first.join(5)
+    second.join(5)
+    assert got == ["b\n"] and target.read_text() == "b\nc\n"
+    assert [p.name for p in tmp_path.iterdir()] == ["sort.csv"], "no temp file is left"
+
+
 # -------------------------------------------------------------------- plan
 
 

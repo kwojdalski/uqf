@@ -115,8 +115,10 @@ def after_publication(
     if not ev.published:
         return []
     own = next(o for o in blocks if o.op == "schema_block")
-    path, by = own.post.get("path", ""), own.post.get("by", "uqs")
-    writer = "cli" if by == "uqs" else "tickerplant"
+    # A finished step's post is the BlockRecord, which names the tickerplant that
+    # changed its own file in `process` ("" for a file here); `by` is only in `pre`.
+    path = own.post.get("path", "")
+    writer = "tickerplant" if own.post.get("process") else "cli"
     return [
         Finding(
             "blocker", AFTER_PUBLICATION, "schema",

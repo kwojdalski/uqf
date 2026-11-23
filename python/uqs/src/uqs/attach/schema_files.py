@@ -5,7 +5,8 @@ persist.py composes every change to the file from the text it read: one
 append, or one cut. A `File` carries that change out, and nothing else:
 
   * `LocalFile` is a path on this machine: read as bytes and replaced whole,
-    keeping its mode.
+    keeping its mode, under the file's own lock and only while it still holds
+    the text the change was computed from (#2909).
   * `RemoteFile` is the file the tickerplant was started with (`-schemafile`),
     read and changed by the `schema_file` operation (q/schema_file.q) inside
     that process, which reaches its own disk. The path is never opened here:
@@ -26,7 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
-from uqs.attach.config import AttachmentError, atomic_write
+from uqs.attach.config import AttachmentError, atomic_write, file_locked
 from uqs.attach.facts import SchemaRead
 from uqs.attach.remote import Endpoint, Ipc
 
@@ -73,17 +74,27 @@ class LocalFile:
         return target.read_bytes().decode(*CODEC) if target.is_file() else None
 
     def append(self, before: str, added: str, block: str, token: str) -> None:
-        self._replace(before + added)
+        self._replace(before, before + added)
 
     def cut(self, before: str, span: tuple[int, int], trim: bool, block: str, token: str) -> None:
         rest = before[: span[0]] + before[span[1] :]
-        self._replace(rest[:-1] if trim else rest)
+        self._replace(before, rest[:-1] if trim else rest)
 
-    def _replace(self, text: str) -> None:
+    def _replace(self, before: str, text: str) -> None:
+        """Replace the file with `text` - only while it still holds `before`, the
+        text the change was computed from, as RemoteFile's `expect` asks of the
+        tickerplant. Held under the file's lock from that check to the replace, so
+        another attachment's write cannot land in between and be lost (#2909)."""
         target = Path(self.path)
-        mode = target.stat().st_mode
-        atomic_write(target, text.encode(*CODEC))
-        os.chmod(target, mode)
+        with file_locked(target):
+            if self.read() != before:
+                raise AttachmentError(
+                    f"{self.path} changed since it was read (another attachment wrote to "
+                    "it, or it was edited): nothing was written - run it again"
+                )
+            mode = target.stat().st_mode
+            atomic_write(target, text.encode(*CODEC))
+            os.chmod(target, mode)
 
 
 def _md5(text: str) -> str:

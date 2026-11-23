@@ -83,8 +83,10 @@ def world(tmp_path: Path):
     fake.named("wdb1")["savedir"] = f":{tmp_path / 'wdb'}"
     fake.named("wdb1")["hdbdir"] = f":{tmp_path / 'hdb'}"
 
-    def make(name: str = "pb-uat", tables_q: str = LEDGER_Q + "\n" + DECLARED, folder="b"):
-        bundle = make_bundle(tmp_path / folder, tables_q)
+    def make(
+        name: str = "pb-uat", tables_q: str = LEDGER_Q + "\n" + DECLARED, folder="b", table=TABLE
+    ):
+        bundle = make_bundle(tmp_path / folder, tables_q, table)
         att = service.create(
             name, "pb_general_ledger", bundle, 6000, ROOT, runtime_only=True, storage=storage
         )
@@ -387,6 +389,39 @@ def test_a_file_changed_between_planning_and_writing_is_refused(world, monkeypat
     assert TABLE not in csv.read_text(), "nothing of ours was written"
     op = Manifest.load("pb-uat", state).find("sort_rows", str(csv), TABLE)
     assert op is not None and op.status == "failed"
+
+
+def test_rows_another_attachment_added_while_one_waited_for_the_file_are_kept(world, monkeypatch):
+    """#2909: the file is shared by every attachment on the stack, and the lock
+    on an attachment is one per name. B's whole apply lands before A takes the
+    file's own lock: A's compare then sees B's rows and refuses, instead of
+    replacing the file with its own text built from the bytes before them."""
+    from contextlib import contextmanager
+
+    fake, make, state, csv = world
+    other = "piggybank_other_ledger"
+    a = make()
+    b = make(
+        "pb-b", LEDGER_Q.replace(TABLE, other) + "\n" + DECLARED.replace(TABLE, other), "b2", other
+    )
+    real, fired = sort_file.file_locked, []
+
+    @contextmanager
+    def b_first(path):
+        if not fired:
+            fired.append("B")  # before B's apply, whose own write comes through here too
+            fired.append(apply_(b, fake, state).state)
+        with real(path):
+            yield
+
+    monkeypatch.setattr(sort_file, "file_locked", b_first)
+    with pytest.raises(applying.ApplyFailed, match="changed since it was planned"):
+        apply_(a, fake, state)
+    monkeypatch.setattr(sort_file, "file_locked", real)
+    assert fired == ["B", "applied"]
+    assert f"{other},p,sym,1\n" in csv.read_text(), "B's rows are kept"
+    assert TABLE + "," not in csv.read_text()
+    assert live(fake, "wdb1", other) == [("p", "sym", True), ("", "time", True)]
 
 
 def test_a_failed_reload_leaves_the_publisher_stopped_and_a_rerun_finishes(world):
