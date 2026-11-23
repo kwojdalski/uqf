@@ -517,7 +517,7 @@ def test_a_new_tables_catalog_entry_says_whether_it_is_read_bounded():
     the description, which the to-do list finds and `uqs job remove` takes
     back out (#2461)."""
     from uqs.scaffold.catalog import catalog_actions
-    from uqs.scaffold.remove import _drop_catalog
+    from uqs.scaffold.remove_edits import drop_catalog
 
     notes: list[str] = []
     (action,) = catalog_actions("hunt_metric", [], notes)
@@ -526,4 +526,4 @@ def test_a_new_tables_catalog_entry_says_whether_it_is_read_bounded():
     assert reason.strip().startswith('"SCAFFOLDED:') and reason.rstrip().endswith('";')
     assert any(".qcat.unbounded" in n for n in notes)
     before = "x:1;\n"
-    assert _drop_catalog(before + action.body, "hunt_metric") == before
+    assert drop_catalog(before + action.body, "hunt_metric") == before

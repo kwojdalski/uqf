@@ -54,20 +54,15 @@ scaffold/references.py.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from uqs.model.declarations import declaration_calls, declared_outputs, symbols
 from uqs.model.kinds import DECLARATION_VERBS
 from uqs.paths import (
-    CATALOG_FILE,
     REACTION_DIR,
     SOURCE_DIR,
-    STACK_TABLES_LIST,
-    STACK_TABLES_TEST,
     STREAM_DIR,
-    TABLES_FILE,
     TEST_DIR,
     WORKER_DIR,
     UqsError,
@@ -76,6 +71,7 @@ from uqs.scaffold.docs import SHOWCASE_PAGE, STACK_PAGE, without_stubs
 from uqs.scaffold.example import GENERATED_BY, example_path
 from uqs.scaffold.profile import PROFILES_FILE, UNPROFILED_FILE
 from uqs.scaffold.references import Reference, stale_references
+from uqs.scaffold.remove_edits import drop_from_profiles, drop_table, edit, tables_defined_by
 from uqs.scaffold.remove_policy import (
     BOUNDED,
     MARKER,
@@ -86,7 +82,6 @@ from uqs.scaffold.remove_policy import (
     orphaned_inputs,
     refuse_bundled,
     refuse_dependents,
-    refuse_still_profiled,
     refuse_written,
     user_of,
 )
@@ -223,16 +218,16 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
             kept.add(table)
             continue
         names.add(table)
-        _drop_table(removal, repo_root, table)
+        drop_table(removal, repo_root, table)
     # A table it only reads, when it is the last user of a scaffold whose job is gone (#2924).
     for table in orphaned_inputs(repo_root, job_file, text, tables, gone, living):
         removal.notes.append(f"removed table {table}: its job is gone, and this read it last")
         names.add(table)
-        _drop_table(removal, repo_root, table)
+        drop_table(removal, repo_root, table)
 
     for rel in (PROFILES_FILE, UNPROFILED_FILE):
         if (repo_root / rel).is_file():
-            _edit(removal, repo_root, rel, lambda t: _drop_from_profiles(t, proc))
+            edit(removal, repo_root, rel, lambda t: drop_from_profiles(t, proc))
     removal.notes.append(
         f"{proc}'s port offset stays in scripts/processes/process_ports.csv, which is append-only "
         "so an offset is never handed to another process"
@@ -240,7 +235,7 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     # The stubs a scaffold wrote go while they still say SCAFFOLDED; anything
     # else that names the process is listed by the reference report below.
     for page in (STACK_PAGE, SHOWCASE_PAGE):
-        _edit(removal, repo_root, page, lambda t: without_stubs(t, proc))
+        edit(removal, repo_root, page, lambda t: without_stubs(t, proc))
     refuse_written(removal.deletes, repo_root, force, proven, exact)
     return _with_references(removal, repo_root, names - kept, {job})
 
@@ -279,19 +274,19 @@ def _leftovers_of(repo_root: Path, name: str, job: str, force: bool) -> Removal 
             else:
                 kept.add(base)
                 removal.notes.append(f"kept source {base}: {reader} reads it")
-    for table in _tables_defined_by(repo_root, {job, proc}):
+    for table in tables_defined_by(repo_root, {job, proc}):
         user = user_of(repo_root, table, gone)
         if user is not None:
             removal.notes.append(f"kept table {table}: {user} uses it")
             kept.add(table)
             continue
         names.add(table)
-        _drop_table(removal, repo_root, table)
+        drop_table(removal, repo_root, table)
     for rel in (PROFILES_FILE, UNPROFILED_FILE):
         if (repo_root / rel).is_file():
-            _edit(removal, repo_root, rel, lambda t: _drop_from_profiles(t, proc))
+            edit(removal, repo_root, rel, lambda t: drop_from_profiles(t, proc))
     for page in (STACK_PAGE, SHOWCASE_PAGE):
-        _edit(removal, repo_root, page, lambda t: without_stubs(t, proc))
+        edit(removal, repo_root, page, lambda t: without_stubs(t, proc))
     if not removal.deletes and not removal.rewrites:
         return None
     removal.notes.insert(
@@ -300,25 +295,6 @@ def _leftovers_of(repo_root: Path, name: str, job: str, force: bool) -> Removal 
     )
     refuse_written(removal.deletes, repo_root, force, proven, {})
     return _with_references(removal, repo_root, names - kept, {job})
-
-
-def _tables_defined_by(repo_root: Path, owners: set[str]) -> list[str]:
-    """The plant tables whose definition's comment opens "/ <owner>'s", as a
-    scaffold of one of `owners` writes it."""
-    path = repo_root / TABLES_FILE
-    if not path.is_file():
-        return []
-    lines = path.read_text().splitlines()
-    owner = re.compile(rf"/ (?:{'|'.join(map(re.escape, sorted(owners)))})'s ")
-    tables = []
-    for i, line in enumerate(lines):
-        if m := re.match(r"(?:\.qetl\.plant\.)?(\w+):\(\[\]", line):
-            start = i
-            while start > 0 and lines[start - 1].startswith("/"):
-                start -= 1
-            if any(owner.match(c) for c in lines[start:i]):
-                tables.append(m.group(1))
-    return tables
 
 
 def _with_references(
@@ -380,120 +356,3 @@ def _declaration(path: Path, text: str) -> tuple[str, str, dict[str, str]]:
     if len(calls) != 1:
         raise UqsError(f"{path} makes {len(calls)} job declarations - remove it by hand")
     return calls[0]
-
-
-def _edit(removal: Removal, repo_root: Path, path: Path, change) -> None:
-    """Apply `change` to `path`'s pending text, keeping only real changes."""
-    if path not in removal.rewrites and not (repo_root / path).is_file():
-        return
-    current = removal.rewrites.get(path) or (repo_root / path).read_text()
-    new = change(current)
-    if new != current:
-        removal.rewrites[path] = new
-
-
-def _drop_table(removal: Removal, repo_root: Path, table: str) -> None:
-    """Queue `table`'s definition, `expected` entry and catalog lines to go."""
-    _edit(removal, repo_root, TABLES_FILE, lambda t: _drop_definition(t, table))
-    expected = f"{STACK_TABLES_LIST}:"
-    _edit(removal, repo_root, STACK_TABLES_TEST, lambda t: _drop_token(t, expected, f"`{table}"))
-    _edit(removal, repo_root, CATALOG_FILE, lambda t: _drop_catalog(t, table))
-
-
-def _drop_token(text: str, prefix: str, token: str) -> str:
-    """`text` with `token` taken out of its one line starting `prefix`."""
-    lines = text.splitlines(keepends=True)
-    for i, line in enumerate(lines):
-        if line.startswith(prefix):
-            lines[i] = re.sub(rf"{re.escape(token)}(?=[`;\s]|$)", "", line, count=1)
-    return "".join(lines)
-
-
-def _drop_definition(text: str, table: str) -> str:
-    """`text` without `table`'s definition, the comment above it, and the
-    blank line a scaffold puts before that comment."""
-    lines = text.splitlines(keepends=True)
-    at = [
-        i for i, line in enumerate(lines) if re.match(rf"(?:\.qetl\.plant\.)?{table}:\(\[\]", line)
-    ]
-    if len(at) != 1:
-        return text
-    start = at[0]
-    while start > 0 and lines[start - 1].startswith("/"):
-        start -= 1
-    if start > 0 and not lines[start - 1].strip():
-        start -= 1
-    # A list column's `.qetl.plant.nested` declaration goes with its table:
-    # left behind, it names a table that no longer exists and the plant fails
-    # to load (#1567).
-    nested = f".qetl.plant.nested[`{table};"
-    rest = [line for line in lines[at[0] + 1 :] if not line.startswith(nested)]
-    return "".join(lines[:start] + rest)
-
-
-def _drop_catalog(text: str, table: str) -> str:
-    """`text` without `table`'s `.qcat.describe`, `.qcat.hidden` and
-    `.qcat.unbounded` entries and their continuation lines."""
-    heads = ("describe", "hidden", "unbounded")
-    for head in (f".qcat.{h}[`{table}]:" for h in heads):
-        lines = text.splitlines(keepends=True)
-        for i, line in enumerate(lines):
-            if line.startswith(head):
-                end = i + 1
-                while end < len(lines) and lines[end][:1] in (" ", "\t"):
-                    end += 1
-                text = "".join(lines[:i] + lines[end:])
-                break
-    return text
-
-
-def _drop_from_profiles(text: str, proc: str) -> str:
-    """profiles.py without `proc` in any profile; unprofiled.py without its exemption.
-
-    Each edit is confined to its own dict: a process may share its name with
-    a profile, and PROFILES["default"] is keyed exactly as an exemption for a
-    process called `default` would be (#1566). A profile is a one-line tuple
-    or one written a member per line, as the scaffold's "add it by hand"
-    leaves a long one (#2926); any other layout still naming `proc` is
-    refused, since a profile naming a process that is gone cannot start.
-    """
-    quoted = f'"{proc}"'
-    lines = text.splitlines(keepends=True)
-    out: list[str] = []
-    block = None
-    skipping = False
-    members = False
-    opened = 0
-    for line in lines:
-        if m := re.match(r"^([A-Z_]+): dict\[", line):
-            block = m.group(1)
-        elif line.rstrip("\n") == "}":
-            block = None
-        if skipping:
-            skipping = line.strip() != "),"
-            continue
-        if members:
-            # Inside a profile written a member per line, up to its `),`.
-            members = not re.match(r"^\s*\),\s*$", line)
-            if members and line.strip() == f"{quoted},":
-                continue
-            if not members and len(out) == opened + 1:
-                # Its last member went: `(\n),` is `()` to ruff format (#2917).
-                out[opened] = out[opened].rstrip() + "),\n"
-                continue
-        elif block == "UNPROFILED" and line.startswith(f"    {quoted}: ("):
-            skipping = not line.rstrip().endswith("),")
-            continue
-        elif block == "PROFILES" and re.match(r'^\s+"\w+": \(\s*$', line):
-            members = True
-            opened = len(out)
-        elif block == "PROFILES" and quoted in line and re.match(r'^\s+"\w+": \(.*\),\s*$', line):
-            head, inner = line.split(": (", 1)
-            kept = [m.strip() for m in inner.rsplit("),", 1)[0].split(",") if m.strip()]
-            kept = [m for m in kept if m != quoted]
-            joined = ", ".join(kept) + ("," if len(kept) == 1 else "")
-            line = f"{head}: ({joined}),\n"
-        out.append(line)
-    new = "".join(out)
-    refuse_still_profiled(new, proc)
-    return new
