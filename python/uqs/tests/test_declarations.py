@@ -14,6 +14,7 @@ import pytest
 
 from uqs.model import registry
 from uqs.model.declarations import (
+    Declaration,
     dictionary_fields,
     read_declarations,
     read_file_text,
@@ -237,6 +238,26 @@ def test_a_locked_offset_is_kept_and_a_new_one_goes_after_every_locked_one():
         "new1": 31,
         "new2": 32,
     }
+
+
+def test_a_new_process_past_one_runtimes_port_span_is_refused(tmp_path):
+    """#2949: offset 100 is the next runtime's base port (uqf 6050, torq 6150).
+    The lock is append-only, so once offset 99 is handed out - to a retired row
+    too - the next writer must refuse before it writes the job."""
+    assert registry.PORT_SPAN == 100
+    lock = tmp_path / PROCESS_PORTS_FILE
+    lock.parent.mkdir(parents=True)
+    lock.write_text("procname,offset\ntap1,1\nold1,97\n")
+    new = Declaration("job_a", "job_a1", PipelineKind.ETL, (), ("tbl",), False, "",
+                      tmp_path / "job_a.q")  # fmt: skip
+    registry.refuse_taken([new], [], tmp_path)  # offset 98, inside
+    lock.write_text("procname,offset\ntap1,1\nold1,97\nretired1,99\n")
+    with pytest.raises(
+        UqsError, match="job_a1 would get port offset 100, but each runtime's ports"
+    ):
+        registry.refuse_taken([new], [], tmp_path)
+    lock.write_text("procname,offset\ntap1,1\nold1,97\nretired1,99\njob_a1,98\n")
+    registry.refuse_taken([new], [], tmp_path)  # locked: it keeps its offset
 
 
 def test_the_lock_keeps_every_row_it_had():

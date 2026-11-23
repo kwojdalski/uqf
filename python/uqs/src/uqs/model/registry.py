@@ -29,6 +29,7 @@ from __future__ import annotations
 import csv
 from collections.abc import Iterable
 from dataclasses import replace
+from itertools import pairwise
 from pathlib import Path
 
 from uqs.model.declarations import Declaration, read_declarations
@@ -86,10 +87,12 @@ def refuse_taken(new: Iterable[Declaration], existing: Iterable[Declaration], ro
     `.qpipe.job.<name>`, across kinds (#2500); a procname is one process
     (#1572), and is taken if a declaration in `existing` claims it, tap1-like
     NON_JOB_PIPELINES run it, or the vendored TorQ stack does (#2823). Each of
-    `new` is checked against the others too.
+    `new` is checked against the others too. And a new process must have a
+    port: one whose offset would leave this runtime's span is refused (#2949).
     """
     names = {d.name: d.kind.value for d in existing}
-    taken = {p: f"the vendored TorQ stack ({VENDORED_PROCESSES})" for p in vendored_procnames(root)}
+    vendored = vendored_procnames(root)
+    taken = {p: f"the vendored TorQ stack ({VENDORED_PROCESSES})" for p in vendored}
     taken |= {p.procname: p.procname for p in NON_JOB_PIPELINES}
     taken |= {d.procname: d.name for d in existing}
     for d in new:
@@ -105,6 +108,27 @@ def refuse_taken(new: Iterable[Declaration], existing: Iterable[Declaration], ro
             )
         names[d.name] = d.kind.value
         taken[d.procname] = d.name
+    _refuse_past_port_span([p for p in taken if p not in vendored], root)
+
+
+def _refuse_past_port_span(procnames: list[str], root: Path) -> None:
+    """Refuse when a process would be given an offset at or past PORT_SPAN -
+    a port of the next runtime's span. The lock is append-only and retired
+    rows keep their offsets, so the span runs out and stays out (#2949).
+
+    A tree with no lock (a bundle's own directory) has no offsets to give:
+    the install that lands the job in the tree asks again."""
+    if not (root / PROCESS_PORTS_FILE).is_file():
+        return
+    offsets = allocate_offsets(procnames, read_port_lock(root))
+    if over := sorted((o, p) for p, o in offsets.items() if o >= PORT_SPAN):
+        offset, procname = over[0]
+        raise UqsError(
+            f"{procname} would get port offset {offset}, but each runtime's ports span only "
+            f"{PORT_SPAN} offsets (the gap between base ports in runtimes.py), so it would "
+            f"listen on the next runtime's ports. Every offset below {PORT_SPAN} is taken in "
+            f"{PROCESS_PORTS_FILE}, retired rows included - widen the runtimes' base-port gap first"
+        )
 
 
 def read_port_lock(root: Path) -> dict[str, int]:
@@ -124,11 +148,22 @@ def read_port_lock(root: Path) -> dict[str, int]:
     return locked
 
 
+#: How many offsets one runtime's ports hold: the smallest gap between two
+#: runtimes' base ports. An offset at or past it is a port of the next
+#: runtime's span, which `uqs` promises is clear of every other's (#761).
+_BASE_PORTS = sorted(runtime.base_port for runtime in RUNTIMES.values())
+PORT_SPAN = min(b - a for a, b in pairwise(_BASE_PORTS))
+
+
 def allocate_offsets(procnames: list[str], locked: dict[str, int]) -> dict[str, int]:
     """Every procname's offset: its locked one, or the next free after ALL
     locked offsets - retired ones included, so an offset is never reused.
     New names are allocated in sorted order, so two added at once land the
-    same way on every machine."""
+    same way on every machine.
+
+    No ceiling here: PIPELINES is built with it at import, so a refusal would
+    stop every command, `uqs job remove` too. Writers ask refuse_taken, which
+    refuses an offset past PORT_SPAN before a file is written (#2949)."""
     offsets = {name: locked[name] for name in procnames if name in locked}
     nxt = max(locked.values()) + 1
     for name in sorted(set(procnames) - set(locked)):

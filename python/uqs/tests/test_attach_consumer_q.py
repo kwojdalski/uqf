@@ -162,6 +162,40 @@ def test_unsubscribing_takes_back_exactly_the_subscription_attach_added(q_binary
     assert json.loads(again) == {"status": "absent", "problems": []}
 
 
+#: L held by rdb1 and created by attachment pb-a, whose record has no users yet
+OWNED_BY_A = (
+    f"{LEDGER};.uqfattach.owned:(enlist `L)!enlist .j.j "
+    '`token`attachment`created!("AAA";"pb-a";"2026.11.23");'
+)
+
+
+@pytest.mark.parametrize(
+    ("setup", "status"),
+    [
+        (".sub.getsubscriptionhandles:{[a;b;c] 0#H};", "refused"),  # no tickerplant connection
+        ('.sub.subscribe:{[t;s;c;r;h] \'"boom"};', "failed"),  # the subscribe signals
+    ],
+)
+def test_a_join_that_does_not_subscribe_leaves_the_tables_users_alone(
+    q_binary, tmp_path, setup, status
+):
+    """#2943: the join ran before these exits, so pb-uat stayed among L's users
+    although its apply stopped - and was journalled failed, which detach skips -
+    so pb-a's detach was refused "used by attachment(s) pb-uat" for good."""
+    body = f"{OWNED_BY_A}{setup}out attach {req()};out .uqfattach.owned`L;"
+    answer, record = run_q(q_binary, tmp_path, body)
+    assert json.loads(answer)["status"] == status
+    assert "users" not in json.loads(record)
+
+
+def test_a_join_that_subscribes_adds_the_attachment_to_the_tables_users(q_binary, tmp_path):
+    answer, record = run_q(
+        q_binary, tmp_path, f"{OWNED_BY_A}out attach {req()};out .uqfattach.owned`L;"
+    )
+    assert json.loads(answer)["status"] == "shared"
+    assert json.loads(record)["users"] == ["pb-uat"]
+
+
 def test_unsubscribing_without_a_tickerplant_is_refused(q_binary, tmp_path):
     bare = qstr({"table": "L", "dry_run": False})
     (answer,) = run_q(q_binary, tmp_path, f"out unsubscribe {bare};")

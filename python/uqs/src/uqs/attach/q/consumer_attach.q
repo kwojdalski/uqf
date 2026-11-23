@@ -46,13 +46,14 @@
   mt:exec t from meta t;
   if[not $[(cols t)~cs;all (ty=mt)|(ty in .Q.A)&mt=" ";0b];
    :.j.j `status`detail!("refused";"the table exists with a different schema")]];
- if[had and inl and (not mine) and `join in key r;
-  rec:own t;
-   rec[`users]:distinct (),$[`users in key rec;rec`users;()],enlist att;
-   .uqfattach.owned[t]:.j.j rec];
+ / another attachment joins the table's users only once it is subscribed: a refusal or a
+ / failure below changes nothing, and is never undone by a detach, which skips it (#2943)
+ jn:had and inl and (not mine) and `join in key r;
+ adduser:{[t;att;rec] rec[`users]:distinct (),$[`users in key rec;rec`users;()],enlist att; .uqfattach.owned[t]:.j.j rec};
  subd:t in exec table from .sub.SUBSCRIPTIONS where active;
  tpt:$[pt~`rdb;.rdb.tickerplanttypes;.wdb.tickerplanttypes];
  if[subd and had;
+  if[jn;adduser[t;att;own t]];
   :.j.j `status`rows`owner!($[mine;"owned";inl;"shared";"existing"];count value t;$[inl;own[t]`attachment;""])];
  hs:.sub.getsubscriptionhandles[tpt;();()!()];
  if[0=count hs;:.j.j `status`detail!("refused";"no tickerplant connection")];
@@ -68,6 +69,7 @@
  / every row as it was, but this tickerplant's inactive rows for t, which the new active one replaces
  `.sub.SUBSCRIPTIONS set (delete from pre where table=t,procname=h`procname,not active),select from .sub.SUBSCRIPTIONS where table=t,active;
  if[pt~`rdb;.rdb.subtables:distinct .rdb.subtables,t];
+ if[jn;adduser[t;att;own t]];
  if[(pt~`rdb) and `dataaccess in key .proc.params;
   .dataaccess.metainfo:.dataaccess.metainfo upsert .checkinputs.getmetainfo[]];
  if[not had;
