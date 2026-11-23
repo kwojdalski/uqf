@@ -147,6 +147,101 @@ def test_a_start_that_does_not_launch_the_publisher_is_not_gated(att):
     start_policy.refuse_start(default_paths(), ["stop"], None)
 
 
+# ---------------------------------- several attachments of one publisher (#2904)
+
+OTHER_STACK = 7000
+
+
+@pytest.fixture
+def elsewhere(att) -> config.Attachment:
+    """The same job attached a second time, to another stack: `ex-dev`, which
+    the gate reads before `ex-uat`."""
+    attachment = service.create("ex-dev", "executions", None, OTHER_STACK, ROOT)
+    config.save(attachment)
+    return attachment
+
+
+@pytest.fixture
+def asked(monkeypatch) -> list[str]:
+    """The attachments the gate asked the stack about, in order."""
+    names: list[str] = []
+    monkeypatch.setattr(attach_state, "live_check", names.append)
+    return names
+
+
+def test_a_job_verified_on_two_stacks_starts_under_each(att, elsewhere, asked):
+    """Each start is of the attachment whose stack it is under: the other one
+    used to refuse it, naming a base port the first then refused in turn."""
+    with_state(att, "verified")
+    with_state(elsewhere, "verified")
+    start_policy.refuse_start(default_paths(), ["start", PUBLISHER], STACK)
+    start_policy.refuse_start(default_paths(), ["start", PUBLISHER], OTHER_STACK)
+    assert asked == ["ex-uat", "ex-dev"]
+    with pytest.raises(UqsError, match=f"on stack {OTHER_STACK}.*--base-port {OTHER_STACK}"):
+        start_policy.refuse_start(default_paths(), ["start", PUBLISHER], None)
+
+
+@pytest.mark.parametrize("args", STARTS, ids=" ".join)
+@pytest.mark.parametrize(
+    "status",
+    ["planned", "applied", "partial", "detaching", "detached", "rolled_back", "unreadable"],
+)
+def test_an_attachment_to_another_stack_does_not_close_the_gate_for_a_verified_one(
+    att, elsewhere, asked, args, status
+):
+    """`ex-dev` unfinished, removed or unreadable on stack 7000 says nothing of
+    a start under 6000, where `ex-uat` is verified - and still holds its own."""
+    with_state(att, "verified")
+    if status == "unreadable":
+        with_state(elsewhere, "verified").write_text("{")
+    elif status != "planned":
+        with_state(elsewhere, status)
+    start_policy.refuse_start(default_paths(), args, STACK)
+    assert asked == ["ex-uat"]
+    said = "whose manifest is unreadable" if status == "unreadable" else f"which is {status}"
+    with pytest.raises(UqsError, match=f"publisher of attachment ex-dev .*{said}"):
+        start_policy.refuse_start(default_paths(), args, OTHER_STACK)
+
+
+@pytest.mark.parametrize("args", STARTS, ids=" ".join)
+@pytest.mark.parametrize("status", ["detached", "rolled_back"])
+def test_a_removed_attachment_holds_its_publisher_under_its_own_stack_only(att, args, status):
+    """`remove` keeps the folder. Under the stack it was on the publisher waits
+    for `add`; under any other it starts as it did before it was attached."""
+    with_state(att, status)
+    with pytest.raises(UqsError, match=f"publisher of attachment ex-uat .*which is {status}"):
+        start_policy.refuse_start(default_paths(), args, STACK)
+    start_policy.refuse_start(default_paths(), args, None)
+    start_policy.refuse_start(default_paths(), args, 6100)
+
+
+@pytest.mark.parametrize("status", ["planned", "applied", "rolled_back"])
+def test_a_start_under_no_attachments_stack_names_the_verified_one(att, elsewhere, status):
+    """The refusal names a base port that works: the verified `ex-uat`'s, not
+    the `ex-dev` read before it."""
+    with_state(att, "verified")
+    if status != "planned":
+        with_state(elsewhere, status)
+    with pytest.raises(UqsError) as caught:
+        start_policy.refuse_start(default_paths(), ["start", PUBLISHER], None)
+    text = str(caught.value)
+    assert f"belongs to attachment ex-uat on stack {STACK}" in text
+    assert "`uqs job attachment add ex-uat`" in text and f"--base-port {STACK}" in text
+
+
+def test_a_removed_attachment_does_not_close_its_own_stack_to_a_verified_one(att, asked):
+    """Removed as `ex-dev`, attached again to the same stack as `ex-uat`."""
+    again = service.create("ex-dev", "executions", None, STACK, ROOT)
+    config.save(again)
+    with_state(again, "rolled_back")
+    with_state(att, "applied")
+    with pytest.raises(UqsError, match="publisher of attachment ex-uat .*which is applied"):
+        start_policy.refuse_start(default_paths(), ["start", PUBLISHER], STACK)
+    with_state(att, "verified")
+    start_policy.refuse_start(default_paths(), ["start", PUBLISHER], STACK)
+    assert asked == ["ex-uat"]
+
+
 # ------------------------------------------------------- unreadable state (#1442)
 
 

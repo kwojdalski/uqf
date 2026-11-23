@@ -137,6 +137,13 @@ stack id, whatever starts it, `uqs exec -- debug pb_ledger1` included. A bare
 `attachment.json` cannot be read, every start is refused. Make it readable, or
 move the folder out of the attachments directory if the attachment is gone.
 
+A job attached to two stacks has one publisher name and two attachments. Each
+start is judged by the attachment on the stack it starts under, so each
+publisher starts under its own stack id, whatever state the other attachment is
+in. A removed attachment keeps its folder. Under the stack it was attached to,
+the publisher stays stopped until `uqs job attachment add` has verified it
+again. Under any other base port it no longer holds the publisher.
+
 `--no-start` applies and verifies, and leaves the publisher stopped. The same
 command without it starts it later. `--follow`, `--trace`, `--level` and
 `--stop-on-exit` are `uqs start`'s.
