@@ -228,8 +228,8 @@ start if that fails. `uqs job attachment show NAME` lists the entries.
 - `uqs job attachment status` shows each destination's worker, state, outcome
   and log, and what to do next when the rows are not queryable.
 - `uqs logs --attachment NAME --worker WORKER [-f]` shows the latest run's log
-  for that worker, or for `<dataset>.receiver`. `--run` picks an older run.
-- `uqs job runs list | status | show --attachment NAME` reads the run ledger.
+  for that worker, or for `<dataset>.receiver`. `--stamp` picks an older run.
+- `uqs job runs list | show --attachment NAME` reads the run ledger.
 - `uqs job attachment show NAME` lists each waiver used.
 
 ## Detach
