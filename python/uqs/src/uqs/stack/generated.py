@@ -28,7 +28,7 @@ import os
 import tempfile
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -46,7 +46,8 @@ _held = threading.local()
 
 
 class StackBusy(UqsError):
-    """Another lifecycle command holds this stack's lock."""
+    """Another command holds a lock this one needs: the stack's lifecycle
+    lock, or a file_lock of its own."""
 
 
 def write_text(path: Path, text: str) -> None:
@@ -79,6 +80,29 @@ def lifecycle_lock(paths: UqsPaths, wait: float | None = None) -> Iterator[None]
     thread.
     """
     lock = lock_path(paths)
+    busy = (
+        f"another start, stop or restart is running on this stack (it holds "
+        f"{lock}) - wait for it to finish, then try again"
+    )
+    with file_lock(lock, wait, busy):
+        yield
+
+
+@contextmanager
+def file_lock(
+    lock: Path,
+    wait: float | None,
+    busy: str,
+    on_wait: Callable[[], None] | None = None,
+) -> Iterator[None]:
+    """Hold an ``flock`` on *lock*, the file made if missing: lifecycle_lock's
+    for a stack, and the same for any other file a command must not share.
+
+    *wait* as lifecycle_lock's; past it, StackBusy says *busy*. *on_wait* is
+    called once if another holder makes this one wait, so a command that
+    queues can say why it is not moving. Re-entrant within a thread, and
+    released by the kernel if the holder dies.
+    """
     key = str(lock)
     held: set[str] = getattr(_held, "locks", set())
     if key in held:
@@ -87,9 +111,11 @@ def lifecycle_lock(paths: UqsPaths, wait: float | None = None) -> Iterator[None]
     lock.parent.mkdir(parents=True, exist_ok=True)
     with lock.open("a") as handle:
         if wait is None:
+            if on_wait is not None and not _taken(handle):
+                on_wait()
             fcntl.flock(handle, fcntl.LOCK_EX)
         else:
-            _within(handle, lock, time.monotonic() + wait)
+            _within(handle, time.monotonic() + wait, busy)
         held.add(key)
         _held.locks = held
         try:
@@ -99,19 +125,21 @@ def lifecycle_lock(paths: UqsPaths, wait: float | None = None) -> Iterator[None]
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def _within(handle, lock: Path, deadline: float) -> None:
+def _taken(handle) -> bool:
+    """Whether the lock on *handle* was free and is now held."""
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return False
+    return True
+
+
+def _within(handle, deadline: float, busy: str) -> None:
     """Take the lock on *handle* by *deadline*, else refuse with StackBusy."""
-    while True:
-        try:
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return
-        except BlockingIOError:
-            if time.monotonic() >= deadline:
-                raise StackBusy(
-                    f"another start, stop or restart is running on this stack (it holds "
-                    f"{lock}) - wait for it to finish, then try again"
-                ) from None
-            time.sleep(0.05)
+    while not _taken(handle):
+        if time.monotonic() >= deadline:
+            raise StackBusy(busy) from None
+        time.sleep(0.05)
 
 
 def write_process_csv(paths: UqsPaths, rows: list[dict[str, str]]) -> None:
