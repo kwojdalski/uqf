@@ -88,6 +88,7 @@ def bounded_worker(
     twin_of: str | None = None,
     raw: tuple[str, list[tuple[str, str]]] | None = None,
     target_columns: list[tuple[str, str]] | None = None,
+    shaped_as: str | None = None,
 ) -> ScaffoldPlan:
     """Plan a new bounded worker: its source, its worker and its test.
 
@@ -123,6 +124,9 @@ def bounded_worker(
     a job that declares its transform: the twin applies that one (#884). `twin_of`
     is the streaming job the worker repairs: written into the declaration, so q
     keeps holding the pair to it after this scaffold is gone (#2103).
+    `shaped_as` is the plant table whose columns the source's rows carry, which
+    a derive's input is named after (#2915): the caller's to find for a source
+    it reuses, and the dataset when a new source is declared with its columns.
 
     `raw` is (physical table, columns) when the new source's adapter reads
     columns other than those it returns: written as the source's `raw`
@@ -213,6 +217,10 @@ def bounded_worker(
                 f"({', '.join(c for c, _ in target_columns)}) - name the one that holds "
                 "the partition"
             )
+    output = cols if define_table else target_columns
+    if shaped_as is None and not reuse_source and output is not None:
+        if [c for c, _ in cols] == [c for c, _ in output]:
+            shaped_as = dataset
 
     actions: list[FileAction] = []
     slice_sample = _slice_sample(cols, partition, partition_column)
@@ -238,6 +246,7 @@ def bounded_worker(
                 transform=transform,
                 shared=shared,
                 twin_of=twin_of,
+                shaped_as=shaped_as,
             ),
         )
     )

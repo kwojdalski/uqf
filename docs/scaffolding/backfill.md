@@ -184,7 +184,7 @@ facts:{[batch]
     if[0=count batch; :(enlist `window)!enlist "empty window"];
     (enlist `rows)!enlist count batch}
 
-.qetl.transform.passthrough[`fxprobe_passthrough;`batch;.qetl.plant.shape `fx_probe;.qpipe.source.fxprobe.fixture[]];
+.qetl.transform.passthrough[`fxprobe_passthrough;`fx_probe;.qetl.plant.shape `fx_probe;.qpipe.source.fxprobe.fixture[]];
 
 .qetl.job.bounded.define[`fxprobe_backfill;
     `source`outputs`width`transform`facts`procname`note!
