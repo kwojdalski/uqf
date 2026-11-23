@@ -445,6 +445,42 @@ def test_removing_a_process_named_like_a_profile_keeps_that_profile(proc):
     assert _drop_from_profiles(exempt, proc) == exempt
 
 
+def _fx_one_per_line(text: str, extra: str) -> str:
+    """profiles.py with the fx profile written a member per line, plus `extra`
+    - the layout "add it by hand" leaves a profile past the line limit."""
+    one_line = '    "fx": ("posbook1", "fxpositions1", "last_value1"),\n'
+    assert one_line in text, "the fx profile as profiles.py writes it"
+    members = ["posbook1", "fxpositions1", extra, "last_value1"]
+    return text.replace(
+        one_line, '    "fx": (\n' + "".join(f'        "{m}",\n' for m in members) + "    ),\n"
+    )
+
+
+def test_removing_a_process_drops_it_from_a_profile_written_a_member_per_line():
+    """#2926: only a one-line tuple was edited, so the process stayed in a
+    multi-line profile, the removal reported success and the profile could
+    no longer start."""
+    from uqs.scaffold.remove import _drop_from_profiles
+
+    before = PROFILES_FILE.read_text()
+    listed = _fx_one_per_line(before, "zq_ml1")
+    after = _drop_from_profiles(listed, "zq_ml1")
+    assert _literal(after, "PROFILES") == _literal(before, "PROFILES")
+    assert after == _fx_one_per_line(before, "zq_ml1").replace('        "zq_ml1",\n', "")
+
+
+def test_a_profile_layout_the_removal_cannot_edit_refuses_the_removal():
+    """Rather than leave the process in a profile and report success (#2926)."""
+    from uqs.scaffold.remove import _drop_from_profiles
+
+    text = PROFILES_FILE.read_text().replace(
+        '"fx": ("posbook1", "fxpositions1", "last_value1"),',
+        '"fx": ("posbook1", "fxpositions1",\n           "zq_ml1", "last_value1"),',
+    )
+    with pytest.raises(UqsError, match=r"still lists zq_ml1 in a profile this cannot edit"):
+        _drop_from_profiles(text, "zq_ml1")
+
+
 def test_removing_an_exempt_process_named_like_a_profile_drops_only_its_exemption():
     from uqs.scaffold import profile
     from uqs.scaffold.remove import _drop_from_profiles

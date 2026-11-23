@@ -11,6 +11,7 @@ scaffold/remove.py plans the edits from them.
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -33,6 +34,7 @@ from uqs.paths import (
 )
 from uqs.scaffold.external import EXTERNAL_DIR, connector_mark, external_files, feed_module
 from uqs.scaffold.jobs import test_namespace
+from uqs.scaffold.profile import PROFILES_FILE
 from uqs.scaffold.transform import MODES, streaming_test
 
 MARKER = "SCAFFOLDED"
@@ -116,6 +118,20 @@ def refuse_dependents(
             f"{job} cannot be removed while another job depends on it: {'; '.join(found)} "
             "- remove it first"
         )
+
+
+def refuse_still_profiled(text: str, proc: str) -> None:
+    """Refuse when profiles.py's `text`, as the removal leaves it, still lists
+    `proc` in a profile - a layout the edit does not read. A profile naming a
+    process that is gone cannot start, and the removal reported success (#2926)."""
+    for node in ast.parse(text).body:
+        if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", None) == "PROFILES":
+            profiles = ast.literal_eval(node.value) if node.value is not None else {}
+            if any(proc in leaves for leaves in profiles.values()):
+                raise UqsError(
+                    f"{PROFILES_FILE} still lists {proc} in a profile this cannot edit - take "
+                    "it out by hand, then run it again"
+                )
 
 
 def generated_test(job: str, fields: dict[str, str], exact: dict[Path, str]) -> None:

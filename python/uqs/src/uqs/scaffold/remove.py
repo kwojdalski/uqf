@@ -76,6 +76,7 @@ from uqs.scaffold.remove_policy import (
     generated_test,
     living_names,
     refuse_dependents,
+    refuse_still_profiled,
     refuse_written,
     user_of,
 )
@@ -344,17 +345,21 @@ def _drop_catalog(text: str, table: str) -> str:
 
 
 def _drop_from_profiles(text: str, proc: str) -> str:
-    """profiles.py without `proc` in any one-line profile; unprofiled.py without its exemption.
+    """profiles.py without `proc` in any profile; unprofiled.py without its exemption.
 
     Each edit is confined to its own dict: a process may share its name with
     a profile, and PROFILES["default"] is keyed exactly as an exemption for a
-    process called `default` would be (#1566).
+    process called `default` would be (#1566). A profile is a one-line tuple
+    or one written a member per line, as the scaffold's "add it by hand"
+    leaves a long one (#2926); any other layout still naming `proc` is
+    refused, since a profile naming a process that is gone cannot start.
     """
     quoted = f'"{proc}"'
     lines = text.splitlines(keepends=True)
     out: list[str] = []
     block = None
     skipping = False
+    members = False
     for line in lines:
         if m := re.match(r"^([A-Z_]+): dict\[", line):
             block = m.group(1)
@@ -363,14 +368,23 @@ def _drop_from_profiles(text: str, proc: str) -> str:
         if skipping:
             skipping = line.strip() != "),"
             continue
-        if block == "UNPROFILED" and line.startswith(f"    {quoted}: ("):
+        if members:
+            # Inside a profile written a member per line, up to its `),`.
+            members = not re.match(r"^\s*\),\s*$", line)
+            if members and line.strip() == f"{quoted},":
+                continue
+        elif block == "UNPROFILED" and line.startswith(f"    {quoted}: ("):
             skipping = not line.rstrip().endswith("),")
             continue
-        if block == "PROFILES" and quoted in line and re.match(r'^\s+"\w+": \(.*\),\s*$', line):
+        elif block == "PROFILES" and re.match(r'^\s+"\w+": \(\s*$', line):
+            members = True
+        elif block == "PROFILES" and quoted in line and re.match(r'^\s+"\w+": \(.*\),\s*$', line):
             head, inner = line.split(": (", 1)
-            members = [m.strip() for m in inner.rsplit("),", 1)[0].split(",") if m.strip()]
-            members = [m for m in members if m != quoted]
-            joined = ", ".join(members) + ("," if len(members) == 1 else "")
+            kept = [m.strip() for m in inner.rsplit("),", 1)[0].split(",") if m.strip()]
+            kept = [m for m in kept if m != quoted]
+            joined = ", ".join(kept) + ("," if len(kept) == 1 else "")
             line = f"{head}: ({joined}),\n"
         out.append(line)
-    return "".join(out)
+    new = "".join(out)
+    refuse_still_profiled(new, proc)
+    return new
