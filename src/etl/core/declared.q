@@ -156,3 +156,46 @@
     c:cols value tbl;
     if[not (tbl name)~c!stored c;
         'who," is already declared as a ",kind," with a different declaration - a name is declared once, and a second would silently replace the first"]}
+
+/ Refuse a declaration whose name is not a symbol or which is not a dictionary (#2953).
+/ .
+/ Every verb says "... declaration must be a dictionary", but no verb checked its
+/ name: a string made the message's own `string name` a list of strings, and the
+/ refusal came out as a bare 'type or 'length with no job in it. Both checks come
+/ first, so a verb builds its message prefix from a name it knows is a symbol.
+/ @param kind what the verb declares, as its messages name it: "" for a job or a
+/   source, else e.g. "bars job"
+/ @param name the declared name
+/ @param decl the declaration
+/ @return the name
+/ @throws error when name is not a symbol, or decl is not a dictionary
+/ @eg .qetl.declared.require_form["bars job";`exec_bars;()!()]  ->  `exec_bars
+.qetl.declared.require_form:{[kind;name;decl]
+    pre:"define: ",$[count kind; kind," "; ""];
+    if[not -11h=type name; 'pre,"name must be a symbol, e.g. `my_job - got ",.Q.s1 name];
+    if[not 99h=type decl; 'pre,string[name],"'s declaration must be a dictionary"];
+    name}
+
+/ Refuse a declared value that is not a symbol, naming the declaration and the key (#2953).
+/ @param who the message prefix, e.g. "define: demo"
+/ @param field the declaration key, for the message
+/ @param v the value declared under it
+/ @param what what it names, completing "<key> must be ...", e.g. "a column name"
+/ @return v
+/ @throws error when v is not a symbol atom
+/ @eg .qetl.declared.require_symbol["define: x";`time_column;`ts;"a column name"]  ->  `ts
+.qetl.declared.require_symbol:{[who;field;v;what]
+    if[not -11h=type v; 'who,"'s ",string[field]," must be ",what,", a symbol"];
+    v}
+
+/ Refuse a declared value that is neither a symbol nor a symbol list (#2953).
+/ @param who the message prefix, e.g. "define: demo"
+/ @param field the declaration key, for the message
+/ @param v the value declared under it
+/ @param what what it names, completing "<key> must be ...", e.g. "column names"
+/ @return v
+/ @throws error when v is not a symbol atom or a symbol list
+/ @eg .qetl.declared.require_symbols["define: x";`by;`sym`venue;"column names"]  ->  `sym`venue
+.qetl.declared.require_symbols:{[who;field;v;what]
+    if[not 11h=abs type v; 'who,"'s ",string[field]," must be ",what,", a symbol or a symbol list"];
+    v}

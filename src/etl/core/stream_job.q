@@ -289,7 +289,7 @@
 / @return the job name
 / @throws error naming every missing or malformed field at once
 .qetl.job.stream.define:{[job;decl]
-    if[not 99h=type decl; '"define: ",string[job],"'s declaration must be a dictionary"];
+    .qetl.declared.require_form["";job;decl];
     .qetl.job.stream.refuse_taken["define: ",string job;job;decl];
     .qetl.job.stream.refuse_publishes["define: ",string job;decl];
     / A supplied ns is refused, not overwritten, as .qetl.job.bounded.define does (#2115)
@@ -327,7 +327,7 @@
     if[has_period<>has_body;
         '"define: ",string[job]," declares ",$[has_period;"period without on_timer";"on_timer without period"]," - a timer is both or neither"];
     if[has_period;
-        if[not 16h=abs type decl`period;
+        if[not -16h=type decl`period;
             '"define: ",string[job],"'s period must be a timespan, e.g. 0D00:00:01"];
         if[not (decl`period)>0D00:00;
             '"define: ",string[job],"'s period must be positive"];

@@ -170,7 +170,10 @@ qetl.declared,q_version,function,1,v
 qetl.declared,refuse_redeclared,function,5,who kind tbl name stored
 qetl.declared,refuse_unknown,function,4,who kind decl allowed
 qetl.declared,require_callable,function,4,who name v shape
+qetl.declared,require_form,function,3,kind name decl
 qetl.declared,require_q,function,2,who v
+qetl.declared,require_symbol,function,4,who field v what
+qetl.declared,require_symbols,function,4,who field v what
 qetl.declared,stored_q,function,2,who decl
 qetl.enrich,add,function,2,state refs
 qetl.enrich,lookup,function,3,state events spec

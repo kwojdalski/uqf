@@ -161,13 +161,13 @@
 / @throws error naming what is wrong with the declaration
 / @eg .qetl.transform.define[`mid_quotes;`inputs`output`fn`examples!(enlist[`quotes]!enlist ([] sym:`symbol$(); bid:`float$(); ask:`float$()); ([] sym:`symbol$(); mid:`float$()); {[q] select sym, mid:(bid+ask)%2 from q}; enlist `inputs`expected!(enlist[`quotes]!enlist ([] sym:enlist`EURUSD; bid:1.1; ask:1.2); ([] sym:enlist`EURUSD; mid:1.15)))]
 .qetl.transform.define:{[name;decl]
+    .qetl.declared.require_form["transform";name;decl];
     who:"define: transform ",string[name];
-    if[not 99h=type decl; '"define: a transform declaration must be a dictionary"];
     .qetl.declared.refuse_unknown[who;"a transform";decl;.qetl.transform.required_keys,`as_of];
     missing:.qetl.transform.required_keys where not .qetl.transform.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     ins:decl`inputs;
-    if[not (99h=type ins) and 11h=type key ins;
+    if[not $[99h=type ins; 11h=type key ins; 0b];
         'who,"'s inputs must be a dictionary of name -> empty typed table"];
     if[0=count ins; 'who," reads no inputs - a transform of nothing is a constant"];
     if[not all 98h=type each value ins;

@@ -192,7 +192,8 @@
 / one.
 / @param source a name for this source, e.g. `deals_analogue
 / @param decl a dict carrying every name in required_declarations:
-/   table   - the external table name, as a symbol
+/   source  - the source's own name, the same symbol as the first argument
+/   table_name - the external table name, as a symbol
 /   time_column - the column the window is taken on, as a symbol
 /   row_key - the column(s) identifying a row uniquely, as a symbol vector
 /   columns  - the columns this adapter RETURNS, as a symbol vector - also
@@ -230,6 +231,7 @@
 / @return the source name
 / @throws error naming every missing or malformed declaration at once
 .qetl.source.define:{[source;decl]
+    .qetl.declared.require_form["";source;decl];
     / Where rows go is the WORKER's dataset (#769), so a source naming a
     / destination was a second answer to that question, shown and never used
     / (#1092).
@@ -253,6 +255,7 @@
     .qetl.source.check_arity[source;decl];
     if[not -11h=type decl`tz;
         '"define: ",string[source],"'s tz must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\""];
+    .qetl.source.check_values[source;decl];
     / The window is taken on time_column, so time_column must be a field this
     / adapter actually READS. Without this check a typo registers happily and
     / surfaces two layers down: validate never checks the column (it is not
@@ -372,6 +375,18 @@
     .[{.qetl.log.ch.dbg[x;y;z]};(`config;"source registered";
         `source`columns`time_column`tz`transport`row_key!(source;decl`columns;decl`time_column;decl`tz;tr;key_cols));::];
     source}
+
+/ Private: refuse a source declaration's names that are not symbols, which would
+/ fail with a bare 'type further in (#2953). Split out of define, whose locals are
+/ at q's limit once coverage instruments it.
+/ @param source the name the source is declared under
+/ @param decl the declaration
+/ @return nothing - it throws naming the source and the key
+/ @private
+.qetl.source.check_values:{[source;decl]
+    who:"define: ",string source;
+    .qetl.declared.require_symbol[who;`table_name;decl`table_name;"the external table's name"];
+    .qetl.declared.require_symbol[who;`time_column;decl`time_column;"the column the window is taken on"]}
 
 / Private: refuse a query or fixture lambda of the wrong arity - now, rather
 / than at the first live window's bare 'rank (#2484). Only a lambda's parameter

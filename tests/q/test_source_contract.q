@@ -48,6 +48,13 @@
     .qunit.assertEquals[(.qetl.source.def `t)`table_name;`ext;"and the first is still what is registered"];
     .qunit.assertEquals[.qetl.source.define[`t;.qt.qetl.source.decl[]];`t;"the same declaration read again, as a reload does, is accepted"]};
 
+/ #2953: a column or table named by a string was refused with a bare 'type.
+.qt.qetl.source.test_a_table_name_or_time_column_that_is_a_string_is_refused_by_name:{[t]
+    .qunit.assertThrows[.qetl.source.define[`t;];@[.qt.qetl.source.decl[];`table_name;:;"ext"];
+        "define: t's table_name must be the external table's name, a symbol";"table_name"];
+    .qunit.assertThrows[.qetl.source.define[`t;];@[.qt.qetl.source.decl[];`time_column;:;"ts"];
+        "define: t's time_column must be the column the window is taken on, a symbol";"time_column"]};
+
 / Registration validates NOW, unlike .qetl.job.bounded.state.register which defers. The
 / asymmetry is deliberate: a worker's methods appear as its file loads, so
 / early validation would force declaration order; a declaration is one
