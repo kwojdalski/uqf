@@ -11,7 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from attach_support import LEDGER_COLUMNS, FakeStack, FaultIpc, make_bundle
+from attach_support import LEDGER_COLUMNS, LEDGER_Q, FakeStack, FaultIpc, make_bundle
 
 from uqs.attach import apply as applying
 from uqs.attach import block_text, config, facts, live, persist, plan, service, verify
@@ -314,6 +314,51 @@ def test_a_failure_writing_the_schema_file_leaves_the_runtime_registration_and_s
         "the runtime registration stays; a restart drops it"
     )
     assert schema.read_text() == "x\n"
+
+
+def test_a_block_another_attachment_wrote_after_the_file_was_read_is_kept(
+    state, tmp_path, monkeypatch
+):
+    """#2909: two attachments on one stack, one schema file. B's whole apply lands
+    after A read the file and before A takes the file's lock to write: A's write,
+    composed from the text without B's block, is refused instead of replacing the
+    file and losing B's block, and A run again adds its own beside it."""
+    from contextlib import contextmanager
+
+    from uqs.attach import schema_files
+
+    schema = tmp_path / "database.q"
+    schema.write_text("trade:([] time:`timestamp$())\n")
+    fake = FakeStack(6000, schema_file=str(schema))
+    other = "piggybank_other_ledger"
+    a = attachment(make_bundle(tmp_path / "a"), "pb-a", runtime_only=False)
+    b = attachment(
+        make_bundle(tmp_path / "b", LEDGER_Q.replace(TABLE, other), other), "pb-b",
+        runtime_only=False,
+    )  # fmt: skip
+    real, fired = schema_files.file_locked, []
+
+    @contextmanager
+    def b_first(path):
+        if not fired:
+            fired.append("B")  # before B's apply, whose own write comes through here too
+            fired.append(go(b, fake, state).state)
+        with real(path):
+            yield
+
+    monkeypatch.setattr(schema_files, "file_locked", b_first)
+    with pytest.raises(applying.ApplyFailed, match="changed since it was read .* nothing was"):
+        go(a, fake, state)
+    monkeypatch.setattr(schema_files, "file_locked", real)
+    assert fired == ["B", "applied"]
+    b_token = Manifest.load("pb-b", state).token
+    assert block_text.begin_marker("pb-b", b_token) in schema.read_text(), "B's block is kept"
+    a_block = Manifest.load("pb-a", state).find("schema_block", "schema-file", TABLE)
+    assert found(a_block).status == "failed"
+    assert go(a, fake, state).state == "applied"
+    text = schema.read_text()
+    assert block_text.begin_marker("pb-b", b_token) in text
+    assert block_text.begin_marker("pb-a", Manifest.load("pb-a", state).token) in text
 
 
 # ----------------------------------------------------------------------- verify

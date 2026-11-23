@@ -373,3 +373,39 @@ def test_publication_is_read_off_the_stacks_disk_by_the_tickerplant(bundle, tmp_
     assert block_text.begin_marker(att.name, "") in fake.stack_files[STACK_PATH].decode(), "kept"
     (asked,) = [r for _, op, r in fake.calls if op == "disk_marks"]
     assert asked["dirs"] == ["/data/wdbhdb", "/data/hdb"] and asked["logdir"] == "/data/tplogs"
+
+
+def test_what_the_tickerplant_cannot_read_on_the_stacks_disk_counts_as_publication(
+    bundle, tmp_path
+):
+    """#2913: a par.txt or a log there that the tickerplant cannot read."""
+    fake, att = _fake(), _att(bundle)
+    pub = Publisher()
+    assert _run(att, fake, tmp_path, pub).ok
+    fake.stack_unread.append("the par.txt in /data/hdb cannot be read")
+    result = _detach(att, fake, pub, tmp_path)
+    assert result.outcome == "detached" and result.evidence.unknown == [
+        f"{TABLE}: on uat-box.example, the par.txt in /data/hdb cannot be read"
+    ]
+
+
+@pytest.mark.parametrize(("process", "writer"), [("stp1", "tickerplant"), ("", "cli")])
+def test_a_kept_block_names_the_writer_that_appended_it(bundle, monkeypatch, process, writer):
+    """The --transient refusal after publication names the writer recorded with the
+    block: a finished step's post is the BlockRecord, which has no `by`."""
+    from dataclasses import asdict
+    from typing import cast
+
+    from uqs.attach import apply_schema, persist
+    from uqs.attach.evidence import Evidence
+    from uqs.attach.manifest import Op
+    from uqs.attach.topology import Observation
+
+    record = persist.BlockRecord(STACK_PATH, "o", "b", process=process)
+    op = Op(4, "schema_block", "schema-file", TABLE, "done", "created", post=asdict(record))
+    monkeypatch.setattr(
+        apply_schema, "evidence", lambda *a: Evidence(published=True, reasons=["a log"])
+    )
+    unread = cast(Observation, None)  # evidence, which reads it, is stubbed
+    (refused,) = apply_schema.after_publication(_att(bundle), [op], unread, _fake(), HERE)
+    assert refused.action.endswith(f"--schema-writer {writer}`, the writer that appended the block")

@@ -9,7 +9,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from uqs.attach.config import Attachment, AttachmentError
+from uqs.attach.config import Attachment, AttachmentError, unreplaceable
 from uqs.attach.facts import Facts, Host
 from uqs.attach.findings import Finding
 from uqs.attach.remote import Ipc
@@ -316,13 +316,13 @@ def _change(
         )
         return Change(t, path, "conflict", want, existing, group, sha=sf.sha)
     status = "present" if existing else "add"
-    if status == "add" and not os.access(sf.path, os.W_OK):
+    if status == "add" and (why := unreplaceable(sf.path)):
         out.append(
             Finding(
                 "blocker",
                 "SORT_FILE",
                 "sort.csv",
-                f"{path} is not writable by this user",
+                why,
                 f"add these rows by hand, then reload: {describe(want)}",
                 facts,
             )

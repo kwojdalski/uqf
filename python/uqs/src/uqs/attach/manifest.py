@@ -68,6 +68,38 @@ class Op:
     note: str = ""
 
 
+def _older(path: Path, name: str, missing: list[str], data: dict) -> str:
+    """The refusal for a manifest an older uqs wrote, which is never read as one
+    (#2723). Planning again starts a manifest under a new token, and what the old
+    one applied carries the old token: an `add` would join it as another user,
+    and a `remove` then leave it on the stack for good (#2912). So while the file
+    records anything still in place, the refusal names it and the token, and
+    says it must go first."""
+    head = (
+        f"{path} was written by an older uqs (no {', '.join(missing)}), which this one "
+        "does not read"
+    )
+    again = f"move that file aside, then `uqs job attachment add {name}`"
+    try:
+        held = [
+            f"{o['op']} {o['process']}: {o['table']}"
+            for o in data.get("operations", [])
+            if o.get("ownership") in (CREATED, SHARED)
+            and o.get("status") in (PENDING, DONE, RETAINED)
+        ]
+    except TypeError, KeyError, AttributeError:
+        held = ["(its operations cannot be read)"]
+    if not held:
+        return f"{head}. Plan the attachment again - {again}"
+    return (
+        f"{head}. It applied, under the token {data.get('token')!r}, what is still on the "
+        f"stack: {'; '.join(held)}. Planned again, the attachment has a new token: it would "
+        "join that as another user, and `uqs job attachment remove` would leave it in place "
+        f"for good. Remove the attachment first with the uqs that applied it (`uqs job "
+        f"attachment remove {name}`), or remove those by hand. After that, {again}"
+    )
+
+
 @dataclass
 class Manifest:
     attachment: str
@@ -122,11 +154,7 @@ class Manifest:
                 )
             if missing := sorted({f.name for f in fields(cls)} - {"path"} - data.keys()):
                 # a field a later uqs added (registrations, #1845): an older file is not read
-                raise AttachmentError(
-                    f"{path} was written by an older uqs (no {', '.join(missing)}), which this "
-                    f"one does not read. Plan the attachment again - move that file aside, then "
-                    f"`uqs job attachment add {name}`"
-                )
+                raise AttachmentError(_older(path, name, missing, data))
             ops = [Op(**o) for o in data.pop("operations")]
             data.pop("schema")
             return cls(**data, operations=ops, path=path)

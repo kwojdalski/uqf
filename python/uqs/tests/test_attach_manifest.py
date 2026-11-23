@@ -15,7 +15,7 @@ from attach_support import make_bundle
 
 from uqs.attach import block_text, config, manifest, persist, service
 from uqs.attach.config import AttachmentError
-from uqs.attach.manifest import Manifest
+from uqs.attach.manifest import CREATED, DONE, EXISTING, RETAINED, REVERTED, Manifest, Op
 from uqs.attach.schema import TableSpec
 from uqs.paths import UqsError, default_paths, repo_root
 from uqs.stack import attach_state, start_policy
@@ -152,6 +152,35 @@ def test_a_manifest_written_before_1845_is_refused_naming_the_command(att, state
         f"{m.path} was written by an older uqs (no registrations), which this one does not "
         "read. Plan the attachment again - move that file aside, then "
         "`uqs job attachment add pb-uat`"
+    )
+
+
+def test_an_older_manifest_that_still_holds_state_names_it_before_planning_again(att, state):
+    """#2912: moved aside and planned again, the attachment has a new token and
+    joins what the old one made as another user, which a remove then leaves for
+    good. So the refusal names what is still in place and its token, and says it
+    goes first; one with nothing in place keeps the plain advice (above)."""
+    m = fresh(att, state)
+    m.operations += [
+        Op(1, "stp_register", "stp1", TABLE, DONE, CREATED),
+        Op(2, "consumer_attach", "rdb1", TABLE, REVERTED, CREATED),
+        Op(3, "schema_block", "schema-file", TABLE, RETAINED, CREATED),
+        Op(4, "consumer_attach", "wdb1", TABLE, DONE, EXISTING),
+    ]
+    m.save()
+    data = json.loads(m.path.read_text())
+    data.pop("registrations")
+    m.path.write_text(json.dumps(data))
+    with pytest.raises(AttachmentError) as caught:
+        Manifest.load("pb-uat", state)
+    assert str(caught.value) == (
+        f"{m.path} was written by an older uqs (no registrations), which this one does not "
+        f"read. It applied, under the token {m.token!r}, what is still on the stack: "
+        f"stp_register stp1: {TABLE}; schema_block schema-file: {TABLE}. Planned again, the "
+        "attachment has a new token: it would join that as another user, and `uqs job "
+        "attachment remove` would leave it in place for good. Remove the attachment first "
+        "with the uqs that applied it (`uqs job attachment remove pb-uat`), or remove those "
+        "by hand. After that, move that file aside, then `uqs job attachment add pb-uat`"
     )
 
 

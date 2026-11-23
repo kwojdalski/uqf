@@ -405,6 +405,58 @@ def test_a_partition_in_the_hdb_or_the_wdb_is_publication_too(world, tmp_path):
     )
 
 
+def test_a_partition_in_a_segment_par_txt_names_is_publication_too(world, tmp_path):
+    """#2913: TorQ's wdb moves a partition into a segment of a segmented HDB
+    (`.Q.par`), not under the HDB itself; a relative segment is read from the HDB."""
+    fake, make, state, schema, log = world
+    att = make()
+    apply_(att, fake, state)
+    (tmp_path / "seg1" / "2026.10.15" / TABLE).mkdir(parents=True)
+    (tmp_path / "hdb" / "par.txt").write_text(f"{tmp_path / 'seg0'}\n\n../seg1\n")
+    result = detach_(att, fake, state)
+    assert result.outcome == "detached" and result.evidence.reasons == [
+        f"{TABLE}: the HDB holds a partition of it"
+    ]
+    assert fake.named("stp1")["schemas"][TABLE], "so nothing was removed"
+
+
+def test_a_par_txt_that_cannot_be_read_counts_as_publication(world, tmp_path):
+    fake, make, state, schema, log = world
+    att = make()
+    apply_(att, fake, state)
+    (tmp_path / "hdb" / "par.txt").mkdir()  # there, and not a file that can be read
+    result = detach_(att, fake, state)
+    assert result.outcome == "detached"
+    par = tmp_path / "hdb" / "par.txt"
+    assert result.evidence.unknown == [
+        f"{TABLE}: the HDB's par.txt cannot be read: [Errno 21] Is a directory: '{par}'"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("written", "published"), [(b"x" * 200, True), (b"x" * 8, False)], ids=["rows", "empty"]
+)
+def test_a_gzipped_log_of_an_earlier_day_is_read_as_it_was_written(
+    world, tmp_path, written, published
+):
+    """#2913: housekeeping gzips an earlier day's log in place (`tplogzip`); its
+    size is what the plant wrote, so a zipped empty log is still empty."""
+    import gzip
+
+    fake, make, state, schema, log = world
+    att = make()
+    apply_(att, fake, state)
+    day = tmp_path / "tplogs" / "stp1_2026.10.15"
+    day.mkdir()
+    (day / f"stp1_{TABLE}20261015120000.gz").write_bytes(gzip.compress(written))
+    result = detach_(att, fake, state)
+    assert result.outcome == ("detached" if published else "rolled_back")
+    if published:
+        assert result.evidence.reasons == [
+            f"{TABLE}: an earlier log stp1_{TABLE}20261015120000.gz holds 200 bytes"
+        ]
+
+
 def test_after_detaching_a_published_attachment_applying_again_adopts_what_stayed(world):
     fake, make, state, schema, log = world
     att = make()
@@ -1170,8 +1222,8 @@ def _stopped_after_the_block_was_written(att, fake, state, monkeypatch) -> None:
     """Apply, stopped between the schema file's write and its journal entry."""
     replace = schema_files.LocalFile._replace
 
-    def stop(self, text: str) -> None:
-        replace(self, text)
+    def stop(self, before: str, text: str) -> None:
+        replace(self, before, text)
         raise KeyboardInterrupt
 
     with monkeypatch.context() as patched:
@@ -1210,6 +1262,38 @@ def test_a_block_of_unknown_outcome_in_a_file_that_is_gone_refuses(world, monkey
         f"settled: {schema.resolve()} does not exist"
     ]
     assert TABLE in fake.named("stp1")["schemas"], "nothing was removed"
+
+
+def test_a_stopped_block_step_removed_by_hand_lets_remove_finish(world, monkeypatch):
+    """#2908: the block taken out by hand before `remove` is read as never made,
+    so the refusal that once came back word for word after doing so is gone."""
+    fake, make, state, schema, log = world
+    before, text = stack_state(fake), schema.read_text()
+    att = make()
+    _stopped_after_the_block_was_written(att, fake, state, monkeypatch)
+    schema.write_text(text)
+    assert detach_(att, fake, state, dry_run=True).outcome == "rolled_back"
+    result = detach_(att, fake, state)
+    assert result.outcome == "rolled_back", [b.reason for b in result.blockers]
+    assert "schema_block" not in [s.op for s in result.steps if s.outcome == "removed"]
+    assert stack_state(fake) == before and schema.read_text() == text
+    assert detach_(att, fake, state).outcome == "already"
+
+
+def test_applying_again_finishes_a_stopped_block_step_and_remove_takes_it(world, monkeypatch):
+    """#2908: `attachment add` run again after a stop inside the block step."""
+    fake, make, state, schema, log = world
+    text = schema.read_text()
+    att = make()
+    _stopped_after_the_block_was_written(att, fake, state, monkeypatch)
+    apply_(att, fake, state)
+    m = Manifest.load("pb-uat", state)
+    done = m.find("schema_block", "schema-file", TABLE)
+    assert m.state == "applied" and done is not None
+    assert (done.status, done.ownership) == ("done", "created")
+    assert schema.read_text().count(block_text.begin_marker("pb-uat", m.token)) == 1
+    assert detach_(att, fake, state).outcome == "rolled_back"
+    assert schema.read_text() == text
 
 
 def test_apply_recognises_its_own_leftover_by_token_after_an_unknown_outcome(world):

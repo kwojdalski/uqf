@@ -168,6 +168,8 @@ class FakeStack:
         #: directories (save directory, HDB) that hold a partition of the table
         self.stack_logs: list[dict[str, Any]] = []
         self.stack_partitions: set[str] = set()
+        #: what it finds there and cannot read (a truncated log, a par.txt)
+        self.stack_unread: list[str] = []
         sid = str(stack_id)
         self.add(
             probe("discovery1", "discovery", stack_id + 1, sid, torq=torq, services=[]),
@@ -295,6 +297,7 @@ class FakeStack:
             "disk_marks": lambda p, req: {
                 "logs": self.stack_logs,
                 "partitions": [d in self.stack_partitions for d in req["dirs"]],
+                "unread": self.stack_unread,
             },
         }.get(op)
         if handler is None:
