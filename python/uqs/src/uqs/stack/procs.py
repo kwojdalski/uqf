@@ -383,6 +383,9 @@ def set_process_config(
     refuse_unknown_field(field, "unknown process.csv field")
     refuse_unsafe_override(procname, field, value)
     override_files.refuse_taken_name(names, procname, field, value)
+    override_files.refuse_taken_port(
+        effective_process_rows(paths), build_env(paths), procname, field, value
+    )
     if dry_run:
         return
     overrides = override_files.read_file(paths.overrides_path)

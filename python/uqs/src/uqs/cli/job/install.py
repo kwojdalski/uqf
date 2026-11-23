@@ -30,7 +30,7 @@ from uqs.cli.common.shared import (
 )
 from uqs.cli.job import install_bundle
 from uqs.cli.job.create_plant import plant_tables as _plant_tables
-from uqs.cli.job.regenerate import _DERIVED, _regenerate_derived, derived_command
+from uqs.cli.job.regenerate import report_regeneration
 from uqs.model.declarations import (
     Declaration,
     declaration_calls,
@@ -361,15 +361,11 @@ def install_jobs(
 
     # A file that does not parse, or a job whose edges do not resolve, is
     # refused by the generators - which is the earliest the tree can say so.
-    for derived, regen in zip(_DERIVED, _regenerate_derived(repo_root), strict=True):
-        if regen.returncode == 0:
-            console.print(f"[green]✓[/] regenerated via {' '.join(derived)}")
-        else:
-            console.print(
-                f"[red]✗ could not regenerate[/] - run `{derived_command(derived)}` "
-                f"and fix what it reports:\n{regen.stdout}{regen.stderr}"
-            )
-            failed += 1
+    # Every derived target, as `job new` and `job remove` regenerate them: the
+    # next steps say to commit the derived files, and the q-backed ones (q
+    # facts, the contract surface) go stale as surely as the rest (#2922).
+    if not report_regeneration(repo_root):
+        failed += 1
     if failed:
         console.print(f"[red]✗ install incomplete:[/] {failed} step(s) above failed")
         raise typer.Exit(code=1)

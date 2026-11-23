@@ -17,7 +17,8 @@ from typer.testing import CliRunner
 from uqs import cli
 from uqs import paths as stack_paths
 from uqs.cli.job import install as cli_install
-from uqs.cli.job.regenerate import _DERIVED
+from uqs.cli.job import regenerate
+from uqs.cli.job.regenerate import _DERIVED, _WITH_Q
 from uqs.paths import SOURCE_DIR, STREAM_DIR, WORKER_DIR
 from uqs.stack import install
 from uqs.stack.install import Kind, Mode, Status
@@ -137,12 +138,7 @@ def test_skipped_is_not_installable(sidecar: Path, repo: Path) -> None:
 @pytest.fixture
 def cli_repo(repo: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(cli_install, "_paths", lambda: stack_paths.paths_for_root(repo))
-    monkeypatch.setattr(
-        cli_install,
-        "_regenerate_derived",
-        # One result per derived script: the CLI pairs them strictly.
-        lambda _root: [subprocess.CompletedProcess([], 0, "", "")] * len(_DERIVED),
-    )
+    monkeypatch.setattr(cli_install, "report_regeneration", lambda _root: True)
     return repo
 
 
@@ -275,11 +271,32 @@ def test_cli_exits_non_zero_when_a_regeneration_fails(
     sidecar: Path, cli_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """#2839: as the bundle installer does."""
-    monkeypatch.setattr(
-        cli_install,
-        "_regenerate_derived",
-        lambda _root: [subprocess.CompletedProcess([], 1, "", "boom")] * len(_DERIVED),
-    )
+    monkeypatch.setattr(cli_install, "report_regeneration", lambda _root: False)
     code, out = _run(str(sidecar), "--copy", "--yes")
     assert code == 1, out
     assert "Next steps" not in out
+
+
+def test_cli_regenerates_every_derived_target_as_job_new_does(
+    sidecar: Path, repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#2922: install regenerated plant-schema and operational-docs only, then
+    said to commit "derived files included" while q-facts and the contract
+    surface were stale - the q-backed targets must run too."""
+    ran: list[str] = []
+
+    def runs(targets: tuple[tuple[str, ...], ...]):
+        def run(_root: Path) -> list[subprocess.CompletedProcess[str]]:
+            ran.extend(t[-1] for t in targets)
+            return [subprocess.CompletedProcess([], 0, "", "")] * len(targets)
+
+        return run
+
+    monkeypatch.setattr(cli_install, "_paths", lambda: stack_paths.paths_for_root(repo))
+    monkeypatch.setattr(regenerate, "_regenerate_derived", runs(_DERIVED))
+    monkeypatch.setattr(regenerate, "_regenerate_with_q", runs(_WITH_Q))
+    code, out = _run(str(sidecar), "--copy", "--yes")
+    assert code == 0, out
+    assert ran == [t[-1] for t in (*_DERIVED, *_WITH_Q)]
+    assert "q-facts" in out and "contract-surface" in out
+    assert "Next steps" in out
