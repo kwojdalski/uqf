@@ -25,7 +25,10 @@ too, `mode: dry-run`: it admits under the waiver and runs the lifecycle; `--mode
 nothing, it changes nothing. No credential is ever recorded: the readers' password goes to
 the runner by environment, and the command is rebuilt from the run's own arguments, not argv.
 
-`uqs job attachment show NAME` lists the entries of its current destination.
+A `--writer --override any-writer` run (#2928) is recorded the same way, before its runner is
+started, in the state directory of the forced destination it writes to (forced_entry): it
+accepts no finding, because nothing is checked. `uqs job attachment show NAME` lists the
+entries of its current destination and of its forced ones.
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ from __future__ import annotations
 import getpass
 import json
 import os
+import re
 import socket
 from datetime import UTC, datetime
 from pathlib import Path
@@ -102,6 +106,53 @@ def entries(
         }
         for o in plan.get("overrides", [])
     ]
+
+
+def forced_entry(
+    *,
+    run: str,
+    mode: str,
+    reason: str,
+    effect: str,
+    command: str,
+    job: str,
+    writer: str,
+    destination: dict[str, Any],
+    range_from: str,
+    range_to: str,
+    last_writable_date: str,
+    log_path: Path,
+) -> dict[str, Any]:
+    """The `override` entry of a `--writer --override any-writer` run (#2928): the shape of
+    `entries`'s, with what a forced run has instead of an admission - no finding was accepted,
+    because nothing was checked, and its one bound is the writer's completed history."""
+    return {
+        "at": _now(),
+        "event": "override",
+        "run": run,
+        "mode": mode,
+        "override": "any-writer",
+        "reason": reason,
+        "requested": True,
+        "needed": True,
+        "effect": effect,
+        "operator": getpass.getuser(),
+        "host": socket.gethostname(),
+        "command": command,
+        "job": job,
+        "writer": writer,
+        "destination": destination,
+        "range_from": range_from,
+        "range_to": range_to,
+        "bounds": {
+            "last_writable_date": last_writable_date,
+            "writes_stop_at": None,
+            "eod_fence_bypassed": True,
+        },
+        "accepted": [],
+        "observed": [],
+        "log": str(log_path),
+    }
 
 
 def _append(path: Path, lines: list[dict[str, Any]]) -> None:
@@ -175,15 +226,37 @@ def _written_before_2122(entry: dict[str, Any]) -> bool:
 
 
 def of_attachment(paths: UqsPaths, attachment: str) -> tuple[Path | None, list[dict[str, Any]]]:
-    """(the log, its entries) for `attachment`'s current destination; (None, []) when it has
-    no destination (no pinned HDB)."""
+    """(the log, its entries) for `attachment`'s current destination, followed by the entries
+    of its `--override any-writer` runs, which are filed under the writer they wrote through
+    (#2928); (None, []) when it has neither."""
     from uqs.attach.backfill import state_dir_of
 
     try:
-        path = path_for(state_dir_of(paths, attachment))
+        path: Path | None = path_for(state_dir_of(paths, attachment))
     except UqsError:
-        return None, []
-    return path, read(path)
+        path = None
+    found = [] if path is None else read(path)
+    others = _forced_logs(paths, attachment, path)
+    forced = sorted((e for p in others for e in read(p)), key=lambda e: str(e.get("at", "")))
+    return path if path is not None or not others else others[0], found + forced
+
+
+def _forced_logs(paths: UqsPaths, attachment: str, current: Path | None) -> list[Path]:
+    """The records of `attachment`'s `--override any-writer` destinations (#2928): a forced
+    run's coverage, and so its record, is filed under the writer's address
+    (backfill_remote.forced_destination), apart from the destination `state_dir_of` names."""
+    from uqs.attach.backfill import STATE_SUBDIR
+    from uqs.stack import runs
+
+    root = runs.status_dir(paths) / STATE_SUBDIR
+    named = re.compile(re.escape(attachment) + r"-[0-9a-f]{12}")
+    out = []
+    for log_ in sorted(root.glob(f"*/{OVERRIDES_LOG}")) if root.is_dir() else []:
+        if log_ == current or not named.fullmatch(log_.parent.name):
+            continue
+        if any(e.get("override") == "any-writer" for e in read(log_)):
+            out.append(log_)
+    return out
 
 
 def lines_of(entries_: list[dict[str, Any]]) -> list[str]:

@@ -221,7 +221,9 @@ deadline. Every other check still applies.
 The waiver is not saved with the attachment, so the next backfill without the
 flag is fenced again. A dry run or run that uses it first appends an entry to
 `<status dir>/attached/<attachment>-<id>/backfill_overrides.jsonl`, and does not
-start if that fails. `uqs job attachment show NAME` lists the entries.
+start if that fails. A `--writer` run with `--override any-writer --reason TEXT`
+is recorded the same way, in the state directory of the writer it writes
+through. `uqs job attachment show NAME` lists the entries.
 
 ### Seeing what happened
 

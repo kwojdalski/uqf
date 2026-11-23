@@ -16,7 +16,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import backfill as attached
-from uqs.attach import backfill_remote
+from uqs.attach import backfill_audit, backfill_remote
 from uqs.attach.remote import IpcError
 from uqs.paths import UqsError
 
@@ -58,13 +58,15 @@ class _Silent:
 
 def _launch(world, monkeypatch, **kw):
     kw.setdefault("ipc", _Writer())
+    if kw.get("force"):
+        kw.setdefault("reason", "approved by the desk")
     monkeypatch.setattr(backfill_remote, "q_interpreter", lambda env: Path("/bin/q"))
     monkeypatch.setattr(
         backfill_remote,
         "evaluate",
         lambda *a: {"custom_io": False, "live": True, "source": "s", "dataset": "d", "windows": []},
     )
-    monkeypatch.setattr(backfill_remote.subprocess, "Popen", _Popen)
+    monkeypatch.setattr(backfill_remote.subprocess, "Popen", kw.pop("popen", _Popen))
     monkeypatch.setattr(backfill_remote.backfill_owner, "claim", lambda *a: None)
     return backfill_remote.launch_remote(
         world.paths, "pb-uat", WORKER, "v1", FROM, TO,
@@ -176,3 +178,91 @@ def test_a_forced_launch_is_refused_when_the_writer_does_not_answer(world, monke
     with pytest.raises(UqsError, match="does not answer writer_state"):
         _launch(world, monkeypatch, force=True, ipc=_Silent())
     assert _Popen.argv == []
+
+
+# --- the forced write is on record (#2928) ---------------------------------------------
+
+
+def test_a_forced_launch_is_recorded_before_the_runner_starts(world, monkeypatch):
+    save_attachment("pb-uat", world.hdb)
+    seen: list[list[dict]] = []
+
+    class _Recording(_Popen):
+        def __init__(self, argv, **kw) -> None:
+            dest = backfill_remote.forced_destination(world.paths, "pb-uat", WORKER, "uat-box:6055")
+            seen.append(backfill_audit.read(backfill_audit.path_for(dest.state_dir)))
+            super().__init__(argv, **kw)
+
+    run_, _ = _launch(world, monkeypatch, force=True, popen=_Recording)
+    [entry] = seen[0]
+    assert run_.audit == backfill_audit.path_for(run_.state_dir)
+    assert entry["event"] == "override" and entry["override"] == "any-writer"
+    assert entry["reason"] == "approved by the desk"
+    assert entry["run"] == run_.run_id and entry["log"] == str(run_.log)
+    assert entry["writer"] == "uat-box:6055"
+    assert entry["command"].endswith("--writer uat-box:6055 --mode run --from "
+                                     f"{FROM.isoformat()} --to {TO.isoformat()} "
+                                     "--source-version v1 --override any-writer")  # fmt: skip
+    assert entry["bounds"] == {
+        "last_writable_date": "2026-09-13", "writes_stop_at": None, "eod_fence_bypassed": True,
+    }  # fmt: skip
+    assert entry["operator"] and entry["host"]
+
+
+def test_a_forced_launch_that_cannot_be_recorded_starts_nothing(world, monkeypatch):
+    save_attachment("pb-uat", world.hdb)
+    _Popen.argv = []
+
+    def _unwritable(path, lines):
+        raise OSError("read-only file system")
+
+    monkeypatch.setattr(backfill_audit, "_append", _unwritable)
+    with pytest.raises(UqsError, match="could not record the override .* nothing was started"):
+        _launch(world, monkeypatch, force=True)
+    assert _Popen.argv == [], "the runner was started without its record"
+
+
+def test_a_forced_launch_without_a_reason_is_refused(world, monkeypatch):
+    save_attachment("pb-uat", world.hdb)
+    _Popen.argv = []
+    with pytest.raises(UqsError, match="--override any-writer needs a --reason"):
+        _launch(world, monkeypatch, force=True, reason="")
+    assert _Popen.argv == []
+
+
+def test_a_checked_remote_launch_writes_no_override_record(world, monkeypatch):
+    run_, _ = _launch(world, monkeypatch)
+    assert run_.audit is None
+    assert not backfill_audit.path_for(run_.state_dir).exists()
+
+
+def test_attachment_show_lists_the_forced_write(world, monkeypatch):
+    """`uqs job attachment show` reads the attachment's record: a forced run's is filed under
+    the writer, apart from the pinned destination's, and is listed all the same."""
+    save_attachment("pb-uat", world.hdb)
+    run_, _ = _launch(world, monkeypatch, force=True)
+    record, found = backfill_audit.of_attachment(world.paths, "pb-uat")
+    assert [e["run"] for e in found] == [run_.run_id]
+    assert record is not None
+    [line] = backfill_audit.lines_of(found)
+    assert "OVERRIDE any-writer" in line and "reason: approved by the desk" in line
+
+
+def test_attachment_show_lists_the_forced_write_of_an_attachment_with_no_pinned_hdb(
+    world, monkeypatch
+):
+    save_attachment("pb-uat", world.hdb, state="applied", pin=False)
+    run_, _ = _launch(world, monkeypatch, force=True)
+    record, found = backfill_audit.of_attachment(world.paths, "pb-uat")
+    assert record == run_.audit
+    assert [e["override"] for e in found] == ["any-writer"]
+
+
+def test_another_attachments_forced_write_is_not_listed(world, monkeypatch):
+    save_attachment("pb-uat", world.hdb)
+    _launch(world, monkeypatch, force=True)
+    save_attachment("pb", world.hdb)
+    assert backfill_audit.of_attachment(world.paths, "pb") == (
+        backfill_audit.path_for(attached.state_dir_of(world.paths, "pb")),
+        [],
+    )

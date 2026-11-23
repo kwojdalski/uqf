@@ -299,6 +299,7 @@ def backfill(
             trace=trace,
             writer=writer,
             force=force,
+            force_reason=why,
             waived=waived,
         )
         return
