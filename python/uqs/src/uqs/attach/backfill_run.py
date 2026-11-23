@@ -93,8 +93,9 @@ def stop_file_for(state_dir: Path, worker: str, pid: int) -> Path:
     """The file that asks a run to stop (#2679): `<state dir>/<worker>.<pid>.stop`, beside the
     worker's lock and status file. q derives the same path from the same parts
     (`.qetl.job.bounded.stop.path`, src/etl/core/bounded_stop.q) - the suffix is q's fact,
-    generated - and checks for it between windows, never inside one. It names the process, so a
-    request left behind for a run that has ended stops no other."""
+    generated - and checks for it between windows, never inside one. A pid is reused, so a
+    request must not outlive its run: the run removes its own on every exit, and `launch`
+    removes one an earlier process of the new pid left (#2930)."""
     return state_dir / f"{worker}.{pid}{q_facts.STOP_FILE_SUFFIX}"
 
 
@@ -291,6 +292,9 @@ def launch(
         except OSError as exc:
             backfill_audit.outcome(audit, log.stem, outcome="not-started", error=str(exc))
             raise UqsError(f"could not start the backfill runner: {exc}") from None
+        # a stop request an earlier process with this pid left would stop this run before its
+        # first window; nobody has this pid to ask a stop of until the claim below (#2930)
+        stop_file_for(dest.state_dir, worker, proc.pid).unlink(missing_ok=True)
         # the process exists: record it before the lock is released, so no second run or detach
         # can slip in between its start and its own claim
         backfill_owner.claim(attachment, worker, proc.pid, dest.identity, attach_root)

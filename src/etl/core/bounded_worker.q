@@ -1113,7 +1113,7 @@
     if[count owed; why,:enlist .qetl.job.bounded.owed_error owed];
     / Report the phase reached, not the one asked for: a run whose ledger
     / close failed ends `failed (#675), and its result and exit code say so.
-    result[`state]:.qetl.job.bounded.advance_phase[worker;result`state;$[count why; "; " sv why; ""]]; if[stopped; .qetl.job.bounded.stop.clear worker];
+    result[`state]:.qetl.job.bounded.advance_phase[worker;result`state;$[count why; "; " sv why; ""]];
     / No cleanup here: `run` above releases on EVERY exit, this one included.
     / .
     / The release used to live on this line, which made it the happy path's
@@ -1513,14 +1513,14 @@
 
 .qetl.job.bounded.publish_last_batch:{[worker;unused] .qetl.job.bounded.runtime.retire_fixture_claims[worker;.qetl.job.bounded.own[worker;`publish] .qetl.job.bounded.read_state[worker;`last_batch]]}
 
-/ Release everything the worker holds. release_lock removes the lock
-/ whoever holds it, so call this only from a worker that took it (#2319).
+/ Release everything the worker holds, its stop file too whatever the end (#2930). release_lock
+/ removes the lock whoever holds it, so call this only from a worker that took it (#2319).
 .qetl.job.bounded.cleanup:{[worker]
     h:.qetl.job.bounded.read_state[worker;`handle];
     / The transport's `close`: hclose, the ODBC close, or for a local source's
     / directory nothing at all.
     closer:(.qetl.source.for_source (.qetl.job.bounded.def worker)`source)`close;
     if[not null h; closer h; .qetl.job.bounded.write_state[worker;`handle;0Ni]];
-    .qetl.job.bounded.state.release_lock worker}
+    .qetl.job.bounded.stop.clear worker; .qetl.job.bounded.state.release_lock worker}
 
 \d .

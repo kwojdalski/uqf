@@ -56,7 +56,15 @@ from uqs.attach.backfill import (
 from uqs.attach.backfill_admission import admit
 from uqs.attach.backfill_coordination import assess
 from uqs.attach.backfill_plan import evaluate
-from uqs.attach.backfill_run import AGAIN, LOGS, REACH_PASSWORD_ENV, RUNNER, Launched, q_date
+from uqs.attach.backfill_run import (
+    AGAIN,
+    LOGS,
+    REACH_PASSWORD_ENV,
+    RUNNER,
+    Launched,
+    q_date,
+    stop_file_for,
+)
 from uqs.attach.remote import Ipc
 from uqs.interpreter import q_interpreter
 from uqs.liveness import on_this_host
@@ -248,6 +256,8 @@ def launch_remote(
         except OSError as exc:
             backfill_audit.outcome(audit, log.stem, outcome="not-started", error=str(exc))
             raise UqsError(f"could not start the backfill runner: {exc}") from None
+        # an earlier process's leftover stop request for this pid stops nothing new (#2930)
+        stop_file_for(dest.state_dir, worker, proc.pid).unlink(missing_ok=True)
         backfill_owner.claim(attachment, worker, proc.pid, dest.identity, attach_root)
     return Launched(proc.pid, log, dest.state_dir, owner, dest, proc, audit), plan
 

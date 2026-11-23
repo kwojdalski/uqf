@@ -280,3 +280,22 @@ def test_a_remote_launch_on_a_busy_attachment_is_told_to_run_again(world, monkey
     with pytest.raises(UqsError, match=r"`uqs job runs stop other_worker --attachment pb-uat` "
                        r"stops it\), then run this backfill again\."):  # fmt: skip
         _launch(world, monkeypatch, force=True)
+
+
+def test_a_launch_removes_a_stop_request_an_earlier_process_of_its_pid_left(world, monkeypatch):
+    """#2930: `<worker>.<pid>.stop` left by a run that ended without reading it would stop the
+    next run given the same pid before its first window; nobody can have asked the new run to
+    stop before the launcher hands its pid out, so what is there is stale."""
+    from uqs.attach import backfill_run
+
+    save_attachment("pb-uat", world.hdb)
+    dest = attached.resolve(world.paths, "pb-uat", WORKER, on_this_machine=False)
+    left = backfill_run.stop_file_for(dest.state_dir, WORKER, 4242)  # _Popen's pid
+    other = backfill_run.stop_file_for(dest.state_dir, WORKER, 4343)
+    left.parent.mkdir(parents=True, exist_ok=True)
+    left.touch()
+    other.touch()
+    run_, _ = _launch(world, monkeypatch)
+    assert run_.state_dir == dest.state_dir
+    assert not left.exists(), "the leftover for this pid stops nothing now"
+    assert other.exists(), "another pid's request is not this launch's to remove"
