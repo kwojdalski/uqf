@@ -371,9 +371,9 @@
             while[j<count out_edges;
                 nbr:out_edges[j]`dst;
                 if[not nbr in visited;
-                    visited:visited,nbr;
+                    visited,:nbr;
                     parent[nbr]:(cur;out_edges[j]`via);
-                    next_frontier:next_frontier,nbr;
+                    next_frontier,:nbr;
                     if[nbr~goal_ccy; found:1b]];
                 j+:1];
             i+:1];
