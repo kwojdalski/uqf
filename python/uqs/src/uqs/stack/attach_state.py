@@ -173,14 +173,19 @@ def refuse_old_config(cfg: object, path: Path) -> None:
 def _remote_discovery(cfg: dict) -> str:
     """`:host:port` of the attachment's discovery when its host is not this
     machine by name, else "". By name only, as TorQ's own process.csv names
-    it: an address this machine owns is still a name TorQ would connect to."""
+    it: an address this machine owns is still a name TorQ would connect to.
+
+    This machine by name is its name or the short form of it, as
+    uqs.attach.facts.Host.is_local has it: two names that both carry a domain
+    and differ are two machines, however alike their first labels (#2906)."""
     stack = cfg.get("stack") or {}
     host = str(stack.get("discovery_host") or "").lower()
     port = stack.get("discovery_port")
     here = socket.gethostname().lower()
     if not host or not port or host in _LOOPBACK or host.startswith("127."):
         return ""
-    if host in (here, here.split(".")[0]) or host.split(".")[0] == here.split(".")[0]:
+    named, mine = host.split("."), here.split(".")
+    if host == here or (named[0] == mine[0] and 1 in (len(named), len(mine))):
         return ""
     return f":{host}:{int(port)}"
 

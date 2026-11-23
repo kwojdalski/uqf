@@ -675,6 +675,67 @@ def test_only_a_host_that_resolves_to_another_machine_is_elsewhere():
     assert not h.is_elsewhere(socket.gethostname().upper())
 
 
+UAT = "kdb1.uat.example.com"
+
+
+def _named(monkeypatch, *names: str, resolves_to: str = "192.0.2.77") -> facts.Host:
+    """This machine under `names`, where every name resolves to `resolves_to` -
+    by default an address of TEST-NET-1, which no machine here owns."""
+    monkeypatch.setattr(facts, "_addresses", lambda name: [resolves_to])
+    return facts.Host(lambda h, port: False, facts.LOCAL_HOSTS + names)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["kdb1.prod.example.com", "KDB1.other-site.example.org", "kdb2.uat.example.com", "kdb2"],
+)
+def test_a_host_in_another_domain_is_another_machine_whatever_its_first_label(monkeypatch, name):
+    """Hosts named per environment share a short name: `kdb1.prod` is not
+    `kdb1.uat`, and deciding by the first label alone said it was (#2906)."""
+    here = _named(monkeypatch, UAT)
+    assert not here.is_local(name) and here.is_elsewhere(name)
+
+
+@pytest.mark.parametrize(
+    ("mine", "name"),
+    [
+        (UAT, "kdb1"),
+        (UAT, "KDB1"),
+        (UAT, "KDB1.UAT.Example.com"),
+        # gethostname() gave the short name and the operator the full one
+        ("kdb1", "KDB1.uat.example.com"),
+        ("kdb1", "Kdb1"),
+    ],
+)
+def test_this_machine_is_local_by_its_short_name_and_by_its_full_one(monkeypatch, mine, name):
+    """In any case: q's .z.h is lower-case, gethostname() on macOS is not (#726)."""
+    here = _named(monkeypatch, mine)
+    assert here.is_local(name) and not here.is_elsewhere(name)
+
+
+def test_a_name_in_another_domain_is_still_local_by_an_address_this_machine_owns(monkeypatch):
+    here = _named(monkeypatch, UAT, resolves_to="127.0.0.1")
+    assert here.is_local("kdb1.prod.example.com")
+
+
+def test_a_schema_file_here_is_not_the_one_of_a_stack_that_shares_the_short_name(
+    bundle, tmp_path, monkeypatch
+):
+    """Both boxes deploy to the same path, so the file exists HERE - and is
+    still another machine's: it is neither approved nor written (#2906)."""
+    schema = tmp_path / "database.q"
+    schema.write_text("trade:([] time:`timestamp$())\n")
+    fake = FakeStack(6000, schema_file=str(schema))
+    att = att_for(bundle, host="kdb1.prod.example.com", runtime_only=False)
+    p = plan.build(att, fake, ROOT, preflight.Facts(host=_named(monkeypatch, UAT)))
+    (refused,) = [f for f in p.findings if f.code == "PERSIST_UNAVAILABLE"]
+    assert (
+        "the schema file is on kdb1.prod.example.com; this machine cannot edit it"
+        in refused.message
+    )
+    assert not p.ok and "WILL_PERSIST" not in {f.code for f in p.findings}
+
+
 def test_a_schema_file_on_this_disk_is_persistable_with_the_stack_host_given_as_an_ip(
     bundle, tmp_path
 ):

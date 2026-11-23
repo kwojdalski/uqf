@@ -11,6 +11,7 @@ it, and nothing else does.
 from __future__ import annotations
 
 import contextlib
+import socket
 import subprocess
 from pathlib import Path
 
@@ -60,6 +61,31 @@ def test_the_discovery_named_by_the_attachment_is_the_one_passed():
 def test_a_stack_on_this_machine_changes_nothing(host):
     attach(host)
     assert extras("start", PUBLISHER) == ["start", PUBLISHER]
+
+
+@pytest.mark.parametrize(
+    ("here", "host", "after"),
+    [
+        # hosts named per environment: the same short name, another machine (#2906)
+        ("Kdb1.uat.example.com", "kdb1.prod.example.com",
+         ["-.servers.DISCOVERY", ":kdb1.prod.example.com:6001"]),
+        ("Kdb1.uat.example.com", "KDB1.uat.example.com", []),
+        ("Kdb1.uat.example.com", "kdb1", []),
+        ("Kdb1", "kdb1.uat.example.com", []),
+    ],
+)  # fmt: skip
+def test_only_a_stack_this_machine_is_not_named_as_is_told_its_discovery(
+    monkeypatch, here, host, after
+):
+    """This machine by name is its name or the short form of it, in any case
+    (q's .z.h is lower-case, gethostname() on macOS is not, #726)."""
+    attach(host, runtime_only=True)
+    monkeypatch.setattr(socket, "gethostname", lambda: here)
+    assert extras("start", PUBLISHER) == [
+        "start",
+        PUBLISHER,
+        *(["-extras", *after] if after else []),
+    ]
 
 
 def test_other_processes_and_other_verbs_are_left_alone():

@@ -38,11 +38,17 @@ class Host:
         """Whether `name` is this machine - by name, by loopback, or by ANY address it
         owns. A stack host given as the machine's own IP (`--host 10.1.2.3`, or any
         127.x) is as local as `localhost`; deciding by name alone called it remote,
-        so a schema file on this very disk was reported unreachable (#1435)."""
+        so a schema file on this very disk was reported unreachable (#1435).
+
+        By name means the same name, or the short form of one: `kdb1` is
+        `kdb1.uat.example.com`. Two names that both carry a domain and differ are
+        not one machine by name - `kdb1.prod.example.com` is another environment's
+        box, whose schema file is not the one on this disk (#2906) - so they are
+        decided by address."""
         lowered = name.lower()
-        if lowered in self.local_names or lowered.split(".")[0] in {
-            n.split(".")[0] for n in self.local_names if not _is_ip(n)
-        }:
+        if lowered in self.local_names or any(
+            _short_form(lowered, n) for n in self.local_names if not _is_ip(n)
+        ):
             return True
         return any(_owned(address) for address in _addresses(lowered))
 
@@ -52,6 +58,13 @@ class Host:
         elsewhere - a check that must not miss a clash on this machine treats
         an unknown host as possibly this one (#1686)."""
         return not self.is_local(name) and bool(_addresses(name.lower()))
+
+
+def _short_form(a: str, b: str) -> bool:
+    """Whether one of two host names is the other without its domain: the same
+    first label, and at least one of them nothing but that label."""
+    one, other = a.split("."), b.split(".")
+    return one[0] == other[0] and 1 in (len(one), len(other))
 
 
 def _is_ip(text: str) -> bool:
