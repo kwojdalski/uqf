@@ -300,7 +300,9 @@ Say this back to the user, because it is the part that surprises people:
 - The job needs a new pricing or execution function under `src/foundation/`,
   `pricing/`, `portfolio/`, `execution/` or `market_data/`. That is
   `uqf-quant-developer`'s.
-- The port budget is full. The licence caps a q process at 16 concurrent
-  connections and every streaming job opens one to the plant; past that the cap,
-  not the configuration, decides what runs. `uqs start` warns, but check before
-  adding the seventeenth.
+- The port budget is full. The licence caps a q process's concurrent
+  connections, and every streaming job opens one to the plant; the stack's own
+  subscribers (rdb1, wdb1, sctp1, metrics1) hold some before any job starts.
+  `uqs profile list` shows each profile's slots against its allowance. A
+  `uqs start --profile` over the allowance is refused and a positional start
+  only warns, so check before adding a streaming job.
