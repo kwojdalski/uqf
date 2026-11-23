@@ -38,7 +38,7 @@ from uqs.attach import config, durability, topology
 from uqs.attach.config import Attachment
 from uqs.attach.facts import Host
 from uqs.attach.manifest import DONE, SHARED, Manifest
-from uqs.attach.remote import Ipc, KolaIpc
+from uqs.attach.remote import Bounded, Ipc, KolaIpc
 from uqs.paths import UqsError
 from uqs.stack import attach_state
 
@@ -56,7 +56,9 @@ def needed(att: Attachment, m: Manifest, host: Host) -> bool:
 
 
 def ipc_for(att: Attachment) -> Ipc:
-    return KolaIpc(att.stack.user, att.stack.password(), TIMEOUT_MS)
+    """A probe's connection: a process that accepts and never answers is given
+    up on after its timeout and a margin, as reach's are."""
+    return Bounded(KolaIpc(att.stack.user, att.stack.password(), TIMEOUT_MS), TIMEOUT_MS / 1000 + 3)
 
 
 def missing(att: Attachment, ipc: Ipc) -> tuple[list[str], str]:

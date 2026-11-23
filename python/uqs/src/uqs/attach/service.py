@@ -16,14 +16,23 @@ from uqs.attach import config, jobs, overrides, plan
 from uqs.attach.config import Attachment, AttachmentError, Publisher, Stack, Storage
 from uqs.attach.facts import Facts, Host
 from uqs.attach.manifest import Manifest
-from uqs.attach.remote import Ipc, KolaIpc
+from uqs.attach.remote import Bounded, Ipc, KolaIpc
 from uqs.attach.topology import Observation
 from uqs.paths import paths_for_root
 
+#: How long a call may wait for its answer. kola's timeout bounds the connect
+#: only: a process that accepts and never answers - one still in its startup
+#: script, or wedged - held attach, detach, backfill and HDB scoping forever.
+ANSWER_S = 30.0
+
+#: The operations that may take longer: a reload reads a whole database.
+SLOW_S = {"hdb_reload": 600.0, "sort_reload": 600.0}
+
 
 def ipc_for(att: Attachment) -> Ipc:
-    """The real connection, with the credential the attachment names."""
-    return KolaIpc(att.stack.user, att.stack.password())
+    """The real connection, with the credential the attachment names, every
+    call ending within ANSWER_S (SLOW_S for a reload), answered or not."""
+    return Bounded(KolaIpc(att.stack.user, att.stack.password()), ANSWER_S, SLOW_S)
 
 
 #: The starter pack's process registry, under the starter pack: where TorQ's

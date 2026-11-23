@@ -153,10 +153,13 @@ class Bounded:
     localhost on every machine (KolaIpc's comment).
     """
 
-    def __init__(self, inner: Ipc, seconds: float) -> None:
-        self.inner, self.seconds = inner, seconds
+    def __init__(self, inner: Ipc, seconds: float, slow: dict[str, float] | None = None) -> None:
+        # `slow`: operations allowed longer than `seconds` - a reload of a large
+        # database answers in minutes, and still must answer in the end.
+        self.inner, self.seconds, self.slow = inner, seconds, slow or {}
 
     def call(self, endpoint: Endpoint, op: str, request: dict[str, Any]) -> dict[str, Any]:
+        seconds = self.slow.get(op, self.seconds)
         box: dict[str, Any] = {}
 
         def run() -> None:
@@ -167,12 +170,12 @@ class Bounded:
 
         worker = threading.Thread(target=run, name=f"uqs-ipc-{op}", daemon=True)
         worker.start()
-        worker.join(self.seconds)
+        worker.join(seconds)
         if worker.is_alive():
             raise IpcError(
                 endpoint,
                 op,
-                f"did not answer within {self.seconds:g}s",
+                f"did not answer within {seconds:g}s",
                 unresponsive=True,
             )
         if "error" in box:
