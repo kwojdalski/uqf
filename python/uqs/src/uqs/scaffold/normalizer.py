@@ -207,6 +207,7 @@ publish:.qetl.job.stream.unwired `{name};
         unprofiled=unprofiled,
         start_with_all=start_with_all,
         known_profiles=profile_names(known_profiles),
+        inputs=sources,
     )
     actions += member_actions
     notes += member_notes

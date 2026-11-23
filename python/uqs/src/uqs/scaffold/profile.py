@@ -12,7 +12,11 @@ A process that starts with the stack also goes into `default`, because
 equal.
 
 The edit is to Python source, so it refuses rather than guesses: the profile
-must be a single-line tuple, and the result must fit the line limit.
+must be a tuple literal of names, on one line or wrapped one name a line as
+`ruff format` leaves it. The result is written on one line while it fits the
+line limit and wrapped once it does not, and a wrapped tuple stays wrapped. A
+process already in the profile is left there: the profile already says what
+the scaffold came to say (#2917).
 """
 
 from __future__ import annotations
@@ -78,11 +82,14 @@ def membership(
     unprofiled: str | None,
     start_with_all: bool,
     known_profiles: Iterable[str],
+    inputs: Iterable[str] = (),
 ) -> tuple[list[FileAction], list[str]]:
     """The profiles.py / unprofiled.py edits for `proc`, and their notes.
 
     With neither a profile nor a reason, nothing is written and the note says
-    what to do - the scaffold cannot know which set a job belongs in.
+    what to do - the scaffold cannot know which set a job belongs in. A
+    profile the process would take past its connection budget is refused;
+    `inputs`, the tables it subscribes to, bring their producers in with it.
     """
     known = set(known_profiles)
     if profile and unprofiled:
@@ -105,6 +112,9 @@ def membership(
             "--profile default is what `uqs start all` runs, so it needs --start-with-all too"
         )
     targets = [p for p in (profile, DEFAULT_PROFILE if start_with_all else None) if p]
+    for p in dict.fromkeys(targets):
+        if problem := _past_budget(proc, p, inputs):
+            raise UqsError(problem)
     actions = [
         FileAction(PROFILES_FILE, proc, mode=WriteMode.APPEND, anchor=f"{_PROFILE_PREFIX}{p}")
         for p in dict.fromkeys(targets)
@@ -135,6 +145,33 @@ def membership(
         f"add {proc} to a profile (--profile NAME), or exempt it with --unprofiled REASON - "
         "`uqs profile list` shows the sets and their connection budget"
     ]
+
+
+def _past_budget(proc: str, profile: str, inputs: Iterable[str]) -> str | None:
+    """Why `proc` cannot join `profile`, or None: the budget `uqs profile list`
+    shows and `uqs start --profile` refuses on (model/profiles.py's
+    over_budget_procs), on the profile with `proc` and whatever it reads (#2921).
+    """
+    from uqs.model import profiles as model
+    from uqs.model.dependencies import external_producers, producers_by_table
+    from uqs.paths import repo_root
+
+    if profile not in model.PROFILES:
+        return None
+    unfed = model.unfed_inputs([profile])
+    fed = {*external_producers(repo_root()), *unfed}
+    producers = producers_by_table()
+    feeders = [p for t in inputs if t not in fed for p in sorted(producers.get(t, ()))]
+    members = {*model.resolve([profile]), *model.closure(feeders, unfed)}
+    problem = model.over_budget_procs(members, f"profile(s) {profile} with {proc}", [proc])
+    if problem is None:
+        return None
+    return (
+        f"{proc} would take the {profile} profile past its connection budget, and "
+        f"`uqs start --profile {profile}` would then be refused: {problem} Nothing was "
+        f"written - put {proc} in another profile (`uqs profile list` shows each one's "
+        "slots), or exempt it with --unprofiled REASON"
+    )
 
 
 def _unprofiled_entry(proc: str, reason: str) -> str:
@@ -175,26 +212,52 @@ def _block(lines: list[str], header: str, path: Path = PROFILES_FILE) -> tuple[i
 def _with_member(existing: str, profile: str, proc: str) -> str:
     lines = existing.splitlines(keepends=True)
     start, end = _block(lines, "PROFILES:")
-    entry = re.compile(rf"^(\s+){re.escape(json.dumps(profile))}: \((.*)\),\s*$")
+    head = re.compile(rf"^(\s+){re.escape(json.dumps(profile))}: \((.*)$")
     for i in range(start, end):
-        if m := entry.match(lines[i]):
-            inner = m.group(2).strip().rstrip(",")
-            members = ast.literal_eval(f"({inner},)") if inner else ()
-            if proc in members:
-                raise UqsError(f"{proc} is already in the {profile} profile")
-            new = (*members, proc)
-            inner = ", ".join(json.dumps(p) for p in new) + ("," if len(new) == 1 else "")
-            line = f"{m.group(1)}{json.dumps(profile)}: ({inner}),\n"
-            if len(line.rstrip("\n")) > _LINE_LIMIT:
-                raise UqsError(
-                    f"adding {proc} to the {profile} profile passes the line limit - "
-                    f"add it by hand in {PROFILES_FILE}"
-                )
-            lines[i] = line
-            return "".join(lines)
-    raise UqsError(
-        f"the {profile} profile is not a one-line tuple in {PROFILES_FILE} - add {proc} by hand"
-    )
+        if not (m := head.match(lines[i].rstrip("\n"))):
+            continue
+        last = next((j for j in range(i, end) if lines[j].rstrip().endswith("),")), None)
+        members = None if last is None else _members(lines[i : last + 1])
+        if last is None or members is None:
+            raise UqsError(
+                f"the {profile} profile is not a tuple of names in {PROFILES_FILE}, one line "
+                f"or one name a line - add {proc} by hand"
+            )
+        if proc in members:
+            return existing
+        lines[i : last + 1] = _member_lines(m.group(1), profile, (*members, proc), last > i)
+        return "".join(lines)
+    raise UqsError(f"{PROFILES_FILE} has no {profile} profile - add {proc} by hand")
+
+
+def _members(span: list[str]) -> tuple[str, ...] | None:
+    """The names a profile's lines hold, or None when they are not only names:
+    a comment would be lost by rewriting them, so that is refused too."""
+    source = "".join(span).split(": ", 1)[1].rstrip().removesuffix(",")
+    if "#" in source:
+        return None
+    try:
+        members = ast.literal_eval(source)
+    except SyntaxError, ValueError:
+        return None
+    if not isinstance(members, tuple) or not all(isinstance(p, str) for p in members):
+        return None
+    return members
+
+
+def _member_lines(indent: str, profile: str, members: tuple[str, ...], wrapped: bool) -> list[str]:
+    """A profile's entry: one line while it fits and was one line, else one
+    name a line with a trailing comma, the shape `ruff format` keeps."""
+    key = json.dumps(profile)
+    inner = ", ".join(json.dumps(p) for p in members) + ("," if len(members) == 1 else "")
+    line = f"{indent}{key}: ({inner}),\n"
+    if not wrapped and len(line.rstrip("\n")) <= _LINE_LIMIT:
+        return [line]
+    return [
+        f"{indent}{key}: (\n",
+        *(f"{indent}    {json.dumps(p)},\n" for p in members),
+        f"{indent}),\n",
+    ]
 
 
 def _with_unprofiled(existing: str, entry: str) -> str:

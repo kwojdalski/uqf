@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 from plain_cli import PlainRunner
@@ -232,7 +233,7 @@ def test_neither_answer_takes_a_module_past_its_line_budget():
     the first `--unprofiled` scaffold; a member edits its profile's one line
     (#2462)."""
     for kwargs in ({"unprofiled": "a diagnostic started by hand"}, {"profile": "fx"}):
-        kwargs = {"profile": None, "unprofiled": None, **kwargs}
+        kwargs: dict[str, Any] = {"profile": None, "unprofiled": None, **kwargs}
         actions, _ = profile.membership(
             "tapx1", start_with_all=False, known_profiles=KNOWN, **kwargs
         )
@@ -329,7 +330,7 @@ def test_no_choice_leaves_a_note_and_writes_nothing():
     ],
 )
 def test_a_profile_choice_that_cannot_stand_is_refused(kwargs, message):
-    args = {"profile": None, "unprofiled": None, **kwargs}
+    args: dict[str, Any] = {"profile": None, "unprofiled": None, **kwargs}
     with pytest.raises(UqsError, match=message):
         profile.membership("p1", start_with_all=False, known_profiles=KNOWN, **args)
 
@@ -356,12 +357,112 @@ def test_start_with_all_and_unprofiled_are_refused_together():
         )
 
 
-def test_a_process_already_in_the_profile_is_refused():
+def test_a_process_already_in_the_profile_is_left_there():
+    """#2917: refusing it meant the hand edit the line limit asked for was
+    refused in turn, and a rerun without --start-with-all left the declaration
+    and `default` disagreeing."""
     actions, _ = profile.membership(
         "cryptomock1", profile="crypto", unprofiled=None, start_with_all=False, known_profiles=KNOWN
     )
-    with pytest.raises(UqsError, match="already in the crypto profile"):
-        _applied(actions)
+    assert _edited(actions)[profile.PROFILES_FILE] == PROFILES_TEXT
+
+
+def _profile_entry(text: str, name: str) -> tuple[str, ...]:
+    import ast
+
+    tree = ast.parse(text)
+    (node,) = [
+        n.value
+        for n in tree.body
+        if isinstance(n, ast.AnnAssign)
+        and getattr(n.target, "id", None) == "PROFILES"
+        and n.value is not None
+    ]
+    return ast.literal_eval(node)[name]
+
+
+def test_a_member_past_the_line_limit_wraps_the_tuple_and_more_join_it():
+    """#2917: a 41-character name was refused at once, and once ruff had
+    wrapped a hand-edited tuple every later job naming that profile was
+    refused as well. The wrapped shape is the one `ruff format` keeps."""
+    long_name = "a_rather_long_but_plausible_job_name_feed1"
+    before = _profile_entry(PROFILES_TEXT, "default")
+    text = profile._with_member(PROFILES_TEXT, "default", long_name)
+    assert '    "default": (\n' in text
+    assert f'        "{long_name}",\n    ),\n' in text
+    assert all(len(line) <= 100 for line in text.splitlines())
+    text = profile._with_member(text, "default", "tiny1")
+    assert _profile_entry(text, "default") == (*before, long_name, "tiny1")
+    assert '        "tiny1",\n    ),\n' in text, "a wrapped tuple stays wrapped"
+    assert profile._with_member(text, "default", long_name) == text
+    compile(text, "profiles.py", "exec")
+
+
+def test_a_profile_holding_a_comment_is_refused_rather_than_rewritten():
+    wrapped = profile._with_member(PROFILES_TEXT, "default", "a" * 60 + "1")
+    commented = wrapped.replace('        "posbook1",\n', '        "posbook1",  # kept\n', 1)
+    with pytest.raises(UqsError, match="default profile is not a tuple of names .* add x1 by hand"):
+        profile._with_member(commented, "default", "x1")
+
+
+def _licence_with_room(monkeypatch, profile_name: str, room: int) -> None:
+    """A licence leaving `room` plant slots beyond what `profile_name` holds."""
+    from uqs.model import profiles  # noqa: PLC0415
+
+    held = profiles.plant_slots(profiles.resolve([profile_name]))
+    monkeypatch.setenv(
+        profiles.LICENCE_CONNECTIONS_ENV, str(held + room + profiles.INBOUND_RESERVE)
+    )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "name"),
+    [({"profile": "fx"}, "fx"), ({"start_with_all": True}, "default")],
+)
+def test_a_profile_the_process_would_take_past_its_budget_is_refused(monkeypatch, kwargs, name):
+    """#2921: two jobs scaffolded into `fx` at 13 of 14 slots both exited 0,
+    and `uqs start --profile fx` was refused from then on. The budget is the
+    one that start and `uqs profile list` read."""
+    from uqs.model.profiles import PROFILES  # noqa: PLC0415
+
+    args: dict[str, Any] = {"profile": None, "unprofiled": None, "start_with_all": False, **kwargs}
+    _licence_with_room(monkeypatch, name, 1)
+    actions, _ = profile.membership("job_a1", known_profiles=PROFILES, **args)
+    assert actions
+    _licence_with_room(monkeypatch, name, 0)
+    with pytest.raises(
+        UqsError,
+        match=rf"job_a1 would take the {name} profile past its connection budget, and "
+        rf"`uqs start --profile {name}` would then be refused: profile\(s\) {name} with "
+        r"job_a1 need .* --unprofiled REASON",
+    ):
+        profile.membership("job_a1", known_profiles=PROFILES, **args)
+
+
+def test_the_budget_counts_the_producers_a_new_member_brings_with_it(monkeypatch):
+    """A subscriber to a table nothing in the profile publishes starts that
+    table's producer too, so its slot is charged as well."""
+    from uqs.model import profiles  # noqa: PLC0415
+    from uqs.model.dependencies import external_producers, producers_by_table  # noqa: PLC0415
+    from uqs.paths import repo_root  # noqa: PLC0415
+
+    members = set(profiles.resolve(["fx"]))
+    fed = {*external_producers(repo_root()), *profiles.unfed_inputs(["fx"])}
+    table = next(
+        (
+            t
+            for t, procs in sorted(producers_by_table().items())
+            if t not in fed and procs and profiles.plant_slots(profiles.closure(procs) - members)
+        ),
+        None,
+    )
+    if table is None:
+        pytest.skip("every produced table's producer is already in fx")
+    _licence_with_room(monkeypatch, "fx", 1)
+    args: dict[str, Any] = {"profile": "fx", "unprofiled": None, "start_with_all": False}
+    assert profile.membership("job_a1", known_profiles=profiles.PROFILES, **args)[0]
+    with pytest.raises(UqsError, match="past its connection budget"):
+        profile.membership("job_a1", known_profiles=profiles.PROFILES, inputs=[table], **args)
 
 
 def test_a_normalizer_takes_a_profile_too():
