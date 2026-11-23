@@ -367,3 +367,39 @@ def test_kola_is_given_the_timeout_in_seconds_its_own_unit(monkeypatch, timeout_
         Endpoint("rdb1", "127.0.0.1", 5000), "writer_state", {}
     )
     assert given == [seconds]
+
+
+def test_attachment_calls_end_on_a_process_that_never_answers(bundle, silent_port, monkeypatch):
+    """kola's timeout bounds the connect, not the answer: attach, detach, backfill
+    and HDB scoping waited forever on a process that accepted and never answered.
+    Every call through `service.ipc_for` now ends within its bound."""
+    monkeypatch.setattr(service, "ANSWER_S", 1.0)
+    ipc = service.ipc_for(_att(bundle))
+    ep = Endpoint("rdb", "127.0.0.1", silent_port, local=True)
+    t = time.monotonic()
+    with pytest.raises(IpcError, match="did not answer within 1s") as err:
+        ipc.call(ep, "writer_state", {})
+    assert err.value.unresponsive
+    assert time.monotonic() - t < 3
+
+
+def test_a_reload_is_allowed_its_longer_bound_and_others_are_not():
+    class Slow:
+        def call(self, endpoint, op, request):
+            time.sleep(0.3)
+            return {"op": op}
+
+    ep = Endpoint("hdb", "localhost", 1, local=True)
+    bounded = Bounded(Slow(), 0.1, {"hdb_reload": 2.0})
+    assert bounded.call(ep, "hdb_reload", {}) == {"op": "hdb_reload"}
+    with pytest.raises(IpcError, match="within 0.1s"):
+        bounded.call(ep, "probe", {})
+
+
+def test_the_live_check_and_the_attach_workflow_both_bound_their_calls(bundle):
+    from uqs.attach import live
+
+    att = _att(bundle)
+    ipc = service.ipc_for(att)
+    assert isinstance(ipc, Bounded) and ipc.slow == service.SLOW_S
+    assert isinstance(live.ipc_for(att), Bounded)
