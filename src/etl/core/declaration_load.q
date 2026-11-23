@@ -60,8 +60,10 @@
 / thirty declarations cannot otherwise say which one stopped it.
 / @param f the file's path, relative to the repository root
 / @return the file's path
-/ @throws error naming the file and its jobs, then q's own message
+/ @throws error naming the file and its jobs, then q's own message; or naming a file whose name holds a space
 .qetl.load.one:{[f]
+    / \l splits its argument on a space, so a file manager's "my_job copy.q" failed as a bare nyi (#2954)
+    if[" " in f; '"etl load: ",f," has a space in its name - a declaration file is loaded with \\l, which cannot take one; rename or remove it"];
     @[system;"l ",f;{[f;e]
         js:$[(`$f) in key .qetl.load.declares; .qetl.load.declares `$f; `symbol$()];
         '"etl load: ",f,$[count js;" (job ",(", " sv string js),")";""]," failed: ",e}[f]];

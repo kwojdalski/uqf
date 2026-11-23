@@ -214,6 +214,7 @@
 /   batching (compute batching inside a window, off unless declared - bounded_batching.q, #1921) pin (a niladic function recording the configuration snapshot its rows name - bounded_pin.q), and `twin_of with `twin_calculation (the streaming job it repairs, held to its output, contract and calculation whenever both load - twin.q, #2103), and q (the q interpreters it runs on, e.g. "kdbx>=4.1 peachq" - declared.q, #2747)
 / @throws error naming every missing or malformed field at once
 .qetl.job.bounded.define:{[worker;decl]
+    .qetl.declared.require_form["";worker;decl];
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
     if[worker in key .qetl.job.stream.jobs;
         '"define: ",string[worker]," is already a streaming job - job names must be unique across execution modes"];
@@ -242,9 +243,8 @@
     / malformed manager should fail at declaration, not halfway through a
     / backfill having already fetched a window it is now unable to store.
     .qetl.io.for_cfg decl;
-    .qetl.source.def decl`source;
+    .qetl.source.def .qetl.declared.require_symbol["define: ",string worker;`source;decl`source;"the name of a registered source"];
     .qetl.job.bounded.require_transform[worker;decl]; .qetl.twin.check_worker[worker;decl];
-
     / Refuse two workers filling one dataset AND PARTITION (#60, #185).
     / .
     / This used to refuse on the dataset alone, because coverage had no
@@ -319,9 +319,8 @@
          / did, immediately before the wreckage.
          "[",string[part],"], already claimed by ",(", " sv string clash),
          " - two workers on one dataset and partition produce coverage rows nothing can tell apart"];
-
     / Normalise to the full key set before storing - see optional_cfg.
-    stored:.qetl.job.bounded.normalised decl;
+    stored:.qetl.job.bounded.normalised decl; .qetl.declared.refuse_redeclared["define: ",string worker;"worker";.qetl.job.bounded.worker_cfg;worker;stored];
     `.qetl.job.bounded.worker_cfg upsert (worker,stored cols value .qetl.job.bounded.worker_cfg);
     / Last, so a refused declaration leaves no half-stamped namespace behind.
     .qetl.job.bounded.inherit[worker;decl`ns];

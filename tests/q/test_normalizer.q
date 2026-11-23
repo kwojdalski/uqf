@@ -55,6 +55,19 @@
         "the table and the columns that differ are named"];
     .qunit.assertTrue[not `quote in .qetl.job.stream.defined[];"and nothing was registered"]};
 
+/ #2953: a refused declaration under a live job's name wrote the normalizer's dispatcher over the job's handler.
+.qt.qetl.job.stream.normalizer.test_a_refused_declaration_leaves_the_live_jobs_handler_alone:{[t]
+    .qt.support.save_stream_jobs[`.qt.qetl.job.stream.normalizer];
+    .qt.qetl.job.stream.normalizer.mk_xf[`normtest_good;.qt.qetl.job.stream.normalizer.canon;.qt.qetl.job.stream.normalizer.good];
+    mine:{[t;x] `mine};
+    .qetl.job.stream.define[`nt_live;`subscribe_to`outputs`on_batch!(enlist `nt_in;enlist `nt_live_out;mine)];
+    (` sv (.qetl.job.stream.namespace `nt_live),`on_batch) set mine;
+    r:@[.qetl.job.stream.normalize[`nt_live;];`procname`output`input!(`nt_live2;.qt.qetl.job.stream.normalizer.canon;(enlist `src)!enlist `normtest_good);{x}];
+    h:get ` sv (.qetl.job.stream.namespace `nt_live),`on_batch;
+    .qt.support.restore_stream_jobs[`.qt.qetl.job.stream.normalizer];
+    .qunit.assertTrue[r like "define: normalizer nt_live is already a streaming job*";"refused, naming the verb"];
+    .qunit.assertEquals[h~mine;1b;"and the job's own handler is still the one in its namespace"]};
+
 / #2935: a dotted name registers in one place in q and is read as another by uqs.
 .qt.qetl.job.stream.normalizer.test_a_name_that_is_not_a_plain_identifier_is_refused:{[t]
     {[n] .qunit.assertThrows[.qetl.job.stream.normalize[n;];

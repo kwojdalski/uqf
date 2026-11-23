@@ -192,7 +192,8 @@
 / one.
 / @param source a name for this source, e.g. `deals_analogue
 / @param decl a dict carrying every name in required_declarations:
-/   table   - the external table name, as a symbol
+/   source  - the source's own name, the same symbol as the first argument
+/   table_name - the external table name, as a symbol
 /   time_column - the column the window is taken on, as a symbol
 /   row_key - the column(s) identifying a row uniquely, as a symbol vector
 /   columns  - the columns this adapter RETURNS, as a symbol vector - also
@@ -230,6 +231,7 @@
 / @return the source name
 / @throws error naming every missing or malformed declaration at once
 .qetl.source.define:{[source;decl]
+    .qetl.declared.require_form["";source;decl];
     / Where rows go is the WORKER's dataset (#769), so a source naming a
     / destination was a second answer to that question, shown and never used
     / (#1092).
@@ -253,6 +255,7 @@
     .qetl.source.check_arity[source;decl];
     if[not -11h=type decl`tz;
         '"define: ",string[source],"'s tz must be a single symbol - `UTC, or a tz-database name such as `$\"Europe/London\""];
+    .qetl.source.check_values[source;decl];
     / The window is taken on time_column, so time_column must be a field this
     / adapter actually READS. Without this check a typo registers happily and
     / surfaces two layers down: validate never checks the column (it is not
@@ -367,10 +370,36 @@
     / columns and types to vectors too: one field's atom would otherwise type
     / a general column on the first registration and refuse the next one.
     decl:.qetl.source.optional_declarations,@[decl;`row_key`columns`types;:;(key_cols;(),decl`columns;(),decl`types)];
+    .qetl.declared.refuse_redeclared["define: ",string source;"source";.qetl.source.sources;source;decl];
     `.qetl.source.sources upsert (source,decl cols value .qetl.source.sources);
     .[{.qetl.log.ch.dbg[x;y;z]};(`config;"source registered";
         `source`columns`time_column`tz`transport`row_key!(source;decl`columns;decl`time_column;decl`tz;tr;key_cols));::];
     source}
+
+/ Private: refuse the values of a source declaration that contradict it, or that
+/ would fail with a bare 'type further in (#2953). Split out of define, whose
+/ locals are at q's limit once coverage instruments it.
+/ .
+/ The zone's spelling is checked only for UTC: the zone table loads after the
+/ declaration, so no other zone can be looked up here, but `utc` is a typo of
+/ `UTC` that the table's lookup would answer with a request to load a table.
+/ @param source the name the source is declared under
+/ @param decl the declaration, whose columns and types are already known well-formed
+/ @return nothing - it throws naming the source and the key
+/ @private
+.qetl.source.check_values:{[source;decl]
+    who:"define: ",string source;
+    if[not source~decl`source;
+        'who," declares source ",.Q.s1[decl`source],", which is not its name - the registry is keyed on the name it is defined under"];
+    .qetl.declared.require_symbol[who;`table_name;decl`table_name;"the external table's name"];
+    .qetl.declared.require_symbol[who;`time_column;decl`time_column;"the column the window is taken on"];
+    g:group decl`columns;
+    if[count rep:where 1<count each g;
+        'who,"'s columns repeat ",(", " sv string rep)," - a field is declared once"];
+    if[not all (decl`types) in .Q.t,upper .Q.t;
+        'who,"'s types holds ",(distinct (decl`types) where not (decl`types) in .Q.t,upper .Q.t)," - not a q type character"];
+    if[(not `UTC~decl`tz) and `UTC~`$upper string decl`tz;
+        'who,"'s tz is ",string[decl`tz],", which is not UTC - zone names are case-sensitive, so write `UTC"]}
 
 / Private: refuse a query or fixture lambda of the wrong arity - now, rather
 / than at the first live window's bare 'rank (#2484). Only a lambda's parameter

@@ -11,6 +11,7 @@
 
 / stage_ready's inputs for a source whose hook is `hook`: the window state a stage receives.
 .qt.qetl.source.readiness.state_for:{[hook;batch]
+    .qt.support.drop_rows[`.qetl.source.sources;`rd_src];
     .qetl.source.define[`rd_src;
         `source`table_name`time_column`row_key`columns`types`query`fixture`tz`ready!
         (`rd_src;`t;`time;`time;enlist `time;enlist "p";{[h;a;b] ()};{[] ()};`UTC;hook)];

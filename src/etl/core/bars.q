@@ -92,8 +92,8 @@
 / @return the name
 / @throws error naming the first problem found
 .qetl.job.stream.bars.define:{[name;decl]
+    .qetl.declared.require_form["bars job";name;decl];
     who:"define: bars job ",string[name];
-    if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
     .qetl.job.stream.refuse_publishes[who;decl];
     decl:.qetl.job.stream.with_lateness[who;decl];
     .qetl.declared.refuse_unknown[who;"a bars job";decl;.qetl.job.stream.bars.required_keys,.qetl.job.stream.bars.optional_keys];
@@ -117,6 +117,7 @@
     t:.qetl.transform.def[who;decl`transform];
     if[1<>count t`inputs; 'who,"'s transform takes ",string[count t`inputs]," inputs - it takes one: the events plus bar_start"];
     .qetl.job.stream.refuse_output_mismatch[who;decl`outputs;t`output];
+    if[`by in key decl; .qetl.declared.require_symbols[who;`by;decl`by;"the grouping columns"]];
     d:`by`event_time!(enlist `sym;`time);
     d:d,decl,enlist[`by]!enlist (),$[`by in key decl; decl`by; `sym];
     in_cols:cols first value t`inputs;

@@ -59,6 +59,13 @@
     .qetl.job.bounded.define[`cs_w1;d];
     .qunit.assertEquals[(.qetl.job.bounded.def `cs_w1)`procname;`cs_shared;"a re-definition replaces the row"]};
 
+.qt.qetl.job.consistency.test_a_worker_declared_twice_with_another_declaration_is_refused:{[t]
+    .qt.qetl.job.consistency.fresh[];
+    .qetl.job.bounded.define[`cs_w1;.qt.qetl.job.consistency.worker_decl[`cs_ds1]];
+    .qunit.assertThrows[.qetl.job.bounded.define[`cs_w1];@[.qt.qetl.job.consistency.worker_decl[`cs_ds1];`width;:;2D];
+        "define: cs_w1 is already declared as a worker with a different declaration*";"the second would replace the first, as a streaming job's is refused"];
+    .qunit.assertEquals[(.qetl.job.bounded.def `cs_w1)`width;1D;"and the first is still what is registered"]};
+
 .qt.qetl.job.consistency.test_a_streaming_job_cannot_take_a_workers_procname:{[t]
     .qt.qetl.job.consistency.fresh[];
     .qetl.job.bounded.define[`cs_w1;@[.qt.qetl.job.consistency.worker_decl[`cs_ds1];`procname;:;`cs_shared]];
@@ -158,3 +165,46 @@
     d:`procname`on_start`check`on_fail _ .qt.qetl.job.consistency.clone[`bars;`cs_b1];
     .qetl.job.stream.at_bars[`cs_b1;d];
     .qunit.assertEquals[(.qetl.job.stream.def `cs_b1)`procname;`cs_b11;"bars"]}
+
+/ --- the same refusal from every verb (#2953) -------------------------------------
+
+/ Every verb that declares something by name.
+.qt.qetl.job.consistency.verbs:{[]
+    (.qetl.job.stream.define;.qetl.job.bounded.define;.qetl.source.define;.qetl.transform.define;
+     .qetl.job.stream.normalize;.qetl.job.stream.at_bars;.qetl.job.stream.at_rolling;.qetl.job.stream.at_horizons)}
+
+.qt.qetl.job.consistency.test_every_verb_refuses_a_name_that_is_not_a_symbol:{[t]
+    {[v] .qunit.assertThrows[v["cs_x";];()!();"define: *name must be a symbol, e.g. `my_job - got \"cs_x\"";
+        "a string name, which a bare type or length used to answer"]} each .qt.qetl.job.consistency.verbs[]};
+
+.qt.qetl.job.consistency.test_every_verb_refuses_a_declaration_that_is_not_a_dictionary:{[t]
+    {[v] .qunit.assertThrows[v[`cs_x;];`a`b;"define: *cs_x's declaration must be a dictionary";
+        "a list of keys is not a declaration"]} each .qt.qetl.job.consistency.verbs[]};
+
+.qt.qetl.job.consistency.test_every_event_time_kind_refuses_by_that_is_not_symbols:{[t]
+    .qt.qetl.job.consistency.fresh[];
+    {[kind]
+        d:@[.qt.qetl.job.consistency.clone[kind;`cs_b2];`by;:;"sym"];
+        .qunit.assertThrows[((.qt.qetl.job.consistency.kinds[] kind)`define)[`cs_b2;];d;
+            "*cs_b2's by must be the grouping columns, a symbol or a symbol list";string[kind]," names its key"]} each `bars`rolling`horizons};
+
+.qt.qetl.job.consistency.test_every_event_time_kind_refuses_a_period_that_is_a_list:{[t]
+    .qt.qetl.job.consistency.fresh[];
+    {[kind]
+        d:.qt.qetl.job.consistency.clone[kind;`cs_p1];
+        d:@[d;`period;:;enlist d`period];
+        .qunit.assertThrows[((.qt.qetl.job.consistency.kinds[] kind)`define)[`cs_p1;];d;
+            "*cs_p1's period must be a*";string[kind]]} each `bars`rolling`horizons};
+
+.qt.qetl.job.consistency.test_a_normalizer_input_that_is_a_symbol_list_is_refused_by_name:{[t]
+    .qunit.assertThrows[.qetl.job.stream.normalize[`cs_n1;];`procname`output`input!(`cs_n11;([] a:`long$());`src`cs_xf);
+        "define: normalizer cs_n1's input must be a dictionary of source table -> transform name*";"not the first symbol of the list"]};
+
+.qt.qetl.job.consistency.test_a_transform_whose_inputs_are_one_table_is_refused_by_name:{[t]
+    t1:([] time:`timestamp$(); x:`long$());
+    .qunit.assertThrows[.qetl.transform.define[`cs_xf1;];`inputs`output`fn`examples!(t1;t1;{x};());
+        "define: transform cs_xf1's inputs must be a dictionary of name -> empty typed table";"a bare table"]};
+
+.qt.qetl.job.consistency.test_a_bounded_worker_source_that_is_a_string_is_refused_by_name:{[t]
+    .qunit.assertThrows[.qetl.job.bounded.define[`cs_w1;];@[.qt.qetl.job.consistency.worker_decl[`cs_ds1];`source;:;"demo_deals"];
+        "define: cs_w1's source must be the name of a registered source, a symbol";"not 'type"]};

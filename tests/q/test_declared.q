@@ -131,7 +131,7 @@
     (`ns`procname`note`twin_of`twin_calculation) _ @[.qt.support.declaration `demo_deals_backfill;`outputs;:;enlist `zz_decl_out]}
 
 .qt.qetl.declared.source_base:{[]
-    @[.qetl.source.def `demo_deals;`complete_through`ready;:;({[h] 2026.09.01D00:00};{[b;f;t] ()})]}
+    @[.qetl.source.def `demo_deals;`source`complete_through`ready;:;(`zz_decl_source;{[h] 2026.09.01D00:00};{[b;f;t] ()})]}
 
 .qt.qetl.declared.transform_base:{[]
     `inputs`output`fn`examples!(enlist[`a]!enlist ([] x:`long$()); ([] x:`long$()); {[a] a};

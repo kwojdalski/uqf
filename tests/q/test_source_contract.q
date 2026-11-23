@@ -40,6 +40,41 @@
 .qt.qetl.source.test_a_complete_declaration_registers:{[t]
     .qunit.assertEquals[.qetl.source.define[`t;.qt.qetl.source.decl[]];`t;"a valid declaration is accepted"]};
 
+/ #2953: a streaming job refuses its name declared twice; a source replaced the first in silence.
+.qt.qetl.source.test_a_source_declared_twice_with_another_declaration_is_refused:{[t]
+    .qetl.source.define[`t;.qt.qetl.source.decl[]];
+    .qunit.assertThrows[.qetl.source.define[`t;];@[.qt.qetl.source.decl[];`table_name;:;`other];
+        "define: t is already declared as a source with a different declaration*";"the second would replace the first"];
+    .qunit.assertEquals[(.qetl.source.def `t)`table_name;`ext;"and the first is still what is registered"];
+    .qunit.assertEquals[.qetl.source.define[`t;.qt.qetl.source.decl[]];`t;"the same declaration read again, as a reload does, is accepted"]};
+
+/ #2953: a column or table named by a string was refused with a bare 'type.
+.qt.qetl.source.test_a_table_name_or_time_column_that_is_a_string_is_refused_by_name:{[t]
+    .qunit.assertThrows[.qetl.source.define[`t;];@[.qt.qetl.source.decl[];`table_name;:;"ext"];
+        "define: t's table_name must be the external table's name, a symbol";"table_name"];
+    .qunit.assertThrows[.qetl.source.define[`t;];@[.qt.qetl.source.decl[];`time_column;:;"ts"];
+        "define: t's time_column must be the column the window is taken on, a symbol";"time_column"]};
+
+/ #2953: values that contradict each other were accepted and surfaced at a fetch or a validate.
+.qt.qetl.source.test_a_source_key_that_is_not_the_name_is_refused:{[t]
+    .qunit.assertThrows[.qetl.source.define[`other;];.qt.qetl.source.decl[];
+        "define: other declares source `t, which is not its name*";"the registry is keyed on the name argument"]};
+
+.qt.qetl.source.test_repeated_columns_are_refused_naming_them:{[t]
+    .qunit.assertThrows[.qetl.source.define[`t;];@[.qt.qetl.source.decl[];`columns`types;:;(`ts`px`px;"pff")];
+        "define: t's columns repeat px - a field is declared once";"validate_fixture accepted a table with a repeated column"]};
+
+.qt.qetl.source.test_a_types_character_that_is_not_a_q_type_is_refused_at_declaration:{[t]
+    .qunit.assertThrows[.qetl.source.define[`t;];@[.qt.qetl.source.decl[];`types;:;"pq"];
+        "define: t's types holds q - not a q type character";"it used to be found only when a fixture was validated"];
+    .qunit.assertEquals[.qetl.source.define[`t;@[.qt.qetl.source.decl[];`types;:;"p "]];`t;"a space, a general column, is a type character"]};
+
+.qt.qetl.source.test_a_tz_that_differs_from_utc_only_by_case_is_refused_saying_so:{[t]
+    .qunit.assertThrows[.qetl.source.define[`t;];@[.qt.qetl.source.decl[];`tz;:;`utc];
+        "define: t's tz is utc, which is not UTC - zone names are case-sensitive, so write `UTC";
+        "the fetch's own refusal sent the operator to load a zone table"];
+    .qunit.assertEquals[.qetl.source.define[`t;@[.qt.qetl.source.decl[];`tz;:;`$"Europe/London"]];`t;"another zone is the zone table's to judge, at fetch"]};
+
 / Registration validates NOW, unlike .qetl.job.bounded.state.register which defers. The
 / asymmetry is deliberate: a worker's methods appear as its file loads, so
 / early validation would force declaration order; a declaration is one
@@ -88,7 +123,7 @@
 
 / A bracketless lambda is called with (::) for its implicit x, so it is niladic.
 .qt.qetl.source.test_a_bracketless_or_empty_fixture_is_niladic:{[t]
-    ok:{.qetl.source.define[`t;@[.qt.qetl.source.decl[];`fixture;:;x]]} each ({[] ()};{()});
+    ok:{.qt.support.drop_rows[`.qetl.source.sources;`t]; .qetl.source.define[`t;@[.qt.qetl.source.decl[];`fixture;:;x]]} each ({[] ()};{()});
     .qunit.assertEquals[ok;`t`t;"{[] ...} and {...} both register"]};
 
 / The zone is a required declaration with no default. A defaulted zone
@@ -247,6 +282,7 @@
 .qt.qetl.source.test_the_key_accessor_always_returns_a_vector:{[t]
     .qetl.source.define[`t;.qt.qetl.source.decl[]];
     single:.qetl.source.row_key `t;
+    .qt.support.drop_rows[`.qetl.source.sources;`t];
     .qetl.source.define[`t;@[.qt.qetl.source.decl[];`row_key;:;`ts`px]];
     .qunit.assertEquals[(count single;count .qetl.source.row_key `t);(1;2);"one place decides whether an atom needs enlisting, so no caller has to"]};
 

@@ -138,8 +138,8 @@
 / @return the name
 / @throws error naming the first problem found
 .qetl.job.stream.rolling.define:{[name;decl]
+    .qetl.declared.require_form["rolling job";name;decl];
     who:"define: rolling job ",string[name];
-    if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
     .qetl.job.stream.refuse_publishes[who;decl];
     decl:.qetl.job.stream.with_lateness[who;decl];
     .qetl.declared.refuse_unknown[who;"a rolling job";decl;.qetl.job.stream.rolling.required_keys,.qetl.job.stream.rolling.optional_keys];
@@ -162,6 +162,7 @@
     t:.qetl.transform.def[who;decl`transform];
     if[1<>count t`inputs; 'who,"'s transform takes ",string[count t`inputs]," inputs - it takes one: the events plus window, as_of and inside"];
     .qetl.job.stream.refuse_output_mismatch[who;decl`outputs;t`output];
+    if[`by in key decl; .qetl.declared.require_symbols[who;`by;decl`by;"the grouping columns"]];
     d:`by`event_time!(enlist `sym;`time);
     d:d,decl,`by`windows!(((),$[`by in key decl; decl`by; `sym]);asc distinct ws);
     ev0:first value t`inputs;

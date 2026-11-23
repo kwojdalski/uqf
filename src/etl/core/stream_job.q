@@ -176,8 +176,11 @@
         if[not .qetl.declared.callable decl`check;
             '"define: ",string[job],"'s check must be a function of the rows about to be published, returning the offending rows"];
         .qetl.job.stream.require_arity[job;`check;decl`check;1;"a function of the rows about to be published"];
-        if[not (`on_fail in key decl) and -11h=type decl`on_fail;
+        if[not count decl`outputs; '"define: ",string[job]," declares a check but no outputs - it would never run, because the check sits on the publish seam outputs wire"];
+        if[not `on_fail in key decl;
             '"define: ",string[job]," declares a check but no on_fail - say `drop (publish the clean rows) or `hold (withhold the whole batch)"];
+        if[not -11h=type decl`on_fail;
+            '"define: ",string[job],"'s on_fail must be a single symbol, `drop or `hold, not ",.Q.s1 decl`on_fail];
         if[not (decl`on_fail) in `drop`hold;
             '"define: ",string[job],"'s on_fail must be `drop or `hold, not ",string decl`on_fail]];
     }
@@ -289,7 +292,7 @@
 / @return the job name
 / @throws error naming every missing or malformed field at once
 .qetl.job.stream.define:{[job;decl]
-    if[not 99h=type decl; '"define: ",string[job],"'s declaration must be a dictionary"];
+    .qetl.declared.require_form["";job;decl];
     .qetl.job.stream.refuse_taken["define: ",string job;job;decl];
     .qetl.job.stream.refuse_publishes["define: ",string job;decl];
     / A supplied ns is refused, not overwritten, as .qetl.job.bounded.define does (#2115)
@@ -327,7 +330,7 @@
     if[has_period<>has_body;
         '"define: ",string[job]," declares ",$[has_period;"period without on_timer";"on_timer without period"]," - a timer is both or neither"];
     if[has_period;
-        if[not 16h=abs type decl`period;
+        if[not -16h=type decl`period;
             '"define: ",string[job],"'s period must be a timespan, e.g. 0D00:00:01"];
         if[not (decl`period)>0D00:00;
             '"define: ",string[job],"'s period must be positive"];
@@ -344,6 +347,8 @@
         '"define: ",string[job]," declares on_endofday but subscribes to nothing - the TorQ plant sends end of day only to its subscribers, so the hook would never be called there; do the work on the job's timer instead"];
     decl:.qetl.job.stream.with_defaults decl;  / after the checks above, which tell declared from absent (#2657)
     .qetl.job.stream.jobs[job]:enlist decl;
+    / a handler that publishes through a job declaring no outputs meets this, not an undefined name (#2953)
+    if[(not count decl`outputs) and not `publish in key decl`ns; (` sv decl[`ns],`publish) set .qetl.job.stream.no_outputs job];
     .qetl.job.stream.procnames[decl`procname]:job;
     .[{.qetl.log.ch.dbg[`config;y;(enlist[`job]!enlist x),z]};(job;"streaming job registered";
         `procname`subscribe_to`outputs`timer!(decl`procname;decl`subscribe_to;decl`outputs;
@@ -400,6 +405,15 @@
 / Every registered job, for the runner and for tests.
 / @return symbol list of job names
 .qetl.job.stream.defined:{[] key .qetl.job.stream.jobs}
+
+/ Private: the `publish` of a job that declares no outputs, which `start` never wires.
+/ A handler calling it was written for an output the declaration does not list;
+/ without this it met the undefined name .qpipe.job.<job>.publish, whose whole text is that name.
+/ @param job the job's name
+/ @return a function of (table name; rows) that refuses, naming the job and the fix
+/ @private
+.qetl.job.stream.no_outputs:{[job]
+    {[job;t;x] '"publish: ",string[job]," declares no outputs, so nothing is wired to publish onto ",string[t]," - add it to the job's outputs"}[job]} / noqa: QF016 publish signature, refuses
 
 / Point a job's `publish` at something that can actually publish.
 / .
@@ -518,8 +532,9 @@
 / @private
 .qetl.job.stream.withhold:{[job;t;x;msg;f;n]
     .[.qetl.stream_health.record;(job;0b;msg);::];
-    .[{.qetl.log.ch.err[`transform;y;(enlist[`job]!enlist x),z]};(job;"publish check withheld rows";
-        `table`rows`withheld`failures!(t;.qetl.job.stream.row_count[t;x];n;$[.Q.qt f;300 sublist .Q.s1 5 sublist f;""]));::];
+    / the reason is the one stream health holds, and which gate withheld it - a contract refusal ran no check (#2954)
+    .[{.qetl.log.ch.err[`transform;y;(enlist[`job]!enlist x),z]};(job;$[msg like "check *"; "publish check withheld rows"; "plant contract withheld rows"];
+        `table`rows`withheld`failures`reason!(t;.qetl.job.stream.row_count[t;x];n;$[.Q.qt f;300 sublist .Q.s1 5 sublist f;""];300 sublist msg));::];
     .qetl.job.stream.withheld_n::.qetl.job.stream.withheld_n+1;
     ::}
 

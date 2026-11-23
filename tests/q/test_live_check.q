@@ -194,6 +194,7 @@
     d}
 
 .qt.qetl.livecheck.test_a_source_with_supporting_inputs_is_checked_whole_and_counts_its_primary:{[t]
+    .qt.support.drop_rows[`.qetl.source.sources;`livetest_src];
     .qetl.source.define[`livetest_src;.qt.qetl.livecheck.supported_decl[]];
     r:.qt.qetl.livecheck.check[];
     .qunit.assertEquals[r`status`stage`rows;(`ok;`done;1);"the whole read validated, its primary's rows counted"]};
@@ -201,6 +202,7 @@
 .qt.qetl.livecheck.test_a_supporting_input_that_breaks_its_contract_still_fails_at_output:{[t]
     d:.qt.qetl.livecheck.supported_decl[];
     d[`query]:{[h;a;b] `ext`quote!(.qt.qetl.livecheck.rows;([] ts:enlist .z.p; px:enlist `wrong))};
+    .qt.support.drop_rows[`.qetl.source.sources;`livetest_src];
     .qetl.source.define[`livetest_src;d];
     r:.qt.qetl.livecheck.check[];
     .qunit.assertEquals[r`status`stage;(`failed;`output);"a supporting input is held to its own contract"]};
