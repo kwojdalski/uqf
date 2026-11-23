@@ -176,11 +176,9 @@ class Config:
     #: --override allow-low-disk's reason: push onto a filesystem with less free
     #: than preflight.DISK_FACTOR times the artifact plus DISK_MARGIN (#2743)
     allow_low_disk: str | None = None
-    #: --override accept-job-q's reason: start a --jobs job on a server q its
-    #: `q` key does not name (#2747)
+    #: --override accept-job-q's reason: a --jobs job on a q its `q` key does not name (#2747)
     accept_job_q: str | None = None
-    #: --override accept-demo-logins's reason: start a bundled TorQ on the
-    #: starter pack's own access list (#2739)
+    #: --override accept-demo-logins's reason: a bundled TorQ on the starter pack's logins (#2739)
     accept_demo_logins: str | None = None
 
     @property
