@@ -740,6 +740,7 @@ def test_the_quality_check_note_names_a_route_that_is_not_refused():
     (note,) = [n for n in plan.notes if "quality check" in n]
     assert "rerun with --check" not in note
     assert "`uqs job remove citeprobe` and scaffold again with --check" in note
+    assert ".qpipe.job.citeprobe_backfill.quality_check" in note
     assert "src/etl/workers/demo_deals_backfill.q" in note
 
 
