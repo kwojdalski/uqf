@@ -203,10 +203,10 @@ attachment runs a uqf job against a TorQ stack uqf does not manage: plan ->
 validate (preflight) -> apply -> verify -> detach, from a write-ahead manifest,
 never restarting a process it did not start.
 
-- `uqs job attachment add JOB --base-port N ...` replaces the old stage
-  commands; also `remove`, `show`, `list`, `status`,
-  `contract export|approve|list`. `uqs job backfill --attachment` backfills into
-  the attached stack's HDB.
+- `uqs job attachment add NAME --job JOB --base-port N ...` (NAME is the
+  attachment's, e.g. `piggybank-uat`) replaces the old stage commands; also
+  `remove`, `show`, `list`, `status`, `contract export|approve|list`.
+  `uqs job backfill --attachment` backfills into the attached stack's HDB.
 - `attachment.json` holds the stack id (its base port), discovery, tickerplant,
   consumers and the password **variable name**, never the secret.
 - Preflight blockers: per-table tplog logging, unfiltered consumers, a sort.csv
