@@ -617,7 +617,7 @@
 / @param worker the worker's name
 / @param decl its declaration, with partition already resolved
 / @return the column, a symbol
-/ @throws error when it is not a symbol naming an output column, there is no partition, or a partition has no column
+/ @throws error when it is not a symbol naming an output column of symbols - publish compares it with the partition, a symbol (#2918) - there is no partition, or a partition has no column
 / @private
 .qetl.job.bounded.runtime.require_partition_column:{[worker;decl]
     c:$[`partition_column in key decl; decl`partition_column; `];
@@ -631,10 +631,12 @@
         :`];
     if[null decl`partition;
         '"define: ",string[worker],"'s partition_column needs a partition - with none declared there is no value for the column to hold"];
-    out:cols (.qetl.transform.def["define: ",string worker;decl`transform])`output;
+    out:cols shape:(.qetl.transform.def["define: ",string worker;decl`transform])`output;
     if[not c in out;
         '"define: ",string[worker],"'s partition_column ",string[c]," is not among transform ",
          string[decl`transform],"'s output columns (",(", " sv string out),")"];
+    if[not "s"=held:(exec c!t from meta shape) c;
+        '"define: ",string[worker],"'s partition_column ",string[c]," holds type \"",held,"\" in transform ",string[decl`transform],"'s output - a partition is a symbol, so its column must hold symbols"];
     c}
 
 / Private: the options a window's keyed write takes, refusing a `replace that

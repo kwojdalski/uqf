@@ -51,6 +51,25 @@ def _slice_sample(
     return {str(column): f"`{partition}"}
 
 
+def _require_symbols(column: str, cols: list[tuple[str, str]], where: str) -> None:
+    """Refuse a --slice-column that does not hold symbols (#2918).
+
+    A slice is a symbol, and publish compares the column with it: a long
+    column loaded, then failed every window with a bare 'type that named
+    neither. `.qetl.job.bounded.define` refuses it too, for a hand-written
+    worker; here it is refused before anything is written."""
+    literal = dict(cols)[column]
+    try:
+        held = type_char(literal)
+    except UqsError:
+        held = " "
+    if held != "s":
+        raise UqsError(
+            f"--slice-column {column!r} is {literal} in {where}, and a --slice is a symbol - "
+            "name a symbol column that holds the partition"
+        )
+
+
 def check_width(width: str) -> str:
     """Refuse a width `.qetl.job.bounded.define` would refuse at load (#1576).
 
@@ -210,6 +229,7 @@ def bounded_worker(
                 f"--slice-column {partition_column!r} is not among --schema "
                 f"({', '.join(c for c, _ in cols)}) - name the column that holds the partition"
             )
+        _require_symbols(partition_column, cols, "--schema")
     elif partition_column and target_columns is not None:
         if partition_column not in [c for c, _ in target_columns]:
             raise UqsError(
@@ -217,6 +237,7 @@ def bounded_worker(
                 f"({', '.join(c for c, _ in target_columns)}) - name the one that holds "
                 "the partition"
             )
+        _require_symbols(partition_column, target_columns, dataset)
     output = cols if define_table else target_columns
     if shaped_as is None and not reuse_source and output is not None:
         if [c for c, _ in cols] == [c for c, _ in output]:

@@ -71,6 +71,15 @@
         "a partition nothing can check a published row against is refused"];
     .qunit.assertEquals[count select from .qetl.job.bounded.worker_cfg where name=`ppx_eur;0;"and nothing was registered"]};
 
+/ #2918: a partition is a symbol, so publish compares the column with one. A
+/ long column passed define and failed every window with a bare 'type.
+.qt.qetl.partition_replace.test_a_partition_column_that_is_not_symbols_is_refused_at_define:{[t]
+    .qunit.assertThrows[{.qetl.job.bounded.define[`ppx_eur;x]};
+        .qt.qetl.partition_replace.decl[`EURUSD;enlist[`partition_column]!enlist `deal_id];
+        "define: ppx_eur's partition_column deal_id holds type \"j\" in transform demo_deals_passthrough's output - a partition is a symbol*";
+        "the column and its type are named, at define"];
+    .qunit.assertEquals[count select from .qetl.job.bounded.worker_cfg where name=`ppx_eur;0;"and nothing was registered"]};
+
 .qt.qetl.partition_replace.test_publish_refuses_a_row_of_another_partition:{[t]
     .qt.qetl.partition_replace.both[enlist[`partition_column]!enlist `sym;enlist[`partition_column]!enlist `sym];
     mixed:(.qt.qetl.partition_replace.deals[`EURUSD;1;3]),.qt.qetl.partition_replace.deals[`USDJPY;11;3];
