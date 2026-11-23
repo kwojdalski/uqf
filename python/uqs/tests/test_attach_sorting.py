@@ -309,6 +309,28 @@ def test_a_file_on_another_machine_cannot_be_written(world):
     assert any("can only be edited from that machine" in f.message for f in p.findings)
 
 
+def test_a_file_in_a_directory_this_user_cannot_write_is_refused_by_the_plan(world):
+    """#2910: the rows go in by writing a new file beside sort.csv and renaming it
+    over, so a writable file in a read-only directory is the plan's blocker, not a
+    failure after the tickerplant and consumers were changed."""
+    fake, make, state, csv = world
+    att = make()
+    csv.chmod(0o660)
+    csv.parent.chmod(0o555)
+    try:
+        p = plan.build(att, fake, ROOT)
+        with pytest.raises(applying.ApplyRefused, match="SORT_FILE"):
+            apply_(att, fake, state)
+    finally:
+        csv.parent.chmod(0o755)
+    (refused,) = [f for f in p.findings if f.code == "SORT_FILE"]
+    assert refused.level == "blocker" and refused.message == (
+        f"{csv.parent} is not writable by this user, and {csv} is replaced by writing a "
+        "new file there and renaming it over the old one"
+    )
+    assert "stp_register" not in fake.ops() and csv.read_text() == ORIGINAL
+
+
 def test_a_parted_writedown_needs_a_p_column(world):
     fake, make, state, csv = world
     fake.named("wdb1")["writedownmode"] = "partbyattr"

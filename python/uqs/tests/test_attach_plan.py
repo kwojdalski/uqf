@@ -573,6 +573,28 @@ def test_persisting_needs_a_writable_local_non_generated_schema_file(bundle, tmp
     assert "PERSIST_UNAVAILABLE" in codes(p.findings, "blocker")
 
 
+def test_a_schema_file_in_a_directory_this_user_cannot_write_is_refused_by_the_plan(
+    bundle, tmp_path
+):
+    """#2910: apply replaces the file by writing a new one beside it, so a writable
+    file in a read-only directory is refused before anything is changed."""
+    folder = tmp_path / "torq"
+    folder.mkdir()
+    schema = folder / "database.q"
+    schema.write_text("trade:([] time:`timestamp$())\n")
+    folder.chmod(0o555)
+    try:
+        p = run(attachment(bundle, runtime_only=False), FakeStack(6000, schema_file=str(schema)))
+    finally:
+        folder.chmod(0o755)
+    (refused,) = [f for f in blockers(p.findings) if f.code == "PERSIST_UNAVAILABLE"]
+    assert refused.message == (
+        "cannot persist the table across a tickerplant restart: "
+        f"{folder} is not writable by this user, and {schema} is replaced by writing a "
+        "new file there and renaming it over the old one"
+    )
+
+
 def test_no_schema_file_or_a_remote_one_cannot_be_persisted_to(bundle, tmp_path):
     p = run(attachment(bundle, runtime_only=False), FakeStack(6000))
     assert any("-schemafile" in f.message for f in blockers(p.findings))

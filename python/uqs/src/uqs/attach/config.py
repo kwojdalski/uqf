@@ -263,6 +263,21 @@ def atomic_write(path: Path, text: str | bytes) -> None:
         raise
 
 
+def unreplaceable(path: Path) -> str:
+    """Why atomic_write cannot replace the file at `path` for this user, "" when it
+    can. The preflight asks it, so a plan never approves a write apply cannot make
+    (#2910): the new file is written beside the old one and renamed over it, so
+    the directory must take a new file, not only the file be writable."""
+    if not os.access(path, os.W_OK):
+        return f"{path} is not writable by this user"
+    if not os.access(path.parent, os.W_OK | os.X_OK):
+        return (
+            f"{path.parent} is not writable by this user, and {path} is replaced by "
+            "writing a new file there and renaming it over the old one"
+        )
+    return ""
+
+
 @contextmanager
 def file_locked(path: Path) -> Iterator[None]:
     """Hold the file at `path` against every other uqs that changes it, across
