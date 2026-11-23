@@ -310,15 +310,19 @@ def over_budget(names: Iterable[str]) -> str | None:
     return over_budget_procs(resolve(wanted), f"profile(s) {', '.join(wanted)}")
 
 
-def over_budget_procs(procnames: Iterable[str], what: str) -> str | None:
+def over_budget_procs(
+    procnames: Iterable[str], what: str, undeclared: Iterable[str] = ()
+) -> str | None:
     """Why the processes `procnames` cannot be started together, or None.
 
     over_budget's check on a resolved set, for a start that is not only
     profiles: `--profile essential vectorize1` is held to the budget of what it
     actually starts, the profile's members AND the names added to it. `what`
-    is how the refusal names the request, e.g. "profile(s) fx".
+    is how the refusal names the request, e.g. "profile(s) fx". `undeclared`
+    are subscribers no declaration names yet - a scaffold's new process - a
+    slot each (#2921).
     """
-    held = plant_slots(procnames)
+    held = plant_slots(procnames) + len(set(undeclared))
     slots = allowance()
     if slots is None or held <= slots:
         return None

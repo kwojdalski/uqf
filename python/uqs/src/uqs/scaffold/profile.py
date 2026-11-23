@@ -82,11 +82,14 @@ def membership(
     unprofiled: str | None,
     start_with_all: bool,
     known_profiles: Iterable[str],
+    inputs: Iterable[str] = (),
 ) -> tuple[list[FileAction], list[str]]:
     """The profiles.py / unprofiled.py edits for `proc`, and their notes.
 
     With neither a profile nor a reason, nothing is written and the note says
-    what to do - the scaffold cannot know which set a job belongs in.
+    what to do - the scaffold cannot know which set a job belongs in. A
+    profile the process would take past its connection budget is refused;
+    `inputs`, the tables it subscribes to, bring their producers in with it.
     """
     known = set(known_profiles)
     if profile and unprofiled:
@@ -109,6 +112,9 @@ def membership(
             "--profile default is what `uqs start all` runs, so it needs --start-with-all too"
         )
     targets = [p for p in (profile, DEFAULT_PROFILE if start_with_all else None) if p]
+    for p in dict.fromkeys(targets):
+        if problem := _past_budget(proc, p, inputs):
+            raise UqsError(problem)
     actions = [
         FileAction(PROFILES_FILE, proc, mode=WriteMode.APPEND, anchor=f"{_PROFILE_PREFIX}{p}")
         for p in dict.fromkeys(targets)
@@ -139,6 +145,33 @@ def membership(
         f"add {proc} to a profile (--profile NAME), or exempt it with --unprofiled REASON - "
         "`uqs profile list` shows the sets and their connection budget"
     ]
+
+
+def _past_budget(proc: str, profile: str, inputs: Iterable[str]) -> str | None:
+    """Why `proc` cannot join `profile`, or None: the budget `uqs profile list`
+    shows and `uqs start --profile` refuses on (model/profiles.py's
+    over_budget_procs), on the profile with `proc` and whatever it reads (#2921).
+    """
+    from uqs.model import profiles as model
+    from uqs.model.dependencies import external_producers, producers_by_table
+    from uqs.paths import repo_root
+
+    if profile not in model.PROFILES:
+        return None
+    unfed = model.unfed_inputs([profile])
+    fed = {*external_producers(repo_root()), *unfed}
+    producers = producers_by_table()
+    feeders = [p for t in inputs if t not in fed for p in sorted(producers.get(t, ()))]
+    members = {*model.resolve([profile]), *model.closure(feeders, unfed)}
+    problem = model.over_budget_procs(members, f"profile(s) {profile} with {proc}", [proc])
+    if problem is None:
+        return None
+    return (
+        f"{proc} would take the {profile} profile past its connection budget, and "
+        f"`uqs start --profile {profile}` would then be refused: {problem} Nothing was "
+        f"written - put {proc} in another profile (`uqs profile list` shows each one's "
+        "slots), or exempt it with --unprofiled REASON"
+    )
 
 
 def _unprofiled_entry(proc: str, reason: str) -> str:

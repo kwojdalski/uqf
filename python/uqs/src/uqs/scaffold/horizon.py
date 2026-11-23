@@ -217,6 +217,7 @@ score:{{[events;reference]
         unprofiled=unprofiled,
         start_with_all=start_with_all,
         known_profiles=profile_names(known_profiles),
+        inputs=subscribe_to,
     )
     actions += member_actions
     notes += member_notes
