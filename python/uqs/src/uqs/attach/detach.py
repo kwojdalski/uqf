@@ -25,7 +25,8 @@ The contract (issue #1424), as code:
   * Once the publisher is stopped the manifest is no longer `verified`, so a detach
     that stops part way (stack unreadable, an IPC error) leaves the start gate
     closed until a retry finishes (#1443). A step apply never heard back from is
-    probed on the stack, never assumed pre-existing (#1447).
+    probed on the stack, never assumed pre-existing (#1447) - a schema-file block
+    in the file it was written to (#2905).
   * A failure part way is reported as exactly that; no atomicity across
     processes is claimed, and every step is safe to repeat.
 """
@@ -52,7 +53,14 @@ from uqs.attach.manifest import (
     Manifest,
     Op,
 )
-from uqs.attach.outcome import BLOCKS, CONSUMER_OPS, INVERSE, interrupted, unresolved
+from uqs.attach.outcome import (
+    BLOCKS,
+    CONSUMER_OPS,
+    INVERSE,
+    interrupted,
+    unresolved,
+    unresolved_blocks,
+)
 from uqs.attach.publisher import Publisher, stop_publisher
 from uqs.attach.remote import Ipc, IpcError
 from uqs.attach.topology import Observation, Proc, observe
@@ -209,6 +217,9 @@ def _reverse(
         Blocker(*found) for found in unresolved(m, plant_ours(obs, m), procs, save=not dry_run)
     ]
     unknown += [Blocker(*found) for found in sorting.resolve_pending(m, save=not dry_run)]
+    unknown += [
+        Blocker(*found) for found in unresolved_blocks(att, m, ipc, procs, save=not dry_run)
+    ]
     result.evidence = evidence(att, obs, host, ipc)
     if result.evidence.published:
         return retain.retain(att, ipc, procs, m, result, obs)

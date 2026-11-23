@@ -190,28 +190,34 @@ def _file(where: str | File) -> File:
     return LocalFile(str(_real(where))) if isinstance(where, str) else where
 
 
+def _as_written(
+    name: str, rendered: Callable[[bool], str], file: File, text: str, span: tuple[int, int]
+) -> BlockRecord | None:
+    """The record of `name`'s block at `span` of `text`, when it is the block
+    `rendered` gives; None for any other - another token's, or an edited one."""
+    found = text[span[0] : span[1]]
+    separated = _separated(block_text.split_lines(found))
+    if found != rendered(separated):
+        return None
+    return BlockRecord(
+        file.path, _sha(block_text.outside_all(text)), _sha(found), separated, name, file.process
+    )
+
+
 def _write(name: str, token: str, rendered: Callable[[bool], str], file: File) -> BlockRecord:
     text = file.read()
     if text is None:
         raise AttachmentError(f"{file.label} does not exist")
     span = block_text.locate(text, name)
     if span is not None:
-        found = text[span[0] : span[1]]
-        separated = _separated(block_text.split_lines(found))
-        if found != rendered(separated):
+        record = _as_written(name, rendered, file, text, span)
+        if record is None:
             raise AttachmentError(
                 f"{file.label} already holds a different uqs-attach block for {name}; "
                 "remove it by hand or with `uqs job attachment remove`, then run "
                 "`uqs job attachment add` again"
             )
-        return BlockRecord(
-            file.path,
-            _sha(block_text.outside_all(text)),
-            _sha(found),
-            separated,
-            name,
-            file.process,
-        )
+        return record
     _, others = block_text.blocks(text)
     if others:
         # The newline question was answered when the first of them went in: copy the answer.
@@ -259,6 +265,38 @@ def write_uses(
         uses_name(att.name), token, lambda sep: render_uses(att.name, token, tables, sep),
         _file(where),
     )  # fmt: skip
+
+
+def left(
+    att: Attachment, token: str, specs: tuple[TableSpec, ...], where: str | File,
+    uses: bool = False,
+) -> BlockRecord | None:  # fmt: skip
+    """What a write whose outcome was never learned left in the file (#2905), read
+    and not written: the record of the block for `specs` - the `+uses` one with
+    `uses` - as `write` reports it when the file holds exactly that block, None
+    when it holds no block of that name. Any other block under the name (another
+    token's, or an edited one) is refused: it is not this write's to record."""
+    file = _file(where)
+    name = uses_name(att.name) if uses else att.name
+
+    def rendered(separated: bool) -> str:
+        if uses:
+            return render_uses(att.name, token, tuple(s.name for s in specs), separated)
+        return render(att.name, token, specs, separated)
+
+    text = file.read()
+    if text is None:
+        raise AttachmentError(f"{file.label} does not exist")
+    span = block_text.locate(text, name)
+    if span is None:
+        return None
+    record = _as_written(name, rendered, file, text, span)
+    if record is None:
+        raise AttachmentError(
+            f"{file.label} holds a uqs-attach block for {name} that is not the one this "
+            "attachment writes: it carries another token, or was edited"
+        )
+    return record
 
 
 def problems(

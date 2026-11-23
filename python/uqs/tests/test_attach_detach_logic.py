@@ -29,6 +29,7 @@ from uqs.attach import (
     persist,
     plan,
     retain,
+    schema_files,
     service,
     verify,
 )
@@ -1163,6 +1164,52 @@ def test_an_unknown_outcome_step_on_an_unreachable_process_refuses_with_the_manu
     )
     assert Manifest.load("pb-uat", state).state != "rolled_back"
     assert TABLE in fake.named("stp1")["schemas"], "nothing was abandoned or removed"
+
+
+def _stopped_after_the_block_was_written(att, fake, state, monkeypatch) -> None:
+    """Apply, stopped between the schema file's write and its journal entry."""
+    replace = schema_files.LocalFile._replace
+
+    def stop(self, text: str) -> None:
+        replace(self, text)
+        raise KeyboardInterrupt
+
+    with monkeypatch.context() as patched:
+        patched.setattr(schema_files.LocalFile, "_replace", stop)
+        with pytest.raises(KeyboardInterrupt):
+            apply_(att, fake, state)
+
+
+def test_detach_reads_the_schema_file_for_a_block_of_unknown_outcome(world, monkeypatch):
+    """#2905: the block step is settled from the file, here one on this machine."""
+    fake, make, state, schema, log = world
+    before, text = stack_state(fake), schema.read_text()
+    att = make()
+    _stopped_after_the_block_was_written(att, fake, state, monkeypatch)
+    m = Manifest.load("pb-uat", state)
+    pending = m.find("schema_block", "schema-file", TABLE)
+    assert pending is not None and (pending.status, pending.ownership) == ("pending", "")
+    assert block_text.begin_marker("pb-uat", m.token) in schema.read_text()
+    assert detach_(att, fake, state, dry_run=True).outcome == "rolled_back"
+    assert block_text.begin_marker("pb-uat", m.token) in schema.read_text(), "a dry run"
+    result = detach_(att, fake, state)
+    assert result.outcome == "rolled_back", [b.reason for b in result.blockers]
+    assert ("schema_block", "removed") in [(s.op, s.outcome) for s in result.steps]
+    assert stack_state(fake) == before and schema.read_text() == text
+
+
+def test_a_block_of_unknown_outcome_in_a_file_that_is_gone_refuses(world, monkeypatch):
+    fake, make, state, schema, log = world
+    att = make()
+    _stopped_after_the_block_was_written(att, fake, state, monkeypatch)
+    schema.unlink()
+    result = detach_(att, fake, state)
+    assert result.outcome == "refused"
+    assert [b.reason for b in result.blockers] == [
+        f"the schema file block for {TABLE} has an unknown outcome and could not be "
+        f"settled: {schema.resolve()} does not exist"
+    ]
+    assert TABLE in fake.named("stp1")["schemas"], "nothing was removed"
 
 
 def test_apply_recognises_its_own_leftover_by_token_after_an_unknown_outcome(world):
