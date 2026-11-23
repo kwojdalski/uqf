@@ -10,7 +10,7 @@ import subprocess
 from typer.testing import CliRunner
 
 from uqs import cli
-from uqs.attach import backfill_remote
+from uqs.attach import backfill_receiver
 from uqs.cli.common import shared
 from uqs.cli.target import target_edit
 from uqs.paths import UqsPaths
@@ -58,7 +58,7 @@ def test_the_old_two_word_config_set_is_refused(monkeypatch):
 def test_the_receiver_is_stopped_by_its_own_verb_and_a_dry_run_signals_nothing(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        backfill_remote,
+        backfill_receiver,
         "stop_receivers",
         lambda att, dry_run=False, kill=False: (
             calls.append(dry_run) or [{"worker": "d.receiver", "pid": 7, "outcome": "stopped"}]

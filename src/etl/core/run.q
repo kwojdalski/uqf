@@ -558,17 +558,20 @@
     target:id;
     select from .qetl.run.runs[] where run_id=target}
 
-/ The runs still in flight - begun, never finished.
+/ The runs that did not finish what they were asked: every one but those that
+/ ended completed or idle.
 / .
-/ On a shared ledger this includes runs whose process has since died, which
-/ is the intended reading: an interrupted execution is one a reader needs to
-/ find, and nothing else records it.
+/ Those still in flight, which on a shared ledger includes runs whose process
+/ has since died - an interrupted execution is one a reader needs to find, and
+/ nothing else records it - and those that ended with work left: stopped,
+/ partial or failed (#2950). A stopped run's "the same command again does the
+/ rest" is advice to find the run first, and only `running` was listed.
 / @return the unfinished runs
 / @eg .qetl.run.unfinished[]
 .qetl.run.unfinished:{[]
     .qetl.run.init_runs[];
-    running:.qetl.run.in_flight;
-    select from .qetl.run.runs[] where status=running}
+    finished:`completed`idle;
+    select from .qetl.run.runs[] where not status in finished}
 
 / Every fact recorded against one run.
 / @param id the run id

@@ -25,6 +25,7 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from uqs import process_stop
@@ -32,9 +33,13 @@ from uqs.attach import backfill_owner, backfill_run
 from uqs.attach.backfill import state_dir_for
 from uqs.liveness import on_this_host, pid_alive
 from uqs.paths import UqsError, UqsPaths
+from uqs.stack.backfill_status import result_line
 
 #: What a stop ended as: the run `stopped` at a window boundary, was `killed`, or is `running`.
 STOPPED, KILLED, RUNNING = "stopped", "killed", "running"
+#: ...or exited by itself without reading the request: it `ended` as it recorded (#2950) - its
+#: last window finished the range, or it failed or crashed while the stop waited.
+ENDED = "ended"
 #: A destination's identity (backfill.identity_of): what an owner record's `destination` holds.
 _IDENTITY = re.compile(r"[0-9a-f]{12}")
 
@@ -47,6 +52,9 @@ class Outcome:
     pid: int
     state: str
     stop_file: Path
+    #: The state the run recorded on exit (its log's RESULT line) when it went by itself; ""
+    #: when it recorded none, or did not go by itself.
+    recorded: str = ""
 
 
 def find(attachment: str, worker: str, root: Path | None = None) -> dict:
@@ -100,13 +108,34 @@ def stop(
     path.touch()
     if _wait_gone(pid, timeout, alive, clock, sleep):
         path.unlink(missing_ok=True)  # the run clears its own; a race must not leave one
-        return Outcome(worker, pid, STOPPED, path)
+        # Gone is not stopped: the request is read only between windows (#2950).
+        recorded = recorded_state(state_dir, record)
+        return Outcome(worker, pid, STOPPED if recorded == STOPPED else ENDED, path, recorded)
     if not kill:
         return Outcome(worker, pid, RUNNING, path)
     if escalate(pid, alive=alive, clock=clock, sleep=sleep, send=send):
         path.unlink(missing_ok=True)  # nothing is left to read it
         return Outcome(worker, pid, KILLED, path)
     return Outcome(worker, pid, RUNNING, path)
+
+
+def recorded_state(state_dir: Path, record: dict) -> str:
+    """The state the run in `record` recorded as it exited - `stopped`, `completed`, `failed`
+    ... from its log's closing RESULT line - or "" when it wrote none (a crash, a signal).
+
+    Its log is the newest of its worker's in the state directory that is not newer than the
+    run's claim: launch names the log by the time it opens it, just before the claim, and a
+    run that started since has a later one."""
+    worker = str(record["worker"])
+    logs = (state_dir / backfill_run.LOGS).glob(f"{worker}-*.log")
+    stamps = {log.stem.removeprefix(f"{worker}-"): log for log in logs}
+    started = str(record.get("started") or "")
+    if started:
+        claimed = datetime.fromisoformat(started).astimezone(UTC).strftime(backfill_run.LOG_STAMP)
+        stamps = {stamp: log for stamp, log in stamps.items() if stamp <= claimed}
+    if not stamps:
+        return ""
+    return str(result_line(stamps[max(stamps)]).get("state") or "")
 
 
 def escalate(

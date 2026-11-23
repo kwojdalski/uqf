@@ -45,17 +45,25 @@ class RunLog:
     destination: str
 
 
+def state_dirs(paths: UqsPaths, attachment: str) -> list[Path]:
+    """Every state directory `attachment`'s runs have kept, one per destination they went to:
+    its checked destination's, and each forced writer's (#2950)."""
+    root = runs.status_dir(paths) / STATE_SUBDIR
+    return [
+        state
+        for state in (sorted(root.iterdir()) if root.is_dir() else [])
+        if (named := _STATE.match(state.name)) and named["attachment"] == attachment
+    ]
+
+
 def run_logs(paths: UqsPaths, attachment: str) -> list[RunLog]:
     """Every run log of `attachment`, across its destinations, oldest first."""
-    root = runs.status_dir(paths) / STATE_SUBDIR
     found = []
-    for state in sorted(root.iterdir()) if root.is_dir() else []:
-        named = _STATE.match(state.name)
-        if not named or named["attachment"] != attachment:
-            continue
+    for state in state_dirs(paths, attachment):
+        identity = state.name.rsplit("-", 1)[1]
         for log in (state / "logs").glob("*.log"):
             if run := _RUN.match(log.name):
-                found.append(RunLog(log, run["worker"], run["stamp"], named["identity"]))
+                found.append(RunLog(log, run["worker"], run["stamp"], identity))
     return sorted(found, key=lambda r: (r.stamp, r.worker))
 
 
