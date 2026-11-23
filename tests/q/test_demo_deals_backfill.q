@@ -1099,7 +1099,10 @@
 .qt.qpipe.job.demo_deals_backfill.test_a_worker_may_redeclare_itself:{[t]
     before:.qetl.job.bounded.def `demo_deals_backfill;
     r:.qt.qpipe.job.demo_deals_backfill.with_declaration_restored[{system "l src/etl/workers/demo_deals_backfill.q"; .qetl.job.bounded.def `demo_deals_backfill}];
-    .qunit.assertEquals[r;before;
+    / Functions compare as functions: under the coverage run the registry holds
+    / instrumented copies, which a reload's own lambdas never equal by value.
+    fns:{$[type[x] within 100 112h; `function; type[x] in 0 99h; .z.s each x; x]};
+    .qunit.assertEquals[fns r;fns before;
         "reloading a worker file re-runs its own define, which must not trip the clash guard, and leaves the declaration as it was"]};
 
 / The two real workers declare distinct (dataset;partition) pairs, so the

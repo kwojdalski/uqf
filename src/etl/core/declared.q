@@ -142,7 +142,8 @@
 / silently replace the first. A worker, a source and a transform replaced it without a
 / word: a copied file whose name was not changed registered, and the registry held the
 / last one. A declaration read again as it was - a reload re-runs its file - is not a
-/ second one, so an identical redeclaration passes.
+/ second one, so an identical redeclaration passes. Function-valued keys are compared
+/ only as being functions; every other value must match.
 / @param who the message prefix, e.g. "define: demo_backfill"
 / @param kind what is declared, e.g. "worker"
 / @param tbl the keyed registry, keyed on `name
@@ -154,7 +155,10 @@
 .qetl.declared.refuse_redeclared:{[who;kind;tbl;name;stored]
     if[not name in (key tbl)`name; :(::)];
     c:cols value tbl;
-    if[not (tbl name)~c!stored c;
+    / Functions, at any depth, compare as functions: a coverage run instruments
+    / the stored copies, so a reload's own lambdas never match them by value.
+    fns:{$[type[x] within 100 112h; `function; type[x] in 0 99h; .z.s each x; x]};
+    if[not fns[tbl name]~fns c!stored c;
         'who," is already declared as a ",kind," with a different declaration - a name is declared once, and a second would silently replace the first"]}
 
 / Refuse a declaration whose name is not a symbol or which is not a dictionary (#2953).
