@@ -320,6 +320,9 @@ def audit(
     _print(f"{dataset} {window}", rows, _FACT_COLUMNS, "no facts for that window")
 
 
+#: The recorded states of a run that did its job: an ended run reported so exits 0 (#2950).
+_ENDED_WELL = ("completed", "idle")
+
 _StopJob = job_arg("The bounded worker whose running backfill to stop")
 _StopAttach = attach_opt(
     "The attachment whose destination the backfill is running into", required=True
@@ -347,7 +350,9 @@ def stop(
     exits. Without --kill a run that has not stopped by --timeout is reported as still
     running and left alone; a re-run of the same command completes the range.
 
-    Exits 4 when the run stopped (or was killed), 1 when it is still running.
+    Exits 4 when the run stopped (or was killed), 1 when it is still running. A run that
+    exits without reading the request - its last window finished the range, or it failed - is
+    reported as it recorded ending: exit 0 for completed or idle, 1 for anything else.
     """
     from uqs.attach import backfill_stop
 
@@ -369,6 +374,15 @@ def stop(
         console.print(f"{job} (pid {result.pid}): stopped at a window boundary", markup=False)
     elif result.state == backfill_stop.KILLED:
         console.print(f"{job} (pid {result.pid}): killed after {timeout:g}s", markup=False)
+    elif result.state == backfill_stop.ENDED:
+        done = result.recorded in _ENDED_WELL
+        ended = result.recorded or "without recording how it ended (a crash or a signal)"
+        console.print(
+            f"{job} (pid {result.pid}): exited before reading the stop request - it ended "
+            f"{ended}" + ("" if done else f"; its log is under {state_dir / 'logs'}"),
+            markup=False,
+        )
+        raise typer.Exit(code=0 if done else 1)
     else:
         hint = "" if kill else "; its stop request stands - add --kill to end it now"
         console.print(f"{job} (pid {result.pid}): still running{hint}", markup=False)

@@ -27,13 +27,16 @@ WORKER = "demo_deals_backfill"
 DEST = "0123456789ab"
 
 #: A "worker" that exits 4 as soon as its stop file appears - `<dir>/<worker>.<its pid>.stop`, the
-#: lifecycle's check between windows.
+#: lifecycle's check between windows - closing its log with the runner's RESULT line.
 HONOURS = (
     "import os, sys, time, pathlib\n"
     "f = pathlib.Path(sys.argv[1]) / f'{sys.argv[2]}.{os.getpid()}.stop'\n"
+    "log = pathlib.Path(sys.argv[1]) / 'logs' / f'{sys.argv[2]}-20260913T060000000000.log'\n"
     "print('ready', flush=True)\n"
     "while not f.exists():\n"
     "    time.sleep(0.05)\n"
+    "log.parent.mkdir(exist_ok=True)\n"
+    'log.write_text(\'RESULT {"state": "stopped"}\\n\')\n'
     f"sys.exit({q_facts.STOP_EXIT_CODE})\n"
 )
 #: One that never reads it: a window that does not end.
@@ -143,11 +146,65 @@ def test_kill_does_not_signal_a_worker_that_stops_in_time(tmp_path):
     def sleep(_):
         state["alive"] = False  # the run exits by itself on the first wait
 
+    _log(tmp_path, "20260913T060000000000", "stopped")
     out = backfill_stop.stop(
         {"worker": WORKER, "pid": 9}, tmp_path, timeout=5, kill=True,
         alive=lambda pid: state["alive"], sleep=sleep, send=lambda *a: sent.append(a),
     )  # fmt: skip
     assert out.state == backfill_stop.STOPPED and sent == []
+
+
+def _log(state_dir, stamp: str, recorded: str | None) -> None:
+    """A run's log as the runner leaves it, with its RESULT line when `recorded` is a state."""
+    logs = state_dir / backfill_run.LOGS
+    logs.mkdir(exist_ok=True)
+    result = "" if recorded is None else f'RESULT {{"state": "{recorded}"}}\n'
+    (logs / f"{WORKER}-{stamp}.log").write_text(f"INFO|lifecycle|window start\n{result}")
+
+
+def _gone(state_dir, record):
+    return backfill_stop.stop(record, state_dir, timeout=1, kill=False, alive=lambda pid: False)
+
+
+def test_a_run_gone_without_reading_the_request_is_reported_as_it_ended(tmp_path):
+    """#2950: a run in its last window finishes the range and never reads the file. It
+    is not `stopped`: it ended as its log's RESULT line says."""
+    _log(tmp_path, "20260913T060000000000", "completed")
+    out = _gone(tmp_path, {"worker": WORKER, "pid": 9})
+    assert (out.state, out.recorded) == (backfill_stop.ENDED, "completed")
+    assert not out.stop_file.exists()
+
+
+def test_a_run_that_recorded_nothing_ended_without_saying_how(tmp_path):
+    _log(tmp_path, "20260913T060000000000", None)
+    assert _gone(tmp_path, {"worker": WORKER, "pid": 9}).recorded == ""
+    (tmp_path / "no_logs").mkdir()
+    assert _gone(tmp_path / "no_logs", {"worker": WORKER, "pid": 9}).state == backfill_stop.ENDED
+
+
+def test_the_ended_state_is_read_from_the_runs_own_log_not_a_later_runs(tmp_path):
+    _log(tmp_path, "20260913T060000000000", "failed")
+    _log(tmp_path, "20260913T070000000000", "completed")  # a run launched after this one
+    record = {"worker": WORKER, "pid": 9, "started": "2026-09-13T06:00:01+00:00"}
+    assert backfill_stop.recorded_state(tmp_path, record) == "failed"
+
+
+@pytest.mark.parametrize(
+    ("recorded", "code", "said"),
+    [("completed", 0, "it ended completed"), ("failed", 1, "it ended failed; its log is under"),
+     (None, 1, "without recording how it ended")],
+)  # fmt: skip
+def test_runs_stop_exits_by_how_a_run_that_did_not_stop_ended(
+    state, monkeypatch, recorded, code, said
+):
+    _log(state, "20260913T060000000000", recorded)
+    gone = subprocess.Popen([sys.executable, "-c", ""])
+    gone.wait()  # a pid that has exited: the run went before the request was read
+    _claim(monkeypatch, gone.pid)
+    result = _stop("--timeout", "1")
+    assert result.exit_code == code, result.output
+    assert "exited before reading the stop request" in result.output and said in result.output
+    assert "window boundary" not in result.output
 
 
 def test_a_job_with_no_running_backfill_is_refused(monkeypatch):

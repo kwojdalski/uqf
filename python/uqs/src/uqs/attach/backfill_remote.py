@@ -58,6 +58,7 @@ from uqs.attach.backfill_coordination import assess
 from uqs.attach.backfill_plan import evaluate
 from uqs.attach.backfill_run import (
     AGAIN,
+    LOG_STAMP,
     LOGS,
     REACH_PASSWORD_ENV,
     RUNNER,
@@ -230,7 +231,7 @@ def launch_remote(
         ]  # fmt: skip
         logs = dest.state_dir / LOGS
         logs.mkdir(parents=True, exist_ok=True)
-        log = logs / f"{worker}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}.log"
+        log = logs / f"{worker}-{datetime.now(UTC).strftime(LOG_STAMP)}.log"
         # the receiver's password goes to the child by environment, never by command line
         env = {
             **os.environ,
@@ -360,7 +361,7 @@ def receive(
         ]  # fmt: skip
         logs = dest.state_dir / LOGS
         logs.mkdir(parents=True, exist_ok=True)
-        log = logs / f"{receiver}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}.log"
+        log = logs / f"{receiver}-{datetime.now(UTC).strftime(LOG_STAMP)}.log"
         env = {**os.environ, REACH_PASSWORD_ENV: att.stack.password()}
         with log.open("wb") as out:
             proc = subprocess.Popen(

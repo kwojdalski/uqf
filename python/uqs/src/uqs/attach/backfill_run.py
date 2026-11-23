@@ -49,6 +49,8 @@ RUNNER = Path("scripts") / "jobs" / "attached_backfill.q"
 #: What an operator does once the run that holds the attachment has ended (#2932).
 AGAIN = "run this backfill again"
 LOGS = "logs"
+#: A run's log is `<worker>-<this, in UTC>.log`: its run id, ordered as the runs started.
+LOG_STAMP = "%Y%m%dT%H%M%S%f"
 #: The runner's -deadline when the end-of-day fence is waived: q's infinite timestamp, which
 #: no `.z.p` passes, so io_hdb_scoped's deadline check never fires (#1828).
 NO_DEADLINE = "0Wp"
@@ -259,7 +261,7 @@ def launch(
         )
         logs = dest.state_dir / LOGS
         logs.mkdir(parents=True, exist_ok=True)
-        log = logs / f"{worker}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}.log"
+        log = logs / f"{worker}-{datetime.now(UTC).strftime(LOG_STAMP)}.log"
         # each waiver is on record, durably, before the runner exists to write (#1829)
         audit = backfill_audit.record(
             dest.state_dir,
