@@ -1212,6 +1212,38 @@ def test_a_block_of_unknown_outcome_in_a_file_that_is_gone_refuses(world, monkey
     assert TABLE in fake.named("stp1")["schemas"], "nothing was removed"
 
 
+def test_a_stopped_block_step_removed_by_hand_lets_remove_finish(world, monkeypatch):
+    """#2908: the block taken out by hand before `remove` is read as never made,
+    so the refusal that once came back word for word after doing so is gone."""
+    fake, make, state, schema, log = world
+    before, text = stack_state(fake), schema.read_text()
+    att = make()
+    _stopped_after_the_block_was_written(att, fake, state, monkeypatch)
+    schema.write_text(text)
+    assert detach_(att, fake, state, dry_run=True).outcome == "rolled_back"
+    result = detach_(att, fake, state)
+    assert result.outcome == "rolled_back", [b.reason for b in result.blockers]
+    assert "schema_block" not in [s.op for s in result.steps if s.outcome == "removed"]
+    assert stack_state(fake) == before and schema.read_text() == text
+    assert detach_(att, fake, state).outcome == "already"
+
+
+def test_applying_again_finishes_a_stopped_block_step_and_remove_takes_it(world, monkeypatch):
+    """#2908: `attachment add` run again after a stop inside the block step."""
+    fake, make, state, schema, log = world
+    text = schema.read_text()
+    att = make()
+    _stopped_after_the_block_was_written(att, fake, state, monkeypatch)
+    apply_(att, fake, state)
+    m = Manifest.load("pb-uat", state)
+    done = m.find("schema_block", "schema-file", TABLE)
+    assert m.state == "applied" and done is not None
+    assert (done.status, done.ownership) == ("done", "created")
+    assert schema.read_text().count(block_text.begin_marker("pb-uat", m.token)) == 1
+    assert detach_(att, fake, state).outcome == "rolled_back"
+    assert schema.read_text() == text
+
+
 def test_apply_recognises_its_own_leftover_by_token_after_an_unknown_outcome(world):
     fake, make, state, schema, log = world
     att = make()
