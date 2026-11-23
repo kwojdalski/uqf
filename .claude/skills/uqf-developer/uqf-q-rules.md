@@ -250,5 +250,6 @@ scaffold bug: report it, don't work around it.
    runs (V5).
 4. Run the new job's q suite and Python tests (`-n 2` at most), `qlinter` on the
    new files and `python3 scripts/gates/check.py q-traps`.
-5. Run it for real when asked: `uqs start NAME -f`, then `uqs status` shows it
-   `up` and wired; or, on stock kdb+, `q scripts/jobs/run_stream.q -job NAME`.
+5. Run it for real when asked: `uqs start NAME1 -f` (the job's process,
+   `uqs process list` names it), then `uqs status` shows it `up` and wired; or,
+   on stock kdb+, `q scripts/jobs/run_stream.q -job NAME`.
