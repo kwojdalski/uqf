@@ -101,7 +101,7 @@ worker's log and status file are the rehearsal's output.
   | 3    | done in part, with the rest to retry                                                |
   | 4    | stopped on request                                                                  |
   | 5    | done, but what came of part of it is unknown: look before running it again          |
-  | 6    | `--once` found nothing to do: an empty poll, a range already covered, no input      |
+  | 6    | `--once` had nothing to do now: empty poll, range covered or incomplete, no input   |
   | 130  | Ctrl-C ended the stream of `job backfill --attachment --follow`                     |
 
 Only `job backfill` and `target config push` exit 3 or 4, only `job backfill`
@@ -151,7 +151,9 @@ a bounded run stopped on request (`stopped`), 6 no work. `--json` prints
 `{"process", "job", "kind", "outcome", "reason", "units", "rows", "detail", "exit_code", "ok"}`.
 No work is a success a scheduler can tell from a unit that ran, and `reason`
 says which: `no_new_data` (a poll found no page), `all_covered` (a backfill
-range already covered at that version) or `input_timeout`.
+range already covered at that version), `not_complete` (what is left of a
+backfill range is past what the source vouches for, or past the last end of day:
+it is not covered, and a later run does it) or `input_timeout`.
 
 A streaming subscriber waits for its one batch, so its wait is bounded:
 `--once-timeout DURATION`, 60 s by default and 3600 s at most. When it passes

@@ -9,14 +9,17 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from uqs.cli.common.safety import dry_run_note
 from uqs.cli.common.shared import _die, console
 from uqs.interpreter import q_interpreter
-from uqs.paths import DERIVE_SCRIPT, UqsError
+from uqs.paths import DERIVE_SCRIPT, TABLES_FILE, UqsError
 from uqs.scaffold import write
 from uqs.scaffold.plan import ScaffoldPlan
+from uqs.stack import generated
 
 #: What a scaffold makes stale, checked in CI with --check: the plant schema
 #: metadata a new or removed table changes (needs q, #1781) - FIRST, since the
@@ -122,20 +125,76 @@ def report_regeneration(repo_root: Path) -> bool:
     return all(ok)
 
 
+def refuse_a_table_without_q(plan: ScaffoldPlan) -> None:
+    """Refuse, before anything is written, a plan that defines a plant table
+    on a machine with no q (#2916).
+
+    plant-schema re-exports the plant through q, and every `uqs job new`
+    reads that export first, refusing it as stale once plant_tables.q has
+    changed. Written without q, the table left the export stale, so every
+    later `job new` - even a --dry-run - was refused until q was installed
+    or the scaffold undone by hand."""
+    if q_interpreter() is None and any(a.path == TABLES_FILE for a in plan.actions):
+        raise UqsError(
+            f"{plan.name} defines a plant table in {TABLES_FILE.as_posix()}, and recording "
+            f"it (`{derived_command(_DERIVED[0])}`) needs q - set $QCMD, or put q on PATH, "
+            "and run this again. Nothing was written: without that export every later "
+            "`uqs job new` is refused"
+        )
+
+
+#: The lock two `uqs job new` runs in one tree take turns on (#2919), at its root.
+TREE_LOCK = ".uqs-job.lock"
+
+
+@contextmanager
+def tree_lock(repo_root: Path) -> Iterator[None]:
+    """Hold the tree's scaffold lock from the first read of a file the plan
+    appends to until its regeneration is done.
+
+    Two runs at once each read profiles.py, plant_tables.q and the rest, and
+    each wrote back what it had read plus its own lines: both exited 0 and one
+    job's registrations were gone. Regeneration is inside too, or the first
+    run's generators, reading the tree before the second's write, could finish
+    last and write the derived files without it. A second run waits, and says
+    so, rather than refusing: what it found on the tree was still right.
+    """
+    lock = repo_root / TREE_LOCK
+    with generated.file_lock(
+        lock,
+        None,
+        f"another `uqs job` is writing this tree (it holds {lock})",
+        on_wait=lambda: console.print(
+            f"[yellow]waiting[/] for another `uqs job` writing this tree (it holds {lock})"
+        ),
+    ):
+        yield
+
+
 def write_plan(plan: ScaffoldPlan, repo_root: Path, *, dry_run: bool) -> None:
     """Print a plan and, unless --dry-run, write it and regenerate what it
-    makes stale. The same for every shape."""
+    makes stale. The same for every shape. A regeneration that fails fails
+    the command, the scaffold written, as `uqs job remove` does (#2843)."""
     console.print(plan.render())
     console.print("  then regenerate: " + ", ".join(" ".join(d) for d in (*_DERIVED, *_WITH_Q)))
     try:
+        refuse_a_table_without_q(plan)
         if dry_run:
             write.prepare(plan, repo_root)  # a dry run refuses what the real run would (#2827)
             console.print(dry_run_note())
             return
-        written = write.apply_plan(plan, repo_root)
+        with tree_lock(repo_root):
+            written = write.apply_plan(plan, repo_root)
+            console.print(f"\n[green]scaffolded {len(written)} file(s)[/]")
+            regenerated = report_regeneration(repo_root)
     except UqsError as exc:
         _die(exc)
-    console.print(f"\n[green]scaffolded {len(written)} file(s)[/]")
-    report_regeneration(repo_root)
     for note in plan.notes:
         console.print(f"  [yellow]next[/] {note}")
+    if not regenerated:
+        _die(
+            UqsError(
+                f"scaffolded {plan.name}, but the tree does not regenerate - fix what is "
+                "reported above, or undo the files listed above with git"
+            )
+        )

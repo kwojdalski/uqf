@@ -4,11 +4,10 @@ persist to. Split from preflight.py, which orchestrates them."""
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from uqs.attach import block_text, config, durability
-from uqs.attach.config import Attachment
+from uqs.attach.config import Attachment, unreplaceable
 from uqs.attach.facts import Facts
 from uqs.attach.findings import Finding
 from uqs.attach.manifest import EXISTING, SHARED
@@ -314,8 +313,8 @@ def persistence(att: Attachment, obs: Observation, facts: Facts) -> list[Finding
         )
     if not Path(path).is_file():
         return _unavailable(f"{path} does not exist on this machine")
-    if not _writable(Path(path)):
-        return _unavailable(f"{path} is not writable by this user")
+    if why := unreplaceable(Path(path)):
+        return _unavailable(why)
     text = Path(path).read_text(errors="replace")
     return _judge(att, tp, facts, path, text, "a marked block will be added")
 
@@ -384,7 +383,3 @@ def _unavailable(
             action,
         )
     ]
-
-
-def _writable(path: Path) -> bool:
-    return os.access(path, os.W_OK)

@@ -96,7 +96,7 @@ scaffold fxprobe_backfill:
   note: row_key is guessed as `time`sym: rows sharing it are folded into one when written - set .qpipe.source.fxprobe.row_key to what identifies a row
   note: to go live, give fxprobe a row in sources.csv - `uqs config sources stub fxprobe` adds one to fill in (host:port, or host:port:user:password); UQF_SOURCE_CRED_FXPROBE overrides it for one run. With neither, the worker runs on the fixture, and warns that it is
   note: the window is half-open [from;to): >= on the lower bound, < on the upper
-  note: optional: a quality check that fails a window on bad rows - rerun with --check, or see quality_check in src/etl/workers/demo_deals_backfill.q
+  note: optional: a quality check that fails a window on bad rows - write .qpipe.job.fxprobe_backfill.quality_check and declare it as the worker's `check`, as src/etl/workers/demo_deals_backfill.q does, or `uqs job remove fxprobe` and scaffold again with --check
   note: see it run: q scripts/examples/fxprobe_example.q - on the fixture, no stack
   note: describe fxprobe_backfill1: replace its SCAFFOLDED card in docs/services/README.md and its SCAFFOLDED comment in docs/architecture/stack.md
   note: describe fx_probe: replace its two SCAFFOLDED lines in scripts/processes/uqs_catalog.q - the description, and the .qcat.unbounded reason (or swap that for a querypolicy.csv row) - or, if the desk should not see it, delete both and add the table to .qcat.hidden with the reason
@@ -184,7 +184,7 @@ facts:{[batch]
     if[0=count batch; :(enlist `window)!enlist "empty window"];
     (enlist `rows)!enlist count batch}
 
-.qetl.transform.passthrough[`fxprobe_passthrough;`batch;.qetl.plant.shape `fx_probe;.qpipe.source.fxprobe.fixture[]];
+.qetl.transform.passthrough[`fxprobe_passthrough;`fx_probe;.qetl.plant.shape `fx_probe;.qpipe.source.fxprobe.fixture[]];
 
 .qetl.job.bounded.define[`fxprobe_backfill;
     `source`outputs`width`transform`facts`procname`note!

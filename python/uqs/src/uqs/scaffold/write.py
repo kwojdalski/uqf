@@ -104,7 +104,7 @@ def prepare(plan: ScaffoldPlan, repo_root: Path) -> tuple[dict[Path, str], set[P
     A scaffold that created three files and then refused the fourth would leave
     a tree that neither loads nor reverts cleanly, and the half of it that did
     land registers itself on load. An append can refuse on what its file holds
-    (a profile line past the limit, a list it cannot find), so existence alone
+    (a profile it cannot read, a list it cannot find), so existence alone
     is not enough to check (#1568).
     """
     check_plan(plan, repo_root)

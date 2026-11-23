@@ -25,7 +25,8 @@ The contract (issue #1424), as code:
   * Once the publisher is stopped the manifest is no longer `verified`, so a detach
     that stops part way (stack unreadable, an IPC error) leaves the start gate
     closed until a retry finishes (#1443). A step apply never heard back from is
-    probed on the stack, never assumed pre-existing (#1447).
+    probed on the stack, never assumed pre-existing (#1447) - a schema-file block
+    in the file it was written to (#2905).
   * A failure part way is reported as exactly that; no atomicity across
     processes is claimed, and every step is safe to repeat.
 """
@@ -52,7 +53,14 @@ from uqs.attach.manifest import (
     Manifest,
     Op,
 )
-from uqs.attach.outcome import BLOCKS, CONSUMER_OPS, INVERSE, interrupted, unresolved
+from uqs.attach.outcome import (
+    BLOCKS,
+    CONSUMER_OPS,
+    INVERSE,
+    interrupted,
+    unresolved,
+    unresolved_blocks,
+)
 from uqs.attach.publisher import Publisher, stop_publisher
 from uqs.attach.remote import Ipc, IpcError
 from uqs.attach.topology import Observation, Proc, observe
@@ -160,7 +168,8 @@ def detach(
             # that still says `verified` whatever the rest of this detach does (#1443).
             m.set_state("detaching", "detach started: the publisher is stopped")
         try:
-            if not _unregister(m, result, previous, dry_run):
+            # Checked here, removed only once the detach is known to go ahead (#2911).
+            if not _unregister(m, result, previous, dry_run, check=True):
                 return result
             return _reverse(att, ipc, m, result, host, previous, dry_run, state_dir)
         except IpcError as exc:
@@ -171,13 +180,21 @@ def detach(
             raise
 
 
-def _unregister(m: Manifest, result: DetachResult, previous: str, dry_run: bool) -> bool:
+def _unregister(
+    m: Manifest, result: DetachResult, previous: str, dry_run: bool, check: bool = False
+) -> bool:
     """The publisher's row in the stack's process file, and its launcher, go
     first - after the stop, before anything on the stack - so no native start
     can bring the publisher back while the rest is reversed (#1845). Only as
-    this attachment wrote them: a changed row refuses the whole detach."""
+    this attachment wrote them: a changed row refuses the whole detach.
+
+    They go only once every check has said the detach goes ahead: a refused
+    detach changes nothing but the stopped publisher, and a site's native
+    start still starts it (#2911). So detach first calls this with `check`,
+    which only reads, and `_reverse` calls it again just before it changes
+    anything."""
     try:
-        removed, result.blockers = native.unregister(m, dry_run=dry_run)
+        removed, result.blockers = native.unregister(m, dry_run=dry_run or check)
     except OSError as exc:
         raise AttachmentError(f"the process file could not be written: {exc}") from None
     result.steps += [Step("unregister", "process file", "", "removed", s) for s in removed]
@@ -209,8 +226,14 @@ def _reverse(
         Blocker(*found) for found in unresolved(m, plant_ours(obs, m), procs, save=not dry_run)
     ]
     unknown += [Blocker(*found) for found in sorting.resolve_pending(m, save=not dry_run)]
+    unknown += [
+        Blocker(*found) for found in unresolved_blocks(att, m, ipc, procs, save=not dry_run)
+    ]
     result.evidence = evidence(att, obs, host, ipc)
     if result.evidence.published:
+        if not (dry_run or _unregister(m, result, previous, dry_run)):
+            result.interrupted = False
+            return result
         return retain.retain(att, ipc, procs, m, result, obs)
     ours = plant_ours(obs, m)
     result.blockers = (
@@ -233,6 +256,9 @@ def _reverse(
     if dry_run:
         result.retained = ["dry run: nothing was changed"]
         result.interrupted = False
+        return result
+    if not _unregister(m, result, previous, dry_run):
+        result.outcome, result.interrupted = "refused", False
         return result
     result.interrupted = False  # _rollback reports its own failures, and sets its own state
     backups = config.directory(att.name, state_dir) / "backups"

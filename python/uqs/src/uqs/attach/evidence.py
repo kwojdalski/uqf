@@ -4,8 +4,9 @@ A row that was published leaves a mark in several places, and no single one is
 enough: the tickerplant's counters reset at end of day, a log rolls, the rdb
 and wdb are cleared into the HDB. So every place is read - counters, log sizes,
 buffered rows, the consumers' rows, earlier days' logs, the wdb's save directory
-and the HDB - and anything that cannot be read counts as publication, because
-absence is unproven.
+and the HDB, with every segment its `par.txt` names - and anything that cannot
+be read counts as publication, because absence is unproven. An earlier day's
+log counts zipped as well as as written (#2913).
 
 The disk is read here when the stack is on this machine, and by the
 tickerplant (q/disk_marks.q) when it is on another (#1651): one stack, one
@@ -84,6 +85,8 @@ def _on_stack_disk(att: Attachment, table: str, tp: Proc | None, ipc: Ipc, ev: E
     except IpcError as exc:
         ev.unknown.append(f"{table}: {tp.procname} could not read the stack's disk: {exc.reason}")
         return
+    for what in answer.get("unread", []):
+        ev.unknown.append(f"{table}: on {att.stack.host}, {what}")
     for log in answer.get("logs", []):
         if int(log["size"]) > EMPTY_LOG:
             ev.reasons.append(f"{table}: an earlier log {log['name']} holds {log['size']} bytes")
@@ -94,15 +97,44 @@ def _on_stack_disk(att: Attachment, table: str, tp: Proc | None, ipc: Ipc, ev: E
             ev.reasons.append(f"{table}: the {label} holds a partition of it")
 
 
+def _log_size(log: Path) -> int:
+    """The bytes a log holds as the plant wrote it: a gzipped one, as housekeeping
+    leaves an earlier day's (scripts/processes/uqs_housekeeping_config.q's
+    `tplogzip`), by the size its gzip trailer records - so an empty log is still
+    empty once zipped (#2913)."""
+    if log.suffix != ".gz":
+        return log.stat().st_size
+    with log.open("rb") as fh:
+        fh.seek(-4, 2)
+        return int.from_bytes(fh.read(4), "little")
+
+
+def _segments(root: Path) -> list[Path]:
+    """Where an HDB's partitions are: the HDB itself, and each directory its
+    `par.txt` names, which TorQ's wdb moves a partition into (`.Q.par`). A
+    relative one is read from the HDB, as q loads it. Raises OSError for a
+    `par.txt` that cannot be read."""
+    par = root / "par.txt"
+    if not par.exists():
+        return [root]
+    named = [line.strip() for line in par.read_text().splitlines() if line.strip()]
+    return [root, *(root / n for n in named)]
+
+
 def _on_disk(att: Attachment, table: str, plant: str, ev: Evidence) -> None:
     """Earlier days' logs, the wdb's save directory and the HDB: what a published
     row leaves that the processes' own counters no longer show."""
     if att.storage.tplogdir:
-        for log in Path(att.storage.tplogdir).glob(f"*/{plant}_{table}" + "?" * 14):
-            if log.stat().st_size > EMPTY_LOG:
-                ev.reasons.append(
-                    f"{table}: an earlier log {log.name} holds {log.stat().st_size} bytes"
-                )
+        name = f"{plant}_{table}" + "?" * 14
+        logs = Path(att.storage.tplogdir)
+        for log in [*logs.glob(f"*/{name}"), *logs.glob(f"*/{name}.gz")]:
+            try:
+                size = _log_size(log)
+            except OSError as exc:
+                ev.unknown.append(f"{table}: the earlier log {log} cannot be read: {exc}")
+                continue
+            if size > EMPTY_LOG:
+                ev.reasons.append(f"{table}: an earlier log {log.name} holds {size} bytes")
     else:
         ev.unknown.append(f"{table}: no tickerplant log directory was recorded")
     for label, root in (
@@ -111,5 +143,11 @@ def _on_disk(att: Attachment, table: str, plant: str, ev: Evidence) -> None:
     ):
         if not root:
             ev.unknown.append(f"{table}: no {label} was recorded for this attachment")
-        elif next(Path(root).glob(f"*/{table}"), None) is not None:
+            continue
+        try:
+            segments = _segments(Path(root))
+        except OSError as exc:
+            ev.unknown.append(f"{table}: the {label}'s par.txt cannot be read: {exc}")
+            continue
+        if any(next(s.glob(f"*/{table}"), None) is not None for s in segments):
             ev.reasons.append(f"{table}: the {label} holds a partition of it")

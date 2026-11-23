@@ -15,11 +15,12 @@ things in.
 uqs job runs list --unfinished
 ```
 
-lists every run that began and never finished. That includes runs whose process
-died, which nothing else records. `uqs job runs list` shows every run with its
-outcome: `completed`, `idle` (nothing to do), `partial` (some windows failed),
-`stopped` (an operator asked it to stop between two windows; the windows it
-finished stand and the same command again does the rest) or `failed`.
+lists every run that did not finish its range: one still going, one whose
+process died (which nothing else records), and one that ended `stopped`,
+`partial` or `failed`. `uqs job runs list` shows every run with its outcome:
+`completed`, `idle` (nothing to do), `partial` (some windows failed), `stopped`
+(an operator asked it to stop between two windows; the windows it finished stand
+and the same command again does the rest) or `failed`.
 
 The process also told whoever started it:
 

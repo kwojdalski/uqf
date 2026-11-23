@@ -242,9 +242,13 @@ def test_all_leaves_the_crypto_mock_to_be_asked_for():
 
 
 def test_a_profile_needing_a_larger_licence_is_refused_on_this_one_and_says_how():
+    """The counts are derived: `all` grows with every leaf any profile gains,
+    so a literal here failed the first job added to a profile (#2947)."""
     message = profiles.over_budget(["all"])
     assert message is not None
-    assert "19" in message and "14" in message
+    held, slots = profiles.plant_slots(profiles.resolve(["all"])), profiles.allowance()
+    assert f"need {held} tickerplant connections" in message
+    assert f"only {slots} are available" in message
     assert profiles.LICENCE_CONNECTIONS_ENV in message, "the refusal names the way out"
 
 

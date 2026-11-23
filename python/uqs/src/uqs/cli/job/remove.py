@@ -51,8 +51,9 @@ def remove_job(
 
     Only files the scaffold wrote go. A table the job published is kept when
     anything else in the tree uses it, and a backfill's source when anything
-    else reads it. A job another job depends on - a twin, or a reaction on
-    the dataset only it fills - is refused until that one is removed. A file
+    else reads it. A job another job depends on - a twin, a reaction on the
+    dataset only it fills, or a subscriber to a table only it publishes - is
+    refused until that one is removed. A file
     whose SCAFFOLDED marker is gone has been written, and is refused without
     `--override even-if-edited --reason TEXT`. Exits 1 when what the removal
     leaves no longer regenerates.

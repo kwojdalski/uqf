@@ -14,6 +14,7 @@ sends.
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
 
 import pytest
@@ -345,6 +346,122 @@ def test_without_q_the_contract_surface_step_is_named(tmp_path, monkeypatch):
     assert regenerate._regenerate_with_q(tmp_path) is None
 
 
+class _Died(Exception):
+    pass
+
+
+def _write_plan_dies(
+    monkeypatch, plan, root: Path, *, dry_run: bool, q: bool, regenerates: bool = True
+):
+    """write_plan over `plan` with nothing written: the message it dies with,
+    or None. Whether q is installed and whether regeneration succeeds are set."""
+    from uqs.cli.job import regenerate
+
+    died: list[str] = []
+
+    def die(exc):
+        died.append(str(exc))
+        raise _Died
+
+    monkeypatch.setattr(regenerate, "_die", die)
+    monkeypatch.setattr(regenerate, "q_interpreter", lambda: Path("q") if q else None)
+    monkeypatch.setattr(regenerate.write, "apply_plan", lambda plan, root: [Path("x.q")])
+    monkeypatch.setattr(regenerate.write, "prepare", lambda plan, root: None)
+    monkeypatch.setattr(regenerate, "report_regeneration", lambda root: regenerates)
+    try:
+        regenerate.write_plan(plan, root, dry_run=dry_run)
+    except _Died:
+        return died[0]
+    return None
+
+
+def test_a_scaffold_whose_regeneration_fails_exits_nonzero(monkeypatch, tmp_path):
+    """#2916: `could not regenerate` was printed and `job new` exited 0, as
+    `job remove` did until #2843 - so a refused operational-docs left the port
+    lock without the new process, and nothing said the command had failed."""
+    plan = backfill.bounded_worker("fx", "fx_rates", "px:float")
+    message = _write_plan_dies(
+        monkeypatch, plan, tmp_path, dry_run=False, q=True, regenerates=False
+    )
+    assert message is not None and message.startswith(
+        "scaffolded fx_backfill, but the tree does not regenerate"
+    )
+    assert _write_plan_dies(monkeypatch, plan, tmp_path, dry_run=False, q=True) is None
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_without_q_a_scaffold_that_defines_a_table_is_refused_before_writing(
+    monkeypatch, tmp_path, dry_run
+):
+    """#2916: without q, plant-schema could not record the new table, so its
+    export went stale and every later `job new` - a --dry-run too - was refused.
+    The dry run refuses what the real run would (#2827)."""
+    plan = backfill.bounded_worker("fx", "fx_rates", "px:float")
+    message = _write_plan_dies(monkeypatch, plan, tmp_path, dry_run=dry_run, q=False)
+    assert message is not None
+    assert "fx_backfill defines a plant table in src/etl/plant_tables.q" in message
+    assert "needs q" in message and "Nothing was written" in message
+
+
+def test_without_q_a_scaffold_into_an_existing_table_is_still_written(monkeypatch, tmp_path):
+    plan = backfill.bounded_worker(
+        "fx", "fx_rates", "px:float", define_table=False, target_columns=[("px", "`float$()")]
+    )
+    assert _write_plan_dies(monkeypatch, plan, tmp_path, dry_run=False, q=False) is None
+
+
+def test_two_scaffolds_at_once_take_turns_and_neither_loses_its_lines(monkeypatch, tmp_path):
+    """#2919: two `job new` runs each read the files they append to and wrote
+    back what they had read plus their own lines - both exited 0 and one job's
+    registrations were gone. The second now waits for the first's write and
+    regeneration, says so, and appends to what the first left."""
+    import threading
+
+    from uqs.cli.job import regenerate
+    from uqs.scaffold.plan import ScaffoldPlan
+
+    target = tmp_path / "plant_tables.q"
+    target.write_text("tables\n")
+    first_read, go = threading.Event(), threading.Event()
+    printed: list[str] = []
+
+    def apply_plan(plan, root):
+        text = target.read_text()
+        first_read.set()
+        go.wait(10)
+        target.write_text(text + plan.name + "\n")
+        return [target]
+
+    class _Console:
+        def print(self, *args, **_):
+            printed.append(" ".join(map(str, args)))
+
+    monkeypatch.setattr(regenerate, "console", _Console())
+    monkeypatch.setattr(regenerate, "refuse_a_table_without_q", lambda plan: None)
+    monkeypatch.setattr(regenerate.write, "apply_plan", apply_plan)
+    monkeypatch.setattr(regenerate, "report_regeneration", lambda root: True)
+    runs = [
+        threading.Thread(
+            target=regenerate.write_plan,
+            args=(ScaffoldPlan(name=name, actions=[], notes=[]), tmp_path),
+            kwargs={"dry_run": False},
+        )
+        for name in ("job_a", "job_b")
+    ]
+    runs[0].start()
+    assert first_read.wait(10)
+    runs[1].start()
+    deadline = time.monotonic() + 10
+    while not any(line.startswith("[yellow]waiting[/]") for line in printed):
+        assert time.monotonic() < deadline, "the second run neither waited nor said so"
+        time.sleep(0.01)
+    go.set()
+    for run in runs:
+        run.join(10)
+    assert target.read_text() == "tables\njob_a\njob_b\n"
+    assert any(f"holds {tmp_path / regenerate.TREE_LOCK}" in line for line in printed)
+
+
 def test_a_scaffold_regenerates_every_file_a_new_table_or_source_makes_stale():
     """q_facts.py records a new source and a worker's dataset, and
     tableproperties.csv - read from it - lists getdata's tables: left stale,
@@ -400,7 +517,7 @@ def test_a_new_tables_catalog_entry_says_whether_it_is_read_bounded():
     the description, which the to-do list finds and `uqs job remove` takes
     back out (#2461)."""
     from uqs.scaffold.catalog import catalog_actions
-    from uqs.scaffold.remove import _drop_catalog
+    from uqs.scaffold.remove_edits import drop_catalog
 
     notes: list[str] = []
     (action,) = catalog_actions("hunt_metric", [], notes)
@@ -409,4 +526,4 @@ def test_a_new_tables_catalog_entry_says_whether_it_is_read_bounded():
     assert reason.strip().startswith('"SCAFFOLDED:') and reason.rstrip().endswith('";')
     assert any(".qcat.unbounded" in n for n in notes)
     before = "x:1;\n"
-    assert _drop_catalog(before + action.body, "hunt_metric") == before
+    assert drop_catalog(before + action.body, "hunt_metric") == before

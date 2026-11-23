@@ -46,6 +46,34 @@
     .qunit.assertTrue[`nt_a in .qetl.job.stream.normalizer.defined[];"and it is a defined normalizer"];
     .qt.qetl.job.stream.normalizer.forget[`nt_a]};
 
+/ #2934: a normalizer named after a plant table its canonical output does not match.
+.qt.qetl.job.stream.normalizer.test_a_name_that_is_a_plant_table_the_output_does_not_fit_is_refused:{[t]
+    .qt.qetl.job.stream.normalizer.mk_xf[`normtest_good;.qt.qetl.job.stream.normalizer.canon;.qt.qetl.job.stream.normalizer.good];
+    .qunit.assertThrows[.qetl.job.stream.normalize[`quote;];
+        `procname`output`input!(`ntq1;.qt.qetl.job.stream.normalizer.canon;(enlist `src)!enlist `normtest_good);
+        "*normalizer quote publishes onto plant table quote but its output does not fit it: quote has columns a b*";
+        "the table and the columns that differ are named"];
+    .qunit.assertTrue[not `quote in .qetl.job.stream.defined[];"and nothing was registered"]};
+
+/ #2953: a refused declaration under a live job's name wrote the normalizer's dispatcher over the job's handler.
+.qt.qetl.job.stream.normalizer.test_a_refused_declaration_leaves_the_live_jobs_handler_alone:{[t]
+    .qt.support.save_stream_jobs[`.qt.qetl.job.stream.normalizer];
+    .qt.qetl.job.stream.normalizer.mk_xf[`normtest_good;.qt.qetl.job.stream.normalizer.canon;.qt.qetl.job.stream.normalizer.good];
+    mine:{[t;x] `mine};
+    .qetl.job.stream.define[`nt_live;`subscribe_to`outputs`on_batch!(enlist `nt_in;enlist `nt_live_out;mine)];
+    (` sv (.qetl.job.stream.namespace `nt_live),`on_batch) set mine;
+    r:@[.qetl.job.stream.normalize[`nt_live;];`procname`output`input!(`nt_live2;.qt.qetl.job.stream.normalizer.canon;(enlist `src)!enlist `normtest_good);{x}];
+    h:get ` sv (.qetl.job.stream.namespace `nt_live),`on_batch;
+    .qt.support.restore_stream_jobs[`.qt.qetl.job.stream.normalizer];
+    .qunit.assertTrue[r like "define: normalizer nt_live is already a streaming job*";"refused, naming the verb"];
+    .qunit.assertEquals[h~mine;1b;"and the job's own handler is still the one in its namespace"]};
+
+/ #2935: a dotted name registers in one place in q and is read as another by uqs.
+.qt.qetl.job.stream.normalizer.test_a_name_that_is_not_a_plain_identifier_is_refused:{[t]
+    {[n] .qunit.assertThrows[.qetl.job.stream.normalize[n;];
+        `procname`output`input!(`ntdot1;.qt.qetl.job.stream.normalizer.canon;(enlist `src)!enlist `normtest_good);
+        "*name must be a plain identifier*";"refused: ",string n]} each `zz.dot,`$("zz-dash";"9lives")};
+
 .qt.qetl.job.stream.normalizer.test_a_missing_key_is_named:{[t]
     .qunit.assertThrows[.qetl.job.stream.normalize[`nt_b;];`procname`output!(`ntb1;.qt.qetl.job.stream.normalizer.canon);
         "*is missing input*";"a normalizer with no sources is refused by the key it lacks"]};

@@ -125,13 +125,13 @@
 / declaration means adding it to its row below; the test then holds it to the rule.
 .qt.qetl.declared.stream_base:{[]
     `procname`subscribe_to`outputs`on_batch`period`on_timer`on_start`on_endofday`check`on_fail`replay`on_replayed!(
-        `zzdecl1;enlist `trades;`symbol$();{[t;x]};0D00:00:01;{[] ()};{[] ()};{[d] ()};{[x] 0#x};`drop;1b;{[] ()})}
+        `zzdecl1;enlist `trades;enlist `zz_decl_out;{[t;x]};0D00:00:01;{[] ()};{[] ()};{[d] ()};{[x] 0#x};`drop;1b;{[] ()})}
 
 .qt.qetl.declared.bounded_base:{[]
     (`ns`procname`note`twin_of`twin_calculation) _ @[.qt.support.declaration `demo_deals_backfill;`outputs;:;enlist `zz_decl_out]}
 
 .qt.qetl.declared.source_base:{[]
-    @[.qetl.source.def `demo_deals;`complete_through`ready;:;({[h] 2026.09.01D00:00};{[b;f;t] ()})]}
+    @[.qetl.source.def `demo_deals;`source`complete_through`ready;:;(`zz_decl_source;{[h] 2026.09.01D00:00};{[b;f;t] ()})]}
 
 .qt.qetl.declared.transform_base:{[]
     `inputs`output`fn`examples!(enlist[`a]!enlist ([] x:`long$()); ([] x:`long$()); {[a] a};

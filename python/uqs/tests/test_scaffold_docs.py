@@ -13,6 +13,7 @@ test_scaffold_loads.py::test_a_scaffolded_backfill_example_runs_straight_away.
 
 from __future__ import annotations
 
+import itertools
 import shutil
 from pathlib import Path
 
@@ -134,6 +135,27 @@ def test_removal_takes_only_what_still_says_scaffolded():
     written = page.replace(showcase_card("zz1"), "**`zz1` · a pulse** --- ticks, written up.")
     assert without_stubs(written, "zz1") == written
     assert without_stubs(page, "zz") == page, "a prefix of the name is not the name"
+
+
+@pytest.mark.parametrize("proc", ["px1", "a_rather_long_process_name_backfill1"])
+def test_a_card_is_wrapped_as_the_panache_hook_reflows_it(proc):
+    """#2946: the card was one line of about 120 characters, which the
+    panache-format hook re-wraps at .panache.toml's 80 columns - so the first
+    commit after every scaffold of a process failed on the scaffold's own text."""
+    card = showcase_card(proc)
+    lines = card.splitlines()
+    assert len(lines) > 1 and all(len(line) <= 80 for line in lines), card
+    # Greedy, as a reflow is: no line could have taken the next one's first word.
+    assert all(len(a) + 1 + len(b.split()[0]) > 80 for a, b in itertools.pairwise(lines)), card
+
+
+def test_removal_takes_a_wrapped_card_whole():
+    """Only a card's first line names its process: the rest of the paragraph
+    must go with it, and nothing after the blank line that ends it."""
+    proc = "a_rather_long_process_name_backfill1"
+    page = with_card(SHOWCASE, showcase_card(proc), "Feeds")
+    assert len(showcase_card(proc).splitlines()) > 1
+    assert without_stubs(page, proc) == SHOWCASE
 
 
 def test_a_raw_contract_the_fixture_cannot_seed_says_whose_seed_it_is():

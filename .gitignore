@@ -114,6 +114,8 @@ docs/reference/q-api/
 /deploy_history.json
 /deploy_targets.log.jsonl
 /deploy_targets.toml.lock
+# The lock two `uqs job new` runs take turns on (uqs.cli.job.regenerate.TREE_LOCK, #2919).
+/.uqs-job.lock
 
 # Host process settings (and bundle-installed rows), never repository defaults.
 /python/uqs/process_overrides.csv

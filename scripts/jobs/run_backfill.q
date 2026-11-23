@@ -45,7 +45,7 @@
 // -mode validate open nothing and write nothing, whatever -hdb says.
 //
 // -once (#2798) runs the first planned window only and exits with the --once codes: 0 done, 1
-// failed, 4 stopped, 6 no work (every window already covered), writing
+// failed, 4 stopped, 6 no work (every window already covered, or the range not complete yet), writing
 // <UQF_STATUS_DIR>/once_<worker>.json - the same runner torq_backfill.q uses (.qetl.once).
 //
 // Run from the repository root: init.q's \l lines are root-relative.

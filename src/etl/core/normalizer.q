@@ -62,8 +62,9 @@
 / @return the name
 / @throws error naming every problem it finds first
 .qetl.job.stream.normalizer.define:{[name;decl]
+    .qetl.declared.require_form["normalizer";name;decl];
     who:"define: normalizer ",string[name];
-    if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
+    .qetl.job.refuse_name[who;name];
     .qetl.declared.refuse_unknown[who;"a normalizer";decl;.qetl.job.stream.normalizer.required_keys,`procname,.qetl.job.stream.passthrough_keys];
     missing:.qetl.job.stream.normalizer.required_keys where not .qetl.job.stream.normalizer.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
@@ -73,10 +74,13 @@
     if[`time in cols out;
         'who,"'s output carries `time` - the plant stamps its own, and a source's own stamp belongs in a column named for what it is"];
     srcs:decl`input;
-    if[not (99h=type srcs) and (11h=type key srcs) and 11h=type value srcs;
+    if[not $[99h=type srcs; (11h=type key srcs) and 11h=type value srcs; 0b];
         'who,"'s input must be a dictionary of source table -> transform name, symbols both"];
     if[0=count srcs; 'who," has no input - a normalizer of nothing normalizes nothing"];
     .qetl.job.stream.normalizer.check_source[who;out]'[key srcs;value srcs];
+    .qetl.job.stream.refuse_output_mismatch[who;enlist name;out];
+    / before the handler is written: a refused re-declaration of a live job must leave its on_batch as it was (#2953)
+    .qetl.job.stream.refuse_taken[who;name;decl];
     / The dispatcher is ALSO set as .qpipe.job.<name>.on_batch, so a normalizer
     / instance has the same surface as every other job - a reader, a test
     / or the runner reaching for a job's handler finds it in the one place.

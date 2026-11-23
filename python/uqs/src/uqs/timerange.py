@@ -99,7 +99,7 @@ def parse_bound(name: str, text: str) -> datetime:
         raise UqsUsageError(f"{name} {text!r} is finer than a microsecond, which this cannot carry")
     from_q = _from_q_literal(name, text)
     if from_q is not None:
-        return from_q
+        return _held(name, text, from_q)
     try:
         parsed = datetime.fromisoformat(text)
     except ValueError:
@@ -107,9 +107,9 @@ def parse_bound(name: str, text: str) -> datetime:
             f"{name} must be a date or a timestamp - {BOUND_FORMS}; got {text!r}"
         ) from None
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=UTC)
+        return _held(name, text, parsed.replace(tzinfo=UTC))
     try:
-        return parsed.astimezone(UTC)
+        return _held(name, text, parsed.astimezone(UTC))
     except OverflowError:  # 0001-01-01T00:00+01:00 is a year 0 in UTC (#2519)
         raise UqsUsageError(f"{name} {text!r} {_OUTSIDE}") from None
 
@@ -143,8 +143,23 @@ def parse_duration(name: str, value: str | float) -> timedelta:
     return span
 
 
-#: Why a bound past datetime's years 1-9999 is refused (#2519).
-_OUTSIDE = "is outside the range a timestamp can hold (years 1 to 9999)"
+#: The bounds a q timestamp literal parses within, Q_END excluded: `"P"$` of
+#: a year before 1709 or after 2290 is a null, though the type itself reaches
+#: a little further. Every range here ends up a q timestamp, so a bound outside is
+#: refused here, naming the option, rather than by the launched process,
+#: where only its log says why (#2951).
+Q_EARLIEST = datetime(1709, 1, 1, tzinfo=UTC)
+Q_END = datetime(2291, 1, 1, tzinfo=UTC)
+
+#: Why a bound past q's timestamps is refused (#2519, #2951).
+_OUTSIDE = "is outside the range a timestamp can hold in q (years 1709 to 2290)"
+
+
+def _held(name: str, text: object, bound: datetime) -> datetime:
+    """`bound`, or a refusal naming `name` when q's timestamp cannot hold it."""
+    if not Q_EARLIEST <= bound < Q_END:
+        raise UqsUsageError(f"{name} {text!r} {_OUTSIDE}")
+    return bound
 
 
 def _midnight(day: date) -> datetime:
@@ -270,13 +285,14 @@ def resolve(
         if day is not None:
             first = parse_day("--date", day)
             try:
-                return TimeRange(_midnight(first), _midnight(first + timedelta(days=1)))
+                end = _midnight(first + timedelta(days=1))
             except OverflowError:  # 9999-12-31: its end is in year 10000
                 raise UqsUsageError(f"--date {day!r} {_OUTSIDE}") from None
+            return TimeRange(_held("--date", day, _midnight(first)), _held("--date", day, end))
         span = parse_duration("--last", "" if last is None else last)
         end = (now or datetime.now(UTC)).astimezone(UTC)
         try:
-            return TimeRange(end - span, end, span)
+            return TimeRange(_held("--last", last, end - span), end, span)
         except OverflowError:
             raise UqsUsageError(f"--last {last!r} {_OUTSIDE}") from None
     if not open_ended and (range_from is None or range_to is None):

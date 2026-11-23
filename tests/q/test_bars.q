@@ -74,6 +74,14 @@
     .qunit.assertEquals[count .qt.qetl.job.stream.bars.ns[`bt_redecl;`pending];1;"the open window's row is still buffered"];
     .qunit.assertEquals[(.qt.qetl.job.stream.bars.ns[`bt_redecl;`publish])[`bt_bar;([] a:1 2)];2;"and publish still reaches what it was wired to"]};
 
+/ #2934: outputs naming a plant table the transform's bars do not fit was
+/ accepted, and every batch was then withheld at run time.
+.qt.qetl.job.stream.bars.test_outputs_naming_a_plant_table_the_bars_do_not_fit_is_refused:{[t]
+    .qunit.assertThrows[.qetl.job.stream.at_bars[`bt_mism;];@[.qt.qetl.job.stream.bars.decl[];`outputs`procname;:;(enlist `quote;`btmism1)];
+        "*bars job bt_mism publishes onto plant table quote but its output does not fit it: quote has columns sym bar_start*";
+        "the table and the columns that differ are named"];
+    .qunit.assertTrue[not `bt_mism in .qetl.job.stream.defined[];"and nothing was registered"]};
+
 / The windows are cut on event_time: a float column was accepted and every
 / batch then threw a bare 'type, as did a list of two columns (#2855).
 .qt.qetl.job.stream.bars.test_an_event_time_that_is_not_one_timestamp_column_is_refused:{[t]

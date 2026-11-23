@@ -126,6 +126,7 @@
 .qetl.job.stream.horizons.normalise:{[who;decl;ins]
     ev_cols:cols first value ins; ref_cols:cols last value ins;
     / key_cols, not `by`: by is a qSQL keyword, which q reserves
+    if[`by in key decl; .qetl.declared.require_symbols[who;`by;decl`by;"the grouping columns"]];
     key_cols:$[`by in key decl; (),decl`by; enlist `sym];
     absent:key_cols where not key_cols in ref_cols;
     if[count absent;
@@ -210,8 +211,8 @@
 / @return the name
 / @throws error naming every problem it finds first
 .qetl.job.stream.horizons.define:{[name;decl]
+    .qetl.declared.require_form["horizon job";name;decl];
     who:"define: horizon job ",string[name];
-    if[not 99h=type decl; 'who,"'s declaration must be a dictionary"];
     .qetl.job.stream.refuse_publishes[who;decl];
     decl:.qetl.job.stream.with_lateness[who;decl];
     .qetl.declared.refuse_unknown[who;"a horizon job";decl;.qetl.job.stream.horizons.required_keys,.qetl.job.stream.horizons.optional_keys];

@@ -118,8 +118,24 @@ def test_the_cli_prints_each_gap_and_the_backfill_that_refills_it(monkeypatch):
     assert "2026-09-13T10:20:00.000000000" in result.output
     assert (
         "uqs job backfill hdb_fx_markouts_backfill --from 2026-09-13T10:00:00 "
-        "--to 2026-09-13T10:20:00 --source-version <V>"
+        "--to 2026-09-13T10:20:00\n"
     ) in result.output
+
+
+def test_a_twin_without_a_default_version_is_advised_a_command_a_shell_can_run(monkeypatch):
+    """#2952: no `<V>` placeholder, which a shell reads as a redirection; the
+    command leaves the version out, and a line says it is the operator's."""
+    result = _gaps_cli(monkeypatch, [_HOLE], ["hdb_fx_markouts_backfill"])
+    assert "<V>" not in result.output
+    assert "add --source-version RELEASE" in result.output
+    assert "hdb_fx_markouts_backfill: it declares no default" in result.output
+
+
+def test_the_json_refill_says_its_source_version_is_unnamed(monkeypatch):
+    monkeypatch.setattr(gaps_cli, "_utc_today", lambda: date(2026, 9, 20))
+    found, _ = gaps_cli.refills([_HOLE], {"hdb_fx_markouts_backfill": None})
+    assert [r["source_version"] for r in found] == [None]
+    assert found[0]["command"].endswith("--to 2026-09-13T10:20:00")
 
 
 def test_the_cli_says_when_nothing_can_refill_the_gap(monkeypatch):
@@ -157,7 +173,7 @@ def test_a_gap_across_midnight_into_today_is_refilled_up_to_midnight(monkeypatch
     result = _gaps_cli(monkeypatch, [hole], ["hdb_fx_markouts_backfill"])
     assert (
         "uqs job backfill hdb_fx_markouts_backfill --from 2026-09-13T23:00:00 "
-        "--to 2026-09-14T00:00:00 --source-version <V>"
+        "--to 2026-09-14T00:00:00\n"
     ) in result.output
     assert "after end of day" in result.output
 
@@ -165,7 +181,7 @@ def test_a_gap_across_midnight_into_today_is_refilled_up_to_midnight(monkeypatch
 def test_a_gap_before_today_is_advised_whole_and_nothing_is_said_about_today(monkeypatch):
     monkeypatch.setattr(gaps_cli, "_utc_today", lambda: date(2026, 9, 14))
     result = _gaps_cli(monkeypatch, [_HOLE], ["hdb_fx_markouts_backfill"])
-    assert "--to 2026-09-13T10:20:00 --source-version <V>" in result.output
+    assert "--to 2026-09-13T10:20:00\n" in result.output
     assert "after end of day" not in result.output
 
 
@@ -217,7 +233,7 @@ def test_the_printed_refill_runs_through_the_backfill_cli(monkeypatch):
         return subprocess.CompletedProcess([], 0)
 
     monkeypatch.setattr(backfill_cli.stack_backfill, "start", start)
-    args = shlex.split(command.replace("<V>", "v1"))[1:]
+    args = [*shlex.split(command)[1:], "--source-version", "v1"]
     result = runner.invoke(cli.app, args, env={"COLUMNS": "200"})
     assert result.exit_code == 0, result.output
     assert started == [
@@ -237,7 +253,7 @@ def test_an_end_a_nanosecond_before_midnight_rounds_up_into_the_next_day(monkeyp
         "range_to": "2026-09-13T23:59:59.999999999",
     }
     result = _gaps_cli(monkeypatch, [hole], ["hdb_fx_markouts_backfill"])
-    assert "--from 2026-09-13T23:00:00 --to 2026-09-14T00:00:00 --source-version" in result.output
+    assert "--from 2026-09-13T23:00:00 --to 2026-09-14T00:00:00\n" in result.output
 
 
 # --- a bar-building twin is advised a range on its grid (#1323) --------------
@@ -300,9 +316,7 @@ def test_a_grain_that_does_not_divide_the_epoch_gap_lands_on_qs_grid(upper):
 def test_the_advised_exec_bars_refill_is_minute_aligned_and_widened(monkeypatch):
     result = _gaps_cli(monkeypatch, [_NS_HOLE], {"hdb_exec_bars_backfill": _MINUTE_NS})
     command = _printed_command(result.output)
-    assert "--from 2026-09-13T10:00:00 --to 2026-09-13T10:05:00 --source-version" in command, (
-        command
-    )
+    assert command.endswith("--from 2026-09-13T10:00:00 --to 2026-09-13T10:05:00"), command
 
 
 def test_the_advised_exec_bars_refill_is_accepted_by_init(monkeypatch, status):

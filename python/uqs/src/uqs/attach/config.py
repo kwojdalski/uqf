@@ -250,12 +250,61 @@ def atomic_write(path: Path, text: str | bytes) -> None:
     """Replace `path` whole or not at all: a crash leaves the old file. Bytes
     are written as given - no encoding, no newline translation."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    with tmp.open("wb" if isinstance(text, bytes) else "w") as fh:
-        fh.write(text)
-        fh.flush()
-        os.fsync(fh.fileno())
-    os.replace(tmp, path)
+    # A name of its own: two writers of one file never share a temp file (#2909).
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
+    try:
+        with tmp.open("wb" if isinstance(text, bytes) else "w") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def unreplaceable(path: Path) -> str:
+    """Why atomic_write cannot replace the file at `path` for this user, "" when it
+    can. The preflight asks it, so a plan never approves a write apply cannot make
+    (#2910): the new file is written beside the old one and renamed over it, so
+    the directory must take a new file, not only the file be writable."""
+    if not os.access(path, os.W_OK):
+        return f"{path} is not writable by this user"
+    if not os.access(path.parent, os.W_OK | os.X_OK):
+        return (
+            f"{path.parent} is not writable by this user, and {path} is replaced by "
+            "writing a new file there and renaming it over the old one"
+        )
+    return ""
+
+
+@contextmanager
+def file_locked(path: Path) -> Iterator[None]:
+    """Hold the file at `path` against every other uqs that changes it, across
+    processes and attachments (#2909): a stack's schema file and sort.csv are
+    shared by every attachment on it, and `locked` is one per attachment.
+
+    The lock is flock on the file itself, so it needs nothing beside it. A
+    replace (atomic_write) puts a new file at the path, so a holder that got the
+    lock on the one replaced under it lets go and takes it again on the new one.
+    Released by the kernel if the holder dies. Raises OSError (FileNotFoundError)
+    for a file that is not there.
+    """
+    while True:
+        fd = os.open(path, os.O_RDONLY)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            try:
+                now = os.stat(path)
+            except FileNotFoundError:
+                continue
+            held = os.fstat(fd)
+            if (now.st_dev, now.st_ino) != (held.st_dev, held.st_ino):
+                continue
+            yield
+            return
+        finally:
+            os.close(fd)  # closing the descriptor releases its flock
 
 
 def save(att: Attachment, root: Path | None = None) -> Path:

@@ -31,7 +31,7 @@ from attach_backfill_support import (
     snapshot,
     tree_table,
 )
-from attach_support import blocked
+from attach_support import ListedHosts, blocked
 from typer.testing import CliRunner
 
 from uqs import cli
@@ -74,6 +74,25 @@ def test_the_destination_is_the_attachments_canonical_hdb_never_the_runtimes(wor
     assert dest.identity == attached.identity_of("testhost", 6000, world.hdb.resolve())
     assert dest.state_dir.parent == world.status / "attached"
     assert dest.state_dir.name == f"pb-uat-{dest.identity}"
+
+
+def test_a_writer_runs_state_is_the_one_its_ledger_readers_look_in(world, monkeypatch):
+    """#2950: an HDB on the writer's machine whose path crosses a symlink HERE (`/tmp` on
+    macOS) was realpath'd by state_dir_of and not by a --writer run, so `runs list
+    --attachment` read another directory than the run wrote."""
+    here = world.tmp / "link"
+    here.symlink_to(world.tmp, target_is_directory=True)
+    remote = here / "only-on-the-writer" / "hdb"  # no such directory on this machine
+    save_attachment("pb-uat", world.hdb)
+    att = config.load("pb-uat")
+    monkeypatch.setattr(
+        config,
+        "load",
+        lambda *a, **k: replace(att, storage=replace(att.storage, hdb_dir=str(remote))),
+    )
+    dest = attached.resolve(world.paths, "pb-uat", WORKER, on_this_machine=False)
+    assert dest.hdb_dir == remote, "a path that is not here is kept as pinned"
+    assert attached.state_dir_of(world.paths, "pb-uat") == dest.state_dir
 
 
 def test_two_destinations_never_share_state(world):
@@ -161,7 +180,21 @@ def test_an_unknown_attachment_and_an_unknown_worker_are_refused(world):
 def test_the_writers_and_the_readers_that_serve_the_destination_are_found(world):
     plan_ = plan_with(world, facts_of())
     assert plan_["writers"] == ["rdb1", "wdb1"]
-    assert plan_["reload_targets"] == [{"process": "hdb1", "port": 6003}]
+    assert plan_["reload_targets"] == [{"process": "hdb1", "host": "testhost", "port": 6003}]
+
+
+def test_a_reader_on_a_second_host_is_asked_where_discovery_lists_it(world):
+    """Asked at the stack's host instead, nothing answered: the reader that serves
+    the destination read as `not running` and was left out of the reload (#2907)."""
+    world.stack.named("hdb1")["host"] = "hostb.example.com"
+    world.stack.refresh_discovery()
+    ipc = ListedHosts(world.stack)
+    plan_ = plan_with(world, facts_of(), ipc=ipc)
+    assert plan_["reload_targets"] == [
+        {"process": "hdb1", "host": "hostb.example.com", "port": 6003}
+    ]
+    assert plan_["readers_not_serving"] == []
+    assert {host for name, host, _ in ipc.asked if name == "hdb1"} == {"hostb.example.com"}
 
 
 def test_a_reader_of_another_directory_is_not_a_reload_target(world, monkeypatch):
@@ -330,7 +363,7 @@ def test_the_plan_reports_everything_the_issue_asks_for(world):
     assert p["coverage"] == {"fetch": 1, "covered": 1, "deferred": 0}
     assert p["native_partitions"] == [{"date": "2026-09-12", "exists": False, "has_dataset": False}]
     assert p["destination"]["hdb_dir"] == str(world.hdb.resolve())
-    assert p["reload_targets"] == [{"process": "hdb1", "port": 6003}]
+    assert p["reload_targets"] == [{"process": "hdb1", "host": "testhost", "port": 6003}]
 
 
 def test_native_partitions_say_what_already_exists(world):
@@ -494,7 +527,9 @@ def test_cli_plan_prints_the_report_and_json_matches(world, monkeypatch):
     out = " ".join(text.output.split())
     assert "attachment pb-uat (nothing was written)" in out and "reload hdb1:6003" in out
     as_json = invoke(*COMMON, "--mode", "plan", "--json")
-    assert json.loads(as_json.output)["reload_targets"] == [{"process": "hdb1", "port": 6003}]
+    assert json.loads(as_json.output)["reload_targets"] == [
+        {"process": "hdb1", "host": "testhost", "port": 6003}
+    ]
 
 
 def test_json_without_attach_reports_the_local_run(world):

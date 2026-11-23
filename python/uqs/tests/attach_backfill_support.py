@@ -87,6 +87,8 @@ class HdbStack(FakeStack):
             reader = next(p for k, p in self.procs.items() if k < 0 and p["procname"] == name)
             self.procs.pop(-reader["port"])
             reader["port"] = port
+            # a real process a test started on this machine: listed where it listens
+            reader["host"] = "localhost"
             self.procs[-port] = reader
         self.refresh_discovery()
 
@@ -393,9 +395,9 @@ class Receivers:
         self.pids: list[int] = []
 
     def start(self, paths, attachment: str, contract: str, *, port: int, ipc) -> dict[str, Any]:
-        from uqs.attach import backfill_remote
+        from uqs.attach import backfill_receiver
 
-        started = backfill_remote.receive(paths, attachment, contract, port=port, ipc=ipc)
+        started = backfill_receiver.receive(paths, attachment, contract, port=port, ipc=ipc)
         self.pids.append(started["pid"])
         return started
 

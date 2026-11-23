@@ -15,6 +15,7 @@ from test_attach_cli import SECRET, TABLE, flat, new, run, world  # noqa: F401 -
 
 from uqs.attach import config, publisher
 from uqs.cli.connector import attach_launch, attach_next
+from uqs.stack.attach_state import MANIFEST_FILE
 
 FOLLOW = "follow it with `uqs logs pb_ledger1 -f`"
 ROWS = f"uqs query --host testhost --port 6002 'select from {TABLE} where i >= count[i]-10'"
@@ -88,6 +89,43 @@ def test_show_names_the_commands_and_where_the_port_comes_from(world):  # noqa: 
     assert nxt["follow"] == "uqs logs pb_ledger1 -f"
     assert nxt["rows"].startswith("uqs query --host <rdb-host> --port <rdb-port> ")
     assert NO_PORT in nxt["port_from"]
+
+
+@pytest.mark.parametrize(
+    ("state", "hint"),
+    [
+        ("planned", "apply it with `uqs job attachment add pb-uat`"),
+        ("partial", "finish applying it with `uqs job attachment add pb-uat`"),
+        ("detaching", "finish removing it with `uqs job attachment remove pb-uat`"),
+        ("rolled_back", None),
+        ("detached", None),
+    ],
+)
+def test_show_names_what_moves_an_attachment_on_that_publishes_nothing(
+    world,  # noqa: F811
+    state,
+    hint,
+):
+    """#2943: show told an attachment never applied, or removed, to follow a
+    publisher that was not running and query a table the rdb did not hold."""
+    assert run("add", *new(world, "--yes")).exit_code == 0
+    manifest = world.state_dir / "pb-uat" / MANIFEST_FILE
+    if state == "planned":
+        manifest.unlink()
+    else:
+        manifest.write_text(json.dumps({**json.loads(manifest.read_text()), "state": state}))
+    result = run("show", "pb-uat")
+    assert result.exit_code == 0, result.output
+    text = flat(result.output)
+    assert f"state: {state}" in text
+    assert "uqs logs" not in text and "uqs query" not in text
+    nxt = json.loads(run("show", "pb-uat", "--json").output)["next"]
+    if hint is None:
+        assert "uqs job attachment" not in text
+        assert nxt == {}
+    else:
+        assert hint in text
+        assert f"{nxt['why']} with `{nxt['command']}`" == hint
 
 
 @pytest.mark.parametrize("command", ["add", "show", "show-json", "add-json"])

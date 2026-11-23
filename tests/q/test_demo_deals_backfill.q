@@ -965,9 +965,7 @@
 .qt.qpipe.job.demo_deals_backfill.test_redeclaring_a_worker_keeps_its_state:{[t]
     .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
     .qt.qpipe.job.demo_deals_backfill.with_declaration_restored[{
-        .qetl.job.bounded.define[`demo_deals_backfill;
-            `source`outputs`width`transform`check!
-            (`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough;.qpipe.job.demo_deals_backfill.quality_check)]}];
+        system "l src/etl/workers/demo_deals_backfill.q"}];
     .qunit.assertEquals[.qpipe.job.demo_deals_backfill.spec[];.qt.qpipe.job.demo_deals_backfill.spec_for[.qt.qpipe.job.demo_deals_backfill.fv;1;4];
         "a second define fills only absent names, and the run specification is not one"]};
 
@@ -1099,12 +1097,13 @@
 / Redefining the SAME worker must stay legal - the shell's define is called
 / at load, and reloading a worker file is ordinary.
 .qt.qpipe.job.demo_deals_backfill.test_a_worker_may_redeclare_itself:{[t]
-    .qunit.assertEquals[
-        .qt.qpipe.job.demo_deals_backfill.with_declaration_restored[{
-            .qetl.job.bounded.define[`demo_deals_backfill;
-                `source`outputs`width`transform!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough)]}];
-        `demo_deals_backfill;
-        "reloading a worker file re-runs its own define, which must not trip the clash guard"]};
+    before:.qetl.job.bounded.def `demo_deals_backfill;
+    r:.qt.qpipe.job.demo_deals_backfill.with_declaration_restored[{system "l src/etl/workers/demo_deals_backfill.q"; .qetl.job.bounded.def `demo_deals_backfill}];
+    / Functions compare as functions: under the coverage run the registry holds
+    / instrumented copies, which a reload's own lambdas never equal by value.
+    fns:{$[type[x] within 100 112h; `function; type[x] in 0 99h; .z.s each x; x]};
+    .qunit.assertEquals[fns r;fns before;
+        "reloading a worker file re-runs its own define, which must not trip the clash guard, and leaves the declaration as it was"]};
 
 / The two real workers declare distinct (dataset;partition) pairs, so the
 / guard is satisfied by the tree as it stands rather than by luck. Keyed on
@@ -1485,3 +1484,19 @@
     id:exec last run_id from .qetl.run.runs[] where worker=`demo_deals_backfill;
     .qunit.assertEquals[asc exec label from .qetl.run.facts_of id;`dry_run`rows`source_version;"the framework's facts are recorded"];
     .qunit.assertTrue[any {[l] (`ERROR=l 0) and l[2] like "facts function returned*"} each lines;"and the bad facts are logged at ERROR"]};
+
+/ #2951: a dry run's `rows fact was finish_window's rows_published, 0 because
+/ nothing was published - so a range holding data read like an empty source.
+/ It is the rows each window would publish, and they add up to the real run's.
+.qt.qpipe.job.demo_deals_backfill.test_a_dry_runs_facts_count_the_rows_it_would_publish:{[t]
+    setenv[`UQF_DRY_RUN;"true"];
+    lines:.qt.support.captured_log[0b;{[x]
+        .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
+        .qpipe.job.demo_deals_backfill.run[]}];
+    setenv[`UQF_DRY_RUN;""];
+    would:sum {[l] l[3][`facts]`rows} each lines where lines[;2] like "dry run - facts not recorded";
+    .qunit.assertEquals[count value `demo_deals;0;"setup: the dry run published nothing"];
+    .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
+    r:.qpipe.job.demo_deals_backfill.run[];
+    .qunit.assertTrue[0<r`rows_published;"setup: the range holds rows"];
+    .qunit.assertEquals[would;r`rows_published;"the dry run's rows are the rows the run publishes"]};

@@ -568,9 +568,33 @@ def test_a_dry_run_asks_no_reader_to_reload(world):
 
 def test_a_second_run_is_refused_while_the_attachment_owns_one(world):
     backfill_owner.claim("pb-uat", "some_worker", os.getpid(), "abc")
-    with pytest.raises(AttachmentError, match="has an attached backfill running: some_worker"):
+    with pytest.raises(AttachmentError, match="has an attached backfill running: some_worker") as e:
         run(world)
     assert not (world.status / "attached").exists(), "refused before the state directory exists"
+    # a second backfill is told what follows and stops the first, and to run itself again -
+    # not to detach, nor to follow with the command that was just refused (#2932)
+    message = str(e.value)
+    assert "`uqs logs --attachment pb-uat --worker some_worker -f` follows it" in message
+    assert "`uqs job runs stop some_worker --attachment pb-uat` stops it" in message
+    assert message.endswith("then run this backfill again. Nothing was changed.")
+    assert "detach" not in message and "uqs job backfill" not in message
+
+
+def test_the_refusal_names_the_receiver_stop_for_a_receiver(tmp_path):
+    backfill_owner.claim("pb-uat", "trades.receiver", os.getpid(), "abc", tmp_path)
+    with pytest.raises(AttachmentError) as e:
+        backfill_owner.refuse_while_active("pb-uat", tmp_path, then="start the receiver again")
+    message = str(e.value)
+    assert "`uqs logs --attachment pb-uat --worker trades.receiver -f` follows it" in message
+    assert "`uqs job receiver stop --attachment pb-uat` stops it" in message
+    assert "then start the receiver again." in message
+
+
+def test_detach_is_still_told_to_detach_afterwards(tmp_path):
+    backfill_owner.claim("pb-uat", WORKER, os.getpid(), "abc", tmp_path)
+    with pytest.raises(AttachmentError, match=rf"`uqs job runs stop {WORKER} --attachment pb-uat` "
+                       r"stops it\), then detach\. Nothing was changed\.$"):  # fmt: skip
+        backfill_owner.refuse_while_active("pb-uat", tmp_path)
 
 
 def test_detach_refuses_while_a_backfill_owns_the_attachment(world):

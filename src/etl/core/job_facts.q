@@ -29,6 +29,22 @@
 .qetl.job.procname_of:{[name;decl]
     $[`procname in key decl; decl`procname; .qetl.job.default_procname name]}
 
+/ Refuse a job name q would register but nothing else can read. A name is
+/ `[a-zA-Z_][a-zA-Z0-9_]*`, the set uqs's declaration reader recognises: a dot is
+/ q's namespace separator (`zz.dot` would sit at .qpipe.job.zz.dot, which uqs
+/ reads as job `zz`), and a dash or a leading digit is not a namespace segment
+/ at all (#2935).
+/ @param who the error prefix, e.g. "define: demo_markout"
+/ @param name the job's name
+/ @return the name
+/ @throws error when the name is not a plain identifier
+/ @eg .qetl.job.refuse_name["define: demo_markout";`demo_markout]  ->  `demo_markout
+.qetl.job.refuse_name:{[who;name]
+    s:string name;
+    if[not $[-11h=type name; $[count s; (first[s] in .Q.a,.Q.A,"_") and all s in .Q.an,"_"; 0b]; 0b];
+        'who,"'s name must be a plain identifier - letters, digits and underscores, not starting with a digit. A dot is q's namespace separator, so a dotted name registers in one place and is read as another by uqs"];
+    name}
+
 / Resolve a job's procname and refuse it when another job already runs there.
 / One rule for both shells (#2115): a symbol, defaulting to `<name>1`, held by
 / at most one declared job ACROSS the bounded and streaming registries - the
@@ -45,6 +61,7 @@
 / @throws error when procname is not a symbol, or another job already runs there
 / @eg .qetl.job.claim_procname["define: demo_markout";`demo_markout;()!();`]  ->  `demo_markout1
 .qetl.job.claim_procname:{[who;name;decl;self]
+    .qetl.job.refuse_name[who;name];
     proc:.qetl.job.procname_of[name;decl];
     if[not -11h=type proc;
         'who,"'s procname must be a symbol naming the process that runs it, e.g. `",string .qetl.job.default_procname name];

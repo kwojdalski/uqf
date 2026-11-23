@@ -48,7 +48,7 @@ from pathlib import Path
 from uqs.model import q_support, registry
 from uqs.model.declarations import read_declarations, read_file
 from uqs.model.pipeline import PipelineKind
-from uqs.paths import BUNDLE_LEDGER, CATALOG_FILE, TABLES_FILE, UqsError
+from uqs.paths import BUNDLE_LEDGER, CATALOG_FILE, INSTALLED_CONNECTORS, TABLES_FILE, UqsError
 from uqs.stack import bundle_additions, bundle_connectors, bundle_shadowing
 from uqs.stack import install as stack_install
 from uqs.stack import overrides as override_files
@@ -245,6 +245,7 @@ def install(p: Plan, root: Path, runtime: str | None = None) -> dict:
     belongs to every runtime that has all of this tree's pipelines."""
     ledger = read_ledger(root)
     previous = ledger.get(p.bundle.name, {})
+    _claim(ledger, p, root)
     # Overrides first: they are the one addition that can still conflict
     # with what an operator set since, and nothing else is written yet.
     override_files.merge_bundle(root, p.overrides, previous.get("overrides", []), p.bundle.name)
@@ -276,6 +277,33 @@ def install(p: Plan, root: Path, runtime: str | None = None) -> dict:
     (root / LEDGER).write_text(json.dumps(ledger, indent=2, sort_keys=True) + "\n")
     bundle_shadowing.evaluate_tables(root, p.bundle.name)
     return entry
+
+
+def _claim(ledger: dict[str, dict], p: Plan, root: Path) -> None:
+    """Record, before the first write, everything this install may put in the
+    tree, beside what the bundle's previous install owned (#2948).
+
+    An install stopped part-way otherwise leaves job files, override rows and
+    connectors no entry owns, and once the bundle is edited its rerun refuses
+    them as another's. A claimed entry is marked `pending`; the entry written
+    when the install finishes replaces it."""
+    previous = ledger.get(p.bundle.name, {})
+    files = {
+        str(i.destination.relative_to(root)): _sha256(i.source) for i in p.jobs if i.destination
+    }
+    overrides = [list(row) for row in p.overrides]
+    connectors = [str(INSTALLED_CONNECTORS / p.bundle.name / s.name) for s in p.connectors]
+    claimed = {
+        **previous,
+        "files": {**files, **previous.get("files", {})},
+        "overrides": previous.get("overrides", [])
+        + [row for row in overrides if row not in previous.get("overrides", [])],
+        "connectors": sorted({*previous.get("connectors", []), *connectors}),
+        "pending": True,
+    }
+    (root / LEDGER).write_text(
+        json.dumps({**ledger, p.bundle.name: claimed}, indent=2, sort_keys=True) + "\n"
+    )
 
 
 def jobs(p: Plan) -> list[dict[str, str]]:

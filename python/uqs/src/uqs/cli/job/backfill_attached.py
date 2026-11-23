@@ -54,6 +54,7 @@ def run(
     trace: bool = False,
     writer: str | None = None,
     force: bool = False,
+    force_reason: str | None = None,
     waived: Mapping[str, str] | None = None,
 ) -> None:
     """Validate, plan or run a backfill into `attachment`'s native HDB; non-zero on a refusal.
@@ -88,6 +89,7 @@ def run(
             attachment, worker, version, bound_from, bound_to,
             writer=writer, mode=mode, port=port, fixture=fixture, on_conflict=on_conflict,
             as_json=as_json, wait=wait, verbose=verbose, trace=trace, force=force,
+            force_reason=force_reason,
         )  # fmt: skip
         return
     try:

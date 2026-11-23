@@ -427,6 +427,28 @@ def test_detach_stops_the_publisher_then_removes_only_its_unchanged_row(world, m
     assert Manifest.load("pb-uat").registrations == {}
 
 
+def test_a_refused_detach_leaves_the_row_and_the_launcher(world):
+    """#2911: a refusal found after the process file was checked - here the block
+    in the schema file edited since apply - changes nothing but the stopped
+    publisher, as the dry run and the guide say: the site's native start still
+    starts it. The detach that follows the fix removes both."""
+    assert run("add", *new(world), "--yes").exit_code == 0
+    registry, launcher = world.registry.read_bytes(), world.state_dir / "pb-uat" / "native_start.sh"
+    text = world.schema.read_text()
+    world.schema.write_text(text.replace(f"{TABLE}:", f"{TABLE} :", 1))
+    refused = run("remove", "pb-uat", "--yes", "--json")
+    assert refused.exit_code == 1
+    doc = json.loads(refused.output)
+    assert doc["outcome"] == "refused" and doc["steps"] == []
+    assert "was edited" in doc["blockers"][0]["reason"]
+    assert world.registry.read_bytes() == registry and launcher.exists()
+    m = Manifest.load("pb-uat")
+    assert m.state == "applied" and set(m.registrations) == {"process_row", "launcher"}
+    world.schema.write_text(text)
+    assert run("remove", "pb-uat", "--yes").exit_code == 0
+    assert rows_for(world.registry) == [] and not launcher.exists()
+
+
 # ------------------------------------------------- schema writer and secrets
 
 

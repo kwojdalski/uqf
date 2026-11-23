@@ -41,6 +41,7 @@ from test_attach_backfill_run import (  # noqa: F401
 from uqs.attach import (
     backfill_coordination,
     backfill_owner,
+    backfill_receiver,
     backfill_remote,
     backfill_run,
     config,
@@ -216,7 +217,7 @@ def test_a_receiver_holds_detach_off_until_it_is_stopped(world, approved, receiv
     _serving(started)
     with pytest.raises(AttachmentError, match="imported_trades.receiver"):
         backfill_owner.refuse_while_active("pb-uat")
-    stopped = backfill_remote.stop_receivers("pb-uat")
+    stopped = backfill_receiver.stop_receivers("pb-uat")
     assert [r["pid"] for r in stopped] == [started["pid"]]
     for _ in range(50):
         if not _accepting(port):

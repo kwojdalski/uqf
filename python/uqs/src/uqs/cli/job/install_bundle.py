@@ -14,6 +14,7 @@ import filecmp
 from pathlib import Path
 
 import typer
+from rich.markup import escape
 from rich.table import Table
 
 from uqs.cli.common import safety
@@ -69,6 +70,13 @@ def install(
     if plan.tests:
         console.print(f"[dim]not installed (q tests): {', '.join(p.name for p in plan.tests)}[/]")
     if dry_run:
+        try:
+            bundles.refuse_development_checkout(root)
+        except bundles.BundleError as exc:
+            # --dry-run works anywhere; the run it previews does not (#2948)
+            console.print(f"[yellow]the real run would be refused here:[/] {escape(str(exc))}")
+            console.print("[dim]dry run: nothing was changed.[/]")
+            return
         console.print(dry_run_note())
         return
     try:

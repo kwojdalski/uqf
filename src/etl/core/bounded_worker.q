@@ -122,9 +122,9 @@
 / not share it. `phase` is where the worker's run lifecycle stands - see
 / advance_phase. `live` says whether the run reads the real source (1b) or the
 / fixture (0b); it is stated rather than inferred from a null `handle`, which
-/ also means "not opened yet" (#1201).
-.qetl.job.bounded.initial_state:`source_version`range_from`range_to`handle`live`progress`last_batch`last_window`phase!
-    (`;0Np;0Np;0Ni;0b;.qetl.job.bounded.no_progress;();`range_from`range_to!0N 0Np;`)
+/ also means "not opened yet" (#1201). `clipped_to` is where the plan cut the range short, 0Np when it did not (#2929).
+.qetl.job.bounded.initial_state:`source_version`range_from`range_to`handle`live`progress`last_batch`last_window`phase`clipped_to!
+    (`;0Np;0Np;0Ni;0b;.qetl.job.bounded.no_progress;();`range_from`range_to!0N 0Np;`;0Np)
 
 / The methods every worker gets: the contract's five, taken from the
 / contract itself so the two cannot drift, plus the three the launcher and
@@ -214,6 +214,7 @@
 /   batching (compute batching inside a window, off unless declared - bounded_batching.q, #1921) pin (a niladic function recording the configuration snapshot its rows name - bounded_pin.q), and `twin_of with `twin_calculation (the streaming job it repairs, held to its output, contract and calculation whenever both load - twin.q, #2103), and q (the q interpreters it runs on, e.g. "kdbx>=4.1 peachq" - declared.q, #2747)
 / @throws error naming every missing or malformed field at once
 .qetl.job.bounded.define:{[worker;decl]
+    .qetl.declared.require_form["";worker;decl];
     / Both execution modes share .qpipe.job, so a name cannot belong to both.
     if[worker in key .qetl.job.stream.jobs;
         '"define: ",string[worker]," is already a streaming job - job names must be unique across execution modes"];
@@ -242,9 +243,8 @@
     / malformed manager should fail at declaration, not halfway through a
     / backfill having already fetched a window it is now unable to store.
     .qetl.io.for_cfg decl;
-    .qetl.source.def decl`source;
+    .qetl.source.def .qetl.declared.require_symbol["define: ",string worker;`source;decl`source;"the name of a registered source"];
     .qetl.job.bounded.require_transform[worker;decl]; .qetl.twin.check_worker[worker;decl];
-
     / Refuse two workers filling one dataset AND PARTITION (#60, #185).
     / .
     / This used to refuse on the dataset alone, because coverage had no
@@ -319,9 +319,8 @@
          / did, immediately before the wreckage.
          "[",string[part],"], already claimed by ",(", " sv string clash),
          " - two workers on one dataset and partition produce coverage rows nothing can tell apart"];
-
     / Normalise to the full key set before storing - see optional_cfg.
-    stored:.qetl.job.bounded.normalised decl;
+    stored:.qetl.job.bounded.normalised decl; .qetl.declared.refuse_redeclared["define: ",string worker;"worker";.qetl.job.bounded.worker_cfg;worker;stored];
     `.qetl.job.bounded.worker_cfg upsert (worker,stored cols value .qetl.job.bounded.worker_cfg);
     / Last, so a refused declaration leaves no half-stamped namespace behind.
     .qetl.job.bounded.inherit[worker;decl`ns];
@@ -873,9 +872,9 @@
     cfg:.qetl.job.bounded.def worker;
     s:.qetl.job.bounded.spec worker;
     / The range ends where the source can vouch for its data (#1187), rounded down to an `align` worker's
-    / bar edge so a bar is never built from part of its fills (#1477, as #1303 refuses at the edges).
+    / bar edge so a bar is never built from part of its fills (#1477, as #1303 refuses at the edges). Where it was cut is kept: a run left nothing by the cut is not "covered" (#2929).
     to:{[g;t] $[(not null g) and t>-0Wp; g xbar t; t]}[cfg`align] .qetl.source.clip_to_complete[worker;cfg`source;.qetl.job.bounded.read_state[worker;`handle];.qetl.job.bounded.read_state[worker;`live];.qetl.io.clip_to_eod[worker;cfg;s`range_from;s`range_to]];
-    if[to<=s`range_from; :.qetl.job.bounded.empty_windows[]];
+    .qetl.job.bounded.write_state[worker;`clipped_to;$[to<s`range_to;to;0Np]]; if[to<=s`range_from; :.qetl.job.bounded.empty_windows[]];
     / ONE as_of for the whole plan, captured once: a ledger superseded midway
     / would report a range both covered and uncovered in one pass.
     as_of:.z.p;
@@ -1058,16 +1057,16 @@
     recovered:.qetl.job.bounded.recover_unfinished worker;
     replayed:.qetl.job.bounded.replay_reactions worker;
     cursor:.qetl.job.bounded.state.load_checkpoint[worker;.qetl.job.bounded.spec worker];
-    windows:.qetl.job.bounded.once.limit[worker;.qetl.job.bounded.own[worker;`plan][]]; / --once: the first planned window only (bounded_once.q)
+    .qetl.job.bounded.write_state[worker;`clipped_to;0Np]; windows:.qetl.job.bounded.once.limit[worker;.qetl.job.bounded.own[worker;`plan][]]; / --once: the first planned window only (bounded_once.q)
     .qetl.job.bounded.write_state[worker;`progress;@[.qetl.job.bounded.read_state[worker;`progress];`windows_planned;:;count windows]];
     if[0=count windows;
         / "ran, found no work" is a SUCCESS, not a failure. An
         / orchestrator that cannot tell them apart retries a successful
         / no-op forever.
         / INFO, not DEBUG: "the run did nothing" is the question this answers.
-        s:.qetl.job.bounded.spec worker;
-        .qetl.log.ch.info[`lifecycle;"idle - every window in the range is already covered at this source_version";
-            (enlist[`worker]!enlist worker),`source_version`range_from`range_to!(s`source_version;s`range_from;s`range_to)];
+        s:.qetl.job.bounded.spec worker; c:.qetl.job.bounded.read_state[worker;`clipped_to];
+        .qetl.log.ch.info[`lifecycle;$[null c;"idle - every window in the range is already covered at this source_version";"idle - nothing left to plan before clipped_to, and the range after it is not complete yet: it stays uncovered for the next run"];
+            (enlist[`worker]!enlist worker),`source_version`range_from`range_to`clipped_to!(s`source_version;s`range_from;s`range_to;c)];
         / Finish what recover_unfinished found, which is the only thing an
         / idle run has to do - and only then, so an idle run with nothing to
         / repair does not ask the HDB to reload for nothing.
@@ -1113,7 +1112,7 @@
     if[count owed; why,:enlist .qetl.job.bounded.owed_error owed];
     / Report the phase reached, not the one asked for: a run whose ledger
     / close failed ends `failed (#675), and its result and exit code say so.
-    result[`state]:.qetl.job.bounded.advance_phase[worker;result`state;$[count why; "; " sv why; ""]]; if[stopped; .qetl.job.bounded.stop.clear worker];
+    result[`state]:.qetl.job.bounded.advance_phase[worker;result`state;$[count why; "; " sv why; ""]];
     / No cleanup here: `run` above releases on EVERY exit, this one included.
     / .
     / The release used to live on this line, which made it the happy path's
@@ -1448,8 +1447,8 @@
 / precondition.
 / @private
 .qetl.job.bounded.record_facts:{[worker;cfg;w;batch;r]
-    framework:`rows`source_version`dry_run!
-        (r`rows_published;(.qetl.job.bounded.spec worker)`source_version;r`dry_run);
+    framework:`rows`source_version`dry_run!  / a dry run's rows: those it would publish (#2951)
+        ($[r`dry_run; count batch; r`rows_published];(.qetl.job.bounded.spec worker)`source_version;r`dry_run);
     declared:$[(::)~cfg`facts;
         ()!();
         @[{[f;b] f b}[cfg`facts;];batch;
@@ -1513,14 +1512,14 @@
 
 .qetl.job.bounded.publish_last_batch:{[worker;unused] .qetl.job.bounded.runtime.retire_fixture_claims[worker;.qetl.job.bounded.own[worker;`publish] .qetl.job.bounded.read_state[worker;`last_batch]]}
 
-/ Release everything the worker holds. release_lock removes the lock
-/ whoever holds it, so call this only from a worker that took it (#2319).
+/ Release everything the worker holds, its stop file too whatever the end (#2930). release_lock
+/ removes the lock whoever holds it, so call this only from a worker that took it (#2319).
 .qetl.job.bounded.cleanup:{[worker]
     h:.qetl.job.bounded.read_state[worker;`handle];
     / The transport's `close`: hclose, the ODBC close, or for a local source's
     / directory nothing at all.
     closer:(.qetl.source.for_source (.qetl.job.bounded.def worker)`source)`close;
     if[not null h; closer h; .qetl.job.bounded.write_state[worker;`handle;0Ni]];
-    .qetl.job.bounded.state.release_lock worker}
+    .qetl.job.bounded.stop.clear worker; .qetl.job.bounded.state.release_lock worker}
 
 \d .

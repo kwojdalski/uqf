@@ -274,6 +274,40 @@ def test_two_operations_on_one_attachment_cannot_overlap(tmp_path):
         pass
 
 
+def test_one_shared_file_is_changed_by_one_uqs_at_a_time(tmp_path):
+    """#2909: `file_locked` is one lock per file, whatever the attachment; a
+    waiter that queued on the file replaced under it ends up holding the new one."""
+    import threading
+
+    target = tmp_path / "sort.csv"
+    target.write_text("a\n")
+    entered, release, got = threading.Event(), threading.Event(), []
+
+    def holder():
+        with config.file_locked(target):
+            entered.set()
+            release.wait(5)
+            config.atomic_write(target, "b\n")
+
+    def waiter():
+        with config.file_locked(target):
+            got.append(target.read_text())
+            config.atomic_write(target, got[0] + "c\n")
+
+    first = threading.Thread(target=holder)
+    first.start()
+    assert entered.wait(5)
+    second = threading.Thread(target=waiter)
+    second.start()
+    second.join(0.3)
+    assert second.is_alive() and not got, "the second waits for the first"
+    release.set()
+    first.join(5)
+    second.join(5)
+    assert got == ["b\n"] and target.read_text() == "b\nc\n"
+    assert [p.name for p in tmp_path.iterdir()] == ["sort.csv"], "no temp file is left"
+
+
 # -------------------------------------------------------------------- plan
 
 
@@ -537,6 +571,28 @@ def test_persisting_needs_a_writable_local_non_generated_schema_file(bundle, tmp
     schema.chmod(0o444)
     p = run(attachment(bundle, runtime_only=False), FakeStack(6000, schema_file=str(schema)))
     assert "PERSIST_UNAVAILABLE" in codes(p.findings, "blocker")
+
+
+def test_a_schema_file_in_a_directory_this_user_cannot_write_is_refused_by_the_plan(
+    bundle, tmp_path
+):
+    """#2910: apply replaces the file by writing a new one beside it, so a writable
+    file in a read-only directory is refused before anything is changed."""
+    folder = tmp_path / "torq"
+    folder.mkdir()
+    schema = folder / "database.q"
+    schema.write_text("trade:([] time:`timestamp$())\n")
+    folder.chmod(0o555)
+    try:
+        p = run(attachment(bundle, runtime_only=False), FakeStack(6000, schema_file=str(schema)))
+    finally:
+        folder.chmod(0o755)
+    (refused,) = [f for f in blockers(p.findings) if f.code == "PERSIST_UNAVAILABLE"]
+    assert refused.message == (
+        "cannot persist the table across a tickerplant restart: "
+        f"{folder} is not writable by this user, and {schema} is replaced by writing a "
+        "new file there and renaming it over the old one"
+    )
 
 
 def test_no_schema_file_or_a_remote_one_cannot_be_persisted_to(bundle, tmp_path):

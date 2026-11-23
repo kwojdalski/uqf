@@ -19,7 +19,7 @@ import stat
 from pathlib import Path
 
 import pytest
-from attach_support import LEDGER_Q, FakeStack, make_bundle
+from attach_support import LEDGER_Q, FakeStack, ListedHosts, make_bundle
 
 from uqs.attach import apply as applying
 from uqs.attach import (
@@ -83,8 +83,10 @@ def world(tmp_path: Path):
     fake.named("wdb1")["savedir"] = f":{tmp_path / 'wdb'}"
     fake.named("wdb1")["hdbdir"] = f":{tmp_path / 'hdb'}"
 
-    def make(name: str = "pb-uat", tables_q: str = LEDGER_Q + "\n" + DECLARED, folder="b"):
-        bundle = make_bundle(tmp_path / folder, tables_q)
+    def make(
+        name: str = "pb-uat", tables_q: str = LEDGER_Q + "\n" + DECLARED, folder="b", table=TABLE
+    ):
+        bundle = make_bundle(tmp_path / folder, tables_q, table)
         att = service.create(
             name, "pb_general_ledger", bundle, 6000, ROOT, runtime_only=True, storage=storage
         )
@@ -275,6 +277,29 @@ def test_a_sort_process_that_is_not_running_reads_the_file_when_it_starts(world)
     assert verify.verify(att, fake, state, ROOT).ok
 
 
+def test_a_sort_process_on_a_second_host_is_asked_reloaded_and_verified_there(world):
+    """Discovery lists sort1 on another machine than the wdb. Asked at the stack's
+    host it read as not running: it was never reloaded, and the attachment verified
+    while the process that sorts at end of day held no rule for the table (#2907)."""
+    fake, make, state, csv = world
+    fake.named("sort1")["host"] = "hostb.example.com"
+    fake.refresh_discovery()
+    ipc, att = ListedHosts(fake), make()
+    p = plan.build(att, ipc, ROOT)
+    assert p.ok and "SORT_READER_STOPPED" not in codes(p, "warning")
+    assert [r.procname for r in p.sort_changes[0].reload] == ["wdb1", "sort1"]
+    apply_(att, ipc, state)
+    assert live(fake, "sort1") == [("p", "sym", True), ("", "time", True)]
+    assert verify.verify(att, ipc, state, ROOT).ok
+    assert {host for name, host, _ in ipc.asked if name == "sort1"} == {"hostb.example.com"}
+    # and verify notices when THAT process loses the rule, which it could not ask before
+    fake.named("sort1")["sortrows"] = [
+        r for r in fake.named("sort1")["sortrows"] if r["tabname"] != TABLE
+    ]
+    failed = [c.name for c in verify.verify(att, ipc, state, ROOT).checks if not c.ok]
+    assert failed == [f"sort1: {TABLE} is sorted by the declared rule, live"]
+
+
 def test_a_file_on_another_machine_cannot_be_written(world):
     fake, make, state, csv = world
     att = make()
@@ -282,6 +307,28 @@ def test_a_file_on_another_machine_cannot_be_written(world):
     p = plan.build(away, fake, ROOT)
     assert "SORT_FILE" in codes(p)
     assert any("can only be edited from that machine" in f.message for f in p.findings)
+
+
+def test_a_file_in_a_directory_this_user_cannot_write_is_refused_by_the_plan(world):
+    """#2910: the rows go in by writing a new file beside sort.csv and renaming it
+    over, so a writable file in a read-only directory is the plan's blocker, not a
+    failure after the tickerplant and consumers were changed."""
+    fake, make, state, csv = world
+    att = make()
+    csv.chmod(0o660)
+    csv.parent.chmod(0o555)
+    try:
+        p = plan.build(att, fake, ROOT)
+        with pytest.raises(applying.ApplyRefused, match="SORT_FILE"):
+            apply_(att, fake, state)
+    finally:
+        csv.parent.chmod(0o755)
+    (refused,) = [f for f in p.findings if f.code == "SORT_FILE"]
+    assert refused.level == "blocker" and refused.message == (
+        f"{csv.parent} is not writable by this user, and {csv} is replaced by writing a "
+        "new file there and renaming it over the old one"
+    )
+    assert "stp_register" not in fake.ops() and csv.read_text() == ORIGINAL
 
 
 def test_a_parted_writedown_needs_a_p_column(world):
@@ -364,6 +411,39 @@ def test_a_file_changed_between_planning_and_writing_is_refused(world, monkeypat
     assert TABLE not in csv.read_text(), "nothing of ours was written"
     op = Manifest.load("pb-uat", state).find("sort_rows", str(csv), TABLE)
     assert op is not None and op.status == "failed"
+
+
+def test_rows_another_attachment_added_while_one_waited_for_the_file_are_kept(world, monkeypatch):
+    """#2909: the file is shared by every attachment on the stack, and the lock
+    on an attachment is one per name. B's whole apply lands before A takes the
+    file's own lock: A's compare then sees B's rows and refuses, instead of
+    replacing the file with its own text built from the bytes before them."""
+    from contextlib import contextmanager
+
+    fake, make, state, csv = world
+    other = "piggybank_other_ledger"
+    a = make()
+    b = make(
+        "pb-b", LEDGER_Q.replace(TABLE, other) + "\n" + DECLARED.replace(TABLE, other), "b2", other
+    )
+    real, fired = sort_file.file_locked, []
+
+    @contextmanager
+    def b_first(path):
+        if not fired:
+            fired.append("B")  # before B's apply, whose own write comes through here too
+            fired.append(apply_(b, fake, state).state)
+        with real(path):
+            yield
+
+    monkeypatch.setattr(sort_file, "file_locked", b_first)
+    with pytest.raises(applying.ApplyFailed, match="changed since it was planned"):
+        apply_(a, fake, state)
+    monkeypatch.setattr(sort_file, "file_locked", real)
+    assert fired == ["B", "applied"]
+    assert f"{other},p,sym,1\n" in csv.read_text(), "B's rows are kept"
+    assert TABLE + "," not in csv.read_text()
+    assert live(fake, "wdb1", other) == [("p", "sym", True), ("", "time", True)]
 
 
 def test_a_failed_reload_leaves_the_publisher_stopped_and_a_rerun_finishes(world):
@@ -547,6 +627,49 @@ def _added_trade_rows(tmp_path: Path, before: str) -> tuple[Path, dict]:
         csv, sort_file.sha(before), "trade", [("p", "sym", True)], tmp_path / "bak"
     )
     return csv, post
+
+
+#: (line, what TorQ's `("SSSB";enlist",")0:` reads from it under KDB-X) (#2914)
+AS_Q_READS = [
+    ("a,,c,1", ("a", "", "c", True)),
+    ("a,,c,t", ("a", "", "c", True)),
+    ("a,,c,Y", ("a", "", "c", True)),
+    ("a,,c, 1 ", ("a", "", "c", True)),
+    ('a,,c,"1"', ("a", "", "c", True)),
+    ("a,,c,true", ("a", "", "c", False)),
+    ("a,,c,TRUE", ("a", "", "c", False)),
+    ("a,,c,yes", ("a", "", "c", False)),
+    ("a,,c,10", ("a", "", "c", False)),
+    ("a,,c,", ("a", "", "c", False)),
+    ('"trade",p,"sym",1', ("trade", "p", "sym", True)),
+    ('" r ",p,c,1', ("r", "p", "c", True)),
+    (' "r",p,c,1', ('"r"', "p", "c", True)),
+    ('"v,w",,c,1', ("v,w", "", "c", True)),
+    ('"a""c",p,c,1', ('a""c', "p", "c", True)),
+    ('"x"y,p,c,1', ('x"y', "p", "c", True)),
+    ('ab"c,p,c,1', ('ab"c', "p", "c", True)),
+    ("s , p , c d ,1", ("s", "p", "c d", True)),
+    ("t,,c", ("t", "", "c", False)),
+    ("x", ("x", "", "", False)),
+    ("u,,c,1,extra", ("u", "", "c", True)),
+    ("", ("", "", "", False)),
+]
+
+
+@pytest.mark.parametrize(("line", "q_reads"), AS_Q_READS)
+def test_a_row_is_read_as_torqs_loader_reads_it(tmp_path, line, q_reads):
+    """#2914: read differently, a hand-written rule for another table was drift no
+    reload could clear, and a short row a blocker on a file TorQ runs with.
+    test_attach_sorting_q.py reads such a file with TorQ's own loader."""
+    (rule,) = sort_file.parse(
+        tmp_path / "sort.csv", f"{','.join(sort_file.HEADER)}\n{line}\n"
+    ).rules
+    assert (rule.table, rule.att, rule.column, rule.sort) == q_reads
+
+
+def test_the_header_is_read_as_torqs_loader_reads_it(tmp_path):
+    read = sort_file.parse(tmp_path / "sort.csv", '"tabname", att ,column,"sort"\na,p,c,1\n')
+    assert read.header == sort_file.HEADER and read.rules[0].key == ("p", "c", True)
 
 
 def test_rows_of_a_table_whose_name_ends_with_ours_are_not_ours(tmp_path):

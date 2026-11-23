@@ -13,8 +13,8 @@ checkpoints, dry-run and the job graph, so you write none of that.
   | a **worker** in `src/etl/workers/` | which source, which transform, which target dataset, how wide a window   |
 
 [`src/etl/init.q`](../../src/etl/init.q) globs `sources/`, `transforms/`,
-`workers/` and `streaming/`, so a declaration loads because its file exists.
-Every key a declaration accepts is in [the declaration
+`workers/`, `streaming/` and `reactions/`, so a declaration loads because its
+file exists. Every key a declaration accepts is in [the declaration
 reference](../reference/pipeline-declarations.md). Why the framework has this
 shape is in [the pipeline philosophy](../architecture/pipeline-philosophy.md).
 
@@ -44,12 +44,13 @@ for each shape, the streaming ones included.
 ### What a fresh scaffold leaves red
 
 The handler throws and the test fails until you write them.
-`uv run pytest python/uqs` lists, by `path:line`, every placeholder still marked
-`SCAFFOLDED`: the handler, the test, the job's `note`, a new table's catalog
-description, and the process's card in [Services](../services/README.md) and
-comment in [`stack.md`](../architecture/stack.md). That list is the to-do list.
-A line clears when you replace the placeholder and delete its marker. Name the
-process in `stack.md`'s list when you delete its comment.
+`uv run pytest -q python/uqs/tests/test_no_scaffold_left.py` lists, by
+`path:line`, every placeholder still marked `SCAFFOLDED`: the handler, the test,
+the job's `note`, a new table's catalog description, and the process's card in
+[Services](../services/README.md) and comment in
+[`stack.md`](../architecture/stack.md). That list is the to-do list. A line
+clears when you replace the placeholder and delete its marker. Name the process
+in `stack.md`'s list when you delete its comment.
 
 Write the description in
 [`uqs_catalog.q`](../../scripts/processes/uqs_catalog.q) for someone deciding
@@ -71,7 +72,8 @@ Choose the shell first. It is the one choice that is hard to change afterwards.
   window or a restatement. It runs, finishes and exits. This is
   `.qetl.job.bounded`, and the rest of this page.
 - Continuous: it subscribes and never finishes, as with a tickerplant feed or a
-  poller. This is `.qetl.job.continuous`, whose state is a cursor.
+  poller. This is the `.qetl.job.stream` shell; `.qetl.job.continuous` holds the
+  cursor and poll helpers a poller keeps its state with.
 
 A continuous job is one file under
 [`src/etl/streaming/`](../../src/etl/streaming) with a `.qetl.job.stream.define`
@@ -331,7 +333,7 @@ Add `tests/q/test_fx_rates_backfill.q`. Define its tests under
 `\d`, as the scaffold writes it. Then:
 
 ```bash
-uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes
+q tests/run_tests.q -files test_fx_rates_backfill.q
 ```
 
 Cover more than the happy path: a second run is idle, a version bump re-runs the

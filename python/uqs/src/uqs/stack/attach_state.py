@@ -173,14 +173,19 @@ def refuse_old_config(cfg: object, path: Path) -> None:
 def _remote_discovery(cfg: dict) -> str:
     """`:host:port` of the attachment's discovery when its host is not this
     machine by name, else "". By name only, as TorQ's own process.csv names
-    it: an address this machine owns is still a name TorQ would connect to."""
+    it: an address this machine owns is still a name TorQ would connect to.
+
+    This machine by name is its name or the short form of it, as
+    uqs.attach.facts.Host.is_local has it: two names that both carry a domain
+    and differ are two machines, however alike their first labels (#2906)."""
     stack = cfg.get("stack") or {}
     host = str(stack.get("discovery_host") or "").lower()
     port = stack.get("discovery_port")
     here = socket.gethostname().lower()
     if not host or not port or host in _LOOPBACK or host.startswith("127."):
         return ""
-    if host in (here, here.split(".")[0]) or host.split(".")[0] == here.split(".")[0]:
+    named, mine = host.split("."), here.split(".")
+    if host == here or (named[0] == mine[0] and 1 in (len(named), len(mine))):
         return ""
     return f":{host}:{int(port)}"
 
@@ -255,6 +260,34 @@ def _started_by(paths: UqsPaths, wanted: set[str]) -> set[str]:
     return (wanted - {"all"}) | every
 
 
+#: The states `uqs job attachment remove` leaves an attachment in. Its folder
+#: stays, so the gate still reads it: it holds its publisher under its own
+#: stack, until `add` has verified it again, and under no other (#2904).
+REMOVED = ("rolled_back", "detached")
+
+
+def _judged(found: list[Published], procname: str, effective: int) -> list[Published]:
+    """The attachments a start of `procname` under base port `effective` is
+    judged by (#2904).
+
+    One job may be attached to several stacks, and a removed attachment keeps
+    its folder, so the publisher's name alone does not say which attachment a
+    start is of: the stack being started does. The attachments ON that stack
+    decide, whatever the others say - the verified ones when any is, since
+    they share the one process and its tables, else one that was not removed.
+    With none on it, the publisher is held by one on another stack that was
+    not removed - a verified one first, whose refusal names the base port that
+    works - and by nothing when every one of them was removed.
+    """
+    mine = [pub for pub in found if pub.procname == procname]
+    here = [pub for pub in mine if pub.stack_id == effective]
+    if here:
+        verified = [pub for pub in here if pub.state == VERIFIED]
+        return verified or sorted(here, key=lambda pub: pub.state in REMOVED)[:1]
+    held = [pub for pub in mine if pub.state not in REMOVED]
+    return sorted(held, key=lambda pub: pub.state != VERIFIED)[:1]
+
+
 def refuse_unverified_start(paths: UqsPaths, procs: str, base_port: int | None) -> None:
     """Refuse a start of an attachment's publisher unless it was verified AND
     is started under its attachment's stack.
@@ -267,6 +300,10 @@ def refuse_unverified_start(paths: UqsPaths, procs: str, base_port: int | None) 
     is expanded to the startwithall=1 rows it launches before anything is
     checked: a streaming job declared `start_with_all 1b` is one of them, so
     `uqs start`, `start all` and `restart all` are gated too (#1441).
+
+    A publisher several attachments name is judged by the one whose stack is
+    being started (`_judged`, #2904): an attachment of the same job to another
+    stack, or one that was removed, does not close the gate for a verified one.
 
     It fails CLOSED (#1442): a publisher whose manifest cannot be read is
     refused, and an attachment whose attachment.json cannot be read - so whose
@@ -287,9 +324,8 @@ def refuse_unverified_start(paths: UqsPaths, procs: str, base_port: int | None) 
         return
     wanted = _started_by(paths, set(procs.split()))
     effective = paths.runtime_declaration.resolve_base_port(base_port)
-    for pub in found:
-        if pub.procname not in wanted:
-            continue
+    judged = [pub for procname in sorted(wanted) for pub in _judged(found, procname, effective)]
+    for pub in judged:
         if pub.state == UNREADABLE:
             raise UqsError(
                 f"{pub.procname} is the publisher of attachment {pub.attachment} (stack "

@@ -137,6 +137,13 @@ stack id, whatever starts it, `uqs exec -- debug pb_ledger1` included. A bare
 `attachment.json` cannot be read, every start is refused. Make it readable, or
 move the folder out of the attachments directory if the attachment is gone.
 
+A job attached to two stacks has one publisher name and two attachments. Each
+start is judged by the attachment on the stack it starts under, so each
+publisher starts under its own stack id, whatever state the other attachment is
+in. A removed attachment keeps its folder. Under the stack it was attached to,
+the publisher stays stopped until `uqs job attachment add` has verified it
+again. Under any other base port it no longer holds the publisher.
+
 `--no-start` applies and verifies, and leaves the publisher stopped. The same
 command without it starts it later. `--follow`, `--trace`, `--level` and
 `--stop-on-exit` are `uqs start`'s.
@@ -221,15 +228,17 @@ deadline. Every other check still applies.
 The waiver is not saved with the attachment, so the next backfill without the
 flag is fenced again. A dry run or run that uses it first appends an entry to
 `<status dir>/attached/<attachment>-<id>/backfill_overrides.jsonl`, and does not
-start if that fails. `uqs job attachment show NAME` lists the entries.
+start if that fails. A `--writer` run with `--override any-writer --reason TEXT`
+is recorded the same way, in the state directory of the writer it writes
+through. `uqs job attachment show NAME` lists the entries.
 
 ### Seeing what happened
 
 - `uqs job attachment status` shows each destination's worker, state, outcome
   and log, and what to do next when the rows are not queryable.
 - `uqs logs --attachment NAME --worker WORKER [-f]` shows the latest run's log
-  for that worker, or for `<dataset>.receiver`. `--run` picks an older run.
-- `uqs job runs list | status | show --attachment NAME` reads the run ledger.
+  for that worker, or for `<dataset>.receiver`. `--stamp` picks an older run.
+- `uqs job runs list | show --attachment NAME` reads the run ledger.
 - `uqs job attachment show NAME` lists each waiver used.
 
 ## Detach
@@ -239,13 +248,14 @@ uqs job attachment remove pb-uat --dry-run
 uqs job attachment remove pb-uat
 ```
 
-Detach stops the publisher and takes its row, if it has one, out of the stack's
-process file. A publisher the site's `torq.sh` started from that row is stopped
-too: `uqs stop` treats the process file the attachment registered in as its own
-for that one process. One started from any other process file is never
-signalled; the refusal names the `torq.sh stop PROC -csv FILE` that stops it. It
-then reads the stack for evidence that anything was published. Evidence that
-cannot be read counts as publication.
+Detach stops the publisher. A publisher the site's `torq.sh` started from the
+attachment's row in the stack's process file is stopped too: `uqs stop` treats
+the process file the attachment registered in as its own for that one process.
+One started from any other process file is never signalled; the refusal names
+the `torq.sh stop PROC -csv FILE` that stops it. It then reads the stack for
+evidence that anything was published. Evidence that cannot be read counts as
+publication. Once every check has passed, and before anything on the stack
+changes, the row, if there is one, comes out of the process file.
 
 - Before any publication, the attachment is rolled back. What it created is
   removed in reverse order: the schema block, the consumers' table and
@@ -438,12 +448,13 @@ uqs job backfill piggybank_ledger_backfill --attachment pb-uat --writer uat-host
 
 ### Without a receiver
 
-`--force` with `--writer` skips the receiver and everything it checks. HOST:PORT
-is then any q process of the stack, usually its wdb.
+`--override any-writer --reason TEXT` with `--writer` skips the receiver and
+everything it checks. HOST:PORT is then any q process of the stack, usually its
+wdb.
 
 ```bash
 uqs job backfill piggybank_ledger_backfill --attachment pb-uat \
-    --writer uat-host:6055 --force \
+    --writer uat-host:6055 --override any-writer --reason "completed history" \
     --from 2026-10-01 --to 2026-10-02 --source-version historical-v1 --wait
 ```
 

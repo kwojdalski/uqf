@@ -15,7 +15,8 @@ runs q directly (`q scripts/jobs/run_backfill.q ... -once`).
 THE OUTCOMES and their codes are q's (uqs.generated.q_facts, generated from
 .qetl.once): done 0, failed 1, stopped 4, no_work 6. No work is a success the
 scheduler can tell from a unit that ran: a poll that found nothing, a range
-already covered, a subscriber that saw no input before its timeout (reason
+already covered (reason `all_covered`) or not yet complete at the source or end of
+day (`not_complete`, #2929), a subscriber that saw no input before its timeout (reason
 `input_timeout`, a wait that ended - never a cancelled query, which is a failure).
 
 NEVER A SECOND UNIT. A process of the same job that is already running is not

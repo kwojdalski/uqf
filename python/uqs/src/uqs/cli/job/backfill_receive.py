@@ -5,7 +5,7 @@ stack's machine,
 starts the receiver for a receiver contract approved there (`uqs job attachment contract`);
 `uqs job backfill JOB --attachment ATTACHMENT --writer HOST:P ...`, on the source's
 machine, extracts and sends to it. What each decides is in
-uqs.attach.backfill_remote.
+uqs.attach.backfill_remote and uqs.attach.backfill_receiver.
 """
 
 from __future__ import annotations
@@ -15,7 +15,14 @@ from typing import Annotated
 
 import typer
 
-from uqs.attach import backfill_remote, backfill_run, config, service
+from uqs.attach import (
+    backfill_audit,
+    backfill_receiver,
+    backfill_remote,
+    backfill_run,
+    config,
+    service,
+)
 from uqs.cli.common.concepts import attach_opt
 from uqs.cli.common.json_out import emit, json_opt
 from uqs.cli.common.safety import ChangesState, dry_run_note
@@ -42,6 +49,7 @@ def extract(
     verbose: bool,
     trace: bool,
     force: bool = False,
+    force_reason: str | None = None,
 ) -> None:
     """`uqs job backfill --attachment ATTACHMENT --writer HOST:PORT`: plan or start the extractor.
     With `force`, HOST:PORT is any q process (a wdb), written to with nothing checked."""
@@ -91,7 +99,7 @@ def extract(
         run_, plan = backfill_remote.launch_remote(
             paths, attachment, worker, version, bound_from, bound_to,
             writer=writer, mode=mode, on_conflict=on_conflict, verbose=verbose, trace=trace,
-            force=force,
+            force=force, reason=force_reason,
         )  # fmt: skip
     except UqsError as exc:
         _die(exc)
@@ -101,7 +109,7 @@ def extract(
             info,
             as_json,
             f"started {worker} (pid {run_.pid}) -> {writer}; log {run_.log}"
-            f"\n  follow it with `{logs_command(attachment, worker)} -f`",
+            f"\n  follow it with `{logs_command(attachment, worker)} -f`" + _recorded(run_),
         )
         raise typer.Exit(code=0)
     if not as_json:  # with --json, stdout is the one document below (#1685)
@@ -110,12 +118,21 @@ def extract(
         )
     runner, result = backfill_run.follow(run_)
     code = exit_code(runner)
+    backfill_audit.outcome(
+        run_.audit, run_.run_id, outcome=result.get("outcome") or result.get("state", "unknown"),
+        exit_code=code, result=result,
+    )  # fmt: skip
     _report(
         {**info, "result": result, **outcome(result.get("state") or "unknown", code)},
         as_json,
-        _outcome_text(worker, run_, code, result),
+        _outcome_text(worker, run_, code, result) + _recorded(run_),
     )
     raise typer.Exit(code=code)
+
+
+def _recorded(run_: backfill_run.Launched) -> str:
+    """Where a forced run's override is recorded (#2928); nothing for a checked one."""
+    return "" if run_.audit is None else f"\n  override recorded in {run_.audit}"
 
 
 #: `uqs job receiver start|stop` (#1858): the receiver is a noun with two
@@ -203,7 +220,7 @@ def receiver_stop(
     An extractor then fails its next window without covering it. One still
     running after SIGTERM and its grace keeps its ownership, is named, and the
     exit is 1 - unless `--kill` SIGKILLs it."""
-    runs = backfill_remote.stop_receivers(attach, dry_run=dry_run, kill=kill)
+    runs = backfill_receiver.stop_receivers(attach, dry_run=dry_run, kill=kill)
     stopped = [r for r in runs if dry_run or r["outcome"] != "still running"]
     running = [r for r in runs if r not in stopped]
     if as_json:
@@ -244,7 +261,7 @@ def _start(attach: str, contract: str | None, port: int | None, dry_run: bool, a
         )
     try:
         att = config.load(attach)
-        out = backfill_remote.receive(
+        out = backfill_receiver.receive(
             _paths(), attach, contract, port=port, ipc=service.ipc_for(att), dry_run=dry_run
         )
     except UqsError as exc:

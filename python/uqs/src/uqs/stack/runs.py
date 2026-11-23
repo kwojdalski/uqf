@@ -238,14 +238,17 @@ def untagged(version: str) -> str:
     return version.removesuffix(FIXTURE_TAG).split(REVISION_TAG)[0]
 
 
-def rerun_command(run: dict, attach: str | None = None) -> str | None:
+def rerun_command(run: dict, attach: str | None = None, writer: dict | None = None) -> str | None:
     """The command that re-runs `run`'s range - which, because coverage skips
     what is already covered, is also how a failed or interrupted run resumes.
 
     None when the row lacks what the command needs (a run begun before the
     ledger recorded ranges; see `migrate`). `attach` names the attachment a run
     into a native stack's HDB was for: the command must say so, or it would write
-    the runtime's own HDB (#1454).
+    the runtime's own HDB (#1454). `writer` is what the run recorded of the
+    receiver it wrote through (uqs.attach.backfill_remote.writer_of), which the
+    command names again (#2950); a forced run's override with it, whose
+    --reason is the operator's to give.
     """
     needed = ("worker", "range_from", "range_to", "source_version")
     if any(not run.get(k) for k in needed):
@@ -261,6 +264,8 @@ def rerun_command(run: dict, attach: str | None = None) -> str | None:
         f"--to {_as_bound(str(run['range_to']), upper=True)} --source-version {version}"
         + (" --fixture" if fixture else "")
         + (f" --attachment {attach}" if attach else "")
+        + (f" --writer {writer['writer']}" if writer else "")
+        + (" --override any-writer" if writer and writer.get("forced") else "")
     )
 
 

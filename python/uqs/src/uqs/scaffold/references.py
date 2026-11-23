@@ -10,7 +10,8 @@ So after the plan is made, the tree is searched for every name the removal
 takes away - the job, its process, its source when that goes too, and the
 tables it drops - and each surviving line is reported. Rewritten files are
 searched in their NEW text; deleted files are not searched at all. Generated
-files are skipped, because the command regenerates them, as is the port lock,
+files are skipped, because the command regenerates them - and so is the one
+generated block of a page that is otherwise prose - as is the port lock,
 which keeps a removed process's offset on purpose. A name the removal KEEPS
 (a table or a source something else uses) is not searched: its other
 references are why it was kept.
@@ -44,6 +45,18 @@ _SKIP_FILES = {
     Path("python/uqf_airflow_provider/src/uqf_airflow_provider/q_facts.py"),
     Path("scripts/torqconfig/dataaccess/tableproperties.csv"),
     Path("scripts/processes/process_ports.csv"),
+}
+
+#: Pages the removal regenerates one block of, with the starts of the lines
+#: that open and close it (scripts/generate/operational_docs.py writes them).
+#: The profile table names every profile's processes, so counting its rows
+#: made --strict refuse every job in a profile (#2920). The prose around the
+#: block is a person's, and is searched.
+_GENERATED_BLOCKS = {
+    Path("docs/guides/runtimes-and-profiles.md"): (
+        "<!-- BEGIN GENERATED profile table",
+        "<!-- END GENERATED profile table",
+    ),
 }
 
 #: Trees skipped at their own path - not any directory of that name, since
@@ -136,7 +149,13 @@ def stale_references(
         text = rewrites.get(rel)
         if text is None:
             text = (repo_root / rel).read_text(errors="replace")
+        begin, end = _GENERATED_BLOCKS.get(rel, (None, None))
+        generated = False
         for lineno, line in enumerate(text.splitlines(), 1):
-            if pattern.search(line):
+            if begin and line.startswith(begin):
+                generated = True
+            elif end and line.startswith(end):
+                generated = False
+            if not generated and pattern.search(line):
                 refs.append(Reference(rel, lineno, line))
     return refs

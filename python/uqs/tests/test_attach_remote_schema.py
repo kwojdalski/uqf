@@ -28,7 +28,7 @@ from uqs.attach import (
 from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.facts import Host
 from uqs.attach.manifest import Manifest
-from uqs.attach.remote import Endpoint
+from uqs.attach.remote import Endpoint, Ipc, IpcError
 from uqs.attach.schema_files import RemoteFile
 from uqs.paths import repo_root
 
@@ -37,6 +37,7 @@ HERE = Host(lambda h, p: False, ("localhost",))
 #: On the stack's machine; no such directory here.
 STACK_PATH = "/srv/uat-box/torq/database.q"
 STACK_TEXT = "quote:([] time:`timestamp$(); sym:`symbol$())\n"
+TABLE = "piggybank_general_ledger"
 
 
 class Publisher:
@@ -77,7 +78,7 @@ def _fake() -> FakeStack:
     return fake
 
 
-def _run(att: Attachment, fake: FakeStack, state: Path, publisher: Publisher | None = None):
+def _run(att: Attachment, fake: Ipc, state: Path, publisher: Publisher | None = None):
     resolved = resolution.Resolved(att, "new", config.directory(att.name, state))
     shown = plan.build(att, fake, ROOT, facts.Facts(host=HERE))
     return workflow.execute(
@@ -236,6 +237,113 @@ def test_detach_refuses_when_the_tickerplant_cannot_be_asked(bundle, tmp_path):
     assert block_text.begin_marker(att.name, "") in fake.stack_files[STACK_PATH].decode()
 
 
+# ------------------------------------- the answer to the append is lost (#2905)
+
+
+class LostAppend:
+    """An Ipc on which the tickerplant's answer to the `schema_file` append never
+    arrives within the bound: after it appended the block (`written`), or with
+    the request never having reached it."""
+
+    def __init__(self, inner: FakeStack, written: bool = True) -> None:
+        self.inner, self.written = inner, written
+
+    def call(self, endpoint, op, request):
+        if op == "schema_file" and request.get("action") == "append":
+            if self.written:
+                self.inner.call(endpoint, op, request)
+            raise IpcError(endpoint, op, "did not answer within 8s", unresponsive=True)
+        return self.inner.call(endpoint, op, request)
+
+
+def _lost(bundle: Path, state: Path, written: bool = True):
+    """An apply whose append went unanswered: the stack, the attachment, what apply said."""
+    fake, att = _fake(), _att(bundle)
+    out = _run(att, LostAppend(fake, written), state)
+    (said,) = [s.detail for s in out.stages if s.status == "failed"]
+    return fake, att, said
+
+
+def _block_op(att: Attachment, state: Path):
+    (op,) = [o for o in Manifest.load(att.name, state).operations if o.op == "schema_block"]
+    return op
+
+
+def test_a_lost_answer_to_the_append_is_journalled_unknown_not_failed(bundle, tmp_path):
+    fake, att, said = _lost(bundle, tmp_path)
+    assert f"outcome unknown: ['schema_block schema-file {TABLE}']; failed: none" in said
+    op = _block_op(att, tmp_path)
+    assert (op.status, op.ownership) == ("pending", "")
+    assert op.note == "outcome unknown: did not answer within 8s"
+    token = Manifest.load(att.name, tmp_path).token
+    assert block_text.begin_marker(att.name, token) in fake.stack_files[STACK_PATH].decode()
+
+
+def test_detach_takes_out_the_block_a_lost_answer_left_and_a_new_add_applies(bundle, tmp_path):
+    fake, att, _ = _lost(bundle, tmp_path)
+    pub = Publisher()
+    result = _detach(att, fake, pub, tmp_path)
+    assert result.outcome == "rolled_back", result.blockers
+    assert ("schema_block", "removed") in [(s.op, s.outcome) for s in result.steps]
+    assert fake.stack_files[STACK_PATH] == STACK_TEXT.encode(), "byte for byte as it was"
+    again = _run(att, fake, tmp_path, pub)
+    assert again.ok, again.stages
+
+
+def test_an_append_that_never_reached_the_tickerplant_is_settled_as_never_made(bundle, tmp_path):
+    fake, att, _ = _lost(bundle, tmp_path, written=False)
+    assert _block_op(att, tmp_path).status == "pending"
+    result = _detach(att, fake, Publisher(), tmp_path)
+    assert result.outcome == "rolled_back", result.blockers
+    op = _block_op(att, tmp_path)
+    assert (op.status, op.note) == ("reverted", "outcome probed: it never took effect")
+    assert fake.stack_files[STACK_PATH] == STACK_TEXT.encode()
+
+
+def test_re_applying_after_a_lost_answer_finds_the_block_and_finishes_the_step(bundle, tmp_path):
+    fake, att, _ = _lost(bundle, tmp_path)
+    before = fake.stack_files[STACK_PATH]
+    again = _run(att, fake, tmp_path)
+    assert again.ok, again.stages
+    assert fake.stack_files[STACK_PATH] == before, "nothing appended twice"
+    op = _block_op(att, tmp_path)
+    assert (op.status, op.ownership, op.post["process"]) == ("done", "created", "stp1")
+
+
+def test_detach_refuses_an_unknown_block_that_is_not_as_it_would_have_written_it(bundle, tmp_path):
+    fake, att, _ = _lost(bundle, tmp_path)
+    fake.stack_files[STACK_PATH] = fake.stack_files[STACK_PATH].replace(b"/ Added", b"/ added")
+    held = fake.stack_files[STACK_PATH]
+    result = _detach(att, fake, Publisher(), tmp_path)
+    assert result.outcome == "refused"
+    (blocker,) = result.blockers
+    assert blocker.reason == (
+        f"the schema file block for {TABLE} has an unknown outcome and could not be "
+        f"settled: {STACK_PATH} on stp1 holds a uqs-attach block for pb-uat that is not "
+        "the one this attachment writes: it carries another token, or was edited"
+    )
+    assert blocker.action == (
+        f"make {STACK_PATH} on stp1 readable, or edit the block out by hand; then run "
+        "`uqs job attachment remove pb-uat` again"
+    )
+    assert fake.stack_files[STACK_PATH] == held and TABLE in fake.named("stp1")["schemas"]
+    assert Manifest.load(att.name, tmp_path).state == "partial", "nothing claimed, nothing removed"
+
+
+@pytest.mark.parametrize("written", [True, False])
+def test_a_write_journalled_failed_is_read_before_a_rollback_is_claimed(bundle, tmp_path, written):
+    """As a manifest from before #2905 holds a lost answer: `failed`, block or no block."""
+    fake, att, _ = _lost(bundle, tmp_path, written)
+    m = Manifest.load(att.name, tmp_path)
+    (op,) = [o for o in m.operations if o.op == "schema_block"]
+    m.finish(op, "failed", note="stp1 at uat-box.example:6000 (schema_file): did not answer")
+    result = _detach(att, fake, Publisher(), tmp_path)
+    assert result.outcome == "rolled_back", result.blockers
+    assert (("schema_block", "removed") in [(s.op, s.outcome) for s in result.steps]) == written
+    assert fake.stack_files[STACK_PATH] == STACK_TEXT.encode(), "no block left behind"
+    assert _block_op(att, tmp_path).status == ("reverted" if written else "failed")
+
+
 def test_a_change_computed_from_stale_text_is_refused_by_the_tickerplant(bundle):
     fake = _fake()
     stp = fake.named("stp1")
@@ -265,3 +373,39 @@ def test_publication_is_read_off_the_stacks_disk_by_the_tickerplant(bundle, tmp_
     assert block_text.begin_marker(att.name, "") in fake.stack_files[STACK_PATH].decode(), "kept"
     (asked,) = [r for _, op, r in fake.calls if op == "disk_marks"]
     assert asked["dirs"] == ["/data/wdbhdb", "/data/hdb"] and asked["logdir"] == "/data/tplogs"
+
+
+def test_what_the_tickerplant_cannot_read_on_the_stacks_disk_counts_as_publication(
+    bundle, tmp_path
+):
+    """#2913: a par.txt or a log there that the tickerplant cannot read."""
+    fake, att = _fake(), _att(bundle)
+    pub = Publisher()
+    assert _run(att, fake, tmp_path, pub).ok
+    fake.stack_unread.append("the par.txt in /data/hdb cannot be read")
+    result = _detach(att, fake, pub, tmp_path)
+    assert result.outcome == "detached" and result.evidence.unknown == [
+        f"{TABLE}: on uat-box.example, the par.txt in /data/hdb cannot be read"
+    ]
+
+
+@pytest.mark.parametrize(("process", "writer"), [("stp1", "tickerplant"), ("", "cli")])
+def test_a_kept_block_names_the_writer_that_appended_it(bundle, monkeypatch, process, writer):
+    """The --transient refusal after publication names the writer recorded with the
+    block: a finished step's post is the BlockRecord, which has no `by`."""
+    from dataclasses import asdict
+    from typing import cast
+
+    from uqs.attach import apply_schema, persist
+    from uqs.attach.evidence import Evidence
+    from uqs.attach.manifest import Op
+    from uqs.attach.topology import Observation
+
+    record = persist.BlockRecord(STACK_PATH, "o", "b", process=process)
+    op = Op(4, "schema_block", "schema-file", TABLE, "done", "created", post=asdict(record))
+    monkeypatch.setattr(
+        apply_schema, "evidence", lambda *a: Evidence(published=True, reasons=["a log"])
+    )
+    unread = cast(Observation, None)  # evidence, which reads it, is stubbed
+    (refused,) = apply_schema.after_publication(_att(bundle), [op], unread, _fake(), HERE)
+    assert refused.action.endswith(f"--schema-writer {writer}`, the writer that appended the block")

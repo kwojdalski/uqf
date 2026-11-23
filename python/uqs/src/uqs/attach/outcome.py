@@ -3,13 +3,27 @@
 When the connection is lost after a process made a change but before it
 answered, apply journals the step `pending` with no ownership. Detach must not
 read that as "pre-existing": it asks the stack whether the table exists and
-carries this attachment's token, and acts on the answer.
+carries this attachment's token, and acts on the answer. A schema-file block
+is asked of the file it was written to, which carries the token too (#2905).
 """
 
 from __future__ import annotations
 
-from uqs.attach.config import Attachment
-from uqs.attach.manifest import CREATED, DONE, EXISTING, PENDING, REVERTED, SHARED, Manifest
+from dataclasses import asdict
+
+from uqs.attach import persist, schema_files
+from uqs.attach.config import Attachment, AttachmentError
+from uqs.attach.manifest import (
+    CREATED,
+    DONE,
+    EXISTING,
+    FAILED,
+    PENDING,
+    REVERTED,
+    SHARED,
+    Manifest,
+)
+from uqs.attach.remote import Ipc
 from uqs.attach.topology import Proc
 
 #: The q operation that undoes each forward one. `consumer_subscribe` is the
@@ -34,30 +48,25 @@ def unresolved(
 
     Ours by token -> `created`, so the reversal removes it like any created table.
     Absent -> it never took effect. Present but not ours -> not ours to remove.
-    What cannot be told (process unreachable, or a schema-file block) is a blocker
-    naming the manual action; it is never read as "pre-existing"."""
+    What cannot be told (process unreachable) is a blocker naming the manual
+    action; it is never read as "pre-existing". A schema-file block is not a
+    process's to answer for: `unresolved_blocks` reads the file."""
     out: list[tuple[str, str, str]] = []
     for op in m.operations:
-        if op.status != PENDING or op.ownership:
+        if op.status != PENDING or op.ownership or op.op not in INVERSE:
             continue
         proc = procs.get(op.process)
-        if op.op in BLOCKS or (op.op in INVERSE and proc is None):
-            what = (
-                f"the schema file block for {op.table}"
-                if op.op in BLOCKS
-                else f"{op.op} of {op.table} on {op.process}"
-            )
+        if proc is None:
             out.append(
                 (
                     op.process,
-                    f"{what} has an unknown outcome and cannot be checked",
+                    f"{op.op} of {op.table} on {op.process} has an unknown outcome and "
+                    "cannot be checked",
                     f"check whether {op.table} (and its log or schema block) was made by "
-                    "this attachment and remove it by hand if so"
-                    + ("" if op.op in BLOCKS else f"; start {op.process} to let detach check"),
+                    f"this attachment and remove it by hand if so; start {op.process} to "
+                    "let detach check",
                 )
             )
-            continue
-        if op.op not in INVERSE or proc is None:
             continue
         p = proc.probe or {}
         present = bool(p.get("schemas", {}).get(op.table))
@@ -85,6 +94,56 @@ def unresolved(
             op.ownership, op.note = EXISTING, "outcome probed: pre-existing, not ours"
         if op.ownership and op.status == PENDING:
             op.status = DONE
+    if save:
+        m.save()
+    return out
+
+
+def unresolved_blocks(
+    att: Attachment, m: Manifest, ipc: Ipc, procs: dict[str, Proc], *, save: bool
+) -> list[tuple[str, str, str]]:
+    """Settle every schema-file block whose write apply never saw finish (`pending`,
+    no ownership: the tickerplant's answer was lost, or apply was stopped) by
+    reading the file the step named - this machine's, or the tickerplant's own
+    through the tickerplant - for the block this attachment's token writes (#2905).
+
+    There exactly as written -> `created` (`shared` for `+uses`) with the record a
+    finished write journals, so the reversal takes it out, hash checked, like any
+    other. No block of that name -> it never took effect. Anything else - a file
+    that cannot be read, another block under the name - is a blocker naming the
+    manual action.
+
+    A `failed` write is read as well, and counted as made when its block is there:
+    a write can fail after the bytes went in, and a manifest from before #2905
+    journalled a lost answer so. Otherwise it stays failed, and nothing is refused."""
+    out: list[tuple[str, str, str]] = []
+    for op in m.operations:
+        if op.op not in BLOCKS or op.status not in (PENDING, FAILED) or op.ownership:
+            continue
+        uses = op.op == "schema_uses"
+        path, by = str(op.pre.get("path", "")), str(op.pre.get("by", "uqs"))
+        specs = tuple(s for s in att.tables if s.name in op.table.split(","))
+        try:
+            where = path if by == "uqs" else schema_files.file_of(path, by, ipc, procs)
+            record = persist.left(att, m.token, specs, where, uses)
+        except (OSError, AttachmentError) as exc:
+            if op.status == PENDING:
+                label = path + ("" if by == "uqs" else f" on {by}")
+                out.append(
+                    (
+                        op.process,
+                        f"the schema file block for {op.table} has an unknown outcome "
+                        f"and could not be settled: {exc}",
+                        f"make {label} readable, or edit the block out by hand; then "
+                        f"run `uqs job attachment remove {att.name}` again",
+                    )
+                )
+            continue
+        if record is not None:
+            op.status, op.ownership, op.post = DONE, SHARED if uses else CREATED, asdict(record)
+            op.note = "outcome probed: the block is in the file under this attachment's token"
+        elif op.status == PENDING:
+            op.status, op.note = REVERTED, "outcome probed: it never took effect"
     if save:
         m.save()
     return out

@@ -1,8 +1,8 @@
 # Scaffolding
 
-`uqs job new` writes the skeleton of a process: its q files, its table, its
-registry entry and a failing test. Seven shapes, one page each. Every command
-below was run against this tree, and the output shown is what it printed.
+`uqs job new` writes the skeleton of a process: its q files, its table and a
+failing test. Seven shapes, one page each. Every command below was run against
+this tree, and the output shown is what it printed.
 
 ## Which shape
 
@@ -28,10 +28,11 @@ question is asked here, before anything is written.
 have chosen.
 
 `--kind` names five of them --- `streaming` (the default), `normalizer`,
-`horizon`, `backfill`, `external`. There is no `--kind feed`: a streaming job
-that subscribes to nothing *is* a feed, and the scaffold derives that rather
-than asking twice. A reaction is `--triggered-by DATASET`, and is the one shape
-with no process of its own: it runs inside the process that publishes `DATASET`.
+`horizon`, `backfill`, `connector` (the **external** row). There is no
+`--kind feed`: a streaming job that subscribes to nothing *is* a feed, and the
+scaffold derives that rather than asking twice. A reaction is
+`--triggered-by DATASET`, and is the one shape with no process of its own: it
+runs inside the process that publishes `DATASET`.
 
 For a backfill taken all the way from scaffold to a filled database, see the
 worked example [from one kdb+ database to another](hdb-transfer.md). One script
@@ -141,6 +142,6 @@ skill](../../.claude/skills/new-job/SKILL.md):
 2. the test, replacing the stub entirely
 3. the docstrings --- `docs/man.q` reads them when it loads
 
-Then `uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes`, and
+Then `q tests/run_tests.q -files test_<name>.q`, and
 `uv run python scripts/gates/stack_smoke.py` against a real stack, which is the
 only thing that proves the wiring.

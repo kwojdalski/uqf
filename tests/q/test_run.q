@@ -109,6 +109,14 @@
     .qetl.run.begin[`w1;()!()];
     .qunit.assertEquals[count .qetl.run.unfinished[];1;"a run in flight reports as unfinished"]};
 
+/ #2950: a run that ended with windows left is unfinished too, not only a
+/ `running one - the stopped run `job runs stop` says to re-run among them.
+.qt.qetl.run.test_a_run_that_ended_with_work_left_is_unfinished:{[t]
+    {[s] .qetl.run.begin[`w1;()!()]; .qetl.run.finish[s;()!()]} each `completed`idle`stopped`partial`failed;
+    .qetl.run.begin[`w2;()!()];
+    .qunit.assertEquals[asc exec status from .qetl.run.unfinished[];`failed`partial`running`stopped;
+        "every run but a completed or idle one"]};
+
 .qt.qetl.run.test_finish_records_the_outcome_and_closes_the_run:{[t]
     id:.qetl.run.begin[`w1;()!()];
     .qetl.run.finish[`completed;()!()];

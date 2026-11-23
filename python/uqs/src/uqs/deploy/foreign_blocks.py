@@ -35,5 +35,6 @@ def refuse(root: Path, files: list[str], runtime: str, composition: set) -> None
             f"the tree carries bundle blocks outside runtime {runtime}'s composition, "
             "which would ship as tree content:\n  "
             + "\n  ".join(foreign)
-            + "\nBuild from a checkout no bundle was prepared into, or uninstall them first.",
+            + "\nBuild from a checkout no bundle was prepared into, or restore those files "
+            "from git first (`git restore <file>`): there is no command that uninstalls a bundle.",
         )

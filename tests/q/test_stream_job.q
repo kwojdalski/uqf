@@ -1727,12 +1727,20 @@
     ([] check:count[bad]#`negative; status:count[bad]#`bad; detail:count[bad]#enlist "negative"; row:bad)}
 
 .qt.qetl.job.stream.check_probe:{[name;procname;mode;chk]
-    / A feed that keeps its output local, so the output-contract suite has nothing to drive.
+    / A feed with one output that is no plant table, so the output-contract suite has nothing to drive.
     .qetl.job.stream.define[name;`procname`subscribe_to`outputs`period`on_timer`check`on_fail!(
-        procname;`symbol$();`symbol$();0D00:00:01;{[] };chk;mode)];
+        procname;`symbol$();enlist `probe_out;0D00:00:01;{[] };chk;mode)];
     .qt.qetl.job.stream.reset[];
     .qetl.job.stream.wire[name;.qt.qetl.job.stream.recorder[name]];
     ` sv (.qetl.job.stream.namespace name),`publish}
+
+/ The probes are feeds that declare probe_out, and the job-output contracts drive
+/ every registered publishing feed: forget them once this suite is done.
+.qt.qetl.job.stream.afterNamespace_forget_check_probes:{[]
+    probes:j where {[j] (enlist `probe_out)~(),.qetl.job.stream.def[j]`outputs} each j:.qetl.job.stream.defined[];
+    {[nm] `.qetl.job.stream.procnames set (key[.qetl.job.stream.procnames] where nm=value .qetl.job.stream.procnames) _ .qetl.job.stream.procnames;
+        `.qetl.job.stream.jobs set (enlist nm) _ .qetl.job.stream.jobs;
+        `.qetl.job.stream.initial set (enlist nm) _ .qetl.job.stream.initial} each probes;}
 
 .qt.qetl.job.stream.test_a_passing_batch_publishes_whole_and_counts_nothing:{[t]
     pub:.qt.qetl.job.stream.check_probe[`sj_check_pass;`sjcheckpass1;`drop;.qt.qetl.job.stream.neg_check];
@@ -1821,13 +1829,36 @@
     .qunit.assertEquals[h`last_error;`$"check threw: boom";"with the check's own error"]};
 
 .qt.qetl.job.stream.test_a_check_must_declare_what_failure_does:{[t]
-    base:`procname`subscribe_to`outputs`on_batch!(`sjcheckbad1;enlist `quote;`symbol$();{[t;x]});
+    base:`procname`subscribe_to`outputs`on_batch!(`sjcheckbad1;enlist `quote;enlist `sj_check_out;{[t;x]});
     .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,enlist[`check]!enlist .qt.qetl.job.stream.neg_check;
         "*declares a check but no on_fail*";"the author decides whether bad rows hold their neighbours"];
     .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,`check`on_fail!(.qt.qetl.job.stream.neg_check;`skip);
         "*on_fail must be `drop or `hold*";"and only the two choices exist"];
     .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,enlist[`on_fail]!enlist `drop;
         "*on_fail without a check*";"on_fail alone gates nothing"]};
+
+/ #2953: a present on_fail of the wrong type was refused as if it were missing.
+.qt.qetl.job.stream.test_an_on_fail_that_is_not_one_symbol_is_refused_as_what_it_is:{[t]
+    base:`procname`subscribe_to`outputs`on_batch`check!(`sjcheckbad1;enlist `quote;enlist `sj_check_out;{[t;x]};.qt.qetl.job.stream.neg_check);
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,enlist[`on_fail]!enlist "drop";
+        "define: sj_check_bad's on_fail must be a single symbol, `drop or `hold, not \"drop\"";"a string says drop, and was called missing"];
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,enlist[`on_fail]!enlist `drop`hold;
+        "define: sj_check_bad's on_fail must be a single symbol, `drop or `hold, not `drop`hold";"a list is not a choice"]};
+
+/ #2953: a check sits on the publish seam outputs wire, so with none it never runs; a handler
+/ publishing through such a job met an undefined name.
+.qt.qetl.job.stream.test_a_check_on_a_job_with_no_outputs_is_refused:{[t]
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_check_none;];`procname`subscribe_to`outputs`on_batch`check`on_fail!(
+            `sjchecknone1;enlist `quote;`symbol$();{[t;x]};.qt.qetl.job.stream.neg_check;`drop);
+        "define: sj_check_none declares a check but no outputs*";"it would never run"]};
+
+.qt.qetl.job.stream.test_publish_on_a_job_with_no_outputs_says_so:{[t]
+    .qt.support.save_stream_jobs[`.qt.qetl.job.stream.noout];
+    .qetl.job.stream.define[`sj_noout;`procname`subscribe_to`outputs`on_batch!(`sjnoout1;enlist `quote;`symbol$();{[t;x]})];
+    r:.[get ` sv (.qetl.job.stream.namespace `sj_noout),`publish;(`other;());{x}];
+    .qt.support.restore_stream_jobs[`.qt.qetl.job.stream.noout];
+    .qunit.assertEquals[r;"publish: sj_noout declares no outputs, so nothing is wired to publish onto other - add it to the job's outputs";
+        "naming the job and the fix, not the undefined name"]};
 
 .qt.qetl.job.stream.test_market_data_declares_the_qdqc_checks:{[t]
     d:.qetl.job.stream.def`market_data;
@@ -2049,6 +2080,21 @@
     .qunit.assertEquals[(count .qt.qetl.job.stream.published;h[`failed]-before);0 1;"nothing sent, and the job reads failing"];
     .qunit.assertTrue[(string h`last_error) like "plant contract: fx_orderbook.bid_sizes row 0 holds a value of type 7h*";
         "naming the table, column and row"]};
+
+.qt.qetl.job.stream.test_the_withheld_log_line_says_why_and_which_gate:{[t]
+    / #2954: a contract refusal logged "publish check withheld rows" with failures="" and nothing else
+    bad:@[.qt.qetl.job.stream.ob[];2;:;enlist 1 2];
+    lines:.qt.qetl.job.stream.logged[`fx_orderbook_feed;{[bad;x] .qt.qetl.job.stream.ob_publish[`fx_orderbook;bad]}[bad]];
+    ln:first lines where "plant contract withheld rows"~/:lines[;1];
+    .qunit.assertTrue[(last ln)[`reason] like "plant contract: fx_orderbook.bid_sizes row 0 holds a value of type 7h*";
+        "the refusal reason is in the log line, no longer only in stream health"];
+    .qunit.assertFalse[any "publish check withheld rows"~/:lines[;1];"and a contract refusal does not claim a check ran"]};
+
+.qt.qetl.job.stream.test_a_failing_check_is_logged_as_a_check_with_its_reason:{[t]
+    pub:.qt.qetl.job.stream.check_probe[`sj_check_why;`sjcheckwhy1;`hold;.qt.qetl.job.stream.neg_check];
+    lines:.qt.qetl.job.stream.logged[`sj_check_why;{[pub;x] (get pub)[`probe_out;([] v:1 -2 3)]}[pub]];
+    ln:first lines where "publish check withheld rows"~/:lines[;1];
+    .qunit.assertEquals[(last ln)`reason;"check failed: 1 failure(s)";"the reason a check withheld the batch"]};
 
 .qt.qetl.job.stream.test_columns_out_of_the_plant_order_are_withheld:{[t]
     book_rows:flip `sym`bid_prices`bid_sizes`ask_prices`ask_sizes!.qt.qetl.job.stream.ob[];

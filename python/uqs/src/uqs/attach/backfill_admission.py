@@ -19,7 +19,7 @@ from uqs.attach.backfill import Destination, canonical
 from uqs.attach.config import Attachment
 from uqs.attach.manifest import Manifest
 from uqs.attach.remote import Endpoint, Ipc, IpcError
-from uqs.attach.topology import Observation, observe, port_of
+from uqs.attach.topology import Observation, host_of, observe, port_of
 from uqs.paths import UqsError
 
 
@@ -28,6 +28,9 @@ class Reader:
     """One HDB process, and whether it serves the destination."""
 
     procname: str
+    #: where it is reached: the host discovery lists it on (topology.host_of),
+    #: which is not the stack's for a reader on a second machine (#2907)
+    host: str
     port: int
     serves: bool
     detail: str = ""
@@ -90,31 +93,28 @@ def readers_of(att: Attachment, obs: Observation, hdb_dir: Path, ipc: Ipc) -> li
         port = port_of(svc["hpup"])
         if port is None:
             continue
-        who = svc["procname"]
+        who, host = svc["procname"], host_of(svc["hpup"], att.stack)
         try:
-            answer = ipc.call(Endpoint(who, att.stack.host, port), "hdb_reader", {})
+            answer = ipc.call(Endpoint(who, host, port), "hdb_reader", {})
         except IpcError as exc:
             if "refused" in exc.reason.lower():
                 # Nothing listens: it serves nothing now and maps the partitions when it starts, as
                 # discovery's stale entries for processes never started do. Not a reload target.
-                out.append(Reader(who, port, False, "not running (connection refused)"))
+                out.append(Reader(who, host, port, False, "not running (connection refused)"))
                 continue
             raise UqsError(
                 f"HDB reader {who} (port {port}) does not answer: {exc.reason} - whether it "
                 "serves the destination cannot be established, so it cannot be left out of a reload"
             ) from None
         if answer.get("stackid") not in ("", str(att.stack.id)):
-            out.append(
-                Reader(who, port, False, f"stack {answer.get('stackid')}, not {att.stack.id}")
-            )
+            detail = f"stack {answer.get('stackid')}, not {att.stack.id}"
+            out.append(Reader(who, host, port, False, detail))
         elif not _same_dir(str(answer.get("hdbdir", "")), hdb_dir):
-            out.append(
-                Reader(who, port, False, f"serves {answer.get('hdbdir') or 'an unknown directory'}")
-            )
+            detail = f"serves {answer.get('hdbdir') or 'an unknown directory'}"
+            out.append(Reader(who, host, port, False, detail))
         else:
-            out.append(
-                Reader(who, port, True, f"{answer.get('partitions', '?')} partition(s) mapped")
-            )
+            detail = f"{answer.get('partitions', '?')} partition(s) mapped"
+            out.append(Reader(who, host, port, True, detail))
     return sorted(out, key=lambda r: r.procname)
 
 

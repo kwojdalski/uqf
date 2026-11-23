@@ -11,6 +11,8 @@ scaffold/remove.py plans the edits from them.
 
 from __future__ import annotations
 
+import ast
+import json
 import re
 from pathlib import Path
 
@@ -20,9 +22,13 @@ from uqs.model.declarations import (
     declared_outputs,
     reaction_calls,
     read_declarations,
+    read_file,
+    read_file_text,
     symbols,
 )
+from uqs.model.pipeline import PipelineKind
 from uqs.paths import (
+    BUNDLE_LEDGER,
     CATALOG_FILE,
     REACTION_DIR,
     STACK_TABLES_TEST,
@@ -33,6 +39,7 @@ from uqs.paths import (
 )
 from uqs.scaffold.external import EXTERNAL_DIR, connector_mark, external_files, feed_module
 from uqs.scaffold.jobs import test_namespace
+from uqs.scaffold.profile import PROFILES_FILE
 from uqs.scaffold.transform import MODES, streaming_test
 
 MARKER = "SCAFFOLDED"
@@ -64,6 +71,30 @@ GUARDRAILS = (
 )
 
 
+def refuse_bundled(repo_root: Path, job_file: Path) -> None:
+    """Refuse a job a bundle installed, override or not (#2923). Its file, its
+    table and catalog entries in the bundle's `/ BEGIN bundle` blocks and the
+    ledger's record of all three are the install's: removed here, the file
+    went, the blocks were cut into, and the ledger still claimed them. The
+    step that exists is the bundle's own - an install replaces whatever an
+    earlier version of the same bundle put there."""
+    path = repo_root / BUNDLE_LEDGER
+    if not path.is_file():
+        return
+    try:
+        ledger = json.loads(path.read_text())
+    except ValueError as exc:
+        raise UqsError(f"{BUNDLE_LEDGER} is not JSON ({exc}) - fix or remove it by hand") from None
+    owners = sorted(n for n, entry in ledger.items() if str(job_file) in entry.get("files", {}))
+    if owners:
+        raise UqsError(
+            f"{job_file} was installed by bundle {owners[0]} ({BUNDLE_LEDGER}), and uqs job "
+            "remove only undoes a scaffold: take the job out of the bundle's folder and install "
+            "the bundle again (`uqs job install <folder>`, or `uqs runtime prepare` for a "
+            "runtime's bundles), which removes what its earlier version put there"
+        )
+
+
 def refuse_written(
     deletes: list[Path], repo_root: Path, force: bool, proven: set[Path], exact: dict[Path, str]
 ) -> None:
@@ -92,7 +123,9 @@ def refuse_dependents(
     """Refuse while another job resolves only through `job` (#2834): a twin
     whose `twin_of` names it, or a reaction watching the dataset only it
     fills. Either fails the load once `job` is gone, as `uqs job new` would
-    have refused to scaffold it - so it is named, to be removed first."""
+    have refused to scaffold it - so it is named, to be removed first. And a
+    job subscribed to a table only `job` publishes (#2925): it would start
+    with nothing feeding it, in every profile that holds both."""
     workers = _workers(repo_root, job_file)
     found = []
     if fn == BOUNDED:
@@ -110,12 +143,50 @@ def refuse_dependents(
             f"{w} ({path}) declares twin_of {job}"
             for path, w, f in workers
             if symbols(f.get("twin_of", ""))[:1] == (job,)
-        ]
+        ] + _unfed_subscribers(repo_root, job_file, job)
     if found:
         raise UqsError(
             f"{job} cannot be removed while another job depends on it: {'; '.join(found)} "
             "- remove it first"
         )
+
+
+def refuse_still_profiled(text: str, proc: str) -> None:
+    """Refuse when profiles.py's `text`, as the removal leaves it, still lists
+    `proc` in a profile - a layout the edit does not read. A profile naming a
+    process that is gone cannot start, and the removal reported success (#2926)."""
+    for node in ast.parse(text).body:
+        if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", None) == "PROFILES":
+            profiles = ast.literal_eval(node.value) if node.value is not None else {}
+            if any(proc in leaves for leaves in profiles.values()):
+                raise UqsError(
+                    f"{PROFILES_FILE} still lists {proc} in a profile this cannot edit - take "
+                    "it out by hand, then run it again"
+                )
+
+
+def _unfed_subscribers(repo_root: Path, job_file: Path, job: str) -> list[str]:
+    """Each other job subscribed to a table `job` publishes that nothing else
+    feeds: no other streaming job or normalizer publishes it, and no
+    connector produces it (#2925) - the plant's producers, as the profile
+    closure check (test_profiles.py) counts them."""
+    from uqs.model.dependencies import external_producers
+
+    others = [
+        d
+        for d in read_declarations(repo_root)
+        if d.path != repo_root / job_file and d.kind is not PipelineKind.BACKFILL
+    ]
+    fed = {t for d in others for t in d.publishes} | set(external_producers(repo_root))
+    publishes = [t for d in read_file(repo_root / job_file) for t in d.publishes]
+    return [
+        f"{d.name} ({d.path.relative_to(repo_root)}) subscribes to {table}, which only {job} "
+        "publishes"
+        for table in publishes
+        if table not in fed
+        for d in others
+        if table in d.subscribe_to
+    ]
 
 
 def generated_test(job: str, fields: dict[str, str], exact: dict[Path, str]) -> None:
@@ -212,3 +283,28 @@ def defined_by(repo_root: Path, table: str, owners: set[str], living: set[str]) 
     if named & owners:
         return True
     return bool(named) and not named & living and any(_ROW_PLACEHOLDER in c for c in comment)
+
+
+def orphaned_inputs(
+    repo_root: Path,
+    job_file: Path,
+    text: str,
+    decided: list[str],
+    gone: set[Path],
+    living: set[str],
+) -> list[str]:
+    """The tables the job in `job_file` (source `text`) only reads that go with
+    it: none of `decided` (its outputs, already ruled on), nothing outside
+    `gone` names them, and their definition is a scaffold of a job no longer
+    in the tree. #2842's rule for the last writer, applied to the last reader:
+    the producer went first, while this one still read the table, and nobody
+    else is left to take it (#2924)."""
+    declared = read_file_text(text, repo_root / job_file)
+    reads = declared[0].subscribe_to if declared else ()
+    return [
+        t
+        for t in reads
+        if t not in decided
+        and user_of(repo_root, t, gone) is None
+        and defined_by(repo_root, t, set(), living)
+    ]

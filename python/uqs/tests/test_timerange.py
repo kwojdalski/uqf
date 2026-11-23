@@ -138,6 +138,15 @@ def test_last_must_cover_time(text):
         ({"last": "999999999d"}, "--last"),
         ({"last": "9999999999d"}, "--last"),
         ({"day": "9999-12-31"}, "--date"),
+        # #2951: within datetime's years but not q's, where `"P"$` is a null
+        ({"range_from": "0206-09-11", "range_to": "0206-09-12"}, "--from"),
+        ({"range_from": "1600.01.01", "range_to": "2026.01.01"}, "--from"),
+        ({"range_from": "1708-12-31T23:59:59.999999", "range_to": "2026-01-01"}, "--from"),
+        ({"range_from": "2026-01-01", "range_to": "3000-01-01"}, "--to"),
+        ({"range_from": "2026-01-01", "range_to": "2291-01-01"}, "--to"),
+        ({"day": "2290-12-31"}, "--date"),
+        ({"day": "1700-01-01"}, "--date"),
+        ({"last": "200000d"}, "--last"),
     ],
 )
 def test_a_bound_past_what_a_timestamp_holds_is_a_usage_error(given, name):
@@ -145,6 +154,15 @@ def test_a_bound_past_what_a_timestamp_holds_is_a_usage_error(given, name):
     given = {"range_from": None, "range_to": None} | given
     with pytest.raises(UqsUsageError, match=f"{name} .* is outside the range a timestamp"):
         timerange.resolve(**given, now=NOW)
+
+
+def test_the_first_and_last_bounds_q_parses_are_taken():
+    """The edges of `"P"$`, checked on KDB-X: 1709.01.01 and 2290.12.31D23:59:59.999999."""
+    held = timerange.resolve("1709-01-01", "2290-12-31T23:59:59.999999")
+    assert held.bounds == (
+        datetime(1709, 1, 1, tzinfo=UTC),
+        datetime(2290, 12, 31, 23, 59, 59, 999999, tzinfo=UTC),
+    )
 
 
 # --- the three ways, one at a time ----------------------------------------------

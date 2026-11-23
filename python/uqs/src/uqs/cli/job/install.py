@@ -30,7 +30,7 @@ from uqs.cli.common.shared import (
 )
 from uqs.cli.job import install_bundle
 from uqs.cli.job.create_plant import plant_tables as _plant_tables
-from uqs.cli.job.regenerate import _DERIVED, _regenerate_derived, derived_command
+from uqs.cli.job.regenerate import report_regeneration
 from uqs.model.declarations import (
     Declaration,
     declaration_calls,
@@ -171,6 +171,19 @@ def _err_log() -> str:
         return str(where)
 
 
+def _in_no_profile(procs: list[str]) -> list[str]:
+    """The `procs` no profile reaches and UNPROFILED does not exempt - each fails
+    test_every_standing_process_is_reachable_or_exempt_with_a_reason, as a
+    `uqs job new` given neither answer notes (scaffold/profile.py, #2947)."""
+    from uqs.model.profiles import PROFILES, resolve
+    from uqs.model.unprofiled import UNPROFILED
+
+    reached = {leaf for leaves in PROFILES.values() for leaf in leaves}
+    for name in PROFILES:
+        reached |= set(resolve([name]))
+    return [p for p in procs if p not in reached and p not in UNPROFILED]
+
+
 def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> Panel:
     streaming = [d.procname for d in declarations if d.kind is not PipelineKind.BACKFILL]
     workers = [d.name for d in declarations if d.kind is PipelineKind.BACKFILL]
@@ -184,6 +197,12 @@ def _next_steps(declarations: list[Declaration], sidecar_tests: list[Path]) -> P
         steps.add_row(f"{len(steps.rows) + 1}.", what, command)
 
     step("The registry sees them", "uqs process list")
+    for proc in _in_no_profile(streaming):
+        step(
+            f"Put {proc} in a profile, or exempt it",
+            "PROFILES in model/profiles.py, or UNPROFILED with the reason in "
+            "model/unprofiled.py - `uqs profile list` shows the sets and their budget",
+        )
     step("The exact start line", f"uqs start --dry-run {procs}")
     if streaming or not workers:
         step("Start them", f"uqs start {procs}")
@@ -361,15 +380,11 @@ def install_jobs(
 
     # A file that does not parse, or a job whose edges do not resolve, is
     # refused by the generators - which is the earliest the tree can say so.
-    for derived, regen in zip(_DERIVED, _regenerate_derived(repo_root), strict=True):
-        if regen.returncode == 0:
-            console.print(f"[green]✓[/] regenerated via {' '.join(derived)}")
-        else:
-            console.print(
-                f"[red]✗ could not regenerate[/] - run `{derived_command(derived)}` "
-                f"and fix what it reports:\n{regen.stdout}{regen.stderr}"
-            )
-            failed += 1
+    # Every derived target, as `job new` and `job remove` regenerate them: the
+    # next steps say to commit the derived files, and the q-backed ones (q
+    # facts, the contract surface) go stale as surely as the rest (#2922).
+    if not report_regeneration(repo_root):
+        failed += 1
     if failed:
         console.print(f"[red]✗ install incomplete:[/] {failed} step(s) above failed")
         raise typer.Exit(code=1)

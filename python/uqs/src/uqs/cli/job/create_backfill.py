@@ -181,6 +181,34 @@ def check_passthrough(dataset: str, source: str, columns: Columns, definition: s
         )
 
 
+def _declared(repo_root: Path, source: str) -> list[tuple[str, str]]:
+    """[(column, meta type char)] as the existing `source` declares its
+    `columns` and `types` - empty when this cannot read them."""
+    text = strip_q_comments((repo_root / SOURCE_DIR / f"{source}.q").read_text())
+    ns = re.escape(f".qpipe.source.{source}.")
+    # `enlist `time` is how the scaffold writes one column (#2829), as for types.
+    names = re.search(rf"^{ns}columns\s*:\s*(?:enlist\s*)?((?:`\w+)+)\s*$", text, re.MULTILINE)
+    types = re.search(rf'^{ns}types\s*:\s*(?:enlist\s*)?"([^"]*)"', text, re.MULTILINE)
+    cols = names.group(1).strip("`").split("`") if names else []
+    chars = types.group(1) if types else ""
+    return list(zip(cols, chars, strict=True)) if cols and len(cols) == len(chars) else []
+
+
+def shaped_as(
+    repo_root: Path, source: str, dataset: str, tables: dict[str, list[tuple[str, str]]]
+) -> str | None:
+    """Which of `tables` ({plant table: its columns}) the existing `source`'s
+    rows are shaped as - `dataset` before any other - or None for none (#2915).
+
+    A derive's input is the source's rows, and the plant-tables suite refuses
+    an input with a plant table's columns under another name (#833). A source
+    is usually declared with the columns of the table its first worker fills,
+    so a second worker deriving from it reads rows of that table's shape."""
+    rows = [c for c, _ in _declared(repo_root, source)]
+    same = [t for t, cols in tables.items() if [c for c, _ in cols] == rows]
+    return dataset if dataset in same else min(same, default=None)
+
+
 def check_reused_passthrough(
     repo_root: Path, dataset: str, source: str, target: list[tuple[str, str]]
 ) -> None:
@@ -193,27 +221,46 @@ def check_reused_passthrough(
     `columns` and `types` describe. A source whose declaration this cannot read
     is refused too: whether the two agree is then unknown, and a wrong guess
     stops the whole tree loading."""
-    text = strip_q_comments((repo_root / SOURCE_DIR / f"{source}.q").read_text())
-    ns = re.escape(f".qpipe.source.{source}.")
-    # `enlist `time` is how the scaffold writes one column (#2829), as for types.
-    names = re.search(rf"^{ns}columns\s*:\s*(?:enlist\s*)?((?:`\w+)+)\s*$", text, re.MULTILINE)
-    types = re.search(rf'^{ns}types\s*:\s*(?:enlist\s*)?"([^"]*)"', text, re.MULTILINE)
     want = _meta(target)
-    cols = names.group(1).strip("`").split("`") if names else []
-    chars = types.group(1) if types else ""
-    if not cols or len(cols) != len(chars):
+    have = _declared(repo_root, source)
+    if not have:
         raise UqsError(
             f"cannot read source {source}'s declared columns and types, so whether a "
             f"passthrough into {dataset} ({_shown(want)}) fits it is unknown - pass "
             "--transform derive and map one to the other"
         )
-    have = list(zip(cols, chars, strict=True))
     if have != want:
         raise UqsError(
             f"source {source}'s columns ({_shown(have)}) are not {dataset}'s ({_shown(want)}), "
             "so a passthrough cannot publish them - pass --transform derive and map one to "
             "the other"
         )
+
+
+def check_slice_in_fixture(
+    repo_root: Path, source: str, worker_name: str, partition: str, column: str
+) -> None:
+    """Refuse a --slice over an existing `source` whose fixture holds no row in
+    it (#2959). With no credential every window runs on that fixture, and
+    publish refuses a row outside the slice: a scaffold's fixture holds
+    `SCAFFOLD, so every window failed and test_every_worker_runs went red.
+    #2830 writes the slice into a NEW source's fixture; an existing one is
+    not rewritten, so it must name the slice already. Read as text, as
+    `_declared` reads the columns: a fixture that does not name the symbol
+    `partition` is taken not to hold it."""
+    text = strip_q_comments((repo_root / SOURCE_DIR / f"{source}.q").read_text())
+    head = re.search(rf"^\.qpipe\.source\.{re.escape(source)}\.fixture\s*:", text, re.MULTILINE)
+    body = text[head.start() :] if head else text
+    if head and (end := re.search(r"\n\S", body)):
+        body = body[: end.start()]
+    if re.search(rf"`{re.escape(partition)}\b|\"{re.escape(partition)}\"", body):
+        return
+    raise UqsError(
+        f"--slice {partition}: source {source}'s fixture holds no row with {column} "
+        f"`{partition}, and with no credential {worker_name} runs every window on it - "
+        f"publish would refuse each one. Give .qpipe.source.{source}.fixture rows in "
+        f"slice {partition} (src/etl/sources/{source}.q), then run this again"
+    )
 
 
 def backfill_plan(
@@ -310,6 +357,20 @@ def backfill_plan(
         )
         if target is not None:
             check_reused_passthrough(repo_root, dataset, source or name, target)
+    if reuse_source and partition:
+        check_slice_in_fixture(
+            repo_root,
+            source or name,
+            f"{name}_backfill",
+            partition,
+            partition_column or worker.DEFAULT_PARTITION_COLUMN,
+        )
+    shaped = None
+    if reuse_source and shared is None and transform == "derive":
+        tables = {t: definition_columns(d) for t, d in (definitions or {}).items()}
+        if define_table and shape:
+            tables[dataset] = as_columns(shape)
+        shaped = shaped_as(repo_root, source or name, dataset, tables)
     return worker.bounded_worker(
         name,
         dataset,
@@ -332,4 +393,5 @@ def backfill_plan(
             if definitions and dataset in definitions
             else None
         ),
+        shaped_as=shaped,
     )

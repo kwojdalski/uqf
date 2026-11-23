@@ -161,13 +161,13 @@
 / @throws error naming what is wrong with the declaration
 / @eg .qetl.transform.define[`mid_quotes;`inputs`output`fn`examples!(enlist[`quotes]!enlist ([] sym:`symbol$(); bid:`float$(); ask:`float$()); ([] sym:`symbol$(); mid:`float$()); {[q] select sym, mid:(bid+ask)%2 from q}; enlist `inputs`expected!(enlist[`quotes]!enlist ([] sym:enlist`EURUSD; bid:1.1; ask:1.2); ([] sym:enlist`EURUSD; mid:1.15)))]
 .qetl.transform.define:{[name;decl]
+    .qetl.declared.require_form["transform";name;decl];
     who:"define: transform ",string[name];
-    if[not 99h=type decl; '"define: a transform declaration must be a dictionary"];
     .qetl.declared.refuse_unknown[who;"a transform";decl;.qetl.transform.required_keys,`as_of];
     missing:.qetl.transform.required_keys where not .qetl.transform.required_keys in key decl;
     if[count missing; 'who," is missing ",", " sv string missing];
     ins:decl`inputs;
-    if[not (99h=type ins) and 11h=type key ins;
+    if[not $[99h=type ins; 11h=type key ins; 0b];
         'who,"'s inputs must be a dictionary of name -> empty typed table"];
     if[0=count ins; 'who," reads no inputs - a transform of nothing is a constant"];
     if[not all 98h=type each value ins;
@@ -187,9 +187,36 @@
     .qetl.transform.check_example[name;ins;decl`output;clock] each exs;
     if[not any {[e] any 0<count each value e`inputs} each exs;
         'who,"'s examples are all empty - at least one must carry rows"];
-    / upsert, so a second define of one name replaces its row
+    / upsert: a second define of one name replaces its row, unless a job is registered against it
+    .qetl.transform.refuse_breaking_redefine[who;name;ins;decl`output];
     `.qetl.transform.registry upsert (name;ins;decl`output;fn;exs;clock);
     name}
+
+/ The jobs that apply a transform: bounded workers and streaming jobs declaring it,
+/ and normalizers mapping a source table through it.
+/ @param xf the transform's name
+/ @return the job names, a symbol list, empty when none uses it
+/ @eg .qetl.transform.users `mid_quotes  ->  `symbol$()
+.qetl.transform.users:{[xf]
+    / each registry is read only when its file has loaded: transform.q loads before them
+    absent:(`symbol$())!();
+    cfg:@[value;`.qetl.job.bounded.worker_cfg;([] name:`symbol$(); transform:`symbol$())];
+    j:@[value;`.qetl.job.stream.jobs;absent];
+    r:@[value;`.qetl.job.stream.normalizer.registry;absent];
+    s:$[count j; (key j) where xf={[d] d`transform} each first each value j; `symbol$()];
+    n:$[count r; (key r) where {[nm;d] nm in value d`input}[xf] each first each value r; `symbol$()];
+    distinct (exec name from cfg where transform=xf),s,n}
+
+/ Private: refuse a redefinition that changes what a registered job was validated against (#2953).
+/ A job's declaration was checked against the transform's inputs and output; replacing
+/ either leaves the job registered against a transform it was never checked with.
+/ @private
+.qetl.transform.refuse_breaking_redefine:{[who;name;ins;output]
+    if[not name in .qetl.transform.defined[]; :()];
+    old:.qetl.transform.registry name;
+    if[(old[`inputs]~ins) and old[`output]~output; :()];
+    if[count u:.qetl.transform.users name;
+        'who," is already defined with another input or output, and ",(", " sv string u)," apply it - a job was checked against the first"]}
 
 / Private: an example is well-formed against its transform's declaration.
 / @private
