@@ -1734,6 +1734,14 @@
     .qetl.job.stream.wire[name;.qt.qetl.job.stream.recorder[name]];
     ` sv (.qetl.job.stream.namespace name),`publish}
 
+/ The probes are feeds that declare probe_out, and the job-output contracts drive
+/ every registered publishing feed: forget them once this suite is done.
+.qt.qetl.job.stream.afterNamespace_forget_check_probes:{[]
+    probes:j where {[j] (enlist `probe_out)~(),.qetl.job.stream.def[j]`outputs} each j:.qetl.job.stream.defined[];
+    {[nm] `.qetl.job.stream.procnames set (key[.qetl.job.stream.procnames] where nm=value .qetl.job.stream.procnames) _ .qetl.job.stream.procnames;
+        `.qetl.job.stream.jobs set (enlist nm) _ .qetl.job.stream.jobs;
+        `.qetl.job.stream.initial set (enlist nm) _ .qetl.job.stream.initial} each probes;}
+
 .qt.qetl.job.stream.test_a_passing_batch_publishes_whole_and_counts_nothing:{[t]
     pub:.qt.qetl.job.stream.check_probe[`sj_check_pass;`sjcheckpass1;`drop;.qt.qetl.job.stream.neg_check];
     before:.qetl.stream_health.of[`sj_check_pass]`failed;

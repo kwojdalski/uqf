@@ -152,7 +152,7 @@
 / @throws error when name is held by a declaration that differs from stored
 / @eg .qetl.declared.refuse_redeclared["define: x";"worker";.qetl.job.bounded.worker_cfg;`nosuch;()!()]  ->  ::
 .qetl.declared.refuse_redeclared:{[who;kind;tbl;name;stored]
-    if[not name in (key tbl)`name; :()];
+    if[not name in (key tbl)`name; :(::)];
     c:cols value tbl;
     if[not (tbl name)~c!stored c;
         'who," is already declared as a ",kind," with a different declaration - a name is declared once, and a second would silently replace the first"]}
