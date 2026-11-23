@@ -367,6 +367,7 @@
     / columns and types to vectors too: one field's atom would otherwise type
     / a general column on the first registration and refuse the next one.
     decl:.qetl.source.optional_declarations,@[decl;`row_key`columns`types;:;(key_cols;(),decl`columns;(),decl`types)];
+    .qetl.declared.refuse_redeclared["define: ",string source;"source";.qetl.source.sources;source;decl];
     `.qetl.source.sources upsert (source,decl cols value .qetl.source.sources);
     .[{.qetl.log.ch.dbg[x;y;z]};(`config;"source registered";
         `source`columns`time_column`tz`transport`row_key!(source;decl`columns;decl`time_column;decl`tz;tr;key_cols));::];

@@ -167,6 +167,7 @@ qetl.declared,lambda,function,1,v
 qetl.declared,q_impls,value,,
 qetl.declared,q_term,function,1,t
 qetl.declared,q_version,function,1,v
+qetl.declared,refuse_redeclared,function,5,who kind tbl name stored
 qetl.declared,refuse_unknown,function,4,who kind decl allowed
 qetl.declared,require_callable,function,4,who name v shape
 qetl.declared,require_q,function,2,who v
@@ -1102,6 +1103,7 @@ qetl.transform,passthrough,function,4,name input_name schema rows
 qetl.transform,registry,dict,,
 qetl.transform,require_verified,function,1,name
 qetl.transform,required_keys,value,,
+qetl.transform,users,function,1,xf
 qetl.transform,verify,function,1,name
 qetl.transform,verify_all,function,1,
 qetl.twin,calculation,function,2,twin_transform live

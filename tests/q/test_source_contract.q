@@ -40,6 +40,14 @@
 .qt.qetl.source.test_a_complete_declaration_registers:{[t]
     .qunit.assertEquals[.qetl.source.define[`t;.qt.qetl.source.decl[]];`t;"a valid declaration is accepted"]};
 
+/ #2953: a streaming job refuses its name declared twice; a source replaced the first in silence.
+.qt.qetl.source.test_a_source_declared_twice_with_another_declaration_is_refused:{[t]
+    .qetl.source.define[`t;.qt.qetl.source.decl[]];
+    .qunit.assertThrows[.qetl.source.define[`t;];@[.qt.qetl.source.decl[];`table_name;:;`other];
+        "define: t is already declared as a source with a different declaration*";"the second would replace the first"];
+    .qunit.assertEquals[(.qetl.source.def `t)`table_name;`ext;"and the first is still what is registered"];
+    .qunit.assertEquals[.qetl.source.define[`t;.qt.qetl.source.decl[]];`t;"the same declaration read again, as a reload does, is accepted"]};
+
 / Registration validates NOW, unlike .qetl.job.bounded.state.register which defers. The
 / asymmetry is deliberate: a worker's methods appear as its file loads, so
 / early validation would force declaration order; a declaration is one
@@ -88,7 +96,7 @@
 
 / A bracketless lambda is called with (::) for its implicit x, so it is niladic.
 .qt.qetl.source.test_a_bracketless_or_empty_fixture_is_niladic:{[t]
-    ok:{.qetl.source.define[`t;@[.qt.qetl.source.decl[];`fixture;:;x]]} each ({[] ()};{()});
+    ok:{.qt.support.drop_rows[`.qetl.source.sources;`t]; .qetl.source.define[`t;@[.qt.qetl.source.decl[];`fixture;:;x]]} each ({[] ()};{()});
     .qunit.assertEquals[ok;`t`t;"{[] ...} and {...} both register"]};
 
 / The zone is a required declaration with no default. A defaulted zone
@@ -247,6 +255,7 @@
 .qt.qetl.source.test_the_key_accessor_always_returns_a_vector:{[t]
     .qetl.source.define[`t;.qt.qetl.source.decl[]];
     single:.qetl.source.row_key `t;
+    .qt.support.drop_rows[`.qetl.source.sources;`t];
     .qetl.source.define[`t;@[.qt.qetl.source.decl[];`row_key;:;`ts`px]];
     .qunit.assertEquals[(count single;count .qetl.source.row_key `t);(1;2);"one place decides whether an atom needs enlisting, so no caller has to"]};
 

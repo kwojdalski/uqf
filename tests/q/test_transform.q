@@ -30,6 +30,27 @@
 
 .qt.qetl.transform.tearDown_forget:{[] .qt.support.drop_rows[`.qetl.transform.registry;.qetl.transform.defined[] except .qt.qetl.transform.shipped];}
 
+/ #2953: a job applying a transform was checked against its inputs and output, so
+/ replacing either leaves it registered against one it never saw.
+.qt.qetl.transform.test_a_transform_a_job_applies_cannot_be_redefined_with_another_output:{[t]
+    .qt.support.save_stream_jobs[`.qt.qetl.transform];
+    .qetl.transform.define[`xf_applied;.qt.qetl.transform.decl[.qt.qetl.transform.mid_fn;.qt.qetl.transform.good_example[]]];
+    .qetl.job.stream.define[`xf_job;`subscribe_to`outputs`on_batch`transform!(enlist `xf_in;enlist `xf_out;{[a;b] };`xf_applied)];
+    other:.qt.qetl.transform.decl[{[q] select sym, bid:bid from q};enlist `inputs`expected!(enlist[`quotes]!enlist .qt.qetl.transform.two_quotes;select sym, bid from .qt.qetl.transform.two_quotes)];
+    other[`output]:([] sym:`symbol$(); bid:`float$());
+    r:@[.qetl.transform.define[`xf_applied];other;{x}];
+    same:.qetl.transform.define[`xf_applied;.qt.qetl.transform.decl[.qt.qetl.transform.mid_fn;.qt.qetl.transform.good_example[]]];
+    .qt.support.restore_stream_jobs[`.qt.qetl.transform];
+    .qunit.assertEquals[r;"define: transform xf_applied is already defined with another input or output, and xf_job apply it - a job was checked against the first";"refused, naming the job"];
+    .qunit.assertEquals[same;`xf_applied;"the same declaration again is accepted"]};
+
+.qt.qetl.transform.test_a_transform_no_job_applies_can_still_be_redefined:{[t]
+    .qetl.transform.define[`xf_free;.qt.qetl.transform.decl[.qt.qetl.transform.mid_fn;.qt.qetl.transform.good_example[]]];
+    other:.qt.qetl.transform.decl[{[q] select sym, bid:bid from q};enlist `inputs`expected!(enlist[`quotes]!enlist .qt.qetl.transform.two_quotes;select sym, bid from .qt.qetl.transform.two_quotes)];
+    other[`output]:([] sym:`symbol$(); bid:`float$());
+    .qunit.assertEquals[.qetl.transform.define[`xf_free;other];`xf_free;"nothing was checked against it"];
+    .qunit.assertEquals[.qetl.transform.def["t";`xf_free]`output;other`output;"the registry holds the replacement"]};
+
 / --- every registered transform -------------------------------------------
 
 .qt.qetl.transform.test_every_registered_transform_passes_its_examples:{[t]

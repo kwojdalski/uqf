@@ -319,9 +319,8 @@
          / did, immediately before the wreckage.
          "[",string[part],"], already claimed by ",(", " sv string clash),
          " - two workers on one dataset and partition produce coverage rows nothing can tell apart"];
-
     / Normalise to the full key set before storing - see optional_cfg.
-    stored:.qetl.job.bounded.normalised decl;
+    stored:.qetl.job.bounded.normalised decl; .qetl.declared.refuse_redeclared["define: ",string worker;"worker";.qetl.job.bounded.worker_cfg;worker;stored];
     `.qetl.job.bounded.worker_cfg upsert (worker,stored cols value .qetl.job.bounded.worker_cfg);
     / Last, so a refused declaration leaves no half-stamped namespace behind.
     .qetl.job.bounded.inherit[worker;decl`ns];

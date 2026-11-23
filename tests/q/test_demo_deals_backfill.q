@@ -965,9 +965,7 @@
 .qt.qpipe.job.demo_deals_backfill.test_redeclaring_a_worker_keeps_its_state:{[t]
     .qpipe.job.demo_deals_backfill.init[.qt.qpipe.job.demo_deals_backfill.spec_for[`v1;1;4]];
     .qt.qpipe.job.demo_deals_backfill.with_declaration_restored[{
-        .qetl.job.bounded.define[`demo_deals_backfill;
-            `source`outputs`width`transform`check!
-            (`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough;.qpipe.job.demo_deals_backfill.quality_check)]}];
+        system "l src/etl/workers/demo_deals_backfill.q"}];
     .qunit.assertEquals[.qpipe.job.demo_deals_backfill.spec[];.qt.qpipe.job.demo_deals_backfill.spec_for[.qt.qpipe.job.demo_deals_backfill.fv;1;4];
         "a second define fills only absent names, and the run specification is not one"]};
 
@@ -1099,12 +1097,10 @@
 / Redefining the SAME worker must stay legal - the shell's define is called
 / at load, and reloading a worker file is ordinary.
 .qt.qpipe.job.demo_deals_backfill.test_a_worker_may_redeclare_itself:{[t]
-    .qunit.assertEquals[
-        .qt.qpipe.job.demo_deals_backfill.with_declaration_restored[{
-            .qetl.job.bounded.define[`demo_deals_backfill;
-                `source`outputs`width`transform!(`demo_deals;enlist `demo_deals;1D;`demo_deals_passthrough)]}];
-        `demo_deals_backfill;
-        "reloading a worker file re-runs its own define, which must not trip the clash guard"]};
+    before:.qetl.job.bounded.def `demo_deals_backfill;
+    r:.qt.qpipe.job.demo_deals_backfill.with_declaration_restored[{system "l src/etl/workers/demo_deals_backfill.q"; .qetl.job.bounded.def `demo_deals_backfill}];
+    .qunit.assertEquals[r;before;
+        "reloading a worker file re-runs its own define, which must not trip the clash guard, and leaves the declaration as it was"]};
 
 / The two real workers declare distinct (dataset;partition) pairs, so the
 / guard is satisfied by the tree as it stands rather than by luck. Keyed on

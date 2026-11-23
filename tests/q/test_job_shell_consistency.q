@@ -59,6 +59,13 @@
     .qetl.job.bounded.define[`cs_w1;d];
     .qunit.assertEquals[(.qetl.job.bounded.def `cs_w1)`procname;`cs_shared;"a re-definition replaces the row"]};
 
+.qt.qetl.job.consistency.test_a_worker_declared_twice_with_another_declaration_is_refused:{[t]
+    .qt.qetl.job.consistency.fresh[];
+    .qetl.job.bounded.define[`cs_w1;.qt.qetl.job.consistency.worker_decl[`cs_ds1]];
+    .qunit.assertThrows[.qetl.job.bounded.define[`cs_w1];@[.qt.qetl.job.consistency.worker_decl[`cs_ds1];`width;:;2D];
+        "define: cs_w1 is already declared as a worker with a different declaration*";"the second would replace the first, as a streaming job's is refused"];
+    .qunit.assertEquals[(.qetl.job.bounded.def `cs_w1)`width;1D;"and the first is still what is registered"]};
+
 .qt.qetl.job.consistency.test_a_streaming_job_cannot_take_a_workers_procname:{[t]
     .qt.qetl.job.consistency.fresh[];
     .qetl.job.bounded.define[`cs_w1;@[.qt.qetl.job.consistency.worker_decl[`cs_ds1];`procname;:;`cs_shared]];

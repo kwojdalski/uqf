@@ -135,3 +135,24 @@
 / @eg .qetl.declared.stored_q["define: x";enlist[`a]!enlist 1]  ->  ""
 .qetl.declared.stored_q:{[who;decl]
     $[$[`q in key decl; not ""~decl`q; 0b]; .qetl.declared.require_q[who;decl`q]; ""]}
+
+/ Refuse a second, different declaration under a name a keyed registry holds (#2953).
+/ .
+/ A streaming job refuses its name declared twice, because a second declaration would
+/ silently replace the first. A worker, a source and a transform replaced it without a
+/ word: a copied file whose name was not changed registered, and the registry held the
+/ last one. A declaration read again as it was - a reload re-runs its file - is not a
+/ second one, so an identical redeclaration passes.
+/ @param who the message prefix, e.g. "define: demo_backfill"
+/ @param kind what is declared, e.g. "worker"
+/ @param tbl the keyed registry, keyed on `name
+/ @param name the declared name
+/ @param stored the dictionary the registry would now hold, one entry per non-key column
+/ @return nothing - it throws
+/ @throws error when name is held by a declaration that differs from stored
+/ @eg .qetl.declared.refuse_redeclared["define: x";"worker";.qetl.job.bounded.worker_cfg;`nosuch;()!()]  ->  ::
+.qetl.declared.refuse_redeclared:{[who;kind;tbl;name;stored]
+    if[not name in (key tbl)`name; :()];
+    c:cols value tbl;
+    if[not (tbl name)~c!stored c;
+        'who," is already declared as a ",kind," with a different declaration - a name is declared once, and a second would silently replace the first"]}
