@@ -671,6 +671,32 @@ def test_strict_does_not_count_what_the_removal_regenerates(tree):
     assert plan_removal(tree, "pulse").references == []
 
 
+def test_strict_does_not_count_the_generated_profile_table(tree):
+    """#2920: the runtimes guide's profile table is a block the removal's own
+    operational-docs run rewrites, and it names every profile's processes - so
+    --strict refused every job in a profile. The prose around it still counts."""
+    guide = Path("docs/guides/runtimes-and-profiles.md")
+    write.apply_plan(
+        jobs.streaming_job(
+            "pulse", [], "pulse", "px:float", profile="depth", known_profiles=("depth",)
+        ),
+        tree,
+    )
+    (tree / guide).parent.mkdir(parents=True, exist_ok=True)
+    end = "<!-- END GENERATED profile table -->"
+    text = (UQF_ROOT / guide).read_text()
+    assert text.count(end) == 1, "the block operational_docs.py owns in the real guide"
+    # A row as operational-docs writes it once pulse1 is in the depth profile.
+    listed = text.replace(
+        end, f"  | `depth` | `vectorize1`, `cross1`, `pulse1` | 19 | 9/14 |\n\n{end}"
+    )
+    (tree / guide).write_text(listed)
+    assert plan_removal(tree, "pulse").references == []
+    (tree / guide).write_text(listed + "\nStart `pulse1` first.\n")
+    refs = plan_removal(tree, "pulse").references
+    assert [(r.path, r.text) for r in refs] == [(guide, "Start `pulse1` first.")]
+
+
 def test_a_removal_that_breaks_regeneration_exits_nonzero(tree, monkeypatch):
     """#2843: `could not regenerate` was printed and the exit code stayed 0."""
     from typer.testing import CliRunner
