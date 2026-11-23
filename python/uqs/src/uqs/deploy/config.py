@@ -179,6 +179,9 @@ class Config:
     #: --override accept-job-q's reason: start a --jobs job on a server q its
     #: `q` key does not name (#2747)
     accept_job_q: str | None = None
+    #: --override accept-demo-logins's reason: start a bundled TorQ on the
+    #: starter pack's own access list (#2739)
+    accept_demo_logins: str | None = None
 
     @property
     def data_root(self) -> str:
@@ -288,6 +291,7 @@ def make_config(
     break_lock: str | None = None,
     allow_low_disk: str | None = None,
     accept_job_q: str | None = None,
+    accept_demo_logins: str | None = None,
 ) -> Config:
     """A Config from `uqs deploy push`'s options - each value checked, since
     every one of them ends up inside a script the server's shell runs."""
@@ -394,4 +398,5 @@ def make_config(
         break_lock=break_lock,
         allow_low_disk=allow_low_disk,
         accept_job_q=accept_job_q,
+        accept_demo_logins=accept_demo_logins,
     )

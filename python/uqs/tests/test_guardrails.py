@@ -54,6 +54,7 @@ def test_the_catalog_lists_what_it_did_before_the_registry_in_the_same_order():
         "break-lock",
         "allow-low-disk",
         "accept-job-q",
+        "accept-demo-logins",
         "port-conflict:COMPONENT",
         "publisher-running:COMPONENT",
         "sort-config:COMPONENT",

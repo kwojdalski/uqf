@@ -2,9 +2,11 @@
 runtimes it ships, from loading each to installing it.
 
   attach    loads each runtime the config bundles, checked whole, holds it to
-            its pin (overrides.for_runtime) and, for q and Python, to the
-            release: the platform it was built for, a q for a runtime declared
-            on PeachQ, a Python of the version the release's wheels are for.
+            its pin (overrides.for_runtime), a TorQ to holding none of the
+            starter pack's logins (overrides.for_logins, #2739) and, for q
+            and Python, to the release: the platform it was built for, a q
+            for a runtime declared on PeachQ, a Python of the version the
+            release's wheels are for.
   records   each one's components entry, with what the push would do with it
             (runtime_install.state): for the plan and the report.
   install   under the lock, before the release is transferred: each one
@@ -29,6 +31,7 @@ from uqs.deploy.python_runtime import PythonRuntime
 from uqs.deploy.q_runtime import KX_REFUSAL, QRuntime
 from uqs.deploy.report import Report
 from uqs.deploy.stages import Deployment
+from uqs.deploy.torq_runtime import Runtime
 from uqs.interpreter import PEACHQ
 from uqs.logger import get_logger
 from uqs.runtimes import RUNTIMES
@@ -49,6 +52,8 @@ def attach(cfg: Config, dep: Deployment, pkg: Artifact) -> list[dict]:
         else:
             rt = runtime_install.load(component, path)
         exceptions += overrides.for_runtime(cfg, component, rt.path.name, rt.sha256, rt.pinned)
+        if isinstance(rt, Runtime):
+            exceptions += overrides.for_logins(cfg, rt.shipped_logins())
         setattr(dep, f"{component}_runtime", rt)
     if dep.q_runtime is not None:
         _fits(dep.q_runtime, pkg, dep.runtime)
