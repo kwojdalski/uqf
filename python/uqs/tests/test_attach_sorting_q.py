@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from uqs.attach import sort_plan, sorting
+from uqs.attach import sort_file, sort_plan, sorting
 from uqs.attach.config import Attachment, Publisher, Stack
 from uqs.attach.facts import Facts
 from uqs.attach.manifest import Manifest
@@ -144,3 +144,33 @@ def test_a_reload_that_fails_keeps_the_rules_the_process_had(wdb):
     assert answer["status"] == "failed" and "unrecognised type of attribute" in answer["detail"]
     live = ipc.call(endpoint, "probe", {"tables": []})["sortrows"]
     assert [(r["att"], r["col"]) for r in live] == [("p", "securityId")]
+
+
+#: Rows for other tables written by hand, each a way the file can be read
+#: differently from TorQ's `("SSSB";enlist",")0:` (#2914).
+HAND_WRITTEN = (
+    "tabname,att,column,sort\ndefault,p,securityId,1\n"
+    "quote,,time,true\nquote,g,sym,TRUE\ntrade,,price,yes\ntrade,,size,T\n"
+    '"fx",p,"sym",1\n fx , , time ,y\nfills,p,sym\nfills,,time,1,extra\n\n'
+)
+
+
+def test_a_hand_written_file_is_read_as_torq_reads_it_and_plans_without_a_blocker(wdb):
+    """#2914: `true`/`TRUE`/`yes` read false, quotes stripped, a short row padded
+    and a long one cut, exactly as TorQ's loader in the process reads them - so
+    the plan sees no drift between the file and the live rules, and no short row."""
+    endpoint, csv, _ = wdb
+    ipc = KolaIpc("", "")
+    csv.write_text(HAND_WRITTEN)
+    assert ipc.call(endpoint, "sort_reload", {"table": "default"})["status"] != "failed"
+    live = ipc.call(endpoint, "probe", {"tables": []})["sortrows"]
+    read = sort_file.read(csv).rules
+    assert [(r.table, r.att, r.column, r.sort) for r in read] == [
+        (x["tabname"], x["att"], x["col"], x["sort"]) for x in live
+    ]
+    assert [r.sort for r in read if r.table in ("quote", "trade")] == [False, False, False, True]
+    changes, found = sort_plan.assess(
+        attachment(), observe(ipc, endpoint), ipc, Facts(), repo_root()
+    )
+    assert not [f for f in found if f.level == "blocker"], found
+    assert [c.status for c in changes] == ["add"]

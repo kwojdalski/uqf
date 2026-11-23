@@ -3,10 +3,11 @@ makes to one: append a table's declared rows, and take exactly those rows out
 again (#1517). The lifecycle around them is in sorting.py.
 
 `.sort.getsortcsv` reads the file with `("SSSB";enlist",")0:` - a header naming
-the columns, fields trimmed, `sort` a boolean, an empty line a row of nulls, and
-no comment lines. So nothing can mark the rows an attachment added: what was
-added is recorded in the manifest instead, as the exact text, and a removal
-proves the text is still there, once, as whole lines, and alone for its table.
+the columns, fields unquoted and trimmed, `sort` a boolean, an empty line a row
+of nulls, and no comment lines; `parse` reads it exactly so (#2914). So nothing
+can mark the rows an attachment added: what was added is recorded in the
+manifest instead, as the exact text, and a removal proves the text is still
+there, once, as whole lines, and alone for its table.
 """
 
 from __future__ import annotations
@@ -23,8 +24,8 @@ from uqs.attach.schema import TableSpec
 #: sort.csv's columns as TorQ's loader requires them: `sort` last, as the `B` it parses.
 HEADER = ("tabname", "att", "column", "sort")
 #: The manifest operation that records rows added to (or reused in) one file for one table.
-#: How q's `B` parse reads a true boolean.
-_TRUE = "1tTyY"
+#: How q's `B` parse reads a true boolean: one of these characters, alone.
+_TRUE = ("1", "t", "T", "y", "Y")
 _CODEC = ("utf-8", "surrogateescape")
 
 #: (att, column, sort) - one sort.csv row without its table
@@ -82,6 +83,30 @@ def _bare(line: str) -> str:
     return line.removesuffix("\n").removesuffix("\r")
 
 
+def _fields(line: str) -> list[str]:
+    """One line's fields as q's `0:` reads them with `enlist ","` (#2914), as
+    KDB-X does: a field is quoted only when it starts with `"`, and a comma then
+    splits it only outside quotes; its first character, and its last if that is
+    a `"`, are dropped, and a doubled `""` stays as it is. Then each is trimmed."""
+    out, at, n = [], 0, len(line)
+    while True:
+        if at < n and line[at] == '"':
+            end, inside = at, False
+            while end < n and (inside or line[end] != ","):
+                inside ^= line[end] == '"'
+                end += 1
+            raw = line[at + 1 : end]
+            raw = raw[:-1] if raw.endswith('"') else raw
+        else:
+            end = line.find(",", at)
+            end = n if end < 0 else end
+            raw = line[at:end]
+        out.append(raw.strip(" "))
+        if end >= n:
+            return out
+        at = end + 1
+
+
 @dataclass(frozen=True)
 class SortFile:
     """A sort.csv as TorQ's loader reads it, and its exact text."""
@@ -110,31 +135,27 @@ class SortFile:
 
 
 def parse(path: Path, text: str) -> SortFile:
-    """`text` read as `.sort.getsortcsv` reads it - the header names the columns, `sort`
-    is parsed as a boolean, fields are trimmed, and an empty line is a row of nulls.
-    Raises AttachmentError for a file it cannot model exactly: never guess at a
-    file this workflow is about to change."""
+    """`text` read as `.sort.getsortcsv` reads it, `("SSSB";enlist",")0:` (#2914):
+    the header names the columns; fields are unquoted and trimmed (`_fields`);
+    `sort` is true only for one of `_TRUE` alone - `true` or `yes` is false; a
+    row short of fields has nulls for the rest and one with more has them
+    ignored; an empty line is a row of nulls. Read any other way, a rule in the
+    file differs from the one the process holds, and no reload clears that.
+    Raises AttachmentError for a header TorQ's loader would not take."""
     lines = _lines(text)
     if not lines:
         raise AttachmentError(f"{path} is empty: TorQ's loader needs the header {','.join(HEADER)}")
-    header = tuple(f.strip() for f in _bare(lines[0]).split(","))
+    header = tuple(_fields(_bare(lines[0])))
     if sorted(header) != sorted(HEADER) or header[-1] != "sort":
         raise AttachmentError(
             f"{path} has the header {','.join(header)!r}; TorQ's loader parses "
             f"{','.join(HEADER)} with `sort` last"
         )
     rules: list[Rule] = []
-    for n, line in enumerate(lines[1:], 2):
-        cells = [c.strip() for c in _bare(line).split(",")]
-        if cells == [""]:
-            rules.append(Rule("", "", "", False))
-            continue
-        if len(cells) != len(HEADER):
-            raise AttachmentError(f"{path}:{n} has {len(cells)} fields, not {len(HEADER)}")
+    for line in lines[1:]:
+        cells = (_fields(_bare(line)) + [""] * len(HEADER))[: len(HEADER)]
         d = dict(zip(header, cells, strict=True))
-        rules.append(
-            Rule(d["tabname"], d["att"], d["column"], d["sort"][:1] in _TRUE and d["sort"] != "")
-        )
+        rules.append(Rule(d["tabname"], d["att"], d["column"], d["sort"] in _TRUE))
     newline = "\r\n" if lines[0].endswith("\r\n") else "\n"
     return SortFile(path, text, header, tuple(rules), newline)
 

@@ -629,6 +629,49 @@ def _added_trade_rows(tmp_path: Path, before: str) -> tuple[Path, dict]:
     return csv, post
 
 
+#: (line, what TorQ's `("SSSB";enlist",")0:` reads from it under KDB-X) (#2914)
+AS_Q_READS = [
+    ("a,,c,1", ("a", "", "c", True)),
+    ("a,,c,t", ("a", "", "c", True)),
+    ("a,,c,Y", ("a", "", "c", True)),
+    ("a,,c, 1 ", ("a", "", "c", True)),
+    ('a,,c,"1"', ("a", "", "c", True)),
+    ("a,,c,true", ("a", "", "c", False)),
+    ("a,,c,TRUE", ("a", "", "c", False)),
+    ("a,,c,yes", ("a", "", "c", False)),
+    ("a,,c,10", ("a", "", "c", False)),
+    ("a,,c,", ("a", "", "c", False)),
+    ('"trade",p,"sym",1', ("trade", "p", "sym", True)),
+    ('" r ",p,c,1', ("r", "p", "c", True)),
+    (' "r",p,c,1', ('"r"', "p", "c", True)),
+    ('"v,w",,c,1', ("v,w", "", "c", True)),
+    ('"a""c",p,c,1', ('a""c', "p", "c", True)),
+    ('"x"y,p,c,1', ('x"y', "p", "c", True)),
+    ('ab"c,p,c,1', ('ab"c', "p", "c", True)),
+    ("s , p , c d ,1", ("s", "p", "c d", True)),
+    ("t,,c", ("t", "", "c", False)),
+    ("x", ("x", "", "", False)),
+    ("u,,c,1,extra", ("u", "", "c", True)),
+    ("", ("", "", "", False)),
+]
+
+
+@pytest.mark.parametrize(("line", "q_reads"), AS_Q_READS)
+def test_a_row_is_read_as_torqs_loader_reads_it(tmp_path, line, q_reads):
+    """#2914: read differently, a hand-written rule for another table was drift no
+    reload could clear, and a short row a blocker on a file TorQ runs with.
+    test_attach_sorting_q.py reads such a file with TorQ's own loader."""
+    (rule,) = sort_file.parse(
+        tmp_path / "sort.csv", f"{','.join(sort_file.HEADER)}\n{line}\n"
+    ).rules
+    assert (rule.table, rule.att, rule.column, rule.sort) == q_reads
+
+
+def test_the_header_is_read_as_torqs_loader_reads_it(tmp_path):
+    read = sort_file.parse(tmp_path / "sort.csv", '"tabname", att ,column,"sort"\na,p,c,1\n')
+    assert read.header == sort_file.HEADER and read.rules[0].key == ("p", "c", True)
+
+
 def test_rows_of_a_table_whose_name_ends_with_ours_are_not_ours(tmp_path):
     # `trade,p,sym,1` is also the tail of `fxtrade,p,sym,1`: only whole lines count (#1662)
     before = "tabname,att,column,sort\nfxtrade,p,sym,1\n"
