@@ -155,7 +155,7 @@ def refuse_running_writers(where: AttachedHdb, ipc: Ipc, root: Path | None = Non
     """Refuse while an attached backfill owns the attachment, or a wdb writing
     this HDB reports an end-of-day reload in progress, or its clock is within
     EOD_GUARD of a roll - or it does not report its clock."""
-    backfill_owner.refuse_while_active(where.att.name, root)
+    backfill_owner.refuse_while_active(where.att.name, root, then="run this command again")
     if where.observation is None or not where.observation.discovery.up:
         raise AttachmentError(
             f"the stack of attachment {where.att.name} does not answer: whether a wdb is in "

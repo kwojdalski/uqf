@@ -8,6 +8,7 @@ at HOST:PORT; that half is exercised against a live q in the remote-writer tests
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -266,3 +267,16 @@ def test_another_attachments_forced_write_is_not_listed(world, monkeypatch):
         backfill_audit.path_for(attached.state_dir_of(world.paths, "pb")),
         [],
     )
+
+
+def test_a_remote_launch_on_a_busy_attachment_is_told_to_run_again(world, monkeypatch):
+    """#2932: not detach's wording, and not `uqs job backfill ... --wait`, the command refused."""
+    save_attachment("pb-uat", world.hdb)
+    from uqs.attach import backfill_owner
+
+    backfill_owner.claim("pb-uat", "other_worker", os.getpid(), "abc")
+    # alive: the Popen double below would answer liveness's own `ps`
+    monkeypatch.setattr(backfill_owner, "process_gone", lambda *a: False)
+    with pytest.raises(UqsError, match=r"`uqs job runs stop other_worker --attachment pb-uat` "
+                       r"stops it\), then run this backfill again\."):  # fmt: skip
+        _launch(world, monkeypatch, force=True)

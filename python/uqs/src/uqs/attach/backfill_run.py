@@ -46,6 +46,8 @@ EXIT_NOT_QUERYABLE = 3
 #: own (.qetl.job.bounded.stop.code), so the two cannot disagree.
 EXIT_STOPPED = q_facts.STOP_EXIT_CODE
 RUNNER = Path("scripts") / "jobs" / "attached_backfill.q"
+#: What an operator does once the run that holds the attachment has ended (#2932).
+AGAIN = "run this backfill again"
 LOGS = "logs"
 #: The runner's -deadline when the end-of-day fence is waived: q's infinite timestamp, which
 #: no `.z.p` passes, so io_hdb_scoped's deadline check never fires (#1828).
@@ -236,7 +238,7 @@ def launch(
     with config.locked(attachment, attach_root):
         # Read again under the lock: a detach may have finished since admission (#1526).
         require_verified(attachment, attach_root)
-        backfill_owner.refuse_while_active(attachment, attach_root)
+        backfill_owner.refuse_while_active(attachment, attach_root, then=AGAIN)
         dest = Destination(**_destination(plan))
         owner = backfill_owner.owner_file(attachment, worker, attach_root)
         att = config.load(attachment, attach_root)

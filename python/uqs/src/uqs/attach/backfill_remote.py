@@ -56,7 +56,7 @@ from uqs.attach.backfill import (
 from uqs.attach.backfill_admission import admit
 from uqs.attach.backfill_coordination import assess
 from uqs.attach.backfill_plan import evaluate
-from uqs.attach.backfill_run import LOGS, REACH_PASSWORD_ENV, RUNNER, Launched, q_date
+from uqs.attach.backfill_run import AGAIN, LOGS, REACH_PASSWORD_ENV, RUNNER, Launched, q_date
 from uqs.attach.remote import Ipc
 from uqs.interpreter import q_interpreter
 from uqs.liveness import on_this_host
@@ -195,7 +195,7 @@ def launch_remote(
     with config.locked(attachment, attach_root):
         if not force:
             require_verified(attachment, attach_root)
-        backfill_owner.refuse_while_active(attachment, attach_root)
+        backfill_owner.refuse_while_active(attachment, attach_root, then=AGAIN)
         att = config.load(attachment, attach_root)
         owner = backfill_owner.owner_file(attachment, worker, attach_root)
         forced_bound: list[str] = []
@@ -333,7 +333,7 @@ def receive(
     receiver = f"{contract.dataset}.receiver"
     with config.locked(attachment, attach_root):
         require_verified(attachment, attach_root)
-        backfill_owner.refuse_while_active(attachment, attach_root)
+        backfill_owner.refuse_while_active(attachment, attach_root, then="start the receiver again")
         if dry_run:
             return _served(None, port, dest, contract, binding, co, readers, None)
         access = _access_file(dest, att.stack.user, att.stack.password())
