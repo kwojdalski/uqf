@@ -38,6 +38,13 @@ installed, which is the bundle's to take (#2923), and a job another job resolves
 through - a twin's `twin_of`, the dataset a reaction watches that no other worker
 fills (#2834), or a table only it publishes that another job subscribes to (#2925).
 
+WHEN THE JOB FILE IS GONE (#2945) - deleted by hand, or swept by a `git clean`
+- the registrations its scaffold made are still found by name: its test, the
+tables whose definition opens "/ <process>'s", its profile lines and doc stubs,
+and for a backfill its scaffold-written source and example, on the same rules
+as above. The process is the scaffold's default, NAME1: without the file there
+is no declaration to read a --procname from.
+
 WHAT IT REPORTS (#717). Every line elsewhere in the tree that still names
 what it removes - an example script, a docs page, a diagram, another suite's
 test - with its line number, because it knows only the files a scaffold
@@ -126,6 +133,10 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     one that has been written since is refused without `force` (#2832). A
     job another job resolves through is refused outright (#2834).
     """
+    if not any((repo_root / c).is_file() for c in _candidates(name)):
+        leftovers = _leftovers_removal(repo_root, name, force)
+        if leftovers is not None:
+            return leftovers
     job_file = _job_file(repo_root, name)
     refuse_bundled(repo_root, job_file)
     text = (repo_root / job_file).read_text()
@@ -234,6 +245,82 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     return _with_references(removal, repo_root, names - kept, {job})
 
 
+def _leftovers_removal(repo_root: Path, name: str, force: bool) -> Removal | None:
+    """What a scaffold of `name` left registered once its job file is gone
+    (#2945), or None when it left nothing. Without that file `uqs job new`
+    refused its rerun at each leftover in turn, and nothing here could undo
+    them. `name` may be a backfill's NAME, its worker NAME_backfill; when both
+    left something, which was meant is unknown and None is returned."""
+    jobs = [name] if name.endswith("_backfill") else [name, f"{name}_backfill"]
+    found = [r for r in (_leftovers_of(repo_root, name, j, force) for j in jobs) if r]
+    return found[0] if len(found) == 1 else None
+
+
+def _leftovers_of(repo_root: Path, name: str, job: str, force: bool) -> Removal | None:
+    proc = f"{job}1"
+    removal = Removal(job)
+    gone = _remove_test(removal, repo_root, job)
+    names = {name, job, proc}
+    kept: set[str] = set()
+    proven: set[Path] = set()
+    if job.endswith("_backfill"):
+        base = job.removesuffix("_backfill")
+        example = example_path(base)
+        if (repo_root / example).is_file() and GENERATED_BY in (repo_root / example).read_text():
+            removal.deletes.append(example)
+            gone.add(example)
+            proven.add(example)
+        src_file = SOURCE_DIR / f"{base}.q"
+        if (repo_root / src_file).is_file():
+            reader = user_of(repo_root, base, gone | {src_file})
+            if reader is None:
+                removal.deletes.append(src_file)
+                gone.add(src_file)
+            else:
+                kept.add(base)
+                removal.notes.append(f"kept source {base}: {reader} reads it")
+    for table in _tables_defined_by(repo_root, {job, proc}):
+        user = user_of(repo_root, table, gone)
+        if user is not None:
+            removal.notes.append(f"kept table {table}: {user} uses it")
+            kept.add(table)
+            continue
+        names.add(table)
+        _drop_table(removal, repo_root, table)
+    for rel in (PROFILES_FILE, UNPROFILED_FILE):
+        if (repo_root / rel).is_file():
+            _edit(removal, repo_root, rel, lambda t: _drop_from_profiles(t, proc))
+    for page in (STACK_PAGE, SHOWCASE_PAGE):
+        _edit(removal, repo_root, page, lambda t: without_stubs(t, proc))
+    if not removal.deletes and not removal.rewrites:
+        return None
+    removal.notes.insert(
+        0,
+        f"no job file for {job}: removing what its scaffold left registered, for process {proc}",
+    )
+    refuse_written(removal.deletes, repo_root, force, proven, {})
+    return _with_references(removal, repo_root, names - kept, {job})
+
+
+def _tables_defined_by(repo_root: Path, owners: set[str]) -> list[str]:
+    """The plant tables whose definition's comment opens "/ <owner>'s", as a
+    scaffold of one of `owners` writes it."""
+    path = repo_root / TABLES_FILE
+    if not path.is_file():
+        return []
+    lines = path.read_text().splitlines()
+    owner = re.compile(rf"/ (?:{'|'.join(map(re.escape, sorted(owners)))})'s ")
+    tables = []
+    for i, line in enumerate(lines):
+        if m := re.match(r"(?:\.qetl\.plant\.)?(\w+):\(\[\]", line):
+            start = i
+            while start > 0 and lines[start - 1].startswith("/"):
+                start -= 1
+            if any(owner.match(c) for c in lines[start:i]):
+                tables.append(m.group(1))
+    return tables
+
+
 def _with_references(
     removal: Removal, repo_root: Path, names: set[str], jobs: set[str] | None = None
 ) -> Removal:
@@ -265,12 +352,18 @@ def _remove_test(removal: Removal, repo_root: Path, job: str) -> set[Path]:
     return {test_file}
 
 
+def _candidates(name: str) -> list[Path]:
+    """The job files `name` may name: exactly, then as NAME_backfill."""
+    exact = [STREAM_DIR / f"{name}.q", WORKER_DIR / f"{name}.q", REACTION_DIR / f"{name}.q"]
+    return [*exact, WORKER_DIR / f"{name}_backfill.q"]
+
+
 def _job_file(repo_root: Path, name: str) -> Path:
     """The one job file `name` names. A job named exactly wins over the
     NAME_backfill convenience, or a stream job sharing its name with a
     backfill could never be removed by the name `uqs job list` gives it (#2840)."""
-    exact = [STREAM_DIR / f"{name}.q", WORKER_DIR / f"{name}.q", REACTION_DIR / f"{name}.q"]
-    candidates = [*exact, WORKER_DIR / f"{name}_backfill.q"]
+    candidates = _candidates(name)
+    exact = candidates[:3]
     found = [c for c in exact if (repo_root / c).is_file()] or [
         c for c in candidates if (repo_root / c).is_file()
     ]

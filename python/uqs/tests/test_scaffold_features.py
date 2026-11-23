@@ -9,6 +9,8 @@ rather than on the next import.
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -276,8 +278,8 @@ def test_an_exemption_is_written_with_its_reason():
         known_profiles=KNOWN,
     )
     text = _applied(actions)
-    assert '    "tapx1": (\n' in text
-    assert "a diagnostic started by hand" in text
+    reason = "a diagnostic started by hand against whichever table is being looked at"
+    assert f'    "tapx1": ("{reason}"),\n' in text, "a reason that fits is one line (#2946)"
 
 
 @pytest.mark.parametrize(
@@ -291,6 +293,10 @@ def test_an_exemption_is_written_with_its_reason():
         "vol \U0001d70e by hand \U0001f600",
         "a reason long enough that the scaffold wraps it over several lines the way "
         "the existing exemptions in profiles.py are wrapped, every word kept",
+        # #2946: a token longer than a piece was cut, and each cut gained a space.
+        "replays on request, see docs/runbooks/a_rather_long_path_to_a_runbook_file_that_"
+        "cannot_wrap_anywhere_at_all.md",
+        "runs  of   spaces in the middle, " * 5 + "kept",
     ],
 )
 def test_an_exemption_reads_back_as_the_reason_given(reason):
@@ -310,6 +316,47 @@ def test_an_exemption_reads_back_as_the_reason_given(reason):
         and node.value is not None
     ]
     assert ast.literal_eval(unprofiled)["tapx1"] == reason
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "x",
+        "runs on demand only, started by the operator for a replay",
+        'a "replay" by hand',
+        "b" * 86,
+        "a reason long enough that the scaffold wraps it over several lines the way "
+        "the existing exemptions in profiles.py are wrapped, every word kept",
+        'one "quoted" word at the start of a reason that goes on past the limit of '
+        "the line, with no quotes in the tail at all",
+        "a" * 120,
+    ],
+)
+def test_an_exemption_is_written_as_ruff_format_leaves_it(reason):
+    """#2946: a one-line reason was written over three lines, and a quoted one
+    with escaped double quotes - both rewritten by the ruff-format hook, so the
+    first commit after the scaffold failed."""
+    actions, _ = profile.membership(
+        "tapx1", profile=None, unprofiled=reason, start_with_all=False, known_profiles=KNOWN
+    )
+    text = _edited(actions)[profile.UNPROFILED_FILE]
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "format",
+            "--diff",
+            "--stdin-filename",
+            str(profile.UNPROFILED_FILE),
+            "-",
+        ],
+        input=text,
+        text=True,
+        capture_output=True,
+        cwd=UQF_ROOT,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_no_choice_leaves_a_note_and_writes_nothing():
@@ -532,6 +579,30 @@ def test_an_option_for_another_kind_is_refused_by_name(argv, option, monkeypatch
     result = runner.invoke(cli.app, ["job", "new", *argv, "--dry-run"])
     assert result.exit_code == 1
     assert refused and refused[0].startswith(f"{option} does not apply to --kind")
+
+
+@pytest.mark.parametrize(
+    ("argv", "said"),
+    [
+        (["--subscribe-to", "quote,quote", "--outputs", "tbl"], "--subscribe-to names quote"),
+        (["--outputs", "s1, s1", "--schema", "sym:symbol, px:float"], "--outputs names s1"),
+        (["--triggered-by", "demo_deals", "--outputs", "tbl,tbl"], "--outputs names tbl"),
+    ],
+)
+def test_a_name_given_twice_is_refused_as_a_repeat(argv, said, monkeypatch):
+    """#2946: `--subscribe-to quote,quote` was written into the declaration
+    twice, and `--outputs s1,s1 --schema ...` refused as two tables the plant
+    does not define - not as the repeat it is."""
+    refused: list[str] = []
+
+    def record(exc: Exception) -> None:
+        refused.append(str(exc))
+        raise SystemExit(1)
+
+    monkeypatch.setattr(create, "_die", record)
+    result = runner.invoke(cli.app, ["job", "new", "job_a", *argv, "--dry-run"])
+    assert result.exit_code == 1
+    assert refused == [f"{said} more than once - give each once"]
 
 
 @pytest.mark.parametrize(

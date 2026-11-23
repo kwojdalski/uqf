@@ -271,6 +271,14 @@ def new_job(
         uqs job new deal_volume --triggered-by demo_deals --outputs deal_volume
     """
     subs = [s.strip() for s in (subscribe_to or "").split(",") if s.strip()]
+    # A repeated name was written into the declaration twice, and with --schema
+    # refused as two undefined tables rather than as the repeat it is (#2946).
+    for flag, given in (("--subscribe-to", subscribe_to), ("--outputs", outputs)):
+        listed = [t.strip() for t in (given or "").split(",") if t.strip()]
+        if repeated := sorted({t for t in listed if listed.count(t) > 1}):
+            _die(
+                UqsUsageError(f"{flag} names {', '.join(repeated)} more than once - give each once")
+            )
     repo_root = _paths().repo_root
     used = given_options(ctx)
     if triggered_by is not None:

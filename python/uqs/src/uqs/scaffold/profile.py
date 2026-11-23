@@ -24,7 +24,6 @@ from __future__ import annotations
 import ast
 import json
 import re
-import textwrap
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -174,17 +173,42 @@ def _past_budget(proc: str, profile: str, inputs: Iterable[str]) -> str | None:
     )
 
 
-def _unprofiled_entry(proc: str, reason: str) -> str:
-    """One UNPROFILED entry, the reason wrapped as the existing ones are.
+def _literal(text: str) -> str:
+    """`text` as a string literal quoted as ruff format quotes it: double,
+    unless single needs fewer escapes.
 
     JSON's string syntax is Python's only up to the BMP: an ASCII-escaped
     character beyond it is a surrogate pair, which Python reads back as two
     lone surrogates. Written unescaped, every character reads back as given."""
-    pieces = textwrap.wrap(reason, width=70, break_on_hyphens=False)
-    body = "\n".join(
-        f"        {json.dumps(piece + (' ' if i < len(pieces) - 1 else ''), ensure_ascii=False)}"
-        for i, piece in enumerate(pieces)
+    quoted = json.dumps(text, ensure_ascii=False)
+    if text.count('"') <= text.count("'"):
+        return quoted
+    inner = re.sub(
+        r"\\(.)|'",
+        lambda m: '"' if m.group(1) == '"' else m.group(0) if m.group(1) else "\\'",
+        quoted[1:-1],
     )
+    return f"'{inner}'"
+
+
+def _unprofiled_entry(proc: str, reason: str) -> str:
+    """One UNPROFILED entry, written as ruff format leaves it (#2946): on one
+    line when it fits, else the reason alone inside the parentheses, else in
+    pieces of about 70 characters - which ruff would join again if the whole
+    reason fitted on its own line. Each piece keeps its own whitespace, so they
+    concatenate to exactly the reason given: a token too long for a piece is
+    never cut, and a run of spaces is never collapsed."""
+    one = f'    "{proc}": ({_literal(reason)}),\n'
+    if len(one) - 1 <= _LINE_LIMIT:
+        return one
+    if len(whole := f"        {_literal(reason)}") <= _LINE_LIMIT:
+        return f'    "{proc}": (\n{whole}\n    ),\n'
+    pieces = [""]
+    for token in re.findall(r"\s*\S+\s*|\s+", reason):
+        if pieces[-1] and len((pieces[-1] + token).rstrip()) > 70:
+            pieces.append("")
+        pieces[-1] += token
+    body = "\n".join(f"        {_literal(piece)}" for piece in pieces)
     return f'    "{proc}": (\n{body}\n    ),\n'
 
 

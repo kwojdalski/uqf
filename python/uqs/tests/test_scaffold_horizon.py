@@ -34,8 +34,19 @@ def test_it_declares_a_horizon_job_over_the_two_tables():
     text = body()
     assert ".qetl.job.stream.at_horizons[`hz;" in text
     assert "`ev;\n    `ref;" in text and "0D00:00:10;" in text
-    assert "`events`reference!(.qpipe.job.hz.events;.qpipe.job.hz.reference)" in text
+    assert "`ev`ref!(.qpipe.job.hz.events;.qpipe.job.hz.reference)" in text
     assert "not implemented" in text, "the scoring throws until it is written"
+
+
+def test_the_transforms_inputs_are_named_after_the_two_tables():
+    """#2944: each input carries its table's whole plant schema, and the
+    plant-tables suite refuses a plant table's columns under another name
+    (#833) - so inputs called `events` and `reference` turned a fresh
+    scaffold's q suite red with a fix the scaffold never mentioned."""
+    text = body()
+    assert "`ev`ref!(.qpipe.job.hz.events;.qpipe.job.hz.reference)" in text
+    assert "`ev`ref!(([] time:enlist" in text, "the example is keyed the same way"
+    assert "`events`reference!" not in text
 
 
 @pytest.mark.parametrize(

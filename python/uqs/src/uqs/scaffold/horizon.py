@@ -149,7 +149,9 @@ def horizon_job(
 
 / SCAFFOLDED. What the scoring reads - each table's whole plant schema.
 / Narrow both to the columns `score` uses: a column it never touches still
-/ breaks it when upstream changes that column.
+/ breaks it when upstream changes that column. The transform's inputs keep
+/ the tables' names either way: the plant-tables suite checks an input named
+/ after a plant table against it, and refuses its columns under another name.
 events:{_empty(ev)}
 reference:{_empty(ref)}
 
@@ -169,11 +171,11 @@ score:{{[events;reference]
 
 / SCAFFOLDED example: one event, one reference row, and the row they become.
 .qetl.transform.define[`{name};`inputs`output`fn`examples!(
-    `events`reference!(.qpipe.job.{name}.events;.qpipe.job.{name}.reference);
+    `{events}`{reference}!(.qpipe.job.{name}.events;.qpipe.job.{name}.reference);
     .qpipe.job.{name}.{name};
     .qpipe.job.{name}.score;
     enlist `inputs`expected!(
-        `events`reference!({_row(ev)};{_row(ref)});
+        `{events}`{reference}!({_row(ev)};{_row(ref)});
         {_row(output)}))];
 
 / SCAFFOLDED. Optional keys, each off until declared (src/etl/core/horizon.q):
