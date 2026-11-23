@@ -203,6 +203,41 @@
     .qunit.assertEquals[.qt.qetl.once.exits;6 1;"no_work then failed"];
     .qunit.assertEquals[(doc`outcome;doc`detail);("failed";"boom");"the failure carries the error"]};
 
+/ A range the plan clips to nothing - wholly after now, so past what any source vouches for - is not
+/ "covered": it is no_work (nothing to do NOW, exit 6, as an empty poll is) with its own reason,
+/ never all_covered (#2929).
+.qt.qetl.once.conclude_doc:{[r]
+    ctx:.qetl.once.context[`demo_deals_backfill1;`demo_deals_backfill;`bounded];
+    .qetl.job.bounded.once.conclude[ctx;r];
+    doc:.j.k raze read0 hsym `$.qetl.once.path `demo_deals_backfill1;
+    @[hdel;hsym `$.qetl.once.path `demo_deals_backfill1;{[e] (::)}];
+    doc}
+
+.qt.qetl.once.run_future:{[]
+    f:`timestamp$.z.d+2;
+    .qetl.job.bounded.once.request `demo_deals_backfill;
+    .qpipe.job.demo_deals_backfill.init `source_version`range_from`range_to!(`v1;f;f+2D);
+    .qpipe.job.demo_deals_backfill.run[]}
+
+.qt.qetl.once.test_a_range_clipped_to_nothing_is_no_work_not_complete_never_all_covered:{[t]
+    r:.qt.qetl.once.run_future[];
+    .qunit.assertEquals[(r`state;r`windows_completed);(`idle;0);"nothing planned: the range is after now"];
+    doc:.qt.qetl.once.conclude_doc r;
+    .qunit.assertEquals[(doc`outcome;doc`reason;doc`code);("no_work";"not_complete";6f);"no work now, and the reason says the range is not complete - not that it is covered"];
+    .qunit.assertEquals[.qetl.job.bounded.read_state[`demo_deals_backfill;`clipped_to]<`timestamp$.z.d+2;1b;"the plan kept where it was cut"];
+    .qunit.assertEquals[.qt.qetl.once.exits;enlist 6;"the no_work code"]};
+
+.qt.qetl.once.test_a_covered_range_after_a_clipped_run_is_all_covered_again:{[t]
+    .qt.qetl.once.run_future[];
+    .qpipe.job.demo_deals_backfill.cleanup[];
+    .qt.qetl.once.run_worker[];
+    .qpipe.job.demo_deals_backfill.cleanup[];
+    .qetl.job.bounded.once.request `demo_deals_backfill;
+    r:.qt.qetl.once.run_worker[];
+    .qunit.assertEquals[r`state;`idle;"the range is covered"];
+    .qunit.assertEquals[null .qetl.job.bounded.read_state[`demo_deals_backfill;`clipped_to];1b;"an uncut plan leaves no clip from the run before"];
+    .qunit.assertEquals[(.qt.qetl.once.conclude_doc r)`reason;"all_covered";"so it is reported covered"]};
+
 / --- a polling feed: one poll -----------------------------------------------------------------
 
 .qt.qetl.once.test_a_poll_publishes_one_page_and_exits_done:{[t]
