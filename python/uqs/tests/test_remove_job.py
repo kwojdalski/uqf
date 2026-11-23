@@ -214,15 +214,55 @@ def test_every_job_kind_scaffolds_and_removes_exactly(tree, label):
     assert _snapshot(tree) == before, label
 
 
+#: A hand-written q script that reads the pulse table without subscribing to it.
+_PULSE_REPORT = Path("scripts/pulse_report.q")
+
+
+def _pulse_and_a_reader(tree: Path, extra: str = "") -> Path:
+    """The pulse feed, and a q script that reads its table: a use of the
+    table, but no subscription, so removing pulse is not refused (#2925)."""
+    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
+    (tree / _PULSE_REPORT).write_text("/ a report\nn:count select from `pulse\n" + extra)
+    return tree / _PULSE_REPORT
+
+
 def test_a_table_something_else_reads_is_kept(tree):
+    _pulse_and_a_reader(tree)
+    removal = plan_removal(tree, "pulse")
+    assert TABLES_FILE not in removal.rewrites, "pulse_report.q still reads pulse"
+    assert any(f"kept table pulse: {_PULSE_REPORT} uses it" in n for n in removal.notes)
+
+
+def test_a_producer_another_job_subscribes_to_is_refused_naming_the_subscriber(tree):
+    """#2925: the table was kept, the removal exited 0, and every profile
+    holding the subscriber then started it with nothing feeding it."""
     write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
     write.apply_plan(
         jobs.streaming_job("pulsestat", ["pulse"], "pulse_stats", "n:long", known_tables={"pulse"}),
         tree,
     )
+    refusal = (
+        r"pulse cannot be removed while another job depends on it: pulsestat "
+        r"\(src/etl/streaming/pulsestat.q\) subscribes to pulse, which only pulse publishes "
+        r"- remove it first"
+    )
+    for force in (False, True):
+        with pytest.raises(UqsError, match=refusal):
+            plan_removal(tree, "pulse", force=force)
+
+
+def test_a_producer_whose_table_something_else_publishes_is_removable(tree):
+    """A second publisher still feeds the subscriber, so nothing is refused."""
+    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
+    write.apply_plan(
+        jobs.streaming_job("pulse_too", [], "pulse", None, known_tables={"pulse"}), tree
+    )
+    write.apply_plan(
+        jobs.streaming_job("pulsestat", ["pulse"], "pulse_stats", "n:long", known_tables={"pulse"}),
+        tree,
+    )
     removal = plan_removal(tree, "pulse")
-    assert TABLES_FILE not in removal.rewrites, "pulsestat still subscribes to pulse"
-    assert any("kept table pulse" in n for n in removal.notes)
+    assert any("kept table pulse" in n for n in removal.notes), removal.notes
 
 
 def test_a_source_another_worker_reads_is_kept(tree):
@@ -298,35 +338,21 @@ def test_an_example_and_a_docs_page_naming_it_are_listed(tree):
 
 
 def test_what_the_removal_keeps_is_not_reported(tree):
-    """A table another job reads is kept, so its other mentions are why it
+    """A table something else reads is kept, so its other mentions are why it
     stays - not something left behind."""
-    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
-    write.apply_plan(
-        jobs.streaming_job(
-            "pulse_reader", ["pulse"], "pulse_stats", "n:long", known_tables={"pulse"}
-        ),
-        tree,
-    )
+    _pulse_and_a_reader(tree)
     removal = plan_removal(tree, "pulse")
-    assert "src/etl/streaming/pulse_reader.q" not in _referenced(removal)
+    assert str(_PULSE_REPORT) not in _referenced(removal)
 
 
 def test_a_kept_table_does_not_hide_a_call_into_the_removed_job(tree):
-    """#1589: the job and its table share a name. Another job reads the table,
+    """#1589: the job and its table share a name. A script reads the table,
     so the table stays - but a call into the removed job's namespace is still a
     reference, not a use of the table."""
-    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
-    write.apply_plan(
-        jobs.streaming_job(
-            "pulse_reader", ["pulse"], "pulse_stats", "n:long", known_tables={"pulse"}
-        ),
-        tree,
-    )
-    reader = tree / "src/etl/streaming/pulse_reader.q"
-    reader.write_text(reader.read_text() + "poke:{[] .qpipe.job.pulse.on_timer[]}\n")
+    _pulse_and_a_reader(tree, "poke:{[] .qpipe.job.pulse.on_timer[]}\n")
     removal = plan_removal(tree, "pulse")
     assert any("kept table pulse" in n for n in removal.notes)
-    refs = [r for r in removal.references if r.path == Path("src/etl/streaming/pulse_reader.q")]
+    refs = [r for r in removal.references if r.path == _PULSE_REPORT]
     assert [r.text for r in refs] == ["poke:{[] .qpipe.job.pulse.on_timer[]}"]
 
 

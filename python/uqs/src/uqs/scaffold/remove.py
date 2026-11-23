@@ -35,7 +35,8 @@ written complete (a feed module, a passthrough's test), its text changed
 scaffold. `--override even-if-edited --reason TEXT` overrides that, and nothing
 else (a bare `--even-if-edited` until #1852). And, with no override, a job
 another job resolves through: a twin's `twin_of`, or the dataset a reaction
-watches that no other worker fills (#2834). Removed, either fails the load.
+watches that no other worker fills (#2834) - removed, either fails the load -
+or a table only it publishes that another job subscribes to (#2925).
 
 WHAT IT REPORTS (#717). Every line elsewhere in the tree that still names
 what it removes - an example script, a docs page, a diagram, another suite's

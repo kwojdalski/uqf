@@ -21,9 +21,11 @@ from uqs.model.declarations import (
     declared_outputs,
     reaction_calls,
     read_declarations,
+    read_file,
     read_file_text,
     symbols,
 )
+from uqs.model.pipeline import PipelineKind
 from uqs.paths import (
     CATALOG_FILE,
     REACTION_DIR,
@@ -95,7 +97,9 @@ def refuse_dependents(
     """Refuse while another job resolves only through `job` (#2834): a twin
     whose `twin_of` names it, or a reaction watching the dataset only it
     fills. Either fails the load once `job` is gone, as `uqs job new` would
-    have refused to scaffold it - so it is named, to be removed first."""
+    have refused to scaffold it - so it is named, to be removed first. And a
+    job subscribed to a table only `job` publishes (#2925): it would start
+    with nothing feeding it, in every profile that holds both."""
     workers = _workers(repo_root, job_file)
     found = []
     if fn == BOUNDED:
@@ -113,7 +117,7 @@ def refuse_dependents(
             f"{w} ({path}) declares twin_of {job}"
             for path, w, f in workers
             if symbols(f.get("twin_of", ""))[:1] == (job,)
-        ]
+        ] + _unfed_subscribers(repo_root, job_file, job)
     if found:
         raise UqsError(
             f"{job} cannot be removed while another job depends on it: {'; '.join(found)} "
@@ -133,6 +137,30 @@ def refuse_still_profiled(text: str, proc: str) -> None:
                     f"{PROFILES_FILE} still lists {proc} in a profile this cannot edit - take "
                     "it out by hand, then run it again"
                 )
+
+
+def _unfed_subscribers(repo_root: Path, job_file: Path, job: str) -> list[str]:
+    """Each other job subscribed to a table `job` publishes that nothing else
+    feeds: no other streaming job or normalizer publishes it, and no
+    connector produces it (#2925) - the plant's producers, as the profile
+    closure check (test_profiles.py) counts them."""
+    from uqs.model.dependencies import external_producers
+
+    others = [
+        d
+        for d in read_declarations(repo_root)
+        if d.path != repo_root / job_file and d.kind is not PipelineKind.BACKFILL
+    ]
+    fed = {t for d in others for t in d.publishes} | set(external_producers(repo_root))
+    publishes = [t for d in read_file(repo_root / job_file) for t in d.publishes]
+    return [
+        f"{d.name} ({d.path.relative_to(repo_root)}) subscribes to {table}, which only {job} "
+        "publishes"
+        for table in publishes
+        if table not in fed
+        for d in others
+        if table in d.subscribe_to
+    ]
 
 
 def generated_test(job: str, fields: dict[str, str], exact: dict[Path, str]) -> None:
