@@ -409,6 +409,37 @@ def test_cli_dry_run_outside_a_checkout_says_to_run_it_again(bundle: Path, cli_r
     assert "Run it again without --dry-run" in out
 
 
+# ---------------------------------------------- interrupted install (#2948)
+
+
+def test_an_install_stopped_part_way_can_be_rerun_after_the_bundle_changes(
+    bundle: Path, repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The overrides and jobs are written before the ledger; a stop after them
+    left files no ledger entry owned, so after any edit to the bundle the rerun refused them
+    as "not installed by bundle piggybank". The entry is claimed first."""
+
+    def stopped(*_args: object, **_kwargs: object) -> str:
+        raise KeyboardInterrupt("stopped after the job copies")
+
+    monkeypatch.setattr(bundles, "with_block", stopped)
+    with pytest.raises(KeyboardInterrupt):
+        _install(bundle, repo)
+    monkeypatch.undo()
+    assert (repo / STREAM_DIR / "piggy_spread.q").read_text() == STREAM
+    assert json.loads((repo / LEDGER).read_text())["piggybank"]["pending"] is True
+
+    (bundle / "piggy_spread.q").write_text(STREAM + "/ a later edit\n")
+    (bundle / "process_overrides.csv").write_text(
+        "procname,field,value\npiggy_spread1,startwithall,1\n"
+    )
+    entry = _install(bundle, repo)
+    assert (repo / STREAM_DIR / "piggy_spread.q").read_text() == STREAM + "/ a later edit\n"
+    assert "pending" not in entry
+    assert json.loads((repo / LEDGER).read_text())["piggybank"] == entry
+    assert "piggy_spread1,startwithall,1" in (repo / OVERRIDES_FILE).read_text()
+
+
 # ----------------------------------------------- shadowing (#1545)
 
 TRANSFORM = ".qetl.transform.define[`{name};`inputs`output`fn`examples!()]\n"
