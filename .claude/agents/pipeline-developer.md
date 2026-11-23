@@ -182,10 +182,10 @@ Two registry facts that changed under you, and that a job no longer states:
   decomposition that sums, an interval algebra that composes --- not "didn't
   throw". Use fully-qualified timestamp literals.
 - After any change:
-  `uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes`, and
-  `uv run pytest tests/qrun/test_process_runners.py -k backfill-process` when
-  you touch the bounded-worker lifecycle or anything a spawned backfill process
-  loads.
+  `uv run pytest -q tests/qrun/test_q_suite.py::test_the_q_suite_passes --q-files test_<changed>.q`,
+  and `uv run pytest tests/qrun/test_process_runners.py -k backfill-process`
+  when you touch the bounded-worker lifecycle or anything a spawned backfill
+  process loads.
 - Then the repository gates, each run individually with its real exit code
   visible --- **never through a pipe**, because `cmd | tail` reports `tail`'s
   status and a failing gate reads as a pass: `check.py q-traps`,

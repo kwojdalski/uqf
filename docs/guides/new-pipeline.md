@@ -44,12 +44,13 @@ for each shape, the streaming ones included.
 ### What a fresh scaffold leaves red
 
 The handler throws and the test fails until you write them.
-`uv run pytest python/uqs` lists, by `path:line`, every placeholder still marked
-`SCAFFOLDED`: the handler, the test, the job's `note`, a new table's catalog
-description, and the process's card in [Services](../services/README.md) and
-comment in [`stack.md`](../architecture/stack.md). That list is the to-do list.
-A line clears when you replace the placeholder and delete its marker. Name the
-process in `stack.md`'s list when you delete its comment.
+`uv run pytest -q python/uqs/tests/test_no_scaffold_left.py` lists, by
+`path:line`, every placeholder still marked `SCAFFOLDED`: the handler, the test,
+the job's `note`, a new table's catalog description, and the process's card in
+[Services](../services/README.md) and comment in
+[`stack.md`](../architecture/stack.md). That list is the to-do list. A line
+clears when you replace the placeholder and delete its marker. Name the process
+in `stack.md`'s list when you delete its comment.
 
 Write the description in
 [`uqs_catalog.q`](../../scripts/processes/uqs_catalog.q) for someone deciding
@@ -331,7 +332,7 @@ Add `tests/q/test_fx_rates_backfill.q`. Define its tests under
 `\d`, as the scaffold writes it. Then:
 
 ```bash
-uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes
+q tests/run_tests.q -files test_fx_rates_backfill.q
 ```
 
 Cover more than the happy path: a second run is idle, a version bump re-runs the

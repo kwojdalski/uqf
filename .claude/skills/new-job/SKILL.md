@@ -151,9 +151,10 @@ process reporting `up` while publishing nothing.
 So after scaffolding, the tree is in a known state:
 
 - `src/etl/init.q` still LOADS --- the one thing the scaffold never breaks
-- `q tests/run_tests.q` fails on your stub, which is where the work starts -
-  and, for a job that subscribes and publishes, on its `contract_driver` too
-- `uv run pytest python/uqs` fails on `test_no_scaffold_left.py`, which lists
+- `q tests/run_tests.q -files test_<name>.q` fails on your stub, which is where
+  the work starts - and, for a job that subscribes and publishes, on its
+  `contract_driver` too
+- `uv run pytest -q python/uqs/tests/test_no_scaffold_left.py` fails, and lists
   every placeholder still carrying `SCAFFOLDED`, by `path:line`. That list is
   the to-do list: the handler, the test, the job's `note`, the process's card in
   `docs/services/README.md` and its comment in `docs/architecture/stack.md`
@@ -198,7 +199,8 @@ in your job. Say so rather than working around it.
 
 ## Step 3 --- implement, smallest piece first
 
-Write in this order, and run the suite between each:
+Write in this order, and run the job's own suite
+(`q tests/run_tests.q -files test_<name>.q`) between each:
 
 1. **The transform or handler body.** For a streaming job that is
    `on_batch[t;x]` or `on_timer[]`; for a bounded worker it is the source's
@@ -230,11 +232,16 @@ Write in this order, and run the suite between each:
 ## Step 4 --- verify against a real q, not just the unit suite
 
 ```bash
-q tests/run_tests.q                       # the suite; the scaffolded test must be gone
-uv run pytest tests/qrun/test_documented_examples.py  # every @eg you wrote actually runs
-uv run pytest python/ -q                  # the declaration reads back as a process
+q tests/run_tests.q -files test_<name>.q   # the job's suite; the scaffolded test must be gone
+uv run pytest -q tests/qrun/test_documented_examples.py  # every @eg you wrote actually runs
+uv run pytest -q -n 2 python/uqs/tests/test_declarations_match_q.py  # the declaration reads back as a process
 uv run python scripts/gates/check.py q-traps
 ```
+
+Those are the targeted forms: the whole q and Python suites stay out of this
+loop (`uqf-developer` W5).
+`uv run pytest -q tests/qrun/test_q_suite.py::test_the_q_suite_passes --q-files test_<name>.q`
+is the same selection through pytest.
 
 Then load the tree on its own, because the unit suite is not the same thing.
 Each kind registers in its own place, so ask the line for the one you

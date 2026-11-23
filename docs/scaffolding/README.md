@@ -142,6 +142,6 @@ skill](../../.claude/skills/new-job/SKILL.md):
 2. the test, replacing the stub entirely
 3. the docstrings --- `docs/man.q` reads them when it loads
 
-Then `uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes`, and
+Then `q tests/run_tests.q -files test_<name>.q`, and
 `uv run python scripts/gates/stack_smoke.py` against a real stack, which is the
 only thing that proves the wiring.
