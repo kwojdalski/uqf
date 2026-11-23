@@ -926,6 +926,48 @@ def test_a_sliced_source_s_fixture_row_is_in_the_slice():
     assert "sym:enlist `SCAFFOLD; pair:enlist `EURUSD;" in _body(other, "sources/fx.q")
 
 
+def test_a_slice_over_a_reused_source_whose_fixture_lacks_it_is_refused(tmp_path):
+    """#2959: px_hist's scaffolded fixture holds `SCAFFOLD in sym, so a worker
+    sliced EURUSD over it was refused at publish in every window, and
+    test_every_worker_runs went red for the documented commands."""
+    from uqs.scaffold.write import flat_source  # noqa: PLC0415
+
+    source = next(
+        a for a in backfill.bounded_worker("px_hist", "px_hist", "sym:symbol, mid:float").actions
+        if a.path.parent.name == "sources"
+    )  # fmt: skip
+    (tmp_path / source.path).parent.mkdir(parents=True)
+    (tmp_path / source.path).write_text(flat_source(source.body, UQF_ROOT))
+    with pytest.raises(
+        UqsError,
+        match=r"--slice EURUSD: source px_hist's fixture holds no row with sym `EURUSD, .*"
+        r"Give \.qpipe\.source\.px_hist\.fixture rows in slice EURUSD",
+    ):
+        create_backfill.check_slice_in_fixture(
+            tmp_path, "px_hist", "px_eur_backfill", "EURUSD", "sym"
+        )
+    # The slice a new source was scaffolded with is in its fixture (#2830).
+    sliced = next(
+        a for a in backfill.bounded_worker(
+            "px_eu", "px_eu", "sym:symbol, mid:float", partition="EURUSD"
+        ).actions
+        if a.path.parent.name == "sources"
+    )  # fmt: skip
+    (tmp_path / sliced.path).write_text(flat_source(sliced.body, UQF_ROOT))
+    create_backfill.check_slice_in_fixture(tmp_path, "px_eu", "px_eu2_backfill", "EURUSD", "sym")
+
+
+def test_job_new_refuses_a_slice_its_reused_source_s_fixture_does_not_hold():
+    with pytest.raises(
+        UqsError, match=r"source demo_deals's fixture holds no row with sym `AUDUSD"
+    ):
+        create_backfill.backfill_plan(
+            UQF_ROOT, "deals_au", "demo_deals", None,
+            width=None, source="demo_deals", procname=None, transport=None, partition="AUDUSD",
+            check=False, transform="derive", start_with_all=False, definitions=_plant(),
+        )  # fmt: skip
+
+
 def test_every_one_line_placeholder_carries_the_marker():
     """#2852: `<one line: what a row means>` was written without SCAFFOLDED,
     so test_no_scaffold_left could not list it - and two reached master."""

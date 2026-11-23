@@ -237,6 +237,32 @@ def check_reused_passthrough(
         )
 
 
+def check_slice_in_fixture(
+    repo_root: Path, source: str, worker_name: str, partition: str, column: str
+) -> None:
+    """Refuse a --slice over an existing `source` whose fixture holds no row in
+    it (#2959). With no credential every window runs on that fixture, and
+    publish refuses a row outside the slice: a scaffold's fixture holds
+    `SCAFFOLD, so every window failed and test_every_worker_runs went red.
+    #2830 writes the slice into a NEW source's fixture; an existing one is
+    not rewritten, so it must name the slice already. Read as text, as
+    `_declared` reads the columns: a fixture that does not name the symbol
+    `partition` is taken not to hold it."""
+    text = strip_q_comments((repo_root / SOURCE_DIR / f"{source}.q").read_text())
+    head = re.search(rf"^\.qpipe\.source\.{re.escape(source)}\.fixture\s*:", text, re.MULTILINE)
+    body = text[head.start() :] if head else text
+    if head and (end := re.search(r"\n\S", body)):
+        body = body[: end.start()]
+    if re.search(rf"`{re.escape(partition)}\b|\"{re.escape(partition)}\"", body):
+        return
+    raise UqsError(
+        f"--slice {partition}: source {source}'s fixture holds no row with {column} "
+        f"`{partition}, and with no credential {worker_name} runs every window on it - "
+        f"publish would refuse each one. Give .qpipe.source.{source}.fixture rows in "
+        f"slice {partition} (src/etl/sources/{source}.q), then run this again"
+    )
+
+
 def backfill_plan(
     repo_root: Path,
     name: str,
@@ -331,6 +357,14 @@ def backfill_plan(
         )
         if target is not None:
             check_reused_passthrough(repo_root, dataset, source or name, target)
+    if reuse_source and partition:
+        check_slice_in_fixture(
+            repo_root,
+            source or name,
+            f"{name}_backfill",
+            partition,
+            partition_column or worker.DEFAULT_PARTITION_COLUMN,
+        )
     shaped = None
     if reuse_source and shared is None and transform == "derive":
         tables = {t: definition_columns(d) for t, d in (definitions or {}).items()}

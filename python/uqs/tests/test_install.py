@@ -300,3 +300,27 @@ def test_cli_regenerates_every_derived_target_as_job_new_does(
     assert ran == [t[-1] for t in (*_DERIVED, *_WITH_Q)]
     assert "q-facts" in out and "contract-surface" in out
     assert "Next steps" in out
+
+
+def test_cli_next_steps_name_a_profile_for_a_standing_process_in_none(
+    sidecar: Path, cli_repo: Path
+) -> None:
+    """#2947: a plain install left its streaming process in no profile and with
+    no exemption, which test_profiles fails on, and its next steps never said
+    so - the note `uqs job new` gives for the same state."""
+    code, out = _run(str(sidecar), "--copy", "--yes")
+    assert code == 0, out
+    flat = " ".join(out.split())
+    assert "Put acme_spread1 in a profile, or exempt it" in flat
+    assert "UNPROFILED" in flat
+
+
+def test_cli_next_steps_leave_out_a_process_already_exempt(
+    sidecar: Path, cli_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from uqs.model import unprofiled
+
+    monkeypatch.setitem(unprofiled.UNPROFILED, "acme_spread1", "a test double")
+    code, out = _run(str(sidecar), "--copy", "--yes")
+    assert code == 0, out
+    assert "Put acme_spread1 in a profile" not in " ".join(out.split())
