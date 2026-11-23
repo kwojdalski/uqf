@@ -176,8 +176,11 @@
         if[not .qetl.declared.callable decl`check;
             '"define: ",string[job],"'s check must be a function of the rows about to be published, returning the offending rows"];
         .qetl.job.stream.require_arity[job;`check;decl`check;1;"a function of the rows about to be published"];
-        if[not (`on_fail in key decl) and -11h=type decl`on_fail;
+        if[not count decl`outputs; '"define: ",string[job]," declares a check but no outputs - it would never run, because the check sits on the publish seam outputs wire"];
+        if[not `on_fail in key decl;
             '"define: ",string[job]," declares a check but no on_fail - say `drop (publish the clean rows) or `hold (withhold the whole batch)"];
+        if[not -11h=type decl`on_fail;
+            '"define: ",string[job],"'s on_fail must be a single symbol, `drop or `hold, not ",.Q.s1 decl`on_fail];
         if[not (decl`on_fail) in `drop`hold;
             '"define: ",string[job],"'s on_fail must be `drop or `hold, not ",string decl`on_fail]];
     }
@@ -344,6 +347,8 @@
         '"define: ",string[job]," declares on_endofday but subscribes to nothing - the TorQ plant sends end of day only to its subscribers, so the hook would never be called there; do the work on the job's timer instead"];
     decl:.qetl.job.stream.with_defaults decl;  / after the checks above, which tell declared from absent (#2657)
     .qetl.job.stream.jobs[job]:enlist decl;
+    / a handler that publishes through a job declaring no outputs meets this, not an undefined name (#2953)
+    if[(not count decl`outputs) and not `publish in key decl`ns; (` sv decl[`ns],`publish) set .qetl.job.stream.no_outputs job];
     .qetl.job.stream.procnames[decl`procname]:job;
     .[{.qetl.log.ch.dbg[`config;y;(enlist[`job]!enlist x),z]};(job;"streaming job registered";
         `procname`subscribe_to`outputs`timer!(decl`procname;decl`subscribe_to;decl`outputs;
@@ -400,6 +405,15 @@
 / Every registered job, for the runner and for tests.
 / @return symbol list of job names
 .qetl.job.stream.defined:{[] key .qetl.job.stream.jobs}
+
+/ Private: the `publish` of a job that declares no outputs, which `start` never wires.
+/ A handler calling it was written for an output the declaration does not list;
+/ without this it met the undefined name .qpipe.job.<job>.publish, whose whole text is that name.
+/ @param job the job's name
+/ @return a function of (table name; rows) that refuses, naming the job and the fix
+/ @private
+.qetl.job.stream.no_outputs:{[job]
+    {[job;t;x] '"publish: ",string[job]," declares no outputs, so nothing is wired to publish onto ",string[t]," - add it to the job's outputs"}[job]} / noqa: QF016 publish signature, refuses
 
 / Point a job's `publish` at something that can actually publish.
 / .

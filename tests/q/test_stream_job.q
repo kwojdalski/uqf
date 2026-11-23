@@ -1727,9 +1727,9 @@
     ([] check:count[bad]#`negative; status:count[bad]#`bad; detail:count[bad]#enlist "negative"; row:bad)}
 
 .qt.qetl.job.stream.check_probe:{[name;procname;mode;chk]
-    / A feed that keeps its output local, so the output-contract suite has nothing to drive.
+    / A feed with one output that is no plant table, so the output-contract suite has nothing to drive.
     .qetl.job.stream.define[name;`procname`subscribe_to`outputs`period`on_timer`check`on_fail!(
-        procname;`symbol$();`symbol$();0D00:00:01;{[] };chk;mode)];
+        procname;`symbol$();enlist `probe_out;0D00:00:01;{[] };chk;mode)];
     .qt.qetl.job.stream.reset[];
     .qetl.job.stream.wire[name;.qt.qetl.job.stream.recorder[name]];
     ` sv (.qetl.job.stream.namespace name),`publish}
@@ -1821,13 +1821,36 @@
     .qunit.assertEquals[h`last_error;`$"check threw: boom";"with the check's own error"]};
 
 .qt.qetl.job.stream.test_a_check_must_declare_what_failure_does:{[t]
-    base:`procname`subscribe_to`outputs`on_batch!(`sjcheckbad1;enlist `quote;`symbol$();{[t;x]});
+    base:`procname`subscribe_to`outputs`on_batch!(`sjcheckbad1;enlist `quote;enlist `sj_check_out;{[t;x]});
     .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,enlist[`check]!enlist .qt.qetl.job.stream.neg_check;
         "*declares a check but no on_fail*";"the author decides whether bad rows hold their neighbours"];
     .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,`check`on_fail!(.qt.qetl.job.stream.neg_check;`skip);
         "*on_fail must be `drop or `hold*";"and only the two choices exist"];
     .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,enlist[`on_fail]!enlist `drop;
         "*on_fail without a check*";"on_fail alone gates nothing"]};
+
+/ #2953: a present on_fail of the wrong type was refused as if it were missing.
+.qt.qetl.job.stream.test_an_on_fail_that_is_not_one_symbol_is_refused_as_what_it_is:{[t]
+    base:`procname`subscribe_to`outputs`on_batch`check!(`sjcheckbad1;enlist `quote;enlist `sj_check_out;{[t;x]};.qt.qetl.job.stream.neg_check);
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,enlist[`on_fail]!enlist "drop";
+        "define: sj_check_bad's on_fail must be a single symbol, `drop or `hold, not \"drop\"";"a string says drop, and was called missing"];
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_check_bad;];base,enlist[`on_fail]!enlist `drop`hold;
+        "define: sj_check_bad's on_fail must be a single symbol, `drop or `hold, not `drop`hold";"a list is not a choice"]};
+
+/ #2953: a check sits on the publish seam outputs wire, so with none it never runs; a handler
+/ publishing through such a job met an undefined name.
+.qt.qetl.job.stream.test_a_check_on_a_job_with_no_outputs_is_refused:{[t]
+    .qunit.assertThrows[.qetl.job.stream.define[`sj_check_none;];`procname`subscribe_to`outputs`on_batch`check`on_fail!(
+            `sjchecknone1;enlist `quote;`symbol$();{[t;x]};.qt.qetl.job.stream.neg_check;`drop);
+        "define: sj_check_none declares a check but no outputs*";"it would never run"]};
+
+.qt.qetl.job.stream.test_publish_on_a_job_with_no_outputs_says_so:{[t]
+    .qt.support.save_stream_jobs[`.qt.qetl.job.stream.noout];
+    .qetl.job.stream.define[`sj_noout;`procname`subscribe_to`outputs`on_batch!(`sjnoout1;enlist `quote;`symbol$();{[t;x]})];
+    r:.[get ` sv (.qetl.job.stream.namespace `sj_noout),`publish;(`other;());{x}];
+    .qt.support.restore_stream_jobs[`.qt.qetl.job.stream.noout];
+    .qunit.assertEquals[r;"publish: sj_noout declares no outputs, so nothing is wired to publish onto other - add it to the job's outputs";
+        "naming the job and the fix, not the undefined name"]};
 
 .qt.qetl.job.stream.test_market_data_declares_the_qdqc_checks:{[t]
     d:.qetl.job.stream.def`market_data;

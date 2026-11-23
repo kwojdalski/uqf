@@ -1503,6 +1503,7 @@ qpipe.job.alert_sink,on_timer,function,1,
 qpipe.job.alert_sink,payload,function,1,row
 qpipe.job.alert_sink,pending,table,,
 qpipe.job.alert_sink,post,function,2,target body
+qpipe.job.alert_sink,publish,value,,
 qpipe.job.alert_sink,slack,value,,
 qpipe.job.arbitrage,arbitrage,table,,
 qpipe.job.arbitrage,evaluate,function,1,batch
