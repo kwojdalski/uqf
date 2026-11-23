@@ -15,6 +15,7 @@ left would defeat the check.
 from __future__ import annotations
 
 import re
+import textwrap
 from pathlib import Path
 
 from uqs.paths import UqsError
@@ -44,11 +45,20 @@ def stack_line(proc: str) -> str:
     )
 
 
+#: The width .panache.toml reflows prose to.
+_DOCS_WIDTH = 80
+
+
 def showcase_card(proc: str) -> str:
-    """The Showcase placeholder for `proc`, in the shape of the cards around it."""
-    return (
+    """The Showcase placeholder for `proc`, in the shape of the cards around it:
+    wrapped at the width the panache-format hook reflows to, or that hook
+    rewrites the scaffold's own card and the first commit after it fails (#2946)."""
+    return textwrap.fill(
         f"**`{proc}` · SCAFFOLDED: a few words** --- SCAFFOLDED: what it does, what goes in "
-        "and what comes out, and how to see it."
+        "and what comes out, and how to see it.",
+        width=_DOCS_WIDTH,
+        break_long_words=False,
+        break_on_hyphens=False,
     )
 
 
@@ -87,13 +97,21 @@ def with_card(existing: str, card: str, section: str) -> str:
 
 def without_stubs(text: str, proc: str) -> str:
     """`text` without any still-SCAFFOLDED line naming `proc`, and the blank
-    line a scaffold put before it - what `uqs job remove` undoes."""
+    line a scaffold put before it - what `uqs job remove` undoes. A Showcase
+    card goes whole: it is a paragraph wrapped over several lines, and only
+    its first names the process."""
     named = re.compile(rf"\b{re.escape(proc)}\b")
+    card = f"**`{proc}` · SCAFFOLDED"
     out: list[str] = []
+    in_card = False
     for line in text.splitlines(keepends=True):
+        if in_card and line.strip() and not line.startswith("#"):
+            continue
+        in_card = False
         if "SCAFFOLDED" in line and named.search(line):
             if out and not out[-1].strip():
                 out.pop()
+            in_card = line.startswith(card)
             continue
         out.append(line)
     return "".join(out)
