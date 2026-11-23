@@ -141,6 +141,30 @@ def test_into_an_existing_target_the_partition_column_is_the_targets():
         )  # fmt: skip
 
 
+def test_a_partition_column_that_does_not_hold_symbols_is_refused():
+    """#2918: a slice is a symbol, and publish compares the column with it - a
+    long column was scaffolded, loaded, and failed every window with a bare
+    'type naming neither the column nor the slice."""
+    with pytest.raises(UqsError, match=r"--slice-column 'venue_id' is `long\$\(\) in --schema"):
+        backfill.bounded_worker(
+            "venue", "venue_hist", "sym:symbol, venue_id:long, px:float", partition="7",
+            partition_column="venue_id",
+        )  # fmt: skip
+    target = [*_FX_RATES, ("venue_id", "`long$()")]
+    with pytest.raises(UqsError, match=r"'venue_id' is `long\$\(\) in fx_rates, and a --slice"):
+        backfill.bounded_worker(
+            "fx", "fx_rates", "venue_id:long, mid:float", partition="7",
+            partition_column="venue_id", transform="derive",
+            define_table=False, target_columns=target,
+        )  # fmt: skip
+    # a grouped symbol column is a symbol column
+    plan = backfill.bounded_worker(
+        "fx", "fx_rates", "pair:symbol, mid:float", partition="EURUSD", transform="derive",
+        define_table=False, target_columns=_FX_RATES,
+    )  # fmt: skip
+    assert symbols(_fields(plan, "fx_backfill.q")["partition_column"]) == ("sym",)
+
+
 @pytest.mark.parametrize("partition", ["EUR/USD", "_spot", "_"])
 def test_a_partition_that_is_not_a_symbol_is_refused(partition):
     """#2825: `_spot passed the old pattern, and q reads it as ` _ spot - the

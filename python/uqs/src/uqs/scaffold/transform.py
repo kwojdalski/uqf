@@ -79,13 +79,27 @@ def fixture_rows(cols: list[tuple[str, str]]) -> str:
 
 
 def worker_transform(
-    mode: str, worker: str, src: str, dataset: str, shared: tuple[str, str] | None = None
+    mode: str,
+    worker: str,
+    src: str,
+    dataset: str,
+    shared: tuple[str, str] | None = None,
+    shaped_as: str | None = None,
 ) -> tuple[str, str, str]:
     """A worker's transform: (q inside its namespace, q after it, transform name).
 
     `shared` is (stream job, its declared transform) for a twin: the twin then
     applies that transform rather than one of its own, so a refill re-derives
-    what the job publishes (#884), and nothing is written for `mode`."""
+    what the job publishes (#884), and nothing is written for `mode`.
+
+    The input is NAMED after the plant table whose columns it carries: the
+    plant-tables suite refuses one that has a plant table's columns under
+    another name (#833), so `batch` left a fresh scaffold failing a test about
+    a transform its author had not touched (#2915). A passthrough's input is
+    the dataset's shape, so it is the dataset's name. A derive's is the
+    source's rows: `shaped_as` is the plant table they are shaped as, when the
+    caller knows of one, and without one it stays `batch`. The runtime hands a
+    one-input transform its batch under whatever name it declares."""
     if shared is not None:
         job, name = shared
         after = f"""/ {job}'s own transform, as it declares it: a refill re-derives what
@@ -103,8 +117,9 @@ def worker_transform(
         after = f"""/ Pass-through until a real transform is needed: the batch is published as
 / fetched. Its shape is {dataset}'s, `time` kept (the fixture carries it), taken
 / from the plant rather than copied from the fixture (#1360); the example is
-/ what .qetl.transform checks it against.
-.qetl.transform.passthrough[`{xf};`batch;.qetl.plant.shape `{dataset};.qpipe.source.{src}.fixture[]];
+/ what .qetl.transform checks it against. The input is named after {dataset}
+/ because it carries its columns: the plant-tables suite holds it to that name.
+.qetl.transform.passthrough[`{xf};`{dataset};.qetl.plant.shape `{dataset};.qpipe.source.{src}.fixture[]];
 """  # noqa: E501
         return "", after, xf
     name = f"{worker}_transform"
@@ -117,16 +132,25 @@ derive:{{[batch]
     '"{worker}.derive: not implemented";
     }}
 """
+    given = shaped_as or "batch"
+    named = (
+        f"""/ The input is named after {shaped_as} because the source's rows carry its
+/ columns, and the plant-tables suite holds such an input to that name. Once the
+/ source returns other columns, call it `batch`.
+"""
+        if shaped_as
+        else ""
+    )
     after = f"""/ The transform between source and dataset. Its example's expected output is
 / SCAFFOLDED - an empty {dataset}, which no real derivation of the fixture
 / returns - so .qetl.transform.verify fails it, and the suite with it, until
 / derive is written and the expected rows say what it should return.
-.qetl.transform.define[`{name};`inputs`output`fn`examples!(
-    (enlist `batch)!enlist 0#.qpipe.source.{src}.fixture[];
+{named}.qetl.transform.define[`{name};`inputs`output`fn`examples!(
+    (enlist `{given})!enlist 0#.qpipe.source.{src}.fixture[];
     .qetl.plant.shape `{dataset};
     .qpipe.job.{worker}.derive;
     enlist `inputs`expected!(
-        (enlist `batch)!enlist .qpipe.source.{src}.fixture[];
+        (enlist `{given})!enlist .qpipe.source.{src}.fixture[];
         / SCAFFOLDED: the rows derive returns for the fixture above
         0#.qetl.plant.shape `{dataset}))];
 """

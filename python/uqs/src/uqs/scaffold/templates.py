@@ -221,17 +221,19 @@ def worker_body(
     transform: str = "passthrough",
     shared: tuple[str, str] | None = None,
     twin_of: str | None = None,
+    shaped_as: str | None = None,
 ) -> str:
     """The worker file. `partition` scopes it to one slice of its dataset,
     which is what lets a second worker fill the same dataset; `check` adds a
-    quality check stub; `transform` is `passthrough` or `derive`, and
-    `shared` a twin's stream job and the transform it declares - see
+    quality check stub; `transform` is `passthrough` or `derive`, `shared` a
+    twin's stream job and the transform it declares, and `shaped_as` the plant
+    table a derive's input is named after - see
     scaffold/transform.py. `twin_of` declares the live job this worker repairs: q
     then refuses the worker if that job stops publishing its dataset, whatever the
     schemas say (#2103), and `shared` adds the promise that both apply one transform."""
     check_stub = _CHECK_STUB.format(worker=worker) if check else ""
     derive_stub, transform_decl, transform_name = worker_transform(
-        transform, worker, src, dataset, shared
+        transform, worker, src, dataset, shared, shaped_as
     )
     extra_keys = ("`check" if check else "") + ("`partition`partition_column" if partition else "")
     extra_values = (f";.qpipe.job.{worker}.quality_check" if check else "") + (

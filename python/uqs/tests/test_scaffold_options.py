@@ -345,6 +345,64 @@ def test_without_q_the_contract_surface_step_is_named(tmp_path, monkeypatch):
     assert regenerate._regenerate_with_q(tmp_path) is None
 
 
+class _Died(Exception):
+    pass
+
+
+def _write_plan_dies(monkeypatch, plan, *, dry_run: bool, q: bool, regenerates: bool = True):
+    """write_plan over `plan` with nothing written: the message it dies with,
+    or None. Whether q is installed and whether regeneration succeeds are set."""
+    from uqs.cli.job import regenerate
+
+    died: list[str] = []
+
+    def die(exc):
+        died.append(str(exc))
+        raise _Died
+
+    monkeypatch.setattr(regenerate, "_die", die)
+    monkeypatch.setattr(regenerate, "q_interpreter", lambda: Path("q") if q else None)
+    monkeypatch.setattr(regenerate.write, "apply_plan", lambda plan, root: [Path("x.q")])
+    monkeypatch.setattr(regenerate.write, "prepare", lambda plan, root: None)
+    monkeypatch.setattr(regenerate, "report_regeneration", lambda root: regenerates)
+    try:
+        regenerate.write_plan(plan, Path("/nonexistent"), dry_run=dry_run)
+    except _Died:
+        return died[0]
+    return None
+
+
+def test_a_scaffold_whose_regeneration_fails_exits_nonzero(monkeypatch):
+    """#2916: `could not regenerate` was printed and `job new` exited 0, as
+    `job remove` did until #2843 - so a refused operational-docs left the port
+    lock without the new process, and nothing said the command had failed."""
+    plan = backfill.bounded_worker("fx", "fx_rates", "px:float")
+    message = _write_plan_dies(monkeypatch, plan, dry_run=False, q=True, regenerates=False)
+    assert message is not None and message.startswith(
+        "scaffolded fx_backfill, but the tree does not regenerate"
+    )
+    assert _write_plan_dies(monkeypatch, plan, dry_run=False, q=True) is None
+
+
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_without_q_a_scaffold_that_defines_a_table_is_refused_before_writing(monkeypatch, dry_run):
+    """#2916: without q, plant-schema could not record the new table, so its
+    export went stale and every later `job new` - a --dry-run too - was refused.
+    The dry run refuses what the real run would (#2827)."""
+    plan = backfill.bounded_worker("fx", "fx_rates", "px:float")
+    message = _write_plan_dies(monkeypatch, plan, dry_run=dry_run, q=False)
+    assert message is not None
+    assert "fx_backfill defines a plant table in src/etl/plant_tables.q" in message
+    assert "needs q" in message and "Nothing was written" in message
+
+
+def test_without_q_a_scaffold_into_an_existing_table_is_still_written(monkeypatch):
+    plan = backfill.bounded_worker(
+        "fx", "fx_rates", "px:float", define_table=False, target_columns=[("px", "`float$()")]
+    )
+    assert _write_plan_dies(monkeypatch, plan, dry_run=False, q=False) is None
+
+
 def test_a_scaffold_regenerates_every_file_a_new_table_or_source_makes_stale():
     """q_facts.py records a new source and a worker's dataset, and
     tableproperties.csv - read from it - lists getdata's tables: left stale,

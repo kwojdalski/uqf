@@ -8,6 +8,8 @@ test_scaffold_loads.py's, under a real q.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from typer.testing import CliRunner
 
@@ -60,8 +62,9 @@ def test_a_backfill_is_still_a_passthrough_by_default():
     body = _body(backfill.bounded_worker("fx", "fx_hist", "sym:symbol, mid:float"), "fx_backfill.q")
     assert ".qetl.transform.passthrough[`fx_passthrough;" in body
     assert "`fx_passthrough;.qpipe.job.fx_backfill.facts" in body
-    # The shape is the plant's, never a copy of the fixture's (#1360).
-    assert "`batch;.qetl.plant.shape `fx_hist;" in body
+    # The shape is the plant's, never a copy of the fixture's (#1360), and
+    # the input is named after it (#2915).
+    assert "`fx_hist;.qetl.plant.shape `fx_hist;" in body
     assert "0#.qpipe.source" not in body
     assert "derive" not in body
 
@@ -76,6 +79,81 @@ def test_a_derived_backfill_declares_its_transform_with_a_failing_example():
     assert "`fx_backfill_transform;.qpipe.job.fx_backfill.facts" in body
     assert "passthrough" not in body
     assert any("fx_backfill.derive" in note for note in plan.notes)
+
+
+def _inputs(body: str) -> list[str]:
+    """The input names a backfill's transform declares, in order."""
+    return re.findall(r"\(enlist `(\w+)\)!enlist (?:0#)?\.qpipe\.source", body) or re.findall(
+        r"\.qetl\.transform\.passthrough\[`\w+;`(\w+);", body
+    )
+
+
+@pytest.mark.parametrize(
+    ("transform", "define_table", "target"),
+    [
+        ("passthrough", True, None),
+        ("derive", True, None),
+        ("derive", False, [("time", "`timestamp$()"), ("sym", "`symbol$()"), ("mid", "`float$()")]),
+    ],
+)
+def test_an_input_with_the_datasets_columns_is_named_after_it(transform, define_table, target):
+    """#2915: the input was `batch` with fx_hist's columns, which the
+    plant-tables suite refuses as a misnamed copy of a plant table (#833) -
+    so a fresh scaffold left the q suite red on a transform nobody touched."""
+    plan = backfill.bounded_worker(
+        "fx", "fx_hist", "sym:symbol, mid:float", transform=transform,
+        define_table=define_table, target_columns=target,
+    )  # fmt: skip
+    body = _body(plan, "fx_backfill.q")
+    assert set(_inputs(body)) == {"fx_hist"}, body
+    assert "the plant-tables suite holds" in body
+
+
+def test_a_derive_from_rows_of_another_shape_keeps_batch():
+    """Named after fx_hist, an input with a column fx_hist lacks would fail
+    the other half of that suite (#817): an input named after a plant table
+    carries only its columns."""
+    target = [("time", "`timestamp$()"), ("sym", "`symbol$()"), ("mid", "`float$()")]
+    plan = backfill.bounded_worker(
+        "fx", "fx_hist", "sym:symbol, bid:float, ask:float", transform="derive",
+        define_table=False, target_columns=target,
+    )  # fmt: skip
+    assert set(_inputs(_body(plan, "fx_backfill.q"))) == {"batch"}
+
+
+def test_a_derive_from_a_reused_source_is_named_after_the_table_its_rows_are(tmp_path):
+    """#2915, for a second worker on a source already written: its rows are
+    read from the source's declared columns, and named after the plant table
+    they match - the dataset's own name first."""
+    from uqs.cli.job import create_backfill  # noqa: PLC0415
+    from uqs.scaffold.write import flat_source  # noqa: PLC0415
+
+    first = backfill.bounded_worker("px", "px_hist", "sym:symbol, mid:float")
+    source = next(a for a in first.actions if a.path.parent.name == "sources")
+    (tmp_path / source.path).parent.mkdir(parents=True)
+    (tmp_path / source.path).write_text(flat_source(source.body, tmp_path))
+    px_hist = table_definition(
+        "px_hist", [("time", "`timestamp$()"), ("sym", "`symbol$()"), ("mid", "`float$()")]
+    )
+    stats = table_definition("px_stats", [("sym", "`symbol$()"), ("n", "`long$()")])
+
+    def plan(dataset, shape, defs):
+        return create_backfill.backfill_plan(
+            tmp_path, "px_" + dataset, dataset, shape,
+            width=None, source="px", procname=None, transport=None, partition=None,
+            check=False, transform="derive", start_with_all=False, definitions=defs,
+            known_tables=set(defs),
+        )  # fmt: skip
+
+    # into another table: named after the table its rows are, px_hist
+    body = _body(plan("px_stats", None, {"px_hist": px_hist, "px_stats": stats}), "_backfill.q")
+    assert set(_inputs(body)) == {"px_hist"}, body
+    # into a new table: still px_hist's rows
+    body = _body(plan("px_new", "sym:symbol, n:long", {"px_hist": px_hist}), "_backfill.q")
+    assert set(_inputs(body)) == {"px_hist"}, body
+    # rows that are no plant table's: batch
+    body = _body(plan("px_stats", None, {"px_stats": stats}), "_backfill.q")
+    assert set(_inputs(body)) == {"batch"}, body
 
 
 def test_an_unknown_transform_is_refused():
