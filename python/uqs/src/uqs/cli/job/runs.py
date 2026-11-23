@@ -272,12 +272,21 @@ def show(
             "facts": [_record(f, _FACT_COLUMNS) for f in facts],
             "logs": [str(state / "logs")] if state
             else [str(p) for p in stack_runs.log_files(_paths(), run[0])],
-            "rerun": stack_runs.rerun_command(run[0], attach) or None,
+            "rerun": stack_runs.rerun_command(run[0], attach, _writer(state, run[0])) or None,
         })  # fmt: skip
         return
     _print("run", run, _RUN_COLUMNS, "")
     _print("facts", facts, _FACT_COLUMNS, "this run recorded no facts")
     _print_next_steps(run[0], attach, state)
+
+
+def _writer(state: Path | None, run: dict) -> dict | None:
+    """What an attached run recorded of the writer it went through, if it went through one."""
+    if state is None:
+        return None
+    from uqs.attach import backfill_remote
+
+    return backfill_remote.writer_of(state, run)
 
 
 def _print_next_steps(run: dict, attach: str | None = None, state: Path | None = None) -> None:
@@ -299,7 +308,7 @@ def _print_next_steps(run: dict, attach: str | None = None, state: Path | None =
         console.print(
             "\n[bold]logs[/]   this run recorded no TorQ process - plain q logs to its console"
         )
-    command = stack_runs.rerun_command(run, attach)
+    command = stack_runs.rerun_command(run, attach, _writer(state, run))
     if command:
         # Re-running IS the resume: coverage skips every window already covered.
         console.print(f"[bold]re-run[/] {command}", soft_wrap=True)

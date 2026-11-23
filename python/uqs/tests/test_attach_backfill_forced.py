@@ -9,6 +9,7 @@ at HOST:PORT; that half is exercised against a live q in the remote-writer tests
 from __future__ import annotations
 
 import os
+import socket
 from pathlib import Path
 
 import pytest
@@ -299,3 +300,35 @@ def test_a_launch_removes_a_stop_request_an_earlier_process_of_its_pid_left(worl
     assert run_.state_dir == dest.state_dir
     assert not left.exists(), "the leftover for this pid stops nothing now"
     assert other.exists(), "another pid's request is not this launch's to remove"
+
+
+def test_a_remote_launch_names_its_worker_in_its_stop_file(world, monkeypatch):
+    """`launch_remote` built Launched without its worker: its stop_file was `.<pid>.stop`."""
+    save_attachment("pb-uat", world.hdb)
+    run_, _ = _launch(world, monkeypatch)
+    assert run_.worker == WORKER
+    assert run_.stop_file.name == f"{WORKER}.4242.stop"
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_runs_show_re_runs_a_writer_run_through_its_writer(world, monkeypatch, force):
+    """#2950: the re-run `job runs show` printed had no --writer, so it took the local
+    attached path, which refuses an HDB that is not on this machine - or writes one that is
+    directly, past the receiver."""
+    from uqs.stack import runs as stack_runs
+
+    save_attachment("pb-uat", world.hdb)
+    run_, _ = _launch(world, monkeypatch, force=force)
+    row = {
+        "worker": WORKER, "range_from": "2026-09-13T00:00:00.000000000",
+        "range_to": "2026-09-14T00:00:00.000000000", "source_version": "v1",
+        "host": socket.gethostname().upper(), "pid": 4242, "started_at": "2999-01-01T00:00:00",
+    }  # fmt: skip
+    noted = backfill_remote.writer_of(run_.state_dir, row)
+    command = stack_runs.rerun_command(row, "pb-uat", noted)
+    assert command is not None and command.endswith(
+        "--attachment pb-uat --writer uat-box:6055" + (" --override any-writer" if force else "")
+    ), command
+    assert backfill_remote.writer_of(run_.state_dir, row | {"pid": 4343}) is None
+    earlier = row | {"started_at": "2000-01-01T00:00:00"}
+    assert backfill_remote.writer_of(run_.state_dir, earlier) is None, "an earlier run, same pid"

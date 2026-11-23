@@ -32,8 +32,10 @@ This module is the extracting half; the receiving half is uqs.attach.backfill_re
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import socket
 import subprocess
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -68,7 +70,10 @@ from uqs.attach.remote import Ipc
 from uqs.interpreter import q_interpreter
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack import backfill as stack_backfill
+from uqs.stack import runs
 
+#: Each --writer run's writer, in its state directory (note_writer).
+WRITERS = "writers.jsonl"
 #: How the runner is handed the password it reaches the receiver with.
 WRITER_PASSWORD_ENV = "UQF_ATTACH_WRITER_PASSWORD"
 #: --override any-writer: the HDB a destination names when the attachment pins none - the
@@ -250,8 +255,50 @@ def launch_remote(
             raise UqsError(f"could not start the backfill runner: {exc}") from None
         # an earlier process's leftover stop request for this pid stops nothing new (#2930)
         stop_file_for(dest.state_dir, worker, proc.pid).unlink(missing_ok=True)
+        note_writer(dest.state_dir, proc.pid, writer, forced=force)
         backfill_owner.claim(attachment, worker, proc.pid, dest.identity, attach_root)
-    return Launched(proc.pid, log, dest.state_dir, owner, dest, proc, audit), plan
+    return Launched(proc.pid, log, dest.state_dir, owner, dest, proc, audit, worker), plan
+
+
+def note_writer(state_dir: Path, pid: int, writer: str, *, forced: bool) -> None:
+    """Record that the run of process `pid` writes through `writer` (#2950). The ledger's row
+    names the run's host and pid but not its writer, and a re-run without --writer would take
+    the local attached path, which writes the HDB directly or refuses it as not here."""
+    note = {
+        "pid": pid,
+        "host": socket.gethostname(),
+        "writer": writer,
+        "forced": forced,
+        "started": datetime.now(UTC).isoformat(),
+    }
+    with (state_dir / WRITERS).open("a") as out:
+        out.write(json.dumps(note, sort_keys=True) + "\n")
+
+
+def writer_of(state_dir: Path, run: dict[str, Any]) -> dict[str, Any] | None:
+    """The `note_writer` record of ledger row `run`, or None for a run that wrote directly:
+    the latest one for its host and pid that is not later than the run's start, since a pid
+    is reused."""
+    try:
+        lines = (state_dir / WRITERS).read_text().splitlines()
+    except OSError:
+        return None
+    started = str(run.get("started_at") or "")
+    if not started:
+        return None
+    began = runs.ledger_moment(started, upper=True)
+    found = None
+    for line in lines:
+        try:
+            note = json.loads(line)
+            same = int(note["pid"]) == int(run.get("pid") or -1) and (
+                str(note["host"]).casefold() == str(run.get("host", "")).casefold()
+            )
+            if same and datetime.fromisoformat(note["started"]) <= began:
+                found = note
+        except ValueError, KeyError, TypeError:
+            continue
+    return found
 
 
 def _forced_entry(
