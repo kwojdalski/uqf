@@ -33,11 +33,18 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
-from uqs.attach import backfill_forced, backfill_owner, config, receiver_contract, service
+from uqs.attach import (
+    backfill_audit,
+    backfill_forced,
+    backfill_owner,
+    config,
+    receiver_contract,
+    service,
+)
 from uqs.attach.backfill import (
     Destination,
     declaration,
@@ -49,7 +56,15 @@ from uqs.attach.backfill import (
 from uqs.attach.backfill_admission import admit
 from uqs.attach.backfill_coordination import assess
 from uqs.attach.backfill_plan import evaluate
-from uqs.attach.backfill_run import LOGS, REACH_PASSWORD_ENV, RUNNER, Launched, q_date
+from uqs.attach.backfill_run import (
+    AGAIN,
+    LOGS,
+    REACH_PASSWORD_ENV,
+    RUNNER,
+    Launched,
+    q_date,
+    stop_file_for,
+)
 from uqs.attach.remote import Ipc
 from uqs.interpreter import q_interpreter
 from uqs.liveness import on_this_host
@@ -163,13 +178,21 @@ def launch_remote(
     verbose: bool = False,
     trace: bool = False,
     force: bool = False,
+    reason: str | None = None,
     attach_root: Path | None = None,
     ipc: Ipc | None = None,
 ) -> tuple[Launched, dict[str, Any]]:
     """Start the extractor: the runner with -writer, after the remote plan. With
     `force` the runner gets -force and writes through the process at `writer`
     directly (forced_destination): no receiver, contract or verification - but
-    still completed history only: `-max_date` is asked of the writer (backfill_forced)."""
+    still completed history only: `-max_date` is asked of the writer (backfill_forced).
+    A forced run is recorded with its `reason` in backfill_audit's log before the runner is
+    started, and refused - nothing started - when it cannot be (#2928)."""
+    if force and not (reason or "").strip():
+        raise UqsError(
+            f"--override {backfill_forced.ANY_WRITER} needs a --reason: it is recorded before "
+            "the run starts, and an override that is not recorded is not used"
+        )
     q = q_interpreter(os.environ)
     if q is None:
         raise UqsError("no q interpreter - set $QCMD, or put q on PATH; the run is a q process")
@@ -180,10 +203,11 @@ def launch_remote(
     with config.locked(attachment, attach_root):
         if not force:
             require_verified(attachment, attach_root)
-        backfill_owner.refuse_while_active(attachment, attach_root)
+        backfill_owner.refuse_while_active(attachment, attach_root, then=AGAIN)
         att = config.load(attachment, attach_root)
         owner = backfill_owner.owner_file(attachment, worker, attach_root)
         forced_bound: list[str] = []
+        last = None
         if force:
             host, wport = parse_writer(writer)
             last, calendar = backfill_forced.completed_bounds(
@@ -213,14 +237,57 @@ def launch_remote(
             "UQF_STATUS_DIR": str(dest.state_dir),
             WRITER_PASSWORD_ENV: att.stack.password(),
         }
-        with log.open("wb") as out:
-            proc = subprocess.Popen(
-                [str(q), str(paths.repo_root / RUNNER), *flags],
-                cwd=paths.repo_root, env=env, stdin=subprocess.DEVNULL,
-                stdout=out, stderr=subprocess.STDOUT, start_new_session=True,
+        # a forced write is on record, durably, before the runner exists to write (#2928)
+        audit = None
+        if force:
+            assert last is not None and reason is not None
+            audit = backfill_audit.record(
+                dest.state_dir,
+                [_forced_entry(dest, worker, version, range_from, range_to, writer=writer,
+                               mode=mode, reason=reason, last=last, log_path=log)],
             )  # fmt: skip
+        try:
+            with log.open("wb") as out:
+                proc = subprocess.Popen(
+                    [str(q), str(paths.repo_root / RUNNER), *flags],
+                    cwd=paths.repo_root, env=env, stdin=subprocess.DEVNULL,
+                    stdout=out, stderr=subprocess.STDOUT, start_new_session=True,
+                )  # fmt: skip
+        except OSError as exc:
+            backfill_audit.outcome(audit, log.stem, outcome="not-started", error=str(exc))
+            raise UqsError(f"could not start the backfill runner: {exc}") from None
+        # an earlier process's leftover stop request for this pid stops nothing new (#2930)
+        stop_file_for(dest.state_dir, worker, proc.pid).unlink(missing_ok=True)
         backfill_owner.claim(attachment, worker, proc.pid, dest.identity, attach_root)
-    return Launched(proc.pid, log, dest.state_dir, owner, dest, proc), plan
+    return Launched(proc.pid, log, dest.state_dir, owner, dest, proc, audit), plan
+
+
+def _forced_entry(
+    dest: Destination,
+    worker: str,
+    version: str,
+    range_from: datetime,
+    range_to: datetime,
+    *,
+    writer: str,
+    mode: str,
+    reason: str,
+    last: date,
+    log_path: Path,
+) -> dict[str, Any]:
+    """The audit entry of a forced run, its command rebuilt from its own arguments."""
+    how = "--dry-run" if mode == "dry-run" else f"--mode {mode}"
+    command = (
+        f"uqs job backfill {worker} --attachment {dest.attachment} --writer {writer} {how} "
+        f"--from {range_from.isoformat()} --to {range_to.isoformat()} "
+        f"--source-version {version} --override {backfill_forced.ANY_WRITER}"
+    )
+    return backfill_audit.forced_entry(
+        run=log_path.stem, mode=mode, reason=reason,
+        effect=backfill_forced.GUARDRAILS[0].description, command=command, job=worker,
+        writer=writer, destination=dest.as_dict(), range_from=range_from.isoformat(),
+        range_to=range_to.isoformat(), last_writable_date=last.isoformat(), log_path=log_path,
+    )  # fmt: skip
 
 
 def _access_file(dest: Destination, user: str, password: str) -> Path:
@@ -276,7 +343,7 @@ def receive(
     receiver = f"{contract.dataset}.receiver"
     with config.locked(attachment, attach_root):
         require_verified(attachment, attach_root)
-        backfill_owner.refuse_while_active(attachment, attach_root)
+        backfill_owner.refuse_while_active(attachment, attach_root, then="start the receiver again")
         if dry_run:
             return _served(None, port, dest, contract, binding, co, readers, None)
         access = _access_file(dest, att.stack.user, att.stack.password())

@@ -33,7 +33,8 @@ _SAFE_VALUE = re.compile(r"[A-Za-z0-9_.:-]+")
 
 #: torq.sh finds its own `-csv` and `-extras` flags by grepping every argument
 #: for those words, so a VALUE containing either is mistaken for the flag and
-#: the command line is misparsed.
+#: the command line is misparsed. Only a start through torq.sh (`start`) is
+#: refused for it: an attached run starts its q directly, and takes either (#2931).
 _TORQ_SH_WORDS = ("csv", "extras")
 
 #: What a write may do with a row whose row_key is already there - the
@@ -128,11 +129,6 @@ def backfill_flags(
                 f"{name} {value!r} may contain only letters, digits and . _ : - "
                 "(torq.sh runs the start line through a shell)"
             )
-        if any(word in value for word in _TORQ_SH_WORDS):
-            raise UqsError(
-                f"{name} {value!r} contains 'csv' or 'extras', which torq.sh "
-                "reads as its own flags wherever they appear"
-            )
     if on_conflict is not None:
         flags += ["-on_conflict", on_conflict]
     if mode is not None:
@@ -175,6 +171,7 @@ def start(
     # interpreter cannot run, rather than letting it fail mid-run.
     capabilities.refuse_unsupported(paths, worker, mode)
     procname = procname_for(worker)
+    _refuse_torq_sh_words(worker, source_version)
     flags = backfill_flags(
         worker,
         source_version,
@@ -191,6 +188,23 @@ def start(
     if mode in REHEARSAL_MODES:
         return rehearsal.run_bootstrapped(paths, args, base_port=base_port, capture=capture)
     return runtime.run_torq_sh(paths, args, base_port=base_port, capture=capture)
+
+
+def _refuse_torq_sh_words(worker: str, source_version: str) -> None:
+    """Refuse a value torq.sh would read as its own `-csv` or `-extras` flag - on the torq.sh
+    start alone: `--attachment` starts its runner without torq.sh and takes either (#2931)."""
+    way_out = {
+        "worker": "backfill with --attachment, which does not go through torq.sh, or give "
+        "the job a name without either to run it in this stack",
+        "version": "pass another --source-version, or backfill with --attachment, which does "
+        "not go through torq.sh",
+    }
+    for name, value in (("worker", worker), ("version", source_version)):
+        if any(word in value for word in _TORQ_SH_WORDS):
+            raise UqsError(
+                f"{name} {value!r} contains 'csv' or 'extras', which torq.sh reads as its own "
+                f"flags wherever they appear: {way_out[name]}"
+            )
 
 
 def clear_checkpoint(paths: UqsPaths, worker: str, dry_run: bool = False) -> Path | None:

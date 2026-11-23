@@ -163,6 +163,37 @@
     @[hdel;other;{[e] (::)}];
     .qunit.assertEquals[(r`state;left);(`completed;1b);"the run ignores it, and does not remove what is not its own"]};
 
+/ --- a request dies with the run it named (#2930) -----------------------------
+
+/ A stop asked during the LAST window is never read - no window follows it. The run that completes
+/ must still take it away: the next run with this pid (here the same process; in a restarted
+/ container, the usual case) would otherwise stop before its first window and do nothing, forever.
+.qt.qetl.job.bounded.stop.test_a_request_the_run_never_read_is_gone_when_it_completes:{[t]
+    `.qt.qetl.job.bounded.stop.after set (enlist 3)!enlist .qt.qetl.job.bounded.stop.touch;
+    r:.qt.qetl.job.bounded.stop.run[];
+    .qunit.assertEquals[(r`state;r`windows_completed);(`completed;3);"asked during the last window: the run completes"];
+    .qunit.assertEquals[()~key hsym `$.qt.qetl.job.bounded.stop.path[];1b;"and its request goes with it"]};
+
+.qt.qetl.job.bounded.stop.test_a_later_run_with_the_same_pid_is_not_stopped_by_an_earlier_request:{[t]
+    `.qt.qetl.job.bounded.stop.after set (enlist 3)!enlist .qt.qetl.job.bounded.stop.touch;
+    .qt.qetl.job.bounded.stop.run[];
+    .qt.support.reset_coverage_ledger[];
+    `.qt.qetl.job.bounded.stop.after set ()!();
+    `.qt.qetl.job.bounded.stop.written set 0;
+    r:.qt.qetl.job.bounded.stop.run[];
+    .qunit.assertEquals[(r`state;r`windows_completed;.qt.qetl.job.bounded.stop.written);(`completed;3;3);"the next run does every window, not stop before the first"]};
+
+/ The request is touched in the last window, which then throws: the run does not complete, and
+/ still takes its request away.
+.qt.qetl.job.bounded.stop.test_a_request_is_gone_when_the_run_fails:{[t]
+    / the third write of demo_deals touches the request, then throws - whichever writer it goes through
+    boom:{[target] .qt.qetl.job.bounded.stop.tick target; if[(target~`demo_deals) and .qt.qetl.job.bounded.stop.written>=3; '"io: disk full"]};
+    `.qt.qetl.job.bounded.stop.after set (enlist 3)!enlist .qt.qetl.job.bounded.stop.touch;
+    .qetl.io.default:`write`write_keyed!({[f;target;batch] f target; .qetl.io.write_memory[target;batch]}[boom];{[f;target;batch;opts] f target; .qetl.io.write_memory_keyed[target;batch;opts]}[boom]);
+    r:@[.qt.qetl.job.bounded.stop.run;::;{[e] `state`error!(`threw;e)}];
+    .qunit.assertTrue[not `completed~r`state;"the last window failed, so the run did not complete"];
+    .qunit.assertEquals[()~key hsym `$.qt.qetl.job.bounded.stop.path[];1b;"and it leaves no request behind"]};
+
 / --- the vocabulary ------------------------------------------------------------
 
 .qt.qetl.job.bounded.stop.test_stopped_is_a_terminal_state_and_not_a_success:{[t]

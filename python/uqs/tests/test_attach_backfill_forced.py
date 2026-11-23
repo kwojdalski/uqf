@@ -8,6 +8,7 @@ at HOST:PORT; that half is exercised against a live q in the remote-writer tests
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -16,7 +17,7 @@ from typer.testing import CliRunner
 
 from uqs import cli
 from uqs.attach import backfill as attached
-from uqs.attach import backfill_remote
+from uqs.attach import backfill_audit, backfill_remote
 from uqs.attach.remote import IpcError
 from uqs.paths import UqsError
 
@@ -58,13 +59,15 @@ class _Silent:
 
 def _launch(world, monkeypatch, **kw):
     kw.setdefault("ipc", _Writer())
+    if kw.get("force"):
+        kw.setdefault("reason", "approved by the desk")
     monkeypatch.setattr(backfill_remote, "q_interpreter", lambda env: Path("/bin/q"))
     monkeypatch.setattr(
         backfill_remote,
         "evaluate",
         lambda *a: {"custom_io": False, "live": True, "source": "s", "dataset": "d", "windows": []},
     )
-    monkeypatch.setattr(backfill_remote.subprocess, "Popen", _Popen)
+    monkeypatch.setattr(backfill_remote.subprocess, "Popen", kw.pop("popen", _Popen))
     monkeypatch.setattr(backfill_remote.backfill_owner, "claim", lambda *a: None)
     return backfill_remote.launch_remote(
         world.paths, "pb-uat", WORKER, "v1", FROM, TO,
@@ -176,3 +179,123 @@ def test_a_forced_launch_is_refused_when_the_writer_does_not_answer(world, monke
     with pytest.raises(UqsError, match="does not answer writer_state"):
         _launch(world, monkeypatch, force=True, ipc=_Silent())
     assert _Popen.argv == []
+
+
+# --- the forced write is on record (#2928) ---------------------------------------------
+
+
+def test_a_forced_launch_is_recorded_before_the_runner_starts(world, monkeypatch):
+    save_attachment("pb-uat", world.hdb)
+    seen: list[list[dict]] = []
+
+    class _Recording(_Popen):
+        def __init__(self, argv, **kw) -> None:
+            dest = backfill_remote.forced_destination(world.paths, "pb-uat", WORKER, "uat-box:6055")
+            seen.append(backfill_audit.read(backfill_audit.path_for(dest.state_dir)))
+            super().__init__(argv, **kw)
+
+    run_, _ = _launch(world, monkeypatch, force=True, popen=_Recording)
+    [entry] = seen[0]
+    assert run_.audit == backfill_audit.path_for(run_.state_dir)
+    assert entry["event"] == "override" and entry["override"] == "any-writer"
+    assert entry["reason"] == "approved by the desk"
+    assert entry["run"] == run_.run_id and entry["log"] == str(run_.log)
+    assert entry["writer"] == "uat-box:6055"
+    assert entry["command"].endswith("--writer uat-box:6055 --mode run --from "
+                                     f"{FROM.isoformat()} --to {TO.isoformat()} "
+                                     "--source-version v1 --override any-writer")  # fmt: skip
+    assert entry["bounds"] == {
+        "last_writable_date": "2026-09-13", "writes_stop_at": None, "eod_fence_bypassed": True,
+    }  # fmt: skip
+    assert entry["operator"] and entry["host"]
+
+
+def test_a_forced_launch_that_cannot_be_recorded_starts_nothing(world, monkeypatch):
+    save_attachment("pb-uat", world.hdb)
+    _Popen.argv = []
+
+    def _unwritable(path, lines):
+        raise OSError("read-only file system")
+
+    monkeypatch.setattr(backfill_audit, "_append", _unwritable)
+    with pytest.raises(UqsError, match="could not record the override .* nothing was started"):
+        _launch(world, monkeypatch, force=True)
+    assert _Popen.argv == [], "the runner was started without its record"
+
+
+def test_a_forced_launch_without_a_reason_is_refused(world, monkeypatch):
+    save_attachment("pb-uat", world.hdb)
+    _Popen.argv = []
+    with pytest.raises(UqsError, match="--override any-writer needs a --reason"):
+        _launch(world, monkeypatch, force=True, reason="")
+    assert _Popen.argv == []
+
+
+def test_a_checked_remote_launch_writes_no_override_record(world, monkeypatch):
+    run_, _ = _launch(world, monkeypatch)
+    assert run_.audit is None
+    assert not backfill_audit.path_for(run_.state_dir).exists()
+
+
+def test_attachment_show_lists_the_forced_write(world, monkeypatch):
+    """`uqs job attachment show` reads the attachment's record: a forced run's is filed under
+    the writer, apart from the pinned destination's, and is listed all the same."""
+    save_attachment("pb-uat", world.hdb)
+    run_, _ = _launch(world, monkeypatch, force=True)
+    record, found = backfill_audit.of_attachment(world.paths, "pb-uat")
+    assert [e["run"] for e in found] == [run_.run_id]
+    assert record is not None
+    [line] = backfill_audit.lines_of(found)
+    assert "OVERRIDE any-writer" in line and "reason: approved by the desk" in line
+
+
+def test_attachment_show_lists_the_forced_write_of_an_attachment_with_no_pinned_hdb(
+    world, monkeypatch
+):
+    save_attachment("pb-uat", world.hdb, state="applied", pin=False)
+    run_, _ = _launch(world, monkeypatch, force=True)
+    record, found = backfill_audit.of_attachment(world.paths, "pb-uat")
+    assert record == run_.audit
+    assert [e["override"] for e in found] == ["any-writer"]
+
+
+def test_another_attachments_forced_write_is_not_listed(world, monkeypatch):
+    save_attachment("pb-uat", world.hdb)
+    _launch(world, monkeypatch, force=True)
+    save_attachment("pb", world.hdb)
+    assert backfill_audit.of_attachment(world.paths, "pb") == (
+        backfill_audit.path_for(attached.state_dir_of(world.paths, "pb")),
+        [],
+    )
+
+
+def test_a_remote_launch_on_a_busy_attachment_is_told_to_run_again(world, monkeypatch):
+    """#2932: not detach's wording, and not `uqs job backfill ... --wait`, the command refused."""
+    save_attachment("pb-uat", world.hdb)
+    from uqs.attach import backfill_owner
+
+    backfill_owner.claim("pb-uat", "other_worker", os.getpid(), "abc")
+    # alive: the Popen double below would answer liveness's own `ps`
+    monkeypatch.setattr(backfill_owner, "process_gone", lambda *a: False)
+    with pytest.raises(UqsError, match=r"`uqs job runs stop other_worker --attachment pb-uat` "
+                       r"stops it\), then run this backfill again\."):  # fmt: skip
+        _launch(world, monkeypatch, force=True)
+
+
+def test_a_launch_removes_a_stop_request_an_earlier_process_of_its_pid_left(world, monkeypatch):
+    """#2930: `<worker>.<pid>.stop` left by a run that ended without reading it would stop the
+    next run given the same pid before its first window; nobody can have asked the new run to
+    stop before the launcher hands its pid out, so what is there is stale."""
+    from uqs.attach import backfill_run
+
+    save_attachment("pb-uat", world.hdb)
+    dest = attached.resolve(world.paths, "pb-uat", WORKER, on_this_machine=False)
+    left = backfill_run.stop_file_for(dest.state_dir, WORKER, 4242)  # _Popen's pid
+    other = backfill_run.stop_file_for(dest.state_dir, WORKER, 4343)
+    left.parent.mkdir(parents=True, exist_ok=True)
+    left.touch()
+    other.touch()
+    run_, _ = _launch(world, monkeypatch)
+    assert run_.state_dir == dest.state_dir
+    assert not left.exists(), "the leftover for this pid stops nothing now"
+    assert other.exists(), "another pid's request is not this launch's to remove"

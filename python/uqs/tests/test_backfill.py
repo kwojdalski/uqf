@@ -64,10 +64,42 @@ def test_a_value_a_shell_would_interpret_is_refused(version):
 
 
 @pytest.mark.parametrize("version", ["v1-csv", "extras2"])
-def test_a_value_torq_sh_would_read_as_its_own_flag_is_refused(version):
+def test_a_value_torq_sh_would_read_as_its_own_flag_is_refused_by_the_torq_sh_start(
+    version, monkeypatch
+):
     """torq.sh greps every argument for `csv` and `extras`."""
-    with pytest.raises(UqsError, match="'csv' or 'extras'"):
-        backfill.backfill_flags("demo_deals_backfill", version, FROM, TO)
+    seen = []
+    monkeypatch.setattr(runtime, "run_torq_sh", lambda paths, args, **kw: seen.append(args))
+    with pytest.raises(
+        UqsError,
+        match=rf"version '{version}' contains 'csv' or 'extras', which torq.sh reads as its own "
+        "flags wherever they appear: pass another --source-version, or backfill with "
+        "--attachment",
+    ):
+        backfill.start(stack_paths.default_paths(), "demo_deals_backfill", version, FROM, TO)
+    assert seen == [], "nothing reached torq.sh"
+
+
+def test_a_worker_torq_sh_would_read_as_its_own_flag_is_told_the_way_out():
+    with pytest.raises(
+        UqsError,
+        match="worker 'csv_trades_backfill' contains 'csv' or 'extras', which torq.sh reads as "
+        "its own flags wherever they appear: backfill with --attachment, which does not go "
+        "through torq.sh, or give the job a name without either",
+    ):
+        backfill._refuse_torq_sh_words("csv_trades_backfill", "v1")
+
+
+@pytest.mark.parametrize(
+    ("worker", "version"),
+    [("csv_trades_backfill", "v1"), ("demo_deals_backfill", "2026.csv"),
+     ("demo_deals_backfill", "extras-1")],
+)  # fmt: skip
+def test_the_flags_an_attached_run_starts_q_with_take_csv_and_extras(worker, version):
+    """#2931: the attached runners start their q directly, never through torq.sh - so a job
+    `uqs job new` scaffolded as csv_trades, or a release labelled 2026.csv, is theirs to run."""
+    flags = backfill.backfill_flags(worker, version, FROM, TO)
+    assert flags[:4] == ["-worker", worker, "-version", version]
 
 
 def test_an_empty_range_is_refused():

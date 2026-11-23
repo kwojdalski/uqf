@@ -48,9 +48,20 @@
         (enlist[`worker]!enlist worker),`planned`left!(count windows;count[windows]-1)];
     1#windows}
 
+/ Why a --once run that ran no window had none (#2929): `all_covered` when coverage left nothing to do,
+/ `not_complete` when the plan was cut short - by the source's complete_through or the end of day - and
+/ what was left before the cut was covered: the rest is not covered, and a later run does it. Both are
+/ no_work, exit 6, "nothing to do now", as a poll that found no page is; the reason tells them apart.
+/ @param worker the worker's name
+/ @return the reason, a string
+/ @eg .qetl.job.bounded.once.no_work_reason[`no_such_worker]  ->  "all_covered"
+.qetl.job.bounded.once.no_work_reason:{[worker]
+    c:@[.qetl.job.bounded.read_state[;`clipped_to];worker;{[e] 0Np}];
+    $[null c; "all_covered"; "not_complete"]}
+
 / The --once outcome of a bounded run's terminal state.
 / @param state the run's state: completed, idle, partial, failed or stopped
-/ @return `done for a window that ran, `no_work when every window was already covered, `stopped
+/ @return `done for a window that ran, `no_work when there was no window to run, `stopped
 / for an operator's stop, and `failed for anything else
 / @eg .qetl.job.bounded.once.outcome `idle  ->  `no_work
 .qetl.job.bounded.once.outcome:{[state] $[state~`completed; `done; state~`idle; `no_work; state~`stopped; `stopped; `failed]}
@@ -62,7 +73,7 @@
 / @return the outcome document
 .qetl.job.bounded.once.conclude:{[ctx;result]
     o:.qetl.job.bounded.once.outcome[result`state];
-    reason:$[o~`no_work; "all_covered"; o~`done; ""; "the run ended ",string result`state];
+    reason:$[o~`no_work; .qetl.job.bounded.once.no_work_reason ctx`job; o~`done; ""; "the run ended ",string result`state];
     n:{[r;k] $[k in key r; `long$r k; 0]}[result];
     detail:$[`error in key result; $[10h=type e:result`error; e; -3!e]; ""];
     .qetl.once.conclude[ctx;o;reason;n`windows_completed;n`rows_published;detail]}

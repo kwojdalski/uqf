@@ -14,16 +14,19 @@
 /   <status_dir>/<worker>.<pid>.stop
 / .
 / beside the worker's own lock (`<worker>.lock`) and status file. It names the process, not just the
-/ worker, so it is unambiguous: a request left behind for a run that has since ended names a pid
-/ no later run has, and stops nothing. Anyone may create it - `touch` - for a run they can see
-/ the pid of (the owner record, the lock, `uqs job backfill`'s own line).
+/ worker. A pid is reused, though - in a restarted container the next run often has the same one -
+/ so a request must not outlive its run: the run removes its own file on EVERY exit, whether it
+/ stopped, completed or failed (`cleanup`, #2930), and the attached launchers remove one a
+/ dead process of that pid left before they hand the new pid to anyone. Anyone may create it -
+/ `touch` - for a run they can see the pid of (the owner record, the lock, `uqs job backfill`'s
+/ own line).
 / .
 / What a stop does. Before each window the run looks for its file. If it is there, the run does
 / NOT start that window: every window it did start has finished or failed exactly as it would
 / have, so no window is recorded complete that did not complete, and the ledger holds exactly the
 / completed ones. The run then finishes its store as any run does (the HDB writer's sort and
 / attribute, the readers' reload), advances to the `stopped phase - the status file, the beat and
-/ the run ledger all say `stopped - removes the file, and exits with `code`. Its locks are released
+/ the run ledger all say `stopped - and exits with `code`. Its locks and its stop file are released
 / by `run`, as on every exit. A re-run plans what is not covered and does the rest.
 / .
 / Its own file because bounded_worker.q is held to its line budget (q-module-size).

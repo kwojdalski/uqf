@@ -81,8 +81,10 @@ def active(attachment: str, root: Path | None = None) -> list[dict[str, Any]]:
 
 
 def refuse_while_active(attachment: str, root: Path | None = None, *, then: str = "detach") -> None:
-    """Raise if an attached backfill owns a live run: detach calls this first, and
-    a `--replace` before it saves (`then` is what the operator does afterwards)."""
+    """Raise if an attached backfill owns a live run: detach calls this first, a `--replace`
+    before it saves, and a second backfill, receiver or HDB write before it starts (`then` is
+    what the operator does afterwards). The refusal names the commands that follow and stop
+    each run (#2932)."""
     runs = active(attachment, root)
     if runs:
         who = "; ".join(
@@ -90,8 +92,17 @@ def refuse_while_active(attachment: str, root: Path | None = None, *, then: str 
             f"into {r.get('destination', '?')}, since {r.get('started', '?')}, record {r['file']})"
             for r in runs
         )
+        how = "; ".join(_follow_and_stop(attachment, str(r.get("worker", "?"))) for r in runs)
         raise AttachmentError(
             f"attachment {attachment} has an attached backfill running: {who}. Let it finish "
-            f"(`uqs job backfill ... --wait` follows it), or stop it, then {then}. "
-            "Nothing was changed."
+            f"or stop it ({how}), then {then}. Nothing was changed."
         )
+
+
+def _follow_and_stop(attachment: str, worker: str) -> str:
+    """The commands that follow and stop `worker`'s run: a receiver (`<dataset>.receiver`) is
+    stopped by `uqs job receiver stop`, every other run by `uqs job runs stop`."""
+    follow = f"`uqs logs --attachment {attachment} --worker {worker} -f` follows it"
+    if worker.endswith(".receiver"):
+        return f"{follow}, `uqs job receiver stop --attachment {attachment}` stops it"
+    return f"{follow}, `uqs job runs stop {worker} --attachment {attachment}` stops it"
