@@ -98,8 +98,8 @@
     while[i<count prefix_targets;
         prefix_target:prefix_targets i;
         sorted_names:.qf.mkt.sorted_source_cols_for_prefix[col_names;col_strs;prefix_target];
-        targets:targets,prefix_target 1;
-        source_lists:source_lists,enlist sorted_names;
+        targets,:prefix_target 1;
+        source_lists,:enlist sorted_names;
         i+:1];
     targets!source_lists};
 

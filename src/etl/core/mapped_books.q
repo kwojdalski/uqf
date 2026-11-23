@@ -251,7 +251,7 @@
         rows:left where ((dt left)-d)>skew;
         if[count rows;
             m:one[d;rows];
-            got:got,select last quoted, last bid, last ask, last clock, last rid, last date by pid from m;
+            got,:select last quoted, last bid, last ask, last clock, last rid, last date by pid from m;
             left:left except exec pid from m]];
     books:select distinct sym, source, source_time:quoted, bid, ask, clock, rid, date from (f lj got) where not null quoted, quoted>=arg`read_from;
     .qetl.mapped.arrange books}
