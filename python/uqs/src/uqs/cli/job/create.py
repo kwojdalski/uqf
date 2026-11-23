@@ -16,7 +16,6 @@ from typing import Annotated
 import typer
 
 from uqs.cli.common import completion, safety
-from uqs.cli.common.choices import ChoiceOpt
 from uqs.cli.common.renames import SLICE, SLICE_COLUMN, refused
 from uqs.cli.common.shared import (
     JOB_AUTHORING_PANEL,
@@ -33,7 +32,15 @@ from uqs.cli.job.create_bundle import (
     refuse_tree_only,
     write_bundle_plan,
 )
-from uqs.cli.job.create_kinds import DEFAULT_KIND, KindOpt, for_kinds, given_options, misplaced
+from uqs.cli.job.create_kinds import (
+    DEFAULT_KIND,
+    KindOpt,
+    TransformOpt,
+    for_kinds,
+    given_options,
+    misplaced,
+    repeated,
+)
 from uqs.cli.job.create_plant import plant_shapes
 from uqs.cli.job.create_reaction import TriggeredByOpt, scaffold_reaction
 from uqs.cli.job.regenerate import write_plan
@@ -42,17 +49,9 @@ from uqs.paths import UqsError, UqsUsageError
 from uqs.scaffold import columns as columns_mod
 from uqs.scaffold import cycles, external, jobs, normalizer
 from uqs.scaffold import horizon as horizon_scaffold
-from uqs.scaffold import transform as transform_mod
 from uqs.scaffold import worker as worker_mod
 
 app.add_typer(job_app, name="job")
-
-
-_TransformOpt = ChoiceOpt(
-    transform_mod.MODES,
-    "--transform",
-    "{values}: the transform, and for streaming its handler" + for_kinds("--transform"),
-)
 
 
 @job_app.command(
@@ -224,7 +223,7 @@ def new_job(
             "--kind backfill --twin-of JOB`" + for_kinds("--twin-of"),
         ),
     ] = None,
-    transform: _TransformOpt = None,
+    transform: TransformOpt = None,
     triggered_by: TriggeredByOpt = None,
     bundle: Annotated[
         Path | None,
@@ -271,14 +270,8 @@ def new_job(
         uqs job new deal_volume --triggered-by demo_deals --outputs deal_volume
     """
     subs = [s.strip() for s in (subscribe_to or "").split(",") if s.strip()]
-    # A repeated name was written into the declaration twice, and with --schema
-    # refused as two undefined tables rather than as the repeat it is (#2946).
-    for flag, given in (("--subscribe-to", subscribe_to), ("--outputs", outputs)):
-        listed = [t.strip() for t in (given or "").split(",") if t.strip()]
-        if repeated := sorted({t for t in listed if listed.count(t) > 1}):
-            _die(
-                UqsUsageError(f"{flag} names {', '.join(repeated)} more than once - give each once")
-            )
+    if refusal := repeated({"--subscribe-to": subscribe_to, "--outputs": outputs}):
+        _die(UqsUsageError(refusal))
     repo_root = _paths().repo_root
     used = given_options(ctx)
     if triggered_by is not None:

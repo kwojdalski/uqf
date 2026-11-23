@@ -11,6 +11,7 @@ from typing import Any
 
 from uqs.cli.common.choices import ChoiceOpt
 from uqs.model.kinds import SCAFFOLD_KINDS
+from uqs.scaffold import transform as transform_mod
 
 #: `--kind` when it is not given.
 DEFAULT_KIND = "streaming"
@@ -62,6 +63,25 @@ def for_kinds(option: str) -> str:
     for an option every kind takes."""
     kinds = SHAPES[option]
     return "" if set(kinds) == set(SCAFFOLD_KINDS) else f" ({', '.join(kinds)})"
+
+
+TransformOpt = ChoiceOpt(
+    transform_mod.MODES,
+    "--transform",
+    "{values}: the transform, and for streaming its handler" + for_kinds("--transform"),
+)
+
+
+def repeated(lists: dict[str, str | None]) -> str | None:
+    """The refusal for the first of `lists` ({--option: its comma-separated
+    tables}) that names a table twice. A repeat was written into the
+    declaration twice, and with --schema refused as two undefined tables
+    rather than as the repeat it is (#2946)."""
+    for flag, given in lists.items():
+        listed = [t.strip() for t in (given or "").split(",") if t.strip()]
+        if names := sorted({t for t in listed if listed.count(t) > 1}):
+            return f"{flag} names {', '.join(names)} more than once - give each once"
+    return None
 
 
 def misplaced(kind: str, used: dict[str, bool]) -> str | None:
