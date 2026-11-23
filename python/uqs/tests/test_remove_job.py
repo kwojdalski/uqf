@@ -680,6 +680,39 @@ def test_the_last_job_on_a_scaffolded_table_takes_it_when_its_definer_is_gone(tr
     assert not changed, f"not restored: {changed}"
 
 
+def test_the_last_reader_of_a_scaffolded_table_takes_it_when_its_definer_is_gone(tree):
+    """#2924: #2842's rule asked only about the tables a job writes, so once
+    the job that defined a table was gone, removing its last subscriber left
+    the definition, its catalog lines and its expected entry behind."""
+    files = (TABLES_FILE, CATALOG_FILE, STACK_TABLES_TEST)
+    before = {rel: (tree / rel).read_text() for rel in files}
+    write.apply_plan(jobs.streaming_job("zq_p", [], "zq_shared", "px:float"), tree)
+    write.apply_plan(
+        jobs.streaming_job("zq_q", ["zq_shared"], "zq_q_out", "n:long", known_tables={"zq_shared"}),
+        tree,
+    )
+    # The job that defined zq_shared is gone; its definition is still unwritten.
+    (tree / "src/etl/streaming/zq_p.q").unlink()
+    (tree / "tests/q/test_zq_p.q").unlink()
+    removal = plan_removal(tree, "zq_q")
+    assert any("removed table zq_shared" in n for n in removal.notes), removal.notes
+    assert removal.references == []
+    removal.apply(tree)
+    assert {rel: (tree / rel).read_text() for rel in files} == before
+
+
+def test_a_table_the_removed_job_reads_stays_while_its_definer_does(tree):
+    write.apply_plan(jobs.streaming_job("zq_p", [], "zq_shared", "px:float"), tree)
+    write.apply_plan(
+        jobs.streaming_job("zq_q", ["zq_shared"], "zq_q_out", "n:long", known_tables={"zq_shared"}),
+        tree,
+    )
+    removal = plan_removal(tree, "zq_q")
+    assert not any("zq_shared" in n for n in removal.notes), removal.notes
+    removal.apply(tree)
+    assert ".qetl.plant.zq_shared:([]" in (tree / TABLES_FILE).read_text(), "zq_p still writes it"
+
+
 def test_a_stream_and_a_backfill_under_one_name_are_each_removable(tree):
     """#2840: `zq_s` matched the stream and zq_s_backfill both, so the stream
     had no name that removed it."""

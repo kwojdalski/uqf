@@ -14,8 +14,8 @@ definition, its `expected` entry and its catalog line - but only when nothing
 else in the tree mentions it, so a table another job reads is never taken, and
 only when this scaffold defined it (its comment opens "/ <process>'s"), so a
 table it merely publishes onto stays (#1585) - unless the job that defined it
-is gone and the definition is still unwritten, when the last job on it takes it
-(#2842).
+is gone and the definition is still unwritten, when the last job on it - writer
+or reader - takes it (#2842, #2924).
 A reaction is only its file and its test: it has no process, so no table,
 profile or port.
 An external feed (#715) also loses its Python publisher, its feed module and
@@ -75,6 +75,7 @@ from uqs.scaffold.remove_policy import (
     defined_by,
     generated_test,
     living_names,
+    orphaned_inputs,
     refuse_dependents,
     refuse_still_profiled,
     refuse_written,
@@ -208,14 +209,12 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
             kept.add(table)
             continue
         names.add(table)
-        _edit(removal, repo_root, TABLES_FILE, lambda t, tb=table: _drop_definition(t, tb))
-        _edit(
-            removal,
-            repo_root,
-            STACK_TABLES_TEST,
-            lambda t, tb=table: _drop_token(t, f"{STACK_TABLES_LIST}:", f"`{tb}"),
-        )
-        _edit(removal, repo_root, CATALOG_FILE, lambda t, tb=table: _drop_catalog(t, tb))
+        _drop_table(removal, repo_root, table)
+    # A table it only reads, when it is the last user of a scaffold whose job is gone (#2924).
+    for table in orphaned_inputs(repo_root, job_file, text, tables, gone, living):
+        removal.notes.append(f"removed table {table}: its job is gone, and this read it last")
+        names.add(table)
+        _drop_table(removal, repo_root, table)
 
     for rel in (PROFILES_FILE, UNPROFILED_FILE):
         if (repo_root / rel).is_file():
@@ -295,6 +294,14 @@ def _edit(removal: Removal, repo_root: Path, path: Path, change) -> None:
     new = change(current)
     if new != current:
         removal.rewrites[path] = new
+
+
+def _drop_table(removal: Removal, repo_root: Path, table: str) -> None:
+    """Queue `table`'s definition, `expected` entry and catalog lines to go."""
+    _edit(removal, repo_root, TABLES_FILE, lambda t: _drop_definition(t, table))
+    expected = f"{STACK_TABLES_LIST}:"
+    _edit(removal, repo_root, STACK_TABLES_TEST, lambda t: _drop_token(t, expected, f"`{table}"))
+    _edit(removal, repo_root, CATALOG_FILE, lambda t: _drop_catalog(t, table))
 
 
 def _drop_token(text: str, prefix: str, token: str) -> str:

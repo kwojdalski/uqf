@@ -21,6 +21,7 @@ from uqs.model.declarations import (
     declared_outputs,
     reaction_calls,
     read_declarations,
+    read_file_text,
     symbols,
 )
 from uqs.paths import (
@@ -228,3 +229,28 @@ def defined_by(repo_root: Path, table: str, owners: set[str], living: set[str]) 
     if named & owners:
         return True
     return bool(named) and not named & living and any(_ROW_PLACEHOLDER in c for c in comment)
+
+
+def orphaned_inputs(
+    repo_root: Path,
+    job_file: Path,
+    text: str,
+    decided: list[str],
+    gone: set[Path],
+    living: set[str],
+) -> list[str]:
+    """The tables the job in `job_file` (source `text`) only reads that go with
+    it: none of `decided` (its outputs, already ruled on), nothing outside
+    `gone` names them, and their definition is a scaffold of a job no longer
+    in the tree. #2842's rule for the last writer, applied to the last reader:
+    the producer went first, while this one still read the table, and nobody
+    else is left to take it (#2924)."""
+    declared = read_file_text(text, repo_root / job_file)
+    reads = declared[0].subscribe_to if declared else ()
+    return [
+        t
+        for t in reads
+        if t not in decided
+        and user_of(repo_root, t, gone) is None
+        and defined_by(repo_root, t, set(), living)
+    ]
