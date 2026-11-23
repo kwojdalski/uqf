@@ -162,7 +162,8 @@ def build_plan(
             "write_lock": f"{dest.hdb_dir}.write.lock",
         },
         "reload_targets": [
-            {"process": r.procname, "port": r.port} for r in admission.reload_targets
+            {"process": r.procname, "host": r.host, "port": r.port}
+            for r in admission.reload_targets
         ],
         "readers_not_serving": [
             {"process": r.procname, "detail": r.detail} for r in admission.readers if not r.serves

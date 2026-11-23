@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 from attach_backfill_support import HdbStack, save_attachment
+from attach_support import ListedHosts
 from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
@@ -171,6 +172,25 @@ def test_the_readers_serving_the_hdb_are_reloaded(monkeypatch, tmp_path):
     rows = hdb_where.reload_readers(where, fake)
     assert fake.reloaded == ["hdb1"]
     assert rows == [{"process": "hdb1", "ok": True, "outcome": "reloaded", "detail": ""}]
+
+
+def test_a_reader_on_a_second_host_is_reloaded_where_discovery_lists_it(monkeypatch, tmp_path):
+    """Asked at the stack's host, it read as not running and was skipped (#2907)."""
+    monkeypatch.setenv("UQS_ATTACH_DIR", str(tmp_path / "attachments"))
+    hdb = tmp_path / "hdb"
+    hdb.mkdir()
+    fake = ReloadingStack(hdb)
+    fake.named("hdb1")["host"] = "hostb.example.com"
+    fake.refresh_discovery()
+    ipc = ListedHosts(fake)
+    save_attachment("pb", hdb)
+    where = hdb_where.resolve("pb", ipc, writes=True)
+    rows = hdb_where.reload_readers(where, ipc)
+    assert rows == [{"process": "hdb1", "ok": True, "outcome": "reloaded", "detail": ""}]
+    assert [(host, op) for name, host, op in ipc.asked if name == "hdb1"] == [
+        ("hostb.example.com", "hdb_reader"),
+        ("hostb.example.com", "hdb_reload"),
+    ]
 
 
 # ------------------------------------------------------------------ ssh

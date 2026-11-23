@@ -19,7 +19,7 @@ import stat
 from pathlib import Path
 
 import pytest
-from attach_support import LEDGER_Q, FakeStack, make_bundle
+from attach_support import LEDGER_Q, FakeStack, ListedHosts, make_bundle
 
 from uqs.attach import apply as applying
 from uqs.attach import (
@@ -273,6 +273,29 @@ def test_a_sort_process_that_is_not_running_reads_the_file_when_it_starts(world)
     assert [r.procname for r in p.sort_changes[0].reload] == ["wdb1"]
     apply_(att, fake, state)
     assert verify.verify(att, fake, state, ROOT).ok
+
+
+def test_a_sort_process_on_a_second_host_is_asked_reloaded_and_verified_there(world):
+    """Discovery lists sort1 on another machine than the wdb. Asked at the stack's
+    host it read as not running: it was never reloaded, and the attachment verified
+    while the process that sorts at end of day held no rule for the table (#2907)."""
+    fake, make, state, csv = world
+    fake.named("sort1")["host"] = "hostb.example.com"
+    fake.refresh_discovery()
+    ipc, att = ListedHosts(fake), make()
+    p = plan.build(att, ipc, ROOT)
+    assert p.ok and "SORT_READER_STOPPED" not in codes(p, "warning")
+    assert [r.procname for r in p.sort_changes[0].reload] == ["wdb1", "sort1"]
+    apply_(att, ipc, state)
+    assert live(fake, "sort1") == [("p", "sym", True), ("", "time", True)]
+    assert verify.verify(att, ipc, state, ROOT).ok
+    assert {host for name, host, _ in ipc.asked if name == "sort1"} == {"hostb.example.com"}
+    # and verify notices when THAT process loses the rule, which it could not ask before
+    fake.named("sort1")["sortrows"] = [
+        r for r in fake.named("sort1")["sortrows"] if r["tabname"] != TABLE
+    ]
+    failed = [c.name for c in verify.verify(att, ipc, state, ROOT).checks if not c.ok]
+    assert failed == [f"sort1: {TABLE} is sorted by the declared rule, live"]
 
 
 def test_a_file_on_another_machine_cannot_be_written(world):

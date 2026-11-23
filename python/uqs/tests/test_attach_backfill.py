@@ -31,7 +31,7 @@ from attach_backfill_support import (
     snapshot,
     tree_table,
 )
-from attach_support import blocked
+from attach_support import ListedHosts, blocked
 from typer.testing import CliRunner
 
 from uqs import cli
@@ -161,7 +161,21 @@ def test_an_unknown_attachment_and_an_unknown_worker_are_refused(world):
 def test_the_writers_and_the_readers_that_serve_the_destination_are_found(world):
     plan_ = plan_with(world, facts_of())
     assert plan_["writers"] == ["rdb1", "wdb1"]
-    assert plan_["reload_targets"] == [{"process": "hdb1", "port": 6003}]
+    assert plan_["reload_targets"] == [{"process": "hdb1", "host": "testhost", "port": 6003}]
+
+
+def test_a_reader_on_a_second_host_is_asked_where_discovery_lists_it(world):
+    """Asked at the stack's host instead, nothing answered: the reader that serves
+    the destination read as `not running` and was left out of the reload (#2907)."""
+    world.stack.named("hdb1")["host"] = "hostb.example.com"
+    world.stack.refresh_discovery()
+    ipc = ListedHosts(world.stack)
+    plan_ = plan_with(world, facts_of(), ipc=ipc)
+    assert plan_["reload_targets"] == [
+        {"process": "hdb1", "host": "hostb.example.com", "port": 6003}
+    ]
+    assert plan_["readers_not_serving"] == []
+    assert {host for name, host, _ in ipc.asked if name == "hdb1"} == {"hostb.example.com"}
 
 
 def test_a_reader_of_another_directory_is_not_a_reload_target(world, monkeypatch):
@@ -330,7 +344,7 @@ def test_the_plan_reports_everything_the_issue_asks_for(world):
     assert p["coverage"] == {"fetch": 1, "covered": 1, "deferred": 0}
     assert p["native_partitions"] == [{"date": "2026-09-12", "exists": False, "has_dataset": False}]
     assert p["destination"]["hdb_dir"] == str(world.hdb.resolve())
-    assert p["reload_targets"] == [{"process": "hdb1", "port": 6003}]
+    assert p["reload_targets"] == [{"process": "hdb1", "host": "testhost", "port": 6003}]
 
 
 def test_native_partitions_say_what_already_exists(world):
@@ -494,7 +508,9 @@ def test_cli_plan_prints_the_report_and_json_matches(world, monkeypatch):
     out = " ".join(text.output.split())
     assert "attachment pb-uat (nothing was written)" in out and "reload hdb1:6003" in out
     as_json = invoke(*COMMON, "--mode", "plan", "--json")
-    assert json.loads(as_json.output)["reload_targets"] == [{"process": "hdb1", "port": 6003}]
+    assert json.loads(as_json.output)["reload_targets"] == [
+        {"process": "hdb1", "host": "testhost", "port": 6003}
+    ]
 
 
 def test_json_without_attach_reports_the_local_run(world):

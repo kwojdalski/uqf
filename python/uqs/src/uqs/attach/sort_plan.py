@@ -25,7 +25,7 @@ from uqs.attach.sort_file import (
     own,
     read,
 )
-from uqs.attach.topology import Observation, Proc, ask, port_of
+from uqs.attach.topology import Observation, Proc, ask, host_of, port_of
 
 #: wdb writedown modes that partition by the `p` column of sort.csv (TorQ wdb.q).
 PARTED_MODES = ("partbyattr", "partbyenum", "partbyfirstchar")
@@ -80,7 +80,11 @@ def resolve_path(probe: dict) -> str:
 def readers(att: Attachment, obs: Observation, ipc: Ipc) -> list[Reader]:
     """Every process whose sort rules decide how an attached table is stored: the
     managed wdbs, and the sort and sortworker processes they name (probed here,
-    read-only). A process that cannot be asked is returned down, not dropped."""
+    read-only). A process that cannot be asked is returned down, not dropped.
+
+    Each is asked at the host discovery lists it on, as the consumers were
+    (topology.host_of): a sort process on a second host, asked at the stack's,
+    read as stopped and was neither reloaded nor verified (#2907)."""
     found = [c for c in obs.consumers if c.proctype == "wdb"]
     names = [t.name for t in att.tables]
     asked: set[str] = set()
@@ -96,9 +100,8 @@ def readers(att: Attachment, obs: Observation, ipc: Ipc) -> list[Reader]:
             asked.add(svc["procname"])
             port = port_of(svc["hpup"])
             if port is not None:
-                found.append(
-                    ask(ipc, att.stack.host, svc["procname"], svc["proctype"], port, names)
-                )
+                host = host_of(svc["hpup"], att.stack)
+                found.append(ask(ipc, host, svc["procname"], svc["proctype"], port, names))
     return [Reader(p, resolve_path(p.probe or {}) if p.up else "") for p in found]
 
 

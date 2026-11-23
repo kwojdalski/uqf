@@ -208,7 +208,7 @@ def test_the_plan_says_the_fence_is_bypassed_and_never_that_writes_stop(world):
 def _flags(plan, tmp):
     dest = Destination(**backfill_run._destination(plan))
     return backfill_run.runner_flags(
-        plan, dest, tmp / "owner.json", host="testhost", user="u", worker=WORKER, version="v1",
+        plan, dest, tmp / "owner.json", user="u", worker=WORKER, version="v1",
         range_from=support.FROM, range_to=support.TO, mode="run", on_conflict=None,
         verbose=False, trace=False,
     )  # fmt: skip
@@ -216,6 +216,15 @@ def _flags(plan, tmp):
 
 def _deadline(flags):
     return flags[flags.index("-deadline") + 1]
+
+
+def test_the_runner_is_told_each_reader_at_the_host_discovery_lists_it_on(world):
+    """Not at the stack's host: the runner asks a reader to reload at the address it
+    is given, and one on a second machine does not listen at the stack's (#2907)."""
+    world.stack.named("hdb1")["host"] = "hostb.example.com"
+    world.stack.refresh_discovery()
+    flags = _flags(plan_with(world, facts_of()), world.tmp)
+    assert flags[flags.index("-readers") + 1] == "hdb1@hostb.example.com:6003"
 
 
 def test_the_runner_gets_an_infinite_deadline_only_when_the_fence_is_waived(world):
