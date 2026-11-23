@@ -11,6 +11,7 @@ one release.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -91,24 +92,46 @@ def _record(row: dict, columns: tuple[str, ...]) -> dict:
     return utc_times({col: row.get(col) for col in columns})
 
 
-def _where(attach: str | None) -> dict:
-    """The `directory=` for the ledger reads: the attached destination's, or none (the default).
+def _where(attach: str | None) -> list[dict]:
+    """The `directory=` of each ledger to read: the runtime's own (no attachment), or every
+    destination's an attachment's runs have kept.
 
-    While a run is going it is the destination that run was launched into, as its owner
-    record names it (#2758): the config's pins may have changed since, and would point the
-    listing at a ledger the run never writes. With none going, the config's own."""
+    Every one, not the config's: a run went where its owner record says (#2758), which the
+    pins may no longer name, and a forced run (`--override any-writer`) files under its
+    writer's address, apart from any checked destination (#2950). A live run's directory is
+    among them even before it has written there."""
     if attach is None:
-        return {}
-    from uqs.attach import backfill as attached
-    from uqs.attach import backfill_owner, backfill_stop
+        return [{}]
+    from uqs.attach import backfill_owner, backfill_stop, config
+    from uqs.stack import attached_logs
 
-    live = {backfill_stop.run_state_dir(_paths(), attach, r) for r in backfill_owner.active(attach)}
-    if len(live) > 1:
-        raise UqsError(
-            f"attachment {attach} has runs going into more than one destination "
-            f"({', '.join(sorted(map(str, live)))}): which ledger to read is ambiguous"
-        )
-    return {"directory": live.pop() if live else attached.state_dir_of(_paths(), attach)}
+    found = {
+        backfill_stop.run_state_dir(_paths(), attach, r) for r in backfill_owner.active(attach)
+    }
+    found.update(attached_logs.state_dirs(_paths(), attach))
+    if not found:
+        config.load(attach)  # a name that is no attachment is refused, not listed as empty
+    return [{"directory": where} for where in sorted(found)]
+
+
+def _history(read, attach: str | None) -> list[dict]:
+    """`read`'s rows from every ledger `_where` names, newest first across them."""
+    rows = [row for where in _where(attach) for row in read(_paths(), **where)]
+    if attach is None:
+        return rows
+    return sorted(rows, key=lambda r: str(r.get("started_at") or ""), reverse=True)
+
+
+def _found(run_id: str, attach: str | None) -> tuple[list[dict], list[dict], Path | None]:
+    """`run_id`'s row and facts, and the state directory whose ledger holds it (None for the
+    runtime's own): the first ledger that has it."""
+    run: list[dict] = []
+    facts: list[dict] = []
+    for where in _where(attach):
+        run, facts = stack_runs.show(_paths(), run_id, **where)
+        if run:
+            return run, facts, where.get("directory")
+    return run, facts, None
 
 
 def _cell(value: object) -> str:
@@ -168,9 +191,7 @@ def list_runs(
     list takes every listing's flags: --export, --sort, --reverse, -i.
     """
     try:
-        rows = (stack_runs.unfinished if unfinished else stack_runs.history)(
-            _paths(), **_where(attach)
-        )
+        rows = _history(stack_runs.unfinished if unfinished else stack_runs.history, attach)
         if any(v is not None for v in (range_from, range_to, day, last)):
             window = timerange.resolve(range_from, range_to, day, last, open_ended=True)
             rows = [r for r in rows if _overlaps(r, window)]
@@ -241,7 +262,7 @@ def show(
 ) -> None:
     """Show one run, and every fact it recorded about what it published."""
     try:
-        run, facts = stack_runs.show(_paths(), run_id, **_where(attach))
+        run, facts, state = _found(run_id, attach)
     except UqsError as exc:
         _die(exc)
     if not run:
@@ -250,23 +271,23 @@ def show(
         emit({
             "run": _record(run[0], _RUN_COLUMNS),
             "facts": [_record(f, _FACT_COLUMNS) for f in facts],
-            "logs": [str(_where(attach)["directory"] / "logs")] if attach
+            "logs": [str(state / "logs")] if state
             else [str(p) for p in stack_runs.log_files(_paths(), run[0])],
             "rerun": stack_runs.rerun_command(run[0], attach) or None,
         })  # fmt: skip
         return
     _print("run", run, _RUN_COLUMNS, "")
     _print("facts", facts, _FACT_COLUMNS, "this run recorded no facts")
-    _print_next_steps(run[0], attach)
+    _print_next_steps(run[0], attach, state)
 
 
-def _print_next_steps(run: dict, attach: str | None = None) -> None:
+def _print_next_steps(run: dict, attach: str | None = None, state: Path | None = None) -> None:
     """Where to look, and what to type: the two things a reader of a failed
-    or interrupted run wants next, without a trip through the docs."""
+    or interrupted run wants next, without a trip through the docs. `state` is
+    the attached run's state directory."""
     paths = _paths()
     logs = stack_runs.log_files(paths, run)
-    if attach:
-        state = _where(attach)["directory"]
+    if attach and state:
         console.print(
             f"\n[bold]logs[/]   {state / 'logs'}  (attached run; `uqs job attachment status`)"
         )

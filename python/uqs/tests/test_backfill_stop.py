@@ -232,4 +232,43 @@ def test_the_runs_listing_reads_a_live_runs_own_ledger(state, monkeypatch):
     from uqs.cli.job import runs
 
     _claim(monkeypatch, 4321)
-    assert runs._where("pb-uat") == {"directory": state}
+    assert runs._where("pb-uat") == [{"directory": state}]
+
+
+#: A forced run's state directory: filed under its writer's address (forced_destination).
+FORCED = "fedcba987654"
+
+
+def test_a_forced_runs_ledger_is_listed_and_shown_after_it_has_ended(state, monkeypatch):
+    """#2950: with no run going, `runs list/show --attachment` read only the checked
+    destination's ledger - which an attachment pinning no HDB has none of, so the
+    listing refused - and never the forced run's, filed under its writer's address."""
+    from uqs.cli.job import runs
+    from uqs.stack import runs as stack_runs
+
+    forced = state.parent / f"pb-uat-{FORCED}"
+    forced.mkdir()
+    (state.parent / f"pb-uat-other-{DEST}").mkdir()  # another attachment's, not read
+    monkeypatch.setattr(backfill_owner, "active", lambda attachment, root=None: [])
+    assert runs._where("pb-uat") == [{"directory": state}, {"directory": forced}]
+    rows = {
+        state: [{"run_id": "a", "worker": WORKER, "started_at": "2026-09-13T06:00:00"}],
+        forced: [{"run_id": "b", "worker": WORKER, "started_at": "2026-09-13T07:00:00"}],
+    }
+    monkeypatch.setattr(stack_runs, "history", lambda paths, directory: rows[directory])
+    assert [r["run_id"] for r in runs._history(stack_runs.history, "pb-uat")] == ["b", "a"]
+
+    def show(paths, run_id, directory):
+        return [r for r in rows[directory] if r["run_id"] == run_id], []
+
+    monkeypatch.setattr(stack_runs, "show", show)
+    assert runs._found("b", "pb-uat") == (rows[forced], [], forced)
+
+
+def test_an_attachment_with_no_runs_anywhere_is_still_checked_to_exist(state, monkeypatch):
+    from uqs.cli.job import runs
+
+    state.rmdir()
+    monkeypatch.setattr(backfill_owner, "active", lambda attachment, root=None: [])
+    with pytest.raises(UqsError, match="nosuch"):
+        runs._where("nosuch")
