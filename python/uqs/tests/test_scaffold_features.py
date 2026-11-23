@@ -481,6 +481,30 @@ def test_an_option_for_another_kind_is_refused_by_name(argv, option, monkeypatch
 
 
 @pytest.mark.parametrize(
+    ("argv", "said"),
+    [
+        (["--subscribe-to", "quote,quote", "--outputs", "tbl"], "--subscribe-to names quote"),
+        (["--outputs", "s1, s1", "--schema", "sym:symbol, px:float"], "--outputs names s1"),
+        (["--triggered-by", "demo_deals", "--outputs", "tbl,tbl"], "--outputs names tbl"),
+    ],
+)
+def test_a_name_given_twice_is_refused_as_a_repeat(argv, said, monkeypatch):
+    """#2946: `--subscribe-to quote,quote` was written into the declaration
+    twice, and `--outputs s1,s1 --schema ...` refused as two tables the plant
+    does not define - not as the repeat it is."""
+    refused: list[str] = []
+
+    def record(exc: Exception) -> None:
+        refused.append(str(exc))
+        raise SystemExit(1)
+
+    monkeypatch.setattr(create, "_die", record)
+    result = runner.invoke(cli.app, ["job", "new", "job_a", *argv, "--dry-run"])
+    assert result.exit_code == 1
+    assert refused == [f"{said} more than once - give each once"]
+
+
+@pytest.mark.parametrize(
     ("old", "new"), [("--partition", "`--slice`"), ("--partition-column", "`--slice-column`")]
 )
 def test_the_old_partition_spellings_are_refused_naming_slice(old, new):
