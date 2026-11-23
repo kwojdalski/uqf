@@ -14,8 +14,17 @@ from pathlib import Path
 
 from uqs.logger import get_logger
 from uqs.paths import UqsError, UqsPaths
+from uqs.stack import alive, generated
 
 log = get_logger()
+
+#: The tickerplant's log directory under the data directory: env.py's KDBTPLOG.
+#: Today's may be the only copy of data not yet in the HDB, so a `--match` takes
+#: it only by naming it (#2742) - `logs` is a substring of `tplogs`.
+TPLOG_DIR = "tplogs"
+
+#: How many running processes a refusal names before it says how many more.
+_NAMED = 5
 
 
 #: One entry `clean` would remove: its path, and the bytes it holds.
@@ -60,7 +69,10 @@ def clean_targets(paths: UqsPaths, match: str | None = None) -> list[CleanTarget
     is descended, so `logs/out_rdb1` can be reached without naming `logs`.
 
     `re.search`, not `re.fullmatch`: `--match logs` should find the logs.
-    Anchor with `^`/`$` to be exact.
+    Anchor with `^`/`$` to be exact. Except under `tplogs/` (TPLOG_DIR): there
+    the match must start at the path's start and cover that whole component,
+    so `logs` does not take the tickerplant logs and `^tplogs` or
+    `tplogs/tp1` does (#2742).
     """
     root = paths.torqdata
     if not root.exists():
@@ -74,16 +86,45 @@ def clean_targets(paths: UqsPaths, match: str | None = None) -> list[CleanTarget
 
     found: list[CleanTarget] = []
 
+    def selects(relative: str) -> bool:
+        hit = pattern.search(relative)
+        if hit is None:
+            return False
+        if relative.split("/", 1)[0] != TPLOG_DIR:
+            return True
+        return hit.start() == 0 and hit.end() >= len(TPLOG_DIR)
+
     def walk(directory: Path) -> None:
         for entry in sorted(directory.iterdir()):
             relative = entry.relative_to(root).as_posix()
-            if pattern.search(relative):
+            if selects(relative):
                 found.append((entry, _entry_size(entry)))
             elif entry.is_dir() and not entry.is_symlink():
                 walk(entry)
 
     walk(root)
     return found
+
+
+def refuse_while_running(paths: UqsPaths) -> None:
+    """Refuse while any of this stack's processes is up (#2742).
+
+    The ones `uqs stop` would stop (alive.stoppable): started from this
+    tree's process file, so another checkout's stack on the same base port
+    does not block this one. A running stack is writing the data directory -
+    the tickerplant its log, which may be the only copy of today's data not
+    yet in the HDB - so removing it under them loses data, and stopping first
+    is the way to clean on purpose.
+    """
+    ours, _elsewhere = alive.stoppable(paths, timeout=10)
+    up = sorted(name for name, pids in ours.items() if pids)
+    if not up:
+        return
+    named = ", ".join(up[:_NAMED]) + (f" and {len(up) - _NAMED} more" if len(up) > _NAMED else "")
+    raise UqsError(
+        f"the stack is running ({named}): clean would remove data its processes are "
+        f"writing, the tickerplant log among it. Stop it first (`uqs stop`), then clean"
+    )
 
 
 def clean(paths: UqsPaths, match: str | None = None, dry_run: bool = False) -> list[CleanTarget]:
@@ -93,6 +134,10 @@ def clean(paths: UqsPaths, match: str | None = None, dry_run: bool = False) -> l
     removed nothing. The caller reports; this decides and acts, so that the
     listing a dry run shows is produced by the same walk that the real
     removal uses and cannot describe a different set.
+
+    A real removal holds the stack's lifecycle lock, refusing at once if a
+    start, stop or restart holds it, and refuses while the stack runs
+    (refuse_while_running): a dry run only lists, so it does neither.
     """
     targets = clean_targets(paths, match)
     if not targets:
@@ -103,10 +148,12 @@ def clean(paths: UqsPaths, match: str | None = None, dry_run: bool = False) -> l
         return []
     if dry_run:
         return targets  # the caller lists them: logged too, each was shown twice (#1880)
-    for entry, _size in targets:
-        log.info("Removing {}", entry)
-        if entry.is_dir() and not entry.is_symlink():
-            shutil.rmtree(entry)
-        else:
-            entry.unlink(missing_ok=True)
+    with generated.lifecycle_lock(paths, wait=0):
+        refuse_while_running(paths)
+        for entry, _size in targets:
+            log.info("Removing {}", entry)
+            if entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry)
+            else:
+                entry.unlink(missing_ok=True)
     return targets

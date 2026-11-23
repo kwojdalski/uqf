@@ -323,6 +323,16 @@ uqs deploy push dist/uqf-<release>.tar.gz --ssh uqf-server --dest /opt/uqf \
   a Python for its `major.minor` too. Build the q runtime on such a host.
 - `uqs deploy build --python-component FILE` makes the release carry the Python,
   so the installer above needs no Python 3.14.
+- A bundled TorQ is the starter pack as vendored, and its access list holds the
+  starter pack's own logins. Every process accepts them, on every interface. So
+  a push of it, `--dry-run` included, is refused. For logins of your own, use
+  `torq_mode = "existing"` with a TorQ application whose `passwords/` you
+  control (`--torq-app-home`). On a host no one else can reach, add
+  `--override accept-demo-logins --reason TEXT`. The reason is recorded like
+  every other override.
+
+A push is refused when the server account is root (uid 0): every process runs as
+that account, and any q session can run `system`.
 
 ## Deploying as a service user
 

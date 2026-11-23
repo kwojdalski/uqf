@@ -23,6 +23,10 @@ and preflight's free-space floor (#2743) and a sidecar job's declared q
     --override allow-low-disk        push onto a filesystem with less free than it needs
     --override accept-job-q          start a --jobs job on a q its `q` key does not name
 
+and a bundled TorQ's starter-pack logins (#2739) theirs:
+
+    --override accept-demo-logins    start processes on the starter pack's access list
+
 and `deploy build --q-version`'s `--override allow-computed-names` is the
 converter's own (deploy/portable.py).
 
@@ -58,6 +62,7 @@ FIX_HDB = "fix-hdb"
 BREAK_LOCK = "break-lock"
 ALLOW_LOW_DISK = "allow-low-disk"
 ACCEPT_JOB_Q = "accept-job-q"
+ACCEPT_DEMO_LOGINS = "accept-demo-logins"
 
 _PUSH = ("deploy push",)
 #: The overrides that were option-per-override before #1732, each then taking
@@ -119,6 +124,16 @@ GUARDRAILS = (
         "start a --jobs job on a server q its `q` key does not name; the q found is recorded",
         risk="the job's process dies on what that q lacks, the failure only in its log",
         action="check the job came up and stayed up (`uqs status`, `uqs logs PROC`)",
+    ),
+    Guardrail(
+        ACCEPT_DEMO_LOGINS,
+        _PUSH,
+        "start a bundled TorQ's processes on the starter pack's own access list, whose "
+        "logins everyone with the starter pack knows",
+        risk="anyone who reaches a process's port logs in and runs any q, `system` included, "
+        "as the deploy account - TorQ listens on every interface",
+        action="use torq_mode existing, with a TorQ application whose passwords/ you control "
+        "(--torq-app-home)",
     ),
 )
 #: {name: what it relaxes} for `deploy push`'s overrides: make_config's fields,
@@ -193,6 +208,32 @@ def _pinned(cfg: Config, name: str, sha256: str, pinned: bool, component: str) -
                 )
             )
     return out
+
+
+def for_logins(cfg: Config, logins: int) -> list[dict]:
+    """A bundled TorQ whose access list holds `logins` of the starter pack's
+    (torq_runtime.Runtime.shipped_logins): refused unless --override
+    accept-demo-logins relaxes it, else the exceptions requested (#2739).
+
+    Every process's `U` column names that list, and TorQ listens on every
+    interface, so each login is a q session for anyone who can reach a port.
+    A runtime is lib/ as vendored, so there is no list of the operator's own
+    to give it: their own logins come with their own TorQ application."""
+    requirement = "no login the starter pack ships"
+    observed = f"{logins} in its appconfig/passwords/accesslist.txt"
+    if logins and cfg.accept_demo_logins is None:
+        raise DeployError(
+            "artifact",
+            f"the bundled TorQ's access list holds the {logins} logins the starter pack ships "
+            "(appconfig/passwords/accesslist.txt), which every process accepts on every "
+            "interface - anyone who reaches a port could run any q as the deploy account. Use "
+            "torq_mode existing with a TorQ application whose passwords/ you control "
+            "(--torq-app-home), or pass --override accept-demo-logins --reason REASON on a "
+            "host no one else can reach",
+        )
+    if cfg.accept_demo_logins is None:
+        return []
+    return [_entry(ACCEPT_DEMO_LOGINS, cfg.accept_demo_logins, requirement, observed, bool(logins))]
 
 
 def for_q(cfg: Config, observed: str) -> list[dict]:

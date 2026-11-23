@@ -1532,6 +1532,7 @@ def test_exec_propagates_the_exit_code(monkeypatch):
 
 
 def test_remove_output_delegates(monkeypatch):
+    _patch(monkeypatch, stack_clean, "refuse_while_running", result=None)
     rec = _patch(monkeypatch, stack_clean, "clean", result=[])
     assert runner.invoke(cli.app, ["clean", "--yes"]).exit_code == 0
     assert len(rec.calls) == 1
@@ -1549,6 +1550,7 @@ def test_remove_output_delegates(monkeypatch):
 )
 def test_remove_output_passes_its_flags_through(monkeypatch, argv, expected):
     """The flags have to arrive as given - a dropped --dry-run deletes."""
+    _patch(monkeypatch, stack_clean, "refuse_while_running", result=None)
     rec = _patch(monkeypatch, stack_clean, "clean", result=[])
     assert runner.invoke(cli.app, ["clean", *argv]).exit_code == 0
     assert rec.calls[-1][1] == expected
@@ -1566,7 +1568,26 @@ def data_dir(tmp_path, monkeypatch):
     (root / "hdb" / "2026.09.01" / "trade").write_bytes(b"x" * 900)
     (root / "logs").mkdir()
     monkeypatch.setattr(cleanup, "_paths", lambda: SimpleNamespace(torqdata=root))
+    _stack_running(monkeypatch)
     return root
+
+
+def _stack_running(monkeypatch, **pids: list[int]) -> None:
+    """alive.stoppable answering with these of the stack's processes up: none by default."""
+    monkeypatch.setattr(alive, "stoppable", lambda *_a, **_k: (dict(pids), {}))
+
+
+def test_clean_while_the_stack_runs_is_refused_before_it_asks(
+    data_dir, terminal, log_text, monkeypatch
+):
+    """#2742: refused before the question - a yes must not be asked for and then ignored."""
+    _stack_running(monkeypatch, tp1=[4242])
+    result = runner.invoke(cli.app, ["clean", "--match", "^hdb$"], input="y\n")
+    assert result.exit_code == 1
+    assert "the stack is running (tp1)" in log_text()
+    assert "Stop it first (`uqs stop`)" in log_text()
+    assert "This cannot be undone" not in result.output
+    assert (data_dir / "hdb" / "2026.09.01" / "trade").exists()
 
 
 def test_clean_without_a_terminal_refuses_naming_yes(data_dir, log_text):

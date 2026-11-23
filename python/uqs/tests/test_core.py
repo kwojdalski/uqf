@@ -250,6 +250,85 @@ def test_no_match_still_removes_the_whole_directory(fake_paths: UqsPaths):
     assert not fake_paths.torqdata.exists()
 
 
+def _stack_up(monkeypatch, **pids: list[int]) -> None:
+    """alive.stoppable as it answers with these of this stack's processes up."""
+    from uqs.stack import alive
+
+    monkeypatch.setattr(alive, "stoppable", lambda *_a, **_k: (dict(pids), {}))
+
+
+def test_clean_is_refused_while_the_stack_runs(fake_paths: UqsPaths, monkeypatch):
+    """#2742: a running tickerplant is writing tplogs/ - removing it loses data."""
+    _tree(fake_paths.torqdata)
+    _stack_up(monkeypatch, tp1=[4242], rdb1=[])
+    refusal = r"the stack is running \(tp1\).*Stop it first \(`uqs stop`\)"
+    with pytest.raises(UqsError, match=refusal):
+        stack_clean.clean(fake_paths, r"^logs$")
+    assert (fake_paths.torqdata / "logs" / "out_rdb1.log").exists()
+    with pytest.raises(UqsError, match="the stack is running"):
+        stack_clean.clean(fake_paths)
+    assert (fake_paths.torqdata / "tplogs" / "tp1.log").exists()
+
+
+def test_a_dry_run_still_lists_while_the_stack_runs(fake_paths: UqsPaths, monkeypatch):
+    _tree(fake_paths.torqdata)
+    _stack_up(monkeypatch, tp1=[4242])
+    assert [e.name for e, _s in stack_clean.clean(fake_paths, r"^logs$", dry_run=True)] == ["logs"]
+
+
+def test_a_refusal_names_a_few_running_processes_and_counts_the_rest(fake_paths, monkeypatch):
+    _tree(fake_paths.torqdata)
+    _stack_up(monkeypatch, **{f"p{i}": [i + 100] for i in range(7)})
+    with pytest.raises(UqsError, match=r"\(p0, p1, p2, p3, p4 and 2 more\)"):
+        stack_clean.clean(fake_paths)
+
+
+def test_clean_is_refused_while_a_lifecycle_command_holds_the_lock(fake_paths, monkeypatch):
+    """#2742: a start under way holds the lifecycle lock; clean does not wait on it."""
+    import threading
+
+    from uqs.stack import generated
+
+    _tree(fake_paths.torqdata)
+    _stack_up(monkeypatch)
+    held, done = threading.Event(), threading.Event()
+
+    def start() -> None:
+        with generated.lifecycle_lock(fake_paths, wait=0):
+            held.set()
+            done.wait(10)
+
+    holder = threading.Thread(target=start)
+    holder.start()
+    try:
+        assert held.wait(10)
+        with pytest.raises(generated.StackBusy, match="another start, stop or restart is running"):
+            stack_clean.clean(fake_paths, r"^logs$")
+    finally:
+        done.set()
+        holder.join()
+    assert (fake_paths.torqdata / "logs" / "out_rdb1.log").exists()
+
+
+@pytest.mark.parametrize(
+    ("match", "taken"),
+    [
+        ("logs", ["logs"]),  # #2742: not tplogs, although `logs` is in its name
+        ("log", ["logs"]),
+        (r"\.log$", ["out_rdb1.log", "out_stp1.log"]),
+        ("tplogs", ["tplogs"]),
+        ("^tplogs$", ["tplogs"]),
+        ("tplogs/tp1", ["tp1.log"]),
+        ("tp1", ["out_stp1.log"]),  # not tplogs/tp1.log: only a pattern naming tplogs is
+    ],
+)
+def test_a_match_reaches_the_tickerplant_logs_only_by_naming_them(
+    fake_paths: UqsPaths, match, taken
+):
+    _tree(fake_paths.torqdata)
+    assert [e.name for e, _s in stack_clean.clean_targets(fake_paths, match)] == taken
+
+
 def test_get_process_config_returns_vendored_row(fake_paths: UqsPaths):
     row = stack_procs.get_process_config(fake_paths, "discovery1", resolve=False)
     assert row["proctype"] == "discovery"

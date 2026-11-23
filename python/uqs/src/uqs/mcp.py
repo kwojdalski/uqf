@@ -124,8 +124,8 @@ def uqs_clean(match: str | None = None, confirm: bool = False) -> dict[str, Any]
     selects. A dry run unless confirm=true (#2257): it returns what would go,
     each entry's path and bytes, and removes nothing. The deletion cannot be
     undone, and MCP has no terminal to ask on, so confirm=true is the CLI's
-    question answered yes - show the dry run to the user first. Stop the stack
-    first - this does not stop running processes.
+    question answered yes - show the dry run to the user first. Refused while
+    the stack is running: stop it first - this does not stop it.
     """
     targets = stack_clean.clean(_paths(), match=match, dry_run=not confirm)
     return {

@@ -50,6 +50,10 @@ fail() { echo "$*" >&2; exit 1; }
 if [ -n "$expected_user" ] && [ "$(id -un)" != "$expected_user" ]; then
   fail "running as $(id -un), not $expected_user"
 fi
+# Every process runs as this account, and any q session can run `system`:
+# never root (#2739).
+[ "$(id -u)" != 0 ] || fail "running as root (uid 0) - every process would run as root, and" \
+  "any q session as root; push as an unprivileged account, or add --remote-user"
 if [ -e "$dest" ]; then
   test -w "$dest" || fail "destination $dest is not writable"
 else

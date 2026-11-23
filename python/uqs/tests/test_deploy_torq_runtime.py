@@ -329,6 +329,69 @@ def test_the_dry_run_shows_the_runtime_and_installs_nothing(tmp_path):
     assert f"runtime sha256 {rt.sha256}: not on the server yet, installed write-once" in out
 
 
+# --- the starter pack's logins (#2739) -----------------------------------------------------
+
+#: A starter pack whose access list holds logins, as the vendored one does -
+#: made-up names and passwords, never the vendored file's.
+WITH_LOGINS = {
+    **VENDORED,
+    "lib/torq-finance-starter-pack/appconfig/passwords/accesslist.txt": (
+        "job_a:not-a-real-password\njob_b:not-a-real-password\n"
+    ),
+}
+
+
+@pytest.mark.parametrize("dry_run", [(), ("--dry-run",)])
+def test_a_runtime_holding_the_starter_packs_logins_is_refused(tmp_path, dry_run):
+    rt = runtime(tmp_path, WITH_LOGINS)
+    with pytest.raises(DeployError) as err:
+        _push(tmp_path, rt, *dry_run)
+    said = str(err.value)
+    assert err.value.stage == "artifact"
+    assert "access list holds the 2 logins the starter pack ships" in said, said
+    assert "Use torq_mode existing with a TorQ application whose passwords/ you control" in said
+    assert "--override accept-demo-logins --reason REASON" in said
+    assert "not-a-real-password" not in said and "job_a" not in said, "nothing of a login is said"
+
+
+def test_the_refusal_comes_before_anything_reaches_the_server(tmp_path):
+    rt = runtime(tmp_path, WITH_LOGINS)
+    rules = {**ABSENT, **_HEALTHY, "uv python find": _done(SERVER + "data=present\n")}
+    remote = FakeRemote(rules)
+    argv = _args(_artifact(tmp_path / "release"), "--torq-mode", "bundled",
+                 "--torq-component", str(rt.path))  # fmt: skip
+    with pytest.raises(DeployError, match="accept-demo-logins"):
+        capture.deploy(parse_args(argv), remote, out=io.StringIO())
+    assert remote.scripts == [] and remote.puts == []
+
+
+def test_accept_demo_logins_pushes_and_is_recorded(tmp_path):
+    rt = runtime(tmp_path, WITH_LOGINS)
+    code, _, out = _push(
+        tmp_path, rt, "--override", "accept-demo-logins", "--reason", "a host only I reach"
+    )
+    (e,) = json.loads(out)["exceptions"]
+    assert code == 0 and e["override"] == "accept-demo-logins" and e["applied"]
+    assert e["reason"] == "a host only I reach"
+    assert e["observed"] == "2 in its appconfig/passwords/accesslist.txt"
+    assert "not-a-real-password" not in out
+
+
+def test_a_runtime_with_no_logins_needs_no_override(tmp_path):
+    rt = runtime(tmp_path)
+    assert rt.shipped_logins() == 0
+    code, _, out = _push(tmp_path, rt)
+    assert code == 0 and json.loads(out)["exceptions"] == []
+
+
+def test_the_real_starter_pack_ships_logins(tmp_path):
+    """lib/ as vendored has an access list, so a bundled push of it is refused."""
+    trees = ["lib/torq", "lib/torq-finance-starter-pack"]
+    if _git(ROOT, "status", "--porcelain", "--untracked-files=all", "--", *trees):
+        pytest.skip("lib/ differs from what is committed here")
+    assert torq_runtime.build_runtime(ROOT, tmp_path).shipped_logins() > 0
+
+
 # --- the pins: step 1's overrides, applied to the runtime ----------------------------------
 
 

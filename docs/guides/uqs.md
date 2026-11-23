@@ -108,8 +108,16 @@ uqs job checkpoint remove demo_deals_backfill # one backfill worker's resume poi
 ```
 
 `--match REGEX` searches each path under `output/uqs/`. Anchor with `^` and `$`
-to match exactly. A directory the pattern matches goes whole. `--yes` skips the
-question, and a script without a terminal needs it.
+to match exactly. A directory the pattern matches goes whole. The tickerplant
+logs are the exception: a pattern reaches `tplogs/` only by naming it from the
+start of the path (`^tplogs`, `tplogs/tp1`), so `--match logs` takes `logs/` and
+leaves them. `--yes` skips the question, and a script without a terminal needs
+it.
+
+`uqs clean` refuses while any of the stack's processes is up, or while a start,
+stop or restart is under way: the running stack is writing these files, and
+today's tickerplant log may be the only copy of data not yet in the HDB. Run
+`uqs stop` first. `--dry-run` still lists.
 
 ## Listing things
 

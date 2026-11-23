@@ -63,6 +63,11 @@ RUNTIMES_DIR = "shared/runtimes/torq"
 MTIME = 315532800  # 1980-01-01
 #: git's modes for a regular file; anything else is refused.
 _FILE_MODES = {"100644": 0o644, "100755": 0o755}
+#: The access list every process's `U` column names (model/pipeline.py, the
+#: starter pack's own process.csv rows), as a member of the runtime. A runtime
+#: is lib/ exactly as vendored, so each login in it is one the starter pack
+#: ships, and everyone who has the starter pack knows (#2739).
+ACCESS_LIST = "torq-finance-starter-pack/appconfig/passwords/accesslist.txt"
 
 
 @dataclass
@@ -92,6 +97,17 @@ class Runtime:
         """TORQHOME and TORQAPPHOME, as deploy.env names them."""
         home = self.directory(dest)
         return f"{home}/torq", f"{home}/torq-finance-starter-pack"
+
+    def shipped_logins(self) -> int:
+        """How many logins the runtime's access list holds: a count, never a
+        name or a password."""
+        with tarfile.open(self.path, "r:gz") as tar:
+            try:
+                f = tar.extractfile(ACCESS_LIST)
+            except KeyError:
+                return 0
+            text = f.read().decode(errors="replace") if f else ""
+        return sum(1 for line in text.splitlines() if ":" in line.strip())
 
     def record(self, dest: str, install: str) -> dict:
         """The components entry for a bundled TorQ (components.observed)."""

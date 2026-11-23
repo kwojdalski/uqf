@@ -27,6 +27,7 @@ from mcp_support import call, refused, tools
 from uqs import mcp, mcp_server
 from uqs.cli.common import vocabulary
 from uqs.paths import UqsError
+from uqs.stack import alive
 
 TOOLS = {t.name: t for t in tools()}
 
@@ -224,6 +225,7 @@ def test_clean_is_a_dry_run_unless_confirmed(tmp_path, monkeypatch):
     (data / "logs").mkdir()
     (data / "logs" / "rdb1.log").write_bytes(b"y" * 3)
     monkeypatch.setattr(mcp, "_paths", lambda: types.SimpleNamespace(torqdata=data))
+    monkeypatch.setattr(alive, "stoppable", lambda *_a, **_k: ({}, {}))
 
     dry = call("uqs_clean").structured_content
     assert dry == {"dry_run": True, "entries": [{"path": str(data), "bytes": 13}], "bytes": 13}
@@ -237,3 +239,16 @@ def test_clean_is_a_dry_run_unless_confirmed(tmp_path, monkeypatch):
     assert done == {"dry_run": False, "entries": logs["entries"], "bytes": 3}
     assert not (data / "logs").exists()
     assert (data / "hdb").exists()
+
+
+def test_clean_confirmed_is_refused_while_the_stack_runs(tmp_path, monkeypatch):
+    """#2742: confirm=true answers the question, not whether the stack is up."""
+    data = tmp_path / "data"
+    (data / "tplogs").mkdir(parents=True)
+    (data / "tplogs" / "tp1.log").write_bytes(b"x" * 10)
+    monkeypatch.setattr(mcp, "_paths", lambda: types.SimpleNamespace(torqdata=data))
+    monkeypatch.setattr(alive, "stoppable", lambda *_a, **_k: ({"tp1": [4242]}, {}))
+
+    error = refused(call("uqs_clean", confirm=True))
+    assert "the stack is running (tp1)" in error and "Stop it first (`uqs stop`)" in error
+    assert (data / "tplogs" / "tp1.log").exists()
