@@ -748,6 +748,40 @@ def test_a_stream_and_a_backfill_under_one_name_are_each_removable(tree):
     assert Path("src/etl/workers/zq_s_backfill.q") in plan_removal(tree, "zq_s_backfill").deletes
 
 
+def _install_bundle(tree: Path, where: Path) -> None:
+    """A one-job bundle, installed into `tree` as `uqs job install` would."""
+    from uqs.stack import bundles
+
+    where.mkdir()
+    (where / "bundle.json").write_text('{"name": "zqbundle", "version": "1.0.0"}')
+    (where / "zq_bjob.q").write_text(
+        ".qetl.job.stream.define[`zq_bjob;`procname`outputs!(`zq_bjob1;enlist `zq_btab)];\n"
+    )
+    (where / "tables.q").write_text("/ zqbundle's table\nzq_btab:([]time:`timestamp$();px:())\n")
+    (where / "catalog.q").write_text('.qcat.describe[`zq_btab]:\n    "one zqbundle print";\n')
+    bundles.install(bundles.plan(bundles.read_bundle(where), tree), tree)
+
+
+def test_a_job_a_bundle_installed_is_refused_naming_the_bundle(tree, tmp_path):
+    """#2923: the refusal offered --override even-if-edited, which deleted the
+    file and cut its table and catalog entries out of the bundle's blocks,
+    while the ledger still recorded all three."""
+    from uqs.paths import BUNDLE_LEDGER
+
+    _install_bundle(tree, tmp_path / "zqbundle")
+    job = tree / "src/etl/streaming/zq_bjob.q"
+    assert "zq_bjob.q" in (tree / BUNDLE_LEDGER).read_text(), "the install recorded it"
+    refusal = (
+        r"src/etl/streaming/zq_bjob.q was installed by bundle zqbundle .*take the job out of "
+        r"the bundle's folder and install the bundle again \(`uqs job install <folder>`"
+    )
+    before = _snapshot(tree)
+    for force in (False, True):
+        with pytest.raises(UqsError, match=refusal):
+            plan_removal(tree, "zq_bjob", force=force)
+    assert job.is_file() and _snapshot(tree) == before
+
+
 #: The files the removal regenerates, each as a scaffold leaves it naming the job.
 _REGENERATED = {
     "python/uqs/src/uqs/generated/q_facts.py": '    "pulse": ("pulse",),\n',

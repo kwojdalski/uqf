@@ -33,10 +33,10 @@ longer as the scaffold wrote it: its SCAFFOLDED marker gone, or, for a file
 written complete (a feed module, a passthrough's test), its text changed
 (#2832). It has been written, and deleting written work is not undoing a
 scaffold. `--override even-if-edited --reason TEXT` overrides that, and nothing
-else (a bare `--even-if-edited` until #1852). And, with no override, a job
-another job resolves through: a twin's `twin_of`, or the dataset a reaction
-watches that no other worker fills (#2834) - removed, either fails the load -
-or a table only it publishes that another job subscribes to (#2925).
+else (a bare `--even-if-edited` until #1852). With or without it: a job a bundle
+installed, which is the bundle's to take (#2923), and a job another job resolves
+through - a twin's `twin_of`, the dataset a reaction watches that no other worker
+fills (#2834), or a table only it publishes that another job subscribes to (#2925).
 
 WHAT IT REPORTS (#717). Every line elsewhere in the tree that still names
 what it removes - an example script, a docs page, a diagram, another suite's
@@ -77,6 +77,7 @@ from uqs.scaffold.remove_policy import (
     generated_test,
     living_names,
     orphaned_inputs,
+    refuse_bundled,
     refuse_dependents,
     refuse_still_profiled,
     refuse_written,
@@ -126,6 +127,7 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     job another job resolves through is refused outright (#2834).
     """
     job_file = _job_file(repo_root, name)
+    refuse_bundled(repo_root, job_file)
     text = (repo_root / job_file).read_text()
     if MARKER not in text and not force:
         raise UqsError(

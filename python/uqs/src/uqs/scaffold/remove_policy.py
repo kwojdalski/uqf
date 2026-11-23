@@ -12,6 +12,7 @@ scaffold/remove.py plans the edits from them.
 from __future__ import annotations
 
 import ast
+import json
 import re
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from uqs.model.declarations import (
 )
 from uqs.model.pipeline import PipelineKind
 from uqs.paths import (
+    BUNDLE_LEDGER,
     CATALOG_FILE,
     REACTION_DIR,
     STACK_TABLES_TEST,
@@ -67,6 +69,30 @@ GUARDRAILS = (
         action="commit or copy the job first: git has it, nothing else does",
     ),
 )
+
+
+def refuse_bundled(repo_root: Path, job_file: Path) -> None:
+    """Refuse a job a bundle installed, override or not (#2923). Its file, its
+    table and catalog entries in the bundle's `/ BEGIN bundle` blocks and the
+    ledger's record of all three are the install's: removed here, the file
+    went, the blocks were cut into, and the ledger still claimed them. The
+    step that exists is the bundle's own - an install replaces whatever an
+    earlier version of the same bundle put there."""
+    path = repo_root / BUNDLE_LEDGER
+    if not path.is_file():
+        return
+    try:
+        ledger = json.loads(path.read_text())
+    except ValueError as exc:
+        raise UqsError(f"{BUNDLE_LEDGER} is not JSON ({exc}) - fix or remove it by hand") from None
+    owners = sorted(n for n, entry in ledger.items() if str(job_file) in entry.get("files", {}))
+    if owners:
+        raise UqsError(
+            f"{job_file} was installed by bundle {owners[0]} ({BUNDLE_LEDGER}), and uqs job "
+            "remove only undoes a scaffold: take the job out of the bundle's folder and install "
+            "the bundle again (`uqs job install <folder>`, or `uqs runtime prepare` for a "
+            "runtime's bundles), which removes what its earlier version put there"
+        )
 
 
 def refuse_written(
