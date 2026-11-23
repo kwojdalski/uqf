@@ -79,6 +79,8 @@
     if[0=count srcs; 'who," has no input - a normalizer of nothing normalizes nothing"];
     .qetl.job.stream.normalizer.check_source[who;out]'[key srcs;value srcs];
     .qetl.job.stream.refuse_output_mismatch[who;enlist name;out];
+    / before the handler is written: a refused re-declaration of a live job must leave its on_batch as it was (#2953)
+    .qetl.job.stream.refuse_taken[who;name;decl];
     / The dispatcher is ALSO set as .qpipe.job.<name>.on_batch, so a normalizer
     / instance has the same surface as every other job - a reader, a test
     / or the runner reaching for a job's handler finds it in the one place.
