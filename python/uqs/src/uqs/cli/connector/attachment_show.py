@@ -20,7 +20,8 @@ from uqs.stack import attach_inventory
 ShowJson = json_opt(
     '{"attachment": {name, stack, publisher, tables, ...}, "state": {...}, '
     '"backfill_overrides": {"record": path, "entries": [...]}, '
-    '"next": {"follow", "rows", "port_from", "tables"}}'
+    '"next": {"follow", "rows", "port_from", "tables"} when applied or verified, '
+    '{"command", "why"} when add or remove moves it on, else {}}'
 )
 
 
@@ -34,9 +35,10 @@ def show(name: NameArg, as_json: ShowJson = False) -> None:
     any credential redacted. Changes nothing. Last, every waiver an attached
     backfill into its destination used (`--skip-eod-fence`), from that
     destination's backfill_overrides.jsonl: an accepted risk, never saved here.
-    Then what to run next: `uqs logs` to follow its publisher, and `uqs query`
-    for its rows - the rdb's host and port come from the stack's discovery,
-    which `show` does not ask.
+    Then what to run next. Applied or verified: `uqs logs` to follow its
+    publisher, and `uqs query` for its rows - the rdb's host and port come from
+    the stack's discovery, which `show` does not ask. Not applied, or stopped
+    part-way: the `add` or `remove` that moves it on. Removed: nothing.
     """
     try:
         att = config.load(name)
@@ -46,7 +48,7 @@ def show(name: NameArg, as_json: ShowJson = False) -> None:
     state = next((r for r in rows if r["attachment"] == name), {})
     record, waivers = backfill_audit.of_attachment(_paths(), name)
     overrides = {"record": None if record is None else str(record), "entries": waivers}
-    nxt = attach_next.commands(att, None)
+    nxt = attach_next.for_state(att, str(state.get("state", "")))
     doc = redact(
         {"attachment": config.to_json(att), "state": state, "backfill_overrides": overrides,
          "next": nxt},

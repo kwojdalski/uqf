@@ -65,8 +65,38 @@ def commands(att: Attachment, rdb: Endpoint | None) -> dict:
     }
 
 
+#: The states in which the attachment's table is registered and its publisher
+#: may run: the only ones with a log to follow and rows to query.
+PUBLISHING = ("applied", "verified")
+#: What moves the attachment on from a state that publishes nothing (#2943):
+#: `add` applies one never applied, or whose apply stopped part-way; `remove`
+#: finishes a detach or a rollback that stopped part-way. A removed one
+#: (detached, rolled_back) needs nothing, and an unreadable one is the list's.
+MOVES_ON = {
+    "planned": ("add", "apply it"),
+    "applying": ("add", "finish applying it"),
+    "partial": ("add", "finish applying it"),
+    "detaching": ("remove", "finish removing it"),
+    "rollback_partial": ("remove", "finish removing it"),
+}
+
+
+def for_state(att: Attachment, state: str) -> dict:
+    """What `show` ends with in `state`: `commands` when it publishes, the one
+    command that moves it on ({"command", "why"}) when one does, else {}."""
+    if state in PUBLISHING:
+        return commands(att, None)
+    if state in MOVES_ON:
+        verb, why = MOVES_ON[state]
+        return {"command": f"uqs job attachment {verb} {att.name}", "why": why}
+    return {}
+
+
 def lines(nxt: dict, *, follow: bool = True) -> list[str]:
-    """`commands` as the lines a person reads; without `follow`, the query alone."""
+    """`commands` as the lines a person reads; without `follow`, the query alone.
+    A `for_state` answer that is not `commands` is its one line, or none."""
+    if "rows" not in nxt:
+        return [f"{nxt['why']} with `{nxt['command']}`"] if nxt else []
     out = [f"follow it with `{nxt['follow']}`"] if follow else []
     out.append(f"query its rows with `{nxt['rows']}`")
     out.append(f"  {nxt['port_from']}")
