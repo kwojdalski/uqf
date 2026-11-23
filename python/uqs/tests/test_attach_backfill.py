@@ -76,6 +76,25 @@ def test_the_destination_is_the_attachments_canonical_hdb_never_the_runtimes(wor
     assert dest.state_dir.name == f"pb-uat-{dest.identity}"
 
 
+def test_a_writer_runs_state_is_the_one_its_ledger_readers_look_in(world, monkeypatch):
+    """#2950: an HDB on the writer's machine whose path crosses a symlink HERE (`/tmp` on
+    macOS) was realpath'd by state_dir_of and not by a --writer run, so `runs list
+    --attachment` read another directory than the run wrote."""
+    here = world.tmp / "link"
+    here.symlink_to(world.tmp, target_is_directory=True)
+    remote = here / "only-on-the-writer" / "hdb"  # no such directory on this machine
+    save_attachment("pb-uat", world.hdb)
+    att = config.load("pb-uat")
+    monkeypatch.setattr(
+        config,
+        "load",
+        lambda *a, **k: replace(att, storage=replace(att.storage, hdb_dir=str(remote))),
+    )
+    dest = attached.resolve(world.paths, "pb-uat", WORKER, on_this_machine=False)
+    assert dest.hdb_dir == remote, "a path that is not here is kept as pinned"
+    assert attached.state_dir_of(world.paths, "pb-uat") == dest.state_dir
+
+
 def test_two_destinations_never_share_state(world):
     other = world.tmp / "other-hdb"
     other.mkdir()

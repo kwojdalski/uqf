@@ -124,7 +124,7 @@ def state_dir_of(paths: UqsPaths, attachment: str, attach_root: Path | None = No
             f"attachment {att.name} pins no HDB directory: it has no destination"
             + _PIN.format(name=att.name)
         )
-    ident = identity_of(att.stack.host, att.stack.id, canonical(att.storage.hdb_dir))
+    ident = identity_of(att.stack.host, att.stack.id, destination_dir(att.storage.hdb_dir))
     return state_dir_for(paths, att.name, ident)
 
 
@@ -175,6 +175,15 @@ def worker_table(paths: UqsPaths, att: Attachment, dataset: str) -> TableSpec | 
 
 def canonical(path: str) -> Path:
     return Path(os.path.realpath(path))
+
+
+def destination_dir(hdb: str) -> Path:
+    """A pinned HDB directory as its destination's identity takes it: canonical when it is a
+    directory on this machine, so a symlink and its target are one destination, and as pinned
+    when it is not - realpath would resolve its prefix through THIS machine's links (`/tmp`,
+    `/var` on macOS), not the writer's. One rule for a run and for the readers of its ledgers
+    (`resolve`, `state_dir_of`), so a `--writer` run's state is where they look (#2950)."""
+    return canonical(hdb) if Path(hdb).is_dir() else Path(hdb)
 
 
 def require_verified(
@@ -294,7 +303,7 @@ def destination(
             f"attachment {att.name}'s HDB directory {hdb} is not a directory on this machine: "
             "it is not created, and nothing falls back to another HDB"
         )
-    real = canonical(hdb) if on_this_machine else Path(hdb)
+    real = destination_dir(hdb)
     ident = identity_of(att.stack.host, att.stack.id, real)
     return Destination(
         att.name,
