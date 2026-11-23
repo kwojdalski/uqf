@@ -391,10 +391,22 @@ def test_cli_installs_into_a_clone_marked_as_an_instance(bundle: Path, cli_repo:
 
 
 def test_cli_dry_run_in_a_checkout_still_reports(bundle: Path, cli_repo: Path) -> None:
+    """#2948: and says the real run is refused here, rather than telling the
+    operator to run it again without --dry-run."""
     (cli_repo / ".git").mkdir()
     code, out = _run(str(bundle), "--dry-run")
     assert code == 0, out
     assert "dry run: nothing was changed" in out
+    assert "without --dry-run" not in out
+    flat = " ".join(out.split())
+    assert "the real run would be refused here:" in flat
+    assert "is a development checkout" in flat
+
+
+def test_cli_dry_run_outside_a_checkout_says_to_run_it_again(bundle: Path, cli_repo: Path) -> None:
+    code, out = _run(str(bundle), "--dry-run")
+    assert code == 0, out
+    assert "Run it again without --dry-run" in out
 
 
 # ----------------------------------------------- shadowing (#1545)
