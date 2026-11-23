@@ -123,8 +123,8 @@ def run(root: Path) -> int:
     for line in found:
         print(f"  {line}", file=sys.stderr)
     print(
-        "\nUnstage those hunks (the blocks stay in your working tree), or uninstall\n"
-        "the bundle before committing.",
+        "\nUnstage those hunks (the blocks stay in your working tree), or restore the\n"
+        "file from git (`git restore <file>`): there is no command that uninstalls a bundle.",
         file=sys.stderr,
     )
     return 1

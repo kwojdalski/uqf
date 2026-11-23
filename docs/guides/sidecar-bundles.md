@@ -202,7 +202,8 @@ by writing `/ BEGIN bundle <name>` blocks into tracked files (`plant_tables.q`,
 `uqs_catalog.q`). The build copies the working tree, so it refuses any block
 from outside the release's own composition, naming the file, even with
 `--override allow-dirty`. The `bundle-blocks` pre-commit hook refuses to commit
-one at all. Build from a clean checkout, or uninstall the bundles first.
+one at all. Build from a clean checkout, or restore the files it names from git
+(`git restore <file>`) first: there is no command that uninstalls a bundle.
 
 ## Build and deploy
 

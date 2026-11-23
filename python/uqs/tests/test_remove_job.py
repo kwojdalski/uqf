@@ -214,15 +214,55 @@ def test_every_job_kind_scaffolds_and_removes_exactly(tree, label):
     assert _snapshot(tree) == before, label
 
 
+#: A hand-written q script that reads the pulse table without subscribing to it.
+_PULSE_REPORT = Path("scripts/pulse_report.q")
+
+
+def _pulse_and_a_reader(tree: Path, extra: str = "") -> Path:
+    """The pulse feed, and a q script that reads its table: a use of the
+    table, but no subscription, so removing pulse is not refused (#2925)."""
+    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
+    (tree / _PULSE_REPORT).write_text("/ a report\nn:count select from `pulse\n" + extra)
+    return tree / _PULSE_REPORT
+
+
 def test_a_table_something_else_reads_is_kept(tree):
+    _pulse_and_a_reader(tree)
+    removal = plan_removal(tree, "pulse")
+    assert TABLES_FILE not in removal.rewrites, "pulse_report.q still reads pulse"
+    assert any(f"kept table pulse: {_PULSE_REPORT} uses it" in n for n in removal.notes)
+
+
+def test_a_producer_another_job_subscribes_to_is_refused_naming_the_subscriber(tree):
+    """#2925: the table was kept, the removal exited 0, and every profile
+    holding the subscriber then started it with nothing feeding it."""
     write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
     write.apply_plan(
         jobs.streaming_job("pulsestat", ["pulse"], "pulse_stats", "n:long", known_tables={"pulse"}),
         tree,
     )
+    refusal = (
+        r"pulse cannot be removed while another job depends on it: pulsestat "
+        r"\(src/etl/streaming/pulsestat.q\) subscribes to pulse, which only pulse publishes "
+        r"- remove it first"
+    )
+    for force in (False, True):
+        with pytest.raises(UqsError, match=refusal):
+            plan_removal(tree, "pulse", force=force)
+
+
+def test_a_producer_whose_table_something_else_publishes_is_removable(tree):
+    """A second publisher still feeds the subscriber, so nothing is refused."""
+    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
+    write.apply_plan(
+        jobs.streaming_job("pulse_too", [], "pulse", None, known_tables={"pulse"}), tree
+    )
+    write.apply_plan(
+        jobs.streaming_job("pulsestat", ["pulse"], "pulse_stats", "n:long", known_tables={"pulse"}),
+        tree,
+    )
     removal = plan_removal(tree, "pulse")
-    assert TABLES_FILE not in removal.rewrites, "pulsestat still subscribes to pulse"
-    assert any("kept table pulse" in n for n in removal.notes)
+    assert any("kept table pulse" in n for n in removal.notes), removal.notes
 
 
 def test_a_source_another_worker_reads_is_kept(tree):
@@ -298,35 +338,21 @@ def test_an_example_and_a_docs_page_naming_it_are_listed(tree):
 
 
 def test_what_the_removal_keeps_is_not_reported(tree):
-    """A table another job reads is kept, so its other mentions are why it
+    """A table something else reads is kept, so its other mentions are why it
     stays - not something left behind."""
-    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
-    write.apply_plan(
-        jobs.streaming_job(
-            "pulse_reader", ["pulse"], "pulse_stats", "n:long", known_tables={"pulse"}
-        ),
-        tree,
-    )
+    _pulse_and_a_reader(tree)
     removal = plan_removal(tree, "pulse")
-    assert "src/etl/streaming/pulse_reader.q" not in _referenced(removal)
+    assert str(_PULSE_REPORT) not in _referenced(removal)
 
 
 def test_a_kept_table_does_not_hide_a_call_into_the_removed_job(tree):
-    """#1589: the job and its table share a name. Another job reads the table,
+    """#1589: the job and its table share a name. A script reads the table,
     so the table stays - but a call into the removed job's namespace is still a
     reference, not a use of the table."""
-    write.apply_plan(jobs.streaming_job("pulse", [], "pulse", "px:float"), tree)
-    write.apply_plan(
-        jobs.streaming_job(
-            "pulse_reader", ["pulse"], "pulse_stats", "n:long", known_tables={"pulse"}
-        ),
-        tree,
-    )
-    reader = tree / "src/etl/streaming/pulse_reader.q"
-    reader.write_text(reader.read_text() + "poke:{[] .qpipe.job.pulse.on_timer[]}\n")
+    _pulse_and_a_reader(tree, "poke:{[] .qpipe.job.pulse.on_timer[]}\n")
     removal = plan_removal(tree, "pulse")
     assert any("kept table pulse" in n for n in removal.notes)
-    refs = [r for r in removal.references if r.path == Path("src/etl/streaming/pulse_reader.q")]
+    refs = [r for r in removal.references if r.path == _PULSE_REPORT]
     assert [r.text for r in refs] == ["poke:{[] .qpipe.job.pulse.on_timer[]}"]
 
 
@@ -443,6 +469,42 @@ def test_removing_a_process_named_like_a_profile_keeps_that_profile(proc):
     assert _literal(after, "PROFILES") == _literal(before, "PROFILES")
     exempt = UNPROFILED_FILE.read_text()
     assert _drop_from_profiles(exempt, proc) == exempt
+
+
+def _fx_one_per_line(text: str, extra: str) -> str:
+    """profiles.py with the fx profile written a member per line, plus `extra`
+    - the layout "add it by hand" leaves a profile past the line limit."""
+    one_line = '    "fx": ("posbook1", "fxpositions1", "last_value1"),\n'
+    assert one_line in text, "the fx profile as profiles.py writes it"
+    members = ["posbook1", "fxpositions1", extra, "last_value1"]
+    return text.replace(
+        one_line, '    "fx": (\n' + "".join(f'        "{m}",\n' for m in members) + "    ),\n"
+    )
+
+
+def test_removing_a_process_drops_it_from_a_profile_written_a_member_per_line():
+    """#2926: only a one-line tuple was edited, so the process stayed in a
+    multi-line profile, the removal reported success and the profile could
+    no longer start."""
+    from uqs.scaffold.remove import _drop_from_profiles
+
+    before = PROFILES_FILE.read_text()
+    listed = _fx_one_per_line(before, "zq_ml1")
+    after = _drop_from_profiles(listed, "zq_ml1")
+    assert _literal(after, "PROFILES") == _literal(before, "PROFILES")
+    assert after == _fx_one_per_line(before, "zq_ml1").replace('        "zq_ml1",\n', "")
+
+
+def test_a_profile_layout_the_removal_cannot_edit_refuses_the_removal():
+    """Rather than leave the process in a profile and report success (#2926)."""
+    from uqs.scaffold.remove import _drop_from_profiles
+
+    text = PROFILES_FILE.read_text().replace(
+        '"fx": ("posbook1", "fxpositions1", "last_value1"),',
+        '"fx": ("posbook1", "fxpositions1",\n           "zq_ml1", "last_value1"),',
+    )
+    with pytest.raises(UqsError, match=r"still lists zq_ml1 in a profile this cannot edit"):
+        _drop_from_profiles(text, "zq_ml1")
 
 
 def test_removing_an_exempt_process_named_like_a_profile_drops_only_its_exemption():
@@ -644,6 +706,39 @@ def test_the_last_job_on_a_scaffolded_table_takes_it_when_its_definer_is_gone(tr
     assert not changed, f"not restored: {changed}"
 
 
+def test_the_last_reader_of_a_scaffolded_table_takes_it_when_its_definer_is_gone(tree):
+    """#2924: #2842's rule asked only about the tables a job writes, so once
+    the job that defined a table was gone, removing its last subscriber left
+    the definition, its catalog lines and its expected entry behind."""
+    files = (TABLES_FILE, CATALOG_FILE, STACK_TABLES_TEST)
+    before = {rel: (tree / rel).read_text() for rel in files}
+    write.apply_plan(jobs.streaming_job("zq_p", [], "zq_shared", "px:float"), tree)
+    write.apply_plan(
+        jobs.streaming_job("zq_q", ["zq_shared"], "zq_q_out", "n:long", known_tables={"zq_shared"}),
+        tree,
+    )
+    # The job that defined zq_shared is gone; its definition is still unwritten.
+    (tree / "src/etl/streaming/zq_p.q").unlink()
+    (tree / "tests/q/test_zq_p.q").unlink()
+    removal = plan_removal(tree, "zq_q")
+    assert any("removed table zq_shared" in n for n in removal.notes), removal.notes
+    assert removal.references == []
+    removal.apply(tree)
+    assert {rel: (tree / rel).read_text() for rel in files} == before
+
+
+def test_a_table_the_removed_job_reads_stays_while_its_definer_does(tree):
+    write.apply_plan(jobs.streaming_job("zq_p", [], "zq_shared", "px:float"), tree)
+    write.apply_plan(
+        jobs.streaming_job("zq_q", ["zq_shared"], "zq_q_out", "n:long", known_tables={"zq_shared"}),
+        tree,
+    )
+    removal = plan_removal(tree, "zq_q")
+    assert not any("zq_shared" in n for n in removal.notes), removal.notes
+    removal.apply(tree)
+    assert ".qetl.plant.zq_shared:([]" in (tree / TABLES_FILE).read_text(), "zq_p still writes it"
+
+
 def test_a_stream_and_a_backfill_under_one_name_are_each_removable(tree):
     """#2840: `zq_s` matched the stream and zq_s_backfill both, so the stream
     had no name that removed it."""
@@ -651,6 +746,40 @@ def test_a_stream_and_a_backfill_under_one_name_are_each_removable(tree):
     write.apply_plan(backfill.bounded_worker("zq_s", "zq_s_hist", "amt:float"), tree)
     assert Path("src/etl/streaming/zq_s.q") in plan_removal(tree, "zq_s").deletes
     assert Path("src/etl/workers/zq_s_backfill.q") in plan_removal(tree, "zq_s_backfill").deletes
+
+
+def _install_bundle(tree: Path, where: Path) -> None:
+    """A one-job bundle, installed into `tree` as `uqs job install` would."""
+    from uqs.stack import bundles
+
+    where.mkdir()
+    (where / "bundle.json").write_text('{"name": "zqbundle", "version": "1.0.0"}')
+    (where / "zq_bjob.q").write_text(
+        ".qetl.job.stream.define[`zq_bjob;`procname`outputs!(`zq_bjob1;enlist `zq_btab)];\n"
+    )
+    (where / "tables.q").write_text("/ zqbundle's table\nzq_btab:([]time:`timestamp$();px:())\n")
+    (where / "catalog.q").write_text('.qcat.describe[`zq_btab]:\n    "one zqbundle print";\n')
+    bundles.install(bundles.plan(bundles.read_bundle(where), tree), tree)
+
+
+def test_a_job_a_bundle_installed_is_refused_naming_the_bundle(tree, tmp_path):
+    """#2923: the refusal offered --override even-if-edited, which deleted the
+    file and cut its table and catalog entries out of the bundle's blocks,
+    while the ledger still recorded all three."""
+    from uqs.paths import BUNDLE_LEDGER
+
+    _install_bundle(tree, tmp_path / "zqbundle")
+    job = tree / "src/etl/streaming/zq_bjob.q"
+    assert "zq_bjob.q" in (tree / BUNDLE_LEDGER).read_text(), "the install recorded it"
+    refusal = (
+        r"src/etl/streaming/zq_bjob.q was installed by bundle zqbundle .*take the job out of "
+        r"the bundle's folder and install the bundle again \(`uqs job install <folder>`"
+    )
+    before = _snapshot(tree)
+    for force in (False, True):
+        with pytest.raises(UqsError, match=refusal):
+            plan_removal(tree, "zq_bjob", force=force)
+    assert job.is_file() and _snapshot(tree) == before
 
 
 #: The files the removal regenerates, each as a scaffold leaves it naming the job.
@@ -669,6 +798,32 @@ def test_strict_does_not_count_what_the_removal_regenerates(tree):
         (tree / rel).parent.mkdir(parents=True, exist_ok=True)
         (tree / rel).write_text(line)
     assert plan_removal(tree, "pulse").references == []
+
+
+def test_strict_does_not_count_the_generated_profile_table(tree):
+    """#2920: the runtimes guide's profile table is a block the removal's own
+    operational-docs run rewrites, and it names every profile's processes - so
+    --strict refused every job in a profile. The prose around it still counts."""
+    guide = Path("docs/guides/runtimes-and-profiles.md")
+    write.apply_plan(
+        jobs.streaming_job(
+            "pulse", [], "pulse", "px:float", profile="depth", known_profiles=("depth",)
+        ),
+        tree,
+    )
+    (tree / guide).parent.mkdir(parents=True, exist_ok=True)
+    end = "<!-- END GENERATED profile table -->"
+    text = (UQF_ROOT / guide).read_text()
+    assert text.count(end) == 1, "the block operational_docs.py owns in the real guide"
+    # A row as operational-docs writes it once pulse1 is in the depth profile.
+    listed = text.replace(
+        end, f"  | `depth` | `vectorize1`, `cross1`, `pulse1` | 19 | 9/14 |\n\n{end}"
+    )
+    (tree / guide).write_text(listed)
+    assert plan_removal(tree, "pulse").references == []
+    (tree / guide).write_text(listed + "\nStart `pulse1` first.\n")
+    refs = plan_removal(tree, "pulse").references
+    assert [(r.path, r.text) for r in refs] == [(guide, "Start `pulse1` first.")]
 
 
 def test_a_removal_that_breaks_regeneration_exits_nonzero(tree, monkeypatch):

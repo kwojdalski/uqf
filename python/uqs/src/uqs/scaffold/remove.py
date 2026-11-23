@@ -14,8 +14,8 @@ definition, its `expected` entry and its catalog line - but only when nothing
 else in the tree mentions it, so a table another job reads is never taken, and
 only when this scaffold defined it (its comment opens "/ <process>'s"), so a
 table it merely publishes onto stays (#1585) - unless the job that defined it
-is gone and the definition is still unwritten, when the last job on it takes it
-(#2842).
+is gone and the definition is still unwritten, when the last job on it - writer
+or reader - takes it (#2842, #2924).
 A reaction is only its file and its test: it has no process, so no table,
 profile or port.
 An external feed (#715) also loses its Python publisher, its feed module and
@@ -33,9 +33,10 @@ longer as the scaffold wrote it: its SCAFFOLDED marker gone, or, for a file
 written complete (a feed module, a passthrough's test), its text changed
 (#2832). It has been written, and deleting written work is not undoing a
 scaffold. `--override even-if-edited --reason TEXT` overrides that, and nothing
-else (a bare `--even-if-edited` until #1852). And, with no override, a job
-another job resolves through: a twin's `twin_of`, or the dataset a reaction
-watches that no other worker fills (#2834). Removed, either fails the load.
+else (a bare `--even-if-edited` until #1852). With or without it: a job a bundle
+installed, which is the bundle's to take (#2923), and a job another job resolves
+through - a twin's `twin_of`, the dataset a reaction watches that no other worker
+fills (#2834), or a table only it publishes that another job subscribes to (#2925).
 
 WHAT IT REPORTS (#717). Every line elsewhere in the tree that still names
 what it removes - an example script, a docs page, a diagram, another suite's
@@ -75,7 +76,10 @@ from uqs.scaffold.remove_policy import (
     defined_by,
     generated_test,
     living_names,
+    orphaned_inputs,
+    refuse_bundled,
     refuse_dependents,
+    refuse_still_profiled,
     refuse_written,
     user_of,
 )
@@ -123,6 +127,7 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
     job another job resolves through is refused outright (#2834).
     """
     job_file = _job_file(repo_root, name)
+    refuse_bundled(repo_root, job_file)
     text = (repo_root / job_file).read_text()
     if MARKER not in text and not force:
         raise UqsError(
@@ -207,14 +212,12 @@ def plan_removal(repo_root: Path, name: str, *, force: bool = False) -> Removal:
             kept.add(table)
             continue
         names.add(table)
-        _edit(removal, repo_root, TABLES_FILE, lambda t, tb=table: _drop_definition(t, tb))
-        _edit(
-            removal,
-            repo_root,
-            STACK_TABLES_TEST,
-            lambda t, tb=table: _drop_token(t, f"{STACK_TABLES_LIST}:", f"`{tb}"),
-        )
-        _edit(removal, repo_root, CATALOG_FILE, lambda t, tb=table: _drop_catalog(t, tb))
+        _drop_table(removal, repo_root, table)
+    # A table it only reads, when it is the last user of a scaffold whose job is gone (#2924).
+    for table in orphaned_inputs(repo_root, job_file, text, tables, gone, living):
+        removal.notes.append(f"removed table {table}: its job is gone, and this read it last")
+        names.add(table)
+        _drop_table(removal, repo_root, table)
 
     for rel in (PROFILES_FILE, UNPROFILED_FILE):
         if (repo_root / rel).is_file():
@@ -296,6 +299,14 @@ def _edit(removal: Removal, repo_root: Path, path: Path, change) -> None:
         removal.rewrites[path] = new
 
 
+def _drop_table(removal: Removal, repo_root: Path, table: str) -> None:
+    """Queue `table`'s definition, `expected` entry and catalog lines to go."""
+    _edit(removal, repo_root, TABLES_FILE, lambda t: _drop_definition(t, table))
+    expected = f"{STACK_TABLES_LIST}:"
+    _edit(removal, repo_root, STACK_TABLES_TEST, lambda t: _drop_token(t, expected, f"`{table}"))
+    _edit(removal, repo_root, CATALOG_FILE, lambda t: _drop_catalog(t, table))
+
+
 def _drop_token(text: str, prefix: str, token: str) -> str:
     """`text` with `token` taken out of its one line starting `prefix`."""
     lines = text.splitlines(keepends=True)
@@ -344,17 +355,21 @@ def _drop_catalog(text: str, table: str) -> str:
 
 
 def _drop_from_profiles(text: str, proc: str) -> str:
-    """profiles.py without `proc` in any one-line profile; unprofiled.py without its exemption.
+    """profiles.py without `proc` in any profile; unprofiled.py without its exemption.
 
     Each edit is confined to its own dict: a process may share its name with
     a profile, and PROFILES["default"] is keyed exactly as an exemption for a
-    process called `default` would be (#1566).
+    process called `default` would be (#1566). A profile is a one-line tuple
+    or one written a member per line, as the scaffold's "add it by hand"
+    leaves a long one (#2926); any other layout still naming `proc` is
+    refused, since a profile naming a process that is gone cannot start.
     """
     quoted = f'"{proc}"'
     lines = text.splitlines(keepends=True)
     out: list[str] = []
     block = None
     skipping = False
+    members = False
     for line in lines:
         if m := re.match(r"^([A-Z_]+): dict\[", line):
             block = m.group(1)
@@ -363,14 +378,23 @@ def _drop_from_profiles(text: str, proc: str) -> str:
         if skipping:
             skipping = line.strip() != "),"
             continue
-        if block == "UNPROFILED" and line.startswith(f"    {quoted}: ("):
+        if members:
+            # Inside a profile written a member per line, up to its `),`.
+            members = not re.match(r"^\s*\),\s*$", line)
+            if members and line.strip() == f"{quoted},":
+                continue
+        elif block == "UNPROFILED" and line.startswith(f"    {quoted}: ("):
             skipping = not line.rstrip().endswith("),")
             continue
-        if block == "PROFILES" and quoted in line and re.match(r'^\s+"\w+": \(.*\),\s*$', line):
+        elif block == "PROFILES" and re.match(r'^\s+"\w+": \(\s*$', line):
+            members = True
+        elif block == "PROFILES" and quoted in line and re.match(r'^\s+"\w+": \(.*\),\s*$', line):
             head, inner = line.split(": (", 1)
-            members = [m.strip() for m in inner.rsplit("),", 1)[0].split(",") if m.strip()]
-            members = [m for m in members if m != quoted]
-            joined = ", ".join(members) + ("," if len(members) == 1 else "")
+            kept = [m.strip() for m in inner.rsplit("),", 1)[0].split(",") if m.strip()]
+            kept = [m for m in kept if m != quoted]
+            joined = ", ".join(kept) + ("," if len(kept) == 1 else "")
             line = f"{head}: ({joined}),\n"
         out.append(line)
-    return "".join(out)
+    new = "".join(out)
+    refuse_still_profiled(new, proc)
+    return new
