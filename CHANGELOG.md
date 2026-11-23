@@ -2,6 +2,52 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-11-23
+
+**Overview.** Three days of fixing the job workflows end to end: two defect
+trains over the job framework (77 issues), a review of how jobs are created,
+installed, attached and backfilled (54 issues), and two long-open defects in
+`uqs clean` and the bundled-TorQ push. The q linter pin moved from v0.22 to
+v0.36, and the tree lints with no findings on it.
+
+**Changes by area**
+
+- **Attach (`python/uqs/src/uqs/attach`).** Every IPC call ends within a bound
+  (#2902). A second attachment of one publisher no longer closes the start gate
+  for a verified one (#2904); a schema-file write whose answer was lost is
+  settled from the file, so `remove` cleans it up (#2905, #2908); hosts in
+  another domain are other machines, and sort and HDB readers are asked at their
+  listed host (#2906, #2907). Shared schema files and sort.csv are locked per
+  file (#2909), preflight checks the directory a file is replaced in (#2910),
+  sort.csv is read as TorQ reads it (#2914), and segmented HDBs and gzipped logs
+  count as published history (#2913).
+- **Creating and removing jobs (`scaffold/`, `cli/job/`).** Fresh backfill and
+  horizon scaffolds pass the plant-tables gate (#2915, #2944); `job new` exits 1
+  when regeneration fails, takes a lock against a concurrent run, wraps long
+  profile tuples and refuses a profile past its connection budget (#2916, #2917,
+  #2919, #2921). `job remove` refuses a producer another job reads and a job a
+  bundle installed, and takes a scaffold's leftovers when its file is gone
+  (#2923, #2925, #2945).
+- **Backfills.** A forced write is audited before it runs (#2928); a clipped
+  range ends `not_complete`, a leftover stop file stops nothing, and `job runs`
+  reports stopped, forced and receiver runs truthfully (#2929, #2930, #2950).
+- **Declarations and streaming jobs (`src/etl/core`).** Every define verb checks
+  its name, form and values the same way; a differing redeclaration, a dotted
+  job name or an output that does not fit its plant table is refused at define,
+  and a subscription to a table the tickerplant lacks names the job and the
+  table (#2933, #2934, #2935, #2953, #2954).
+- **Operations.** `uqs clean` refuses while the stack runs and `--match logs`
+  leaves the tickerplant logs (#2742); a bundled-TorQ push refuses the starter
+  pack's demo logins without `--override accept-demo-logins`, and every push
+  refuses root (#2739). `config set` refuses a port another process holds
+  (#2927).
+- **Linting (`.qlinter-version`).** Pinned at v0.36.0 (#2957); five loops append
+  in place.
+- **Guidance (`docs/`, `.claude/skills`).** Nine places where the job guidance
+  named commands, options or numbers the code does not have were corrected
+  (#2936-#2942, #2955, #2956).
+- **Files changed:** 274 files changed, 9440 insertions(+), 1591 deletions(-).
+
 ## stable/2026-11-20
 
 **Overview.** A week of making attached data honest about what it keeps, of one
