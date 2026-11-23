@@ -370,6 +370,7 @@ def _drop_from_profiles(text: str, proc: str) -> str:
     block = None
     skipping = False
     members = False
+    opened = 0
     for line in lines:
         if m := re.match(r"^([A-Z_]+): dict\[", line):
             block = m.group(1)
@@ -383,11 +384,16 @@ def _drop_from_profiles(text: str, proc: str) -> str:
             members = not re.match(r"^\s*\),\s*$", line)
             if members and line.strip() == f"{quoted},":
                 continue
+            if not members and len(out) == opened + 1:
+                # Its last member went: `(\n),` is `()` to ruff format (#2917).
+                out[opened] = out[opened].rstrip() + "),\n"
+                continue
         elif block == "UNPROFILED" and line.startswith(f"    {quoted}: ("):
             skipping = not line.rstrip().endswith("),")
             continue
         elif block == "PROFILES" and re.match(r'^\s+"\w+": \(\s*$', line):
             members = True
+            opened = len(out)
         elif block == "PROFILES" and quoted in line and re.match(r'^\s+"\w+": \(.*\),\s*$', line):
             head, inner = line.split(": (", 1)
             kept = [m.strip() for m in inner.rsplit("),", 1)[0].split(",") if m.strip()]

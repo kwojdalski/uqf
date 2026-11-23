@@ -495,6 +495,32 @@ def test_removing_a_process_drops_it_from_a_profile_written_a_member_per_line():
     assert after == _fx_one_per_line(before, "zq_ml1").replace('        "zq_ml1",\n', "")
 
 
+def test_removing_from_a_profile_job_new_wrapped_keeps_the_shape_ruff_format_keeps():
+    """#2917 wraps a profile past 100 characters a member per line; #2926's
+    removal reads that shape back. Dropping the member that brings it under
+    the limit leaves it wrapped (the trailing comma keeps ruff from joining
+    it, and job new keeps a wrapped profile wrapped), and dropping the last
+    leaves `()`, not `(\n    ),`, which ruff format would rewrite."""
+    from uqs.scaffold.profile import _with_member
+    from uqs.scaffold.remove import _drop_from_profiles
+
+    base = 'PROFILES: dict[str, tuple[str, ...]] = {\n    "p": ("job_a",),\n}\n'
+    long_b, long_c = "job_b_with_a_rather_long_plausible_name1", "job_c_with_a_longer_name2"
+    wrapped = _with_member(_with_member(_with_member(base, "p", long_b), "p", long_c), "p", "job_d")
+
+    def shape(*members: str) -> str:
+        body = "".join(f'        "{m}",\n' for m in members)
+        return f'PROFILES: dict[str, tuple[str, ...]] = {{\n    "p": (\n{body}    ),\n}}\n'
+
+    assert wrapped == shape("job_a", long_b, long_c, "job_d"), "the shape job new writes"
+    under = _drop_from_profiles(wrapped, long_c)
+    assert under == shape("job_a", long_b, "job_d")
+    assert _with_member(under, "p", "job_e") == shape("job_a", long_b, "job_d", "job_e")
+    for proc in (long_b, "job_d", "job_a"):
+        under = _drop_from_profiles(under, proc)
+    assert under == 'PROFILES: dict[str, tuple[str, ...]] = {\n    "p": (),\n}\n'
+
+
 def test_a_profile_layout_the_removal_cannot_edit_refuses_the_removal():
     """Rather than leave the process in a profile and report success (#2926)."""
     from uqs.scaffold.remove import _drop_from_profiles
