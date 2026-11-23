@@ -438,12 +438,13 @@ uqs job backfill piggybank_ledger_backfill --attachment pb-uat --writer uat-host
 
 ### Without a receiver
 
-`--force` with `--writer` skips the receiver and everything it checks. HOST:PORT
-is then any q process of the stack, usually its wdb.
+`--override any-writer --reason TEXT` with `--writer` skips the receiver and
+everything it checks. HOST:PORT is then any q process of the stack, usually its
+wdb.
 
 ```bash
 uqs job backfill piggybank_ledger_backfill --attachment pb-uat \
-    --writer uat-host:6055 --force \
+    --writer uat-host:6055 --override any-writer --reason "completed history" \
     --from 2026-10-01 --to 2026-10-02 --source-version historical-v1 --wait
 ```
 
