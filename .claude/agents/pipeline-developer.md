@@ -57,10 +57,10 @@ Sources (`sources/*.q`) and workers (`workers/*.q`) load **last**, because a
 declaration registers itself on load --- there is no way to have a declaration
 without its implementation.
 
-`src/etl/init.q` **globs** the sources, transforms, workers and streaming
-directories rather than listing them, so a new declaration file is loaded the
-moment it exists and there is no `\l` line to add. One ordering is still
-load-bearing and its header explains it: sources before workers, because
+`src/etl/init.q` **globs** the sources, transforms, workers, streaming and
+reactions directories rather than listing them, so a new declaration file is
+loaded the moment it exists and there is no `\l` line to add. One ordering is
+still load-bearing and its header explains it: sources before workers, because
 `.qetl.job.bounded.define` resolves its source at define time. Within a
 directory nothing may depend on another file at load time: a job that needs a
 table's schema reads `.qetl.plant`, never another job's namespace, and
@@ -74,10 +74,9 @@ pricing or execution function, say so and stop rather than adding it here.
 ## Adding ONE job is not your job
 
 `uqs job new` scaffolds a streaming job or a bounded worker --- the q files, the
-table definition, the registry entry and a failing test --- and the
-`uqs job new` skill walks the whole loop from scaffold to green. Point the user
-there when the request is "add a feed / a backfill / a job" and the framework
-already supports it.
+table definition and a failing test --- and the `new-job` skill walks the whole
+loop from scaffold to green. Point the user there when the request is "add a
+feed / a backfill / a job" and the framework already supports it.
 
 You own the FRAMEWORK those jobs run on: the lifecycle, the coverage ledger, the
 job graph, the source contract, the IO managers. Use the scaffold yourself when

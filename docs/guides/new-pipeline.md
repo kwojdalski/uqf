@@ -13,8 +13,8 @@ checkpoints, dry-run and the job graph, so you write none of that.
   | a **worker** in `src/etl/workers/` | which source, which transform, which target dataset, how wide a window   |
 
 [`src/etl/init.q`](../../src/etl/init.q) globs `sources/`, `transforms/`,
-`workers/` and `streaming/`, so a declaration loads because its file exists.
-Every key a declaration accepts is in [the declaration
+`workers/`, `streaming/` and `reactions/`, so a declaration loads because its
+file exists. Every key a declaration accepts is in [the declaration
 reference](../reference/pipeline-declarations.md). Why the framework has this
 shape is in [the pipeline philosophy](../architecture/pipeline-philosophy.md).
 
@@ -72,7 +72,8 @@ Choose the shell first. It is the one choice that is hard to change afterwards.
   window or a restatement. It runs, finishes and exits. This is
   `.qetl.job.bounded`, and the rest of this page.
 - Continuous: it subscribes and never finishes, as with a tickerplant feed or a
-  poller. This is `.qetl.job.continuous`, whose state is a cursor.
+  poller. This is the `.qetl.job.stream` shell; `.qetl.job.continuous` holds the
+  cursor and poll helpers a poller keeps its state with.
 
 A continuous job is one file under
 [`src/etl/streaming/`](../../src/etl/streaming) with a `.qetl.job.stream.define`

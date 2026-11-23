@@ -1,8 +1,8 @@
 # Scaffolding
 
-`uqs job new` writes the skeleton of a process: its q files, its table, its
-registry entry and a failing test. Seven shapes, one page each. Every command
-below was run against this tree, and the output shown is what it printed.
+`uqs job new` writes the skeleton of a process: its q files, its table and a
+failing test. Seven shapes, one page each. Every command below was run against
+this tree, and the output shown is what it printed.
 
 ## Which shape
 

@@ -101,7 +101,7 @@ D (generated files), T (tests) and C (the CLI), and summarises L and J.
 - **J14** `start_with_all 1b` only when the user asks. The licence leaves 14
   connection slots on the tickerplant, and each **tickerplant subscriber** -
   every started non-backfill pipeline, plus rdb1, wdb1, sctp1 and metrics1 -
-  spends one; a process that subscribes to nothing spends none
+  spends one, a feed included; only a backfill spends none
   (`model/pipeline_edges.py`; `uqf-on-torq.md` §7). `uqs profile list` shows
   each profile's slots.
 - **J15** Job names are unique across streaming and bounded jobs: they share

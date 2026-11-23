@@ -35,7 +35,7 @@ expensive to undo.
   | You know the range before you start | yes                                                      | no                                                 |
   | It finishes and exits               | yes                                                      | never                                              |
   | Examples                            | a backfill, a nightly window, a restatement              | a tickerplant feed, a poller                       |
-  | Shell                               | `.qetl.job.bounded`                                      | `.qetl.job.stream` / `.qetl.job.continuous`        |
+  | Shell                               | `.qetl.job.bounded`                                      | `.qetl.job.stream`                                 |
 
 ```bash
 # continuous: subscribes to two tables, publishes one
@@ -110,10 +110,11 @@ several tables in or out are refused - use the custom-handler scaffold there.
 
 To undo a scaffold, `uqs job remove NAME --dry-run` shows everything it would
 take back out, then run it without `--dry-run`. It refuses a job whose
-SCAFFOLDED markers are gone, and keeps any table or source something else still
-uses. It also lists every other line that still names the job (an example, a
-docs page, a diagram) - those are yours to edit - and `--strict` refuses while
-any remain.
+SCAFFOLDED markers are gone (one whose handler is written) unless
+`--override even-if-edited --reason TEXT` says the edits may go, and keeps any
+table or source something else still uses. It also lists every other line that
+still names the job (an example, a docs page, a diagram) - those are yours to
+edit - and `--strict` refuses while any remain.
 
 `--proc` names the process (default `NAME1`, or `NAME_backfill1`), and
 `--start-with-all` puts a streaming job or normalizer in `uqs start all`. Leave
