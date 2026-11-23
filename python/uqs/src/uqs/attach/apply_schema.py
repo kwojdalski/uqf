@@ -20,9 +20,18 @@ from uqs.attach.config import Attachment, AttachmentError
 from uqs.attach.evidence import evidence
 from uqs.attach.facts import Host
 from uqs.attach.findings import Finding
-from uqs.attach.manifest import CREATED, DONE, FAILED, REVERTED, SHARED, Manifest, Op
+from uqs.attach.manifest import (
+    CREATED,
+    DONE,
+    FAILED,
+    PENDING,
+    REVERTED,
+    SHARED,
+    Manifest,
+    Op,
+)
 from uqs.attach.outcome import BLOCKS
-from uqs.attach.remote import Ipc
+from uqs.attach.remote import Ipc, IpcError
 from uqs.attach.schema import TableSpec
 from uqs.attach.topology import Observation, Proc
 
@@ -61,6 +70,12 @@ def block(
             record = persist.write_uses(att, m.token, tuple(s.name for s in specs), where)
         else:
             record = persist.write(att, m.token, tuple(specs), where)
+    except IpcError as exc:
+        # The tickerplant may have appended the block and its answer been lost: unknown,
+        # as apply's other remote steps journal it, and never `failed`, which a detach
+        # reads as nothing to take back (#2905). outcome.unresolved_blocks settles it.
+        m.finish(op, PENDING, note=f"outcome unknown: {exc.reason}")
+        raise AttachmentError(f"the schema file {path}: {exc}") from None
     except (OSError, AttachmentError) as exc:
         m.finish(op, FAILED, note=str(exc))
         raise AttachmentError(f"the schema file {path}: {exc}") from None
