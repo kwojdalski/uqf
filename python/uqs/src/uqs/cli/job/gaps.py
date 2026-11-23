@@ -82,7 +82,9 @@ def widen_to_grain(ledger_value: str, align_ns: int | None, *, upper: bool = Fal
 
 GapsJson = json_opt(
     '{"job", "gaps": [{range_from, range_to}], "sessions", "refillable": bool, '
-    '"refills": [{job, range_from, range_to, command}], "today_not_refillable": bool}'
+    '"refills": [{job, range_from, range_to, source_version, command}], '
+    '"today_not_refillable": bool} - source_version is null where the twin declares '
+    "no default: its command then omits --source-version, which the operator must add"
 )
 
 
@@ -92,18 +94,28 @@ def refills(holes: list[dict], twins: dict) -> tuple[list[dict], bool]:
     out = []
     for worker, align in twins.items() if advised else ():
         try:
-            version = f" --source-version {stack_backfill.resolve_version(worker, None)}"
+            version: str | None = stack_backfill.resolve_version(worker, None)
         except UqsError:
             # No declared default: the source release is the operator's to
-            # name, so it is shown as one to fill in, not guessed.
-            version = " --source-version <V>"
+            # name, so it is left out, not guessed or stood in for (#2952). A
+            # placeholder is no good either way: `<V>` is a shell redirection,
+            # and a word would be taken as the release and file coverage under
+            # it. Pasted without one, `uqs job backfill` refuses and says why.
+            version = None
+        flag = f" --source-version {version}" if version else ""
         for hole in advised:
             start = stack_runs._as_bound(widen_to_grain(str(hole["range_from"]), align))
             end = stack_runs._as_bound(
                 widen_to_grain(str(hole["range_to"]), align, upper=True), upper=True
             )
-            command = f"uqs job backfill {worker} --from {start} --to {end}{version}"
-            out.append({"worker": worker, "range_from": start, "range_to": end, "command": command})
+            command = f"uqs job backfill {worker} --from {start} --to {end}{flag}"
+            out.append({
+                "worker": worker,
+                "range_from": start,
+                "range_to": end,
+                "source_version": version,
+                "command": command,
+            })  # fmt: skip
     return out, cut
 
 
@@ -180,6 +192,13 @@ def gaps(
         console.print("\n[bold]refill[/] - re-running is idempotent: covered windows are skipped")
     for refill in found:
         console.print(f"  {refill['command']}", soft_wrap=True)
+    unnamed = sorted({r["worker"] for r in found if r["source_version"] is None})
+    if unnamed:
+        console.print(
+            f"[yellow]add --source-version RELEASE[/] to the refill of {', '.join(unnamed)}: "
+            "it declares no default, so which release of its source to record "
+            "coverage under is yours to name"
+        )
     if cut:
         console.print(
             "[yellow]today's part of these gaps is not refillable yet[/]: a backfill cannot "
