@@ -17,7 +17,9 @@ absent* - first appears in the second.
 ## Opening one
 
 They are `.qnb` files, the notebook format of the
-[q-lint](https://github.com/kwojdalski/q-lint) VS Code extension.
+[q-lint](https://github.com/kwojdalski/q-lint) VS Code extension. They need
+version 0.28.0 of it or later: the values shown inside the prose (`{{q: ...}}`)
+and the shell runner below arrived then, and an older one shows them as text.
 
 1. Start a scratch q **from the repository root** - the notebooks load
    `src/init.q` by a relative path, and refuse to run from anywhere else:
