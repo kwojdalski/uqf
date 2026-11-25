@@ -35,7 +35,7 @@ ignore = ["QS001", "QS008", "QS010"]
 # reports the routine mix of `*`/`%` with `+`/`-`, where q's right-to-left
 # order and school precedence agree. #2814 parenthesised every mixed line,
 # routine or trap, so the tree reads one way; selecting QP007 keeps new code
-# to that, at no cost today (0 findings on 0.38.0). QP005 still reports the
+# to that, at no cost today (0 findings on 0.39.0). QP005 still reports the
 # trap, where the two orders disagree.
 extend-select = ["QP007"]
 
