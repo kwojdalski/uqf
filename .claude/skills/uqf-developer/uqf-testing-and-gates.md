@@ -194,9 +194,9 @@ The push itself runs the same pre-push hooks.
 
 ## 4. qlinter and the q-traps gate
 
-- Pin: `.qlinter-version` (`v0.38.0` today) is the one place the version is set.
+- Pin: `.qlinter-version` (`v0.39.0` today) is the one place the version is set.
   Install the matching tag:
-  `cargo install --git https://github.com/kwojdalski/q-lint --tag v0.38.0 --locked`.
+  `cargo install --git https://github.com/kwojdalski/q-lint --tag v0.39.0 --locked`.
 - Config: `.qlinter.toml` - `exclude = ["lib/**", ".claude/worktrees/"]`,
   `profile = "uqf"`, `ignore = ["QS001","QS008","QS010"]` (snake_case beside
   TorQ's camelCase; `_` in names; the `{[t;x]}` handler shape), plus per-file
