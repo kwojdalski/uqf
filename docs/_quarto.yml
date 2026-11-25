@@ -91,6 +91,7 @@ website:
           - guides/connecting.md
           - guides/hdb.md
           - guides/when-it-breaks.md
+          - guides/eod-interrupted.md
           - guides/new-pipeline.md
           - guides/config-audit.md
           - guides/metatables.md
