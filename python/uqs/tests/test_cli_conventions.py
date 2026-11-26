@@ -1255,9 +1255,10 @@ def test_rule5c_every_irreversible_deletion_asks():
 
 def test_rule5c_every_irreversible_deletion_asks_on_mcp_too():
     """uqs-mcp has no terminal and no --yes, and its `uqs_clean` deleted the
-    data directory, the HDB with it, in one call (#2257). A tool mirroring an
-    IRREVERSIBLE command is a dry run unless confirm=true - required, never a
-    default - and takes no dry_run or yes beside it; no other tool takes it."""
+    data directory, the HDB with it, in one call (#2257). A tool mirroring a
+    command that asks - every IRREVERSIBLE one among them - is a preview unless
+    confirm=true, never a default, and takes no dry_run, apply or yes beside
+    it (#2988); no other tool but the server-changing PREVIEW_FIRST takes it."""
     from mcp_support import tools
 
     from uqs import mcp, mcp_server
@@ -1265,18 +1266,19 @@ def test_rule5c_every_irreversible_deletion_asks_on_mcp_too():
     schemas = {t.name: t.input_schema for t in tools()}
     mirrored = {path: name for name, path in mcp.MIRRORS.items()}
     assert "clean" in mirrored, "uqs_clean is the tool #2257 is about"
+    asking = {p for p in mirrored if _flag(LEAVES[p], "--yes", "-y")}
+    assert IRREVERSIBLE <= asking
     wrong = {}
-    for path in IRREVERSIBLE & set(mirrored):
-        schema = schemas[mirrored[path]]
-        props = schema["properties"]
+    for path in asking | mcp.PREVIEW_FIRST:
+        props = schemas[mirrored[path]]["properties"]
         default = props.get(mcp_server.CONFIRM, {}).get("default")
-        if default is not False or {"dry_run", "yes"} & set(props):
+        if default is not False or {"dry_run", "apply", "yes"} & set(props):
             wrong[path] = sorted(props)
-    assert not wrong, f"irreversible tools not a dry run unless {mcp_server.CONFIRM}=true: {wrong}"
+    assert not wrong, f"tools that ask, not a preview unless {mcp_server.CONFIRM}=true: {wrong}"
     confirming = {
         mcp.MIRRORS[n] for n, s in schemas.items() if mcp_server.CONFIRM in s["properties"]
     }
-    assert confirming <= IRREVERSIBLE, sorted(confirming - IRREVERSIBLE)
+    assert confirming == asking | mcp.PREVIEW_FIRST
 
 
 def test_rule5c_the_commands_that_ask_are_the_known_ones():
@@ -1303,6 +1305,7 @@ def test_rule5c_the_commands_that_ask_are_the_known_ones():
 #: Three behaviours were one mistake's: exit 2 (data check/alter/compress),
 #: exit 1 (job attachment add/remove) and a prompt mid-run (deploy prune).
 JSON_WITHOUT_YES = {
+    "clean": "test_cli.py::test_clean_json_without_yes_is_refused_and_removes_nothing",
     "data alter": "test_hdb_alter_cli.py::test_json_without_yes_is_refused_and_writes_nothing",
     "data check": "test_hdb_alter_cli.py::test_json_without_yes_is_refused_and_writes_nothing",
     "data compress": "test_data_compress.py::test_json_cannot_ask",

@@ -20,9 +20,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from mcp_support import call
 from typer.testing import CliRunner
 
-from uqs import cli, mcp
+from uqs import cli
 from uqs import paths as stack_paths
 from uqs.cli.fleet import start_warnings
 from uqs.interpreter import q_interpreter
@@ -77,19 +78,19 @@ def test_a_profile_start_writes_exactly_its_set(paths, torq_runs):
     members, _ = start_policy.resolve_profiles(paths, "essential")
     paths.generated_deployment.parent.mkdir(parents=True)
     paths.generated_deployment.write_text("hdb2\nsortworker2\n")  # a previous profile's
-    mcp.uqs_start(profile="essential")
+    assert not call("uqs_start", profile="essential").is_error
     assert deployment.members(paths) == members, "replaced, not added to"
     assert torq_runs == [["start", " ".join(members)]]
 
 
 def test_starting_sortworker2_later_makes_it_discoverable(paths, torq_runs):
-    mcp.uqs_start(profile="essential")
+    assert not call("uqs_start", profile="essential").is_error
     runtime.start(paths, "sortworker2")
     assert "sortworker2" in (deployment.members(paths) or ())
 
 
 def test_a_refused_start_changes_nothing(paths, torq_runs):
-    mcp.uqs_start(profile="essential")
+    assert not call("uqs_start", profile="essential").is_error
     before = deployment.members(paths)
     with pytest.raises(UqsError, match="nosuchproc1"):
         runtime.start(paths, "sortworker2 nosuchproc1")
