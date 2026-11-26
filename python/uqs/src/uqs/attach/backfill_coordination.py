@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Mapping
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from uqs.attach import writer_calendar
@@ -186,11 +186,13 @@ def examine(
     dates: list[date],
     *,
     guard: timedelta = EOD_GUARD,
+    spans: list[tuple[datetime, datetime]] | None = None,
 ) -> Assessment:
     """Every coordination finding for `dest`, and the facts established, without refusing.
 
     Read-only: one `writer_state` call per process that writes the destination. `assess` is
-    this plus the refusal; nothing here decides whether a finding may be accepted.
+    this plus the refusal; nothing here decides whether a finding may be accepted. `spans`
+    are the plan's exact [from, to) windows (backfill_fence.fence); None fences whole dates.
     """
     blockers: list[Finding] = []
     warnings: list[str] = []
@@ -230,7 +232,7 @@ def examine(
             )
         )
     _others(obs, blockers, warnings)
-    fences = [fence(s, dates, guard, blockers) for s in answered.values()]
+    fences = [fence(s, dates, guard, blockers, spans) for s in answered.values()]
     actives = [a for a, _, _ in fences if a is not None]
     nows = [n for _, n, _ in fences if n is not None]
     rolls = [r for _, _, r in fences if r is not None]
@@ -263,16 +265,18 @@ def assess(
     *,
     guard: timedelta = EOD_GUARD,
     waived: Mapping[str, str] | None = None,
+    spans: list[tuple[datetime, datetime]] | None = None,
 ) -> Coordination:
     """Coordination facts for `dest`, or a `CoordinationRefused` listing every blocker.
 
     `waived` ({id: reason}; only `eod-fence`) lifts those findings, kept as `accepted`; the
     rest still refuse. A waived fence also has no write deadline, whether or not it fired now.
+    `spans` are examine's: `active-date` is never waivable, with or without them.
 
     Read-only: one `writer_state` call per process that writes the destination.
     """
     waivers = check_waivers(waived)
-    found = examine(att, dest, obs, writers, ipc, dates, guard=guard)
+    found = examine(att, dest, obs, writers, ipc, dates, guard=guard, spans=spans)
     blockers, accepted = lift(found.blockers, waivers)
     if blockers:
         raise CoordinationRefused(

@@ -18,9 +18,17 @@ from uqs.attach.findings import Finding
 
 
 def fence(
-    state: dict[str, Any], dates: list[date], guard: timedelta, blockers: list[Finding]
+    state: dict[str, Any],
+    dates: list[date],
+    guard: timedelta,
+    blockers: list[Finding],
+    spans: list[tuple[datetime, datetime]] | None = None,
 ) -> tuple[date | None, datetime | None, datetime | None]:
-    """One writer's active date and end-of-day fence: blockers appended, facts returned."""
+    """One writer's active date and end-of-day fence: blockers appended, facts returned.
+
+    `spans` are the plan's exact [from, to) windows over `dates` (#2974): with them, a date
+    the active partition starts inside is admitted up to that start. Without them, or when they
+    do not account for every date, each date is fenced whole."""
     who = state.get("procname", "a writer")
     held, unreadable = writer_clock.partitions(state)
     if not held or unreadable:
@@ -58,7 +66,10 @@ def fence(
             )
         )
     if active is not None:
-        touched = [d.isoformat() for d in writer_calendar.touched_days(state, dates, active, roll)]
+        touched = [
+            d.isoformat() for d in writer_calendar.touched_days(state, dates, active, roll, spans)
+        ]
+        start = writer_calendar.active_start(state, active, roll)
         if touched:
             blockers.append(
                 blocker(
@@ -66,8 +77,14 @@ def fence(
                     who,
                     f"{', '.join(touched)} is not completed history: "
                     f"{writer_clock.boundary(state, held)} and native end of day will write it. "
-                    "Only dates before it can be backfilled",
+                    + (
+                        f"Only dates before it, or a range ending at or before "
+                        f"{start.isoformat()} where {active} begins, can be backfilled"
+                        if start is not None
+                        else "Only dates before it can be backfilled"
+                    ),
                     active_date=active.isoformat(),
+                    active_start=start.isoformat() if start is not None else None,
                     touched_dates=",".join(touched),
                     partitions=",".join(d.isoformat() for d in held),
                 )
