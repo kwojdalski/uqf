@@ -12,7 +12,7 @@ fence.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 from uqs.attach import writer_clock
@@ -76,21 +76,55 @@ def day_start(state: dict[str, Any], day: date, roll: datetime) -> datetime | No
     return roll - timedelta(days=1 + (today - day).days)
 
 
+def active_start(state: dict[str, Any], active: date, roll: datetime | None) -> datetime | None:
+    """The UTC instant the partition the stack is filling began (None when it cannot be said)."""
+    return day_start(state, active, roll) if roll is not None else None
+
+
+def _spans_cover(dates: list[date], spans: list[tuple[datetime, datetime]] | None) -> bool:
+    """Do `spans` account for every date in `dates`? Only then may they stand in for them.
+
+    Each span must be a non-empty, zone-aware [from, to) and every date must meet one; anything
+    else (no spans, a reversed or naive span, a date no span reaches) is inconsistent."""
+    if not spans or any(a.tzinfo is None or b.tzinfo is None or a >= b for a, b in spans):
+        return False
+    return all(any(_meets(d, a, b) for a, b in spans) for d in dates)
+
+
+def _day_bounds(d: date) -> tuple[datetime, datetime]:
+    begin = datetime.combine(d, time.min, tzinfo=UTC)
+    return begin, begin + timedelta(days=1)
+
+
+def _meets(d: date, a: datetime, b: datetime) -> bool:
+    begin, end = _day_bounds(d)
+    return a < end and b > begin
+
+
 def touched_days(
-    state: dict[str, Any], dates: list[date], active: date, roll: datetime | None
+    state: dict[str, Any],
+    dates: list[date],
+    active: date,
+    roll: datetime | None,
+    spans: list[tuple[datetime, datetime]] | None = None,
 ) -> list[date]:
     """The window days that reach the partition the stack is filling.
 
-    A window is a UTC calendar day; the stack's day starts where its roll puts it.
+    A window is a UTC calendar day; the stack's day starts where its roll puts it. With the
+    plan's exact half-open `spans` (#2974), a day is touched only where a span on it ends after
+    that start: [00:00, 22:00) of a day the stack's partition starts at 22:00 is completed
+    history. Without them, or when they do not account for every date, the whole day counts.
     """
-    start = day_start(state, active, roll) if roll is not None else None
+    start = active_start(state, active, roll)
     if start is None:
         return [d for d in dates if d >= active]
-    return [
-        d
-        for d in dates
-        if datetime.combine(d + timedelta(days=1), time.min, tzinfo=start.tzinfo) > start
-    ]
+    if spans is not None and _spans_cover(dates, spans):
+        return [
+            d
+            for d in dates
+            if any(min(b, _day_bounds(d)[1]) > start for a, b in spans if _meets(d, a, b))
+        ]
+    return [d for d in dates if _day_bounds(d)[1] > start]
 
 
 def runner_text_of(state: dict[str, Any]) -> str:

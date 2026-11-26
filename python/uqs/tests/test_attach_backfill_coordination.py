@@ -15,7 +15,7 @@ import os
 import socket
 import subprocess
 import time
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from attach_backfill_support import (
@@ -692,3 +692,134 @@ def test_the_runner_is_given_the_calendar_in_a_form_that_is_not_a_flag():
     bare = writer_calendar.of({"proctype": "wdb"})
     assert bare is not None
     assert bare.runner_text == ""
+
+
+# --- the exact window, not the UTC date (#2974) -----------------------------------------------
+# A stack rolling at 17:00 America/Toronto (22:00 UTC in November): at noon UTC on 2026-11-26
+# both writers are filling 2026.11.26, which began at 2026-11-25T22:00Z. [00:00, 22:00) of UTC
+# 2026-11-25 is completed history; one microsecond more reaches the partition being written.
+
+TORONTO = {
+    "now": "2026.11.26D12:00:00.000000000",
+    "next_roll": "2026.11.26D22:00:00.000000000",
+    "rolltimeoffset": str(-7 * 3600 * 10**9),
+    "rolltz_adj": str(-5 * 3600 * 10**9),
+    "datatz_adj": "0",
+    "native_day": "2026.11.26",
+}
+NOV_25 = "2026.11.25D00:00:00.000000000"
+AT_ROLL = "2026.11.25D22:00:00.000000000"
+PAST_ROLL = "2026.11.25D22:00:00.000001000"
+ATTACHMENT = COMMON[COMMON.index("--attachment") + 1]
+
+
+def _toronto(world, *, rdb_partitions=("2026.11.26",), **over):
+    world.stack.state_over["wdb1"] = TORONTO | {"partition": "2026.11.26"} | over
+    world.stack.state_over["rdb1"] = TORONTO | {"partitions": list(rdb_partitions)} | over
+
+
+def _window(range_to, *, range_from=NOV_25, decision="fetch", dates=("2026.11.25",)):
+    return facts_of(
+        windows=[{"range_from": range_from, "range_to": range_to, "decision": decision}],
+        dates=list(dates),
+    )
+
+
+def test_a_range_ending_exactly_where_the_active_native_partition_starts_is_admitted(world):
+    _toronto(world)
+    co = plan_with(world, _window(AT_ROLL))["coordination"]
+    assert co["active_date"] == "2026-11-26"
+    assert co["last_writable_date"] == "2026-11-25"
+
+
+def test_a_range_one_microsecond_into_the_active_partition_is_refused_by_both_writers(world):
+    _toronto(world)
+    with pytest.raises(UqsError) as info:
+        plan_with(world, _window(PAST_ROLL))
+    text = str(info.value)
+    assert "2026-11-25 is not completed history: wdb1's current write partition is 2026-11-26" in (
+        text
+    )
+    assert "rdb1's outstanding partitions are 2026-11-26" in text
+    assert "a range ending at or before 2026-11-25T22:00:00+00:00 where 2026-11-26 begins" in text
+
+
+def test_a_whole_utc_date_crossing_the_roll_is_still_refused(world):
+    # --date 2026-11-25 is the half-open day [00:00, next 00:00), which reaches 22:00 onwards
+    _toronto(world)
+    with pytest.raises(UqsError, match="2026-11-25 is not completed history"):
+        plan_with(world, _window("2026.11.26D00:00:00.000000000"))
+
+
+def test_an_rdb_still_holding_the_earlier_partition_refuses_the_exact_window(world):
+    # the rdb's earliest outstanding partition is 2026.11.25 (awaiting reload), which began at
+    # 2026-11-24T22:00Z: the window that clears the wdb is inside it
+    _toronto(world, rdb_partitions=("2026.11.25", "2026.11.26"))
+    with pytest.raises(UqsError) as info:
+        plan_with(world, _window(AT_ROLL))
+    text = str(info.value)
+    assert "rdb1's outstanding partitions are 2026-11-25, 2026-11-26" in text
+    assert "wdb1's current write partition" not in text
+
+
+@pytest.mark.parametrize(
+    "facts",
+    [
+        # every window is already covered: no fetch window accounts for 2026-11-25
+        _window(AT_ROLL, decision="covered"),
+        # a window that never reaches the date the plan says it writes
+        _window("2026.11.24D12:00:00.000000000", range_from="2026.11.24D00:00:00.000000000"),
+    ],
+    ids=["no-fetch-window", "date-no-window-reaches"],
+)
+def test_windows_that_do_not_account_for_the_dates_fall_back_to_the_whole_date(world, facts):
+    _toronto(world)
+    with pytest.raises(UqsError, match="2026-11-25 is not completed history"):
+        plan_with(world, facts)
+
+
+def test_without_spans_the_fence_is_the_whole_date():
+    state = TORONTO | {"procname": "wdb1", "proctype": "wdb", "partition": "2026.11.26"}
+    whole = _fence_codes(state, [date(2026, 11, 25)])
+    assert "active-date" in whole
+    found: list = []
+    spans = [(datetime(2026, 11, 25, tzinfo=UTC), datetime(2026, 11, 25, 22, tzinfo=UTC))]
+    backfill_fence.fence(state, [date(2026, 11, 25)], timedelta(hours=1), found, spans)
+    assert [f.code for f in found] == []
+    reversed_spans = [(b, a) for a, b in spans]
+    backfill_fence.fence(state, [date(2026, 11, 25)], timedelta(hours=1), found, reversed_spans)
+    assert [f.code for f in found] == ["active-date"]
+
+
+def test_skip_eod_fence_does_not_waive_the_active_partition(world):
+    # inside the end-of-day guard, so the waiver has something to lift; the active date stays
+    _toronto(world, now="2026.11.26D21:30:00.000000000")
+    world.monkeypatch.setattr(planning, "evaluate", lambda *a, **k: _window(PAST_ROLL))
+    waived = {"eod-fence": "test"}
+    with pytest.raises(coordination.CoordinationRefused) as info:
+        planning.plan_attached(
+            world.paths,
+            ATTACHMENT,
+            WORKER,
+            "v1",
+            datetime(2026, 11, 25, tzinfo=UTC),
+            datetime(2026, 11, 25, 22, 0, 0, 1, tzinfo=UTC),
+            ipc=world.stack,
+            on_conflict="replace",
+            waived=waived,
+        )
+    assert [f.code for f in info.value.findings] == ["active-date", "active-date"]
+    assert {f.code for f in info.value.accepted} == {"eod-fence"}
+    world.monkeypatch.setattr(planning, "evaluate", lambda *a, **k: _window(AT_ROLL))
+    plan = planning.plan_attached(
+        world.paths,
+        ATTACHMENT,
+        WORKER,
+        "v1",
+        datetime(2026, 11, 25, tzinfo=UTC),
+        datetime(2026, 11, 25, 22, tzinfo=UTC),
+        ipc=world.stack,
+        on_conflict="replace",
+        waived=waived,
+    )
+    assert plan["coordination"]["eod_fence_bypassed"] is True

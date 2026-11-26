@@ -131,9 +131,16 @@ def build_plan(
         for w in facts["windows"]
     ]
     dates = [date.fromisoformat(d.replace(".", "-")) for d in facts["dates"]]
+    # the exact windows a run would fetch, so a date the active native partition starts inside
+    # is fenced from that start rather than whole (#2974); the fence checks they cover `dates`
+    spans = [
+        (datetime.fromisoformat(w["range_from"]), datetime.fromisoformat(w["range_to"]))
+        for w in windows
+        if w["decision"] == "fetch"
+    ]
     assert admission.observation is not None
     coordination = assess(
-        att, dest, admission.observation, admission.writers, ipc, dates, waived=waived
+        att, dest, admission.observation, admission.writers, ipc, dates, waived=waived, spans=spans
     )
     return {
         "mode": "plan",
