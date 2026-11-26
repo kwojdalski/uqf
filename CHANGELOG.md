@@ -2,6 +2,29 @@
 
 Daily stable snapshots of this repository. Newest first.
 
+## stable/2026-11-26
+
+**Overview.** One attached-backfill defect fixed and the q linter pin moved from
+v0.36 to v0.41. An attached backfill whose window ends exactly where the active
+TorQ partition begins is now admitted instead of refused with the whole UTC
+date.
+
+**Changes by area**
+
+- **Attach (`python/uqs/src/uqs/attach`).** Writer coordination now checks a
+  backfill's exact `[from, to)` windows against the active native partition, not
+  only the UTC dates they touch (#2974). On a stack rolling at 17:00 Toronto,
+  the completed `[00:00, 22:00)` part of a UTC day is admitted; a window one
+  microsecond past the roll, or a whole `--date` crossing it, is still refused,
+  and the refusal names the boundary. Missing or inconsistent windows fall back
+  to the whole-date fence, and `--skip-eod-fence` does not lift it.
+- **Tooling.** qlinter is pinned to v0.41.0 (#2973, via v0.37-v0.40), which
+  carries about 1,000 fixes from two bug hunts; the tree still lints with no
+  findings. The q test-impact selector's test expects 0.41.0's reading of a name
+  built from a namespace prefix as a dependency on that namespace.
+
+**Files changed:** 12 files changed, 221 insertions(+), 27 deletions(-)
+
 ## stable/2026-11-23
 
 **Overview.** Three days of fixing the job workflows end to end: two defect
