@@ -584,7 +584,8 @@ def test_the_coverage_hook_cli_always_prints_a_line(small_repo, monkeypatch, tmp
 def test_the_modules_a_change_reaches_are_it_and_its_production_dependents(small):
     """src/b.q calls src/a.q; the loader src/init.q loads both and is not one."""
     assert _pick(small, "src/a.q").modules == ["src/a.q", "src/b.q"]
-    assert _pick(small, "src/c.q").modules == ["src/c.q"]
+    # src/dyn.q builds `.qf.c` names; qlinter 0.41.0 reads that as reaching src/c.q
+    assert _pick(small, "src/c.q").modules == ["src/c.q", "src/dyn.q"]
     # a suite is no module; a child process's file is not loaded here
     assert _pick(small, "tests/q/test_a.q").modules == []
     assert _pick(small, "tests/q/child.q").modules == []
