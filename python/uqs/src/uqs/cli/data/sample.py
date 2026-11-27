@@ -128,7 +128,7 @@ def sample(
         if apply and not (quiesced or point_in_time):
             raise UqsUsageError(_STATE_NEEDED)
         if apply and quiesced:
-            lock = hdb_sample.writer_lock(source.expanduser().resolve())
+            lock = hdb_sample.writer_lock(source)  # as writers name it: not resolved (#2985)
             if lock.exists():
                 raise UqsError(
                     f"--quiesced, but the source's write lock {lock} is held: a writer may be "

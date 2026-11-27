@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import socket
 import subprocess
 from datetime import date
 from pathlib import Path
@@ -219,13 +221,61 @@ def test_a_failed_move_leaves_no_partial_table_visible(hdbs, tmp_path, monkeypat
 
 def test_an_interrupted_runs_stage_is_reported_then_removed(hdbs, tmp_path):
     src, dst, _ = hdbs
-    stale = tmp_path / "rehearsal-hdb.sample-999999-abc"
+    stale = tmp_path / f"rehearsal-hdb.sample-{socket.gethostname()}-999999-abc"
     (stale / "2026.11.19" / "quote").mkdir(parents=True)
     (stale / "2026.11.19" / "quote" / "bid").write_bytes(b"partial")
     assert _sample(tmp_path, src, dst)["stale_stages"] == [str(stale)]
     assert stale.is_dir(), "a dry run removes nothing"
     doc = _sample(tmp_path, src, dst, apply=True)
     assert doc["recovered"] == [str(stale)] and not stale.exists()
+
+
+def _stage(root: Path, host: str, pid: int, written: float | None = None, tag="k3_x9") -> Path:
+    stage = root.parent / f"{root.name}.sample-{host}-{pid}-{tag}"
+    stage.mkdir()
+    if written is not None:
+        os.utime(stage, (written, written))
+    return stage
+
+
+def test_a_stage_is_stale_only_when_its_process_is_provably_gone(tmp_path):
+    """#2985: uqs.liveness's rule - this host's dead pid, or a live pid that
+    started after the stage was last written. Another host's is never judged."""
+    dst = tmp_path / "rehearsal-hdb"
+    host = socket.gethostname()
+    gone = subprocess.Popen(["true"])
+    gone.wait()
+    dead = _stage(dst, host.upper(), gone.pid)  # host compared without case
+    recycled = _stage(dst, host, os.getpid(), written=946684800.0)  # 2000-01-01
+    _stage(dst, host, os.getpid(), tag="live")  # this run: alive, and started before it wrote
+    _stage(dst, "elsewhere.example", gone.pid)
+    assert hdb_sample.stale_stages(dst) == sorted([dead, recycled])
+
+
+def test_a_symlinked_destination_is_locked_where_its_writers_lock_it(tmp_path, monkeypatch):
+    """#2985: the lock is named after the root as given, as .qetl.io.hdb_lock names
+    it, not after the symlink's target; only the stage sits beside the target."""
+    (tmp_path / "volume" / "hdb").mkdir(parents=True)
+    (tmp_path / "hdb").symlink_to(tmp_path / "volume" / "hdb")
+    (tmp_path / "src" / "2026.11.19").mkdir(parents=True)
+    locked: list[tuple[str, Path]] = []
+    staged_in: list[Path] = []
+
+    def run(_paths, _q, _env, argv, tag):
+        if tag == "STAGED|":
+            staged_in.append(Path(argv[-1]))
+            return {"staged": []}
+        return {"partitions": []}
+
+    monkeypatch.setattr(hdb_sample, "with_interpreter", lambda _p: {})
+    monkeypatch.setattr(hdb_sample, "q_interpreter", lambda _e: Path("q"))
+    monkeypatch.setattr(hdb_sample, "_run", run)
+    monkeypatch.setattr(hdb_sample, "_write_lock", lambda *a: locked.append((a[3], a[4])))
+    hdb_sample.sample(
+        _paths(tmp_path), tmp_path / "src", tmp_path / "hdb", ["quote"], [D19], 10, apply=True
+    )
+    assert locked == [("acquire", tmp_path / "hdb"), ("release", tmp_path / "hdb")]
+    assert staged_in[0].parent == (tmp_path / "volume").resolve(), "staged beside the target"
 
 
 def test_the_source_is_only_read(hdbs, tmp_path):
@@ -311,6 +361,18 @@ def test_quiesced_is_refused_while_the_sources_lock_is_held(calls, tmp_path, log
     (tmp_path / "hdb.write.lock").write_text("pid 1")
     argv = [*ARGV, "--apply", "--yes", "--quiesced"]
     argv[argv.index("/prod/hdb")] = str(src)
+    result = CliRunner().invoke(cli.app, argv)
+    assert result.exit_code == 1 and "write lock" in log_text()
+    assert calls == []
+
+
+def test_quiesced_reads_a_symlinked_sources_lock_beside_the_link(calls, tmp_path, log_text):
+    """#2985: a writer given the link locks beside the link, not beside its target."""
+    (tmp_path / "volume" / "hdb").mkdir(parents=True)
+    (tmp_path / "hdb").symlink_to(tmp_path / "volume" / "hdb")
+    (tmp_path / "hdb.write.lock").write_text("pid 1")
+    argv = [*ARGV, "--apply", "--yes", "--quiesced"]
+    argv[argv.index("/prod/hdb")] = str(tmp_path / "hdb")
     result = CliRunner().invoke(cli.app, argv)
     assert result.exit_code == 1 and "write lock" in log_text()
     assert calls == []

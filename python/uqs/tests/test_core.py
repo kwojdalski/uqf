@@ -32,6 +32,7 @@ from uqs.stack import deployment, hdb_types, listing, monitor_budget, process_un
 from uqs.stack import logs as stack_logs
 from uqs.stack import multitail as stack_multitail
 from uqs.stack import procs as stack_procs
+from uqs.stack.generated import lock_path as real_lock_path
 from uqs.stack.placeholders import resolve_process_config
 from uqs.stack.prerequisites import check_data_dir_was_migrated
 from uqs.stack.procs import VENDORED_STARTWITHALL_OVERLAY
@@ -308,6 +309,44 @@ def test_clean_is_refused_while_a_lifecycle_command_holds_the_lock(fake_paths, m
         done.set()
         holder.join()
     assert (fake_paths.torqdata / "logs" / "out_rdb1.log").exists()
+
+
+def test_clean_holds_the_lifecycle_lock_through_the_whole_removal(fake_paths, monkeypatch):
+    """#2982: the lock file sits beside the data directory, not in it.
+
+    flock belongs to the inode: with the file inside, the removal unlinked it
+    and a start arriving afterwards made a new one and got the lock at once.
+    """
+    import threading
+
+    from uqs.stack import generated
+
+    monkeypatch.setattr(generated, "lock_path", real_lock_path)  # conftest moves it
+    assert fake_paths.torqdata not in generated.lock_path(fake_paths).parents
+    _tree(fake_paths.torqdata)
+    _stack_up(monkeypatch)
+    answers: list[str] = []
+
+    def second_start() -> None:
+        try:
+            with generated.lifecycle_lock(fake_paths, wait=0):
+                answers.append("got it")
+        except generated.StackBusy:
+            answers.append("refused")
+
+    real_rmtree = stack_clean.shutil.rmtree
+
+    def rmtree_then_contend(path):
+        real_rmtree(path)
+        racer = threading.Thread(target=second_start)
+        racer.start()
+        racer.join()
+
+    monkeypatch.setattr(stack_clean.shutil, "rmtree", rmtree_then_contend)
+    stack_clean.clean(fake_paths)
+    assert not fake_paths.torqdata.exists()
+    assert answers == ["refused"], "a start after the removal must still wait for clean"
+    assert stack_clean.clean_targets(fake_paths, "lock") == [], "nor can --match select it"
 
 
 @pytest.mark.parametrize(
