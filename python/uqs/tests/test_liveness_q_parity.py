@@ -18,6 +18,12 @@ each lock owner and judges it, and while that q is still running - so "this
 pid, alive" is true for both - Python reads the same owner files and judges
 them too.
 
+The pid space beside the host (#2986) is a dimension too: an owner recording
+none (an older version, or macOS) is judged by host alone, one recording this
+machine's like any other, and one recording another's is never gone. Both
+sides are given the same fixed pid space for this machine, so the table reads
+the same on macOS, which has no /proc to read a real one from.
+
 Not compared: a `started` between the q process's real start and the moment
 it loaded backfill_state.q, where q's `loaded_at` and `ps`'s second-truncated
 start disagree by design. No real record falls there: q writes `started`
@@ -44,13 +50,18 @@ UQF_ROOT = Path(__file__).resolve().parents[3]
 HOSTS = ("same", "other")
 PIDS = ("dead", "self", "other")
 STARTED = ("before", "after", "missing")
+SPACES = ("missing", "same", "other")
+#: The pid space both rules are told this machine has, and another machine's.
+HERE, ELSEWHERE = "boot-a/pid:[1]", "boot-b/pid:[2]"
 
-#: The verdict both rules must reach: gone on this host when the pid is dead,
-#: or when it is alive but started after the record - this q's own pid or
-#: another process's.
+#: The verdict both rules must reach: gone on this host and in this pid space
+#: (or with none recorded) when the pid is dead, or when it is alive but
+#: started after the record - this q's own pid or another process's.
 EXPECTED = {
-    (host, pid, started): host == "same" and (pid == "dead" or started == "before")
-    for host, pid, started in itertools.product(HOSTS, PIDS, STARTED)
+    (host, pid, started, space): host == "same"
+    and space != "other"
+    and (pid == "dead" or started == "before")
+    for host, pid, started, space in itertools.product(HOSTS, PIDS, STARTED, SPACES)
 }
 
 #: q writes each owner as write_owner_as would, but with the case's host,
@@ -60,16 +71,18 @@ EXPECTED = {
 _SCRIPT = """
 \\l src/init.q
 \\l src/etl/core/backfill_state.q
+.qetl.job.bounded.state.pid_space:"{here}";
 dir:"{dir}";
 dead:{dead};
 other:{other};
-own:{{[name;host;pid;started]
+own:{{[name;host;pid;started;space]
     p:dir,"/",name,".lock";
     system "mkdir -p ",p;
     num:$[pid~`self;.z.i;pid~`other;other;dead];
     d:`pid`host!("j"$num;$[host~`same;string .z.h;"elsewhere.example"]);
     before:.qetl.job.bounded.state.loaded_at-0D01;
     if[not started~`missing; d[`started]:$[started~`before;before;.z.p]];
+    if[not space~`missing; d[`pid_space]:$[space~`same;"{here}";"{elsewhere}"]];
     (hsym `$.qetl.job.bounded.state.owner_file p) 0: enlist .j.j d;
     p}};
 cases:{cases};
@@ -82,7 +95,7 @@ exit 0
 """
 
 
-def _name(case: tuple[str, str, str]) -> str:
+def _name(case: tuple[str, ...]) -> str:
     return "_".join(case)
 
 
@@ -93,20 +106,28 @@ def _dead_pid() -> int:
 
 
 def _q_cases() -> str:
-    rows = [f'("{_name(c)}";`{c[0]};`{c[1]};`{c[2]})' for c in EXPECTED]
+    rows = [f'("{_name(c)}";`{c[0]};`{c[1]};`{c[2]};`{c[3]})' for c in EXPECTED]
     return "(" + ";".join(rows) + ")"
 
 
-def test_q_and_python_judge_one_table_of_owners_alike():
+def test_q_and_python_judge_one_table_of_owners_alike(monkeypatch):
     q = q_interpreter(os.environ)
     if q is None:
         pytest.skip("no q interpreter - set $QCMD, or put q on PATH")
+    monkeypatch.setattr(liveness, "local_pid_space", lambda: HERE)
     env = {**os.environ, "QHOME": os.environ.get("QHOME", str(Path.home() / ".kx"))}
     other = subprocess.Popen(["sleep", "300"])
     with tempfile.TemporaryDirectory() as tmp:
         script = Path(tmp) / "parity.q"
         script.write_text(
-            _SCRIPT.format(dir=tmp, dead=_dead_pid(), other=other.pid, cases=_q_cases())
+            _SCRIPT.format(
+                dir=tmp,
+                dead=_dead_pid(),
+                other=other.pid,
+                cases=_q_cases(),
+                here=HERE,
+                elsewhere=ELSEWHERE,
+            )
         )
         proc = subprocess.Popen(
             [str(q), str(script), "-q"],
@@ -131,7 +152,7 @@ def test_q_and_python_judge_one_table_of_owners_alike():
                 lock = Path(tmp) / f"{_name(case)}.lock" / "owner"
                 owner = json.loads(lock.read_text())
                 python_verdicts[_name(case)] = liveness.process_gone(
-                    owner["host"], int(owner["pid"]), owner.get("started")
+                    owner["host"], int(owner["pid"]), owner.get("started"), owner.get("pid_space")
                 )
         finally:
             proc.kill()

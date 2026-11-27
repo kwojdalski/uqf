@@ -65,7 +65,7 @@ def find(attachment: str, worker: str, root: Path | None = None) -> dict:
     for record in backfill_owner.active(attachment, root):
         if record.get("worker") != worker:
             continue
-        if not on_this_host(str(record.get("host", ""))):
+        if not on_this_host(str(record.get("host", "")), record.get("pid_space")):
             raise UqsError(
                 f"{worker}'s run into {attachment} is on {record.get('host', '?')}, not this "
                 "host: stop it there. Nothing was changed."

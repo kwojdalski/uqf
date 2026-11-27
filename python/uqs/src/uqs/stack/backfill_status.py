@@ -52,7 +52,7 @@ def _owners(attachment: str) -> list[dict[str, Any]]:
         try:
             record = json.loads(path.read_text())
             pid, host = int(record["pid"]), str(record["host"])
-            alive = not process_gone(host, pid, record.get("started"))
+            alive = not process_gone(host, pid, record.get("started"), record.get("pid_space"))
         except OSError, ValueError, KeyError, TypeError:
             continue
         if alive:

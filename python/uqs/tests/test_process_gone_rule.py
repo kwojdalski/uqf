@@ -109,3 +109,31 @@ def test_importing_liveness_loads_no_other_uqs_module():
         [sys.executable, "-c", probe], capture_output=True, text=True, check=True
     ).stdout.strip()
     assert out == "[]"
+
+
+# ------------------------------------------------------- the pid space (#2986)
+
+
+@pytest.mark.parametrize(
+    ("recorded", "here", "same"),
+    [
+        ("boot-a/pid:[1]", "boot-a/pid:[1]", True),
+        ("boot-b/pid:[2]", "boot-a/pid:[1]", False),  # a container sharing the hostname
+        (None, "boot-a/pid:[1]", True),  # written by a version that recorded none
+        ("", "boot-a/pid:[1]", True),  # written where there is no /proc
+        ("boot-b/pid:[2]", "", True),  # read where there is no /proc: host alone
+    ],
+)
+def test_a_recorded_pid_space_must_match_this_machine_s(monkeypatch, recorded, here, same):
+    monkeypatch.setattr(liveness, "local_pid_space", lambda: here)
+    assert liveness.on_this_host(HOST, recorded) is same
+    assert liveness.process_gone(HOST, _dead_pid(), NOW, recorded) is same
+    assert liveness.on_this_host("elsewhere.example", recorded) is False
+
+
+def test_the_pid_space_is_read_from_proc_or_is_empty():
+    space = liveness.local_pid_space()
+    if Path(liveness.BOOT_ID).exists():
+        assert space.count("/pid:[") == 1, space
+    else:
+        assert space == "", "no /proc (macOS): the host alone names the machine"

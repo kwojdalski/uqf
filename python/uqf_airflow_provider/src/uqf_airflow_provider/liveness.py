@@ -9,6 +9,15 @@ Change uqs.liveness, then copy it here.
 q records the writer as a pid and a host (`.z.i`, `.z.h`). A reader can prove
 that writer dead only on the same host, and must compare host names without
 case: q's `.z.h` is lower-case where `socket.gethostname()` may not be (#726).
+A hostname is not a machine either: two containers or cloned VMs can share
+one, and a status directory, with separate pid numbering. A writer that
+records its pid space (boot id and pid namespace, `local_pid_space`) beside
+its host is this machine's only when that matches too; one that records none
+- an older version, or macOS, where there is no /proc - is judged by its host
+alone (#2986). So a record carrying one, left by this host before a reboot or
+by a container before its restart, is another machine's here, as another
+host's is: once its writer is known gone, it is removed by hand.
+
 A live pid that started after the file's `updated_at` is a recycled number,
 not the writer (#2497, #2652).
 """
@@ -20,10 +29,34 @@ import socket
 import subprocess
 from datetime import UTC, datetime
 
+#: Where Linux names this boot, and this process's pid namespace.
+BOOT_ID = "/proc/sys/kernel/random/boot_id"
+PID_NAMESPACE = "/proc/self/ns/pid"
 
-def on_this_host(host: str) -> bool:
-    """Was `host` (as q's `.z.h` recorded it) this machine?"""
-    return host.lower() == socket.gethostname().lower()
+
+def local_pid_space() -> str:
+    """The space this machine's pids are numbered in: its boot id and pid namespace
+    (`<boot id>/pid:[<inode>]`), as q's `.qetl.job.bounded.state.pid_space` records
+    it - or "" where there is no /proc to read them from (macOS), and the host alone
+    says which machine (#2986)."""
+    try:
+        with open(BOOT_ID) as fh:
+            boot = fh.read().strip()
+        space = os.readlink(PID_NAMESPACE)
+    except OSError:
+        return ""
+    return f"{boot}/{space}" if boot and space else ""
+
+
+def on_this_host(host: str, pid_space: object = None) -> bool:
+    """Was `host` (as q's `.z.h` recorded it) this machine? Two containers or cloned
+    VMs can share a hostname but not a pid space, so where the writer recorded one
+    and this machine has one, they must match too (#2986). A record without one -
+    from a version that wrote none, or from macOS - is judged by its host alone."""
+    if host.lower() != socket.gethostname().lower():
+        return False
+    recorded, here = str(pid_space or ""), local_pid_space()
+    return not recorded or not here or recorded == here
 
 
 def pid_alive(pid: int) -> bool:
@@ -71,7 +104,7 @@ def process_started(pid: int) -> datetime | None:
     return local.astimezone(UTC)
 
 
-def process_gone(host: str, pid: int, alive_at: object = None) -> bool:
+def process_gone(host: str, pid: int, alive_at: object = None, pid_space: object = None) -> bool:
     """Is the process `pid` on `host` provably dead? Only on this host: a
     pid recorded elsewhere is never gone, so a reader keeps waiting.
 
@@ -82,7 +115,7 @@ def process_gone(host: str, pid: int, alive_at: object = None) -> bool:
     again (#2497). q's `held_by_predecessor` is the same test from the inside,
     where the live process is the one asking. Without `alive_at`, or when
     either time cannot be read, a live pid is the writer."""
-    if not on_this_host(host):
+    if not on_this_host(host, pid_space):
         return False
     if not pid_alive(pid):
         return True

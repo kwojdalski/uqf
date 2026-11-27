@@ -154,7 +154,7 @@ def stop_receivers(
         run
         for run in backfill_owner.active(attachment, attach_root)
         if str(run.get("worker", "")).endswith(".receiver")
-        and on_this_host(str(run.get("host", "")))
+        and on_this_host(str(run.get("host", "")), run.get("pid_space"))
     ]
     if dry_run:  # the ones that would stop: nothing signalled, nothing released
         return runs
