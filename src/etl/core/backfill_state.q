@@ -1,90 +1,9 @@
-/ backfill_state.q - the bounded worker lifecycle contract (.qetl.job.bounded.state).
-/ .
-/ The distinction this file exists to enforce:
-/   a BOUNDED worker takes an explicit [range_from;range_to) request, a
-/   resumable run specification, a private state file, and has a terminal
-/   completion path. That is an enforced contract, checked at init.
-/   a CONTINUOUS worker is a long-running poll-and-cursor loop. That is an
-/   established pattern with NO registry and no contract, and the
-/   asymmetry is deliberate - see issue #62.
-/ .
-/ "A bounded worker must not silently become an unbounded tailer" is the
-/ sentence the whole contract exists to make true.
+/ backfill_state.q - a bounded worker's state on disk (.qetl.job.bounded.state):
+/ its single-instance lock and who holds it, the shared ledger lock, durable
+/ state files and the checkpoint. The contract a bounded worker implements is
+/ bounded_contract.q's, in the same namespace.
 
 \d .
-
-/ ---------------------------------------------------------------- CONTRACT
-
-/ Every bounded worker must define these functions in its own namespace.
-/ Chosen to match the lifecycle the framework actually drives: acquire a
-/ request, turn a cursor into windows, fetch one window, publish it, then
-/ record the cursor that acknowledges it.
-.qetl.job.bounded.state.bounded_worker_methods:`init`plan`fetch`publish`checkpoint
-
-/ ...and these globals. range_from/range_to make the bound explicit and
-/ inspectable rather than buried in a call; source_version is mandatory
-/ because coverage recorded under one source release says nothing about
-/ another, so a run that cannot name its release cannot record
-/ coverage either.
-.qetl.job.bounded.state.bounded_worker_globals:`source_version`range_from`range_to
-
-/ worker name -> the namespace symbol holding its implementation.
-.qetl.job.bounded.state.bounded_workers:(`symbol$())!`symbol$()
-
-/ Private: the names defined in a namespace, or an empty list if the
-/ namespace does not exist. Wrapped because `key` on an absent namespace
-/ throws rather than returning empty, and a missing namespace is a contract
-/ violation we want reported by name rather than as a bare error.
-/ @private
-.qetl.job.bounded.state.ns_names:{[ns] @[{key x};ns;`symbol$()]}
-
-/ Register a bounded worker. Does NOT validate - require_contract does that,
-/ at init, when the namespace is actually populated. Registering early and
-/ checking late is deliberate: a worker's methods are defined as its file
-/ loads, so validating at registration would force declaration order.
-/ @param worker the worker's name, e.g. `markout_backfill
-/ @param ns the namespace symbol holding its implementation, e.g.
-/   `.qpipe.job.markout_backfill - .qetl.job.bounded.define derives it, so only a worker
-/   built without the shell passes one by hand
-/ @return the worker name
-/ @eg .qetl.job.bounded.state.register[`demo_deals_backfill;`.qpipe.job.demo_deals_backfill]
-.qetl.job.bounded.state.register:{[worker;ns]
-    .qetl.job.bounded.state.bounded_workers[worker]:ns;
-    worker}
-
-/ Every registered bounded worker, for introspection and for tests.
-.qetl.job.bounded.state.registered:{[] key .qetl.job.bounded.state.bounded_workers}
-
-/ Check that a registered worker implements the whole contract, and throw
-/ naming everything missing if it does not.
-/ .
-/ Called during the worker's own initialisation, so an incomplete worker
-/ fails at startup rather than part-way through a backfill against a live
-/ source. It reports ALL missing names at once rather than the first,
-/ because fixing them one error at a time is the slow way to find out a
-/ worker was never wired up.
-/ .
-/ This is what makes "is this worker complete" a deterministic test rather
-/ than a code-review question.
-/ @param worker a name previously passed to register
-/ @return the worker name, so it can be used inline in an init chain
-/ @throws error if the worker is unregistered, its namespace is absent, or
-/   any contract method or global is missing
-/ @eg .qetl.job.bounded.state.require_contract[`demo_deals_backfill]
-.qetl.job.bounded.state.require_contract:{[worker]
-    if[not worker in key .qetl.job.bounded.state.bounded_workers;
-        '"require_contract: ",string[worker]," is not registered - call .qetl.job.bounded.state.register first"];
-    ns:.qetl.job.bounded.state.bounded_workers worker;
-    names:.qetl.job.bounded.state.ns_names[ns];
-    if[0=count names;
-        '"require_contract: ",string[worker],"'s namespace ",string[ns]," is empty or absent"];
-    missing_methods:.qetl.job.bounded.state.bounded_worker_methods where not .qetl.job.bounded.state.bounded_worker_methods in names;
-    missing_globals:.qetl.job.bounded.state.bounded_worker_globals where not .qetl.job.bounded.state.bounded_worker_globals in names;
-    if[count missing_methods,missing_globals;
-        '"require_contract: ",string[worker]," is incomplete",
-         $[count missing_methods; " - missing method(s): ",", " sv string missing_methods; ""],
-         $[count missing_globals; " - missing global(s): ",", " sv string missing_globals; ""]];
-    worker}
 
 / -------------------------------------------------------------------- LOCK
 
@@ -146,6 +65,13 @@
 / @private
 .qetl.job.bounded.state.rm_lock:{[path] system"rm -rf ",.qetl.job.bounded.state.shell_word[path]}
 
+/ Private: rename `from` to `to` unless something is at `to` already - try_take's
+/ atomic step, for a lock that already exists. 0 when moved, 1 otherwise.
+/ @private
+.qetl.job.bounded.state.move_lock:{[from;to]
+    @[{system"perl -e 'exit 1 if -e $ARGV[1]; rename($ARGV[0],$ARGV[1]) or exit 1' ",(" " sv .qetl.job.bounded.state.shell_word each x)," 2>/dev/null"; 0};
+        (from;to);{[e] 1}]}
+
 / ------------------------------------------------- LOCK OWNERSHIP
 / .
 / A lock records WHO holds it, and these are the functions that read that
@@ -168,7 +94,9 @@
 / HOST as well as pid, because a pid means nothing off the machine that
 / issued it. Without the host a lock left on a shared status directory by
 / another box could be broken here on the strength of a number that happens
-/ to match some unrelated local process.
+/ to match some unrelated local process. And the PID SPACE beside the host,
+/ because a hostname is not a machine: two containers or cloned VMs can share
+/ one, and a status directory, with separate pid numbering (#2986).
 / @param path the lock directory
 / @return the owner file's path
 / @eg .qetl.job.bounded.state.write_owner["/tmp/x.lock"]
@@ -184,7 +112,7 @@
 / @return the owner file's path
 / @eg .qetl.job.bounded.state.write_owner_as["/tmp/x.lock";.z.i]
 .qetl.job.bounded.state.write_owner_as:{[path;pid]
-    (hsym `$.qetl.job.bounded.state.owner_file[path]) 0: enlist .j.j `pid`started`host!("j"$pid;.z.p;string .z.h);
+    (hsym `$.qetl.job.bounded.state.owner_file[path]) 0: enlist .j.j `pid`started`host`pid_space!("j"$pid;.z.p;string .z.h;.qetl.job.bounded.state.pid_space);
     .qetl.job.bounded.state.owner_file[path]}
 
 / The holder recorded inside a lock, or () when there is none to read.
@@ -215,6 +143,45 @@
 .qetl.job.bounded.state.pid_alive:{[pid]
     out:@[system;"ps -p ",string["j"$pid]," > /dev/null 2>&1; echo $?";{[e] ""}];
     $[0=count out; 1b; "0"=first first out]}
+
+/ The space this machine's pids are numbered in: its boot id and pid namespace,
+/ `<boot id>/pid:[<inode>]`, read from Linux's /proc once, at load - or "" where
+/ there is no /proc (macOS), and the host alone names the machine, as it did
+/ before (#2986). The q side of `uqs.liveness.local_pid_space`.
+/ @private
+.qetl.job.bounded.state.pid_space:{[]
+    if[()~key `:/proc/sys/kernel/random/boot_id; :""];
+    out:@[system;"cat /proc/sys/kernel/random/boot_id 2>/dev/null; readlink /proc/self/ns/pid 2>/dev/null";{[e] ()}];
+    $[(2=count out) and all 0<count each out; out[0],"/",out 1; ""]}[]
+
+/ Private: was a lock owner written in this machine's pid space - or does
+/ either side have none (an older version's owner, or macOS), so the host
+/ alone decides, as before (#2986)?
+/ @private
+.qetl.job.bounded.state.same_pid_space:{[o]
+    rec:$[`pid_space in key o; o`pid_space; ""];
+    here:.qetl.job.bounded.state.pid_space;
+    $[(rec~"") or (rec~0n) or here~""; 1b; rec~here]}
+
+/ Private: an owner on this host but in another pid space - was it recorded
+/ before this pid space began, the start of its pid 1? Then it is this
+/ machine before a reboot or this container before its restart, and gone
+/ (#2497). Recorded since, or either time unreadable: another machine sharing
+/ the hostname, live (#2986). The q side of `uqs.liveness.predates_pid_space`.
+/ @private
+.qetl.job.bounded.state.predates_pid_space:{[o]
+    recorded:$[`started in key o; @["P"$;o`started;{[e] 0Np}]; 0Np];
+    if[null recorded; :0b];
+    began:.qetl.job.bounded.state.pid_started 1;
+    $[null began; 0b; recorded<began]}
+
+/ Private: an owner on this host in another, live pid space? Said in a
+/ refusal, since its pid may look dead here and yet it is not broken.
+/ @private
+.qetl.job.bounded.state.foreign_pid_space:{[o]
+    if[not all `host`pid_space in key o; :0b];
+    if[not 10h=type o`pid_space; :0b];
+    (lower[o`host]~lower string .z.h) and not .qetl.job.bounded.state.same_pid_space[o]}
 
 / When this process first loaded this file: a lock owner naming this pid but
 / started earlier was written by a predecessor whose number this process now
@@ -278,8 +245,11 @@
 /   another host        a pid is meaningless off the machine that issued it;
 /                       compared without case, since .z.h is lower-case on
 /                       macOS and a non-q writer's hostname need not be (#726);
-/                       once that host's holder is known dead, remove the
-/                       lock directory by hand - nothing here can prove it
+/                       so is a recorded pid space not this one's, unless it
+/                       was recorded before this pid space's pid 1 began -
+/                       this host before a reboot, a container before its
+/                       restart - when it is stale (#2986); once another
+/                       machine's holder is known dead, remove the lock by hand
 /   the pid is running  it holds the lock - unless the process now carrying
 /                       that number began after the lock was taken, when the
 /                       holder is gone and only its number was reused: this
@@ -287,14 +257,37 @@
 / @param path the lock directory
 / @return 1b when the recorded holder is gone from this host
 / @eg .qetl.job.bounded.state.lock_is_stale["/tmp/nonexistent.lock"]  ->  0b
-.qetl.job.bounded.state.lock_is_stale:{[path]
-    o:.qetl.job.bounded.state.read_owner[path];
+.qetl.job.bounded.state.lock_is_stale:{[path] .qetl.job.bounded.state.owner_is_stale .qetl.job.bounded.state.read_owner[path]}
+
+/ Private: lock_is_stale, for an owner record already read.
+/ @private
+.qetl.job.bounded.state.owner_is_stale:{[o]
     $[()~o;                          0b;
       not all `pid`host in key o;    0b;
       not lower[o`host]~lower string .z.h; 0b;
+      not .qetl.job.bounded.state.same_pid_space[o]; .qetl.job.bounded.state.predates_pid_space[o];
       .qetl.job.bounded.state.held_by_predecessor[o]; 1b;
       not .qetl.job.bounded.state.pid_alive o`pid; 1b;
       .qetl.job.bounded.state.held_by_newcomer[o]]}
+
+/ Private: remove the lock at `path` if its holder is gone - by moving it aside
+/ to a name of this process's own first, then removing it only if the owner it
+/ carries is the one judged dead, and putting it back otherwise. Between a
+/ judgement and an `rm` the lock can be removed by another breaker and taken
+/ afresh; an `rm` acting on the old judgement then removed a LIVE lock (#2986).
+/ The move is atomic, and what it moved is re-read where nobody else looks.
+/ If the put-back finds the path taken meanwhile, the moved lock is dropped:
+/ its holder had already lost it to the breaker that moved it.
+/ @private
+/ @return 1b when this call removed the lock
+.qetl.job.bounded.state.remove_if_stale:{[path]
+    o:.qetl.job.bounded.state.read_owner path;
+    if[not .qetl.job.bounded.state.owner_is_stale o; :0b];
+    tomb:path,".tomb.",string[.z.i],".",string "j"$.z.p;
+    if[0<>.qetl.job.bounded.state.move_lock[path;tomb]; :0b];
+    if[o~.qetl.job.bounded.state.read_owner tomb; .qetl.job.bounded.state.rm_lock tomb; :1b];
+    if[0<>.qetl.job.bounded.state.move_lock[tomb;path]; .qetl.job.bounded.state.rm_lock tomb];
+    0b}
 
 / Break a stale lock, if it is still stale - without ever removing a live one.
 / .
@@ -308,16 +301,18 @@
 / .
 / A breaker that dies while holding `.break` leaves it behind; it records an
 / owner like any lock, so the next breaker clears it when that owner is gone.
+/ Two breakers can judge that dead `.break` together, so it - and the lock -
+/ is removed through remove_if_stale, which never removes one taken afresh
+/ since it was judged (#2986).
 / @param path the lock directory
 / @return 1b when this call removed the lock
 / @eg .qetl.job.bounded.state.break_stale "/tmp/nonexistent.lock"  ->  0b
 .qetl.job.bounded.state.break_stale:{[path]
     b:path,".break";
     if[0<>.qetl.job.bounded.state.try_take[b;.z.i];
-        if[.qetl.job.bounded.state.lock_is_stale[b]; .qetl.job.bounded.state.rm_lock[b]];
+        .qetl.job.bounded.state.remove_if_stale[b];
         :0b];
-    broke:.qetl.job.bounded.state.lock_is_stale[path];
-    if[broke; .qetl.job.bounded.state.rm_lock[path]];
+    broke:.qetl.job.bounded.state.remove_if_stale[path];
     .qetl.job.bounded.state.rm_lock[b];
     broke}
 
@@ -336,6 +331,7 @@
     if[()~o; :"an unrecorded holder (no owner file - it is mid-acquire)"];
     "pid ",string["j"$o`pid],
         $[`host in key o; " on ",o`host; ""],
+        $[.qetl.job.bounded.state.foreign_pid_space[o]; " in another pid space (",o[`pid_space],")"; ""],
         $[`started in key o; ", started ",o`started; ""]}
 
 / Take an exclusive single-instance lock, or refuse to start

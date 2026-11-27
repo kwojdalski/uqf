@@ -104,9 +104,12 @@ def receiver(monkeypatch, tmp_path):
         "attachment": "pb-uat",
     }
     released: list[str] = []
+    monkeypatch.setenv("UQS_ATTACH_DIR", str(tmp_path / "attachments"))
     monkeypatch.setattr(backfill_owner, "active", lambda attachment, root=None: [dict(record)])
     monkeypatch.setattr(
-        backfill_owner, "release", lambda attachment, worker, root=None: released.append(worker)
+        backfill_owner,
+        "release",
+        lambda attachment, worker, root=None, pid=None: released.append(worker),
     )
     yield child, released
     reap(child)
@@ -124,6 +127,38 @@ def test_a_receiver_is_released_once_kill_has_ended_it(receiver):
     child, released = receiver
     [run] = backfill_receiver.stop_receivers("pb-uat", grace=0.5, kill=True)
     assert run["outcome"] == "killed" and released == ["pb_ledger.receiver"]
+
+
+def test_a_stop_keeps_the_record_of_a_receiver_started_while_it_waited(monkeypatch, tmp_path):
+    """The stop released by name, so a receiver that claimed the name while the stop
+    waited for the old one to exit lost its record, and detach no longer saw it (#2984)."""
+    monkeypatch.setenv("UQS_ATTACH_DIR", str(tmp_path / "attachments"))
+    old, new = spawn(IGNORES), spawn(IGNORES)
+    try:
+        backfill_owner.claim("pb-uat", "pb_ledger.receiver", old.pid, "abc")
+        real_stop = backfill_receiver.stop_pids
+
+        def stop_then_restart(pids, **kw):
+            done = real_stop(pids, **kw)
+            backfill_owner.claim("pb-uat", "pb_ledger.receiver", new.pid, "abc")
+            return done
+
+        monkeypatch.setattr(backfill_receiver, "stop_pids", stop_then_restart)
+        [run] = backfill_receiver.stop_receivers("pb-uat", grace=0.5, kill=True)
+        assert run["outcome"] == "killed"
+        assert [r["pid"] for r in backfill_owner.active("pb-uat")] == [new.pid]
+    finally:
+        reap(old)
+        reap(new)
+
+
+def test_release_with_a_pid_drops_only_that_process_s_record(tmp_path):
+    backfill_owner.claim("pb-uat", "w", 4242, "abc", tmp_path)
+    backfill_owner.release("pb-uat", "w", tmp_path, pid=4343)
+    assert backfill_owner.owner_file("pb-uat", "w", tmp_path).exists()
+    backfill_owner.release("pb-uat", "w", tmp_path, pid=4242)
+    assert not backfill_owner.owner_file("pb-uat", "w", tmp_path).exists()
+    backfill_owner.release("pb-uat", "w", tmp_path, pid=4242)  # already gone: no error
 
 
 def test_receiver_stop_names_a_survivor_and_exits_one(monkeypatch):

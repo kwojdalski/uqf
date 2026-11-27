@@ -214,13 +214,25 @@ def confirm(handle: Handle, what: str, *, yes: bool, as_json: bool) -> None:
 def apply_plan(
     handle: Handle, req: Request, *, as_json: bool, yes: bool, what: str
 ) -> dict[str, Any]:
-    """Check the writers, ask, write, reload: the result document."""
+    """Check the writers, ask, check them again, write, reload: the result document.
+
+    On an attachment the writers are checked before the prompt, so a refusal comes
+    before the question, and again after it under the attachment lock, held through
+    the write: the prompt has no time limit, and a backfill may have started or end of
+    day come near while it waited; with the lock held, no backfill or receiver can
+    start until the write is done (#2984)."""
     if handle.kind == "attach":
         assert handle.where is not None
         hdb_where.refuse_running_writers(handle.where, service.ipc_for(handle.where.att))
     confirm(handle, what, yes=yes, as_json=as_json)
-    # hdb/alter.q takes the HDB write lock itself, on whichever host it runs (#2740)
-    result = handle.run(req, apply=True)
+    if handle.kind == "attach":
+        assert handle.where is not None
+        with attach_config.locked(handle.where.att.name):
+            hdb_where.refuse_running_writers(handle.where, service.ipc_for(handle.where.att))
+            # hdb/alter.q takes the HDB write lock itself, on whichever host it runs (#2740)
+            result = handle.run(req, apply=True)
+    else:
+        result = handle.run(req, apply=True)
     result["readers"] = readers(handle) if result.get("status") == "applied" else []
     return result
 

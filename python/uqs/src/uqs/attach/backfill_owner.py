@@ -11,8 +11,10 @@ and `detach` refuses while any record names a live process.
 Liveness is `uqs.liveness`'s rule, shared with the status readers: a record whose
 pid is gone on this machine is a run that died, not one that owns anything, and does
 not block. A record from another host cannot be proven dead and does count (the
-same direction the run lock errs in). A pid reused by an unrelated process makes a
-stale record look live; the refusal names the file, which is the way out.
+same direction the run lock errs in), and so does one from another pid space - a
+container sharing this hostname - where the record names one (#2986). A pid reused
+by an unrelated process makes a stale record look live; the refusal names the file,
+which is the way out.
 
 A record naming pid 0 or a negative pid - corrupt or hand-edited, since a launcher
 writes `Popen.pid` - is read as unreadable: it counts as live, and a stop refuses it
@@ -30,7 +32,7 @@ from typing import Any
 
 from uqs.attach import config
 from uqs.attach.config import AttachmentError
-from uqs.liveness import process_gone
+from uqs.liveness import local_pid_space, process_gone
 from uqs.stack.backfill_status import OWNER_SUBDIR
 
 SUBDIR = OWNER_SUBDIR
@@ -49,6 +51,7 @@ def claim(
     record = {
         "pid": pid,
         "host": socket.gethostname(),
+        "pid_space": local_pid_space(),
         "worker": worker,
         "attachment": attachment,
         "destination": destination,
@@ -58,9 +61,23 @@ def claim(
     return path
 
 
-def release(attachment: str, worker: str, root: Path | None = None) -> None:
-    """Drop the record (the process does this itself on a normal exit)."""
-    owner_file(attachment, worker, root).unlink(missing_ok=True)
+def release(
+    attachment: str, worker: str, root: Path | None = None, *, pid: int | None = None
+) -> None:
+    """Drop the record (the process does this itself on a normal exit). With `pid`, only
+    while the record still names that process: a stopper releasing the run it stopped
+    must not drop the record of a newer run that claimed the same worker meanwhile
+    (#2984). The caller holds `config.locked`, as `claim`'s callers do, so the record
+    cannot change between the read and the unlink."""
+    path = owner_file(attachment, worker, root)
+    if pid is not None:
+        try:
+            named = json.loads(path.read_text()).get("pid")
+        except OSError, ValueError, AttributeError:
+            return  # gone, or unreadable: not provably the stopped run's
+        if str(named) != str(pid):
+            return
+    path.unlink(missing_ok=True)
 
 
 def _live(record: dict[str, Any]) -> bool:
@@ -70,7 +87,7 @@ def _live(record: dict[str, Any]) -> bool:
         return True  # a record this cannot read is not one it can prove dead
     if pid <= 0:
         return True  # names no process: as unreadable as a missing pid (#2983)
-    return not process_gone(host, pid, record.get("started"))
+    return not process_gone(host, pid, record.get("started"), record.get("pid_space"))
 
 
 def run_pid(record: dict[str, Any]) -> int:

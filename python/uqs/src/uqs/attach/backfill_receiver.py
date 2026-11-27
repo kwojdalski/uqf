@@ -148,18 +148,29 @@ def stop_receivers(
     Each gets the one stop policy (uqs/process_stop.py): SIGTERM, a grace to exit,
     SIGKILL only with `kill`. Its ownership is released only once it is gone - one
     still running keeps its record, so a detach still refuses (#2689). Returns each
-    receiver's record with its `outcome`: stopped, killed or still running."""
+    receiver's record with its `outcome`: stopped, killed or still running. A record is
+    released only while it still names the stopped pid, under the attachment lock (#2984)."""
     runs = [
         run
         for run in backfill_owner.active(attachment, attach_root)
         if str(run.get("worker", "")).endswith(".receiver")
-        and on_this_host(str(run.get("host", "")))
+        and on_this_host(str(run.get("host", "")), run.get("pid_space"))
     ]
     if dry_run:  # the ones that would stop: nothing signalled, nothing released
         return runs
     done = stop_pids([backfill_owner.run_pid(run) for run in runs], kill=kill, grace=grace)
+    gone = []
     for run, result in zip(runs, done, strict=True):
         run["outcome"] = result.verdict
         if result.gone:
-            backfill_owner.release(attachment, str(run["worker"]), attach_root)
+            gone.append(run)
+    if gone:
+        # under the lock `receive` claims under, and only a record still naming the pid that
+        # was stopped: while this waited, a `receiver start` may have seen the stopped run as
+        # dead and claimed its name for a new receiver, whose record must stay (#2984)
+        with config.locked(attachment, attach_root):
+            for run in gone:
+                backfill_owner.release(
+                    attachment, str(run["worker"]), attach_root, pid=int(run["pid"])
+                )
     return runs

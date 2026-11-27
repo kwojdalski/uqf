@@ -192,6 +192,112 @@
         "a lock from another host is refused however dead its pid looks here"];
     .qetl.job.bounded.state.release_lock[`lock_otherhost]};
 
+/ --- the pid space beside the host (#2986) ---------------------------------
+/ .
+/ Two containers or cloned VMs can share a hostname and a status directory
+/ with separate pid numbering, so each saw the other's live holder as dead. A
+/ recorded pid space that is not this machine's is another machine's. Each
+/ test sets this machine's to a fixed value, so it reads the same on macOS,
+/ where there is no /proc and the real value is "".
+
+/ Plant a lock whose owner records `space` as its pid space.
+.qt.qetl.job.bounded.state.plant_spaced:{[worker;pid;space]
+    .qt.qetl.job.bounded.state.plant_spaced_at[worker;pid;space;.z.p]}
+
+/ ...and `started` as the time it was taken.
+.qt.qetl.job.bounded.state.plant_spaced_at:{[worker;pid;space;started]
+    path:.qt.qetl.job.bounded.state.plant_lock[worker;pid;string .z.h];
+    (hsym `$path,"/owner") 0: enlist .j.j `pid`started`host`pid_space!(pid;started;string .z.h;space);
+    path}
+
+/ `f x` with this machine's pid space set to `space`, restoring it after.
+.qt.qetl.job.bounded.state.in_space:{[space;f;x]
+    was:.qetl.job.bounded.state.pid_space;
+    .qetl.job.bounded.state.pid_space:space;
+    r:@[f;x;{[was;e] .qetl.job.bounded.state.pid_space:was; 'e}[was]];
+    .qetl.job.bounded.state.pid_space:was;
+    r}
+
+.qt.qetl.job.bounded.state.test_a_dead_pid_in_another_pid_space_recorded_since_it_began_is_live:{[t]
+    path:.qt.qetl.job.bounded.state.plant_spaced[`space_other;.qt.qetl.job.bounded.state.dead_pid;"boot-b/pid:[2]"];
+    .qunit.assertFalse[.qt.qetl.job.bounded.state.in_space["boot-a/pid:[1]";.qetl.job.bounded.state.lock_is_stale;path];
+        "a holder in another container sharing this hostname cannot be proven dead by a pid lookup here"];
+    .qunit.assertTrue[.qt.qetl.job.bounded.state.in_space["boot-a/pid:[1]";.qetl.job.bounded.state.owner_desc;path] like "*another pid space (boot-b/pid:[[]2[]])*";
+        "and the refusal says why a pid that looks dead is not broken"];
+    .qetl.job.bounded.state.release_lock[`space_other]};
+
+/ This machine before a reboot, or this container before its restart: another
+/ pid space, recorded before this one's pid 1 began. Its holder is gone, so the
+/ lock still clears itself, as #2497 made it (pid 1 began after 2000).
+.qt.qetl.job.bounded.state.test_a_lock_from_before_this_pid_space_began_is_stale:{[t]
+    path:.qt.qetl.job.bounded.state.plant_spaced_at[`space_reboot;.z.i;"boot-b/pid:[2]";2000.01.01D];
+    .qunit.assertTrue[.qt.qetl.job.bounded.state.in_space["boot-a/pid:[1]";.qetl.job.bounded.state.lock_is_stale;path];
+        "recorded before this pid space's pid 1 began: a previous incarnation of this machine"];
+    .qetl.job.bounded.state.release_lock[`space_reboot]};
+
+.qt.qetl.job.bounded.state.test_another_pid_space_is_live_when_pid_1_s_start_is_unreadable:{[t]
+    path:.qt.qetl.job.bounded.state.plant_spaced_at[`space_noclock;.z.i;"boot-b/pid:[2]";2000.01.01D];
+    was:.qetl.job.bounded.state.pid_started;
+    .qetl.job.bounded.state.pid_started:{[pid] 0Np};
+    stale:@[.qt.qetl.job.bounded.state.in_space["boot-a/pid:[1]";.qetl.job.bounded.state.lock_is_stale];path;{[e] e}];
+    .qetl.job.bounded.state.pid_started:was;
+    .qunit.assertEquals[stale;0b;"when this pid space began cannot be read, the holder is another machine's, live"];
+    .qetl.job.bounded.state.release_lock[`space_noclock]};
+
+.qt.qetl.job.bounded.state.test_a_dead_pid_in_this_pid_space_is_stale:{[t]
+    path:.qt.qetl.job.bounded.state.plant_spaced[`space_same;.qt.qetl.job.bounded.state.dead_pid;"boot-a/pid:[1]"];
+    .qunit.assertTrue[.qt.qetl.job.bounded.state.in_space["boot-a/pid:[1]";.qetl.job.bounded.state.lock_is_stale;path];
+        "the same pid space: the pid lookup is good, and the holder is gone"];
+    .qetl.job.bounded.state.release_lock[`space_same]};
+
+/ An owner written by a version that recorded no pid space, or written on
+/ macOS, is judged by its host alone, as it always was.
+.qt.qetl.job.bounded.state.test_an_owner_without_a_pid_space_is_judged_by_host_alone:{[t]
+    path:.qt.qetl.job.bounded.state.plant_lock[`space_none;.qt.qetl.job.bounded.state.dead_pid;string .z.h];
+    .qunit.assertTrue[.qt.qetl.job.bounded.state.in_space["boot-a/pid:[1]";.qetl.job.bounded.state.lock_is_stale;path];
+        "an older record lacks the field; it is not made unbreakable by lacking it"];
+    path:.qt.qetl.job.bounded.state.plant_spaced[`space_none;.qt.qetl.job.bounded.state.dead_pid;""];
+    .qunit.assertTrue[.qt.qetl.job.bounded.state.in_space["boot-a/pid:[1]";.qetl.job.bounded.state.lock_is_stale;path];
+        "nor is one written where there was no pid space to read"];
+    path:.qt.qetl.job.bounded.state.plant_spaced[`space_none;.qt.qetl.job.bounded.state.dead_pid;"boot-b/pid:[2]"];
+    .qunit.assertTrue[.qt.qetl.job.bounded.state.in_space["";.qetl.job.bounded.state.lock_is_stale;path];
+        "and where this machine has none (macOS), the host alone decides, as before"];
+    .qetl.job.bounded.state.release_lock[`space_none]};
+
+.qt.qetl.job.bounded.state.test_a_lock_records_this_machine_s_pid_space:{[t]
+    .qetl.job.bounded.state.release_lock[`space_rec];
+    path:.qetl.job.bounded.state.acquire_lock[`space_rec];
+    .qunit.assertEquals[.qetl.job.bounded.state.read_owner[path]`pid_space;.qetl.job.bounded.state.pid_space;
+        "the owner carries the pid space it was written in"];
+    .qetl.job.bounded.state.release_lock[`space_rec]};
+
+/ --- removing a stale lock never removes one taken since (#2986) ----------
+/ .
+/ Two breakers both judged a dead `.break` stale; one removed it and a third
+/ process took it afresh; the other, acting on its old judgement, then removed
+/ that live one. Standing in for the interleaving: a judgement that, as it is
+/ made, sees the lock replaced by a live holder's.
+.qt.qetl.job.bounded.state.test_a_lock_retaken_after_it_was_judged_stale_is_put_back:{[t]
+    path:.qt.qetl.job.bounded.state.plant_lock[`tomb_raced;.qt.qetl.job.bounded.state.dead_pid;string .z.h];
+    judge:.qetl.job.bounded.state.owner_is_stale;
+    .qetl.job.bounded.state.owner_is_stale:{[path;judge;o]
+        r:judge o;
+        system"rm -rf ",path;
+        .qetl.job.bounded.state.try_take[path;.z.i];
+        r}[path;judge];
+    removed:@[.qetl.job.bounded.state.remove_if_stale;path;{[e] e}];
+    .qetl.job.bounded.state.owner_is_stale:judge;
+    .qunit.assertEquals[removed;0b;"what it would have removed is no longer what it judged dead"];
+    .qunit.assertEquals["j"$.qetl.job.bounded.state.read_owner[path]`pid;"j"$.z.i;"so the live holder's lock is back in place"];
+    .qunit.assertTrue[0=sum (string key hsym `$.qetl.job.bounded.state.lock_dir[]) like "tomb_raced.lock.tomb.*";"and no tombstone is left behind"];
+    .qetl.job.bounded.state.release_lock[`tomb_raced]};
+
+.qt.qetl.job.bounded.state.test_removing_a_stale_lock_leaves_no_tombstone:{[t]
+    path:.qt.qetl.job.bounded.state.plant_lock[`tomb_clean;.qt.qetl.job.bounded.state.dead_pid;string .z.h];
+    .qunit.assertEquals[.qetl.job.bounded.state.remove_if_stale path;1b;"the dead holder's lock is removed"];
+    .qunit.assertTrue[()~key hsym `$path;"gone from its path"];
+    .qunit.assertTrue[0=sum (string key hsym `$.qetl.job.bounded.state.lock_dir[]) like "tomb_clean.lock.tomb.*";"and from its tombstone"]};
+
 / --- break_stale: one breaker, re-checked, never a live lock ---------------
 
 / The race: two waiters judged the same dead owner stale; the first broke the
