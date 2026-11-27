@@ -43,7 +43,7 @@ def _normalised(remote: FakeRemote) -> str:
     s = "\n=====\n".join(f"[{stage}]\n{script}" for stage, script in remote.scripts)
     s = re.sub(r"\b[0-9a-f]{64}\b", "<sha256>", s)
     s = re.sub(r"printf '%s\\n' '[^']*' > (\S+/owner)", r"printf '%s\\n' <owner> > \1", s)
-    s = re.sub(r"(/owner 2>/dev/null \|\| true\)\" = )'[^']*'", r"\1<owner>", s)
+    s = re.sub(r"(/owner 2>/dev/null \|\| true\)\" !?= )'[^']*'", r"\1<owner>", s)
     body = r"<<'DEPLOYREPORT'\n.*?\nDEPLOYREPORT\n"
     s = re.sub(body, "<<'DEPLOYREPORT'\n<report>\nDEPLOYREPORT\n", s, flags=re.S)
     return s.rstrip("\n") + "\n"

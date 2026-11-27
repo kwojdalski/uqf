@@ -27,6 +27,13 @@ same transaction as `uqs target add --reach` (deploy/target_changes.py), and
 records the release as "adopted" in this machine's deployment history, so
 `uqs deploy history` shows it and `uqs --target NAME` reaches it. A release
 named adopted-* is not a release id, so `uqs deploy prune` never removes it.
+
+--apply holds `<dest>/deploy.lock` while it changes the server (#2980), as a
+push, rollback or prune does, and is refused while another holds it: moving
+`<dest>`'s contents would otherwise carry a push in flight's lock and staging
+away with them. The move itself never takes deploy.lock or staging/ either.
+The survey before it only reads, so it takes no lock; what it found that
+matters - whether `current` exists - is checked again under the lock.
 """
 
 from __future__ import annotations
@@ -38,6 +45,7 @@ from datetime import UTC, datetime
 
 from uqs.deploy import launch
 from uqs.deploy.control import Remote, Runner, refuse_unreached
+from uqs.deploy.lock import record
 from uqs.deploy.remote import diagnostic
 from uqs.paths import UqsError
 
@@ -265,31 +273,57 @@ def server_changes(s: Survey) -> list[str]:
     return [moved, link]
 
 
+#: How long adopt's own hold of deploy.lock may go unbeaten: its one short
+#: script, with room to spare.
+ADOPT_STALE_AFTER = 300
+
+
+def locked(dest: str, owner: str, body: str) -> str:
+    """`body` under `dest`/deploy.lock, taken here and removed when the
+    script ends however it ends - refused, changing nothing, while another
+    run holds it (#2980)."""
+    q = shlex.quote
+    lock = f"{dest}/deploy.lock"
+    return (
+        f"mkdir -p {q(dest)} || exit 1; mkdir {q(lock)} 2>/dev/null || "
+        f"{{ echo uqs: another deployment holds {q(lock)}: "
+        f'"$(head -n 1 {q(lock)}/owner 2>/dev/null || echo unknown)" >&2; exit 3; }}; '
+        f"trap 'rm -rf {q(lock)}' EXIT; "
+        f"printf '%s\n' {q(owner)} > {q(lock)}/owner; date +%s > {q(lock)}/heartbeat; "
+        f"{body}"
+    )
+
+
 def apply_script(s: Survey) -> str:
-    """The shell text that makes server_changes() - refused, changing
-    nothing, when the release's place is taken or current appeared since."""
+    """The shell text that makes server_changes() under deploy.lock - refused,
+    changing nothing, when the lock is held, the release's place is taken or
+    current appeared since."""
     q = shlex.quote
     dest, name = s.dest, str(s.release_name)
     new = f"{dest}/releases/{name}"
+    owner = record("adopt", name, ADOPT_STALE_AFTER)
     appeared = (
         f"if [ -e {q(dest)}/current ] || [ -L {q(dest)}/current ]; then "
         f"echo uqs: {q(dest)}/current appeared since the survey >&2; exit 3; fi; "
     )
     if s.in_place:
-        return f"{appeared}ln -s releases/{q(name)} {q(dest)}/current"
+        return locked(dest, owner, f"{appeared}ln -s releases/{q(name)} {q(dest)}/current")
     if s.release_dir.rstrip("/") == dest:
         move = (
             f"mkdir {q(new)} && for f in {q(dest)}/* {q(dest)}/.[!.]* {q(dest)}/..?*; do "
             '[ -e "$f" ] || [ -L "$f" ] || continue; '
-            'case "${f##*/}" in releases|current|shared) continue ;; esac; '
+            # a push's lock and staging are its own (#2980); the lock is ours now
+            'case "${f##*/}" in releases|current|shared|deploy.lock|staging) continue ;; esac; '
             f'mv "$f" {q(new)}/ || exit 1; done'
         )
     else:
         move = f"mv {q(s.release_dir)} {q(new)}"
-    return (
+    return locked(
+        dest,
+        owner,
         f"{appeared}"
         f"if [ -e {q(new)} ]; then echo uqs: {q(new)} already exists >&2; exit 3; fi; "
-        f"mkdir -p {q(dest)}/releases && {move} && ln -s releases/{q(name)} {q(dest)}/current"
+        f"mkdir -p {q(dest)}/releases && {move} && ln -s releases/{q(name)} {q(dest)}/current",
     )
 
 

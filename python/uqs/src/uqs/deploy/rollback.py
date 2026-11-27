@@ -32,7 +32,7 @@ from __future__ import annotations
 import json
 
 from uqs.deploy import report as deploy_report
-from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, redact
+from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, LockLost, redact
 from uqs.deploy.remote import Transport, q
 from uqs.deploy.selection import Selection, started_by
 from uqs.deploy.stages import Deployment
@@ -91,6 +91,8 @@ def _start_and_verify(dep: Deployment, release: str, report: dict, what: str) ->
         return dep.verify(
             path, report["profile"], "rollback", Selection(processes=report["extra_processes"])
         )
+    except LockLost:
+        raise
     except DeployError as exc:
         return {"passed": False, "reason": str(exc)}
 
@@ -165,7 +167,8 @@ def rollback(
         # A stop that failed, or Ctrl-C in the target's verify wait: the same
         # restore a target that fails to verify gets, then the exception goes
         # on to the caller - as a push does (#1664, #2175).
-        if reached:
+        # Not once the lock is another run's: restoring would act beside it (#2978).
+        if reached and not isinstance(exc, LockLost):
             _recover(dep, plan, now, then, reached, exc)
         raise
     finally:
@@ -180,6 +183,8 @@ def _restore(dep: Deployment, plan: dict, now: dict, then: dict, *, stop_target:
         try:
             dep.uqs(f"{dep.releases}/{target}", "rollback", "stopping the target's processes",
                     "stop", *_started(then))  # fmt: skip
+        except LockLost:
+            raise
         except DeployError as exc:
             log.error("stopping release {}'s processes failed: {}; restoring anyway", target,
                       redact(str(exc)))  # fmt: skip

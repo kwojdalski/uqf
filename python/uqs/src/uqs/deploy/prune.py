@@ -9,7 +9,13 @@ whatever N is - N=0 included:
   - the release a rollback would return to: the `previous_release` current's
     own deploy-report.json records (`uqs deploy rollback`'s default target);
   - any release whose report still says `running`: a push that died
-    mid-run, whose processes may still be up.
+    mid-run, whose processes may still be up;
+  - any release a process runs from: one whose working directory or
+    executable is under it, read from /proc on the server (#2980) - a failed
+    push whose rollback could not stop its processes is `failed`, not
+    `running`, yet they still run from its tree and its .venv;
+  - any release whose report says its rollback FAILED to stop its processes,
+    for a server whose /proc does not show them (another user's, say).
 
 What each release holds is read on the server by one python3 program
 (LIST_PY): name, size, and its report's status and previous_release. Only a
@@ -62,6 +68,20 @@ current = os.path.basename(os.path.normpath(os.readlink(cur))) if os.path.islink
 named = re.compile(re.escape(runtimes) + r"/((?:" + "|".join(kinds)
                    + r")/[0-9a-f]{64})(?![0-9a-f])")
 out = {"current": current, "releases": [], "runtimes": []}
+# which releases a process runs from: its cwd or exe under root (#2980). Only
+# processes this user may read are seen; a report's FAILED stop covers the rest.
+real = os.path.realpath(root) + os.sep
+busy = set()
+for pid in os.listdir("/proc") if os.path.isdir("/proc") else []:
+    if not pid.isdigit():
+        continue
+    for link in ("cwd", "exe"):
+        try:
+            target = os.readlink(os.path.join("/proc", pid, link))
+        except OSError:
+            continue
+        if target.startswith(real):
+            busy.add(target[len(real):].split(os.sep, 1)[0])
 for kind in kinds:
     d = os.path.join(runtimes, kind)
     if os.path.isdir(d):
@@ -96,6 +116,8 @@ for name in sorted(os.listdir(root)) if os.path.isdir(root) else []:
         "status": report.get("status", ""),
         "previous_release": report.get("previous_release"),
         "runtimes": uses,
+        "in_use": name in busy,
+        "stop_failed": "FAILED to stop" in str(report.get("rollback") or ""),
     })
 print(json.dumps(out))
 """
@@ -135,6 +157,10 @@ def decide(listing: dict, keep: int) -> dict:
     for name, r in releases.items():
         if r.get("status") == "running":
             reasons[name] = "its report says a push is still running"
+        elif r.get("in_use"):
+            reasons[name] = "a process on the server still runs from it"
+        elif r.get("stop_failed"):
+            reasons[name] = "its rollback failed to stop its processes"
     if rollback_to in releases:
         reasons[rollback_to] = "a rollback would return to it"
     if current in releases:
@@ -185,6 +211,7 @@ def prune_locked(dep: Deployment, keep: int, dry_run: bool = False) -> dict:
             "prune",
             "removing old releases",
             *(f"rm -rf {q(dep.releases)}/{q(name)}" for name in result["removed"]),
+            fenced=True,
         )
     for name in result["removed"]:
         log.info("{} release {}", "would remove" if dry_run else "removed", name)
@@ -194,6 +221,7 @@ def prune_locked(dep: Deployment, keep: int, dry_run: bool = False) -> dict:
             "prune",
             "removing runtimes no release names",
             *(f"rm -rf {q(_runtimes_dir(dep))}/{q(name)}" for name in unused),
+            fenced=True,
         )
     for name in unused:
         log.info("{} runtime {}", "would remove" if dry_run else "removed", name)
@@ -228,6 +256,9 @@ def prune(
             going = planned["removed"] + planned.get("runtimes", {}).get("removed", [])
             if going and not confirm(planned):
                 return 1, {"ok": False, "prune": "declined", **planned}
+            # the background beater kept the lock alive through the wait;
+            # this says whether it is still ours before anything goes (#2978)
+            dep.beat()
         result = prune_locked(dep, keep)
     finally:
         dep.release_lock()
