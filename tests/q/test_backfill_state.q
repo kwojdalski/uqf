@@ -202,8 +202,12 @@
 
 / Plant a lock whose owner records `space` as its pid space.
 .qt.qetl.job.bounded.state.plant_spaced:{[worker;pid;space]
+    .qt.qetl.job.bounded.state.plant_spaced_at[worker;pid;space;.z.p]}
+
+/ ...and `started` as the time it was taken.
+.qt.qetl.job.bounded.state.plant_spaced_at:{[worker;pid;space;started]
     path:.qt.qetl.job.bounded.state.plant_lock[worker;pid;string .z.h];
-    (hsym `$path,"/owner") 0: enlist .j.j `pid`started`host`pid_space!(pid;.z.p;string .z.h;space);
+    (hsym `$path,"/owner") 0: enlist .j.j `pid`started`host`pid_space!(pid;started;string .z.h;space);
     path}
 
 / `f x` with this machine's pid space set to `space`, restoring it after.
@@ -214,13 +218,31 @@
     .qetl.job.bounded.state.pid_space:was;
     r}
 
-.qt.qetl.job.bounded.state.test_a_dead_pid_in_another_pid_space_is_never_judged_stale:{[t]
+.qt.qetl.job.bounded.state.test_a_dead_pid_in_another_pid_space_recorded_since_it_began_is_live:{[t]
     path:.qt.qetl.job.bounded.state.plant_spaced[`space_other;.qt.qetl.job.bounded.state.dead_pid;"boot-b/pid:[2]"];
     .qunit.assertFalse[.qt.qetl.job.bounded.state.in_space["boot-a/pid:[1]";.qetl.job.bounded.state.lock_is_stale;path];
         "a holder in another container sharing this hostname cannot be proven dead by a pid lookup here"];
     .qunit.assertTrue[.qt.qetl.job.bounded.state.in_space["boot-a/pid:[1]";.qetl.job.bounded.state.owner_desc;path] like "*another pid space (boot-b/pid:[[]2[]])*";
         "and the refusal says why a pid that looks dead is not broken"];
     .qetl.job.bounded.state.release_lock[`space_other]};
+
+/ This machine before a reboot, or this container before its restart: another
+/ pid space, recorded before this one's pid 1 began. Its holder is gone, so the
+/ lock still clears itself, as #2497 made it (pid 1 began after 2000).
+.qt.qetl.job.bounded.state.test_a_lock_from_before_this_pid_space_began_is_stale:{[t]
+    path:.qt.qetl.job.bounded.state.plant_spaced_at[`space_reboot;.z.i;"boot-b/pid:[2]";2000.01.01D];
+    .qunit.assertTrue[.qt.qetl.job.bounded.state.in_space["boot-a/pid:[1]";.qetl.job.bounded.state.lock_is_stale;path];
+        "recorded before this pid space's pid 1 began: a previous incarnation of this machine"];
+    .qetl.job.bounded.state.release_lock[`space_reboot]};
+
+.qt.qetl.job.bounded.state.test_another_pid_space_is_live_when_pid_1_s_start_is_unreadable:{[t]
+    path:.qt.qetl.job.bounded.state.plant_spaced_at[`space_noclock;.z.i;"boot-b/pid:[2]";2000.01.01D];
+    was:.qetl.job.bounded.state.pid_started;
+    .qetl.job.bounded.state.pid_started:{[pid] 0Np};
+    stale:@[.qt.qetl.job.bounded.state.in_space["boot-a/pid:[1]";.qetl.job.bounded.state.lock_is_stale];path;{[e] e}];
+    .qetl.job.bounded.state.pid_started:was;
+    .qunit.assertEquals[stale;0b;"when this pid space began cannot be read, the holder is another machine's, live"];
+    .qetl.job.bounded.state.release_lock[`space_noclock]};
 
 .qt.qetl.job.bounded.state.test_a_dead_pid_in_this_pid_space_is_stale:{[t]
     path:.qt.qetl.job.bounded.state.plant_spaced[`space_same;.qt.qetl.job.bounded.state.dead_pid;"boot-a/pid:[1]"];

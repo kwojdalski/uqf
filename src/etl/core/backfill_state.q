@@ -154,26 +154,34 @@
     out:@[system;"cat /proc/sys/kernel/random/boot_id 2>/dev/null; readlink /proc/self/ns/pid 2>/dev/null";{[e] ()}];
     $[(2=count out) and all 0<count each out; out[0],"/",out 1; ""]}[]
 
-/ Private: was a lock owner written in this machine's pid space? The host,
-/ compared without case (#726), and - where the owner recorded a pid space and
-/ this machine has one - that too: a container sharing this hostname and status
-/ directory numbers its pids apart, so its live holder's pid says nothing here
-/ (#2986). An owner without one - from a version that wrote none, or from macOS -
-/ is judged by its host alone, as before.
+/ Private: was a lock owner written in this machine's pid space - or does
+/ either side have none (an older version's owner, or macOS), so the host
+/ alone decides, as before (#2986)?
 / @private
-.qetl.job.bounded.state.same_machine:{[o]
-    if[not lower[o`host]~lower string .z.h; :0b];
+.qetl.job.bounded.state.same_pid_space:{[o]
     rec:$[`pid_space in key o; o`pid_space; ""];
     here:.qetl.job.bounded.state.pid_space;
     $[(rec~"") or (rec~0n) or here~""; 1b; rec~here]}
 
-/ Private: does an owner name this host, but another pid space? Said in a
-/ refusal, since its pid may look dead here and yet it is not broken (#2986).
+/ Private: an owner on this host but in another pid space - was it recorded
+/ before this pid space began, the start of its pid 1? Then it is this
+/ machine before a reboot or this container before its restart, and gone
+/ (#2497). Recorded since, or either time unreadable: another machine sharing
+/ the hostname, live (#2986). The q side of `uqs.liveness.predates_pid_space`.
+/ @private
+.qetl.job.bounded.state.predates_pid_space:{[o]
+    recorded:$[`started in key o; @["P"$;o`started;{[e] 0Np}]; 0Np];
+    if[null recorded; :0b];
+    began:.qetl.job.bounded.state.pid_started 1;
+    $[null began; 0b; recorded<began]}
+
+/ Private: an owner on this host in another, live pid space? Said in a
+/ refusal, since its pid may look dead here and yet it is not broken.
 / @private
 .qetl.job.bounded.state.foreign_pid_space:{[o]
     if[not all `host`pid_space in key o; :0b];
     if[not 10h=type o`pid_space; :0b];
-    (lower[o`host]~lower string .z.h) and not .qetl.job.bounded.state.same_machine[o]}
+    (lower[o`host]~lower string .z.h) and not .qetl.job.bounded.state.same_pid_space[o]}
 
 / When this process first loaded this file: a lock owner naming this pid but
 / started earlier was written by a predecessor whose number this process now
@@ -237,12 +245,11 @@
 /   another host        a pid is meaningless off the machine that issued it;
 /                       compared without case, since .z.h is lower-case on
 /                       macOS and a non-q writer's hostname need not be (#726);
-/                       a recorded pid space that is not this one's is another
-/                       machine's too - a container sharing the hostname, or
-/                       this host before a reboot, or a container before its
-/                       restart (#2986); once that holder is known dead,
-/                       remove the lock directory by hand - nothing here can
-/                       prove it
+/                       so is a recorded pid space not this one's, unless it
+/                       was recorded before this pid space's pid 1 began -
+/                       this host before a reboot, a container before its
+/                       restart - when it is stale (#2986); once another
+/                       machine's holder is known dead, remove the lock by hand
 /   the pid is running  it holds the lock - unless the process now carrying
 /                       that number began after the lock was taken, when the
 /                       holder is gone and only its number was reused: this
@@ -257,7 +264,8 @@
 .qetl.job.bounded.state.owner_is_stale:{[o]
     $[()~o;                          0b;
       not all `pid`host in key o;    0b;
-      not .qetl.job.bounded.state.same_machine[o]; 0b;
+      not lower[o`host]~lower string .z.h; 0b;
+      not .qetl.job.bounded.state.same_pid_space[o]; .qetl.job.bounded.state.predates_pid_space[o];
       .qetl.job.bounded.state.held_by_predecessor[o]; 1b;
       not .qetl.job.bounded.state.pid_alive o`pid; 1b;
       .qetl.job.bounded.state.held_by_newcomer[o]]}

@@ -131,6 +131,27 @@ def test_a_recorded_pid_space_must_match_this_machine_s(monkeypatch, recorded, h
     assert liveness.on_this_host("elsewhere.example", recorded) is False
 
 
+@pytest.mark.parametrize(
+    ("written", "pid1_began", "gone"),
+    [
+        (LONG_AGO, "2026-01-01T00:00:00+00:00", True),  # before a reboot or restart
+        (NOW, "2026-01-01T00:00:00+00:00", False),  # another machine, live
+        (LONG_AGO, None, False),  # pid 1's start unreadable
+        (None, "2026-01-01T00:00:00+00:00", False),  # the record's time unreadable
+    ],
+)
+def test_another_pid_space_is_judged_by_when_this_one_began(monkeypatch, written, pid1_began, gone):
+    """A record from this machine before a reboot, or this container before its
+    restart, still clears itself (#2497); another live machine sharing the
+    hostname is protected (#2986)."""
+    from datetime import datetime
+
+    began = datetime.fromisoformat(pid1_began) if pid1_began else None
+    monkeypatch.setattr(liveness, "local_pid_space", lambda: "boot-a/pid:[1]")
+    monkeypatch.setattr(liveness, "process_started", lambda pid: began if pid == 1 else None)
+    assert liveness.process_gone(HOST, os.getpid(), written, "boot-b/pid:[2]") is gone
+
+
 def test_the_pid_space_is_read_from_proc_or_is_empty():
     space = liveness.local_pid_space()
     if Path(liveness.BOOT_ID).exists():
