@@ -98,12 +98,16 @@ the push is a conflict: the restore is refused and nothing written. The
 history root's `.lock` (WRITE_LOCK) makes that check hold at the write: an
 upload holds it for its one publishing step, and a restore for its check
 and every write after it, so a push that lands between a restore's first
-look and its writes is seen and refused, never overwritten (#2181).
+look and its writes is seen and refused, never overwritten (#2181). An
+upload with `overwrite` looks at its file again under that lock, and refuses
+as a conflict a file another push wrote while its bytes arrived (#2981).
 `history_diff` diffs before and after as text under DIFF_CAP; a binary or
 larger file is told by its sizes and sha256s only. Opening a push prunes the
 history to its bound - the newest `max_kept` pushes, none older than
 `retention_days` (the tighter wins) - and logs each pruned id in PRUNED_LOG, so a
-restore of one is refused as pruned, not as never having existed.
+restore of one is refused as pruned, not as never having existed. A prune
+holds WRITE_LOCK and skips a push whose own lock is held, which a restore
+holds on the push it undoes until it is done (#2981).
 
 FRAMING. `list` is sent as before: the helper's source on stdin to
 `python -I -`. An upload cannot be, because `-` reads stdin to its end as
@@ -168,7 +172,8 @@ ERRORS = (
     "too_large",
     "incomplete",
     # push history (#2002): a push whose history retention removed, and a
-    # restore refused because a file changed since the push it would undo
+    # restore refused because a file changed since the push it would undo -
+    # or an upload, because another push wrote its file while it arrived (#2981)
     "pruned",
     "conflict",
 )
@@ -606,13 +611,25 @@ def sweep(fd, now=None):
     return swept
 
 
+def _identity(st):
+    """What makes a stat the same file: (st_dev, st_ino), or None for no file."""
+    return None if st is None else (st.st_dev, st.st_ino)
+
+
 def _publish_step(fd, tmp, name, existing, mode, overwrite, keep):
-    """publish's one step: `keep`, then `tmp` becomes `name`."""
+    """publish's one step: `keep`, then `tmp` becomes `name`. With
+    `overwrite`, `name` is looked at again first - under WRITE_LOCK when
+    publish holds it - and must still be what publish saw before the bytes
+    arrived: a file another push wrote meanwhile is a conflict, never
+    overwritten nor recorded as a create (#2981)."""
+    if overwrite:
+        now = _existing(fd, name, overwrite)  # what is there now may not be a file
+        if _identity(now) != _identity(existing):
+            raise Refusal("conflict", f"{name!r} changed while the upload arrived - "
+                          "another push wrote it; nothing was published")  # fmt: skip
     if keep is not None:
         keep(fd, tmp, existing, mode)
     if overwrite:
-        if existing is None:
-            _existing(fd, name, overwrite)  # what is there now may not be a file
         os.replace(tmp, name, src_dir_fd=fd, dst_dir_fd=fd)
     else:
         _publish_new(fd, tmp, name)
@@ -1132,10 +1149,35 @@ def _bounds(request):
     return max_kept, days
 
 
+def _try_lock(hfd, name):
+    """A descriptor holding push `name`'s lock, or None when another holds it."""
+    pfd = _open_dir(hfd, name)
+    try:
+        flags = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+        lfd = os.open(LOCK, flags, 0o600, dir_fd=pfd)
+    finally:
+        os.close(pfd)
+    try:
+        fcntl.flock(lfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(lfd)
+        return None
+    return lfd
+
+
 def prune(hfd, max_kept, retention_days, protect=(), now=None):
     """Remove the pushes past the bound - beyond the newest `max_kept`, or opened
     more than `retention_days` ago - but never one in `protect`; log each in
-    PRUNED_LOG and return them."""
+    PRUNED_LOG and return them. It holds WRITE_LOCK, so two prunes never race,
+    and leaves alone a push whose own lock is held: a restore holds its source
+    push's for as long as it reads it, and the oldest pushes - the ones past
+    the bound - are the ones a restore is likeliest to undo (#2981). Never
+    called with WRITE_LOCK held: flock would wait on itself."""
+    with _Locked(hfd):
+        return _prune(hfd, max_kept, retention_days, protect, now)
+
+
+def _prune(hfd, max_kept, retention_days, protect, now):
     now = time.time() if now is None else now
     with os.scandir(hfd) as it:
         names = sorted((e.name for e in it if PUSH_ID.fullmatch(e.name)), reverse=True)
@@ -1151,7 +1193,13 @@ def prune(hfd, max_kept, retention_days, protect=(), now=None):
             why = "retention"
         if why is None:
             continue
-        _rmtree(hfd, name)
+        held = _try_lock(hfd, name)
+        if held is None:
+            continue  # in use - a restore reading it: pruned by a later push
+        try:
+            _rmtree(hfd, name)
+        finally:
+            os.close(held)
         gone.append({"push_id": name, "why": why, "pruned_at": _utc_now()})
     if gone:
         records = (_pruned_records(hfd) + gone)[-PRUNED_LOG_MAX:]
@@ -1550,63 +1598,76 @@ def restore(request):
         raise Refusal("refused", "explicit confirmation is required")
     spfd = _push_dir(root, source_id)
     try:
-        source = _read_manifest(spfd)
-        plan = _plan(root, source)
-        answer = {"protocol": PROTOCOL, "ok": True, "restores": source_id,
-                  "dry_run": dry_run, "plan": plan, "push_id": None, "results": [],
-                  "pruned": []}  # fmt: skip
-        if dry_run:
-            return answer
-        steps = _restore_steps(plan, source_id)
-        push_id = _push_id(request.get("push_id"))
-        max_kept, retention_days = _bounds(request)
-        fields = {"kind": "restore", "restores": source_id, "config_dir": "/".join(UPLOAD_ROOT),
-                  "declared": {"file_count": len(steps), "total_bytes": 0},
-                  "user": _label(request.get("user"), "user"),
-                  "target": _label(request.get("target"), "target"),
-                  "via": _label(request.get("via"), "via")}  # fmt: skip
-        _new_push(root, push_id, fields, MAX_KEEP, MAX_KEEP_DAYS)
-        previous = _held_signals(signal.SIG_IGN)  # local disk work: finish it whole
+        # Its lock, held to the end, keeps prune off the push being read; one
+        # pruned before the lock was taken is refused as pruned (#2981).
         try:
-            npfd = _push_dir(root, push_id)
+            held = _Locked(spfd)
+        except FileNotFoundError:
+            os.close(_push_dir(root, source_id))
+            raise
+        with held:
+            os.close(_push_dir(root, source_id))
+            source = _read_manifest(spfd)
+            plan = _plan(root, source)
+            answer = {"protocol": PROTOCOL, "ok": True, "restores": source_id,
+                      "dry_run": dry_run, "plan": plan, "push_id": None, "results": [],
+                      "pruned": []}  # fmt: skip
+            if dry_run:
+                return answer
+            steps = _restore_steps(plan, source_id)
+            push_id = _push_id(request.get("push_id"))
+            max_kept, retention_days = _bounds(request)
+            fields = {"kind": "restore", "restores": source_id, "config_dir": "/".join(UPLOAD_ROOT),
+                      "declared": {"file_count": len(steps), "total_bytes": 0},
+                      "user": _label(request.get("user"), "user"),
+                      "target": _label(request.get("target"), "target"),
+                      "via": _label(request.get("via"), "via")}  # fmt: skip
+            _new_push(root, push_id, fields, MAX_KEEP, MAX_KEEP_DAYS)
+            previous = _held_signals(signal.SIG_IGN)  # local disk work: finish it whole
             try:
-                with _Locked(npfd), _WriteLock(root):
-                    # The first plan was unlocked: look again, now that no push
-                    # can write until this restore is done, and refuse as it
-                    # would have (#2181) - leaving no restore push behind.
-                    try:
-                        plan = answer["plan"] = _plan(root, source)
-                        steps = _restore_steps(plan, source_id)
-                    except Refusal:
-                        _drop_push(root, push_id)
-                        raise
-                    manifest = _read_manifest(npfd)
-                    by_path = {e["path"]: e for e in source["files"] if e.get("state") != "failed"}
-                    for step in steps:
-                        result = {"path": step["path"], "step": step["step"],
-                                  "outcome": "succeeded", "error": None}  # fmt: skip
+                npfd = _push_dir(root, push_id)
+                try:
+                    with _Locked(npfd), _WriteLock(root):
+                        # The first plan was unlocked: look again, now that no push
+                        # can write until this restore is done, and refuse as it
+                        # would have (#2181) - leaving no restore push behind.
                         try:
-                            _restore_one(root, spfd, npfd, manifest, by_path[step["path"]],
-                                         step["step"])  # fmt: skip
-                        except (Refusal, OSError) as exc:
-                            result["outcome"] = "failed"
-                            result["error"] = (
-                                exc.detail if isinstance(exc, Refusal) else exc.strerror
-                            )
-                        answer["results"].append(result)
-                    manifest["closed"] = _utc_now()
-                    _write_manifest(npfd, manifest)
+                            plan = answer["plan"] = _plan(root, source)
+                            steps = _restore_steps(plan, source_id)
+                        except Refusal:
+                            _drop_push(root, push_id)
+                            raise
+                        manifest = _read_manifest(npfd)
+                        by_path = {
+                            e["path"]: e for e in source["files"] if e.get("state") != "failed"
+                        }
+                        for step in steps:
+                            result = {"path": step["path"], "step": step["step"],
+                                      "outcome": "succeeded", "error": None}  # fmt: skip
+                            try:
+                                _restore_one(root, spfd, npfd, manifest, by_path[step["path"]],
+                                             step["step"])  # fmt: skip
+                            except (Refusal, OSError) as exc:
+                                result["outcome"] = "failed"
+                                result["error"] = (
+                                    exc.detail if isinstance(exc, Refusal) else exc.strerror
+                                )
+                            answer["results"].append(result)
+                        manifest["closed"] = _utc_now()
+                        _write_manifest(npfd, manifest)
+                finally:
+                    os.close(npfd)
             finally:
-                os.close(npfd)
-        finally:
-            _restore_signals(previous)
-        hfd = _history_root(root)
-        try:
-            answer["pruned"] = prune(hfd, max_kept, retention_days, protect=(push_id, source_id))
-        finally:
-            os.close(hfd)
-        answer["push_id"] = push_id
-        return answer
+                _restore_signals(previous)
+            hfd = _history_root(root)
+            try:
+                answer["pruned"] = prune(
+                    hfd, max_kept, retention_days, protect=(push_id, source_id)
+                )
+            finally:
+                os.close(hfd)
+            answer["push_id"] = push_id
+            return answer
     finally:
         os.close(spfd)
 

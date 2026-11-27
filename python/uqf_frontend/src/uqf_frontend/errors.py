@@ -27,6 +27,7 @@ caller sent; 404 for a named thing that does not exist, path segment or not;
     StackBusy                409  another lifecycle action holds the lock
     TargetNotScoped          409  the target is not a workspace
     TargetUnusable           409  the target is declared but cannot be used
+    UploadConflict           409  another push wrote the file meanwhile
     UploadExists             409  the file exists and overwrite was not asked
     HistoryPruned            410  retention removed the push's history
     UploadTooLarge           413  the file is over the upload limit
