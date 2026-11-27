@@ -15,8 +15,13 @@ things went wrong with that while anything else was reading:
 So each file is replaced whole (``write_text``: a temporary file in the same
 directory, then one rename), and a lifecycle command holds the stack's lock
 (``lifecycle_lock``) from its bootstrap to the end of its torq.sh. The lock is
-an ``flock`` on a file under $TORQDATA, so `uqs` and the frontend serialise
+an ``flock`` on a file beside $TORQDATA, so `uqs` and the frontend serialise
 against each other, and the kernel releases it if the holder dies.
+
+Beside it, not in it (#2982): an flock belongs to the file's inode, and `uqs
+clean` removes $TORQDATA while holding the lock. With the file inside, the
+removal unlinked it, the next start made a new file at the same path and took
+a lock on that at once, and two commands held "the" lock together.
 """
 
 from __future__ import annotations
@@ -36,7 +41,8 @@ from uqs.paths import UqsError, UqsPaths
 from uqs.stack.carriable import check_carriable
 from uqs.stack.site_fields import process_csv_fields
 
-#: The lock file, beside the generated files it guards.
+#: The lock file's suffix: lock_path puts it next to the data directory, as
+#: `.<data dir name>.lifecycle.lock`, outside the tree `uqs clean` removes.
 LOCK_NAME = ".lifecycle.lock"
 
 #: Lock files this thread already holds: a caller that took the lock around a
@@ -67,7 +73,9 @@ def write_text(path: Path, text: str) -> None:
 
 
 def lock_path(paths: UqsPaths) -> Path:
-    return paths.torqdata / LOCK_NAME
+    """The stack's lifecycle lock file: in $TORQDATA's parent, named after it,
+    so removing $TORQDATA under the lock leaves the locked inode in place (#2982)."""
+    return paths.torqdata.parent / f".{paths.torqdata.name}{LOCK_NAME}"
 
 
 @contextmanager

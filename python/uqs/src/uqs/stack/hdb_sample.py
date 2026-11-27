@@ -8,12 +8,19 @@ is written. This module resolves and refuses the paths, runs the q, and moves
 each staged table into the destination.
 
 Nothing partial is ever visible in the destination. The q stages each table
-beside the destination root (`<root>.sample-<pid>-*`), outside it, and a
+beside the destination root (`<root>.sample-<host>-<pid>-*`), outside it, and a
 table is moved in only once complete - one rename, or an atomic exchange for
 `--on-conflict replace`. A run that is interrupted leaves only its stage
-directory, which the next applied run removes and reports. The destination
-root's write lock, the one every uqs and q writer shares
-(scripts/hdb/lock.q), is held while the run writes.
+directory, which the next applied run removes and reports: one whose process
+uqs.liveness proves gone - on this host, and not a newcomer given its pid
+since the stage was last written (#2985). The destination root's write lock,
+the one every uqs and q writer shares (scripts/hdb/lock.q), is held while the
+run writes.
+
+A lock is named after a root as the writers are given it, made absolute but
+not resolved, as hdb_migrate and `.qetl.io.hdb_lock` do: resolving a symlinked
+root put this run's lock beside the target, where no writer looks (#2985).
+Only the containment checks and the stage use the resolved roots.
 """
 
 from __future__ import annotations
@@ -23,13 +30,15 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import tempfile
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
 from uqs.interpreter import q_interpreter
+from uqs.liveness import process_gone
 from uqs.paths import UqsError, UqsPaths
 from uqs.stack.env import with_interpreter
 from uqs.stack.hdb_migrate import _exchange, _write_lock
@@ -39,18 +48,9 @@ SAMPLE_SCRIPT = Path("hdb") / "sample.q"
 #: What `--on-conflict` may say; None refuses a table the destination holds.
 CONFLICTS = ("ignore", "replace")
 _NAME = re.compile(r"^[A-Za-z_][A-Za-z_0-9]*$")
-#: A stage directory's name after its root's: `<root>.sample-<pid>-<random>`.
-_STAGE = re.compile(r"\.sample-(\d+)-[^/]+$")
-
-
-def _alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
+#: A stage directory's name after its root's: `<root>.sample-<host>-<pid>-<random>`,
+#: the random part mkdtemp's, which has no `-`.
+_STAGE = re.compile(r"\.sample-(.+)-(\d+)-[^/-]+$")
 
 
 def resolve_roots(source: Path, destination: Path) -> tuple[Path, Path]:
@@ -78,18 +78,29 @@ def resolve_roots(source: Path, destination: Path) -> tuple[Path, Path]:
     return src, dst
 
 
+def lock_root(root: Path) -> Path:
+    """`root` as its write lock is named after it: absolute, symlinks kept."""
+    return root.expanduser().absolute()
+
+
 def writer_lock(root: Path) -> Path:
-    """The root's write lock file, as .qetl.io.hdb_lock names it: beside it."""
+    """The root's write lock file, as .qetl.io.hdb_lock names it: beside it,
+    after the root as given (lock_root), not its symlink target."""
+    root = lock_root(root)
     return root.parent / f"{root.name}.write.lock"
 
 
 def stale_stages(dst: Path) -> list[Path]:
     """The stage directories interrupted runs left beside `dst`: those whose
-    process is gone. A live run's is not one."""
+    process is provably gone (uqs.liveness.process_gone), the stage's last
+    write the time it was alive. A live run's is not one, nor another host's."""
     found = []
     for path in sorted(dst.parent.glob(f"{dst.name}.sample-*")):
         m = _STAGE.search(path.name)
-        if m and path.is_dir() and not _alive(int(m.group(1))):
+        if not m or not path.is_dir():
+            continue
+        written = datetime.fromtimestamp(path.stat().st_mtime, UTC).isoformat()
+        if process_gone(m.group(1), int(m.group(2)), written):
             found.append(path)
     return found
 
@@ -164,6 +175,7 @@ def sample(
     if on_conflict is not None and on_conflict not in CONFLICTS:
         raise UqsError(f"--on-conflict {on_conflict!r}: a sample can ignore or replace")
     src, dst = resolve_roots(source, destination)
+    locked = lock_root(destination)
     env = with_interpreter(paths)
     q = q_interpreter(env)
     if q is None:
@@ -184,14 +196,15 @@ def sample(
         return doc
 
     dst.mkdir(exist_ok=True)
-    _write_lock(paths, q, env, "acquire", dst)
+    _write_lock(paths, q, env, "acquire", locked)
     stage: Path | None = None
     moved: list[dict[str, Any]] = []
     try:
         recovered = [str(p) for p in stale_stages(dst)]
         for path in recovered:
             shutil.rmtree(path)
-        stage = Path(tempfile.mkdtemp(prefix=f"{dst.name}.sample-{os.getpid()}-", dir=dst.parent))
+        prefix = f"{dst.name}.sample-{socket.gethostname()}-{os.getpid()}-"
+        stage = Path(tempfile.mkdtemp(prefix=prefix, dir=dst.parent))
         staged = _run(paths, q, env, [*argv, "stage", str(stage)], "STAGED|")
         for row in staged["staged"]:
             _move_in(dst, stage, row)
@@ -205,7 +218,7 @@ def sample(
         if stage is not None:
             shutil.rmtree(stage, ignore_errors=True)
         with contextlib.suppress(UqsError):
-            _write_lock(paths, q, env, "release", dst)
+            _write_lock(paths, q, env, "release", locked)
     doc.update(
         applied=True,
         moved=moved,

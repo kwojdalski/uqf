@@ -136,7 +136,9 @@ def clean(paths: UqsPaths, match: str | None = None, dry_run: bool = False) -> l
     removal uses and cannot describe a different set.
 
     A real removal holds the stack's lifecycle lock, refusing at once if a
-    start, stop or restart holds it, and refuses while the stack runs
+    start, stop or restart holds it - the lock file lives beside the data
+    directory, so removing the directory does not release it (#2982) - and
+    refuses while the stack runs
     (refuse_while_running): a dry run only lists, so it does neither.
     """
     targets = clean_targets(paths, match)

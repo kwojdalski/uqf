@@ -21,7 +21,7 @@ def own_lifecycle_lock(tmp_path, monkeypatch):
     """Each test's own stack lifecycle lock file (#2028), under its tmp_path.
 
     Many tests run a lifecycle command against the checkout's own paths, so
-    they all took one lock file, `output/uqs/.lifecycle.lock`: one xdist worker
+    they all took one lock file, `output/.uqs.lifecycle.lock`: one xdist worker
     holding it made another's frontend route - which refuses rather than waits
     - raise StackBusy, and a developer's running `uqs start` could do the same.
     The lock itself is unchanged: only where a test's lock lives moves, so a

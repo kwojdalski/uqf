@@ -590,6 +590,24 @@ def test_the_refusal_names_the_receiver_stop_for_a_receiver(tmp_path):
     assert "then start the receiver again." in message
 
 
+@pytest.mark.parametrize("pid", [0, -1])
+def test_a_record_naming_a_process_group_owns_the_attachment_and_is_never_signalled(
+    tmp_path, pid, monkeypatch
+):
+    """#2983: kill(-1) is every process the user owns. Such a record is unreadable: it
+    still blocks a detach, and a receiver stop refuses it before signalling anyone."""
+    from uqs.attach import backfill_receiver
+
+    backfill_owner.claim("pb-uat", "trades.receiver", pid, "abc", tmp_path)
+    assert [r["pid"] for r in backfill_owner.active("pb-uat", tmp_path)] == [pid]
+    signalled: list[object] = []
+    monkeypatch.setattr(backfill_receiver, "stop_pids", lambda *a, **_k: signalled.append(a))
+    refusal = rf"names pid {pid}, which is no process: nothing was signalled"
+    with pytest.raises(AttachmentError, match=refusal):
+        backfill_receiver.stop_receivers("pb-uat", tmp_path, kill=True)
+    assert signalled == []
+
+
 def test_detach_is_still_told_to_detach_afterwards(tmp_path):
     backfill_owner.claim("pb-uat", WORKER, os.getpid(), "abc", tmp_path)
     with pytest.raises(AttachmentError, match=rf"`uqs job runs stop {WORKER} --attachment pb-uat` "

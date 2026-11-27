@@ -15,9 +15,17 @@ forgotten, released or reported stopped.
 `kill` is the caller's to give: SIGKILL runs no clean shutdown, no `.z.exit`,
 no `finally`, and a tickerplant killed mid-write may leave its log's last
 message torn. So it is only sent where the operator asked for it (`--kill`),
-and only to what outlived the SIGTERM.
+and only to what outlived the SIGTERM - and still the process that was
+SIGTERMed: one whose start time changed in the grace exited and gave its pid
+to another, which is not signalled (#2983).
 
-A leaf: it imports nothing from `uqs`, so any layer can use it.
+0 and a negative pid are refused before anything is signalled: `kill` reads
+them as process groups - this one's for 0, every process the user owns for
+-1 - so a corrupt record naming one would have stopped far more than its run
+(#2983).
+
+A leaf: it imports nothing from `uqs` but the leaf liveness, so any layer can
+use it.
 """
 
 from __future__ import annotations
@@ -29,6 +37,8 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
+
+from uqs.liveness import process_started
 
 #: How long a SIGTERMed process has to exit before it is reported still
 #: running, or - with `kill` - sent SIGKILL.
@@ -113,23 +123,45 @@ def stop_pids(
     send: Callable[[int, int], None] = os.kill,
     clock: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
+    started: Callable[[int], object] = process_started,
 ) -> list[Stopped]:
     """SIGTERM every pid, wait up to `grace` seconds for each to be gone, then
     - only with `kill` - SIGKILL the ones still running and wait `kill_wait`
     for those. Returns one Stopped per pid, in order: whether it is gone, and
-    whether it took a SIGKILL. Signals only the pids given."""
+    whether it took a SIGKILL. Signals only the pids given.
+
+    Raises ValueError, signalling nothing, if a pid is 0 or negative. With
+    `kill`, each pid's `started` time is read before the SIGTERM, and a
+    survivor whose time has since changed is a newcomer on a recycled pid: the
+    one SIGTERMed is gone, and the newcomer is not SIGKILLed. A time that
+    cannot be read either side changes nothing."""
     targets = list(dict.fromkeys(pids))
+    if refused := [pid for pid in targets if pid <= 0]:
+        raise ValueError(
+            f"refusing to signal pid {refused[0]}: 0 and negative pids name process "
+            "groups, not one process"
+        )
+    born = {pid: started(pid) for pid in targets} if kill else {}
     for pid in targets:
         _signal(send, pid, signal.SIGTERM)
     _wait(targets, grace, running, clock, sleep)
     survivors = [pid for pid in targets if running(pid)]
+    recycled = {pid for pid in survivors if kill and _recycled(born[pid], started(pid))}
+    survivors = [pid for pid in survivors if pid not in recycled]
     if kill and survivors:
         for pid in survivors:
             _signal(send, pid, signal.SIGKILL)
         _wait(survivors, kill_wait, running, clock, sleep)
     return [
-        Stopped(pid, gone=not running(pid), killed=kill and pid in survivors) for pid in targets
+        Stopped(pid, gone=pid in recycled or not running(pid), killed=kill and pid in survivors)
+        for pid in targets
     ]
+
+
+def _recycled(before: object, now: object) -> bool:
+    """Whether a pid's start time, read before the SIGTERM and again now, shows
+    another process holding it: both read, and different."""
+    return before is not None and now is not None and before != now
 
 
 def _signal(send: Callable[[int, int], None], pid: int, sig: int) -> None:
