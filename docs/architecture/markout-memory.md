@@ -129,8 +129,10 @@ policy is a different `config_id`, while a spec without a policy keeps its id. A
 row does not repeat its rules: `.qpipe.transform.config_markout.reference_rules`
 re-derives `ref_rule_t0`, `ref_rule_t1` and their variants from the row's
 `config_id`, `sym`, `source_time` and `horizon`, over the rules the snapshot
-recorded. The jobs read their books by the spec's `max_age`, so a rule's
-`max_age` longer than the spec's sees no older book than the spec's would.
+recorded. The jobs read their books by the spec's `max_age`, so a spec whose
+policy has a rule with a longer `max_age` is refused when it is validated
+(`.qetl.reference.policy.require_max_age`): raise the spec's `max_age`, or lower
+the rule's.
 
 ### Reference variants at scale (#2289)
 

@@ -270,6 +270,8 @@
     if[not $[-11h=type rf; (rf in key .qetl.reference.variants) or .qetl.reference.policy.is rf; 0b];
         '"markout_core: reference must be a registered variant or reference policy (",(", " sv string (key .qetl.reference.variants),key .qetl.reference.policies),")"];
     if[(rf in key .qetl.reference.variants) and .qetl.reference.policy.is rf; '"markout_core: reference ",string[rf]," names both a variant and a reference policy"];
+    / a rule's staleness the job's read cannot honour is refused here, where the spec and its policy meet
+    if[.qetl.reference.policy.is rf; .qetl.reference.policy.require_max_age[rf;spec`max_age]];
     rt:spec`rates;
     if[not (99h=type rt) and (11h=type key rt) or 0=count rt; '"markout_core: rates must be a dictionary from quote currency to rate source"];
     kinds:.qpipe.transform.markout_core.rate_kind each value rt;

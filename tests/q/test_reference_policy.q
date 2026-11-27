@@ -277,6 +277,19 @@
     .qunit.assertEquals[delete config_id from pol;delete config_id from plain;"grouping by rule and pricing each group is the variant's own road"];
     .qunit.assertTrue[(first pol`config_id)<>first plain`config_id;"but a policy is recorded, so it is another configuration"]};
 
+.qt.qetl.reference.policy.test_a_rule_max_age_longer_than_the_spec_s_is_refused_and_an_equal_one_accepted:{[t]
+    rs:update max_age:0D00:00:09 from .qt.qetl.reference.policy.rules[] where rule_id=`us_open;
+    p:.qetl.reference.policy.register[`loose;rs];
+    dom:.qt.qetl.reference.policy.dom[];
+    e:@[.qpipe.transform.markout_core.validate[dom;];.qt.qetl.reference.policy.spec[p];{[e] e}];
+    eq:(.qpipe.transform.markout_core.validate[dom;.qt.qetl.reference.policy.spec[p],enlist[`max_age]!enlist 0D00:00:09])`max_age;
+    open:(.qpipe.transform.markout_core.validate[dom;.qt.qetl.reference.policy.spec[p],enlist[`max_age]!enlist 0Wn])`max_age;
+    .qt.qetl.reference.policy.forget[enlist `loose;`symbol$()];
+    .qunit.assertEquals[e;"reference_policy: loose.us_open: max_age 0D00:00:09.000000000 is longer than the spec's max_age 0D00:00:05.000000000 - the job reads no book older than the spec's limit, so raise the spec's max_age or lower the rule's";
+        "the spec's 5s cannot honour the US rule's 9s: refused, naming the rule, both limits and the fix"];
+    .qunit.assertEquals[eq;0D00:00:09;"a rule as old as the spec's limit is accepted"];
+    .qunit.assertEquals[open;0Wn;"and so is any rule under a spec with no limit"]};
+
 / --- the configuration -------------------------------------------------------------------------------------
 
 .qt.qetl.reference.policy.test_a_policy_is_recorded_in_full_and_its_content_is_independent_of_declaration_order:{[t]

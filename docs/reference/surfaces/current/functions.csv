@@ -906,6 +906,7 @@ qetl.reference.policy,lineage,function,4,ref syms t0s t1s
 qetl.reference.policy,match,function,4,label rules syms times
 qetl.reference.policy,prove,function,2,label rules
 qetl.reference.policy,register,function,2,name rules
+qetl.reference.policy,require_max_age,function,2,name max_age
 qetl.reference.policy,select,function,3,name syms times
 qetl.reference.policy,universe,function,1,name
 qetl.reference.policy,week,value,,
