@@ -12,6 +12,7 @@ import os
 import subprocess
 from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 import pytest
 from attach_backfill_support import HdbStack, save_attachment
@@ -20,6 +21,7 @@ from typer.testing import CliRunner
 
 import uqs.cli.entry  # noqa: F401 - registers every command on the app
 from uqs.attach import backfill_owner, hdb_where, service
+from uqs.attach import config as attach_config
 from uqs.attach.config import AttachmentError
 from uqs.attach.facts import Host
 from uqs.cli.common import shared, target_confirm
@@ -108,6 +110,56 @@ def test_a_live_backfill_owner_is_refused(stack):
     backfill_owner.claim("pb", "duckdb_deals_backfill", os.getpid(), "abc")
     with pytest.raises(AttachmentError, match="attached backfill running"):
         hdb_where.refuse_running_writers(where, fake)
+
+
+#: apply_plan hands the request to Handle.run, which these tests replace.
+NO_REQUEST = cast(Request, None)
+
+
+def _attach_handle(where) -> hdb_scope.Handle:
+    return hdb_scope.Handle("attach", where.hdb, where.source, paths_for_root(UQF_ROOT), where)
+
+
+def test_writers_are_checked_again_after_the_prompt_under_the_lock(stack, monkeypatch):
+    """A backfill that starts while the operator reads the prompt is refused before
+    the write, not only before the question (#2984)."""
+    fake, hdb = stack
+    save_attachment("pb", hdb)
+    where = hdb_where.resolve("pb", fake, writes=True)
+    monkeypatch.setattr(service, "ipc_for", lambda att: fake)
+
+    def answer_late(question, *, yes):
+        backfill_owner.claim("pb", "duckdb_deals_backfill", os.getpid(), "abc")
+
+    monkeypatch.setattr(hdb_scope.safety, "confirm", answer_late)
+    ran = []
+    monkeypatch.setattr(hdb_scope.Handle, "run", lambda self, req, apply: ran.append(req))
+    with pytest.raises(AttachmentError, match="attached backfill running"):
+        hdb_scope.apply_plan(_attach_handle(where), NO_REQUEST, as_json=False, yes=True, what="x")
+    assert ran == [], "nothing was written"
+
+
+def test_the_write_holds_the_attachment_lock(stack, monkeypatch):
+    """While the write runs, a backfill or receiver start - which takes the same
+    lock - is refused (#2984)."""
+    fake, hdb = stack
+    save_attachment("pb", hdb)
+    where = hdb_where.resolve("pb", fake, writes=True)
+    monkeypatch.setattr(service, "ipc_for", lambda att: fake)
+    monkeypatch.setattr(hdb_scope.safety, "confirm", lambda question, *, yes: None)
+    monkeypatch.setattr(hdb_scope, "readers", lambda handle: [])
+
+    def write(self, req, apply):
+        with pytest.raises(AttachmentError, match="another uqs operation"):
+            with attach_config.locked("pb"):
+                pass
+        return {"status": "applied"}
+
+    monkeypatch.setattr(hdb_scope.Handle, "run", write)
+    result = hdb_scope.apply_plan(
+        _attach_handle(where), NO_REQUEST, as_json=False, yes=True, what="x"
+    )
+    assert result["status"] == "applied"
 
 
 def test_an_end_of_day_reload_in_progress_is_refused(stack):

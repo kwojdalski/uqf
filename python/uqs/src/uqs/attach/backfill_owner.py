@@ -53,9 +53,23 @@ def claim(
     return path
 
 
-def release(attachment: str, worker: str, root: Path | None = None) -> None:
-    """Drop the record (the process does this itself on a normal exit)."""
-    owner_file(attachment, worker, root).unlink(missing_ok=True)
+def release(
+    attachment: str, worker: str, root: Path | None = None, *, pid: int | None = None
+) -> None:
+    """Drop the record (the process does this itself on a normal exit). With `pid`, only
+    while the record still names that process: a stopper releasing the run it stopped
+    must not drop the record of a newer run that claimed the same worker meanwhile
+    (#2984). The caller holds `config.locked`, as `claim`'s callers do, so the record
+    cannot change between the read and the unlink."""
+    path = owner_file(attachment, worker, root)
+    if pid is not None:
+        try:
+            named = json.loads(path.read_text()).get("pid")
+        except OSError, ValueError, AttributeError:
+            return  # gone, or unreadable: not provably the stopped run's
+        if str(named) != str(pid):
+            return
+    path.unlink(missing_ok=True)
 
 
 def _live(record: dict[str, Any]) -> bool:
