@@ -386,3 +386,13 @@ def test_status_flags_failing_overdue_and_never_run(cron_dir):
     assert runs.status(e, at("2026-11-27T12:00"))["state"] == "failing"
     assert runs.status(e, at("2026-11-28T07:30"))["state"] == "overdue"
     assert runs.status(e, at("2026-11-28T06:30") + timedelta(minutes=1))["state"] == "failing"
+
+
+def test_cli_status_reports_entries_and_crontab_findings(fake_crontab, cron_dir):
+    fake_crontab.write_text("5 5 * * * /old/uqs cron run gone\n")
+    entries.save({DEALS.name: DEALS})
+    result = runner.invoke(cli.app, ["cron", "status", "--json"])
+    assert result.exit_code == 0, result.output
+    doc = json.loads(result.output)
+    assert [r["state"] for r in doc["entries"]] == ["never run"]
+    assert {f["kind"] for f in doc["findings"]} == {"missing", "orphan"}

@@ -132,7 +132,20 @@ ALLOWED_IMPORTS = {
     # attaching a job to a stack that already exists: reads declarations and bundles
     # (model, stack) and talks to running processes; nothing above it but the CLI.
     "attach": {"generated", "model", "stack"},
-    "cli": {"generated", "model", "stack", "scaffold", "external", "checks", "deploy", "attach"},
+    # scheduled uqs commands (#2987): the entries sit beside the attachments (stack);
+    # what `run` means is handed in by the CLI, so nothing above it but the CLI.
+    "cron": {"generated", "model", "stack"},
+    "cli": {
+        "generated",
+        "model",
+        "stack",
+        "scaffold",
+        "external",
+        "checks",
+        "deploy",
+        "attach",
+        "cron",
+    },  # fmt: skip
 }
 
 _IMPORT = re.compile(r"^\s*(?:from|import) uqs(?:\.(\w+))?(?: import ([\w, ]+))?", re.M)
