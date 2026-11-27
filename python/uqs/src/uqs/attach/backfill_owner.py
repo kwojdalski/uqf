@@ -15,6 +15,11 @@ same direction the run lock errs in), and so does one from another pid space - a
 container sharing this hostname - where the record names one (#2986). A pid reused
 by an unrelated process makes a stale record look live; the refusal names the file,
 which is the way out.
+
+A record naming pid 0 or a negative pid - corrupt or hand-edited, since a launcher
+writes `Popen.pid` - is read as unreadable: it counts as live, and a stop refuses it
+(run_pid) rather than signal it, because `kill` takes those as process groups, -1 as
+every process the user owns (#2983).
 """
 
 from __future__ import annotations
@@ -80,7 +85,25 @@ def _live(record: dict[str, Any]) -> bool:
         pid, host = int(record["pid"]), str(record["host"])
     except KeyError, TypeError, ValueError:
         return True  # a record this cannot read is not one it can prove dead
+    if pid <= 0:
+        return True  # names no process: as unreadable as a missing pid (#2983)
     return not process_gone(host, pid, record.get("started"), record.get("pid_space"))
+
+
+def run_pid(record: dict[str, Any]) -> int:
+    """The pid `record`'s run has, to signal - or AttachmentError when it names none a
+    signal can go to: missing, not a number, 0 or negative (#2983)."""
+    try:
+        pid = int(record["pid"])
+    except KeyError, TypeError, ValueError:
+        pid = 0
+    if pid <= 0:
+        raise AttachmentError(
+            f"{record.get('worker', '?')}'s owner record ({record.get('file', '?')}) names pid "
+            f"{record.get('pid')!r}, which is no process: nothing was signalled. If its run is "
+            "gone, remove the record."
+        )
+    return pid
 
 
 def active(attachment: str, root: Path | None = None) -> list[dict[str, Any]]:

@@ -17,6 +17,8 @@ import pytest
 
 from uqs.deploy import lock
 from uqs.deploy.config import DeployError, make_config
+from uqs.deploy.lock import LockLost
+from uqs.deploy.remote import Remote, StepTimedOut
 from uqs.deploy.server import Server
 
 HERE = socket.gethostname()
@@ -249,7 +251,7 @@ def test_a_break_removes_only_the_lock_it_judged(tmp_path):
     _held(dest, age=5000)
     s = _server(dest, break_lock=True)
     s.remote = s.locker.remote = TakenMeanwhile(dest)
-    with pytest.raises(DeployError, match="another deployment took .* as it was broken"):
+    with pytest.raises(DeployError, match="not broken: it changed hands since it was judged"):
         s.take_lock()
     assert s.locker.info()["host"] == "newcomer", "the lock taken meanwhile is left standing"
 
@@ -263,3 +265,165 @@ def test_a_break_of_a_lock_with_no_owner_file_still_removes_it(tmp_path):
     s = _server(dest, break_lock=True)
     s.take_lock()
     assert s.locker.info()["host"] == HERE
+
+
+class BeatMeanwhile(LocalRemote):
+    """The holder beats between the break's judgement and its removal."""
+
+    def __init__(self, dest: Path) -> None:
+        super().__init__()
+        self.dest = dest
+
+    def run(self, script: str, timeout: int, stage: str, as_login: bool = False):
+        if "cksum <" in script and "rm -rf" in script:
+            (self.dest / "deploy.lock" / "heartbeat").write_text(f"{int(time.time())}\n")
+        return super().run(script, timeout, stage, as_login)
+
+
+def test_a_break_leaves_a_holder_that_beat_since_it_was_judged(tmp_path):
+    """#2978: the break reads the heartbeat again in the script that removes it."""
+    dest = tmp_path / "uqf"
+    _held(dest, age=5000)
+    s = _server(dest, break_lock=True)
+    s.remote = s.locker.remote = BeatMeanwhile(dest)
+    with pytest.raises(DeployError, match="not broken: it beat again"):
+        s.take_lock()
+    assert s.locker.info()["release"] == "OLD"
+
+
+# ------------------------------------------------------------------ fencing (#2978)
+
+
+def _broken_and_taken(dest: Path) -> str:
+    """Another operator breaks this run's lock and takes it; its heartbeat."""
+    subprocess.run(["rm", "-rf", str(dest / "deploy.lock")], check=True)
+    _held(dest, age=0, host="newcomer")
+    return (dest / "deploy.lock" / "heartbeat").read_text()
+
+
+def test_a_beat_after_the_lock_was_broken_stops_the_run_and_leaves_the_newcomers_heartbeat(
+    tmp_path,
+):
+    dest = tmp_path / "uqf"
+    s = _server(dest)
+    s.take_lock()
+    theirs = _broken_and_taken(dest)
+    time.sleep(1.1)
+    with pytest.raises(LockLost, match="no longer this run's.*push OLD by ops@elsewhere"):
+        s.beat()
+    assert (dest / "deploy.lock" / "heartbeat").read_text() == theirs
+
+
+def test_a_beat_after_the_lock_was_removed_stops_the_run(tmp_path):
+    dest = tmp_path / "uqf"
+    s = _server(dest)
+    s.take_lock()
+    subprocess.run(["rm", "-rf", str(dest / "deploy.lock")], check=True)
+    with pytest.raises(LockLost, match="held by none"):
+        s.beat()
+
+
+def test_a_fenced_step_changes_nothing_once_the_lock_is_anothers(tmp_path):
+    """The guard is in the step's own script: a lock lost after the last beat
+    still stops it, on the server."""
+    dest = tmp_path / "uqf"
+    s = _server(dest)
+    s.take_lock()
+    s.run("start", "a destructive step", f"touch {dest}/ran", fenced=True)
+    assert (dest / "ran").exists(), "while the lock is this run's, the step runs"
+    (dest / "ran").unlink()
+    _broken_and_taken(dest)
+    with pytest.raises(LockLost):
+        s.run("start", "a destructive step", f"touch {dest}/ran", fenced=True)
+    assert not (dest / "ran").exists()
+
+
+def test_without_the_lock_a_fenced_step_carries_no_guard(tmp_path):
+    """A dry run takes no lock, and runs no destructive step; nothing to fence."""
+    s = _server(tmp_path / "uqf")
+    assert s.locker.guard() == []
+
+
+def test_the_background_beater_keeps_the_lock_young_between_stages(tmp_path, monkeypatch):
+    monkeypatch.setattr(lock, "BEAT_EVERY", 1)
+    dest = tmp_path / "uqf"
+    s = _server(dest)
+    s.take_lock()
+    try:
+        (dest / "deploy.lock" / "heartbeat").write_text(f"{int(time.time()) - 500}\n")
+        deadline = time.monotonic() + 10
+        while int(s.locker.info()["age"]) >= 500 and time.monotonic() < deadline:
+            time.sleep(0.2)
+        assert int(s.locker.info()["age"]) <= 2, "no stage beat; the thread did"
+    finally:
+        s.release_lock()
+    assert not (dest / "deploy.lock").exists()
+
+
+def test_a_loss_the_background_beater_sees_stops_the_next_stage(tmp_path, monkeypatch):
+    monkeypatch.setattr(lock, "BEAT_EVERY", 1)
+    dest = tmp_path / "uqf"
+    s = _server(dest)
+    s.take_lock()
+    theirs = _broken_and_taken(dest)
+    deadline = time.monotonic() + 10
+    while s.locker.taken_by is None and time.monotonic() < deadline:
+        time.sleep(0.2)
+    assert s.locker.taken_by is not None
+    # the newcomer's lock is now changed by nothing but its own beats
+    assert (dest / "deploy.lock" / "heartbeat").read_text() == theirs
+    with pytest.raises(LockLost):
+        s.beat()
+    s.release_lock()
+    assert (dest / "deploy.lock").is_dir(), "left to its holder"
+
+
+# ------------------------------------------------- a step that outlives this side (#2979)
+
+
+class TimesOut(LocalRemote):
+    def run(self, script: str, timeout: int, stage: str, as_login: bool = False):
+        if stage == "prepare":
+            raise StepTimedOut(stage, "the remote step did not finish within 900s")
+        return super().run(script, timeout, stage, as_login)
+
+
+def test_after_a_step_timed_out_on_this_side_the_lock_is_kept(tmp_path, log_text):
+    dest = tmp_path / "uqf"
+    cfg = make_config(artifact="", ssh="uqf-server", dest=str(dest), profile="essential")
+    s = Server(cfg, TimesOut(), release="20261008T120000Z-0123456789ab")
+    s.take_lock()
+    with pytest.raises(StepTimedOut):
+        s.run("prepare", "preparing", "true")
+    s.release_lock()
+    assert (dest / "deploy.lock").is_dir(), "the server may still be running prepare"
+    assert "is kept: the prepare step timed out on this side" in log_text()
+
+
+def test_every_step_ends_on_the_server_before_this_side_stops_waiting():
+    remote = Remote("deploy@uqf-server", 10)
+    # 900 - connect 10 - KILL grace 10 - slack 5
+    assert remote.ssh_argv(timeout=900)[-1] == "timeout -k 10 875 bash -l -s"
+    svc = Remote("deploy@uqf-server", 10, remote_user="svc")
+    assert svc.ssh_argv(timeout=900)[-1] == "sudo -n -iu svc timeout -k 10 875 bash -s"
+    assert svc.ssh_argv(as_login=True, timeout=900)[-1] == "timeout -k 10 875 bash -s"
+    assert remote.server_limit(5) == 1, "never zero, which timeout reads as no limit"
+
+
+def test_the_remote_runs_each_script_under_the_servers_limit():
+    seen: list[list[str]] = []
+
+    def runner(argv, **kwargs):
+        seen.append(argv)
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    Remote("h", 10, runner=runner).run("true", 300, "lock")
+    assert seen[0][-1] == "timeout -k 10 275 bash -l -s"
+
+
+def test_a_client_side_timeout_is_a_step_timed_out():
+    def runner(*_, **kwargs):
+        raise subprocess.TimeoutExpired("ssh", kwargs["timeout"])
+
+    with pytest.raises(StepTimedOut, match="within 30s"):
+        Remote("h", 5, runner=runner).run("true", 30, "prepare")

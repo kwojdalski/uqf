@@ -103,7 +103,7 @@ def stop(
 ) -> Outcome:
     """Ask the run in `record` to stop, wait up to `timeout` seconds for it to, and - only with
     `kill` - SIGKILL one that has not."""
-    worker, pid = str(record["worker"]), int(record["pid"])
+    worker, pid = str(record["worker"]), backfill_owner.run_pid(record)
     path = backfill_run.stop_file_for(state_dir, worker, pid)
     path.touch()
     if _wait_gone(pid, timeout, alive, clock, sleep):

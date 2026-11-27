@@ -17,6 +17,7 @@ from typing import Annotated
 import typer
 
 from uqs.cli.common import completion, safety
+from uqs.cli.common.json_out import emit, json_opt
 from uqs.cli.common.pipelines import needs_pipelines
 from uqs.cli.common.safety import ChangesState, YesOpt, dry_run_note
 from uqs.cli.common.shared import (
@@ -94,8 +95,17 @@ def _question(targets: list[stack_clean.CleanTarget]) -> str:
     return f"Remove {n} entr{'y' if n == 1 else 'ies'} ({total})? This cannot be undone"
 
 
+#: `clean --json`: what went, or with --dry-run would go (#2988).
+CleanJson = json_opt('{"dry_run", "entries": [{"path", "bytes"}], "bytes"}')
+
+
 @app.command("clean", cls=ChangesState)
-def clean(match: MatchOpt = None, dry_run: DryRunOpt = False, yes: YesOpt = False) -> None:
+def clean(
+    match: MatchOpt = None,
+    dry_run: DryRunOpt = False,
+    yes: YesOpt = False,
+    as_json: CleanJson = False,
+) -> None:
     """Wipe the runtime's data directory: the HDB, logs, tplogs, wdb, the sample data.
 
     `--match` narrows it to the entries whose path under that directory matches a
@@ -109,9 +119,12 @@ def clean(match: MatchOpt = None, dry_run: DryRunOpt = False, yes: YesOpt = Fals
 
     Refused while the stack is running or a start, stop or restart is under
     way: `uqs stop` first. `--match` reaches tplogs/ only by naming it.
+    `--json` prints what went (or would go) as one document, and so cannot
+    ask: it needs --yes unless it is a dry run.
     """
     try:
         if not dry_run:
+            safety.json_needs_yes(as_json, yes, "remove what it lists")
             stack_clean.refuse_while_running(_paths())  # before asking, not after a yes
         if not dry_run and not yes:
             planned = stack_clean.clean(_paths(), match=match, dry_run=True)
@@ -121,6 +134,10 @@ def clean(match: MatchOpt = None, dry_run: DryRunOpt = False, yes: YesOpt = Fals
         targets = stack_clean.clean(_paths(), match=match, dry_run=dry_run)
     except UqsError as exc:
         _die(exc)
+    if as_json:
+        entries = [{"path": str(entry), "bytes": size} for entry, size in targets]
+        emit({"dry_run": dry_run, "entries": entries, "bytes": sum(s for _e, s in targets)})
+        return
     if not targets:
         console.print("[dim]nothing to remove[/]")
     else:

@@ -153,9 +153,11 @@ class DetachedProcess:
             return None
         first, _, identity = self.pid_path.read_text().partition("\n")
         try:
-            return int(first.strip()), " ".join(identity.split())
+            pid = int(first.strip())
         except ValueError:
             return None
+        # 0 and -N name process groups, never one process: unreadable (#2983)
+        return (pid, " ".join(identity.split())) if pid > 0 else None
 
     def pid(self) -> int | None:
         """The recorded pid, or None when there is no readable pid file."""

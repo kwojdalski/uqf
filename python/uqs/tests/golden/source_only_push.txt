@@ -174,7 +174,11 @@ rm -rf /opt/uqf/staging/20261007T000000Z-0123456789ab
 =====
 [lock]
 set -euo pipefail
-if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
+if [ "$(cat /opt/uqf/deploy.lock/owner 2>/dev/null || true)" != <owner> ]; then
+  echo "uqs-lock-lost: $(head -n 1 /opt/uqf/deploy.lock/owner 2>/dev/null || echo none)"
+else date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
 
 =====
 [prepare]
@@ -204,7 +208,11 @@ uv pip install --quiet --offline --no-index --python .venv/bin/python --no-deps 
 =====
 [lock]
 set -euo pipefail
-if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
+if [ "$(cat /opt/uqf/deploy.lock/owner 2>/dev/null || true)" != <owner> ]; then
+  echo "uqs-lock-lost: $(head -n 1 /opt/uqf/deploy.lock/owner 2>/dev/null || echo none)"
+else date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
 
 =====
 [hdb]
@@ -216,7 +224,11 @@ source ./deploy.env
 =====
 [lock]
 set -euo pipefail
-if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
+if [ "$(cat /opt/uqf/deploy.lock/owner 2>/dev/null || true)" != <owner> ]; then
+  echo "uqs-lock-lost: $(head -n 1 /opt/uqf/deploy.lock/owner 2>/dev/null || echo none)"
+else date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
 
 =====
 [smoke]
@@ -228,7 +240,11 @@ timeout 120 "$QCMD" scripts/deploy/smoke.q -q -procs discovery1 stp1 rdb1 hdb1 w
 =====
 [lock]
 set -euo pipefail
-if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
+if [ "$(cat /opt/uqf/deploy.lock/owner 2>/dev/null || true)" != <owner> ]; then
+  echo "uqs-lock-lost: $(head -n 1 /opt/uqf/deploy.lock/owner 2>/dev/null || echo none)"
+else date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
 
 =====
 [report]
@@ -241,7 +257,11 @@ python3 -c 'import os,sys; os.replace(sys.argv[1], sys.argv[2])' /opt/uqf/releas
 =====
 [lock]
 set -euo pipefail
-if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
+if [ "$(cat /opt/uqf/deploy.lock/owner 2>/dev/null || true)" != <owner> ]; then
+  echo "uqs-lock-lost: $(head -n 1 /opt/uqf/deploy.lock/owner 2>/dev/null || echo none)"
+else date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
 
 =====
 [ports]
@@ -253,6 +273,7 @@ if .venv/bin/uqs deploy check --help 2>/dev/null | grep -q -e '--table '; then .
 =====
 [start]
 set -euo pipefail
+[ "$(cat /opt/uqf/deploy.lock/owner 2>/dev/null || true)" = <owner> ] || { echo "uqs-lock-lost: $(head -n 1 /opt/uqf/deploy.lock/owner 2>/dev/null || echo none)"; exit 75; }
 cd /opt/uqf/releases/20261007T000000Z-0123456789ab
 source ./deploy.env
 .venv/bin/uqs start --profile essential
@@ -260,7 +281,11 @@ source ./deploy.env
 =====
 [lock]
 set -euo pipefail
-if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
+if [ "$(cat /opt/uqf/deploy.lock/owner 2>/dev/null || true)" != <owner> ]; then
+  echo "uqs-lock-lost: $(head -n 1 /opt/uqf/deploy.lock/owner 2>/dev/null || echo none)"
+else date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
 
 =====
 [verify]
@@ -272,7 +297,11 @@ if .venv/bin/uqs deploy check --help 2>/dev/null | grep -q -e '--table '; then .
 =====
 [lock]
 set -euo pipefail
-if [ -d /opt/uqf/deploy.lock ]; then date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
+if [ "$(cat /opt/uqf/deploy.lock/owner 2>/dev/null || true)" != <owner> ]; then
+  echo "uqs-lock-lost: $(head -n 1 /opt/uqf/deploy.lock/owner 2>/dev/null || echo none)"
+else date +%s > /opt/uqf/deploy.lock/heartbeat; fi
+
 
 =====
 [report]
@@ -285,6 +314,7 @@ python3 -c 'import os,sys; os.replace(sys.argv[1], sys.argv[2])' /opt/uqf/releas
 =====
 [activate]
 set -euo pipefail
+[ "$(cat /opt/uqf/deploy.lock/owner 2>/dev/null || true)" = <owner> ] || { echo "uqs-lock-lost: $(head -n 1 /opt/uqf/deploy.lock/owner 2>/dev/null || echo none)"; exit 75; }
 ln -sfn releases/20261007T000000Z-0123456789ab /opt/uqf/.current.new
 python3 -c 'import os,sys; os.replace(sys.argv[1], sys.argv[2])' /opt/uqf/.current.new /opt/uqf/current
 

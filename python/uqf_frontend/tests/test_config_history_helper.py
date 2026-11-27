@@ -447,6 +447,48 @@ def test_an_uploads_publishing_step_waits_for_the_write_lock(root):
     assert (root / "shared/config/a").read_bytes() == b"1"
 
 
+class _Racing(io.BytesIO):
+    """An upload's bytes, during whose arrival another push writes `dest`."""
+
+    def __init__(self, data: bytes, dest: Path, theirs: bytes):
+        super().__init__(data)
+        self.dest, self.theirs, self.fired = dest, theirs, False
+
+    def read(self, n=-1):
+        if not self.fired:
+            self.fired = True
+            tmp = self.dest.with_name("their-temp")
+            tmp.write_bytes(self.theirs)
+            tmp.replace(self.dest)  # as an upload publishes: a new file
+        return super().read(n)
+
+
+@pytest.mark.parametrize("before", [None, b"0"], ids=["absent", "replaced"])
+def test_a_file_another_push_writes_while_an_upload_arrives_is_a_conflict(root, before):
+    # Whether the file existed was looked at before the bytes came; under
+    # WRITE_LOCK it is looked at again, and a file that appeared or was
+    # replaced meanwhile is kept and refused - never overwritten, nor
+    # recorded as a create whose restore would delete it (#2981).
+    dest = root / "shared/config/a"
+    if before is not None:
+        dest.write_bytes(before)
+    push_id = _open(root)
+    data = b"mine\n"
+    request = {"protocol": 1, "op": "upload", "root": str(root), "path": "shared/config/a",
+               "size": len(data), "sha256": _sha(data), "overwrite": True,
+               "push_id": push_id}  # fmt: skip
+    answer = handle(request, _Racing(data, dest, b"theirs\n"))
+    assert answer["error"] == "conflict", answer
+    assert "another push wrote it" in answer["detail"]
+    assert dest.read_bytes() == b"theirs\n"
+    (entry,) = _manifest(root, push_id)["files"]
+    assert entry["state"] == "failed" and entry["error"] == "conflict"
+    assert not (_history(root) / push_id / "before").exists()
+    assert not (_history(root) / push_id / "after" / "a").exists()
+    assert remote_files._UPLOAD_REFUSALS["conflict"] is remote_files.UploadConflict
+    assert remote_files.UploadConflict.status_code == 409
+
+
 def test_restoring_what_is_already_restored_is_refused(root):
     push_id = _open(root)
     _put(root, push_id, "shared/config/a", b"1")
@@ -505,6 +547,49 @@ def test_a_restore_after_pruning_is_refused_clearly(root):
         assert "pruned" in answer["detail"] and "row_cap bound" in answer["detail"]
     never = _ask(root, "history_show", push_id="20261104T100009000Z-00000009")
     assert never["error"] == "not_found"
+
+
+def test_prune_leaves_alone_a_push_whose_lock_is_held(root):
+    # The oldest pushes are the ones past the bound and the ones a restore
+    # undoes: one whose lock is held is skipped, and pruned once free (#2981).
+    import fcntl
+
+    old = _open(root, "20261104T100000000Z-00000001")
+    lock = os.open(_history(root) / old / ".lock", os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        answer = _ask(root, "push_open", push_id="20261104T100001000Z-00000002",
+                      config_dir="shared/config", max_kept=1)  # fmt: skip
+        assert answer["pruned"] == []
+        assert (_history(root) / old / MANIFEST).exists()
+    finally:
+        os.close(lock)
+    answer = _ask(root, "push_open", push_id="20261104T100002000Z-00000003",
+                  config_dir="shared/config", max_kept=1)  # fmt: skip
+    assert {p["push_id"] for p in answer["pruned"]} == {old, "20261104T100001000Z-00000002"}
+
+
+def test_a_push_opened_during_a_restore_does_not_prune_the_push_it_restores(root, monkeypatch):
+    # A restore holds its source push's lock from its first look to its last
+    # write, so another operator's push_open, pruning hard, leaves it whole (#2981).
+    (root / "shared/config/a").write_bytes(b"0")
+    source = _open(root, "20261104T100000000Z-00000001")
+    assert _put(root, source, "shared/config/a", b"1", overwrite=True)["ok"]
+    planned = remote_helper._plan
+    pruned = []
+
+    def plan_then_prune(*args):
+        if not pruned:
+            answer = _ask(root, "push_open", push_id=remote_files.new_push_id(),
+                          config_dir="shared/config", max_kept=1)  # fmt: skip
+            pruned.append(answer["pruned"])
+        return planned(*args)
+
+    monkeypatch.setattr(remote_helper, "_plan", plan_then_prune)
+    answer = _restore(root, source)
+    assert pruned == [[]]
+    assert answer["ok"] and [r["outcome"] for r in answer["results"]] == ["succeeded"], answer
+    assert (root / "shared/config/a").read_bytes() == b"0"
 
 
 def test_a_bound_outside_its_limits_is_refused(root):

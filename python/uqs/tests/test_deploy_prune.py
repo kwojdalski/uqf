@@ -21,6 +21,7 @@ from uqs import cli
 from uqs.cli.common.safety import dry_run_note
 from uqs.deploy import prune
 from uqs.deploy.config import DeployError, make_config
+from uqs.deploy.lock import LockLost
 
 NOTE = Text.from_markup(dry_run_note()).plain
 R1, R2, R3, R4, R5 = (f"2026100{d}T120000Z-0123456789a{d}" for d in range(1, 6))
@@ -239,3 +240,60 @@ def test_json_without_yes_is_refused_before_the_server_is_reached(dest, monkeypa
     assert doc["ok"] is False
     assert "--json cannot ask for confirmation: add --yes to remove releases" in doc["error"]
     assert _left(dest) == before
+
+
+# ------------------------------------------- a release still in use (#2980)
+
+
+def test_a_release_whose_rollback_failed_to_stop_its_processes_is_kept(dest):
+    """R5's push failed, and its rollback could not stop what it started: it
+    is `failed`, not `running`, yet its processes run from it."""
+    report = json.loads((dest / "releases" / R5 / "deploy-report.json").read_text())
+    report["rollback"] = "FAILED to stop the new release's processes: exit 1"
+    (dest / "releases" / R5 / "deploy-report.json").write_text(json.dumps(report))
+    _, result, _ = _prune(dest, 0)
+    assert R5 not in result["removed"] and R5 in _left(dest)
+    kept = {k["release"]: k["why"] for k in result["kept"]}
+    assert kept[R5] == "its rollback failed to stop its processes"
+
+
+def test_decide_keeps_a_release_a_process_runs_from():
+    listing = {
+        "current": "",
+        "releases": [
+            {"release": R1, "bytes": 1, "status": "failed", "in_use": True},
+            {"release": R2, "bytes": 1, "status": "deployed"},
+        ],
+    }
+    result = prune.decide(listing, 0)
+    assert result["removed"] == [R2]
+    assert result["kept"] == [{"release": R1, "why": "a process on the server still runs from it"}]
+
+
+@pytest.mark.skipif(not Path("/proc/self/cwd").exists(), reason="the server's /proc: Linux only")
+def test_the_listing_sees_a_process_whose_working_directory_is_in_a_release(dest):
+    proc = subprocess.Popen(["sleep", "30"], cwd=dest / "releases" / R5 / ".venv")
+    try:
+        _, result, _ = _prune(dest, 0)
+    finally:
+        proc.kill()
+        proc.wait()
+    assert R5 in _left(dest), "its process runs from it"
+    assert {"release": R5, "why": "a process on the server still runs from it"} in result["kept"]
+
+
+def test_a_prune_whose_lock_was_broken_while_it_asked_removes_nothing(dest):
+    """#2978: the answer came after another run broke the lock and took it."""
+
+    def broken_then_yes(_planned) -> bool:
+        subprocess.run(["rm", "-rf", str(dest / "deploy.lock")], check=True)
+        (dest / "deploy.lock").mkdir()
+        (dest / "deploy.lock" / "owner").write_text("2026-10-08 push NEW by ops@h pid 9\n")
+        return True
+
+    before = _left(dest)
+    cfg = make_config(artifact="", ssh="uqf-server", dest=str(dest), profile="prune")
+    with pytest.raises(LockLost, match="push NEW"):
+        prune.prune(cfg, LocalRemote(), keep=0, confirm=broken_then_yes)
+    assert _left(dest) == before
+    assert (dest / "deploy.lock" / "owner").read_text().startswith("2026-10-08 push NEW")

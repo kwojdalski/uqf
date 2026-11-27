@@ -39,6 +39,7 @@ def _stop(alive: set[int], pids, *, kill: bool, dies_on=signal.SIGTERM, vanished
         send=send,
         clock=iter(range(1000)).__next__,
         sleep=lambda _s: None,
+        started=lambda _pid: None,
     )
     return results, sent
 
@@ -68,7 +69,7 @@ def test_with_kill_only_the_survivors_get_sigkill():
 
     results = stop_pids(
         [11, 12], kill=True, grace=3, running=lambda p: p in alive, send=send,
-        clock=iter(range(1000)).__next__, sleep=lambda _s: None,
+        clock=iter(range(1000)).__next__, sleep=lambda _s: None, started=lambda _p: None,
     )  # fmt: skip
     assert sent == [(11, signal.SIGTERM), (12, signal.SIGTERM), (12, signal.SIGKILL)]
     assert [r.verdict for r in results] == ["stopped", "killed"]
@@ -131,3 +132,35 @@ def test_an_exited_child_reads_as_gone_although_it_is_a_zombie():
 @pytest.mark.parametrize("pid", [0, -1])
 def test_a_process_group_selector_is_never_running(pid):
     assert not pid_running(pid)
+
+
+@pytest.mark.parametrize("pid", [0, -1])
+@pytest.mark.parametrize("kill", [False, True])
+def test_a_process_group_selector_is_refused_and_nothing_is_signalled(pid, kill):
+    """#2983: kill(0) is this process group, kill(-1) every process the user owns."""
+    sent: list[tuple[int, int]] = []
+    with pytest.raises(ValueError, match=f"refusing to signal pid {pid}: 0 and negative"):
+        stop_pids([4242, pid], kill=kill, send=lambda p, s: sent.append((p, s)))
+    assert sent == [], "not even the valid pid before it"
+
+
+def test_a_pid_recycled_during_the_grace_is_not_sigkilled():
+    """#2983: the SIGTERMed process left, another took its number - not SIGKILLed."""
+    sent: list[tuple[int, int]] = []
+    starts = iter(["09:00:00", "09:00:07"])  # before the SIGTERM, then at the SIGKILL
+    results = stop_pids(
+        [11], kill=True, grace=3, running=lambda _p: True, send=lambda p, s: sent.append((p, s)),
+        clock=iter(range(1000)).__next__, sleep=lambda _s: None, started=lambda _p: next(starts),
+    )  # fmt: skip
+    assert sent == [(11, signal.SIGTERM)]
+    assert results == [Stopped(11, gone=True, killed=False)], "the one SIGTERMed is gone"
+
+
+def test_an_unreadable_start_time_still_allows_the_sigkill():
+    sent: list[tuple[int, int]] = []
+    starts = iter(["09:00:00", None])
+    stop_pids(
+        [11], kill=True, grace=3, running=lambda _p: True, send=lambda p, s: sent.append((p, s)),
+        clock=iter(range(1000)).__next__, sleep=lambda _s: None, started=lambda _p: next(starts),
+    )  # fmt: skip
+    assert sent == [(11, signal.SIGTERM), (11, signal.SIGKILL)]

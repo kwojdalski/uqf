@@ -67,6 +67,20 @@ def test_an_unreadable_pid_file_is_no_pid(proc):
     assert proc.pid() is None and not proc.running()
 
 
+@pytest.mark.parametrize("recorded", ["0", "-1"])
+def test_a_process_group_pid_file_is_no_pid_and_is_never_signalled(proc, recorded, monkeypatch):
+    """#2983: a stop of a pid file holding 0 SIGTERMed uqs's own process group."""
+
+    def refuse(*_a, **_k):
+        raise AssertionError("signalled")
+
+    monkeypatch.setattr(lifecycle, "stop_pids", refuse)
+    proc.pid_path.write_text(recorded)
+    assert proc.pid() is None
+    with pytest.raises(UqsError, match="not running"):
+        proc.stop(missing_ok=False)
+
+
 @pytest.fixture
 def stranger() -> Iterator[subprocess.Popen]:
     """An unrelated live process - what holds a feed's old pid once the OS reuses it."""

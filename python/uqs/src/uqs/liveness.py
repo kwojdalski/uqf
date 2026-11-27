@@ -75,7 +75,11 @@ def on_this_host(host: str, pid_space: object = None) -> bool:
 def pid_alive(pid: int) -> bool:
     """Is `pid` running on this machine? A process owned by another user
     raises PermissionError, and that one IS running - the reason
-    `.qetl.job.bounded.state.pid_alive` uses `ps -p` rather than `kill -0`."""
+    `.qetl.job.bounded.state.pid_alive` uses `ps -p` rather than `kill -0`.
+    0 and a negative pid name no process: `kill` reads them as process groups,
+    every one of this user's for -1, so they answer False (#2983)."""
+    if pid <= 0:
+        return False
     try:
         os.kill(pid, 0)
     except ProcessLookupError:

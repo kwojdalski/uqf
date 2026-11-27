@@ -56,6 +56,9 @@ CASES = {
     # pid 1 again after a container restart: alive, but not the writer (#2652)
     "live pid started after the file was written": (os.getpid, HOST.lower(), LONG_AGO, True),
     "live pid recycled, another host": (os.getpid, "elsewhere.example", LONG_AGO, False),
+    # kill() reads these as process groups, so signal 0 "finds" them (#2983)
+    "pid 0, this host": (lambda: 0, HOST.lower(), NOW, True),
+    "pid -1, this host": (lambda: -1, HOST.lower(), NOW, True),
 }
 
 

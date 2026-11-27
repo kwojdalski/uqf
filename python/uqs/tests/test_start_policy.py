@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 import pytest
 from mcp_support import call, refused
 
-from uqs import interpreter, mcp
+from uqs import interpreter
 from uqs import paths as stack_paths
 from uqs.paths import UqsError
 from uqs.stack import backfill, occupancy, runtime, start_policy
@@ -66,7 +66,7 @@ def test_the_mcp_server_starts_a_profile_as_the_cli_resolves_it(monkeypatch):
 
     monkeypatch.setattr(runtime, "run_torq_sh", torq)
     monkeypatch.setattr(occupancy, "refuse_if_taken", lambda *_a: None)
-    mcp.uqs_start(profile="essential")
+    assert not call("uqs_start", profile="essential").is_error
     members, _ = start_policy.resolve_profiles(stack_paths.default_paths(), "essential")
     assert seen == [["start", " ".join(members)]]
 

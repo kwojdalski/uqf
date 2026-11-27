@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.scripts]
-uqs = "uqs.cli:main"
+uqs = "uqs.launch:main"
 uqs-mcp = "uqs.mcp:main"
 
 [project.optional-dependencies]

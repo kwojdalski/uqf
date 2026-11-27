@@ -158,7 +158,7 @@ def stop_receivers(
     ]
     if dry_run:  # the ones that would stop: nothing signalled, nothing released
         return runs
-    done = stop_pids([int(run["pid"]) for run in runs], kill=kill, grace=grace)
+    done = stop_pids([backfill_owner.run_pid(run) for run in runs], kill=kill, grace=grace)
     gone = []
     for run, result in zip(runs, done, strict=True):
         run["outcome"] = result.verdict

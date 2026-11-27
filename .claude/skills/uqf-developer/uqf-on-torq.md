@@ -94,7 +94,8 @@ The gateway's read path: client -> `.dataaccess.getdata` ->
 
 `effective_process_rows()` composes it fresh, then `stack/generated.py`
 `write_process_csv()` writes `$TORQDATA/process.csv` (atomic, `\n` line ends
-because torq.sh's awk breaks on `\r`, under the `.lifecycle.lock` flock):
+because torq.sh's awk breaks on `\r`, under the flock on
+`.<data dir>.lifecycle.lock` beside `$TORQDATA`):
 
 1. the starter pack's `appconfig/process.csv`, read fresh, never edited (23
    rows: stp1 +0, discovery1 +1, rdb1 +2, hdb1 +3, hdb2 +4, wdb1 +5, sort1 +6,

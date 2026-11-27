@@ -205,8 +205,9 @@ uqs deploy prune prod-a --keep 3 --dry-run
 uqs deploy prune prod-a --yes             # from a script, to the target's keep
 ```
 
-Three releases stay whatever `--keep` is: the one `current` names, the one a
-rollback would return to, and any whose push died part-way.
+Some releases stay whatever `--keep` is: the one `current` names, the one a
+rollback would return to, any whose push died part-way, and any a process on the
+server still runs from, such as a failed push whose rollback could not stop it.
 `uqs deploy push --keep N` prunes the same way after it activates a release. A
 target that sets no `keep` never prunes, and `push` warns about it.
 
@@ -243,7 +244,9 @@ says what was done. Ctrl-C is handled the same way.
 
 A push killed outright leaves `deploy.lock/` behind, and the next run stops,
 naming the holder. `--override break-lock --reason TEXT` on `push` or `rollback`
-removes the lock once its holder is gone.
+removes the lock once its holder is gone. A run whose lock was broken stops at
+its next step and does not roll back. After a remote step times out, the lock is
+kept, because the server may still be running that step.
 
 Releases share one HDB. `push` refuses a release whose tables or columns are
 missing from older partitions. `--override fix-hdb --reason TEXT` writes each

@@ -26,7 +26,7 @@ src/uqs/
   deploy/      `uqs deploy`: building a release and putting it on a server
   generated/   modules written from the q tree; never edited by hand
   logger/      the CLI's own loguru logging
-  mcp.py       the `uqs-mcp` server: the same operations as MCP tools
+  mcp.py       the `uqs-mcp` server: every CLI command as an MCP tool, derived
 tests/         flat, one module per source module
 ```
 

@@ -81,6 +81,8 @@ CASES: dict[str, tuple[list[str], str]] = {
         "no activity history at",
     ),
     "runtime list": (["runtime", "list"], "uqf"),
+    # refused before it lists anything: --json cannot ask, so it needs --yes (#2988)
+    "clean": (["clean"], "add --yes"),
     "job list": (["job", "list"], "["),
     "process list": (["process", "list"], '"process"'),
     "profile list": (["profile", "list"], "["),
@@ -211,6 +213,8 @@ CASES: dict[str, tuple[list[str], str]] = {
     ),
     # one unit of a job (#2798): a name that is no job, refused before torq.sh
     "job run": (["job", "run", "nosuch", "--once"], "is not a job"),
+    # no entries under this test's own attachments directory (#2987)
+    "cron list": (["cron", "list"], "entries"),
 }
 #: --json commands with no offline case, and why.
 NO_OFFLINE_CASE = {
@@ -218,6 +222,10 @@ NO_OFFLINE_CASE = {
     "config sources check": "needs q",
     # reads the store through a short-lived q, empty or not
     "data snapshot list": "needs q",
+    # read the user's crontab, which a test never does (#2987): test_cron.py runs
+    # both against a fake crontab
+    "cron install": "reads the crontab",
+    "cron status": "reads the crontab",
 }
 
 
