@@ -57,8 +57,15 @@ missing (it never runs sudo), then puts `uqs` on your PATH. Flags: `--dev`
 
 ## Quick start
 
-Five entry points, one per thing you might have come for. None depends on the
+Six entry points, one per thing you might have come for. None depends on the
 others.
+
+**Read it first.** Three q notebooks explain the framework by running it - the
+quant library, books and execution, then the pipeline framework in one process -
+each with its prose, code and charts in one file, and each needing only a
+scratch q process. They open in VS Code with the
+[q-lint](https://github.com/kwojdalski/q-lint) extension:
+[`scripts/examples/notebooks/`](scripts/examples/notebooks/README.md).
 
 **Price something.** The quant library is pure functions and no processes, so
 this needs nothing but the interpreter:
@@ -166,7 +173,7 @@ uv run pytest -m "not q_backend"                   # without the q scripts run a
 uv run pytest tests/qrun/test_q_suite.py::test_the_q_suite_passes   # the qUnit suite on KDB-X;
                                                    # --q-files test_a.q,test_b.q runs only those files' suites
 uv run pytest tests/qrun/test_q_suite.py -m peachq      # the whole suite on PeachQ, held to its known gaps
-uv run pytest tests/qrun/test_worked_examples.py   # every scripts/examples/*.q, on KDB-X
+uv run pytest tests/qrun/test_worked_examples.py   # every scripts/examples/*.q and notebooks/*.qnb, on KDB-X
 uv run pytest tests/qrun/test_doc_blocks.py -m kdbx     # the docs' marked q blocks on KDB-X
 uv run pytest tests/qrun/test_doc_blocks.py -m peachq   # ... and on PeachQ; --peachq PATH picks one
 uv run pytest tests/qrun/test_documented_examples.py   # every @eg in src/ and scripts/

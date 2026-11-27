@@ -1,0 +1,301 @@
+{
+ "qnb": 1,
+ "cells": [
+  {
+   "kind": "markdown",
+   "source": [
+    "# 2. Books and execution: the market as it was observed",
+    "",
+    "Notebook 1 priced things from theory: a spot rate, two interest rates, a volatility. This one starts from the other end - from **quotes that were actually seen** - and asks the questions a desk asks of them:",
+    "",
+    "- what would it cost to trade this size, right now?",
+    "- what is the price of a pair nobody quotes directly?",
+    "- was that fill a good one?",
+    "- can these quotes be trusted at all?",
+    "",
+    "Two namespaces answer them: `.qf.mkt` (analytics over observed market data) and `.qf.exec` (execution quality). As in notebook 1, every function is pure, so one q process is enough.",
+    "",
+    "**To run it:** start `q` from the repository root, connect q-lint to that process, and use **Run All**. Use a scratch process, not one that belongs to a running stack."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "if[()~key `:src/init.q; '\"start q from the uqf repository root: this notebook loads src/init.q by a relative path\"];",
+    "\\l src/init.q",
+    "\\l scripts/examples/lib/example_books.q",
+    "t0:2026.08.21D09:00:00.000000000;",
+    "pairs:`AUDUSD`EURUSD`EURPLN; spots:0.6550 1.0850 4.2500;",
+    "/ one snapshot a second for eight seconds, every pair drifting up a fifth of a pip each time",
+    "snapshot:{[sym;spot;i] (`time`sym!(t0+0D00:00:01*i;sym)),.qf.demo.book spot+i*0.00002};",
+    "quotes:`sym`time xasc raze {[sym;spot] snapshot[sym;spot] each til 8}'[pairs;spots];",
+    "select time, sym, bid_prices, bid_sizes, ask_prices, ask_sizes from quotes where sym=`EURUSD, i<3"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## The shape of a book",
+    "",
+    "That is the one quotes shape the whole library reads: a row per snapshot, and four **nested** columns holding the price and size of every level, best first. The table holds {{q: count quotes}} snapshots of {{q: count pairs}} pairs, sorted by `sym` then `time`.",
+    "",
+    "Level 0 is the top of the book. In this synthetic book each level is a pip further out and holds about a million more than the one before it, which is what makes the next sections interesting: a bigger order has to reach further in.",
+    "",
+    "The usual top-of-book features are one call each, and they take whole columns:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "eurusd:select from quotes where sym=`EURUSD;",
+    "select time,",
+    "    mid:.qf.mkt.mid_price[bid_prices;ask_prices],",
+    "    microprice:.qf.mkt.microprice[bid_prices;bid_sizes;ask_prices;ask_sizes],",
+    "    spread_bps:.qf.mkt.spread_bps[bid_prices;ask_prices],",
+    "    imbalance:.qf.mkt.order_book_imbalance[bid_sizes;ask_sizes;3] from eurusd"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## What a size really costs: sweeping the book",
+    "",
+    "The top-of-book price is only good for the size shown there. Buying more means lifting the next offer too, and the one after. `sweep_price` walks the levels and says what the whole order would average."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "latest:last eurusd;",
+    ".qf.mkt.sweep_price[latest`ask_prices;latest`ask_sizes;3000000]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Three million took the first two offers entirely (0.9m + 1.9m) and the rest from the third: `levels_used` names the levels touched, `worst_price` is the last price paid, and `avg_price` is what the whole order averaged.",
+    "",
+    "Across sizes, the average drifts away from the best offer. This curve *is* the book's liquidity:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @chart line",
+    "/ @title Average price to buy EURUSD, by order size (millions)",
+    "order_sizes:1000000*1+til 12;",
+    "swept:{.qf.mkt.sweep_price[latest`ask_prices;latest`ask_sizes;x]} each order_sizes;",
+    "([] size_millions:order_sizes%1000000; avg_price:swept`avg_price; worst_price:swept`worst_price)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "And when the book is not deep enough, the answer says so instead of pretending:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    ".qf.mkt.sweep_price[latest`ask_prices;latest`ask_sizes;1e9]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "`fully_filled` is `0b` and `filled_size` is everything the book had. The caller decides what a partial answer is worth; the function never invents a price for size that was not there. That habit - *a claim is true, or absent* - runs through the whole framework, and notebook 3 shows what it buys.",
+    "",
+    "## A pair nobody quotes: synthetic crosses",
+    "",
+    "There is no AUDPLN quote in this table. There is AUDUSD, EURUSD and EURPLN - and that is enough, because AUD can be turned into USD, USD into EUR, and EUR into PLN. `cross_decomp` finds that chain from the pairs available:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "route:.qf.mkt.cross_decomp[pairs;`AUDPLN]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The route is {{q: \" -> \" sv string route}}. `cross_book_at` then walks it: for each size it sweeps every leg's book, as of one instant, and chains the results into a bid and an ask for the cross."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "as_of:t0+0D00:00:02.5;",
+    "synthetic:.qf.mkt.cross_book_at[quotes;`AUDPLN;as_of;1000000 3000000;`bid`ask`mid]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Two things to read off that table:",
+    "",
+    "- **The bigger size is worse on both sides.** Three million reaches deeper into each leg's book, so the cross's bid is lower and its ask higher. A cross price always belongs to a size.",
+    "- **Each side says whether it was fully filled.** If one leg ran out of depth, the cross would say so rather than quote a price for a size it could not do.",
+    "",
+    "How does that compare with theory? From the legs' mid prices alone, AUDPLN = AUDUSD x EURPLN / EURUSD:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "leg_mid:{[pair] exec last .qf.mkt.mid_price[bid_prices;ask_prices] from quotes where sym=pair, time<=as_of};",
+    "theoretical:leg_mid[`AUDUSD]*.qf.px.cross_rate_shared_base[leg_mid `EURPLN;leg_mid `EURUSD];",
+    "one_million:first synthetic;",
+    "`theoretical_mid`executable_bid`executable_ask`spread_pips!(theoretical;one_million`bid;one_million`ask;10000*(one_million`ask)-one_million`bid)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The theoretical mid sits between the executable bid and ask. The gap between those two is three spreads stacked on top of each other - one per leg - which is why a cross is always wider than the pairs it is built from.",
+    "",
+    "### The as-of rule",
+    "",
+    "`cross_book_at` used, for each leg, the last quote **at or before** {{q: as_of}}. It never looks ahead, and it never fills a gap with a later quote. Ask for an instant before the first quote and it refuses:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "too_early:t0-0D00:00:01;",
+    "refusal:@[{.qf.mkt.cross_book_at[quotes;`AUDPLN;x;1000000;`mid]};too_early;{x}]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The message names the leg and the instant. An error here is the right answer: a price built from a quote that had not happened yet would look fine and be wrong.",
+    "",
+    "## Was that a good fill? Markouts",
+    "",
+    "A **markout** compares a fill's price with the market mid some time *after* the fill. It is the standard measure of whether a trade was well timed: if the market keeps moving your way after you buy, you bought well.",
+    "",
+    "The sign convention is stated once, in `src/execution/execution.q`, and holds for every function in `.qf.exec`:",
+    "",
+    "- `side` is `1` for a buy and `-1` for a sell;",
+    "- a **markout** is positive when the market moved in the fill's favour;",
+    "- a **cost** (slippage, effective spread) is positive when it went against the taker.",
+    "",
+    "Two fills, one each way, into the market above - which is drifting up:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "mids:select sym, time, mid:.qf.mkt.mid_price[bid_prices;ask_prices] from quotes;",
+    "executed:([] sym:`EURUSD`AUDUSD; time:t0+0D00:00:00.5 0D00:00:01.2; side:1 -1;",
+    "    trade_price:1.08506 0.65503; pip_factor:10000 10000);",
+    "markouts:.qf.exec.markout_at_horizons[executed;mids;0D00:00:01*0 1 2 3 5];",
+    "select sym, trade_time, horizon, trade_price, ref_price, markout_pips from markouts"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @chart line",
+    "/ @title Markout in pips by seconds after the fill (positive = the market moved the fill's way)",
+    "0!exec sym!markout_pips by seconds_after:horizon%0D00:00:01 from markouts"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The EURUSD **buy** starts slightly negative - it paid a little over the mid - and turns positive as the market rises. The AUDUSD **sell** goes the other way: the market kept rising after it sold. Same market, opposite sides, opposite verdicts.",
+    "",
+    "Each reference price is the mid as of `trade_time + horizon`, by the same as-of rule as above.",
+    "",
+    "The single-number cost measures follow the same convention:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "`effective_spread_pips`slippage_pips`vwap!(",
+    "    .qf.exec.eff_spread[1;1.08506;1.08505;10000];",
+    "    .qf.exec.slippage[1;1.08505;1.08506;10000];",
+    "    .qf.exec.vwap[1.1000 1.1010 1.1005;1000000 2000000 1000000])"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Can these quotes be trusted? Data-quality checks",
+    "",
+    "Every number above is only as good as the quotes under it. The checks in `.qf.mkt` each return a table with a `status` per row, so they compose into one summary. Here a fourth pair is added whose book is far too wide and which then stops updating:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "suspect:`time`sym`bid_prices`bid_sizes`ask_prices`ask_sizes!(t0+0D00:00:02;`GBPUSD;1.2700 1.2699;1e6 2e6;1.2760 1.2761;1e6 2e6);",
+    "watched:`sym`time xasc quotes,enlist suspect;",
+    "spread_check:.qf.mkt.check_market_data_quality[watched;5];",
+    "select from spread_check where status<>`ok"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "stale_check:.qf.mkt.check_stale_quotes[watched;t0+0D00:00:10;0D00:00:07]"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    ".qf.mkt.summarize_checks[((`stale;stale_check);(`spread;spread_check))]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "GBPUSD fails both: its spread is far beyond the 5 basis-point limit, and its last quote is older than the 7 seconds allowed. The other three pairs pass.",
+    "",
+    "## Holding this notebook to its word",
+    "",
+    "`tests/qrun/test_worked_examples.py` runs every notebook in this folder on each change. The cell below turns the claims made above into checks."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "whole:.qf.mkt.sweep_price[latest`ask_prices;latest`ask_sizes;3000000];",
+    "short:.qf.mkt.sweep_price[latest`ask_prices;latest`ask_sizes;1e9];",
+    "final:{[s] exec last markout_pips from markouts where sym=s};",
+    "claims:(",
+    "    (\"3m of EURUSD reaches the third level and is fully filled\";(whole[`levels_used]~0 1 2) and whole`fully_filled);",
+    "    (\"a size beyond the book is reported as not fully filled\";not short`fully_filled);",
+    "    (\"AUDPLN routes through AUDUSD, EURUSD and EURPLN\";route~`AUDUSD`EURUSD`EURPLN);",
+    "    (\"the bigger cross size has a lower bid and a higher ask\";(synthetic[1;`bid]<synthetic[0;`bid]) and synthetic[1;`ask]>synthetic[0;`ask]);",
+    "    (\"the theoretical mid lies between the executable bid and ask\";(theoretical>one_million`bid) and theoretical<one_million`ask);",
+    "    (\"an instant before the first quote is refused, naming the leg\";refusal like \"*no quote for AUDUSD at or before*\");",
+    "    (\"the buy ends with a positive markout and the sell with a negative one\";(0<final `EURUSD) and 0>final `AUDUSD);",
+    "    (\"only GBPUSD is wide, and only GBPUSD is stale\";(enlist[`GBPUSD]~exec distinct sym from spread_check where status<>`ok) and enlist[`GBPUSD]~exec sym from stale_check where status<>`ok));",
+    "broken:claims[;0] where not claims[;1];",
+    "if[count broken; '\"notebook 2 no longer holds: \",\"; \" sv broken];",
+    "`claims_checked`all_hold!(count claims;1b)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Where next",
+    "",
+    "- **Notebook 3** (`03_pipeline_in_one_process.qnb`): how the framework runs functions like these as jobs - a markout job is `markout_at_horizons` with a queue, a timer and a ledger around it.",
+    "- `scripts/examples/cross_book_chain_example.q` and `cross_markout_example.q` take the cross machinery further: longer chains, and markouts of a fill in a cross against its synthetic mid.",
+    "- `src/market_data/microstructure.q` has the rest of the book features (depth, slope, resilience); the qDoc block above each definition says what it takes, returns and refuses."
+   ]
+  }
+ ]
+}

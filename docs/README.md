@@ -47,6 +47,10 @@ or an architecture note, and only its purpose decides where it goes.
 - [`faq.md`](faq.md) --- short answers to the questions asked most, starting
   with how this differs from plain TorQ, each pointing to the page that has the
   long one.
+- [`../scripts/examples/notebooks/`](../scripts/examples/notebooks/README.md) ---
+  three q notebooks that explain the framework by running it: the quant library,
+  books and execution, and the pipeline framework in one process. They live
+  beside the worked examples, not here, because the same test runs both.
 - [`man.q`](man.q) --- the function registry. It reads the qDoc comments under
   `src/` when it loads, so it cannot fall out of date; the [q
   API](reference/q-api/index.md) pages are rendered from it.

@@ -1,0 +1,454 @@
+{
+ "qnb": 1,
+ "cells": [
+  {
+   "kind": "markdown",
+   "source": [
+    "# 3. The pipeline framework, in one process",
+    "",
+    "Notebooks 1 and 2 were about functions. This one is about **jobs**: the code that fetches data, checks it, publishes it, and - the part that is hard to get right - *remembers truthfully what it has done*, so that a crash, a bad day at the source or a second run never leaves a silent hole.",
+    "",
+    "Normally these jobs run as processes around a TorQ stack, started by the `uqs` command. But the framework under `src/etl/` does not know TorQ exists, so everything it does can be watched in a single q process, with no tickerplant and no database. That is what this notebook does, with the demo job the tree ships: `demo_deals_backfill`.",
+    "",
+    "The ideas to take away:",
+    "",
+    "1. A job is a **declaration**, not a program. One `define` call; the lifecycle is shared.",
+    "2. Work is cut into **windows** `[from; to)`, and a **coverage ledger** records each window only after its rows are published.",
+    "3. **A claim is true, or absent.** A window that fails a check is published nowhere and recorded nowhere - so the next run does it again.",
+    "4. A re-run does **only what is missing**.",
+    "",
+    "**To run it:** start `q` from the repository root, connect q-lint to that process, and use **Run All**. This notebook runs real workers, so the first cell points them at a new, empty temporary status directory and refuses to run inside a TorQ process. Use a scratch q process."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "if[()~key `:src/init.q; '\"start q from the uqf repository root: this notebook loads src/init.q by a relative path\"];",
+    "if[`proc in key `; '\"this is a TorQ process: run this notebook in a scratch q process, not one that belongs to a stack\"];",
+    "/ every checkpoint and ledger this notebook writes goes to a new, empty directory - never a deployment's",
+    "setenv[`UQF_STATUS_DIR;first system \"mktemp -d\"];",
+    "/ with no credential a worker runs on its source's fixture, and publishing fixture rows has to be allowed by name",
+    "setenv[`UQF_FIXTURE_WRITES;enlist \"1\"];",
+    "\\l src/init.q",
+    "\\l src/etl/init.q",
+    "/ a second Run All starts as a new process would: the directory on disk is empty, so what is in memory is emptied to match",
+    "if[`etl_coverage in tables `.; `etl_coverage set .qetl.coverage.empty_ledger[]];",
+    "if[`etl_runs in tables `.; `etl_runs set .qetl.run.empty_runs[]];",
+    "if[`etl_run_meta in tables `.; `etl_run_meta set .qetl.run.empty_meta[]];",
+    "{[t] if[t in tables `.; ![t;();0b;`symbol$()]];} each `demo_deals`deal_positions;",
+    "`status_directory`fixture_writes!(.qetl.status.status_dir[];getenv `UQF_FIXTURE_WRITES)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## What loading declared",
+    "",
+    "`src/etl/init.q` found every declaration file by globbing four directories. There is no registry to add a job to: writing the file *is* the registration."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "([] declared_with:`.qetl.source.define`.qetl.transform.define`.qetl.job.bounded.define`.qetl.job.stream.define;",
+    "    directory:(\"src/etl/sources/\";\"src/etl/transforms/\";\"src/etl/workers/\";\"src/etl/streaming/\");",
+    "    declarations:count each (.qetl.source.defined[];.qetl.transform.defined[];.qetl.job.bounded.defined[];.qetl.job.stream.defined[]);",
+    "    what_it_is:(\"where rows come from, and the shape they must have\";",
+    "        \"a pure function from rows to rows, with examples that are executed\";",
+    "        \"a job over a time range: runs its windows, then exits\";",
+    "        \"a job that never ends: subscribes, or polls on a timer\"))"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "A **bounded** job has a beginning and an end (a backfill, a daily load). A **streaming** job runs for as long as the stack does. They share sources and transforms, and often come in pairs - the same calculation, once over history and once live.",
+    "",
+    "## A source: a contract, and a fixture that satisfies it",
+    "",
+    "A source declaration states the shape rows must arrive in: the columns, their types, the time column the windows cut on, and the key that identifies a row."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "contract:.qetl.source.def `demo_deals;",
+    "`table_name`time_column`row_key`columns`types`transport#contract"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Every source also carries a **fixture**: a small, hand-written, deterministic set of rows that must satisfy the same contract as the live data. With no credential configured, a worker runs on the fixture - which is what makes a job runnable on a laptop, in a test, and here."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    ".qpipe.source.demo_deals.fixture[]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Five deals, one a day from 11 to 15 September 2026. Remember deal 4, on the 14th: it is the one that goes wrong later.",
+    "",
+    "## A job: one declaration",
+    "",
+    "This is the whole of what `src/etl/workers/demo_deals_backfill.q` declares about its job:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "`source`dataset`width`align`transform`target_key`on_conflict`twin_of#.qetl.job.bounded.def `demo_deals_backfill"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Read from the `demo_deals` source, in windows one day wide, apply the `demo_deals_passthrough` transform, and upsert into the `demo_deals` table by `deal_id`. `twin_of` names its streaming twin.",
+    "",
+    "That file also defines one function of its own - a **data-quality check** - and nothing else. The lifecycle (`init`, `plan`, `fetch`, `publish`, `checkpoint`, `run`, `cleanup`) was stamped into the job's namespace by the `define` call:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "1_key `.qpipe.job.demo_deals_backfill"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Running it",
+    "",
+    "A run is `init` (connect, read the ledger, validate), `run` (do the windows), `cleanup`. Three days first: 11, 12 and 13 September. The range is **half-open** - `range_to` is the first instant *not* included - so day ranges join without overlapping or leaving a gap."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "backfill:{[first_day;end_day]",
+    "    .qpipe.job.demo_deals_backfill.init `source_version`range_from`range_to!(`v1;\"p\"$first_day;\"p\"$end_day);",
+    "    outcome:.qpipe.job.demo_deals_backfill.run[];",
+    "    .qpipe.job.demo_deals_backfill.cleanup[];",
+    "    outcome};",
+    "first_run:backfill[2026.09.11;2026.09.14]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The run ended **{{q: first_run`state}}**: {{q: first_run`windows_completed}} windows, {{q: first_run`rows_published}} rows. (The q process's own console shows the worker's log lines, including a warning that it ran on the fixture.)",
+    "",
+    "The rows are in the target table:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "demo_deals"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## The coverage ledger",
+    "",
+    "And this is what the job *claims* to have done - one row per window, written only **after** that window's rows were published:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "claims_now:{[] select dataset, source_version, range_from, range_to, rows_published, run_id from etl_coverage where superseded_at=.qetl.coverage.still_current};",
+    "claims_now[]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Two details in that table carry a lot of weight:",
+    "",
+    "- **`source_version` is `v1~fixture`, not `v1`.** The run was asked for `v1`, but it read a fixture, and the ledger says so. Coverage earned on invented rows can never be mistaken for coverage of the real source.",
+    "- **The order of writing is publish, then ledger, then checkpoint.** If the process dies between any two of them, the worst case is a window that is published but not claimed - which is simply done again. The dangerous case, a window claimed but not published, cannot be reached.",
+    "",
+    "Nobody reads the ledger table directly. The readers answer the questions that matter:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "ledger_version:`$\"v1~fixture\";",
+    "`covered_11_to_14`covered_11_to_16!(",
+    "    .qetl.coverage.is_covered[`demo_deals;`;ledger_version;.z.p;\"p\"$2026.09.11;\"p\"$2026.09.14];",
+    "    .qetl.coverage.is_covered[`demo_deals;`;ledger_version;.z.p;\"p\"$2026.09.11;\"p\"$2026.09.16])"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Running it again does nothing",
+    "",
+    "The same range, a second time:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "second_run:backfill[2026.09.11;2026.09.14]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "This one ended **{{q: second_run`state}}**, with {{q: second_run`windows_completed}} windows. The plan is the requested range **minus what the ledger already covers**, and that was empty. A re-run is always safe, which is what lets an operator answer \"did it finish?\" by running it again.",
+    "",
+    "## A bad day at the source",
+    "",
+    "Now the wider range, 11 to 16 September - two new windows, the 14th and the 15th. But first, something goes wrong upstream: deal 4 arrives with a rate of zero.",
+    "",
+    "A zero rate has the right *type*, so the source contract accepts it. It is the job's own check that refuses it: no trade can have a non-positive rate. The check runs between fetch and publish, and - because it is part of the declaration - it cannot be skipped.",
+    "",
+    "(The two helper lines swap the source's fixture for a damaged copy, standing in for the upstream fault. They are swapped in after `init`, because `init` validates the fixture.)"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "intact:contract`fixture;",
+    "use_fixture:{[f] `.qetl.source.sources upsert (enlist[`name]!enlist `demo_deals),@[.qetl.source.sources `demo_deals;`fixture;:;f];};",
+    ".qpipe.job.demo_deals_backfill.init `source_version`range_from`range_to!(`v1;\"p\"$2026.09.11;\"p\"$2026.09.16);",
+    "use_fixture {[] update rate:0f from .qpipe.source.demo_deals.fixture[] where deal_id=4};",
+    "damaged_run:.qpipe.job.demo_deals_backfill.run[];",
+    ".qpipe.job.demo_deals_backfill.cleanup[];",
+    "use_fixture intact;",
+    "damaged_run"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The run ended **{{q: damaged_run`state}}**: {{q: damaged_run`windows_completed}} window completed, {{q: damaged_run`windows_failed}} failed. Only two windows were planned at all - the three already covered were not touched.",
+    "",
+    "What matters is what did **not** happen. Deal 4 is not in the table:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "demo_deals"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "and the ledger makes no claim about the 14th. Asked what is missing from the range, it says exactly that day:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "still_missing:.qetl.coverage.missing[`demo_deals;`;ledger_version;.z.p;\"p\"$2026.09.11;\"p\"$2026.09.16]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "A failed check took the same path as a failed fetch would have: nothing published, nothing recorded. The gap is **visible**: an operator can ask for it, and a downstream job that needs the 14th can see that it is not there. Compare the alternative, a ledger row saying \"14 September: done, 1 row\", sitting on a deal with a rate of zero that nobody will ever look at again.",
+    "",
+    "## Fixed upstream: the re-run fills only the gap",
+    "",
+    "The source is repaired (the intact fixture is back). The same command again:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "repair_run:backfill[2026.09.11;2026.09.16]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "{{q: repair_run`windows_completed}} window, {{q: repair_run`rows_published}} row: the 14th and nothing else. Five days were asked for; four were already true."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    ".qetl.coverage.intervals[`demo_deals;`;ledger_version;.z.p]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The five daily claims compose into one covered interval. Every run that got here is in the run log, with its outcome:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "select run_id, worker, status, range_from, range_to, started_at, ended_at from .qetl.run.runs[]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "`completed`, `idle`, `partial`, `completed`. Each ledger row above carries the `run_id` of the run that earned it, so any claim can be traced back to the run - and its log - that made it.",
+    "",
+    "## A reaction: work that follows a window",
+    "",
+    "One more table appeared along the way, and nothing in this notebook asked for it:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "`time xasc deal_positions"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "`src/etl/reactions/rebuild_positions.q` declares a **reaction** to `demo_deals`: each time a window of it is covered, the net position for that window is recomputed - with `.qf.port.apply_desk_fills`, the quant library from notebook 1. The 14th got its position only when its window finally succeeded.",
+    "",
+    "## The streaming twin",
+    "",
+    "`demo_deals_feed` is the same data as a job that never ends: on a timer it polls the source from a cursor and publishes what is new. A streaming job calls `publish` in its own namespace; on a stack that is wired to the tickerplant, and here it is wired to a recorder, which is exactly how the tests drive a job without a stack.",
+    "",
+    "`preview` shows what a tick *would* do, and publishes nothing:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "received:();",
+    ".qetl.job.stream.wire[`demo_deals_feed;{[t;x] received,:enlist (t;count x); count x}];",
+    "preview:.qetl.job.stream.preview[`demo_deals_feed;2];",
+    "published_by_preview:count received;",
+    "(`state`fetched`live#preview),enlist[`published_by_preview]!enlist published_by_preview"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "first_tick:.qetl.job.stream.tick `demo_deals_feed;",
+    "second_tick:.qetl.job.stream.tick `demo_deals_feed;",
+    ".qetl.job.continuous.clear_cursor `demo_deals_feed;",
+    "`first_tick`second_tick`recorder_received!(first_tick`state;second_tick`state;received)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The first tick published the five rows and moved the cursor; the second found nothing new and was idle. (The last line clears the cursor again, so this cell behaves the same on the next Run All.)",
+    "",
+    "## Transforms: the calculation, tested where it is declared",
+    "",
+    "Both twins apply one **transform**. A transform is a pure function with declared inputs, a declared output schema, and examples - and the examples are executed, here and in CI:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    ".qetl.transform.verify `demo_deals_passthrough"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "This one passes rows through unchanged, which sounds like nothing - but declaring it is what makes \"the backfill and the feed produce the same rows\" a tested statement rather than a hope. Real jobs put a markout, a bar aggregation or a normalisation here.",
+    "",
+    "## The graph nobody drew",
+    "",
+    "Because every job declares what it reads and what it publishes, the dependency graph is **derived**. Nobody maintains it:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    ".qetl.dag.adopt_all[];",
+    "select jobs:count i by kind from .qetl.dag.jobs[]"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "`producers_of_demo_deals`consumers_of_demo_deals!(.qetl.dag.producers `demo_deals;.qetl.dag.consumers `demo_deals)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Two jobs produce `demo_deals` - the twins - and the reaction consumes it. Sorted into layers, where each job depends only on layers to its left, the whole tree looks like this:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @chart bar",
+    "/ @title Jobs per dependency layer (layer 0 reads only external data)",
+    "layers:.qetl.dag.layers[];",
+    "([] layer:til count layers; jobs:count each layers)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The same graph is what `uqs` uses to start a job's producers before the job, and what `docs/reference/processes.md` is generated from. *Derive; do not restate.*",
+    "",
+    "## Holding this notebook to its word",
+    "",
+    "`tests/qrun/test_worked_examples.py` runs every notebook in this folder on each change. The cell below turns the claims made above into checks."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "runs:exec status from .qetl.run.runs[];",
+    "claims:(",
+    "    (\"the first run completed three windows\";(`completed~first_run`state) and 3=first_run`windows_completed);",
+    "    (\"the second run over the same range was idle\";(`idle~second_run`state) and 0=second_run`windows_completed);",
+    "    (\"the damaged run was partial: one window done, one failed\";(`partial~damaged_run`state) and (1=damaged_run`windows_completed) and 1=damaged_run`windows_failed);",
+    "    (\"only 14 September was missing after it\";(enlist \"p\"$2026.09.14)~still_missing`range_from);",
+    "    (\"the repair run did exactly one window\";(`completed~repair_run`state) and 1=repair_run`windows_completed);",
+    "    (\"all five days are covered, as one interval\";(1=count .qetl.coverage.intervals[`demo_deals;`;ledger_version;.z.p]) and .qetl.coverage.is_covered[`demo_deals;`;ledger_version;.z.p;\"p\"$2026.09.11;\"p\"$2026.09.16]);",
+    "    (\"every claim is for the fixture's version\";all ledger_version=exec source_version from claims_now[]);",
+    "    (\"the table holds each deal once\";(asc exec deal_id from demo_deals)~1 2 3 4 5);",
+    "    (\"the run log reads completed, idle, partial, completed\";runs~`completed`idle`partial`completed);",
+    "    (\"each of the five windows has a position\";5=count deal_positions);",
+    "    (\"preview published nothing; one tick published five rows; the next was idle\";(0=published_by_preview) and (`published~first_tick`state) and (received~enlist (`demo_deals;5)) and `idle~second_tick`state);",
+    "    (\"the transform's examples pass\";all exec passed from .qetl.transform.verify `demo_deals_passthrough);",
+    "    (\"demo_deals has two producers and one consumer\";(2=count .qetl.dag.producers `demo_deals) and 1=count .qetl.dag.consumers `demo_deals));",
+    "broken:claims[;0] where not claims[;1];",
+    "if[count broken; '\"notebook 3 no longer holds: \",\"; \" sv broken];",
+    "`claims_checked`all_hold!(count claims;1b)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Where next",
+    "",
+    "- **Why it is shaped this way:** `docs/architecture/pipeline-philosophy.md` - the principles above, each with the failure that taught it.",
+    "- **Every key a declaration takes:** `docs/reference/pipeline-declarations.md`.",
+    "- **Write your own job:** `uqs job new NAME --dry-run` prints the scaffold; `docs/scaffolding/etl.md` walks through it.",
+    "- **Run the real thing:** `uqs start demo_deals_feed1` starts the feed on a stack; `uqs status` shows what is running and `uqs graph` how it is wired; `uqs job backfill demo_deals_backfill --from 2026-09-11 --to 2026-09-16 --source-version v1` runs the bounded job as this notebook did.",
+    "- **When it breaks:** `docs/guides/when-it-breaks.md`."
+   ]
+  }
+ ]
+}
