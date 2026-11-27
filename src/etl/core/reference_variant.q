@@ -23,6 +23,9 @@
 / once over the gathered slice, each variant's combine on its own SELECT - is .qetl.variant (variant_run.q); the
 / transforms and combines beyond `top` and `best` that read a book's DEPTH are reference_library.q, and the variants
 / declared with them are src/etl/core/variants/*.q. This file is the registry and the single-variant pricing both build on.
+/ .
+/ A VARIANT PER INSTANT. A reference policy (reference_policy.q, #2996) chooses the sources and the variant for each
+/ reference instant from a rule table, and prices each rule's targets through `priced` below - the road `at` takes.
 
 \d .
 
@@ -81,13 +84,15 @@
 / The registered variants: name -> its definition, enlisted so the dictionary stays general.
 .qetl.reference.variants:(`symbol$())!()
 
-/ Register a variant.
-/ @param name the variant's name, a non-null symbol
+/ A variant's definition, validated and completed, without registering it: the checks `register` makes, so a
+/ definition built elsewhere - a reference policy's rule (reference_policy.q, #2996) - is refused by the same rules
+/ and with the same words.
+/ @param name the name the definition is refused under, a non-null symbol
 / @param def a dictionary with venues, stale, offset, transform and combine, and optionally params
-/ @return name
+/ @return the stored form: venues, stale, offset, transform, combine and params completed with the transform's defaults
 / @throws error when the definition is malformed or names an unregistered transform or combine, or a parameter its transform lacks
-/ @eg .qetl.reference.register[`eg_variant;`venues`stale`offset`transform`combine!(`all;`spec;0D;`top;`best)]  ->  `eg_variant
-.qetl.reference.register:{[name;def]
+/ @eg (.qetl.reference.complete[`eg_variant;`venues`stale`offset`transform`combine!(`all;`spec;0D;`top;`best)])`params  ->  (`symbol$())!()
+.qetl.reference.complete:{[name;def]
     if[not $[-11h=type name; not null name; 0b]; '"reference: a variant's name must be a non-null symbol"];
     if[not (99h=type def) and (asc (key def) except `params)~asc .qetl.reference.keys; '"reference: ",string[name]," must define exactly ",", " sv string .qetl.reference.keys];
     if[not $[-11h=type def`venues; def[`venues]=`all; (11h=type def`venues) and 0<count def`venues]; '"reference: ",string[name],"'s venues must be `all or a list of sources"];
@@ -102,7 +107,16 @@
     if[not (99h=type given) and 11h=abs type key given; '"reference: ",string[name],"'s params must be a dictionary of symbol to value"];
     if[count extra:(key given) except key want; '"reference: ",string[name],"'s transform ",string[def`transform]," has no parameter ",", " sv string extra];
     if[count bad:(key given) where not (type each given key given)=type each want key given; '"reference: ",string[name],"'s parameter ",(", " sv string bad)," must have the type of the transform's default"];
-    full:(`venues`stale`offset`transform`combine#def),enlist[`params]!enlist want,given;
+    (`venues`stale`offset`transform`combine#def),enlist[`params]!enlist want,given}
+
+/ Register a variant.
+/ @param name the variant's name, a non-null symbol
+/ @param def a dictionary with venues, stale, offset, transform and combine, and optionally params
+/ @return name
+/ @throws error when the definition is malformed or names an unregistered transform or combine, or a parameter its transform lacks
+/ @eg .qetl.reference.register[`eg_variant;`venues`stale`offset`transform`combine!(`all;`spec;0D;`top;`best)]  ->  `eg_variant
+.qetl.reference.register:{[name;def]
+    full:.qetl.reference.complete[name;def];
     .qetl.reference.variants[name]:enlist full;
     name}
 
@@ -179,13 +193,27 @@
 / @return `same`any!(table bid, ask, mid; table bid, ask, mid), one row per target
 / @eg .qetl.reference.at[`best_top;0#([] sym:`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid:`float$(); ask:`float$(); clock:`symbol$());0D00:00:05;enlist `EURUSD;enlist 2026.09.17D10:00:00;enlist `venue]`same  ->  ([] bid:enlist 0n; ask:enlist 0n; mid:enlist 0n)
 .qetl.reference.at:{[variant;tob;max_age;syms;times;clocks]
-    def:.qetl.reference.def variant;
+    .qetl.reference.priced[variant;.qetl.reference.def variant;tob;max_age;syms;times;clocks]}
+
+/ The price of each instant under a variant's DEFINITION: what `at` does once it has looked the name up, and the one
+/ road a reference policy's rule (reference_policy.q, #2996) is priced by too, so a rule is never a second pricing path.
+/ @param label the name a refusal names (the variant, or a policy's rule)
+/ @param def a definition as `complete` returns it
+/ @param tob the top-of-book table: sym, source, source_time, bid, ask, clock; arranged
+/ @param max_age the spec's reference age limit, used where the definition's stale is `spec
+/ @param syms the sym of each target, null where there is none
+/ @param times the instant of each target
+/ @param clocks the clock of each target
+/ @return `same`any!(table bid, ask, mid; table bid, ask, mid), one row per target
+/ @throws error when the transform reads depth and tob is not a slice
+/ @eg (.qetl.reference.priced[`eg;.qetl.reference.def `best_top;0#([] sym:`symbol$(); source:`symbol$(); source_time:`timestamp$(); bid:`float$(); ask:`float$(); clock:`symbol$());0D00:00:05;enlist `EURUSD;enlist 2026.09.17D10:00:00;enlist `venue]`same)`mid  ->  enlist 0n
+.qetl.reference.priced:{[label;def;tob;max_age;syms;times;clocks]
     n:count syms;
     none:([] bid:n#0n; ask:n#0n; mid:n#0n);
     j:.qetl.reference.chosen[def;tob;max_age;syms;times;clocks];
     if[() ~ j; :`same`any!(none;none)];
     t:.qetl.reference.transform def`transform;
-    books:$[`depth~t`needs; .qetl.reference.require_slice[variant;tob]; ()];
+    books:$[`depth~t`needs; .qetl.reference.require_slice[label;tob]; ()];
     px:$[`depth~t`needs; (t[`fn][books;def`params]) j`rid; t[`fn][j;def`params]];
     .qetl.reference.folded[def;j;px;n]}
 

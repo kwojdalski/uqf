@@ -59,6 +59,7 @@
 \l src/etl/core/reference_variant.q
 \l src/etl/core/reference_library.q
 \l src/etl/core/variant_run.q
+\l src/etl/core/reference_policy.q
 \l src/etl/core/compression.q
 \l src/etl/core/run.q
 \l src/etl/core/config_snapshot.q

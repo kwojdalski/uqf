@@ -91,6 +91,47 @@ scored under #1 since, keeps its id.
 A markout run uses the spec's one variant; a LIST of them is `.qetl.variant`
 (`src/etl/core/variant_run.q`) and `markout_variants.calc`.
 
+### Reference policies: a variant per instant (#2996)
+
+The spec's `reference` may instead name a **reference policy**
+(`.qetl.reference.policy`, `src/etl/core/reference_policy.q`): a rule table that
+picks the sources and the variant per reference instant. One complete regime per
+row - `rule_id`, `priority`, `active_from` (inclusive) and `active_to`
+(exclusive, `24:00` allowed) in UTC, `weekdays` (`` `all ``, `` `weekdays `` or
+day symbols), `instrument_selector`, `sources`, `reference_variant`, `max_age`
+(`0Nn` keeps the variant's staleness) and `parameters` (merged into the
+variant's, refused when its transform lacks the key):
+
+```q
+rules:([] rule_id:`asia_open`london_open`us_open`fallback; priority:10 20 30 0;
+    active_from:00:00 08:00 12:00 00:00; active_to:08:00 12:00 21:00 24:00;
+    weekdays:`weekdays`weekdays`weekdays`all; instrument_selector:`EURUSD`EURUSD`EURUSD`all;
+    sources:(`LP_A`LP_B;`LP_A`LP_C;`LP_B`LP_D;`all);
+    reference_variant:`best_top`median_top`best_top`best_top; max_age:4#0Nn; parameters:4#enlist ())
+.qetl.reference.policy.register[`fx_sessions;rules]
+spec:spec,enlist[`reference]!enlist `fx_sessions
+```
+
+`register` refuses a malformed rule by name and **proves** coverage: for every
+instrument the rules name (and any other, when a rule selects `` `all ``), every
+weekday and every window between the boundaries the rules declare, at least one
+rule matches and only one at the top priority - exhaustive, not sampled. At run
+time `t0` and `t1` are each matched on their own timestamp
+(`.qetl.reference.policy.select`, on the execution's instrument), the probes are
+grouped by rule, and each group is priced by `.qetl.reference.priced` - the road
+`.qetl.reference.at` takes - with the rule's sources as the venues, so a source
+outside the rule cannot set the price. An instant no rule matches fails as
+`unmatched_reference_rule`; there is no fallback the rules do not declare.
+
+The policy's canonical content (rules sorted by `rule_id`, and the definition
+each rule prices with) goes into the configuration snapshot, so a different
+policy is a different `config_id`, while a spec without a policy keeps its id. A
+row does not repeat its rules: `.qpipe.transform.config_markout.reference_rules`
+re-derives `ref_rule_t0`, `ref_rule_t1` and their variants from the row's
+`config_id`, `sym`, `source_time` and `horizon`, over the rules the snapshot
+recorded. The jobs read their books by the spec's `max_age`, so a rule's
+`max_age` longer than the spec's sees no older book than the spec's would.
+
 ### Reference variants at scale (#2289)
 
 Reference prices may be wanted in a thousand ways, and a stored column per way
