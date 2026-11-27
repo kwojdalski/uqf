@@ -132,7 +132,8 @@ re-derives `ref_rule_t0`, `ref_rule_t1` and their variants from the row's
 recorded. The jobs read their books by the spec's `max_age`, so a spec whose
 policy has a rule with a longer `max_age` is refused when it is validated
 (`.qetl.reference.policy.require_max_age`): raise the spec's `max_age`, or lower
-the rule's.
+the rule's. A rule with a null `max_age` is held to the same limit through its
+variant's `stale` (`` `spec `` is the spec's own and always fits).
 
 ### Reference variants at scale (#2289)
 

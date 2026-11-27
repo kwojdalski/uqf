@@ -249,19 +249,29 @@
 
 / Refuse a policy any of whose rules allows an older book than a spec's max_age. A markout job reads its books by the
 / spec's max_age, so a longer rule limit could never be honoured - the rule would see no book the spec's limit had not
-/ already cut off, which is a staleness that silently is not what the rule declares.
+/ already cut off, which is a staleness that silently is not what the rule declares. A rule with no max_age of its own
+/ has its variant's staleness: `spec is the spec's own and always fits, a timespan is held to the same limit.
 / @param name a registered policy
 / @param max_age the spec's max_age, after defaults
 / @return name
-/ @throws error naming the first such rule, both limits and the fix
+/ @throws error naming the first such rule, both limits (and the variant, where the limit is the variant's) and the fix
 / @eg .qetl.reference.policy.require_max_age[.qetl.reference.policy.register[`eg_policy;.qetl.reference.policy.example];0D00:00:05]  ->  `eg_policy
 .qetl.reference.policy.require_max_age:{[name;max_age]
-    rs:(.qetl.reference.policy.def name)`rules;
+    p:.qetl.reference.policy.def name;
+    rs:p`rules;
+    fix:" - the job reads no book older than the spec's limit, so raise the spec's max_age or ";
     long:where (not null rs`max_age) & (rs`max_age)>max_age;
     if[count long;
         i:first long;
         '"reference_policy: ",string[name],".",string[(rs`rule_id) i],": max_age ",string[(rs`max_age) i]," is longer than the spec's max_age ",string[max_age],
-            " - the job reads no book older than the spec's limit, so raise the spec's max_age or lower the rule's"];
+            fix,"lower the rule's"];
+    st:{[d] d`stale} each p`defs;
+    inherited:where (null rs`max_age) & {[ma;s] $[-16h=type s; s>ma; 0b]}[max_age] each st;
+    if[count inherited;
+        i:first inherited;
+        / shorter than the message above: q cuts a signalled string at 255 characters
+        '"reference_policy: ",string[name],".",string[(rs`rule_id) i],": null max_age takes variant ",string[(rs`reference_variant) i],"'s stale ",string[st i],
+            ", longer than the spec's max_age ",string[max_age]," - raise the spec's max_age or give the rule one within it"];
     name}
 
 / The rule a registered policy selects for each target.

@@ -290,6 +290,21 @@
     .qunit.assertEquals[eq;0D00:00:09;"a rule as old as the spec's limit is accepted"];
     .qunit.assertEquals[open;0Wn;"and so is any rule under a spec with no limit"]};
 
+.qt.qetl.reference.policy.test_a_null_max_age_is_held_to_the_spec_s_through_its_variant_s_stale:{[t]
+    .qetl.reference.register[`stale9;`venues`stale`offset`transform`combine!(`all;0D00:00:09;0D;`top;`best)];
+    rs:update reference_variant:`stale9 from .qt.qetl.reference.policy.rules[] where rule_id=`us_open;
+    p:.qetl.reference.policy.register[`inherits;rs];
+    dom:.qt.qetl.reference.policy.dom[];
+    e:@[.qpipe.transform.markout_core.validate[dom;];.qt.qetl.reference.policy.spec[p];{[e] e}];
+    eq:(.qpipe.transform.markout_core.validate[dom;.qt.qetl.reference.policy.spec[p],enlist[`max_age]!enlist 0D00:00:09])`max_age;
+    pq:.qetl.reference.policy.register[`own;update max_age:0D00:00:05 from rs where rule_id=`us_open];
+    own:(.qpipe.transform.markout_core.validate[dom;.qt.qetl.reference.policy.spec[pq]])`reference;
+    .qt.qetl.reference.policy.forget[`inherits`own;enlist `stale9];
+    .qunit.assertEquals[e;"reference_policy: inherits.us_open: null max_age takes variant stale9's stale 0D00:00:09.000000000, longer than the spec's max_age 0D00:00:05.000000000 - raise the spec's max_age or give the rule one within it";
+        "the US rule declares no max_age and its variant allows 9s against the spec's 5s: refused, naming the variant"];
+    .qunit.assertEquals[eq;0D00:00:09;"a variant's stale as old as the spec's limit is accepted"];
+    .qunit.assertEquals[own;`own;"and a rule's own max_age within the spec's replaces the variant's, so it is accepted too"]};
+
 / --- the configuration -------------------------------------------------------------------------------------
 
 .qt.qetl.reference.policy.test_a_policy_is_recorded_in_full_and_its_content_is_independent_of_declaration_order:{[t]
