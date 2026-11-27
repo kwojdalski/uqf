@@ -16,7 +16,8 @@
 /                      list --dataset` filters on)
 /   horizons, max_age, report_ccy, rate_timing, rates
 /                      the core's validated parameters, the rates as declared
-/   reference          the reference variant, when it is not variant #1 (reference_variant.q)
+/   reference          the reference variant, when it is not variant #1 (reference_variant.q), or the
+/                      reference policy in full (reference_policy.q, #2996)
 /   domain_spec        the domain's own spec keys (an FX convention, a tolerance)
 / .
 / THE CALCULATION STAYS PURE. `id` is a function of the domain and the spec, so
@@ -77,8 +78,12 @@
     / implied by contract_version and adds nothing: the ids of every result scored before variants existed, and of
     / every result scored under it since, are the same. Any other variant is recorded IN FULL, so a result
     / scored against another reference can never share a config_id with one scored against the default.
+    / A reference policy (#2996) is recorded in full the same way: its canonical rules and the definition each prices
+    / with, so a row's rule at t0 and t1 is re-derived from the snapshot (reference_rules) rather than stored on it.
     ref:$[`reference in key spec; spec`reference; .qetl.reference.default];
-    $[ref~.qetl.reference.default; base; base,enlist[`reference]!enlist .qetl.reference.describe ref]}
+    $[ref~.qetl.reference.default; base;
+      .qetl.reference.policy.is ref; base,enlist[`reference]!enlist .qetl.reference.policy.describe ref;
+      base,enlist[`reference]!enlist .qetl.reference.describe ref]}
 
 / The configuration a markout runs under, as a snapshot records it.
 / .
@@ -189,6 +194,30 @@
 / @eg count .qpipe.transform.config_markout.enrich[0#.qpipe.transform.markout_core.result]  ->  0
 .qpipe.transform.config_markout.enrich:{[rows]
     rows lj `config_id xkey .qpipe.transform.config_markout.params rows}
+
+/ The reference rule and variant each row was priced under at its execution (t0) and its horizon (t1): re-derived
+/ from the reference its snapshot records (.qetl.reference.policy.lineage) and the row's sym, source_time and horizon,
+/ so a historical row is traced to the policy version and the rule without either being repeated on it (#2996). A row
+/ scored under a variant has a null rule and that variant; one whose snapshot records no reference, variant #1.
+/ @param rows a markout dataset's rows, with config_id, sym, source_time and horizon
+/ @return table ref_rule_t0, ref_rule_t1, ref_variant_t0, ref_variant_t1, one row per row, in order
+/ @throws error when a row names no snapshot or an unrecorded one, a column is missing, or the recorded rules do not cover an instant
+/ @eg count .qpipe.transform.config_markout.reference_rules[0#.qpipe.transform.markout_core.result]  ->  0
+.qpipe.transform.config_markout.reference_rules:{[rows]
+    .qf.util.require_cols[`config_markout;`rows;rows;`config_id`sym`source_time`horizon];
+    n:count rows;
+    out:([] ref_rule_t0:n#`; ref_rule_t1:n#`; ref_variant_t0:n#`; ref_variant_t1:n#`);
+    if[0=n; :out];
+    ids:distinct rows`config_id;
+    s:.qetl.snapshot.require_many ids;
+    c:.qetl.snapshot.decode each s`content;
+    step:{[rows;s;c;acc;id]
+        ix:where (rows`config_id)=id;
+        cfg:c (s`snapshot_id)?id;
+        ref:$[`reference in key cfg; cfg`reference; (::)];
+        t0:(rows`source_time) ix;
+        @[acc;ix;:;.qetl.reference.policy.lineage[ref;(rows`sym) ix;t0;t0+(rows`horizon) ix]]}[rows;s;c];
+    step/[out;ids]}
 
 / Refuse rows written under another contract version (a consumer pins one).
 / .

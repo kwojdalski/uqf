@@ -265,7 +265,13 @@
     if[not (-16h=type spec`max_age) and spec[`max_age]>0D; '"markout_core: max_age must be a positive timespan, 0Wn for as of however old"];
     if[not (-11h=type spec`report_ccy) and not null spec`report_ccy; '"markout_core: report_ccy must be a non-null symbol"];
     if[not (-11h=type spec`rate_timing) and spec[`rate_timing] in `execution`horizon; '"markout_core: rate_timing must be `execution or `horizon"];
-    if[not $[-11h=type spec`reference; spec[`reference] in key .qetl.reference.variants; 0b]; '"markout_core: reference must be a registered variant (",(", " sv string key .qetl.reference.variants),")"];
+    / the reference is a registered variant, or a reference policy choosing one per instant (#2996) - never both
+    rf:spec`reference;
+    if[not $[-11h=type rf; (rf in key .qetl.reference.variants) or .qetl.reference.policy.is rf; 0b];
+        '"markout_core: reference must be a registered variant or reference policy (",(", " sv string (key .qetl.reference.variants),key .qetl.reference.policies),")"];
+    if[(rf in key .qetl.reference.variants) and .qetl.reference.policy.is rf; '"markout_core: reference ",string[rf]," names both a variant and a reference policy"];
+    / a rule's staleness the job's read cannot honour is refused here, where the spec and its policy meet
+    if[.qetl.reference.policy.is rf; .qetl.reference.policy.require_max_age[rf;spec`max_age]];
     rt:spec`rates;
     if[not (99h=type rt) and (11h=type key rt) or 0=count rt; '"markout_core: rates must be a dictionary from quote currency to rate source"];
     kinds:.qpipe.transform.markout_core.rate_kind each value rt;
@@ -428,15 +434,23 @@
     asks:{x`ask} each books;
     0.5*((prd bids)+prd asks)}
 
-/ Private: every leg's oriented book at the given instants, under the spec's reference variant: `same`, from
-/ books on each row's own clock, and `any`, from every book - how a mismatch is told from a gap.
+/ Private: how the legs are priced at some instants - a function of (syms; times; clocks). Under a variant it is
+/ .qetl.reference.at with that variant; under a reference policy (#2996) each row's rule is selected from its
+/ INSTRUMENT and the instant, and every leg of the row is priced under that rule, so a row has one rule per instant.
 / @private
-.qpipe.transform.markout_core.leg_books:{[variant;tob;max_age;lg;times;clk]
-    per:{[variant;tob;max_age;lg;times;clk;k]
+.qpipe.transform.markout_core.pricer:{[ref;tob;max_age;syms;times]
+    if[not .qetl.reference.policy.is ref; :.qetl.reference.at[ref;tob;max_age;;;]];
+    .qetl.reference.policy.at[ref;.qetl.reference.policy.select[ref;syms;times];tob;max_age;;;]}
+
+/ Private: every leg's oriented book at the given instants, priced by pr (pricer): `same`, from books on each row's
+/ own clock, and `any`, from every book - how a mismatch is told from a gap.
+/ @private
+.qpipe.transform.markout_core.leg_books:{[pr;lg;times;clk]
+    per:{[pr;lg;times;clk;k]
         syms:(lg`legs) k;
         flips:(lg`invs) k;
-        r:.qetl.reference.at[variant;tob;max_age;syms;times;clk];
-        `same`any!(.qpipe.transform.markout_core.orient[syms;flips;r`same];.qpipe.transform.markout_core.orient[syms;flips;r`any])}[variant;tob;max_age;lg;times;clk] each til count lg`legs;
+        r:pr[syms;times;clk];
+        `same`any!(.qpipe.transform.markout_core.orient[syms;flips;r`same];.qpipe.transform.markout_core.orient[syms;flips;r`any])}[pr;lg;times;clk] each til count lg`legs;
     `same`any!(per[;`same];per[;`any])}
 
 / Private: apply one patch - the rows, rates, sources, syms and times a group
@@ -563,8 +577,9 @@
     tob:.qetl.mapped.require_arranged[`markout_core;md];
     ma:spec`max_age;
     vr:spec`reference;
-    b0:.qpipe.transform.markout_core.leg_books[vr;tob;ma;lg;fr`t0;fr`clock];
-    b1:.qpipe.transform.markout_core.leg_books[vr;tob;ma;lg;fr`t1;fr`clock];
+    / t0 and t1 are priced independently: under a policy, each instant selects its own rule
+    b0:.qpipe.transform.markout_core.leg_books[.qpipe.transform.markout_core.pricer[vr;tob;ma;fr`sym;fr`t0];lg;fr`t0;fr`clock];
+    b1:.qpipe.transform.markout_core.leg_books[.qpipe.transform.markout_core.pricer[vr;tob;ma;fr`sym;fr`t1];lg;fr`t1;fr`clock];
     bk0:b0`same;
     bk1:b1`same;
     ref0:.qpipe.transform.markout_core.chain_mid[bk0];

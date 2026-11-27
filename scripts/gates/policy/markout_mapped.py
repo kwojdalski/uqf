@@ -31,6 +31,7 @@ from pathlib import Path
 PATH = (
     "src/etl/core/mapped_books.q",
     "src/etl/core/reference_variant.q",
+    "src/etl/core/reference_policy.q",
     "src/etl/transforms/markout_core.q",
     "src/etl/transforms/config_markout.q",
     "src/etl/transforms/markout_variants.q",
