@@ -1286,15 +1286,16 @@ def test_config_get_prints_one_field_when_asked(monkeypatch):
 
 def test_config_show_refuses_a_field_the_row_does_not_have(monkeypatch):
     """#2608: it printed "" and exited 0, which `$(uqs config show ...)` takes as a value."""
-    from uqs import mcp
-
     row = {"procname": "rdb1", "port": "6052"}
     _patch(monkeypatch, stack_procs, "get_process_config", result=row)
     for argv in (["config", "show", "rdb1", "prot"], ["config", "show", "rdb1", "prot", "--json"]):
         result = runner.invoke(cli.app, argv)
         assert result.exit_code == 2 and result.stdout == "", result.output
-    with pytest.raises(UqsUsageError, match="unknown process.csv field: 'prot'"):
-        mcp.uqs_config_show("rdb1", "prot")
+    from mcp_support import call, refused
+
+    assert "unknown process.csv field: 'prot'" in refused(
+        call("uqs_config_show", proc="rdb1", field="prot")
+    )
 
 
 def test_config_get_resolves_placeholders_unless_raw_is_given(monkeypatch):
@@ -1611,6 +1612,31 @@ def test_clean_a_yes_removes(data_dir, terminal):
     assert result.exit_code == 0, result.output
     assert "removed 1 entry" in result.output
     assert not (data_dir / "hdb").exists() and (data_dir / "logs").exists()
+
+
+def test_clean_json_without_yes_is_refused_and_removes_nothing(data_dir, terminal, monkeypatch):
+    """--json is one document and never asks (#2229): without --yes it is the
+    one refusal, even with a terminal ready to answer y (#2988)."""
+    monkeypatch.setattr("sys.argv", ["uqs", "clean", "--json"])  # read by json_requested
+    result = runner.invoke(cli.app, ["clean", "--match", "^hdb$", "--json"], input="y\n")
+    assert result.exit_code == 1, result.output
+    document = json.loads(result.stdout)
+    assert document["ok"] is False and "add --yes" in document["error"]
+    assert (data_dir / "hdb").exists()
+
+
+def test_clean_json_is_what_went(data_dir):
+    """`clean --json`: each entry and its bytes, with --dry-run what would go (#2988)."""
+    dry = json.loads(
+        runner.invoke(cli.app, ["clean", "--match", "^hdb$", "--dry-run", "--json"]).stdout
+    )
+    assert dry["dry_run"] is True and [e["path"] for e in dry["entries"]] == [str(data_dir / "hdb")]
+    assert dry["bytes"] == sum(e["bytes"] for e in dry["entries"]) and (data_dir / "hdb").exists()
+    done = json.loads(
+        runner.invoke(cli.app, ["clean", "--match", "^hdb$", "--yes", "--json"]).stdout
+    )
+    assert done == {**dry, "dry_run": False}
+    assert not (data_dir / "hdb").exists()
 
 
 def test_remove_output_reports_what_it_removed(monkeypatch):
