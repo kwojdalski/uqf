@@ -531,6 +531,8 @@ WRITERS = {
     "_forget",
     "_rmtree",
     "prune",
+    "_prune",
+    "_try_lock",  # a push's lock file, so prune can skip one in use (#2981)
     "_new_push",
     "_restore_one",
 }

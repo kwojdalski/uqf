@@ -173,6 +173,13 @@ class UploadExists(FrontendError):
     status_code = 409
 
 
+class UploadConflict(FrontendError):
+    """Another push wrote the file while this upload's bytes arrived - nothing
+    written, so the other push's file is kept (#2981)."""
+
+    status_code = 409
+
+
 class UploadTooLarge(FrontendError):
     status_code = 413
 
@@ -229,6 +236,7 @@ _UPLOAD_REFUSALS: dict[str, type[FrontendError]] = {
     "not_a_directory": UploadRefused,
     "denied": UploadRefused,
     "exists": UploadExists,
+    "conflict": UploadConflict,
     "too_large": UploadTooLarge,
     "incomplete": UploadIncomplete,
     "pruned": HistoryPruned,
