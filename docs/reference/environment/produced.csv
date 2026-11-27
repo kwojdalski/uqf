@@ -24,3 +24,4 @@ variable,value
 `RLWRAP`,`rlwrap`
 `QCON`,`qcon`
 `QCMD`,"`$QCMD`, else `q` --- see above"
+`UQS_CRON_ENTRY`,"the `uqs cron` entry a run belongs to: set on the crontab line and on the uqs a `uqs cron run` starts, so it and every process it starts carry the entry's name"
