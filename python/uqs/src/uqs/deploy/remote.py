@@ -1,4 +1,11 @@
-"""ssh and scp to the server, and the quoting every remote script relies on."""
+"""ssh and scp to the server, and the quoting every remote script relies on.
+
+Killing the local ssh - its timeout, or Ctrl-C - does not end the command on
+the server: without a terminal, sshd sends it no hangup. So each script runs
+under the server's own `timeout` (which preflight already requires), set to
+end it, the KILL grace included, before this side gives up waiting (#2979).
+A step this side still times out on raises StepTimedOut, and the lock is
+kept: the server may not have seen the end of it."""
 
 from __future__ import annotations
 
@@ -12,6 +19,18 @@ from typing import Protocol
 from uqs.deploy.config import DeployError, redact
 
 Runner = Callable[..., subprocess.CompletedProcess]
+
+#: Seconds between the server's TERM and its KILL of an overrunning step.
+KILL_AFTER = 10
+#: What the server's limit leaves of the client's, past the connection and
+#: the KILL grace: sshd starting the shell, sudo -i's login.
+SLACK = 5
+
+
+class StepTimedOut(DeployError):
+    """A remote step this side stopped waiting for (#2979). The server bounds
+    each step below the client's wait, but this side cannot see that it
+    ended, so the lock is kept rather than handed to the next run."""
 
 
 class Transport(Protocol):
@@ -42,24 +61,34 @@ class Remote:
         remote_user: str | None = None,
     ) -> None:
         self.host = host
+        self.connect_timeout = connect_timeout
         self.remote_user = remote_user
         self.options = ["-o", "BatchMode=yes", "-o", f"ConnectTimeout={connect_timeout}"]
         self.runner = runner
 
-    def ssh_argv(self, as_login: bool = False) -> list[str]:
-        """ssh's argv: the script as the service user, unless `as_login`.
+    def server_limit(self, timeout: int) -> int:
+        """How long the server lets a step run that this side waits `timeout`
+        for: it is KILLed by then, however slow the connection was (#2979)."""
+        return max(1, timeout - self.connect_timeout - KILL_AFTER - SLACK)
+
+    def ssh_argv(self, as_login: bool = False, timeout: int | None = None) -> list[str]:
+        """ssh's argv: the script as the service user, unless `as_login`, and
+        - given the client's `timeout` - under the server's own, shorter one.
 
         The one string the login shell parses is fixed apart from the account
-        name, which parse_args validated and which is quoted anyway.
+        name, which parse_args validated and which is quoted anyway. `timeout`
+        runs inside sudo, as the service user, so it can end what it started.
         """
+        bash = "bash -s" if self.remote_user else "bash -l -s"
+        if timeout is not None:
+            bash = f"timeout -k {KILL_AFTER} {self.server_limit(timeout)} {bash}"
         if self.remote_user and not as_login:
-            command = f"sudo -n -iu {q(self.remote_user)} bash -s"
-        elif self.remote_user:
-            # the upload steps: plain, they read nothing from the environment
-            command = "bash -s"
+            command = f"sudo -n -iu {q(self.remote_user)} {bash}"
         else:
-            # a login shell, like sudo -i: the account's own QHOME, QCMD, PATH
-            command = "bash -l -s"
+            # as_login with a remote user: the upload steps, plain - they read
+            # nothing from the environment. Without one, a login shell, like
+            # sudo -i: the account's own QHOME, QCMD, PATH
+            command = bash
         return ["ssh", *self.options, self.host, command]
 
     def run(
@@ -67,7 +96,7 @@ class Remote:
     ) -> subprocess.CompletedProcess:
         try:
             return self.runner(
-                self.ssh_argv(as_login),
+                self.ssh_argv(as_login, timeout),
                 input=script,
                 capture_output=True,
                 text=True,
@@ -75,7 +104,11 @@ class Remote:
                 check=False,
             )
         except subprocess.TimeoutExpired:
-            raise DeployError(stage, f"the remote step did not finish within {timeout}s") from None
+            raise StepTimedOut(
+                stage,
+                f"the remote step did not finish within {timeout}s (the server ends it after "
+                f"{self.server_limit(timeout)}s)",
+            ) from None
         except OSError as exc:
             raise DeployError(stage, f"could not run ssh: {exc}") from None
 

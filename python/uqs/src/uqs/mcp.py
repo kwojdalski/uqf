@@ -1,28 +1,40 @@
 #!/usr/bin/env python3
-"""uqs.mcp - FastMCP server exposing the TorQ Finance Starter Pack
-demo (see docs/guides/uqs.md) as MCP tools, so an MCP client (e.g. Claude)
-can start/stop/query/configure it without shelling out.
+"""uqs.mcp - the uqs CLI as MCP tools, so an MCP client (e.g. Claude) can
+build, run, inspect and deploy the stack without shelling out.
 
-Shares its bootstrapping/config logic with the `uqs` Typer CLI and the
-browser's control API. What a start may start is refused below all three,
-in stack/ (stack.runtime and stack.start_policy, #887), so a misspelt name
-or an unrunnable profile is refused here exactly as `uqs start` refuses it.
-The CLI's advisory warnings (unfed inputs, the connection cap for named
-processes) are its own: they are how it tells an operator, not refusals.
+THE TOOLS ARE DERIVED, NOT WRITTEN (#2988). Every visible leaf of the CLI's
+command tree is one tool, named after it - `uqs job backfill` is
+uqs_job_backfill - whose parameters are that command's, spelled as
+cli/common/vocabulary.py's `spelling` spells them (`--base-port` is
+`base_port`, `PROC...` is `procs`) with the type the CLI gives them. A call
+runs the command itself (uqs.mcp_server.RUN) with `--json` where it has one,
+and returns its one document. Fifteen hand-written tools had covered a sixth
+of the CLI and drifted from the rest; a command added to the CLI is a tool
+here with nothing to write, and test_mcp_vocabulary.py holds every leaf to
+"mirrored, or excluded below with its reason".
 
-The tools speak the CLI's vocabulary (#2120). Each mirrors one CLI command and
-is named after it - `uqs_config_show` is `uqs config show` - and each of its
-parameters is one of that command's, spelled as cli/common/vocabulary.py's
-`spelling` spells it: `base_port` is `--base-port`, the stack's base port,
-and `port` is only ever one process's (`uqs_query`'s), as `--port` is on the
-CLI (#1729). test_mcp_vocabulary.py holds every tool to that, so the two
-surfaces cannot drift apart again. A tool, or a parameter, the redesign
-retired is refused naming what replaced it. The server, the mirror and the
-one refusal are uqs.mcp_server's; the tools are here.
+Three things a terminal gives a command that a tool call does not:
 
-Every tool returns one JSON object, and every failure - a refusal, a bad or
-retired argument, an unknown tool, an exception - is the CLI's one refusal
-document, `{"ok": false, "error": ...}`, marked as an error (#1882).
+- an answer to its question. A command that asks before it changes something
+  (`--yes`), or that changes a server (PREVIEW_FIRST), is a preview unless
+  confirm=true: without it the tool passes `--dry-run`, or leaves `--apply`
+  out; with it, `--yes` and `--apply`. One rule for every such command,
+  where only `clean` had one (#2257);
+- a stream to follow, or a screen to draw on. `--follow`, `--stop-on-exit`,
+  `--interactive` and `logs --multitail` are not offered (TERMINAL_ONLY): a
+  tool returns one result, and is called again for more;
+- a session. Commands that are one (EXCLUDED) are not tools at all, and
+  `query` requires its expression (REQUIRED), its session being what it
+  opens without one.
+
+A tool is marked read-only for the client where its command declares it
+changes nothing (safety.Effect). The CLI's global `--runtime` is every
+tool's `runtime`. Its `--target` is
+not offered: a command run on a deployed release asks its own confirmation
+on the server, which needs a design of its own here. A tool or parameter
+the redesigns retired is refused naming what replaced it (#2120). Every
+failure is the CLI's one refusal document, `{"ok": false, "error": ...}`,
+marked as an error (#1882).
 
 Run (stdio transport, the default - point an MCP client's server command
 at this):
@@ -33,329 +45,280 @@ at this):
 from __future__ import annotations
 
 import inspect
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Iterator
+from typing import Any, Literal
 
-from uqs import qjson
-from uqs.attach import live as _registers_live_check  # noqa: F401 - the start gate's (#1651)
-from uqs.cli.common.json_out import plain, records
-from uqs.cli.common.q_login import DEFAULT_USER, q_password
-from uqs.cli.common.shared import _procs
-from uqs.cli.config import lists as cli_lists
-from uqs.cli.connector.external import BROKEN, ENV_SUFFIX, FEEDS, _secrets_from_env, _status_record
-from uqs.cli.fleet.logs import lines_document
-from uqs.deploy import history as _registers_list_targets  # noqa: F401 - `target list`
-from uqs.external.feeds import ExternalFeed, check_options
+from mcp.types import ToolAnnotations
+
+from uqs import mcp_server as server
+from uqs.cli.common import safety, vocabulary
 from uqs.mcp_server import (
+    CLI,
+    CONFIRM,
     MIRRORS,
     PARAMETERS,
     RETIRED_TOOLS,
-    _paths,
-    _ran,
     cli_command,
     mcp,
-    tool,
+    outcome,
     tool_name,
 )
-from uqs.paths import UqsError, UqsUsageError
-from uqs.stack import clean as stack_clean
-from uqs.stack import listing, runtime, site_fields, start_policy
-from uqs.stack import logs as stack_logs
-from uqs.stack import procs as stack_procs
 from uqs.stack.envfiles import load_repo_env_files
 
 __all__ = ["MIRRORS", "PARAMETERS", "RETIRED_TOOLS", "cli_command", "mcp", "tool_name"]
 
+# ------------------------------------------------------------------ the rules
 
-# --------------------------------------------------------------- the lifecycle
+#: Commands that are no tool, and why: each needs a terminal or bypasses the
+#: named tools. test_mcp_vocabulary.py holds every other leaf to being one.
+EXCLUDED: dict[str, str] = {
+    "exec": "passes any torq.sh verb straight through, around every check the named tools make",
+    "target shell": "opens an interactive ssh session on the server",
+}
 
-
-#: Processes of the stack, as `PROC...` takes them (cli.shared._procs): none is all.
-Procs = list[str] | None
-
-
-@tool("start")
-def uqs_start(
-    procs: Procs = None,
-    base_port: int | None = None,
-    profile: str | None = None,
-    dry_run: bool = False,
-) -> dict[str, Any]:
-    """Start the uqf stack - `uqs start`: every startwithall=1 process
-    (including uqf's own fxfeed1), or only the processes procs names
-    (["rdb1", "stp1"]). profile names
-    comma-separated start sets (uqs_profile_list); procs given with it are
-    added to the set. base_port is the stack's base port, KDBBASEPORT.
-    dry_run=true returns the exact start line(s) and starts nothing.
-    """
-    paths, named, selected = _paths(), _procs(procs), None
-    if profile is not None:
-        members, _ = start_policy.resolve_profiles(
-            paths, profile, [] if named == "all" else named.split()
-        )
-        named, selected = " ".join(members), members
-    if dry_run:
-        return _ran(runtime.print_procs(paths, named, base_port=base_port, selected=selected))
-    return _ran(runtime.start(paths, named, base_port=base_port, selected=selected, capture=True))
+#: Options only a terminal can use, by spelling: never a tool's parameter.
+#: Under "*" on every command; else on the command named.
+TERMINAL_ONLY: dict[str, frozenset[str]] = {
+    # a stream until Ctrl-C, and a table to browse with keys (`-i`)
+    "*": frozenset({"follow", "stop_on_exit", "interactive"}),
+    # multitail is a terminal UI, and --subscribe streams until Ctrl-C
+    "logs": frozenset({"multitail", "stream", "pane_columns", "show_command", "subscribe"}),
+    # how a result prints on a terminal: --json prints it as data
+    "query": frozenset({"render"}),
+}
 
 
-@tool("stop")
-def uqs_stop(procs: Procs = None, base_port: int | None = None) -> dict[str, Any]:
-    """Stop the uqf stack (every process, or those procs names) - `uqs stop`."""
-    return _ran(runtime.stop(_paths(), _procs(procs), base_port=base_port, capture=True))
+def terminal_only(path: str) -> frozenset[str]:
+    """The options the command at `path` is not offered by its tool."""
+    return TERMINAL_ONLY["*"] | TERMINAL_ONLY.get(path, frozenset())
 
 
-@tool("restart")
-def uqs_restart(procs: Procs = None, base_port: int | None = None) -> dict[str, Any]:
-    """Restart the uqf stack (every process, or those procs names) - `uqs restart`."""
-    return _ran(runtime.restart(_paths(), _procs(procs), base_port=base_port, capture=True))
+#: Options a tool always sets for itself, by spelling: --json is how it reads
+#: the answer, and --yes is confirm's.
+SET_BY_THE_TOOL = frozenset({"json", "yes", "help"})
+
+#: Commands that change a server without asking: previews unless confirm=true,
+#: as the commands that ask are.
+PREVIEW_FIRST = frozenset({"deploy push", "deploy rollback"})
+
+#: Arguments a tool requires though its command does not, and why.
+REQUIRED: dict[str, frozenset[str]] = {
+    # without an expression, `uqs query` opens a q session - a terminal's
+    "query": frozenset({"expr"}),
+}
+
+#: Spellings Python cannot take as a parameter name -> the tool's. A range's
+#: ends are `range_from`/`range_to`, as every --json document names them (#2228).
+RENAMED = {"from": "range_from", "to": "range_to"}
 
 
-@tool("status")
-def uqs_status(base_port: int | None = None) -> dict[str, Any]:
-    """Status table (up/down, pid, port) for every process in process.csv - `uqs status`."""
-    return _ran(runtime.summary(_paths(), base_port=base_port))
+def spelled(param: Any) -> str:
+    """A CLI parameter's name on a tool: its spelling, unless RENAMED."""
+    name = vocabulary.spelling(param)
+    return RENAMED.get(name, name)
 
 
-@tool("clean")
-def uqs_clean(match: str | None = None, confirm: bool = False) -> dict[str, Any]:
-    """Wipe the runtime's data directory - `uqs clean`: the HDB, logs, tplogs,
-    wdb, the copied sample data - or only the paths under it `match` (a regex)
-    selects. A dry run unless confirm=true (#2257): it returns what would go,
-    each entry's path and bytes, and removes nothing. The deletion cannot be
-    undone, and MCP has no terminal to ask on, so confirm=true is the CLI's
-    question answered yes - show the dry run to the user first. Refused while
-    the stack is running: stop it first - this does not stop it.
-    """
-    targets = stack_clean.clean(_paths(), match=match, dry_run=not confirm)
+#: The CLI's global options a tool takes, by spelling.
+GLOBAL = ("runtime",)
+
+#: A click type's name -> the Python type a tool's parameter takes.
+_TYPES: dict[str, type] = {"int": int, "int range": int, "boolean": bool, "float": float}
+
+
+# ------------------------------------------------------- reading the CLI tree
+
+
+def leaves(command: Any = CLI, path: tuple[str, ...] = ()) -> Iterator[tuple[str, Any]]:
+    """Every visible leaf command of the CLI, as (path, command)."""
+    subcommands = getattr(command, "commands", None)
+    if subcommands is None:
+        yield " ".join(path), command
+        return
+    for name, sub in sorted(subcommands.items()):
+        if not getattr(sub, "hidden", False):
+            yield from leaves(sub, (*path, name))
+
+
+def flags(command: Any) -> frozenset[str]:
+    """The long options `command` takes, `--json` among them."""
+    return frozenset(o for p in command.params for o in (*p.opts, *p.secondary_opts))
+
+
+def confirms(path: str, command: Any) -> bool:
+    """Whether the tool for `path` is a preview unless confirm=true."""
+    return "--yes" in flags(command) or path in PREVIEW_FIRST
+
+
+def read_only(command: Any) -> bool:
+    """Whether the command declares it changes nothing (safety.Effect, its
+    `cls=`), for the client's annotations: the declaration `uqs --target`
+    reads to decide whether to ask, so the two cannot disagree."""
+    return getattr(command, "effect", None) == safety.Effect.READ_ONLY
+
+
+def parameters(path: str, command: Any) -> dict[str, Any]:
+    """The command's parameters a tool takes, by the tool's name for each: not
+    hidden, not terminal-only, not set by the tool, and on a confirming tool
+    not --dry-run or --apply. Two that share a spelling - `runtime diff`'s
+    two RUNTIMEs - are told apart by their own names (runtime_a, runtime_b)."""
+    taken = [
+        param
+        for param in command.params
+        if not getattr(param, "hidden", False)
+        and spelled(param) not in terminal_only(path) | SET_BY_THE_TOOL
+        and not (confirms(path, command) and spelled(param) in {"dry_run", "apply"})
+    ]
+    names = [spelled(param) for param in taken]
     return {
-        "dry_run": not confirm,
-        "entries": [{"path": str(entry), "bytes": size} for entry, size in targets],
-        "bytes": sum(size for _entry, size in targets),
+        (name if names.count(name) == 1 else f"{name}_{param.name}"): param
+        for name, param in zip(names, taken, strict=True)
     }
 
 
-# -------------------------------------------------------------------- a query
-
-
-#: Hosts a process named by `proc` can be on: its port is this machine's stack's.
-_LOCAL_HOSTS = ("localhost", "127.0.0.1")
-
-
-@tool("query")
-def uqs_query(
-    expr: str,
-    proc: str | None = None,
-    port: int | None = None,
-    base_port: int | None = None,
-    host: str = "localhost",
-    user: str = DEFAULT_USER,
-    password_env: str | None = None,
-) -> dict[str, Any]:
-    """Run a synchronous q expression on a running process - `uqs query`, e.g.
-    expr="select count i by sym from quote", proc="rdb1". Name the process by
-    proc (resolved against the stack at base_port), or give its own port -
-    one process's port, never a base port. password_env names the
-    environment variable holding user's password (default: TorQ's demo
-    credential); the password itself is never an argument. Returns
-    {"expression", "result"}: a table as a list of row objects.
-    """
-    if (proc is None) == (port is None):
-        raise UqsUsageError("name the process to query once: proc, or its port")
-    if port is None:
-        if host not in _LOCAL_HOSTS:
-            raise UqsUsageError(
-                "proc is looked up in this machine's stack - give port for another host"
-            )
-        ports = listing.configured_ports(_paths(), base_port=base_port)
-        if proc not in ports:
-            raise stack_procs.unknown_processes(str(proc))
-        port = int(ports[str(proc)])
-    passwd = q_password(password_env)
-    # kola makes an integral 0W null: q sends it as a float infinity (#2874)
-    result = runtime.query(qjson.carried(expr), port, host=host, user=user, passwd=passwd)
-    return {"expression": expr, "result": plain(result)}
-
-
-# ---------------------------------------------------------------- the config
-
-
-@tool("config show")
-def uqs_config_show(
-    proc: str, field: str | None = None, base_port: int | None = None, unresolved: bool = False
-) -> dict[str, Any]:
-    """A process's effective process.csv row, or one field of it - `uqs config
-    show`: the vendored/fxfeed1 values with any uqs_config_set changes on top.
-    ${VAR}/{VAR}+N placeholders (KDBBASEPORT, KDBHDB, ...) resolve against
-    the env torq.sh itself would use; unresolved=true shows them literal.
-    """
-    row = stack_procs.get_process_config(
-        _paths(), proc, base_port=base_port, resolve=not unresolved
-    )
-    if field is not None:
-        return {"process": proc, "field": field, "value": site_fields.field_value(row, field)}
-    return {"process": proc, "fields": [{"field": k, "value": v} for k, v in row.items()]}
-
-
-@tool("config set")
-def uqs_config_set(proc: str, pairs: list[str], dry_run: bool = False) -> dict[str, Any]:
-    """Set process.csv fields for proc - `uqs config set`: pairs are
-    FIELD=VALUE, e.g. ["port=6061", "startwithall=0"] (uqs_config_field_list
-    names the fields). Persisted to process_overrides.csv and applied on every
-    later start, stop, status... - restart the process for a running instance
-    to pick it up. Every pair is checked before any is written; dry_run=true
-    checks them and writes nothing.
-    """
-    settings = []
-    for pair in pairs:
-        field, sep, value = pair.partition("=")
-        if not sep or not field:
-            raise UqsUsageError(f"{pair!r} is not FIELD=VALUE")
-        settings.append((field, value))
-    paths = _paths()
-    for field, value in settings:
-        stack_procs.set_process_config(paths, proc, field, value, True)
-    if not dry_run:
-        for field, value in settings:
-            stack_procs.set_process_config(paths, proc, field, value, False)
-    fields = [{"field": field, "value": value} for field, value in settings]
-    return {"process": proc, "fields": fields, "dry_run": dry_run}
-
-
-# ------------------------------------------------------------------- the lists
-
-
-def _lister(kind: str, path: str) -> None:
-    """The tool for `path`, the noun's own list of `kind` (cli/config/lists.py): its
-    rows as `--json` prints them - typed, keyed in snake_case, a process
-    `process` (#1882) - taking `base_port` where the command takes --base-port."""
-    key = cli_lists.JSON_KEY.get(kind, kind)
-    if any("--base-port" in p.opts for p in cli_command(path).params):
-
-        def listed(base_port: int | None = None) -> dict[str, Any]:
-            return {key: records(listing.list_items(_paths(), kind, base_port=base_port))}
-
+def _annotation(param: Any) -> Any:
+    """The Python type a tool's parameter takes for this CLI parameter."""
+    choices = getattr(param.type, "choices", None)
+    if choices:  # an enum of the CLI's own choices, built at import
+        one: Any = Literal[tuple(str(c) for c in choices)]  # ty: ignore[invalid-type-form]
     else:
-
-        def listed() -> dict[str, Any]:
-            return {key: records(listing.list_items(_paths(), kind))}
-
-    listed.__doc__ = f"`uqs {path}`: {cli_command(path).help}"
-    tool(path)(listed)
-
-
-#: The lists `uqs list KIND` became (#1858), each its noun's own tool. A view
-#: that is no list - `graph --upstream --offline` - has a tool of its own or none.
-LISTS = {
-    kind: command.removeprefix("uqs ")
-    for kind, command in cli_lists.NOUN_LISTS.items()
-    if not any(word.startswith("-") for word in command.split())
-}
-for _kind, _path in LISTS.items():
-    _lister(_kind, _path)
-
-
-# -------------------------------------------------------------------- the logs
-
-
-@tool("logs")
-def uqs_logs(procs: Procs = None, lines: int = 20, level: str | None = None) -> dict[str, Any]:
-    """The last `lines` lines of each process's out_/err_ log (procs', or
-    every one's) - `uqs logs --json`: {"lines": [{time, host, process, proctype, level, channel,
-    message}]}, merged and sorted by time. level (TRACE, DEBUG, INFO, WARNING
-    or ERROR) shows only that level and above. A snapshot, not a live stream -
-    call again for newer lines.
-    """
-    return lines_document(stack_logs.get_recent_logs(_paths(), _procs(procs), lines, level))
-
-
-# -------------------------------------------------------------- the connectors
-
-
-def _feed(connector: str) -> ExternalFeed:
-    if connector in BROKEN:
-        raise UqsError(BROKEN[connector])
-    if connector not in FEEDS:
-        raise UqsError(f"no connector {connector!r} - the connectors are {', '.join(FEEDS)}")
-    return FEEDS[connector]
-
-
-def _connector_start(connector: str, **options: Any) -> dict[str, Any]:
-    feed = _feed(connector)
-    given, origins = _secrets_from_env(options)
-    own = {option.name for option in feed.options}
-    if stray := [name for name in given if name not in own]:
-        raise UqsUsageError(f"{', '.join(stray)} does not apply to connector {connector}")
-    paths = _paths()
-    pid = feed.start(paths, feed.check_bindings(paths, given, origins))
-    return {"connector": connector, "pid": pid, "output": feed.started(pid)}
-
-
-def _connector_start_parameters() -> list[inspect.Parameter]:
-    """`connector start`'s options, as every connector declares them
-    (external/feeds.py): one parameter each, a secret's as the variable
-    holding it (`tp_credential_env`), never the secret itself (#1853)."""
-    kind = inspect.Parameter.KEYWORD_ONLY
-    params = [inspect.Parameter("connector", inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                                annotation=str)]  # fmt: skip
-    for name, (option, _takers) in check_options(FEEDS).items():
-        if option.secret:
-            name, annotation = name + ENV_SUFFIX, str | None
-        else:
-            annotation = option.type | None
-        params.append(inspect.Parameter(name, kind, default=None, annotation=annotation))
-    return params
-
-
-def _signed(fn: Callable[..., Any], params: list[inspect.Parameter]) -> Callable[..., Any]:
-    fn.__signature__ = inspect.Signature(params, return_annotation=dict[str, Any])  # ty: ignore[unresolved-attribute]
-    fn.__annotations__ = {p.name: p.annotation for p in params} | {"return": dict[str, Any]}
-    return fn
-
-
-_connector_start.__doc__ = (
-    "Start a connector publishing onto the running stack's tickerplant - `uqs "
-    f"connector start`. connector is one of {', '.join(FEEDS)}; each takes only "
-    "its own options, and a secret is given as the NAME of the variable holding it.\n\n"
-    + "\n".join(
-        f"{name}: {option.described} ({', '.join(takers)})"
-        for name, (option, takers) in check_options(FEEDS).items()
+        one = _TYPES.get(param.type.name, str)
+    many = getattr(param, "multiple", False) or (
+        param.param_type_name == "argument" and param.nargs == -1
     )
-)
-uqs_connector_start = tool("connector start")(
-    _signed(_connector_start, _connector_start_parameters())
-)
+    return list[one] if many else one  # ty: ignore[invalid-type-form]
 
 
-@tool("connector stop")
-def uqs_connector_stop(connector: str) -> dict[str, Any]:
-    """Stop a connector started by uqs_connector_start - `uqs connector stop`."""
-    _feed(connector).stop(_paths())
-    return {"connector": connector, "output": f"{connector} connector stopped"}
+def _default(param: Any) -> Any:
+    """The parameter's default as a tool states it: the CLI's, where it is a
+    plain value, else None (the CLI's own default then applies)."""
+    if getattr(param, "is_flag", False) and isinstance(param.default, bool):
+        return param.default
+    default = param.default
+    if isinstance(default, (str, int, float, bool)) and not callable(default):
+        return default
+    return None
 
 
-@tool("connector status")
-def uqs_connector_status(connector: str | None = None) -> dict[str, Any]:
-    """Whether a connector - or, with none named, every connector - is
-    running, its pid, and where its log lives - `uqs connector status --json`."""
-    names = [connector] if connector is not None else list(FEEDS)
-    found = [_status_record(name, _feed(name).status(_paths())) for name in names]
-    document: dict[str, Any] = {"connectors": found}
-    if connector is None and BROKEN:
-        document["broken"] = [{"name": n, "error": why} for n, why in BROKEN.items()]
-    return document
+# ------------------------------------------------------------- the one runner
+
+
+def _argv(path: str, command: Any, by_name: dict[str, Any], arguments: dict[str, Any]) -> list[str]:
+    """The command line for one call: the global options, the command's path,
+    its options, then its positionals (after `--` where one starts with `-`)."""
+    argv: list[str] = []
+    if arguments.get("runtime") is not None:
+        argv += ["--runtime", str(arguments["runtime"])]
+    argv += path.split()
+    options: list[str] = []
+    positionals: list[str] = []
+    for name, param in by_name.items():  # the command's own order
+        value = arguments.get(name)
+        if value is None:
+            continue
+        if param.param_type_name == "argument":
+            positionals += [str(v) for v in value] if isinstance(value, list) else [str(value)]
+        elif getattr(param, "is_flag", False):
+            if value != param.default:
+                long = [
+                    o for o in (param.opts if value else param.secondary_opts) if o.startswith("--")
+                ]
+                options.append(
+                    long[0] if long else (param.opts if value else param.secondary_opts)[0]
+                )
+        else:
+            flag = next(o for o in param.opts if o.startswith("--"))
+            for item in value if isinstance(value, list) else [value]:
+                options += [flag, str(item)]
+    known = flags(command)
+    if confirms(path, command):
+        if arguments.get(CONFIRM):
+            options += [o for o in ("--yes", "--apply") if o in known]
+        elif "--dry-run" in known:
+            options.append("--dry-run")
+    if "--json" in known:
+        options.append("--json")
+    if any(p.startswith("-") for p in positionals):
+        positionals = ["--", *positionals]
+    return argv + options + positionals
+
+
+def _signature(path: str, command: Any) -> tuple[inspect.Signature, dict[str, Any]]:
+    """The tool's signature, derived from the command, and its parameters by name."""
+    required = REQUIRED.get(path, frozenset())
+    kind = inspect.Parameter.KEYWORD_ONLY
+    params, by_name = [], parameters(path, command)
+    for name, param in by_name.items():
+        annotation = _annotation(param)
+        if param.required or name in required:
+            params.append(inspect.Parameter(name, kind, annotation=annotation))
+        else:
+            params.append(inspect.Parameter(name, kind, default=_default(param),
+                                            annotation=annotation | None))  # fmt: skip
+    if confirms(path, command):
+        params.append(inspect.Parameter(CONFIRM, kind, default=False, annotation=bool))
+    for name in GLOBAL:
+        if name not in by_name:
+            params.append(inspect.Parameter(name, kind, default=None, annotation=str | None))
+    params.sort(key=lambda p: p.default is not inspect.Parameter.empty)
+    return inspect.Signature(params, return_annotation=dict[str, Any]), by_name
+
+
+def _description(path: str, command: Any) -> str:
+    """The command's own help, and what the tool does differently."""
+    text = inspect.cleandoc(command.help or command.short_help or f"`uqs {path}`")
+    notes = [f"This is `uqs {path}`."]
+    if confirms(path, command):
+        how = "passes --dry-run" if "--dry-run" in flags(command) else "leaves --apply out"
+        notes.append(
+            f"Without {CONFIRM}=true it is a preview: it {how} and changes nothing. "
+            f"{CONFIRM}=true answers its question yes (--yes) - show the user the "
+            "preview first."
+        )
+    if "--follow" in flags(command):
+        notes.append("--follow is not offered: call again for newer output.")
+    return text + "\n\n" + " ".join(notes)
+
+
+def _register(path: str, command: Any) -> None:
+    """Register the tool mirroring the command at `path`."""
+    signature, by_name = _signature(path, command)
+    as_json = "--json" in flags(command)
+
+    def mirrored(**arguments: Any) -> Any:
+        # server.RUN read at call time: tests run the CLI in process instead
+        return outcome(server.RUN(_argv(path, command, by_name, arguments)), as_json)
+
+    mirrored.__signature__ = signature  # ty: ignore[unresolved-attribute]
+    mirrored.__annotations__ = {p.name: p.annotation for p in signature.parameters.values()} | {
+        "return": dict[str, Any]
+    }
+    name = tool_name(path)
+    mirrored.__name__ = name
+    MIRRORS[name] = path
+    PARAMETERS[name] = frozenset(signature.parameters)
+    mcp.tool(
+        mirrored,
+        name=name,
+        description=_description(path, command),
+        tags={path.split()[0]},
+        output_schema={"type": "object", "additionalProperties": True},
+        annotations=ToolAnnotations(title=f"uqs {path}", read_only_hint=read_only(command)),
+    )
+
+
+for _path, _command in leaves():
+    if _path not in EXCLUDED:
+        _register(_path, _command)
 
 
 # ------------------------------------------------------------- the old names
 
-# --------------------------------------------- one refusal, and the old names
-
 
 def _list_tools() -> str:
-    return ", ".join(tool_name(path) for path in LISTS.values())
+    return ", ".join(sorted(n for n, p in MIRRORS.items() if p.split()[-1] == "list"))
 
 
-#: The tools the redesign retired -> what replaced each (#2120). Refused, naming it.
+#: The tools the redesigns retired -> what replaced each (#2120). Refused, naming it.
 RETIRED_TOOLS.update(
     {
         "uqs_summary": "uqs_status",
@@ -375,7 +338,7 @@ RETIRED_TOOLS.update(
 
 def main() -> None:
     """Entry point for the `uqs-mcp` console script."""
-    # As the CLI does: the tools start processes, and those inherit this env.
+    # As the CLI does: the commands start processes, and those inherit this env.
     load_repo_env_files()
     mcp.run()
 

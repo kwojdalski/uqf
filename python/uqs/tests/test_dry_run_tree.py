@@ -82,6 +82,12 @@ def _targets(sb: Sandbox) -> None:
     _uqs("target", "add", "t1", "--ssh", "u@h", "--dest", "/opt/x", "--label", "tier=uat")(sb)
 
 
+def _cron_entry(sb: Sandbox) -> None:
+    """One saved `uqs cron` entry, under the sandbox's data root."""
+    _uqs("cron", "add", "e1", "--cron", "0 6 * * *", "--", "job", "run", "demo_deals_feed",
+         "--once")(sb)  # fmt: skip
+
+
 @dataclass(frozen=True)
 class Case:
     command: str
@@ -120,6 +126,12 @@ CASES = [
     Case("config set", ("rdb1", "localtime=0")),
     Case("config unset", ("rdb1", "localtime")),
     Case("config sources stub", ("demo_deals",)),
+    # `--dry-run` lands after `--`, in the scheduled command, which add refuses
+    Case(
+        "cron add", ("e1", "--cron", "0 6 * * *", "--", "job", "run", "demo_deals_feed", "--once")
+    ),  # fmt: skip
+    Case("cron install", (), _cron_entry),
+    Case("cron remove", ("e1",), _cron_entry),
     Case("connector start", ("kafka",)),
     Case("connector stop", ("kafka",)),
     Case("connector restart", ("kafka",)),

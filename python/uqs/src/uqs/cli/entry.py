@@ -87,6 +87,7 @@ from uqs.cli.target import target_config  # noqa: F401
 from uqs.cli.target import target_config_push  # noqa: F401
 from uqs.cli.fleet import activity  # noqa: F401
 from uqs.cli.config import lists  # noqa: F401
+from uqs.cli.cron import cron  # noqa: F401
 
 # isort: on
 import sys

@@ -90,18 +90,33 @@ Each endpoint that passes is recorded in `tunnel_checks.json`, beside
 
 ## MCP server
 
-`uqs-mcp` exposes the CLI's operations as MCP tools, for an MCP client to drive
-the stack. `exec` is not exposed. Point the client's server command at this
-(stdio transport):
+`uqs-mcp` exposes the CLI as MCP tools, for an MCP client to drive the stack.
+Point the client's server command at this (stdio transport):
 
 ```bash
 uv run uqs-mcp
 ```
 
-Each tool is one CLI command, named after it: `uqs_start` is `uqs start`,
-`uqs_job_list` is `uqs job list`, and `uqs_logs` is `uqs logs --json`. A tool
-takes its command's options spelled as identifiers, so `uqs_query` takes
-`password_env`, the name of the variable holding the password. `uqs_clean` is a
-dry run that returns each entry it would remove. It deletes only with
-`confirm=true`. Every tool returns one JSON object, and a failure is
-`{"ok": false, "error": "..."}`, marked as an error.
+Every CLI command is a tool, named after it: `uqs_start` is `uqs start`,
+`uqs_job_backfill` is `uqs job backfill`, and `uqs_data_alter` is
+`uqs data alter`. The tools are derived from the CLI's command tree, so a new
+command is a tool without anything to write. A tool takes its command's options
+spelled as identifiers: `base_port` is `--base-port`, `password_env` is
+`--password-env`, and a range is `range_from`/`range_to` for `--from`/`--to`.
+Every tool also takes `runtime`, the CLI's global `--runtime`.
+
+A call runs the command with `--json` and returns its document. A non-zero exit
+that is an outcome, such as no work (6), comes back beside the document as
+`exit_code`. A failure is `{"ok": false, "error": "..."}`, marked as an error.
+
+A tool whose command asks before it changes something is a preview unless
+`confirm=true`. Without it, the tool passes `--dry-run`, or leaves `--apply`
+out. With it, it passes `--yes`, and `--apply` where the command has one.
+`uqs_deploy_push` and `uqs_deploy_rollback` follow the same rule, because they
+change a server. Show the preview to the user before confirming.
+
+A tool returns one result, so `--follow`, `--interactive` and `logs --multitail`
+are not offered. `uqs_query` requires `expr`, since without one the CLI opens a
+session. `exec` and `target shell` are not tools, and neither is the global
+`--target`. Tools whose command declares it changes nothing are marked read-only
+for the client.

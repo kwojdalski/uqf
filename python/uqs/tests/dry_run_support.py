@@ -15,10 +15,12 @@ __pycache__ directories would be the first "change" every run found.
 
 from __future__ import annotations
 
+import functools
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -78,6 +80,17 @@ def changes(before: Snapshot, after: Snapshot) -> list[str]:
     return created + removed + modified
 
 
+@functools.cache
+def _fake_crontab_dir() -> Path:
+    """A `crontab` that has no table and refuses to write one, outside every root a
+    test snapshots: `uqs cron` in a sandbox never reaches this machine's crontab."""
+    bin_dir = Path(tempfile.mkdtemp(prefix="fake-crontab-"))
+    fake = bin_dir / "crontab"
+    fake.write_text('#!/bin/sh\necho "crontab: no crontab for sandbox" >&2\nexit 1\n')
+    fake.chmod(0o755)
+    return bin_dir
+
+
 @dataclass(frozen=True)
 class Sandbox:
     repo: Path
@@ -104,6 +117,8 @@ class Sandbox:
             EDITOR="true",
             VISUAL="true",
             COLUMNS="200",
+            # `uqs cron install` finds this crontab first: never the machine's (#2987)
+            PATH=os.pathsep.join([str(_fake_crontab_dir()), env.get("PATH", "")]),
         )
         return env
 

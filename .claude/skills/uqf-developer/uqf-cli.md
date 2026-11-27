@@ -10,9 +10,10 @@ command tree.
 ## 1. What it is
 
 `python/uqs` ("ultimate q stack"), Python 3.14+, Typer + Rich. Entry points in
-`python/uqs/pyproject.toml`: `uqs = "uqs.cli:main"`, `uqs-mcp = "uqs.mcp:main"`;
-`python -m uqs` works too. Install with `./install.sh` (puts `uqs` on PATH;
-never runs sudo); `./install.sh --dev` adds the workspace and the git hooks.
+`python/uqs/pyproject.toml`: `uqs = "uqs.launch:main"` (cron's not-due check,
+then `uqs.cli:main`), `uqs-mcp = "uqs.mcp:main"`; `python -m uqs` works too.
+Install with `./install.sh` (puts `uqs` on PATH; never runs sudo);
+`./install.sh --dev` adds the workspace and the git hooks.
 
 `main()` (`cli/entry.py`) loads `.env`/`.envrc`, refuses removed or renamed
 environment variables by name (`UQF_PEACHQ`, `UQF_Q_IMPL`, ... -

@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from uqs.deploy import bundled, components, converted_override, fetch, hdb, overrides
 from uqs.deploy.artifact import Artifact, ReleaseError, release_runtime
 from uqs.deploy.config import Config, DeployError, load_artifact, redact
+from uqs.deploy.lock import LockLost
 from uqs.deploy.plan import no_keep, plan
 from uqs.deploy.prune import prune_locked
 from uqs.deploy.remote import Transport
@@ -133,7 +134,8 @@ def _run(
     release: str | None = None
     try:
         state = dep.locked_state()
-    except DeployError:
+    except BaseException:
+        # Ctrl-C too: nothing is changed yet, so nothing holds the lock (#2978)
         dep.release_lock()
         raise
     previous = state.get("current")
@@ -243,6 +245,14 @@ def _run(
         activated = True
         if cfg.keep is not None:
             _prune_after(dep, report, cfg.keep)
+    except LockLost as exc:
+        # Another run holds the lock now: rolling back would stop or start
+        # processes beside it. Stop, and say so (#2978).
+        report.status = "failed"
+        report.stage = exc.stage
+        report.error = str(exc)
+        log.error("STOPPED: {}", redact(str(exc)))
+        report.rollback = "not rolled back: the lock is another run's now - check by hand"
     except DeployError as exc:
         # never after activation: _prune_after catches every DeployError
         report.status = "failed"
@@ -309,14 +319,25 @@ def _now() -> str:
 def _rollback(dep, release, started, stopped_previous, previous, prev) -> str:
     """Stop what the failed release started, and bring the previous one back:
     its profile and the sidecar processes it ran beside it (`prev`). It beats
-    between steps, as the push does, so a slow rollback never looks dead."""
+    between steps, as the push does, so a slow rollback never looks dead - and
+    stops where it is if the lock turns out to be another run's (#2978)."""
+    notes: list[str] = []
+    try:
+        _rolling_back(dep, release, started, stopped_previous, previous, prev, notes)
+    except LockLost as exc:
+        notes.append(f"STOPPED rolling back: {exc}")
+    return "; ".join(notes) or "nothing to roll back"
+
+
+def _rolling_back(dep, release, started, stopped_previous, previous, prev, notes) -> None:
     prev_profile, prev_extra = prev
-    notes = []
     if started and release:
         try:
             dep.uqs(release, "rollback", "stopping the new processes", "stop",
                     *started_by(dep.cfg.profile, dep.selection.processes))  # fmt: skip
             notes.append("stopped the new release's processes")
+        except LockLost:
+            raise
         except DeployError as exc:
             notes.append(f"FAILED to stop the new release's processes: {exc}")
         dep.beat()
@@ -332,6 +353,8 @@ def _rollback(dep, release, started, stopped_previous, previous, prev) -> str:
                 prev_profile,
                 *prev_extra,
             )
+        except LockLost:
+            raise
         except DeployError as exc:
             notes.append(f"FAILED to restart release {previous}: {exc}")
         else:
@@ -352,4 +375,3 @@ def _rollback(dep, release, started, stopped_previous, previous, prev) -> str:
                 )
     if previous:
         notes.append(f"current still names {previous}")
-    return "; ".join(notes) or "nothing to roll back"

@@ -43,7 +43,7 @@ and options.
 uqs start posbook1 crypto_markout1
 ```
 
-Three groups hold what is not a lifecycle command:
+Four groups hold what is not a lifecycle command:
 
 - `uqs job` writes a job into the tree (`new`, `remove`, `install`), operates it
   (`backfill`, `preview`, `gaps`, `runs`) and attaches it to a TorQ stack that
@@ -52,6 +52,8 @@ Three groups hold what is not a lifecycle command:
   ([ODBC](odbc.md)).
 - `uqs connector` runs the external publishers (databento, kafka, the cryptorust
   recorders), which are processes outside TorQ.
+- `uqs cron` runs uqs commands on a schedule from your crontab ([scheduling
+  commands with cron](#scheduling-commands-with-cron)).
 
 ```bash
 uqs connector start kafka --topics uqf.client.flow
@@ -220,6 +222,73 @@ uqs logs <procname> -f
 ```
 
 Commit what `git status` shows afterwards, derived files included.
+
+## Scheduling commands with cron
+
+`uqs cron` runs uqs commands on a schedule from your own crontab. An entry is a
+five-field cron expression, a time zone (UTC when you give none) and the uqs
+command, exactly as you would type it after `uqs`:
+
+```bash
+uqs cron add deals-daily --cron '10 6 * * 1-5' -- job backfill demo_deals_backfill --last 3d --source-version v1
+uqs cron add ldn-feed --cron '0 8 * * *' --tz Europe/London -- job run demo_deals_feed --once
+uqs cron list                 # each entry, its next runs in its zone and in UTC
+uqs cron install --dry-run    # the crontab diff
+uqs cron install
+uqs cron status               # last outcome per entry; overdue, failing, stray lines
+uqs cron remove ldn-feed      # then install again
+```
+
+Only finite units can be scheduled: `job backfill` (coverage skips windows
+already done, so a `--last` range also picks up a missed run) and
+`job run --once`. `add` refuses a streaming job (TorQ supervises it), a reaction
+(it runs when its window is published), an unknown job or attachment, and
+options that make no sense under cron (`--dry-run`, `--mode`, `--follow`,
+`--json`). It parses the command with uqs itself and runs a backfill once with
+`--mode plan`, so the stack must be up. With `--attachment`, a time within the
+end-of-day fence of the attachment's writers is refused.
+
+Entries are kept per machine in `cron/cron.toml`, beside the attachments
+directory, with each entry's log (`<entry>.log`) and one outcome record per run
+(`<entry>.outcomes.jsonl`). The crontab calls `uqs cron run ENTRY`, which adds
+`--wait` to a backfill, logs the command's output and exits with its code. The
+environment comes from `.env` and `.envrc`, which uqs loads itself.
+
+`install` writes one managed block and leaves every other line as it was. Each
+schedule line has an ownership comment above it, then a readable comment:
+
+```
+# >>> uqs cron (managed by `uqs cron install`; edit with `uqs cron`, not by hand) >>>
+# uqs-cron-block: sha=3f1c0e9a42b7
+# uqs-cron: entry=deals-daily managed-by=uqs schedules=/data/cron/cron.toml repo=/srv/uqf tz=UTC sha=9b2d4c1e07fa
+# deals-daily: job backfill demo_deals_backfill --last 3d --source-version v1
+#   10 6 * * 1-5 UTC (06:10, Mon-Fri, UTC); log: /data/cron/deals-daily.log
+10 6 * * 1-5 cd /srv/uqf && UQS_CRON_ENTRY=deals-daily /srv/uqf/.venv/bin/uqs cron run deals-daily
+# <<< uqs cron <<<
+```
+
+- The `uqs-cron:` line is shell-quoted `key=value` words: the entry, the
+  schedules file, the checkout, the zone and a hash of the entry as installed.
+  cron has no trailing comments, so ownership is recorded on comment lines.
+- `UQS_CRON_ENTRY` is set on the command, after the `cd`, so uqs and every
+  process it starts carry the entry's name.
+- `uqs-cron-block` is a hash of the block as written. If the block was edited by
+  hand, `install` refuses and shows it. Make the change with `uqs cron`, delete
+  the block with `crontab -e`, then install again.
+- `status` reports a block line that no entry owns (unknown), a line whose entry
+  changed since it was installed (stale), an entry missing from the block, and
+  any line outside the block that calls `uqs cron run` (an orphan, which uqs
+  never changes).
+
+Every entry has an explicit zone. cron runs lines in the host's zone, and not
+every cron reads `CRON_TZ` (macOS's does not). In the host's zone the line is
+written as given. In any other zone the line fires every hour at the entry's
+minute, or every minute for a zone a fraction of an hour away, and
+`uqs cron run` checks the five fields in the entry's zone. A firing that is not
+due exits 0 before `.env` or the command line loads, and records nothing, so a
+daylight-saving change needs no crontab rewrite.
+
+Retries, alerting and dependencies between entries are left to an orchestrator.
 
 ## Other `torq.sh` verbs
 
