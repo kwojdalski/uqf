@@ -1,0 +1,334 @@
+{
+ "qnb": 1,
+ "cells": [
+  {
+   "kind": "markdown",
+   "source": [
+    "# 1. The quant library: from a currency pair to a risk number",
+    "",
+    "uqf has two halves, and this notebook is about the first:",
+    "",
+    "1. a **quant library** of pure q functions (`src/`, loaded by `src/init.q`), and",
+    "2. a **pipeline framework** that runs jobs around a TorQ stack (`src/etl/`), which notebook 3 covers.",
+    "",
+    "The library is seven namespaces under `.qf`. Every function in them is pure: no state, no I/O, no logging. So nothing below needs a tickerplant, a database or a licence slot - one q process is enough.",
+    "",
+    "This notebook follows one line of thought an FX desk follows every day: name a pair, find its dates, price a forward and an option on it, then hold a position and ask what it could lose.",
+    "",
+    "**To run it:** start `q` from the repository root, connect q-lint to that process, and use **Run All**. The cells only define names in the root namespace of that process. Use a scratch process, not one that belongs to a running stack."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "if[()~key `:src/init.q; '\"start q from the uqf repository root: this notebook loads src/init.q by a relative path\"];",
+    "\\l src/init.q",
+    "domains:`.qf.px`.qf.mkt`.qf.exec`.qf.port`.qf.math`.qf.util`.qf.demo;",
+    "([] namespace:domains; names:{count 1_key x} each domains;",
+    "    holds:(\"theoretical pricing and the conventions it rests on\";",
+    "        \"analytics over observed market data: books, crosses, microstructure, data quality\";",
+    "        \"execution quality and allocation\";",
+    "        \"positions, exposure, risk and limits\";",
+    "        \"numerical primitives\";",
+    "        \"schema checks, rendering, namespace discovery\";",
+    "        \"defaults the worked examples share\"))"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "That one `\\l` loaded {{q: sum {count 1_key x} each domains}} names. Files and directories under `src/` are organisational only: a file puts a name in its domain by writing it in full (`.qf.px.fwd_simple:{...}`), and `src/init.q`'s header is the map from file to domain.",
+    "",
+    "Each function carries a qDoc block with `@param`, `@return` and at least one `@eg`. The `@eg` lines are executed by the test suite, so the documented value of a call is a tested fact. `uqs man <name>` prints a block from the shell.",
+    "",
+    "## Pairs and their conventions",
+    "",
+    "Everything starts from a pair such as `EURUSD`: one unit of the **base** currency (EUR) priced in the **quote** currency (USD). A **pip** is the smallest conventional price step, and it differs by pair."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "pairs:`EURUSD`GBPUSD`USDJPY`EURPLN;",
+    "legs:.qf.px.ccy_pair_legs each pairs;",
+    "([] pair:pairs; base:legs`base; quote_ccy:legs`quote;",
+    "    pip_size:.qf.px.pip_size pairs; pip_factor:.qf.px.pip_factor pairs)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "`pip_factor` is what turns a price difference into pips. It appears as an argument all over the library, because a function that guessed it from the pair would be wrong for the pairs it did not know.",
+    "",
+    "## Dates: spot, then the forward date",
+    "",
+    "A trade done today settles on the **spot date**, usually two business days later in *both* currencies' calendars. The date functions return the answer together with how it was reached, so a surprising date can be explained without a debugger."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ 18 September 2026 is a Friday; 21 September is a holiday in Japan but not in the euro area or the US.",
+    "spot_info:.qf.px.spot_date[2026.09.18;`EURUSD;.qf.px.mock_calendars;.qf.px.mock_conventions]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "EURUSD traded on Friday {{q: spot_info`trade_date}} settles on {{q: spot_info`date}}: the weekend days {{q: spot_info`skipped}} were skipped. The calendars and conventions passed in are small demo tables (`.qf.px.mock_calendars`, `.qf.px.mock_conventions`); a real deployment passes its own.",
+    "",
+    "Forward dates are counted from spot, by tenor, then rolled onto a business day:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "tenors:`1W`1M`3M`6M`1Y;",
+    "fwd_dates:{.qf.px.forward_date[spot_info`date;x;`EURUSD;.qf.px.mock_calendars;.qf.px.mock_conventions]} each tenors;",
+    "select tenor, unadjusted, date, roll, eom_applied from fwd_dates"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Forwards: covered interest parity",
+    "",
+    "A forward rate is not a forecast. It is the spot rate adjusted for the interest earned on each currency until delivery - otherwise there would be a riskless profit in borrowing one currency and lending the other. With simple interest:",
+    "",
+    "`forward = spot * (1 + rd*t) / (1 + rf*t)`",
+    "",
+    "where `rd` is the quote (\"domestic\") currency's rate, `rf` the base (\"foreign\") currency's, and `t` a year fraction from a day-count convention. The market quotes the difference from spot, in pips: **forward points**."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "spot:1.0850; rd:0.045; rf:0.025;",
+    "days:fwd_dates[`date]-spot_info`date;",
+    "t:.qf.px.year_frac[`act360;spot_info`date] each fwd_dates`date;",
+    "outright:.qf.px.fwd_simple[spot;rd;rf;t];",
+    "curve:([] tenor:tenors; days:days; year_frac:t; outright:outright;",
+    "    points:.qf.px.fwd_points[outright;spot;.qf.px.pip_factor `EURUSD])"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @chart line",
+    "/ @title EURUSD forward points by days to delivery (USD 4.5%, EUR 2.5%)",
+    "select days, points from curve"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The points are positive and grow with the tenor because the dollar rate is the higher one: the currency with the higher rate trades at a forward discount, so EURUSD is higher forward than spot.",
+    "",
+    "The functions are vectorised in the usual q way - `fwd_simple` took the whole vector of year fractions at once.",
+    "",
+    "The relation runs backwards too. Given spot, a forward and one rate, the other rate is implied. Asked for the EUR rate behind the 3M forward, the library returns {{q: .qf.px.implied_foreign_rate[spot;outright 2;rd;t 2]}} - the 2.5% that went in.",
+    "",
+    "## Options: Garman-Kohlhagen",
+    "",
+    "Garman-Kohlhagen is Black-Scholes for FX: the base currency's interest rate plays the part of a dividend yield. Prices come out in the quote currency per unit of base."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "strike:1.0850; vol:0.08; expiry:0.25;",
+    "call:.qf.px.gk_call[spot;strike;rd;rf;vol;expiry];",
+    "put:.qf.px.gk_put[spot;strike;rd;rf;vol;expiry];",
+    "parity:(spot*.qf.px.df_cont[rf;expiry])-strike*.qf.px.df_cont[rd;expiry];",
+    "`call`put`call_minus_put`discounted_forward_minus_strike!(call;put;call-put;parity)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The last two numbers agree. That is **put-call parity**: a call minus a put at the same strike is a forward, whatever the volatility. It is the cheapest check there is on an option pricer, and it holds here to rounding.",
+    "",
+    "Across strikes, with everything else fixed:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @chart line",
+    "/ @title 3M EURUSD option premium by strike (spot 1.0850, 8% vol)",
+    "strikes:1.04+0.005*til 19;",
+    "select strike:strikes, call:.qf.px.gk_call[spot;strikes;rd;rf;vol;expiry],",
+    "    put:.qf.px.gk_put[spot;strikes;rd;rf;vol;expiry] from ([] strikes)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The **greeks** are the sensitivities a desk hedges with: delta to spot, gamma to delta, vega to volatility."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "([] strike:strikes;",
+    "    delta_call:.qf.px.gk_delta_call[spot;strikes;rd;rf;vol;expiry];",
+    "    delta_put:.qf.px.gk_delta_put[spot;strikes;rd;rf;vol;expiry];",
+    "    gamma:.qf.px.gk_gamma[spot;strikes;rd;rf;vol;expiry];",
+    "    vega:.qf.px.gk_vega[spot;strikes;rd;rf;vol;expiry])"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Gamma and vega peak near the money, where the outcome is least certain. A call's delta minus a put's is the same at every strike - parity again, differentiated.",
+    "",
+    "The market quotes options by volatility, not premium, so the pricer has to invert: given a premium, which volatility produces it? `implied_vol` solves for one option at a time, so it is applied with `'` (each-both) across strikes."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "premiums:.qf.px.gk_call[spot;strikes;rd;rf;vol;expiry];",
+    "implied:.qf.px.implied_vol[;spot;;rd;rf;expiry;1b]'[premiums;strikes];",
+    "`lowest`highest!(min implied;max implied)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Every strike gives back the 8% the premiums were made with.",
+    "",
+    "## Positions: from fills to a book",
+    "",
+    "A **position book** is a keyed table, one row per pair. It is a plain value: `apply_fills` returns a new book and mutates nothing. Four fills, the last one selling part of the first:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "t0:2026.08.21D09:00:00.000000000;",
+    "trades:([] time:t0+0D00:00:01*til 4; sym:`EURUSD`AUDUSD`EURPLN`EURUSD; side:1 1 1 -1;",
+    "    trade_price:1.0850 0.6550 4.2500 1.0870; size:1000000 500000 300000 400000f)"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "book:.qf.port.apply_fills[.qf.port.empty_book[];trades]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Selling 400,000 EUR at 1.0870 against an average cost of 1.0850 **realised** {{q: \"j\"$book[`EURUSD;`realized_pnl]}} USD; the 600,000 left keep their average price. Marking the open quantity to a market price gives the **unrealised** part:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "marks:`EURUSD`AUDUSD`EURPLN!1.0880 0.6540 4.2550;",
+    "held:exec sym from book;",
+    "([] sym:held; mark:marks held;",
+    "    unrealised:{.qf.port.unrealized_pnl[book;x;marks x]} each held;",
+    "    total:{.qf.port.total_pnl[book;x;marks x]} each held)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Those P&L numbers are each in their own pair's quote currency - USD, USD and PLN - so they cannot be added up as they stand.",
+    "",
+    "## Exposure: one position per currency, in one reporting currency",
+    "",
+    "A pair position is really two currency positions: long 600,000 EURUSD is long EUR and short USD. `ccy_exposure` nets them per currency; `ccy_exposure_in` then revalues each into a reporting currency from a quotes table, as of an instant.",
+    "",
+    "The quotes it reads are order books (notebook 2). The helper loaded here builds a synthetic ten-level book around a mid."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "\\l scripts/examples/lib/example_books.q",
+    "quotes:`sym`time xasc ([] time:3#t0; sym:`EURUSD`AUDUSD`EURPLN),'.qf.demo.book each 1.0850 0.6550 4.2500;",
+    "exposure:.qf.port.ccy_exposure_in[book;quotes;`USD;t0+0D00:01]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "There is no USDPLN quote in that table, yet PLN has a USD value: the library found the path PLN -> EUR -> USD through the pairs it was given. That chaining through a shared currency is the same machinery that prices a cross pair, and notebook 2 opens it up.",
+    "",
+    "## Risk: what could this lose?",
+    "",
+    "**Value at risk** answers \"how much could I lose over this horizon, at this confidence?\". The parametric form assumes normal returns, so it scales with the square root of time:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @chart bar",
+    "/ @title 99% parametric VaR of a 1,000,000 position at 8% vol, by horizon in trading days",
+    "horizon_days:1 5 10 21;",
+    "([] horizon_days; var_99:.qf.port.var_parametric[1000000;0.08;horizon_days%252;0.99])"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The historical form makes no distributional assumption: it reads the loss off a series of past P&L outcomes. Fed a series that *is* normal, the two agree closely:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ 500 one-day P&L outcomes with exactly normal quantiles, at the same 8% annual vol",
+    "pnl_series:1000000*(0.08*sqrt 1%252)*.qf.math.inv_ncdf (0.5+til 500)%500;",
+    "`historical_99`parametric_99!(.qf.port.var_historical[pnl_series;0.99];.qf.port.var_parametric[1000000;0.08;1%252;0.99])"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Holding this notebook to its word",
+    "",
+    "`tests/qrun/test_worked_examples.py` runs every notebook in this folder on each change. The cell below turns the claims made above into checks, so the notebook fails there if the library stops behaving as described."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "claims:(",
+    "    (\"EURUSD traded Friday 18 Sep 2026 settles Tuesday 22 Sep\";2026.09.22=spot_info`date);",
+    "    (\"the implied EUR rate is the one the forward was built with\";1e-12>abs rf-.qf.px.implied_foreign_rate[spot;outright 2;rd;t 2]);",
+    "    (\"put-call parity holds\";1e-12>abs (call-put)-parity);",
+    "    (\"implied vol returns the input vol at every strike\";all 1e-6>abs implied-vol);",
+    "    (\"selling 400k EUR 20 pips above cost realises 800 USD\";800f=book[`EURUSD;`realized_pnl]);",
+    "    (\"PLN exposure has a USD value with no USDPLN quote\";not null exec first reporting_amount from exposure where ccy=`PLN);",
+    "    (\"historical VaR of a normal series is within 2% of parametric\";0.02>abs 1-.qf.port.var_historical[pnl_series;0.99]%.qf.port.var_parametric[1000000;0.08;1%252;0.99]));",
+    "broken:claims[;0] where not claims[;1];",
+    "if[count broken; '\"notebook 1 no longer holds: \",\"; \" sv broken];",
+    "`claims_checked`all_hold!(count claims;1b)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Where next",
+    "",
+    "- **Notebook 2** (`02_books_and_execution.qnb`): the observed market - order books, synthetic crosses, and what a fill cost.",
+    "- **Notebook 3** (`03_pipeline_in_one_process.qnb`): how the framework turns functions like these into jobs that can be re-run safely.",
+    "- `docs/reference/qf-domains.md` draws the boundary of each domain; the qDoc block above each definition in `src/` says what the function takes, returns and refuses, and `python3 scripts/generate/q_api_docs.py` renders them all as pages under `docs/reference/q-api/`.",
+    "- `scripts/examples/scenario_example.q` runs the same fills through the real tickerplant table shapes."
+   ]
+  }
+ ]
+}
