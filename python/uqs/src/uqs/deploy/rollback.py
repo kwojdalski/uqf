@@ -32,7 +32,8 @@ from __future__ import annotations
 import json
 
 from uqs.deploy import report as deploy_report
-from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, LockLost, redact
+from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, redact
+from uqs.deploy.lock import LockLost
 from uqs.deploy.remote import Transport, q
 from uqs.deploy.selection import Selection, started_by
 from uqs.deploy.stages import Deployment

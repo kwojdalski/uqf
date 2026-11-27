@@ -65,7 +65,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from uqs import liveness
-from uqs.deploy.config import Config, DeployError, LockLost
+from uqs.deploy.config import Config, DeployError
 from uqs.deploy.remote import Transport, _checked, q, script
 from uqs.logger import get_logger
 
@@ -139,6 +139,12 @@ RELEASE = r"""
 if [ "$(cat {lock}/owner 2>/dev/null || true)" = {owner} ]; then rm -rf {lock}
 elif [ -d {lock} ]; then echo "kept=$(head -n 1 {lock}/owner 2>/dev/null || echo unknown)"; fi
 """
+
+
+class LockLost(DeployError):
+    """deploy.lock is no longer this run's: it was broken, and maybe taken by
+    another. Nothing more may change on the server - not even a rollback,
+    which would act alongside the new holder (#2978)."""
 
 
 def stale_after(cfg: Config) -> int:

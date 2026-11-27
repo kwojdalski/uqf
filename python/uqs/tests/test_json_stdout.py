@@ -81,6 +81,8 @@ CASES: dict[str, tuple[list[str], str]] = {
         "no activity history at",
     ),
     "runtime list": (["runtime", "list"], "uqf"),
+    # refused before it lists anything: --json cannot ask, so it needs --yes (#2988)
+    "clean": (["clean"], "add --yes"),
     "job list": (["job", "list"], "["),
     "process list": (["process", "list"], '"process"'),
     "profile list": (["profile", "list"], "["),

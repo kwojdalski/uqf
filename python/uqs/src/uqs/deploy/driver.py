@@ -14,7 +14,8 @@ from datetime import UTC, datetime
 
 from uqs.deploy import bundled, components, converted_override, fetch, hdb, overrides
 from uqs.deploy.artifact import Artifact, ReleaseError, release_runtime
-from uqs.deploy.config import Config, DeployError, LockLost, load_artifact, redact
+from uqs.deploy.config import Config, DeployError, load_artifact, redact
+from uqs.deploy.lock import LockLost
 from uqs.deploy.plan import no_keep, plan
 from uqs.deploy.prune import prune_locked
 from uqs.deploy.remote import Transport

@@ -20,7 +20,8 @@ from typer.testing import CliRunner
 from uqs import cli
 from uqs.cli.common.safety import dry_run_note
 from uqs.deploy import prune
-from uqs.deploy.config import DeployError, LockLost, make_config
+from uqs.deploy.config import DeployError, make_config
+from uqs.deploy.lock import LockLost
 
 NOTE = Text.from_markup(dry_run_note()).plain
 R1, R2, R3, R4, R5 = (f"2026100{d}T120000Z-0123456789a{d}" for d in range(1, 6))

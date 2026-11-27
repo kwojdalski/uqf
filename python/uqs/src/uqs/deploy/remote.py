@@ -16,7 +16,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
-from uqs.deploy.config import DeployError, StepTimedOut, redact
+from uqs.deploy.config import DeployError, redact
 
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -25,6 +25,12 @@ KILL_AFTER = 10
 #: What the server's limit leaves of the client's, past the connection and
 #: the KILL grace: sshd starting the shell, sudo -i's login.
 SLACK = 5
+
+
+class StepTimedOut(DeployError):
+    """A remote step this side stopped waiting for (#2979). The server bounds
+    each step below the client's wait, but this side cannot see that it
+    ended, so the lock is kept rather than handed to the next run."""
 
 
 class Transport(Protocol):

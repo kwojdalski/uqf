@@ -16,8 +16,9 @@ from pathlib import Path
 import pytest
 
 from uqs.deploy import lock
-from uqs.deploy.config import DeployError, LockLost, StepTimedOut, make_config
-from uqs.deploy.remote import Remote
+from uqs.deploy.config import DeployError, make_config
+from uqs.deploy.lock import LockLost
+from uqs.deploy.remote import Remote, StepTimedOut
 from uqs.deploy.server import Server
 
 HERE = socket.gethostname()

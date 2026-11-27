@@ -12,13 +12,12 @@ from uqs.deploy.config import (
     UNREADABLE_REPORT,
     Config,
     DeployError,
-    StepTimedOut,
     redact,
 )
 from uqs.deploy.lock import Lock, describe, lost
 from uqs.deploy.python_runtime import PythonRuntime
 from uqs.deploy.q_runtime import QRuntime
-from uqs.deploy.remote import Transport, _checked, diagnostic, q, script
+from uqs.deploy.remote import StepTimedOut, Transport, _checked, diagnostic, q, script
 from uqs.deploy.selection import Selection
 from uqs.deploy.torq_runtime import Runtime
 from uqs.interpreter import PEACHQ
