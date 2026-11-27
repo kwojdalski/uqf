@@ -1160,11 +1160,12 @@ def test_rule5_the_marks_beyond_an_effect_are_declared_where_their_command_is():
     a process even in a dry run, or act under an option are marks on the
     commands (`safety.marked`), which `uqs --target` reads too - so a new
     command with one of these properties cannot skip being confirmed."""
-    assert set(OWN_OUTPUT) == {"activity export", "exec", "job attachment contract export",
-                               "setup odbc env", "target shell"}  # fmt: skip
+    assert set(OWN_OUTPUT) == {"activity export", "cron run", "exec",
+                               "job attachment contract export", "setup odbc env",
+                               "target shell"}  # fmt: skip
     assert set(NO_DRY_RUN) == {"query"}
     starts = set(_marked("dry_run_starts"))
-    assert starts == {"job backfill"}
+    assert starts == {"cron add", "job backfill"}
     for path in starts:
         assert changes_the_server([*path.split(), "w", "--dry-run"]) is True, path
     acting = _marked("acts_when")
@@ -2010,6 +2011,7 @@ VOCABULARY = {
     "PROC", "JOB", "TARGET", "TABLE", "DATASET", "SOURCE", "KIND", "EXPR", "FIELD",
     "VALUE", "PARTITION", "RUNTIME", "RUN", "ATTACHMENT", "FILE", "CONNECTOR",
     "PACKAGE", "ARTIFACT", "COMPONENT", "BUNDLE", "KEY", "CHANGE", "NEW", "PUSH", "SNAPSHOT_ID",
+    "ENTRY", "COMMAND",
 }  # fmt: skip
 #: Placeholders the vocabulary replaced: in help they may only name a command's
 #: own option (`--override NAME`), never stand for one of the things above.
