@@ -7,8 +7,15 @@ import json
 
 from uqs.deploy import preflight as checks
 from uqs.deploy.artifact import compatible
-from uqs.deploy.config import REPORT, UNREADABLE_REPORT, Config, DeployError, redact
-from uqs.deploy.lock import Lock, describe
+from uqs.deploy.config import (
+    REPORT,
+    UNREADABLE_REPORT,
+    Config,
+    DeployError,
+    StepTimedOut,
+    redact,
+)
+from uqs.deploy.lock import Lock, describe, lost
 from uqs.deploy.python_runtime import PythonRuntime
 from uqs.deploy.q_runtime import QRuntime
 from uqs.deploy.remote import Transport, _checked, diagnostic, q, script
@@ -23,6 +30,32 @@ from uqs.stack.odbc_home import ODBC_HOME_ENV
 log = get_logger()
 
 
+class _Watched:
+    """`remote`, telling the server's lock of a step that timed out on this
+    side, so the lock is kept when the run ends (#2979). Anything else is
+    `remote`'s own."""
+
+    def __init__(self, remote: Transport, server: Server) -> None:
+        self._remote, self._server = remote, server
+
+    def __getattr__(self, name: str):
+        return getattr(self._remote, name)
+
+    def run(self, script: str, timeout: int, stage: str, as_login: bool = False):
+        try:
+            return self._remote.run(script, timeout, stage, as_login=as_login)
+        except StepTimedOut:
+            # the lock's own scripts only read and write the lock: none of
+            # them can leave work behind on the server
+            if stage != "lock":
+                self._server.locker.timed_out = stage
+            raise
+
+    def put(self, local, remote_path: str, timeout: int, stage: str) -> None:
+        # an scp left running only writes into staging/, which no one else uses
+        self._remote.put(local, remote_path, timeout, stage)
+
+
 class Server:
     def __init__(
         self,
@@ -32,7 +65,7 @@ class Server:
         release: str = "",
     ) -> None:
         self.cfg = cfg
-        self.remote = remote
+        self.remote: Transport = _Watched(remote, self)
         #: what the artifact was built for: os, arch, python
         self.target = target or {"os": "linux", "arch": "x86_64", "python": "3.14"}
         #: the release id being deployed, to refuse one already on the server
@@ -55,13 +88,21 @@ class Server:
         self.releases = f"{d}/releases"
         self.current = f"{d}/current"
         self.lock = f"{d}/deploy.lock"
-        self.locker = Lock(cfg, remote, self.lock)
+        self.locker = Lock(cfg, self.remote, self.lock)
         self.shared_config = f"{d}/shared/config"
 
     # ------- remote helpers
 
-    def run(self, stage: str, what: str, *lines: str, timeout: int | None = None) -> str:
-        r = self.remote.run(script(*lines), timeout or self.cfg.command_timeout, stage)
+    def run(
+        self, stage: str, what: str, *lines: str, timeout: int | None = None, fenced: bool = False
+    ) -> str:
+        """`lines` on the server. `fenced`, a destructive step: it starts by
+        checking this run still holds deploy.lock, and changes nothing, but
+        raises LockLost, when it does not (uqs.deploy.lock, #2978)."""
+        guard = self.locker.guard() if fenced else []
+        r = self.remote.run(script(*guard, *lines), timeout or self.cfg.command_timeout, stage)
+        if guard and (holder := lost(r)) is not None:
+            raise self.locker.lost(holder)
         return _checked(r, stage, what)
 
     def run_as_login(self, stage: str, what: str, *lines: str) -> str:

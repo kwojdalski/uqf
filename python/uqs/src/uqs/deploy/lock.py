@@ -26,7 +26,32 @@ the same server script that removes it (#2741). A release removes only the
 lock whose owner is still the record this run wrote: a run whose lock was
 broken, and taken by another, must not delete the newcomer's in its `finally`.
 A break removes only the lock whose owner is still the one it judged gone,
-so a lock released and taken again meanwhile is left to its new holder.
+so a lock released and taken again meanwhile is left to its new holder - and
+only while its heartbeat, read again in that script, is still past the limit
+it was judged by: a holder that beat in between keeps it (#2978).
+
+FENCING (#2978). A holder whose lock was broken must stop, not go on beside
+the run that took it. Every beat compares deploy.lock/owner with this run's
+record first: it refreshes only its own heartbeat, and a beat that finds
+another owner (or none) raises LockLost. The destructive steps - stopping and
+starting processes, moving `current`, prune's removals - begin with the same
+comparison in their own script (`guard`), so a lock lost between a beat and
+the step still stops it there, on the server.
+
+A BACKGROUND BEATER (#2978) beats every BEAT_EVERY seconds while the lock is
+held. Beating only between stages left gaps that were sums of steps - the
+transfer alone is an scp, then a sha and tar, then with --remote-user a copy,
+each up to command_timeout - and prune's confirmation waited with no limit,
+so a live holder could look past `stale_after` and be broken. A thread covers
+every gap, a local wait included, without a beat in front of each of the
+dozens of remote calls a deployment makes. It runs no destructive step and
+raises nothing: a loss it sees is recorded, and the next beat on the main
+thread raises it. The beats between stages stay, as those checkpoints.
+
+A run whose remote step timed out on this side (StepTimedOut, #2979) keeps
+the lock when it ends: the server may still be running that step. Every
+step's server-side limit is shorter than `stale_after`, so by the time the
+lock can be broken the step has ended.
 """
 
 from __future__ import annotations
@@ -34,11 +59,13 @@ from __future__ import annotations
 import getpass
 import os
 import socket
+import subprocess
+import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 
 from uqs import liveness
-from uqs.deploy.config import Config, DeployError
+from uqs.deploy.config import Config, DeployError, LockLost
 from uqs.deploy.remote import Transport, _checked, q, script
 from uqs.logger import get_logger
 
@@ -46,6 +73,19 @@ log = get_logger()
 
 #: Slack past the holder's longest step before its silence means it is gone.
 MARGIN = 60
+
+#: The background beater's period, at most: a quarter of stale_after when
+#: that is shorter.
+BEAT_EVERY = 60
+
+#: What a script prints, then exits LOST with, when deploy.lock is not this
+#: run's: then the holder's first line, or `none`.
+LOST_MARKER = "uqs-lock-lost:"
+LOST = 75
+
+#: The heartbeat as a number of seconds, in $hb - the directory's own age for
+#: a lock from before #867, which has none - or empty when neither is readable.
+HEARTBEAT = r"""hb=$(cat {lock}/heartbeat 2>/dev/null || stat -c %Y {lock} 2>/dev/null || true)"""
 
 #: What a lock holds, as name=value lines, then `age` - seconds since its last
 #: beat on the server's clock (the directory's age for a lock without one).
@@ -56,14 +96,41 @@ INFO = r"""
 if [ -d {lock} ]; then
   {{ cat {lock}/owner 2>/dev/null || true; }} | tail -n +2
   echo "owner_sum=$( {{ cksum < {lock}/owner; }} 2>/dev/null || true)"
-  hb=$(cat {lock}/heartbeat 2>/dev/null || stat -c %Y {lock} 2>/dev/null || true)
+  {heartbeat}
   case "$hb" in ''|*[!0-9]*) echo "age=unknown";; *) echo "age=$(( $(date +%s) - hb ))";; esac
 fi
 """
 
-#: Remove the lock only while its owner file's checksum is still {judged}.
+#: Remove the lock only while its owner file's checksum is still {judged}
+#: and its last beat, on the server's clock, is still {limit}s old or more;
+#: otherwise print `kept=` and why. Nothing to say when it is already gone.
 BREAK = r"""
-if [ "$( {{ cksum < {lock}/owner; }} 2>/dev/null || true)" = {judged} ]; then rm -rf {lock}; fi
+if [ -d {lock} ]; then
+  {heartbeat}
+  if [ "$( {{ cksum < {lock}/owner; }} 2>/dev/null || true)" != {judged} ]; then
+    echo "kept=it changed hands since it was judged"
+  else
+    case "$hb" in
+      ''|*[!0-9]*) echo "kept=its age cannot be read";;
+      *) if [ $(( $(date +%s) - hb )) -lt {limit} ]; then echo "kept=it beat again"
+         else rm -rf {lock}; fi;;
+    esac
+  fi
+fi
+"""
+
+#: First line of a destructive step's script: go on only while {lock}/owner
+#: is still {owner}, this run's record (#2978).
+GUARD = (
+    r"""[ "$(cat {lock}/owner 2>/dev/null || true)" = {owner} ] || """
+    r"""{{ echo "{marker} $(head -n 1 {lock}/owner 2>/dev/null || echo none)"; exit {code}; }}"""
+)
+
+#: Refresh the heartbeat only while {lock}/owner is still {owner}.
+BEAT = r"""
+if [ "$(cat {lock}/owner 2>/dev/null || true)" != {owner} ]; then
+  echo "{marker} $(head -n 1 {lock}/owner 2>/dev/null || echo none)"
+else date +%s > {lock}/heartbeat; fi
 """
 
 #: Remove the lock only while its owner file still holds {owner}, this run's
@@ -88,6 +155,11 @@ def stale_after(cfg: Config) -> int:
 
 
 def owner_record(cfg: Config, command: str, release: str) -> str:
+    return record(command, release, stale_after(cfg))
+
+
+def record(command: str, release: str, limit: int) -> str:
+    """deploy.lock/owner's text for a holder that beats at least every `limit`s."""
     who = f"{getpass.getuser()}@{socket.gethostname()}"
     fields = {
         "command": command,
@@ -96,7 +168,7 @@ def owner_record(cfg: Config, command: str, release: str) -> str:
         "host": socket.gethostname(),
         "pid": str(os.getpid()),
         "started": datetime.now(UTC).isoformat(timespec="seconds"),
-        "stale_after": str(stale_after(cfg)),
+        "stale_after": str(limit),
     }
     head = f"{fields['started']} {command} {fields['release']} by {who} pid {fields['pid']}"
     return "\n".join([head, *(f"{k}={v}" for k, v in fields.items())])
@@ -112,6 +184,20 @@ def describe(info: dict[str, str]) -> str:
     )
 
 
+def limit_of(info: dict[str, str], default_limit: int) -> int:
+    """The holder's recorded stale_after, else `default_limit`."""
+    recorded = info.get("stale_after", "")
+    return int(recorded) if recorded.isdigit() else default_limit
+
+
+def lost(r: subprocess.CompletedProcess) -> str | None:
+    """The holder a script found in place of this run, when it found one."""
+    for line in (r.stdout or "").splitlines():
+        if line.startswith(LOST_MARKER):
+            return line.removeprefix(LOST_MARKER).strip() or "none"
+    return None
+
+
 def verdict(
     info: dict[str, str], here: str, alive: Callable[[int], bool], default_limit: int
 ) -> tuple[bool, str]:
@@ -125,8 +211,7 @@ def verdict(
     age = info.get("age", "")
     if not age.isdigit():
         return False, "its age cannot be read"
-    recorded = info.get("stale_after", "")
-    limit = int(recorded) if recorded.isdigit() else default_limit
+    limit = limit_of(info, default_limit)
     if int(age) < limit:
         return False, f"it last beat {age}s ago, within {limit}s"
     why = f"it last beat {age}s ago, past {limit}s"
@@ -142,10 +227,18 @@ class Lock:
         self.cfg, self.remote, self.path = cfg, remote, path
         #: the owner record this run wrote, once it holds the lock
         self.owner: str | None = None
+        #: the holder the background beater found in this run's place
+        self.taken_by: str | None = None
+        #: a remote step this side stopped waiting for: the lock is kept (#2979)
+        self.timed_out: str | None = None
+        self._stop = threading.Event()
+        self._beater: threading.Thread | None = None
 
     def info(self) -> dict[str, str]:
         r = self.remote.run(
-            script(INFO.format(lock=q(self.path))), self.cfg.command_timeout, "lock"
+            script(INFO.format(lock=q(self.path), heartbeat=HEARTBEAT.format(lock=q(self.path)))),
+            self.cfg.command_timeout,
+            "lock",
         )
         out = _checked(r, "lock", "reading the deploy lock")
         return dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
@@ -173,8 +266,16 @@ class Lock:
                 "lock", f"{self.path} is still held, so it was not broken: {why} ({describe(info)})"
             )
         log.warning("breaking {}: {} ({})", self.path, why, describe(info))
-        judged = BREAK.format(lock=q(self.path), judged=q(info.get("owner_sum", "")))
-        self.remote.run(script(judged), self.cfg.command_timeout, "lock")
+        judged = BREAK.format(
+            lock=q(self.path),
+            heartbeat=HEARTBEAT.format(lock=q(self.path)),
+            judged=q(info.get("owner_sum", "")),
+            limit=limit_of(info, stale_after(self.cfg)),
+        )
+        r = self.remote.run(script(judged), self.cfg.command_timeout, "lock")
+        out = _checked(r, "lock", "breaking the deploy lock")
+        if kept := next((ln for ln in out.splitlines() if ln.startswith("kept=")), None):
+            raise DeployError("lock", f"{self.path} was not broken: {kept.removeprefix('kept=')}")
         if not self._mkdir(owner_record(self.cfg, command, release)):
             raise DeployError("lock", f"another deployment took {self.path} as it was broken")
 
@@ -193,13 +294,41 @@ class Lock:
             return False
         _checked(r, "lock", "taking the deployment lock")
         self.owner = owner
+        self._start_beater()
         return True
+
+    def guard(self) -> list[str]:
+        """The line a destructive step's script starts with: it exits LOST,
+        changing nothing, unless this run still holds the lock (#2978). None
+        without the lock - a dry run takes none, and changes nothing."""
+        if self.owner is None:
+            return []
+        return [GUARD.format(lock=q(self.path), owner=q(self.owner), marker=LOST_MARKER, code=LOST)]
+
+    def lost(self, holder: str) -> LockLost:
+        return LockLost(
+            "lock",
+            f"{self.path} is no longer this run's - it was broken, and is held by {holder} - "
+            "so this run stopped, changing nothing more on the server",
+        )
 
     def release(self) -> None:
         """Remove the lock if this run still holds it. One broken and taken
         by another is left to its holder, said in a warning: the run's own
-        outcome is what it reports, not this."""
+        outcome is what it reports, not this. After a remote step timed out
+        on this side the lock is kept, said in a warning (#2979)."""
+        self._stop_beater()
         if self.owner is None:
+            return
+        if self.timed_out is not None:
+            log.warning(
+                "{} is kept: the {} step timed out on this side, and the server may still be "
+                "running it. It ends there within this run's stale_after, after which "
+                "--override break-lock --reason REASON removes the lock",
+                self.path,
+                self.timed_out,
+            )
+            self.owner = None
             return
         r = self.remote.run(
             script(RELEASE.format(lock=q(self.path), owner=q(self.owner))),
@@ -213,13 +342,50 @@ class Lock:
             log.warning("{} is no longer this run's, so it was left to {}", self.path, holder)
 
     def beat(self) -> None:
-        """Refresh the heartbeat between stages. Never fails a deployment: a
-        beat that does not land only lets the lock look older than it is."""
+        """Refresh the heartbeat between stages, if the lock is still this
+        run's; raise LockLost if it is not - found now, or by the background
+        beater (#2978). Otherwise never fails a deployment: a beat that does
+        not land only lets the lock look older than it is."""
+        if self.taken_by is not None:
+            raise self.lost(self.taken_by)
+        if holder := self._beat():
+            raise self.lost(holder)
+
+    def _beat(self) -> str | None:
+        """One beat; the holder found in this run's place, if any."""
+        if self.owner is None:
+            return None
+        body = BEAT.format(lock=q(self.path), owner=q(self.owner), marker=LOST_MARKER)
         try:
-            self.remote.run(
-                script(f"if [ -d {q(self.path)} ]; then date +%s > {q(self.path)}/heartbeat; fi"),
-                self.cfg.command_timeout,
-                "lock",
-            )
+            r = self.remote.run(script(body), self.cfg.command_timeout, "lock")
         except DeployError as exc:
             log.warning("could not refresh {}: {}", self.path, exc)
+            return None
+        return lost(r)
+
+    def _start_beater(self) -> None:
+        self._stop.clear()
+        every = max(1, min(BEAT_EVERY, stale_after(self.cfg) // 4))
+
+        def beating() -> None:
+            while not self._stop.wait(every):
+                try:
+                    holder = self._beat()
+                except Exception as exc:  # noqa: BLE001 - a thread's error has nowhere to go
+                    log.warning("could not refresh {}: {}", self.path, exc)
+                    continue
+                if holder is not None:
+                    log.error("{} was broken: it is held by {}", self.path, holder)
+                    self.taken_by = holder
+                    return
+
+        self._beater = threading.Thread(target=beating, name="deploy-lock-beat", daemon=True)
+        self._beater.start()
+
+    def _stop_beater(self) -> None:
+        self._stop.set()
+        if self._beater is not None:
+            # a beat in flight may outlast this: it compares the owner before
+            # it writes, so one that lands after the release writes nothing
+            self._beater.join(timeout=5)
+            self._beater = None

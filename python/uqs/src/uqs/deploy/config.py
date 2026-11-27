@@ -77,6 +77,18 @@ class DeployError(Exception):
         self.stage = stage
 
 
+class LockLost(DeployError):
+    """deploy.lock is no longer this run's: it was broken, and maybe taken by
+    another. Nothing more may change on the server - not even a rollback,
+    which would act alongside the new holder (#2978)."""
+
+
+class StepTimedOut(DeployError):
+    """A remote step this side stopped waiting for (#2979). The server bounds
+    each step below the client's wait, but this side cannot see that it
+    ended, so the lock is kept rather than handed to the next run."""
+
+
 def load_artifact(path: str) -> Artifact:
     """The artifact, checked whole (uqs.deploy.artifact.read_artifact), or why not."""
     try:

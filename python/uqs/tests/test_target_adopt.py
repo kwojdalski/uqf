@@ -240,3 +240,21 @@ def test_apply_onto_an_inspection_servers_ssh_and_dest_is_refused(
     assert _tree(tmp_path) == before
     # the dry run still reports what the server holds
     assert _adopt(server, "--launch-python", sys.executable).exit_code == 0
+
+
+def test_apply_is_refused_while_a_deployment_holds_the_lock(server, tmp_path, logged):
+    """#2980: moving <dest>'s contents would carry a push in flight's lock away."""
+    (server / "deploy.lock").mkdir()
+    (server / "deploy.lock" / "owner").write_text("2026-10-08 push R by ops@h pid 9\n")
+    before = _tree(server)
+    r = _adopt(server, "--launch-python", sys.executable, "--apply", "--yes")
+    assert r.exit_code != 0
+    assert _has("\n".join(logged) + r.output, "another deployment holds")
+    assert _tree(server) == before, "nothing moved, and the lock is the push's still"
+
+
+def test_apply_leaves_a_pushs_staging_where_it_is_and_releases_its_own_lock(server):
+    (server / "staging").mkdir()
+    r = _adopt(server, "--launch-python", sys.executable, "--apply", "--yes")
+    assert r.exit_code == 0, r.output
+    assert sorted(p.name for p in server.iterdir()) == ["current", "releases", "staging"]

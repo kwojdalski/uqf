@@ -264,11 +264,13 @@ class Deployment(Server):
     ) -> str:
         argv = " ".join(q(a) for a in args)
         prefix = "".join(f"{k}={q(v)} " for k, v in (env or {}).items())
+        # every caller starts or stops processes: fenced (#2978)
         return self.run(
             stage,
             what,
             *self.in_release(release, f"{prefix}.venv/bin/uqs {argv}"),
             timeout=timeout,
+            fenced=True,
         )
 
     def verify(
@@ -368,6 +370,7 @@ class Deployment(Server):
             "moving current to the new release",
             f"ln -sfn releases/{q(rid)} {q(self.cfg.dest)}/.current.new",
             f"python3 -c {q(REPLACE_PY)} {q(self.cfg.dest)}/.current.new {q(self.current)}",
+            fenced=True,
         )
 
     def write_report(self, release: str | None, report: Report, *, required: bool = False) -> None:

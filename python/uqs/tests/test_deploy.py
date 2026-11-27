@@ -1278,6 +1278,63 @@ def test_the_lock_beats_between_prepare_and_the_hdb_check(tmp_path):
     assert any("/heartbeat; fi" in s for _, s in between), "each may take command_timeout"
 
 
+def test_a_push_whose_lock_was_broken_stops_and_never_rolls_back(tmp_path):
+    """#2978: a beat that finds another holder ends the push where it is. A
+    rollback would stop and start processes beside the run that took the lock."""
+    previous = json.dumps({"profile": "fx", "processes": [{"process": "rdb1"}]})
+    code, remote, report = _run(
+        tmp_path,
+        {
+            "uv python find": _done(SERVER + "data=present\ncurrent=OLD\n"),
+            "deploy-report.json\n": _done(previous),
+            "readlink": _done("current=OLD\n"),
+            "/heartbeat; fi": _done("uqs-lock-lost: 2026-10-08 push NEW by ops@h pid 9\n"),
+        },
+        args=("--restart",),
+    )
+    assert code == 1 and report["status"] == "failed" and report["stage"] == "lock"
+    assert "held by 2026-10-08 push NEW" in report["error"]
+    assert report["rollback"].startswith("not rolled back")
+    assert not remote.ran("uqs stop") and not remote.ran("uqs start")
+    assert not remote.ran(".current.new")
+
+
+class InterruptedUnderTheLock(FakeRemote):
+    """Ctrl-C as the destination is read again under the lock just taken."""
+
+    def run(self, script, timeout, stage, as_login=False):
+        if stage == "lock" and "release_exists=yes" in script:
+            raise KeyboardInterrupt
+        return super().run(script, timeout, stage, as_login)
+
+
+def test_ctrl_c_right_after_taking_the_lock_releases_it(tmp_path):
+    """#2978: only a DeployError released it, so Ctrl-C there left it behind."""
+    remote = InterruptedUnderTheLock(_HEALTHY)
+    with pytest.raises(KeyboardInterrupt):
+        driver.deploy(parse_args(_args(_artifact(tmp_path))), remote, out=io.StringIO())
+    assert remote.ran("rm -rf /opt/uqf/deploy.lock")
+
+
+def test_stopping_starting_and_activating_check_the_lock_is_still_this_runs(tmp_path):
+    """#2978: the guard is the first line of each destructive step's own script."""
+    previous = json.dumps({"profile": "fx", "processes": [{"process": "rdb1"}]})
+    _, remote, _ = _run(
+        tmp_path,
+        {
+            "uv python find": _done(SERVER + "data=present\ncurrent=OLD\n"),
+            "deploy-report.json\n": _done(previous),
+            "readlink": _done("current=OLD\n"),
+            "uqs deploy verify --profile": _verified(True),
+        },
+        args=("--restart",),
+    )
+    guard = '[ "$(cat /opt/uqf/deploy.lock/owner 2>/dev/null || true)" = '
+    for marker in ("uqs stop", "uqs start", ".current.new"):
+        (step,) = [s for _, s in remote.scripts if marker in s]
+        assert step.splitlines()[1].startswith(guard), marker
+
+
 def test_a_held_lock_in_preflight_names_break_lock(tmp_path):
     held = _done(
         SERVER + "data=present\nlocked=2026-10-08 push OLD by ops@h pid 7, last beat 9s ago\n"
