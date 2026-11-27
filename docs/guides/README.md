@@ -14,6 +14,7 @@ understood and a [reference](../reference/) page to be consulted.
   | [`hdb.md`](hdb.md)                                       | the HDB: schema, checking and migrating partitions, altering a table, compressing, comparing                                            |
   | [`new-pipeline.md`](new-pipeline.md)                     | adding a pipeline end to end — a streaming job, or a source and a bounded worker, including the implementation                          |
   | [`when-it-breaks.md`](when-it-breaks.md)                 | a backfill that failed partway, or a streaming job that died: finding the cause and recovering                                          |
+  | [`eod-interrupted.md`](eod-interrupted.md)               | the RDB stopped while collecting garbage at end of day: what each signal leaves behind, and putting it right                            |
   | [`metatables.md`](metatables.md)                         | partition profiling over an HDB                                                                                                         |
   | [`config-audit.md`](config-audit.md)                     | recording runtime configuration changes, and joining them to who made them                                                              |
   | [`deploy.md`](deploy.md)                                 | building a release artifact, deploying it to a server with an existing TorQ, verifying it, and rolling back                             |
