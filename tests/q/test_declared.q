@@ -193,7 +193,7 @@
 / Each is a different question, listed with why it is not the declaration rule.
 .qt.qetl.declared.other_questions:(
     ("src/etl/core/io_remote.q";"t within 100 112h";"is a value plain data: a function anywhere in a request is refused, (::) included");
-    ("src/etl/core/source_fetch.q";"100h=type f";"how to print a call: a lambda has its own text");
+    ("src/etl/core/query_log.q";"100h=type f";"how to print a call: a lambda has its own text");
     ("src/etl/streaming/kafka_feed.q";"within 100 107h";"chains a previous .z.exit at run time; not a declaration");
     ("src/namespaces.q";"100h=type";"which namespaces hold functions; the library cannot call .qetl");
     ("src/portfolio/allocation.q";"within 100 104h";"the library's matching methods; src/portfolio cannot call .qetl"))

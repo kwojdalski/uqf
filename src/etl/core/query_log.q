@@ -87,16 +87,18 @@
     req:`transport`request!(spec`transport;.qetl.log.next_request[]);
     sh:.qetl.query.shown spec;
     if[tr;
-        call:$[`f in key spec; enlist[`call]!enlist .qetl.query.call_text spec`f; ()!()];
-        extra:$[`shown in key spec; spec`shown; ()!()];
-        .qetl.query.say[`TRACE;ch;"query sent";call,sh,req,(enlist[`target]!enlist spec`target),extra]];
+        shown:$[`shown in key spec; spec`shown; ()!()];
+        text:$[`f in key spec; .qetl.query.call_text spec`f; sh`qsql];
+        / the trace vocabulary's own line, always on the source channel as it was:
+        / python/uqs/.../trace_render.py renders its `call
+        .[{.qetl.log.ch.trc[x;y;z]};(`source;"query sent";(enlist[`call]!enlist text),sh,req,(enlist[`target]!enlist spec`target),shown);::]];
     r:@[run;::;{[say;ch;tr;req;sh;tg;t0;e]
         ms:`long$(.z.p-t0)%1000000;
-        $[tr; say[`TRACE;ch;"query failed";req,`error`ms!(e;ms)];
+        $[tr; say[`TRACE;`source;"query failed";req,`error`ms!(e;ms)];
             say[`WARNING;ch;"query failed";req,sh,(enlist[`target]!enlist tg),`error`ms!(e;ms)]];
         'e}[.qetl.query.say;ch;tr;req;sh;spec`target;t0]];
     ms:`long$(.z.p-t0)%1000000;
-    $[tr; .qetl.query.say[`TRACE;ch;"query returned";req,`rows`ms!(count r;ms)];
+    $[tr; .qetl.query.say[`TRACE;`source;"query returned";req,`rows`ms!(count r;ms)];
         .qetl.query.say[`INFO;ch;"query";req,sh,(enlist[`target]!enlist spec`target),`rows`ms!(count r;ms)]];
     r}
 
