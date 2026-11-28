@@ -94,51 +94,14 @@
 / @eg .qetl.source.ipc_call[{value x};{[c] c+1};enlist 41] -> 42
 .qetl.source.ipc_call:{[h;f;args] .qetl.source.traced_ipc[h;f;args;enlist[`args]!enlist args]}
 
-/ Private: send `f` with `args` over `h`, logging it at TRACE with `shown`
-/ beside the call - before it is sent, and with the rows and milliseconds,
-/ or the error, when it comes back. With TRACE off it is just sent.
+/ Private: send `f` with `args` over `h` as a logged query (.qetl.query.run):
+/ at TRACE with `shown` beside the call - before it is sent, and with the rows
+/ and milliseconds, or the error, when it comes back; with the queries switch
+/ alone, one line when it is done. With both off it is just sent.
 / @private
 .qetl.source.traced_ipc:{[h;f;args;shown]
-    msg:enlist[f],args;
-    if[not .qetl.log.enabled`TRACE; :h msg];
-    t0:.z.p;
-    req:`transport`request!(`ipc;.qetl.log.next_request[]);
-    .[{.qetl.log.ch.trc[x;y;z]};(`source;"query sent";(enlist[`call]!enlist .qetl.source.call_text f),.qetl.source.qsql_fields[f;args],req,shown);::];
-    r:@[h;msg;{[req;t0;e]
-        .[{.qetl.log.ch.trc[x;y;z]};(`source;"query failed";
-            req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];
-        'e}[req;t0]];
-    .[{.qetl.log.ch.trc[x;y;z]};(`source;"query returned";
-        req,`rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
-    r}
-
-/ Private: the query as the far side will run it, for the TRACE line - the
-/ lambda's body with its arguments resolved and rendered as qSQL (.qetl.qsql),
-/ so a currency pair and a timestamp read as values, not as the names of the
-/ lambda's parameters. This is the construction boundary: the source has
-/ built `f` (closing over its own values) and `args` are what it runs on.
-/ Only `f` and `args` are rendered; the handle - the connection - never is.
-/ A rendering that throws is reported as the TRACE line's own `qsql_error`
-/ rather than costing the query its trace, or the query itself.
-/ @param f the function sent
-/ @param args its arguments, a list
-/ @return a dictionary of `qsql_form (`qsql, `tree or `lambda) and `qsql (the text, in full)
-/ @eg first key .qetl.source.qsql_fields[{[a] a+1};enlist 41]  ->  `qsql_form
-/ @private
-.qetl.source.qsql_fields:{[f;args]
-    r:@[.qetl.qsql.of_call[f];args;{[e] (`error;"qsql: ",e)}];
-    `qsql_form`qsql!(r 0;r 1)}
-
-/ Private: a query lambda's text for a trace - IN FULL. `string` for a
-/ lambda: -3! stops at the console width (79 characters by default), and cut
-/ the traced query before log.q's full-width rendering ever saw it. A
-/ projection has no source text of its own, so it is rendered at the widest
-/ console .qetl.log.value1 allows.
-/ @param f the function sent
-/ @return its text
-/ @eg count .qetl.source.call_text {[a;b] a+b} -> 11
-/ @private
-.qetl.source.call_text:{[f] $[100h=type f; string f; .qetl.log.value1 f]}
+    .qetl.query.run[`channel`transport`target`f`args`shown!(`source;`ipc;.qetl.query.target_of h;f;args;shown);
+        {[h;msg;unused_u] h msg}[h;enlist[f],args]]}
 
 / A mock source's seed, from its credential.
 / @param cred the credential, a string
@@ -324,7 +287,7 @@
     / unambiguous and the half-open bound is applied in UTC - the direction
     / where the arithmetic cannot double-count or skip.
     kept:tbl where in_range;
-    ![kept;();0b;(enlist f)!enlist enlist first each cs where in_range]}
+    ![kept;();0b;(enlist f)!enlist enlist first each cs where in_range]}  / not a query: drops a column from rows already fetched
 
 / Private: apply the window to a fixture, on its declared time_column.
 / .
@@ -349,6 +312,6 @@
     if[not f in .qetl.source.column_names t;
         '"window_fixture: ",string[decl`source],"'s fixture has no ",string[f],
          " column, so the window cannot be applied - it would return every row for every window and triplicate the data"];
-    ?[t;((>=;f;range_from);(<;f;range_to));0b;()]}
+    ?[t;((>=;f;range_from);(<;f;range_to));0b;()]}  / not a query: clips fetched rows to the window
 
 \d .

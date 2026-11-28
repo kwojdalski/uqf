@@ -39,7 +39,7 @@
     if[count absent;
         '"load_zone_table: ",path," is missing ",(", " sv string absent),
          " - a zone table needs a zone name, the UTC instant a rule takes effect, and the offset it applies"];
-    trimmed:?[zt;();0b;needed!needed];
+    trimmed:?[zt;();0b;needed!needed];  / not a query: projects columns of a table in memory
     / The sort is load-bearing: the lookup in offset_at is an `aj`, and on an
     / unsorted right-hand table `aj` returns the wrong row SILENTLY rather
     / than erroring. Sort FIRST and group after - `xasc` reorders rows, so a

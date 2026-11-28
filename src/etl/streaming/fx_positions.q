@@ -140,7 +140,7 @@
 .qpipe.job.fx_positions.restore_throttle:{[x]
     if[(0=count x) or not `time in cols x; :count .qpipe.job.fx_positions.alerts];
     keyed:.qpipe.job.fx_positions.dimensions,`metric;
-    ids:.qf.port.identity ?[x;();0b;keyed!keyed];
+    ids:.qf.port.identity ?[x;();0b;keyed!keyed];  / not a query: projects columns of the batch in hand
     seen:exec max time by id from ([] id:ids; time:x`time);
     `.qpipe.job.fx_positions.alerts set .qpipe.job.fx_positions.alerts|seen;
     count .qpipe.job.fx_positions.alerts}
@@ -275,7 +275,7 @@
     / dimensions lead, in the book's order, so the identity renders the same
     / whatever order the limits file named its scope in - restore_throttle
     / builds it from the published row, which is always in that order.
-    breaches:{[t;c] $[c in cols t; t; ![t;();0b;(enlist c)!enlist enlist `]]}/[breaches;.qpipe.job.fx_positions.dimensions];
+    breaches:{[t;c] $[c in cols t; t; ![t;();0b;(enlist c)!enlist enlist `]]}/[breaches;.qpipe.job.fx_positions.dimensions];  / not a query: drops a column from the batch in hand
     breaches:(.qpipe.job.fx_positions.dimensions,cols[breaches] except .qpipe.job.fx_positions.dimensions)#breaches;
     r:.qf.port.throttle[.qpipe.job.fx_positions.alerts;breaches;now;.qpipe.job.fx_positions.alert_period];
     `.qpipe.job.fx_positions.alerts set r`state;

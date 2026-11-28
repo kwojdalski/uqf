@@ -208,7 +208,7 @@
     / `cols` on every batch, and `cols` of a list of column vectors throws
     / `type`. The $[c;v;c;v;else] form does short-circuit between pairs.
     x:$[98h<>type x; x;
-        `time in cols x; ![x;();0b;enlist `time];
+        `time in cols x; ![x;();0b;enlist `time];  / not a query: drops a column from a batch in hand
         x];
     stamped:$[98h=type x;
         ([] time:(count x)#now) ,' x;
@@ -388,7 +388,7 @@
     / leaving a replay handler installed would send live traffic into
     / recovery code, which is worse than the failure that caused it.
     r:.[{[n;path] -11!(n;path); 1b}; (n;path); {[e] e}];
-    $[count saved; `upd set first saved; ![`.;();0b;enlist `upd]];
+    $[count saved; `upd set first saved; ![`.;();0b;enlist `upd]];  / not a query: deletes a global
     if[not 1b~r; '"replay: ",$[10h=type r; r; .Q.s1 r]];
     n}
 

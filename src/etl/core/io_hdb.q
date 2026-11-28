@@ -228,7 +228,7 @@
     tc:.qetl.plant.time_column;
     if[not any (tc;partition_col) in cols batch;
         '"hdb: ",string[target],"'s batch has neither time nor ",string[partition_col]," to partition by"];
-    data:$[tc in cols batch; batch; tc xcols ![batch;();0b;enlist[tc]!enlist partition_col]];
+    data:$[tc in cols batch; batch; tc xcols ![batch;();0b;enlist[tc]!enlist partition_col]];  / not a query: drops a column from the batch being written
     days:.qetl.io.days_of[root;data tc];
     if[any null days;
         '"hdb: ",string[target]," has rows with a null time - no partition to put them in"];
@@ -289,7 +289,8 @@
             part:hsym `$(string .Q.par[root;d;target]),"/";
             if[()~key part; :1b];
             if[not (exec t from meta rows)~exec t from meta get part; :0b];
-            not any (kc#rows) in ?[part;();0b;kc!kc]}[root;target;kc]'[folds;dates];
+            / the partition's existing keys: a logged query (.qetl.query.local), so the switch shows it
+            not any (kc#rows) in .qetl.query.local[`storage;{[part;kc] ?[part;();0b;kc!kc]};(part;kc)]}[root;target;kc]'[folds;dates];
         if[all clean; .qetl.io.write_hdb[root;partition_col;target;fold]; :count fold]];
     if[`replace=strategy;
         span:{[f;t] f+til 1+t-f}[.qetl.io.days_of[root;opts`range_from];.qetl.io.days_of[root;opts[`range_to]-1]];

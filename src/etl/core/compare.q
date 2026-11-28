@@ -176,7 +176,9 @@
 /   sides lack the column)
 .qetl.compare.snapshot:{[h;tbl;req]
     none:`available`reason`exists`schema`rows`truncated`coverage`filter_absent!(1b;"";0b;([] c:`symbol$(); t:`char$());();0b;(::);`symbol$());
-    m:@[h;(`.gw.syncexec;(.qetl.compare.meta_program;tbl);`rdb);{[e] (`failed;e)}];
+    m:.[{[h;tbl] .qetl.query.run[`channel`transport`target`describe!(`ipc;`gateway;.qetl.query.target_of h;
+            {[tbl;unused_u] (`program;.qetl.compare.meta_program," on rdb, table ",string tbl)}[tbl]);
+            {[h;tbl;unused_u] h(`.gw.syncexec;(.qetl.compare.meta_program;tbl);`rdb)}[h;tbl]]};(h;tbl);{[e] (`failed;e)}];
     if[(0h=type m) and `failed~first m; :none,`available`reason!(0b;"reading ",string[tbl],"'s schema failed: ",last m)];
     if[0=count m; :none];
     m:select c, t from 0!m;

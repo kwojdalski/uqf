@@ -116,7 +116,7 @@
     .qpipe.transform.markout_layouts.require_long[spec;lng];
     id:(spec`execution),spec`horizon;
     want:id,(spec`shared),spec`own;
-    base:?[lng;enlist (=;`kind;enlist spec`base);0b;want!want];
+    base:?[lng;enlist (=;`kind;enlist spec`base);0b;want!want];  / not a query: selects rows of a table in memory
     / executions in first-appearance order, horizons ascending within one
     rows:flip value flip (spec`execution)#lng;
     base_rows:flip value flip (spec`execution)#base;
@@ -127,7 +127,7 @@
     c:spec`components;
     n:0;
     while[n<count c;
-        t:?[lng;((=;`kind;enlist c[n;`kind]);(=;`step;c[n;`step]));0b;(id,spec`own)!id,spec`own];
+        t:?[lng;((=;`kind;enlist c[n;`kind]);(=;`step;c[n;`step]));0b;(id,spec`own)!id,spec`own];  / not a query: selects rows of a table in memory
         t:id xkey (id,.qpipe.transform.markout_layouts.component_names[spec;n]) xcol t;
         j:j lj t;
         n+:1];
@@ -178,7 +178,7 @@
         '"markout_layouts: a per-execution column varies across horizons"];
     cs:(cols w) except ex;
     agg:cs!{$[x in y; (first;x); x]}[;pe] each cs;
-    n:0!?[w;();ex!ex;agg];
+    n:0!?[w;();ex!ex;agg];  / not a query: aggregates rows in memory
     / qSQL groups sort their keys; restore the wide rows' first appearance.
     n (ex#n)?distinct ex#w}
 

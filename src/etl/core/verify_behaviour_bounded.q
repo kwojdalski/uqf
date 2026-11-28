@@ -109,7 +109,7 @@
     n:count held;
     dup:n-count distinct ks#held;
     ev:string[strategy]," on ",(", " sv string ks),": ",string[n]," row(s) held after writing ",string[count batch]," twice, ",string[dup]," repeated";
-    if[target in tables `.; ![`.;();0b;enlist target]];
+    if[target in tables `.; ![`.;();0b;enlist target]];  / not a query: deletes a test global
     $[strategy=`fail; $[(0h=type two) and `refused~first two; `status`reason`evidence!(`PASS;"";ev,"; the second write was refused");
                         `status`reason`evidence!(`FAIL;"on_conflict fail accepted the same rows twice";ev)];
       strategy=`append; `status`reason`evidence!(`UNVERIFIED;"append keeps every write, so re-publication repeats rows by design; no conflict handling to judge";ev);

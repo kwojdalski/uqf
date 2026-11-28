@@ -48,6 +48,15 @@
     if[count .qetl.job.bounded.runtime.connected_override; :.qetl.job.bounded.runtime.connected_override];
     @[{exec distinct proctype from .servers.SERVERS where not null w};::;{`symbol$()}]}
 
+/ The name TorQ gives the process a handle reaches, for a query's log line
+/ (.qetl.query.target_of): the one place src/ reads `.servers` for it.
+/ @param h an open handle
+/ @return the process name, or `remote when the server table does not know it
+/ @eg .qetl.job.bounded.runtime.procname_of 0i  ->  `remote
+.qetl.job.bounded.runtime.procname_of:{[h]
+    n:@[{[hd] exec first procname from .servers.SERVERS where w=hd};h;{[e] `}];
+    $[null n; `remote; n]}
+
 / Fail at INITIALISATION when a declared dependency is unavailable.
 / .
 / At init, not at first use: a worker that starts, runs for twenty minutes

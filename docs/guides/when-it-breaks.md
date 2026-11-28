@@ -69,9 +69,37 @@ If the error alone doesn't explain it, re-run with more detail:
 - `--debug` adds the coverage gaps planned, each fetch's bounds and row counts,
   retries, locks and checkpoints;
 - `--trace` adds every query the source was sent. A live job takes it too:
-  `uqs restart <procname> --trace`.
+  `uqs restart <procname> --trace`. It also switches on query logging, below.
 
 See [the DEBUG level](logs.md#where-a-process-stopped).
+
+#### What query did it actually run?
+
+When a job reads the wrong rows, switch on query logging and read the queries
+themselves. It is one switch per process, and it works on a running one:
+
+```bash
+uqs query hdb_fx_markouts_backfill1 ".qetl.log.queries 1b"   # on, no restart
+uqs query hdb_fx_markouts_backfill1 ".qetl.log.queries 0b"   # off again
+```
+
+`uqs job backfill --trace` and `uqs restart <procname> --trace` start the
+process with it on (and with the TRACE lines above). Every query the framework
+runs - a source's fetch, a read of a partition, a request through the gateway -
+logs one INFO line when it is done, with the query as qSQL, where it ran, the
+rows it returned and the milliseconds it took:
+
+```
+2026.10.09D10:00:03.114|INFO|source|query transport=`ipc request=3 qsql_form=`qsql qsql="select from trade where sym in `EURUSD`GBPUSD,time>2026.10.09D10:00:00.000000000" target=`hdb1 rows=120 ms=14
+```
+
+`qsql_form` says how it was spelt: `qsql` is a query you can paste into q and
+run; `call` is the same query as a functional `?[...]`; `tree` is the whole
+parse tree, used when the query cannot be written as qSQL; a request to the
+gateway is described rather than rendered. The text is never cut. The target is
+the name of the process the query was sent to - never a handle, a host and port,
+a user or a password. A query that throws logs `query failed` with the error and
+still throws. With the switch off the framework does not render a query at all.
 
 ### 3. Fix the cause, then re-run the same command
 

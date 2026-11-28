@@ -141,7 +141,10 @@ D (generated files), T (tests) and C (the CLI), and summarises L and J.
 - **G2** DEBUG is per process, switched on at runtime with
   `uqs query PROC ".qetl.log.debug 1b"`. A backfill takes the global `--debug`
   (`uqs --debug job backfill ...`), or `--trace` for every source query. Never
-  switch it on across the whole stack.
+  switch it on across the whole stack. To see the qSQL every query ran, switch
+  on `.qetl.log.queries` the same way (`--trace` does); a new query site runs
+  through `.qetl.query.run` or `.qetl.query.local`, which the query-sites gate
+  holds.
 
 ## q traps that cost this tree real time (Q)
 

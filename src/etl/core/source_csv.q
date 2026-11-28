@@ -93,17 +93,7 @@
 / @return what `f` returns
 .qetl.source.csv:{[h;f;range_from;range_to]
     rows:.qetl.source.csv_rows[h];
-    if[not .qetl.log.enabled`TRACE; :f[rows;range_from;range_to]];
-    t0:.z.p;
-    req:`transport`request!(`csv;.qetl.log.next_request[]);
-    .[{.qetl.log.ch.trc[x;y;z]};(`source;"query sent";
-        (enlist[`call]!enlist .qetl.source.call_text f),req,`range_from`range_to!(range_from;range_to));::];
-    r:.[f;(rows;range_from;range_to);{[req;t0;e]
-        .[{.qetl.log.ch.trc[x;y;z]};(`source;"query failed";
-            req,`error`ms!(e;`long$(.z.p-t0)%1000000));::];
-        'e}[req;t0]];
-    .[{.qetl.log.ch.trc[x;y;z]};(`source;"query returned";
-        req,`rows`ms!(count r;`long$(.z.p-t0)%1000000));::];
-    r}
+    .qetl.query.run[`channel`transport`target`f`args`shown!(`source;`csv;`local;f;(rows;range_from;range_to);`range_from`range_to!(range_from;range_to));
+        {[f;a;unused_u] .[f;a]}[f;(rows;range_from;range_to)]]}
 
 \d .

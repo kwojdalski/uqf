@@ -63,7 +63,7 @@
     dt:c where 15h=type each t c;
     whole:dt where {[v] all v=`date$v} each t dt;
     if[not count whole; :t];
-    ![t;();0b;whole!{(`date$;x)} each whole]}
+    ![t;();0b;whole!{(`date$;x)} each whole]}  / not a query: casts a result already in memory
 
 / Open a connection and register its handle.
 / @param x a connection string, a DSN symbol, or a (string;timeout) pair

@@ -47,7 +47,7 @@
     if[basis=`final_state;
         g:group ks#rows;
         rows:rows asc last each value g];
-    ![rows;();ks!ks;(enlist `n)!enlist (til;(count;`i))]}
+    ![rows;();ks!ks;(enlist `n)!enlist (til;(count;`i))]}  / not a query: numbers rows in memory
 
 / The differences between two producers' rows, paired by key.
 / @param a the reference producer's rows
@@ -70,10 +70,10 @@
     xtra:kb where not kb in ka;
     out,:([] rowkey:.qetl.verify.key_text[ks] each miss; kind:(count miss)#`missing; detail:(count miss)#enlist "in the first producer only");
     out,:([] rowkey:.qetl.verify.key_text[ks] each xtra; kind:(count xtra)#`extra; detail:(count xtra)#enlist "in the second producer only");
-    ca:?[a;();ks!ks;(enlist `c)!enlist (count;`i)];
-    cb:?[b;();ks!ks;(enlist `c)!enlist (count;`i)];
+    ca:?[a;();ks!ks;(enlist `c)!enlist (count;`i)];  / not a query: counts rows in memory
+    cb:?[b;();ks!ks;(enlist `c)!enlist (count;`i)];  / not a query: counts rows in memory
     if[basis<>`final_state;
-        cb2:(ks,`cb_c)#![0!cb;();0b;(enlist `cb_c)!enlist `c];
+        cb2:(ks,`cb_c)#![0!cb;();0b;(enlist `cb_c)!enlist `c];  / not a query: renames a column in memory
         dup:0!select from (ca ij ks xkey cb2) where c<>cb_c;
         out,:([] rowkey:.qetl.verify.key_text[ks] each dup; kind:(count dup)#`duplicated;
             detail:{"first producer ",string[x`c]," time(s), second ",string x`cb_c} each dup)];

@@ -189,7 +189,8 @@ def backfill(
     `-verbose`, so its log - `uqs logs <process>` - carries DEBUG lines.
     `--trace` starts it with `-trace`: every query sent to the source, at TRACE,
     and the DEBUG lines `uqs --debug` would show, so each query sits beside its
-    window.
+    window. It also switches on query logging (`.qetl.log.queries`), so a
+    partition read or a gateway request logs its qSQL too.
 
     The exit code is torq.sh's: whether the process STARTED, not how the run
     ended. `--wait` waits for the run's outcome and exits with that - what
