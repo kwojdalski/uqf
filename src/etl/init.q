@@ -58,6 +58,7 @@
 \l src/etl/core/mapped_depth.q
 \l src/etl/core/reference_variant.q
 \l src/etl/core/reference_library.q
+\l src/etl/core/reference_consolidated.q
 \l src/etl/core/variant_run.q
 \l src/etl/core/reference_policy.q
 \l src/etl/core/compression.q

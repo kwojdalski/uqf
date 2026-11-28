@@ -27,6 +27,7 @@ from pathlib import Path
 NO_MARKET = (
     "src/etl/core/variant_run.q",
     "src/etl/core/reference_library.q",
+    "src/etl/core/reference_consolidated.q",
     "src/etl/core/reference_variant.q",
     "src/etl/core/reference_policy.q",
     "src/etl/transforms/markout_variants.q",

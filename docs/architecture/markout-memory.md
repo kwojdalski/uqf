@@ -208,6 +208,54 @@ With ten times the market (2,000,000 rows a day) the gather is 1,959 books and
 groups) it is 1,800 books at every count: the gather grows with the distinct
 SELECTs, never with the variants.
 
+### Consolidated-book combines (#3002)
+
+A transform reduces ONE book to a bid, an ask and a weight, so no combine sees
+two venues' depth together. A **ladder combine** does: the transform `ladders`
+passes each matched book's ladders through, and the combine receives them
+grouped by instant (`src/etl/core/reference_consolidated.q`). **Consolidated**
+means the venues' ladders merged into one book:
+
+- `consolidated_micro`: the micro-price of the cross-venue touch (highest bid
+  anywhere, lowest ask anywhere, the size at each summed over every venue
+  quoting exactly that price). It always lies inside the tradeable touch, which
+  a per-venue micro-price does not (A bid 100 x9 / ask 100.2 x1 gives 100.18
+  while B offers 100.1 x3; consolidated: 100.075).
+- `consolidated_vwap`: the ladders merged, a buy filled off the asks cheapest
+  first, a sell off the bids dearest first; `bid` is the sell price, `ask` the
+  buy price, `mid` their midpoint. Asks A 1@100.0, 2@100.5; B 2@100.1, 2@100.6:
+  buying 3 is 100.067 consolidated, against 100.267-100.30 from per-venue VWAPs
+  combined.
+
+```q
+.qetl.reference.register[`cvwap_5;`venues`stale`offset`transform`combine`params!(
+    `all;`spec;0D;`ladders;`consolidated_vwap;`qty`crossed`max_instants!(5f;`null;2000))]
+```
+
+The parameters are the transform `ladders`': `qty` (VWAP only), `crossed`
+(`` `null `` default or `` `as_is ``), `invert` (`0b`) and `max_instants`
+(default 2000). Each rule is a refusal, or a null with a reason that
+`.qetl.reference.reasons` returns, never a guess:
+
+  | rule                          | what happens                                                                                                                                                                                                                                             |
+  | ---                           | ---                                                                                                                                                                                                                                                      |
+  | staleness                     | the variant's SELECT filters each venue's book BEFORE merging; a stale venue is not in the book                                                                                                                                                          |
+  | different `market`            | a venue list spanning two markets is refused at registration; with `` `all `` an instant whose books span two is null, `mixed_market` (a book's market is its venue's, `venue_market.q`)                                                                 |
+  | depth                         | a quantity the merged levels cannot fill is null on that side, `insufficient_depth`; never extrapolated                                                                                                                                                  |
+  | crossed consolidated touch    | `crossed` `` `null `` (default): the instant is null, `crossed`; `` `as_is ``: the formulas run on it                                                                                                                                                    |
+  | no book / one side            | null, `no_books` / `one_sided`                                                                                                                                                                                                                           |
+  | inverted pairs                | `invert:1b` inverts every ladder: prices `1/p`, bids become asks and the reverse, sizes become size x price; quantity is then in the other currency                                                                                                      |
+  | batch size                    | a ladder combine's cost is instants x venues x levels; `.qetl.variant.run` checks `max_instants` BEFORE the ladders are gathered and reads and prices a larger batch in pieces of that size, and `evaluate` splits likewise over books already in memory |
+
+Fees and venue access (a venue the desk cannot trade on still sets the touch)
+are out of scope: a later, declared per-venue adjustment. Measured
+(`tests/q/test_reference_consolidated.q`, KDB-X): 1,000 instants x 6 venues x 10
+levels a side allocate about 2.1 KB per instant while pricing
+`consolidated_vwap`, on top of the 6 gathered books of each instant. Brute-force
+merges (plain loops in the test) equal both combines on random books with ties,
+thin sides and crossed touches, and the live buffer and the mapped gather give
+the same prices.
+
 ## The live path
 
 A live horizon job buffers its reference as the transform declares it, and the

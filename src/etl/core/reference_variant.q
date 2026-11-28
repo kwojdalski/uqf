@@ -81,6 +81,11 @@
     best_ask:@[n#0n;g`tid;:;?[(g`a)=0w;0n;g`a]];
     ([] bid:best_bid; ask:best_ask; mid:?[null best_bid;0n;0.5*(best_bid+best_ask)])}
 
+/ LADDER COMBINES (reference_consolidated.q, #3002): name -> `fn`check, for a combine that reads every venue's LADDERS at an
+/ instant rather than the transform's reduced bid, ask and w. It is also registered in `combines` (as a stub that refuses a direct
+/ call), so a variant names it like any other; `folded` hands it the ladders grouped by instant, and `complete` runs its `check`.
+.qetl.reference.ladder_combines:(`symbol$())!()
+
 / The registered variants: name -> its definition, enlisted so the dictionary stays general.
 .qetl.reference.variants:(`symbol$())!()
 
@@ -101,6 +106,7 @@
     if[not (def`transform) in key .qetl.reference.transforms; '"reference: ",string[name],"'s transform ",string[def`transform]," is not registered"];
     if[not (def`combine) in key .qetl.reference.combines; '"reference: ",string[name],"'s combine ",string[def`combine]," is not registered"];
     want:(.qetl.reference.transform def`transform)`defaults;
+    if[(def`combine) in key .qetl.reference.ladder_combines; (first .qetl.reference.ladder_combines def`combine)[`check][name;def]];
     given:$[`params in key def; def`params; (`symbol$())!()];
     / an empty dictionary of any key type is no parameters
     if[(99h=type given) and 0=count given; given:(`symbol$())!()];
@@ -173,6 +179,8 @@
 / @return `same`any!(table bid, ask, mid; table bid, ask, mid), one row per target
 / @eg (.qetl.reference.folded[.qetl.reference.def `best_top;([] tid:enlist 0; clock:enlist `venue; tclock:enlist `venue);([] bid:enlist 1.5; ask:enlist 2.5);1]`same)`mid  ->  enlist 2f
 .qetl.reference.folded:{[def;j;px;n]
+    / a combine that reads ladders is handed them, grouped by instant (reference_consolidated.q)
+    if[(def`combine) in key .qetl.reference.ladder_combines; :.qetl.reference.ladder_fold[def;j;px;n]];
     rows:([] tid:j`tid; clock:j`clock; target:j`tclock; bid:px`bid; ask:px`ask);
     if[`w in cols px; rows:update w:px`w from rows];
     comb:.qetl.reference.combines def`combine;

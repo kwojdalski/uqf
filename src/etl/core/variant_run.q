@@ -136,6 +136,8 @@
     names:distinct (),names;
     n:count syms;
     none:`same`any!2#enlist ([] bid:n#0n; ask:n#0n; mid:n#0n);
+    / a batch larger than a ladder-reading combine's limit is split, not grown (reference_consolidated.q)
+    if[n>lim:.qetl.reference.instant_limit names; :.qetl.reference.split_evaluate[names;tob;max_age;syms;times;clocks;lim]];
     p:.qetl.variant.plan[names;max_age];
     defs:.qetl.reference.def each names;
     / 1 SELECT, once per group
