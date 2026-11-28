@@ -263,6 +263,8 @@
     "    (\"a crossed touch is null by default and priced as_is when declared\";(null cb_cross_default) and (1e-9>abs cb_cross_asis-100.5) and `crossed~first cb_cross_why);",
     "    (\"venues of two markets are refused, and mixed books are null with their reason\";(cb_refused like \"reference: cb_mixed merges venues of different markets*\") and `mixed_market~first cb_mixed_why);",
     "    (\"a stale venue changed nothing\";cb_fresh_only=cb_with_stale);",
+    "    (\"selling 3 hits the best merged bid, 99, and the mid is the midpoint of that and the buy price\";(1e-9>abs (first cb_consolidated`bid)-99f) and 1e-9>abs (first cb_consolidated`mid)-(0.5*99f+100.06666666666667));",
+    "    (\"the tie sizes are 8 on the bid and 4 on the ask\";(cb_tie_bid_size=8f) and cb_tie_ask_size=4f);",
     "    (\"a batch over the limit is split and prices the same\";(7=.qetl.reference.instant_limit enlist `cb_cap) and cb_split_equal));",
     "broken:claims[;0] where not claims[;1];",
     "if[count broken; '\"notebook 6 no longer holds: \",\"; \" sv broken];",
