@@ -452,3 +452,60 @@
     / an unnameable grid is refused by the same validation at declaration
     .qunit.assertThrows[.qpipe.transform.markout_core.validate[d;];sp,enlist[`horizons]!enlist (0D;0Wn);"*horizons must be finite*";"infinite"];
     .qunit.assertThrows[.qpipe.transform.markout_core.validate[d;];sp,enlist[`horizons]!enlist 0D00:00:01 0D00:00:00.000500;"*whole milliseconds*";"sub-millisecond"]};
+
+/ --- a variant's price is its combine's declared mid (#3003, #3004) and its stale fits the spec (#3005) -----
+
+/ EURUSD priced by `median_top`: venues a 1.0/1.1, b no bid / 1.15, c 1.2/1.3 at 10:00:00, a buy at 1.10 at 10:00:00.5
+.qt.qpipe.transform.markout_core.median_run:{[]
+    t:.qt.qpipe.transform.markout_core.t;
+    dom:.qpipe.transform.markout_core.table_domain[([] sym:enlist `EURUSD; quote_ccy:enlist `USD; legs:enlist enlist `EURUSD; invert:enlist enlist 0b);0#([] quote_ccy:`symbol$(); report_ccy:`symbol$(); leg:`symbol$(); invert:`boolean$())];
+    spec:`horizons`report_ccy`rate_timing`max_age`reference!(enlist 0D00:00:01;`USD;`execution;0D00:00:05;`median_top);
+    md:([] source_time:3#t; sym:3#`EURUSD; source:`a`b`c; bid:1.0 0n 1.2; ask:1.1 1.15 1.3; clock:3#`venue);
+    exe:([] source_time:enlist t+0D00:00:00.5; venue:enlist `v; sym:enlist `EURUSD; side:enlist 1; size:enlist 1e6; price:enlist 1.10; fill_id:enlist `f1; clock:enlist `venue);
+    .qpipe.transform.markout_core.score[dom;spec;exe;md]}
+
+.qt.qpipe.transform.markout_core.test_a_median_reference_skips_the_venues_with_no_side_and_flips_no_sign:{[tc]
+    r:.qt.qpipe.transform.markout_core.median_run[];
+    tot:first select from r where kind=`total;
+    / live bids 1.0 1.2 -> 1.1; live asks 1.1 1.15 1.3 -> 1.15; mids of the two-sided books 1.05 and 1.25 -> 1.15 (the null bid is not a 0n in the middle)
+    .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[enlist tot`ref_t0;enlist 1.15];"the reference is the median of the live mids, not the midpoint of the medians"];
+    / a buy at 1.10 against 1.15 gained 0.05 on 1,000,000
+    .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[enlist tot`move;enlist 0.05];"the move is positive: the null venue did not drag the median down"];
+    .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[enlist tot`quote_amount;enlist 50000f];"quote_amount +50000, as 1e6 x 0.05"];
+    .qunit.assertEquals[tot`status;`ok;"and the row is ok"]};
+
+.qt.qpipe.transform.markout_core.test_a_direct_pairs_leg_price_and_reference_are_the_combines_mid_not_the_midpoint:{[tc]
+    r:.qt.qpipe.transform.markout_core.median_run[];
+    / the median of the bids and of the asks is 1.1 and 1.15, whose midpoint 1.125 is NOT the median mid 1.15
+    v:(.qetl.reference.at[`median_top;.qetl.mapped.arrange ([] source_time:3#.qt.qpipe.transform.markout_core.t; sym:3#`EURUSD; source:`a`b`c; bid:1.0 0n 1.2; ask:1.1 1.15 1.3; clock:3#`venue);0D00:00:05;enlist `EURUSD;enlist .qt.qpipe.transform.markout_core.t+0D00:00:00.5;enlist `venue])`same;
+    .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[v`bid;enlist 1.1] and .qt.qpipe.transform.markout_core.near[v`ask;enlist 1.15];"the variant's own bid and ask"];
+    .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[v`mid;enlist 1.15];"its declared mid"];
+    ref:first exec ref_t0 from r where kind=`total;
+    .qunit.assertTrue[.qt.qpipe.transform.markout_core.near[enlist ref;v`mid];"the markout reference is the variant's mid"]};
+
+.qt.qpipe.transform.markout_core.test_chain_mid_uses_a_declared_mid_and_keeps_the_midpoint_chain_for_a_midpoint_variant:{[tc]
+    near:.qt.qpipe.transform.markout_core.near;
+    / a midpoint variant (best): mid 1.25 is 0.5*(1.0+1.5), so the leg chains as before - half the products of bids and asks, inverted too
+    o:.qpipe.transform.markout_core.orient[`EURUSD`EURUSD;01b;([] bid:1.0 1.0; ask:1.5 1.5; mid:1.25 1.25)];
+    .qunit.assertTrue[near[o`cbid;o`bid] and near[o`cask;o`ask];"a midpoint variant is chained on its bids and asks, bit for bit as before"];
+    .qunit.assertTrue[near[.qpipe.transform.markout_core.chain_mid[enlist o];(0.5*1.0+1.5),0.5*(1f%1.5)+1f%1.0];"the midpoint of the oriented book, inverted leg included"];
+    / a median variant: mid 1.4 is not the midpoint 1.25, so it is the chain's mid itself, 1%1.4 inverted
+    o:.qpipe.transform.markout_core.orient[`EURUSD`EURUSD;01b;([] bid:1.0 1.0; ask:1.5 1.5; mid:1.4 1.4)];
+    .qunit.assertTrue[near[.qpipe.transform.markout_core.chain_mid[enlist o];1.4,1f%1.4];"one leg: the declared mid, and 1%mid when inverted"];
+    two:(([] bid:enlist 1.0; ask:enlist 1.5; cbid:enlist 1.4; cask:enlist 1.4); ([] bid:enlist 2f; ask:enlist 3f; cbid:enlist 2f; cask:enlist 2f));
+    .qunit.assertTrue[near[.qpipe.transform.markout_core.chain_mid[two];enlist 2.8];"a chain of declared mids is their product"];
+    .qunit.assertTrue[near[.qpipe.transform.markout_core.chain_mid[enlist ([] bid:1.1 1.2; ask:1.3 1.4)];1.2 1.3];"legs without chain sides are the midpoint"]};
+
+.qt.qpipe.transform.markout_core.test_a_variant_staler_than_the_specs_max_age_is_refused_with_the_policys_words:{[tc]
+    .qetl.reference.register[`eg_best_1m;`venues`stale`offset`transform`combine!(`all;0D00:01:00;0D;`top;`best)];
+    d:.qt.qpipe.transform.markout_core.domain[];
+    sp:.qt.qpipe.transform.markout_core.sp[`reference`max_age!(`eg_best_1m;0D00:00:05)];
+    r:@[.qpipe.transform.markout_core.validate[d;];sp;{[e] e}];
+    .qetl.reference.variants:(enlist `eg_best_1m) _ .qetl.reference.variants;
+    .qunit.assertTrue[(10h=type r) and r like "markout_core: eg_best_1m: stale 0D00:01:00.000000000 is longer than the spec's max_age 0D00:00:05.000000000 - the job reads no book older*raise the spec's max_age or lower the variant's stale";"refused, naming both limits and the fix"];
+    / a stale within the limit, and `spec, are accepted
+    .qetl.reference.register[`eg_best_2s;`venues`stale`offset`transform`combine!(`all;0D00:00:02;0D;`top;`best)];
+    ok:(.qpipe.transform.markout_core.validate[d;sp,enlist[`reference]!enlist `eg_best_2s])`reference;
+    .qetl.reference.variants:(enlist `eg_best_2s) _ .qetl.reference.variants;
+    .qunit.assertEquals[ok;`eg_best_2s;"a stale inside max_age is accepted"];
+    .qunit.assertEquals[(.qpipe.transform.markout_core.validate[d;sp,enlist[`reference]!enlist .qetl.reference.default])`reference;.qetl.reference.default;"a variant on `spec is accepted"]};

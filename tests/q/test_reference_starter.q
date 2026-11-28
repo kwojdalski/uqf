@@ -92,3 +92,38 @@
     .qetl.reference.variants:(enlist `eg_micro_b) _ .qetl.reference.variants;
     / b alone: 1.95
     .qunit.assertTrue[.qt.qetl.reference.starter.near[r`mid;1.95];"venue b's micro-price"]};
+
+/ --- the median over venues that quote one side or no sizes (#3003): med counts nulls, so only live values are taken ---
+
+.qt.qetl.reference.starter.median_at:{[bids;asks]
+    n:count bids;
+    r:(.qetl.reference.at[`median_top;.qetl.mapped.arrange ([] sym:n#`EURUSD; source:`$'(n#"abcdefgh"); source_time:n#2026.09.17D10:00:00; bid:bids; ask:asks; clock:n#`venue);0D00:00:05;enlist `EURUSD;enlist 2026.09.17D10:00:01;enlist `venue])`same;
+    `bid`ask`mid!first each r`bid`ask`mid}
+
+.qt.qetl.reference.starter.test_the_median_counts_only_live_values_odd_even_and_all_null:{[t]
+    / odd live count (2 of 3 bids live is even; 3 of 4 is odd)
+    r:.qt.qetl.reference.starter.median_at[1.0 0n 1.2;1.1 1.15 1.3];
+    .qunit.assertTrue[.qt.qetl.reference.starter.near[r`bid;1.1];"bids 1.0 1.2: the null is not counted"];
+    .qunit.assertTrue[.qt.qetl.reference.starter.near[r`ask;1.15];"asks 1.1 1.15 1.3"];
+    .qunit.assertTrue[.qt.qetl.reference.starter.near[r`mid;1.15];"mids 1.05 and 1.25 of the two-sided books"];
+    r:.qt.qetl.reference.starter.median_at[1.0 0n 1.2 1.4;4#2f];
+    .qunit.assertTrue[.qt.qetl.reference.starter.near[r`bid;1.2];"odd live count: bids 1.0 1.2 1.4"];
+    r:.qt.qetl.reference.starter.median_at[1.0 0n 0n 1.4;2.0 2.1 2.2 2.3];
+    .qunit.assertTrue[.qt.qetl.reference.starter.near[r`bid;1.2];"even live count: bids 1.0 1.4"];
+    r:.qt.qetl.reference.starter.median_at[2#0n;2#0n];
+    .qunit.assertTrue[null r`bid;"an all-null bid group is null"];
+    .qunit.assertTrue[null r`ask;"an all-null ask group is null"];
+    .qunit.assertTrue[null r`mid;"and so is its mid"];
+    r:.qt.qetl.reference.starter.median_at[2#0n;1.1 1.3];
+    .qunit.assertTrue[null r`bid;"no bids: null bid"];
+    .qunit.assertTrue[.qt.qetl.reference.starter.near[r`ask;1.2];"asks still priced"];
+    .qunit.assertTrue[null r`mid;"no book is two-sided: no mid"]};
+
+.qt.qetl.reference.starter.test_micro_median_skips_a_venue_with_no_sizes:{[t]
+    t0:2026.09.17D10:00:00;
+    buf:([] sym:3#`EURUSD; source:`a`b`c; source_time:3#t0; bid:1.0 1.2 1.1; ask:2.0 2.2 2.1; clock:3#`venue;
+        bid_prices:(enlist 1.0;enlist 1.2;`float$()); bid_sizes:(enlist 100f;enlist 100f;`float$());
+        ask_prices:(enlist 2.0;enlist 2.2;`float$()); ask_sizes:(enlist 100f;enlist 300f;`float$()));
+    r:((.qetl.variant.live[enlist `micro_median;buf;0D00:00:05;enlist `EURUSD;enlist t0+0D00:00:01;enlist `venue])`micro_median)`same;
+    / a: 1.5; b: (1.2 x 300 + 2.2 x 100) / 400 = 1.45; c has no sizes, so no micro-price: median of 1.5 and 1.45 = 1.475
+    .qunit.assertTrue[.qt.qetl.reference.starter.near[first r`mid;1.475];"the venue without sizes adds no null to the median"]};

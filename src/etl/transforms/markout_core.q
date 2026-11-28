@@ -272,6 +272,11 @@
     if[(rf in key .qetl.reference.variants) and .qetl.reference.policy.is rf; '"markout_core: reference ",string[rf]," names both a variant and a reference policy"];
     / a rule's staleness the job's read cannot honour is refused here, where the spec and its policy meet
     if[.qetl.reference.policy.is rf; .qetl.reference.policy.require_max_age[rf;spec`max_age]];
+    / a variant's own stale is held to the same limit (#3005): the job reads no book older than max_age, so a longer stale would price one path and not another
+    if[rf in key .qetl.reference.variants;
+        var_stale:(.qetl.reference.def rf)`stale;
+        if[$[-16h=type var_stale; var_stale>spec`max_age; 0b];
+            '"markout_core: ",string[rf],": stale ",string[var_stale]," is longer than the spec's max_age ",string[spec`max_age]," - the job reads no book older than the spec's limit, so raise the spec's max_age or lower the variant's stale"]];
     rt:spec`rates;
     if[not (99h=type rt) and (11h=type key rt) or 0=count rt; '"markout_core: rates must be a dictionary from quote currency to rate source"];
     kinds:.qpipe.transform.markout_core.rate_kind each value rt;
@@ -416,23 +421,38 @@
 
 / One leg's price at each instant, oriented: the reference variant's answer for the leg's sym, flipped when the
 / route inverts it. An absent leg (a route shorter than the longest) is the identity: bid and ask 1, no mid.
+/ .
+/ A variant's price is its combine's declared mid (#3004). cbid and cask are what the chain multiplies: the oriented bid and
+/ ask where the declared mid IS the midpoint of the variant's bid and ask (best, so the chain keeps the midpoint of the
+/ chain's synthetic bid and ask), and the oriented declared mid on both sides where it is not (the median, say), so the
+/ reference is the mid the variant declared and the leg row reports - 1%mid on an inverted leg.
 / @param syms the leg per row, null where the route has no such leg
 / @param inverted whether the route inverts that leg, per row
 / @param r the variant's price per row: table bid, ask, mid
-/ @return table bid, ask (oriented), mid (the leg's own, un-oriented)
+/ @return table bid, ask (oriented), cbid, cask (what the chain multiplies) and mid (the leg's own, un-oriented)
 / @eg .qpipe.transform.markout_core.orient[enlist `EURUSD;enlist 1b;([] bid:enlist 1.25; ask:enlist 1.5; mid:enlist 1.375)]`bid  ->  enlist 0.6666666666666666
 .qpipe.transform.markout_core.orient:{[syms;inverted;r]
     live:not null syms;
-    ([] bid:?[live;?[inverted;1f%r`ask;r`bid];1f]; ask:?[live;?[inverted;1f%r`bid;r`ask];1f]; mid:?[live;r`mid;0n])}
+    ob:?[live;?[inverted;1f%r`ask;r`bid];1f];
+    oa:?[live;?[inverted;1f%r`bid;r`ask];1f];
+    / the declared mid, oriented; where it is not the midpoint of the variant's own bid and ask both chain sides are it
+    om:?[inverted;1f%r`mid;r`mid];
+    midpoint:0.5*((r`bid)+r`ask);
+    declared:live & not (r`mid)=midpoint;
+    ([] bid:ob; ask:oa; cbid:?[declared;om;ob]; cask:?[declared;om;oa]; mid:?[live;r`mid;0n])}
 
-/ The mid of a chain of oriented legs: half the sum of the products of their bids and asks.
-/ @param books a list of tables bid, ask, one per leg
+/ The mid of a chain of oriented legs: half the sum of the products of their chain sides, cbid and cask where a leg has
+/ them (orient: a variant whose mid is not the midpoint of its bid and ask is chained at that mid), else bid and ask.
+/ For one leg of a variant that declares another mid the chain is that mid; for any leg of a midpoint variant it is
+/ half the sum of the products of the bids and of the asks.
+/ @param books a list of tables bid, ask and optionally cbid, cask, one per leg
 / @return the chain's mid, a float per row; null when any leg has no book
 / @eg .qpipe.transform.markout_core.chain_mid[enlist ([] bid:1.1 1.2; ask:1.3 1.4)]  ->  1.2 1.3
 .qpipe.transform.markout_core.chain_mid:{[books]
-    bids:{x`bid} each books;
-    asks:{x`ask} each books;
-    0.5*((prd bids)+prd asks)}
+    bids:{$[`cbid in cols x; x`cbid; x`bid]} each books;
+    asks:{$[`cask in cols x; x`cask; x`ask]} each books;
+    total:(prd bids)+prd asks;
+    0.5*total}
 
 / Private: how the legs are priced at some instants - a function of (syms; times; clocks). Under a variant it is
 / .qetl.reference.at with that variant; under a reference policy (#2996) each row's rule is selected from its
