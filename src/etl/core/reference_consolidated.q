@@ -202,12 +202,8 @@
     run:{[lc;p;n;r] `bid`ask`mid#lc[`fn][r`tid;r;n;p]}[lc;def`params;n];
     `same`any!(run same;run rows)}
 
-/ The consolidated combines' common function.
-/ @private
-.qetl.reference.consolidated.combine:{[kind;tid;rows;n;params] .qetl.reference.consolidated.price[kind;tid;rows;n;params]}
-
-.qetl.reference.add_ladder_combine[`consolidated_micro;.qetl.reference.consolidated.check;.qetl.reference.consolidated.combine[`micro]];
-.qetl.reference.add_ladder_combine[`consolidated_vwap;.qetl.reference.consolidated.check;.qetl.reference.consolidated.combine[`vwap]];
+.qetl.reference.add_ladder_combine[`consolidated_micro;.qetl.reference.consolidated.check;{[tid;rows;n;params] .qetl.reference.consolidated.price[`micro;tid;rows;n;params]}];
+.qetl.reference.add_ladder_combine[`consolidated_vwap;.qetl.reference.consolidated.check;{[tid;rows;n;params] .qetl.reference.consolidated.price[`vwap;tid;rows;n;params]}];
 
 / The reason each instant of a variant is null or priced, for the books on the target's own clock.
 / @param name a registered variant whose combine reads ladders
