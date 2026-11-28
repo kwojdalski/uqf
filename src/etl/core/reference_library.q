@@ -96,7 +96,9 @@
 / The median of each side and of the books' mids, per instant; null where no book has the side.
 .qetl.reference.combines[`median]:{[tid;px;n]
     t:([] tid:tid; bid:px`bid; ask:px`ask; mid:?[(null px`bid)|null px`ask;0n;0.5*((px`bid)+px`ask)]);
-    g:0!select b:med bid, a:med ask, m:med mid by tid from t;
+    / med does not skip nulls (they sort first and count toward the middle): take the median of the live values only
+    live_med:{[x] $[count v:x where not null x; med v; 0n]};
+    g:0!select b:live_med bid, a:live_med ask, m:live_med mid by tid from t;
     ([] bid:@[n#0n;g`tid;:;g`b]; ask:@[n#0n;g`tid;:;g`a]; mid:@[n#0n;g`tid;:;g`m])};
 
 / The weighted mean of each side and of the books' mids, per instant; a book without the side adds neither weight nor price to it.

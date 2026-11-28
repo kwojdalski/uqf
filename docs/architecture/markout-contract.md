@@ -394,6 +394,16 @@ FX knowledge:
 A single leg with no inversion is the plain best mid across sources, which is
 `crypto_markout`'s reference (`crypto_markout.q:85`).
 
+A reference variant's price is its combine's declared `mid` (#3004). Where that
+mid is the midpoint of the variant's bid and ask (`best`), the chain is the
+midpoint of the chain's synthetic book, half the sum of the products of the
+legs' bids and asks, as above. Where the combine declares another mid (`median`,
+`wmean`), the leg is chained at that mid on both sides, an inverted leg at
+`1%mid`: a one-leg reference is exactly the declared mid, and so is the leg
+row's `price_t0`/`price_t1`. A variant's `stale` may not exceed the spec's
+`max_age` (#3005): the job reads no book older than `max_age`, so a longer one
+is refused when the spec is validated.
+
 **Legs for readiness.** For each execution, the readiness legs are its resolver
 `legs`, plus the conversion leg when the rate comes from `market_data`. The same
 list serves three readers:
