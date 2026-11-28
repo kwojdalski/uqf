@@ -1,18 +1,20 @@
-# Notebooks: uqf in three sittings
+# Notebooks: uqf in four sittings
 
-Three q notebooks that explain this framework by running it. Each is prose, code
+Four q notebooks that explain this framework by running it. Each is prose, code
 and charts in one file, takes about fifteen minutes, and needs nothing but one
 scratch q process - no stack, no tickerplant, no database.
 
-  | Notebook                                                           | What it shows                                                                                                                                                                                                                   |
-  | ---                                                                | ---                                                                                                                                                                                                                             |
-  | [`01_quant_library.qnb`](01_quant_library.qnb)                     | The seven `.qf` namespaces, by following one pair through a desk's day: conventions and dates, a forward from interest parity, an option and its greeks, a position, its exposure and its VaR.                                  |
-  | [`02_books_and_execution.qnb`](02_books_and_execution.qnb)         | The observed market: the one quotes shape the library reads, what a size costs to sweep, a cross built from pairs that are quoted, the as-of rule, markouts and their sign convention, and data-quality checks.                 |
-  | [`03_pipeline_in_one_process.qnb`](03_pipeline_in_one_process.qnb) | The pipeline framework with no stack: a job as a declaration, windows and the coverage ledger, a re-run that does nothing, a window that fails its check and is claimed nowhere, the repair, the streaming twin, the job graph. |
+  | Notebook                                                           | What it shows                                                                                                                                                                                                                                                                                |
+  | ---                                                                | ---                                                                                                                                                                                                                                                                                          |
+  | [`01_quant_library.qnb`](01_quant_library.qnb)                     | The seven `.qf` namespaces, by following one pair through a desk's day: conventions and dates, a forward from interest parity, an option and its greeks, a position, its exposure and its VaR.                                                                                               |
+  | [`02_books_and_execution.qnb`](02_books_and_execution.qnb)         | The observed market: the one quotes shape the library reads, what a size costs to sweep, a cross built from pairs that are quoted, the as-of rule, markouts and their sign convention, and data-quality checks.                                                                              |
+  | [`03_pipeline_in_one_process.qnb`](03_pipeline_in_one_process.qnb) | The pipeline framework with no stack: a job as a declaration, windows and the coverage ledger, a re-run that does nothing, a window that fails its check and is claimed nowhere, the repair, the streaming twin, the job graph.                                                              |
+  | [`04_markouts.qnb`](04_markouts.qnb)                               | The markout pipeline, one step at a time: the sign of a markout, probes, the as-of search, the reference as SELECT x TRANSFORM x COMBINE, a reference policy, the scored rows and their statuses and `config_id`, the long, wide and nested layouts, and the live job beside the batch path. |
 
 Read them in order. The first two are the library; the third is why the
 framework around it is shaped as it is, and its idea - *a claim is true, or
-absent* - first appears in the second.
+absent* - first appears in the second. The fourth takes one pipeline, the
+markout, apart step by step, and needs the first three only as background.
 
 ## Opening one
 

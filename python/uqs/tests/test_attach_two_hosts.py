@@ -57,6 +57,18 @@ def _two_names() -> tuple[str, str]:
     return name, outside[0]
 
 
+def _skip_when_loopback_too(name: str) -> None:
+    """macOS resolves its own .local name to 127.0.0.1 as well as its LAN address:
+    to this code the name is then loopback, so it cannot stand in for ANOTHER
+    machine. The tests whose point is "the stack is elsewhere" skip there."""
+    try:
+        found = {str(i[4][0]) for i in socket.getaddrinfo(name, None)}
+    except OSError:
+        return
+    if any(a.startswith("127.") or a == "::1" for a in found):
+        pytest.skip(f"{name} also resolves to loopback here: it cannot stand in for another host")
+
+
 def _users(path: Path, *creds: tuple[str, str]) -> str:
     path.write_text("".join(f"{u}:{p}\n" for u, p in creds))
     return str(path)
@@ -125,6 +137,7 @@ def hosts(start_q, tmp_path, q_binary) -> Iterator[Hosts]:
 
 def test_the_stack_is_another_host_to_the_attachment(hosts, bundle, monkeypatch):
     # what makes this machine's own name "local" is only that it owns the address
+    _skip_when_loopback_too(hosts.stack_host)
     monkeypatch.setattr(facts, "_owned", lambda address: address.startswith("127."))
     att, host = hosts.att(bundle), Host(None, ("localhost",))
     assert not host.is_local(att.stack.host) and reach.applies(att, host)
@@ -133,6 +146,7 @@ def test_the_stack_is_another_host_to_the_attachment(hosts, bundle, monkeypatch)
 
 
 def test_both_directions_reach_with_the_right_credentials(hosts, bundle):
+    _skip_when_loopback_too(hosts.stack_host)
     att = hosts.att(bundle)
     assert reach.outbound(att, hosts.ipc, hosts.port, hosts.stp) is None
     assert reach.check(att, hosts.ipc, hosts.port) is None
