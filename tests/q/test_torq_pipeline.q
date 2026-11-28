@@ -171,11 +171,11 @@
 / @param opts a parsed command line, as .Q.opt returns it
 / @return (debug_enabled;trace_enabled) as the flags left them
 .qt.qtorq.pipeline.log_flags_after:{[opts]
-    saved:(.qetl.log.debug_enabled;.qetl.log.trace_enabled);
-    .qetl.log.debug 0b; .qetl.log.trace 0b;
+    saved:(.qetl.log.debug_enabled;.qetl.log.trace_enabled;.qetl.log.queries_enabled);
+    .qetl.log.debug 0b; .qetl.log.trace 0b; .qetl.log.queries 0b;
     .qtorq.apply_log_flags opts;
     after:(.qetl.log.debug_enabled;.qetl.log.trace_enabled);
-    .qetl.log.debug saved 0; .qetl.log.trace saved 1;
+    .qetl.log.debug saved 0; .qetl.log.trace saved 1; .qetl.log.queries saved 2;
     after};
 
 .qt.qtorq.pipeline.test_apply_log_flags_turns_trace_and_debug_on_for_trace:{[t]

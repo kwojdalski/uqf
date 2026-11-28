@@ -253,7 +253,7 @@
     / log, so the process stays up and drops every batch (shown only as
     / `failing` in uqs status's Batches column, #832). Guarded on presence because the same job
     / runs under run_stream.q, where the plant has not stamped a `time`.
-    rows:$[`time in cols x; ![x;();0b;enlist `time]; x];
+    rows:$[`time in cols x; ![x;();0b;enlist `time]; x];  / not a query: drops a column from a batch in hand
     `.qpipe.job.cross_arbitrage.books upsert `sym xkey rows;
     now:.z.p;
     rows:.qpipe.job.cross_arbitrage.evaluate[.qpipe.job.cross_arbitrage.books;.qpipe.job.cross_arbitrage.notional;now];

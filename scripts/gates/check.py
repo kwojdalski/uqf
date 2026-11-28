@@ -162,6 +162,15 @@ def _markout_mapped(mapped: ModuleType, root: Path) -> int:
     )
 
 
+def _query_sites(sites: ModuleType, root: Path) -> int:
+    """Every query src/etl runs goes through the one road that logs it (#3001)."""
+    return report(
+        "query-sites",
+        sites.problems(root),
+        f"every query site is on the road or says why; {len(sites.UNWIRED)} files wait on #3000",
+    )
+
+
 def _variant_gather(gather: ModuleType, root: Path) -> int:
     """The reference-variant gather reads the deduped rids once and nothing else (#2289)."""
     return report(
@@ -288,6 +297,12 @@ CHECKS: dict[str, Check] = {
             "a markout's path selects market_data by its date alone and reads no depth (#2288)",
             "markout_mapped",
             _markout_mapped,
+        ),
+        Check(
+            "query-sites",
+            "every query src/etl runs goes through .qetl.query, the road the queries switch shows",
+            "query_sites",
+            _query_sites,
         ),
         Check(
             "variant-gather",

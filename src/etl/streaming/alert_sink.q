@@ -129,7 +129,7 @@
 .qpipe.job.alert_sink.enqueue:{[x;now]
     x:update time:?[null time;now;time] from x;
     scope:.qf.port.scope_cols .qpipe.job.alert_sink.breach_cols#x;
-    ids:.qf.port.identity ?[x;();0b;(scope,`metric)!scope,`metric];
+    ids:.qf.port.identity ?[x;();0b;(scope,`metric)!scope,`metric];  / not a query: projects columns of the batch in hand
     cur:.qpipe.job.alert_sink.alerts;
     / A row is a repeat when its time is under one period after the newest queued for its identity.
     gap:.qpipe.job.alert_sink.alert_period-.qpipe.job.alert_sink.slack;

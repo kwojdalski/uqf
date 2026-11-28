@@ -132,9 +132,24 @@
 
 .qetl.log.trace_enabled:0b
 
+/ Switch query logging on (or off) for THIS process: one INFO line per query
+/ the framework runs - its text as qSQL, where it ran, the rows and the time
+/ (.qetl.query.run, the one road every wired site goes through). Independent
+/ of debug and trace, which stay as they are; a process that runs with TRACE
+/ on logs a traced query in TRACE's own sent/returned form instead.
+/ @param on 1b to log every query, 0b to stop
+/ @return on
+/ @eg .qetl.log.queries 0b  ->  0b
+.qetl.log.queries:{[on]
+    .qetl.log.queries_enabled::on;
+    on}
+
+.qetl.log.queries_enabled:0b
+
 / Apply the start-line log flags every uqf process script takes: -verbose
-/ switches DEBUG on, and -trace TRACE with DEBUG (a traced query is read
-/ beside the window it was sent for, which only DEBUG logs). Without either
+/ switches DEBUG on, and -trace TRACE with DEBUG and with query logging (a
+/ traced query is read beside the window it was sent for, which only DEBUG
+/ logs; the queries switch is what the non-source sites listen to). Without either
 / nothing changes - a level already on stays on. The one mapping; the two
 / switches stay independent in .qetl.log, and only this ties them.
 / @param opts the parsed command line, as .Q.opt returns it
@@ -142,7 +157,7 @@
 .qetl.log.apply_flags:{[opts]
     on:(any `verbose`trace in key opts;`trace in key opts);
     if[on 0; .qetl.log.debug[1b]];
-    if[on 1; .qetl.log.trace[1b]];
+    if[on 1; .qetl.log.trace[1b]; .qetl.log.queries[1b]];
     on}
 
 / Private: is a quiet level switched on, outside TorQ?

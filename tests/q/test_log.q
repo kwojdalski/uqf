@@ -32,7 +32,7 @@
           `.qt.qetl.log.captured set .qt.qetl.log.captured,enlist (level;id;msg)]};
     }
 
-.qt.qetl.log.tearDown_restore:{[] .qetl.log.debug[0b]; .qetl.log.trace[0b];}
+.qt.qetl.log.tearDown_restore:{[] .qetl.log.debug[0b]; .qetl.log.trace[0b]; .qetl.log.queries[0b];}
 
 .qt.qetl.log.last_msg:{[] last .qt.qetl.log.captured[;2]}
 
@@ -153,6 +153,12 @@
 .qt.qetl.log.test_apply_flags_trace_brings_debug:{[t]
     .qunit.assertEquals[.qt.qetl.log.flags_after (enlist`trace)!enlist ();(1b;1b;11b);
         "-trace switches TRACE on, and DEBUG with it"]};
+
+.qt.qetl.log.test_apply_flags_trace_switches_query_logging_on_and_verbose_does_not:{[t]
+    .qetl.log.apply_flags (enlist`verbose)!enlist ();
+    .qunit.assertEquals[.qetl.log.queries_enabled;0b;"-verbose leaves query logging off"];
+    .qetl.log.apply_flags (enlist`trace)!enlist ();
+    .qunit.assertEquals[.qetl.log.queries_enabled;1b;"-trace shows every query, so it switches the queries switch on"]};
 
 .qt.qetl.log.test_apply_flags_without_either_changes_nothing:{[t]
     .qunit.assertEquals[.qt.qetl.log.flags_after (enlist`job)!enlist enlist"x";(0b;0b;00b);

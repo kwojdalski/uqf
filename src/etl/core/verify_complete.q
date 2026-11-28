@@ -33,7 +33,10 @@
 / @eg type .qetl.verify.getdata_reader[0i;1D]  ->  104h
 .qetl.verify.getdata_reader:{[h;pad]
     {[h;pad;dataset;from_ts;to_ts]
-        h(`.dataaccess.getdata;`tablename`starttime`endtime!(dataset;from_ts;to_ts+pad))}[h;pad]}
+        req:`tablename`starttime`endtime!(dataset;from_ts;to_ts+pad);
+        .qetl.query.run[`channel`transport`target`describe!(`ipc;`gateway;.qetl.query.target_of h;
+            {[req;unused_u] (`getdata;".dataaccess.getdata ",.qetl.log.value1 req)}[req]);
+            {[h;req;unused_u] h(`.dataaccess.getdata;req)}[h;req]]}[h;pad]}
 
 / Private: the rows of a table inside the scope and the half-open window.
 / @private

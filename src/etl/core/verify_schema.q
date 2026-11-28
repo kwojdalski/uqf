@@ -190,7 +190,7 @@
     gen:(cols got) inter (.qetl.verify.destination dataset)`generated;
     out:.qetl.verify.no_findings[];
     out,:raze {[p;d;st;gt;b;c] .qetl.verify.finding[p;d;c;`type;.qetl.verify.type_name[st c];.qetl.verify.type_name[gt c];b]}[producer;dataset;st;gt;basis] each gen where st[gen]<>gt gen;
-    out,.qetl.verify.schema_findings[producer;dataset;$[count gen; ![got;();0b;gen]; got];basis]}
+    out,.qetl.verify.schema_findings[producer;dataset;$[count gen; ![got;();0b;gen]; got];basis]}  / not a query: drops columns from rows in hand
 
 / The row-key findings: a key column the destination does not take (a bounded
 / producer's may be a generated one, #2837), and producers that declare different

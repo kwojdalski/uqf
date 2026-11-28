@@ -96,7 +96,7 @@
     old:where t<edge;
     if[0=count old; :r];
     o:update qetl_ix:old from (ks#r) old;
-    anchors:exec qetl_ix from ?[o;();ks!ks;(enlist `qetl_ix)!enlist (last;`qetl_ix)];
+    anchors:exec qetl_ix from ?[o;();ks!ks;(enlist `qetl_ix)!enlist (last;`qetl_ix)];  / not a query: groups rows already in memory
     r asc (where t>=edge),anchors}
 
 \d .

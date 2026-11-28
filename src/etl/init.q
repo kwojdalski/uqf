@@ -48,6 +48,7 @@
 \l src/etl/core/backfill_state.q
 \l src/etl/core/bounded_contract.q
 \l src/etl/core/log.q
+\l src/etl/core/query_log.q
 \l src/etl/core/coercion.q
 \l src/etl/core/declared.q
 \l src/etl/core/venue_market.q

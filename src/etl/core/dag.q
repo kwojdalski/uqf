@@ -272,7 +272,7 @@
                 .qetl.dag.safe_id[r`upstream]," -> ",.qetl.dag.safe_id[r`downstream],": ",string r`tbl]
           }[asserted] each e;
     / A job with no edges at all would otherwise not appear.
-    lonely:.qetl.dag.defined[] where {[j] 0=count ?[.qetl.dag.edges[];enlist (or;(=;`upstream;enlist j);
+    lonely:.qetl.dag.defined[] where {[j] 0=count ?[.qetl.dag.edges[];enlist (or;(=;`upstream;enlist j);  / not a query: filters the in-memory edge table
                                                             (=;`downstream;enlist j));0b;()]} each .qetl.dag.defined[];
     lines,:{.qetl.dag.safe_id[x],": \"",string[x],"\""} each lonely;
     lines,:{.qetl.dag.safe_id[x],".style.stroke-dash: 3"} each asserted inter .qetl.dag.defined[];

@@ -61,7 +61,7 @@
     t:`source_time xasc select from x where outcome in .qpipe.transform.order_outcome.terminal;
     grp:.qpipe.transform.order_quality.frame,.qpipe.transform.order_quality.identity;
     cs:`outcome`inside,dims;
-    0!?[t;();grp!grp;cs!{(last;x)} each cs]}
+    0!?[t;();grp!grp;cs!{(last;x)} each cs]}  / not a query: aggregates rows in memory
 
 / The statistic grouped by a chosen set of dimensions. One row per group per
 / window length: how many requests were counted and how many ended filled and
@@ -86,7 +86,7 @@
     groups:distinct g#x;
     r:update counted:`long$inside, filled:`long$inside&outcome=`filled, rejected:`long$inside&outcome=`rejected
         from .qpipe.transform.order_quality.requests[x;dims];
-    n:?[r;();g!g;`n_orders`n_filled`n_rejected!((sum;`counted);(sum;`filled);(sum;`rejected))];
+    n:?[r;();g!g;`n_orders`n_filled`n_rejected!((sum;`counted);(sum;`filled);(sum;`rejected))];  / not a query: aggregates rows in memory
     b:groups lj g xkey n;
     b:update n_orders:0^n_orders, n_filled:0^n_filled, n_rejected:0^n_rejected from b;
     b:update fill_ratio:.qf.exec.fill_ratio[n_filled;n_orders], reject_ratio:.qf.exec.reject_ratio[n_rejected;n_orders] from b;
