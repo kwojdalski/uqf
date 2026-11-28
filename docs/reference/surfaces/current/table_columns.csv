@@ -388,6 +388,7 @@
 "market_data","bid","f"
 "market_data","ask","f"
 "market_data","rid","j"
+"market_data","two_sided_rid","j"
 "mkt_orderbook","time","p"
 "mkt_orderbook","sym","s"
 "mkt_orderbook","bid_prices"," "

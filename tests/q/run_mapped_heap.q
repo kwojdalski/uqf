@@ -17,6 +17,12 @@
 /                                       materialises every column it names, so it grows with the rows - the control that shows the other
 /                                       measurements could have failed
 / .
+/ And one for a SELECT with a match and declared columns (#3000):
+/   measure_match <dir> <rows> <executions>  gathers the books a `two_sided` match finds for <executions> probes, with market and time read
+/                                    through their rids, and prints RESULT|rows|execs|heap added|peak added|mapped|books
+/   compress <dir> <rows> <executions>  compresses every column of every market_data partition (gzip, block 17, level 6: the policy's
+/                                    own for market_data) - run it between build and measure_match to measure the compressed case
+/ .
 / And one for the reference variants (#2289):
 /   measure_variants <dir> <rows> <executions> <variants> <selects>
 /                                    the batch priced under <variants> declared variants (vwap at a quantity each, three combines) whose
@@ -49,12 +55,16 @@ build_day:{[root;d;n]
     system "mkdir -p ",1_string dir;
     groups:pairs cross venues;
     per:n div count groups;
-    names:`time`sym`source`market`source_time`clock`bid`ask`rid;
+    names:`time`sym`source`market`source_time`clock`bid`ask`rid`two_sided_rid;
     {[dir;d;per;done;g]
         sy:g 0; so:g 1;
         t:(`timestamp$d)+asc per?86400000000000;
         px:1+per?1f;
-        chunk:`time`sym`source`market`source_time`clock`bid`ask`rid!(t;per#`sym$sy;per#`sym$so;per#`sym$`fx;t;per#`sym$`venue;px;px+0.0002;done+til per);
+        / a quarter of the books have no bid: the condition two_sided fails there, and the pointer of such a row is the latest
+        / row of its (sym; source) run - which this chunk is - at or before it that passes (null before the first)
+        ok:0<per?4;
+        ptr:maxs ?[ok;til per;-1];
+        chunk:`time`sym`source`market`source_time`clock`bid`ask`rid`two_sided_rid!(t;per#`sym$sy;per#`sym$so;per#`sym$`fx;t;per#`sym$`venue;?[ok;px;0n];px+0.0002;done+til per;?[ptr>=0;done+ptr;0N]);
         {[dir;c;v] f:` sv dir,c; $[()~key f; f set v; f upsert v]}[dir]'[key chunk;value chunk];
         done+per}[dir;d;per]/[0;groups];
     (` sv dir,`.d) set names;
@@ -101,6 +111,8 @@ build_deep:{[root;n]
     rows:update bid_prices:{x,x-0.0001 0.0002}each px, ask_prices:{x,x+0.0001 0.0002}each px+0.0002 from rows;
     rows:`sym`source`source_time xasc rows;
     rows:update bid:first each bid_prices, ask:first each ask_prices, rid:til count i from rows;
+    / every book is two-sided here: each row points at itself
+    rows:update two_sided_rid:rid from rows;
     market_data::rows;
     .Q.dpfts[root;day;`sym;`market_data;`sym];
     / the previous day too, so every query can look back across midnight
@@ -111,6 +123,20 @@ build_deep:{[root;n]
 if[mode=`build_deep;
     build_deep[hsym `$dir;rows];
     -1 "BUILT|",string rows;
+    exit 0];
+
+/ Compress every column file of every market_data partition, as the policy does after three days (gzip, 128 KB blocks, level 6):
+/ the files are no longer mapped but inflated a block at a time on access. KDB-X only: PeachQ has no -19!.
+if[mode=`compress;
+    root:hsym `$dir;
+    days:key[root] where (string each key root) like "20*";
+    one:{[t;c]
+        f:` sv t,c;
+        g:` sv t,`$string[c],".z";
+        -19!(f;g;17;2;6);
+        system "mv ",(1_string g)," ",1_string f};
+    {[one;root;d] t:` sv root,d,`market_data; one[t] each (key t) except `.d}[one;root] each days;
+    -1 "COMPRESSED|",dir;
     exit 0];
 
 / ---------------------------------------------------------------- measure
@@ -129,12 +155,32 @@ p0:peak[];
 / The heap `depth_at` adds reading some matched books' ladders through their rid.
 if[mode=`measure_depth;
     probes:([] sym:execs?pairs; time:(`timestamp$day)+43200000000000+execs?3600000000000);
-    books:.qetl.mapped.tob_at`probes`read_from`skew`venues!(probes;(`timestamp$day)-1D;1;`all);
+    books:.qetl.mapped.tob_at`order`probes`read_from`skew`venues!(`sym`source`source_time;probes;(`timestamp$day)-1D;1;`all);
     .Q.gc[];
     u0:used[];
     deep:.qetl.mapped.depth_at`books`cols!(books;`bid_prices`ask_prices);
     .Q.gc[];
     -1 "RESULT|",("|" sv string (rows;execs;used[]-u0;0;0;count deep));
+    exit 0];
+
+/ The heap a SELECT with a condition and a transform's declared columns adds (#3000): for each probe the search reads the pointer of the
+/ latest book at or before it and that book's time - the latest TWO-SIDED book inside an hour - then the gather reads `market` and `time`
+/ through the matched books' rids. Flat in the market's rows, and the same on a partition compressed after build/compress: only blocks
+/ it indexes are inflated.
+if[mode=`measure_match;
+    probes:([] sym:execs?pairs; time:(`timestamp$day)+43200000000000+execs?3600000000000);
+    groups:enlist (`all;0D;enlist[`two_sided]!enlist 1b;0D01:00:00);
+    .Q.gc[];
+    u0:used[];
+    / .Q.w[]'s peak is not kept on every build, so the field is the process's resident set instead: it counts the mapped pages a
+    / search touches and the blocks of a compressed column it inflates, which `used` does not
+    rss:{1024*"J"$first system "ps -o rss= -p ",string .z.i};
+    p0:rss[];
+    r:.qetl.mapped.gather`order`probes`read_from`skew`groups`cols!(.qetl.mapped.market_order[];probes;(`timestamp$day)-1D;1;groups;`market`time);
+    .Q.gc[];
+    if[r[`reads]<>count r`slice; '"measure_match: read ",string[r`reads]," rows for ",string[count r`slice]," books"];
+    if[not all not null r[`slice]`bid; '"measure_match: a matched book fails the condition"];
+    -1 "RESULT|",("|" sv string (rows;execs;used[]-u0;rss[]-p0;mapped[];count r`slice));
     exit 0];
 
 / The heap the OLD way adds: the day's books for the syms selected with a where beyond the date, every column named.

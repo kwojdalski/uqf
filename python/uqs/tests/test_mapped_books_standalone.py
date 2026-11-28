@@ -38,12 +38,14 @@ system "l ",getenv`HDB;
 system "l ",getenv`MAPPED_BOOKS;
 system "l ",getenv`MAPPED_DEPTH;
 p:([] sym:`EURUSD`GBPUSD; time:2#2026.01.02D00:30:00);
-b:.qetl.mapped.tob_at`probes`read_from`skew`venues!(p;2026.01.01D00:00:00;1;`all);
+/ the HDB never loads the plant: the caller hands it market_data's declared sort
+o:`sym`source`source_time;
+b:.qetl.mapped.tob_at`order`probes`read_from`skew`venues!(o;p;2026.01.01D00:00:00;1;`all);
 -1 "BOOKS|",string count b;
--1 "ARRANGED|",$[0=count .qetl.mapped.arranged b;"yes";"no"];
+-1 "ARRANGED|",$[0=count .qetl.mapped.arranged[o;b];"yes";"no"];
 d:.qetl.mapped.depth_at`books`cols!(b;`bid_prices`ask_prices);
 -1 "DEPTH|",string[count d],"|",string[(first each d`bid_prices)~d`bid];
--1 "NEWEST|",string[.qetl.mapped.newest enlist[`market]!enlist `];
+-1 "NEWEST|",string[.qetl.mapped.newest `order`market!(o;`)];
 exit 0
 """
 

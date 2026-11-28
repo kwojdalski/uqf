@@ -641,7 +641,9 @@
     c:get hsym `$base,"/.d";
     others:c except col;
     if[(not col in c) or 0=count others; :(::)];
-    (hsym `$base,"/",string col) set til count get hsym `$base,"/",string first others;}
+    (hsym `$base,"/",string col) set til count get hsym `$base,"/",string first others;
+    / the pointer columns of the table's declared conditions (#3000) lie on the same final order
+    if[`write in key `.qetl.mapped.pointers; .qetl.mapped.pointers.write[part;tbl]];}
 
 / Private: sort a staged partition by its rule, put each attribute on, and number its rows.
 / @private

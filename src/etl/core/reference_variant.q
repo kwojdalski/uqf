@@ -3,10 +3,10 @@
 / A markout asks one question of the market: where did the reference stand at this instant. How that is
 / answered is not one rule but a choice, and the choice has three independent parts:
 / .
-/   SELECT     which books count: the venue set, how stale a book may be, how far to shift the instant.
-/              Done by the as-of join (aj) over the flat, memory-mapped keys, so it costs the probes'
-/              pages and nothing else (mapped_books.q).
-/   TRANSFORM  a pure function of ONE matched book: its price from the book's own columns.
+/   SELECT     which books count: the venue set, how stale a book may be, how far to shift the instant, and - `match` - what
+/              the book must satisfy on its own flat columns (a two-sided book, a market). Done by the as-of search over the
+/              flat, memory-mapped keys, so it costs the probes' pages and nothing else (mapped_books.q).
+/   TRANSFORM  a pure function of ONE matched book: its price from the columns it declares it reads (`needs`).
 /   COMBINE    a pure function of the matched books ACROSS venues: one price per instant.
 / .
 / A VARIANT names one of each. The variant a run used is part of its configuration (config_markout.q),
@@ -36,38 +36,63 @@
 / timespan), offset (a timespan the instant is moved EARLIER by), transform and combine (registered names).
 .qetl.reference.keys:`venues`stale`offset`transform`combine
 
-/ A variant may also carry `params`, the transform's parameters (a quantity, a number of levels). The stored
-/ definition always has them, completed with the transform's defaults, so a changed default is a changed variant.
-.qetl.reference.stored:`venues`stale`offset`transform`combine`params
+/ A variant may also carry `params`, the transform's parameters (a quantity, a number of levels), and `match`, the conditions the
+/ matched book must meet. The stored definition always has both, and the `needs` of its transform, completed: a changed default, a
+/ changed list of columns or a changed condition is a changed variant (and so a changed config_id).
+.qetl.reference.stored:`venues`stale`offset`transform`combine`params`needs`match
 
-/ TRANSFORMS: name -> a dictionary of `needs`, `defaults` and `fn`. `needs` is `top for a transform of the matched
-/ book's flat bid and ask (it is run over the books a variant matched), or `depth for one that reads the book's ladders
-/ (it is run ONCE over the whole gathered slice, which must carry them). `defaults` is the parameter dictionary a
+/ The columns a transform may declare beyond what market_data stores: the weight a promoted variant (.qetl.variant.flat) writes beside
+/ each book. It exists only on books that carry it, never in the mapped read.
+.qetl.reference.promoted:enlist `w
+
+/ The columns a transform's `needs` may name, and the refusal when one is not among them.
+/ @param who the transform, for the message
+/ @param needs a symbol list of columns
+/ @return needs
+/ @throws error naming a column market_data does not store, or an empty or repeated list
+/ @eg .qetl.reference.require_needs[`eg;`bid`ask]  ->  `bid`ask
+.qetl.reference.require_needs:{[who;needs]
+    if[not (11h=type needs) and 0<count needs; '"reference: transform ",string[who]," must declare the columns it reads as a non-empty symbol list"];
+    if[not (count needs)=count distinct needs; '"reference: transform ",string[who]," declares a column twice"];
+    ok:(key .qetl.mapped.stored),.qetl.reference.promoted;
+    if[count bad:needs except ok; '"reference: transform ",string[who]," reads ",(", " sv string bad),", which the market table does not have - it has ",", " sv string ok];
+    needs}
+
+/ Does a list of columns include a ladder? A transform that does cannot be run over the books a SELECT matched (they carry flat columns):
+/ it is run once over the gathered slice, which carries the ladders, and read by rid.
+/ @param needs a symbol list of columns
+/ @return 1b when any is a ladder
+/ @eg .qetl.reference.reads_depth `bid`ask  ->  0b
+.qetl.reference.reads_depth:{[needs] any needs in .qetl.mapped.nested}
+
+/ TRANSFORMS: name -> a dictionary of `needs`, `defaults` and `fn`. `needs` is the symbol list of market_data columns the transform
+/ reads: flat ones only (bid, ask, market ...) and it is run over the books a variant matched, which carry them; with a ladder among
+/ them it is run ONCE over the whole gathered slice, which must carry every column it names. `defaults` is the parameter dictionary a
 / variant's `params` completes; `fn` is {[rows;params] ...} returning a table bid, ask and optionally w (a weight the
 / combine may use), one row per book. `top` is the book's own level 0, stored flat: a price is read from bid and ask.
 .qetl.reference.transforms:(`symbol$())!()
 
 / Register a transform.
 / @param name the transform's name
-/ @param needs `top or `depth
+/ @param needs the market_data columns it reads, a symbol list
 / @param defaults the parameter dictionary (symbol keys); a variant may override a key, never add one
 / @param fn {[rows;params] ...} returning a table bid, ask, and optionally w
 / @return name
-/ @throws error when needs is neither `top nor `depth, or the defaults are not a symbol-keyed dictionary
-/ @eg .qetl.reference.add_transform[`eg_top;`top;(`symbol$())!();{[rows;params] ([] bid:rows`bid; ask:rows`ask)}]  ->  `eg_top
+/ @throws error when needs names a column market_data does not have, or the defaults are not a symbol-keyed dictionary
+/ @eg .qetl.reference.add_transform[`eg_top;`bid`ask;(`symbol$())!();{[rows;params] ([] bid:rows`bid; ask:rows`ask)}]  ->  `eg_top
 .qetl.reference.add_transform:{[name;needs;defaults;fn]
-    if[not needs in `top`depth; '"reference: a transform needs `top or `depth"];
+    .qetl.reference.require_needs[name;needs];
     if[not (99h=type defaults) and 11h=abs type key defaults; '"reference: a transform's defaults must be a dictionary of symbol to value"];
     / enlisted: a bare dictionary stored under a key would be flipped, with its peers, into a table
     .qetl.reference.transforms[name]:enlist `needs`defaults`fn!(needs;defaults;fn);
     name}
 
-.qetl.reference.add_transform[`top;`top;(`symbol$())!();{[rows;unused_params] ([] bid:rows`bid; ask:rows`ask)}];
+.qetl.reference.add_transform[`top;`bid`ask;(`symbol$())!();{[rows;unused_params] ([] bid:rows`bid; ask:rows`ask)}];
 
 / A registered transform's definition.
 / @param name a registered transform
 / @return a dictionary: needs, defaults, fn
-/ @eg (.qetl.reference.transform `top)`needs  ->  `top
+/ @eg (.qetl.reference.transform `top)`needs  ->  `bid`ask
 .qetl.reference.transform:{[name] first .qetl.reference.transforms name}
 
 / COMBINES: name -> {[tid;px;n] ...} returning a table bid, ask, mid of n rows, the price of each of the n instants
@@ -88,13 +113,13 @@
 / definition built elsewhere - a reference policy's rule (reference_policy.q, #2996) - is refused by the same rules
 / and with the same words.
 / @param name the name the definition is refused under, a non-null symbol
-/ @param def a dictionary with venues, stale, offset, transform and combine, and optionally params
-/ @return the stored form: venues, stale, offset, transform, combine and params completed with the transform's defaults
-/ @throws error when the definition is malformed or names an unregistered transform or combine, or a parameter its transform lacks
+/ @param def a dictionary with venues, stale, offset, transform and combine, and optionally params and match
+/ @return the stored form: venues, stale, offset, transform, combine, params completed with the transform's defaults, the transform's needs, and the match in canonical form
+/ @throws error when the definition is malformed or names an unregistered transform or combine, or a parameter its transform lacks, or a match on a column market_data does not store flat
 / @eg (.qetl.reference.complete[`eg_variant;`venues`stale`offset`transform`combine!(`all;`spec;0D;`top;`best)])`params  ->  (`symbol$())!()
 .qetl.reference.complete:{[name;def]
     if[not $[-11h=type name; not null name; 0b]; '"reference: a variant's name must be a non-null symbol"];
-    if[not (99h=type def) and (asc (key def) except `params)~asc .qetl.reference.keys; '"reference: ",string[name]," must define exactly ",", " sv string .qetl.reference.keys];
+    if[not (99h=type def) and (asc (key def) except `params`match)~asc .qetl.reference.keys; '"reference: ",string[name]," must define exactly ",(", " sv string .qetl.reference.keys),", and optionally params and match"];
     if[not $[-11h=type def`venues; def[`venues]=`all; (11h=type def`venues) and 0<count def`venues]; '"reference: ",string[name],"'s venues must be `all or a list of sources"];
     if[not $[-16h=type def`stale; def[`stale]>=0D; def[`stale]~`spec]; '"reference: ",string[name],"'s stale must be `spec or a timespan"];
     if[not $[-16h=type def`offset; def[`offset]>=0D; 0b]; '"reference: ",string[name],"'s offset must be a timespan of zero or more"];
@@ -107,13 +132,17 @@
     if[not (99h=type given) and 11h=abs type key given; '"reference: ",string[name],"'s params must be a dictionary of symbol to value"];
     if[count extra:(key given) except key want; '"reference: ",string[name],"'s transform ",string[def`transform]," has no parameter ",", " sv string extra];
     if[count bad:(key given) where not (type each given key given)=type each want key given; '"reference: ",string[name],"'s parameter ",(", " sv string bad)," must have the type of the transform's default"];
-    (`venues`stale`offset`transform`combine#def),enlist[`params]!enlist want,given}
+    / the order is read only for a match that has conditions: a variant without one registers wherever the tree loads
+    given_match:$[`match in key def; def`match; (`symbol$())!()];
+    if[(99h=type given_match) and 0=count given_match; given_match:(`symbol$())!()];
+    match:.qetl.mapped.require_match[`$"reference: ",string name;$[count given_match; .qetl.mapped.market_order[]; `symbol$()];.qetl.mapped.stored;.qetl.mapped.market_conditions[];given_match];
+    (`venues`stale`offset`transform`combine#def),`params`needs`match!(want,given;(.qetl.reference.transform def`transform)`needs;match)}
 
 / Register a variant.
 / @param name the variant's name, a non-null symbol
-/ @param def a dictionary with venues, stale, offset, transform and combine, and optionally params
+/ @param def a dictionary with venues, stale, offset, transform and combine, and optionally params and match
 / @return name
-/ @throws error when the definition is malformed or names an unregistered transform or combine, or a parameter its transform lacks
+/ @throws error when the definition is malformed or names an unregistered transform or combine, or a parameter its transform lacks, or a match on a column market_data does not store flat
 / @eg .qetl.reference.register[`eg_variant;`venues`stale`offset`transform`combine!(`all;`spec;0D;`top;`best)]  ->  `eg_variant
 .qetl.reference.register:{[name;def]
     full:.qetl.reference.complete[name;def];
@@ -122,7 +151,7 @@
 
 / A registered variant's definition, or a refusal naming it.
 / @param name a registered variant
-/ @return its definition: a dictionary of venues, stale, offset, transform and combine
+/ @return its definition: a dictionary of venues, stale, offset, transform, combine, params, needs and match
 / @throws error when nothing is registered under that name
 / @eg (.qetl.reference.def `best_top)`combine  ->  `best
 .qetl.reference.def:{[name]
@@ -131,7 +160,7 @@
 
 / A variant as a configuration snapshot records it: its name and every key of its definition.
 / @param name a registered variant
-/ @return a dictionary: name, then venues, stale, offset, transform and combine
+/ @return a dictionary: name, then venues, stale, offset, transform, combine, params, needs and match
 / @eg (.qetl.reference.describe `best_top)`name  ->  `best_top
 .qetl.reference.describe:{[name] (enlist[`name]!enlist name),.qetl.reference.def name}
 
@@ -153,16 +182,28 @@
 .qetl.reference.chosen:{[def;tob;max_age;syms;times;clocks]
     live:where not null syms;
     if[(0=count tob) or 0=count live; :()];
-    .qetl.mapped.require_arranged[`reference;tob];
+    o:.qetl.mapped.market_order[];
+    .qetl.mapped.require_arranged[`reference;o;tob];
+    / the order's equality keys are the target's sym and the venue the variant's venue set picks from
+    if[3<>count o; '"reference: a SELECT needs an order of (sym; venue; as-of column), not ",", " sv string o];
+    ks:-1_o;
+    ac:last o;
     at:times-def`offset;
     limit:$[`spec~def`stale; max_age; def`stale];
-    srcs:.qetl.mapped.sources_for[tob;distinct syms live];
-    if[not `all~def`venues; srcs:select from srcs where source in def`venues];
-    sp:exec source by sym from srcs;
-    f:ungroup ([] tid:live; sym:syms live; source:sp syms live; source_time:at live; tclock:clocks live);
+    srcs:.qetl.mapped.keys_for[o;tob;distinct syms live];
+    if[not `all~def`venues; srcs:srcs where (srcs ks 1) in def`venues];
+    grp:group srcs ks 0;
+    sp:(key grp)!(srcs ks 1) each value grp;
+    f:ungroup flip (`tid,ks,ac,`tclock)!(live;syms live;sp syms live;at live;clocks live);
     if[0=count f; :()];
-    j:.qetl.mapped.asof[tob;f];
-    select from j where not null quoted, limit>=source_time-quoted}
+    / a match with a condition is searched for inside the staleness window: no row older than the limit takes the place of a newer one that fails
+    books:tob;
+    if[count def`match;
+        back:(f ac)-limit;
+        f:f,'([] oldest:?[back>f ac; -0Wp; back]);
+        books:.qetl.mapped.with_pointers[o;tob;(key def`match) except ks]];
+    j:.qetl.mapped.asof_where[o;books;f;(def`needs) except .qetl.mapped.nested;def`match];
+    j where (not null j`quoted) & limit>=(j ac)-j`quoted}
 
 / A variant's combine over the books it matched: returned twice, `same`, from books on the target's OWN clock, and
 / `any`, from every book - the difference is how a clock mismatch is told from a gap.
@@ -213,8 +254,9 @@
     j:.qetl.reference.chosen[def;tob;max_age;syms;times;clocks];
     if[() ~ j; :`same`any!(none;none)];
     t:.qetl.reference.transform def`transform;
-    books:$[`depth~t`needs; .qetl.reference.require_slice[label;tob]; ()];
-    px:$[`depth~t`needs; (t[`fn][books;def`params]) j`rid; t[`fn][j;def`params]];
+    deep:.qetl.reference.reads_depth def`needs;
+    books:$[deep; .qetl.reference.require_slice[label;def`needs;tob]; ()];
+    px:$[deep; (t[`fn][books;def`params]) j`rid; t[`fn][j;def`params]];
     .qetl.reference.folded[def;j;px;n]}
 
 / One source's book at each instant, for a conversion rate: no combine, the source is named. The latest book
@@ -230,8 +272,10 @@
 .qetl.reference.book_at:{[tob;max_age;src;sy;times;clocks]
     k:count times;
     if[0=count tob; :([] quoted:k#0Np; bid:k#0n; ask:k#0n; live:k#0b)];
-    .qetl.mapped.require_arranged[`reference;tob];
-    j:.qetl.mapped.asof[tob;([] sym:k#sy; source:k#src; source_time:times)];
+    o:.qetl.mapped.market_order[];
+    .qetl.mapped.require_arranged[`reference;o;tob];
+    ks:-1_o;
+    j:.qetl.mapped.asof[o;tob;flip (ks,last o)!(k#sy;k#src;times)];
     ok:(not null j`quoted) & (max_age>=times-j`quoted) & (not null j`bid) & not null j`ask;
     if[count clocks; ok:ok & (j`clock)=clocks];
     ([] quoted:j`quoted; bid:j`bid; ask:j`ask; live:ok)}

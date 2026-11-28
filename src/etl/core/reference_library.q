@@ -24,15 +24,16 @@
 
 \d .
 
-/ A table a depth transform may read: it has the ladders, and its `rid` is its own row index.
+/ A table a transform that reads depth may read: it carries the columns the transform declares, and its `rid` is its own row index.
 / @param variant the variant, for the message
+/ @param needs the columns the transform declares it reads
 / @param tob the table
 / @return tob
-/ @throws error naming the variant when tob lacks the ladders or its rid is not 0, 1, 2, ...
-/ @eg count .qetl.reference.require_slice[`eg;([] bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); rid:`long$())]  ->  0
-.qetl.reference.require_slice:{[variant;tob]
-    need:`bid_prices`bid_sizes`ask_prices`ask_sizes`rid;
-    if[count miss:need where not need in cols tob; '"reference: ",string[variant]," reads depth, so the books must carry ",(", " sv string miss)," - read them with .qetl.variant.read"];
+/ @throws error naming the variant and the columns tob lacks, or when its rid is not 0, 1, 2, ...
+/ @eg count .qetl.reference.require_slice[`eg;`bid_sizes;([] bid_sizes:(); rid:`long$())]  ->  0
+.qetl.reference.require_slice:{[variant;needs;tob]
+    need:distinct needs,`rid;
+    if[count miss:need where not need in cols tob; '"reference: ",string[variant]," reads ",(", " sv string needs),", so the books must carry ",(", " sv string miss)," - read them with .qetl.variant.read"];
     if[not (tob`rid)~til count tob; '"reference: ",string[variant]," reads depth, so the books' rid must be their row index (.qetl.variant.slice)"];
     tob}
 
@@ -67,22 +68,22 @@
     s:n sublist sizes;
     $[0f<sum s; (sum p*s)%sum s; 0n]}
 
-.qetl.reference.add_transform[`micro;`depth;(`symbol$())!();{[slice;unused_params]
+.qetl.reference.add_transform[`micro;`bid`ask`bid_sizes`ask_sizes;(`symbol$())!();{[slice;unused_params]
     bs:{$[count x; first x; 0n]} each slice`bid_sizes;
     as:{$[count x; first x; 0n]} each slice`ask_sizes;
     live:(not null slice`bid) & (not null slice`ask) & (not null bs) & (not null as) & 0f<bs+as;
     px:?[live; ((slice[`bid]*as)+(slice[`ask]*bs))%(bs+as); 0n];
     ([] bid:px; ask:px; w:.qetl.reference.top_size slice)}];
 
-.qetl.reference.add_transform[`vwap;`depth;enlist[`qty]!enlist 1000000f;{[slice;params]
+.qetl.reference.add_transform[`vwap;`bid_prices`bid_sizes`ask_prices`ask_sizes;enlist[`qty]!enlist 1000000f;{[slice;params]
     q:params`qty;
     if[not q>0f; '"vwap: qty must be positive"];
     ([] bid:.qetl.reference.fill_price[q]'[slice`bid_prices;slice`bid_sizes]; ask:.qetl.reference.fill_price[q]'[slice`ask_prices;slice`ask_sizes])}];
 
-.qetl.reference.add_transform[`mid_sized;`depth;(`symbol$())!();{[slice;unused_params]
+.qetl.reference.add_transform[`mid_sized;`bid`ask`bid_sizes`ask_sizes;(`symbol$())!();{[slice;unused_params]
     ([] bid:slice`bid; ask:slice`ask; w:.qetl.reference.top_size slice)}];
 
-.qetl.reference.add_transform[`topn_w;`depth;enlist[`n]!enlist 3;{[slice;params]
+.qetl.reference.add_transform[`topn_w;`bid_prices`bid_sizes`ask_prices`ask_sizes;enlist[`n]!enlist 3;{[slice;params]
     k:params`n;
     if[not k>0; '"topn_w: n must be positive"];
     b:.qetl.reference.level_price[k]'[slice`bid_prices;slice`bid_sizes];
@@ -91,7 +92,7 @@
     ([] bid:b; ask:a; w:(sz[k] each slice`bid_sizes)+sz[k] each slice`ask_sizes)}];
 
 / A promoted variant's transform: the price its transform stored, flat, beside the book (.qetl.variant.promote).
-.qetl.reference.add_transform[`stored;`top;(`symbol$())!();{[rows;unused_params] ([] bid:rows`bid; ask:rows`ask; w:rows`w)}];
+.qetl.reference.add_transform[`stored;`bid`ask`w;(`symbol$())!();{[rows;unused_params] ([] bid:rows`bid; ask:rows`ask; w:rows`w)}];
 
 / The median of each side and of the books' mids, per instant; null where no book has the side.
 .qetl.reference.combines[`median]:{[tid;px;n]

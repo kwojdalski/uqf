@@ -55,7 +55,7 @@
 .qt.qetl.reference.policy.books:{[tms;age;clks]
     one:{[age;clks;tm] ([] sym:4#`EURUSD; source:`LP_A`LP_B`LP_C`LP_D; source_time:4#tm-age;
         bid:1.0 1.25 1.5 1.125; ask:2.0 1.75 1.625 1.875; clock:clks)}[age;clks];
-    .qetl.mapped.arrange raze one each tms}
+    .qetl.mapped.arrange[`market_data] raze one each tms}
 
 / The price under a policy of EURUSD targets on the venue clock.
 .qt.qetl.reference.policy.priced:{[name;tob;max_age;tms]

@@ -97,6 +97,9 @@
 /              write lock (hdb/sort_lib.q) - stop the stack first, as for any migration
 /   rid        each row's position in that order, assigned with the sort (an older partition that
 /              is already in order only gets the column)
+/   <name>_rid the pointer column of each condition market_data declares (two_sided_rid, #3000): the position of the
+/              latest row of the row's (sym; source) run at or before it that passes. Written with the rid by the same
+/              rewrite (.qetl.mapped.pointers), so a partition older than the column is refused by the search until this runs
 / .
 / `uqs data check` (dry) lists the partitions that lack the columns or are not in order
 / (scripts/hdb/sort_order.q); `uqs data check --apply` asks, then runs this with `migrate`.
@@ -231,9 +234,16 @@ legacy_config_cols:`contract_version`rate_timing`report_ccy
 / @param col the column
 / @return 1b for `clock on executions and market_data (attributed by rule), and for a
 /   derived contract column of the FX markout tables
+/ A table's pointer columns (#3000), by the convention the plant's conditions give them: `<name>_rid`, in the declared schema this
+/ script loaded - the bootstrap fill loads no plant, and must hold these back exactly as it holds back rid.
+/ @param table_name the table
+/ @return the declared columns named `*_rid` other than rid, for market_data; none for any other table
+pointer_cols:{[table_name]
+    $[table_name=`market_data; [c:cols value table_name; c where (string[c] like "*_rid") and not c=`rid]; `symbol$()]}
+
 derived_column:{[table_name;col]
     $[(table_name in markout_tables) and col=`config_id; 1b;
-      table_name=`market_data; col in `clock`bid`ask`rid;
+      table_name=`market_data; col in `clock`bid`ask`rid,pointer_cols[table_name];
       table_name=`executions; col=`clock;
       table_name in key fx_derived; col in fx_derived table_name;
       0b]}
@@ -246,7 +256,7 @@ derived_column:{[table_name;col]
 / @return the held-back columns
 held_cols:{[table_name]
     $[table_name in markout_tables; enlist `config_id;
-      table_name=`market_data; `bid`ask`rid;
+      table_name=`market_data; `bid`ask`rid,pointer_cols[table_name];
       `symbol$()]}
 
 / One of market_data's flat columns, derived from the columns beside it. A partition that lacks the
@@ -442,6 +452,7 @@ repair_dir:{[root;table_name;dir]
             col=`config_id; derived_config[root;table_name;dir];
             table_name in key fx_derived; derived_fx[root;table_name;dir;col];
             (table_name=`market_data) and col in `bid`ask`rid; derived_flat[root;dir;col];
+            (table_name=`market_data) and col in pointer_cols[table_name]; (count get ` sv dir,first disk_cols dir)#0N;
             (.Q.en[root] flip enlist[`v]!enlist derived_clock[root;table_name;dir])`v];
         add1col[dir;col;v]}[root;table_name;dir] each absent;
     if[migrate and table_name in markout_tables; drop_legacy[table_name;dir]];

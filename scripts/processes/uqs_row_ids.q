@@ -13,9 +13,16 @@
 / uqf's own finish does the same for the partitions it writes (.qetl.io.assign_row_ids), and
 / `uqs data check --apply` for the partitions older than the column.
 / .
-/ Which tables, and the column, are .qetl.plant.row_ids' (src/etl/plant_tables.q); this process
-/ loads no plant, so the one table that has a row number is named here, and
-/ python/uqs/tests/test_row_ids_overlay.py holds the two equal.
+/ Which tables, and the column, are .qetl.plant.row_ids' (src/etl/plant_tables.q); the one table that has a row number is
+/ named here, and python/uqs/tests/test_market_data_sort_config.py holds the two equal.
+/ .
+/ THE POINTER COLUMNS (#3000). The rows' final order also fixes each declared condition's pointer column (two_sided_rid): the
+/ position of the latest row of the row's run that passes. They are written here, by .qetl.mapped.pointers.write - the SAME
+/ function uqf's own finish and `uqs data check --apply` call - from the plant's declarations, so this file must be loaded after
+/ plant_registry.q, plant_tables.q, mapped_books.q and mapped_pointers.q (VENDORED_LOAD_OVERLAY), and refuses to load without them:
+/ a sort that left the pointers null would read, in a search, as "no book passes".
+
+if[not `write in key `.qetl.mapped.pointers; '"uqs_row_ids: load plant_registry.q, plant_tables.q, mapped_books.q and mapped_pointers.q (src/etl) before this file - market_data's pointer columns are written with its row numbers"];
 
 .qtorq.row_ids.tables:enlist[`market_data]!enlist `rid
 
@@ -26,14 +33,15 @@
 .qtorq.row_ids.number:{[tbl;dirs]
     if[not tbl in key .qtorq.row_ids.tables; :0];
     col:.qtorq.row_ids.tables tbl;
-    done:{[col;dloc]
+    done:{[tbl;col;dloc]
         base:string dloc;
         if["/"=last base; base:-1_base];
         c:@[get;hsym `$base,"/.d";{[e] `symbol$()}];
         others:c except col;
         if[(not col in c) or 0=count others; :0b];
         (hsym `$base,"/",string col) set til count get hsym `$base,"/",string first others;
-        1b}[col] each distinct (),dirs;
+        .qetl.mapped.pointers.write[hsym `$base;tbl];
+        1b}[tbl;col] each distinct (),dirs;
     sum done}
 
 / The vendored sort, kept; the wrapper below runs it and then numbers the rows.

@@ -106,7 +106,7 @@
 / @return the exclusive instant through which the books the scoring needs are present
 / @eg .qpipe.source.hdb_eq_markouts.complete_through[{2026.02.25D15:02:00}]  ->  2026.02.25D15:01:00.000000000
 .qpipe.source.hdb_eq_markouts.complete_through:{[h]
-    latest:.qetl.source.ipc_call[h;{[a] .qetl.mapped.newest a};enlist enlist[`market]!enlist `equity];
+    latest:.qetl.source.ipc_call[h;{[a] .qetl.mapped.newest a};enlist `order`market!(.qetl.mapped.market_order[];`equity)];
     / max of no rows is -0Wp, and arithmetic on it wraps to a far-future instant
     $[latest<=-0Wp; -0Wp; latest-.qpipe.transform.markout_core.reach .qpipe.transform.eq_markout_outputs.job_spec]}
 

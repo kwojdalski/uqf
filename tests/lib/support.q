@@ -29,7 +29,7 @@
 // @return the arranged top of book
 .qt.support.flat_books:{[rows]
     flat:$[`bid in cols rows; rows; .qetl.plant.with_flat rows];
-    .qetl.mapped.arrange select source_time, sym, source, bid, ask, clock from flat}
+    .qetl.mapped.arrange[`market_data] select source_time, sym, source, bid, ask, clock from flat}
 
 // market_data rows as an HDB holds them (#2288), for a stand-in that runs queries in this process:
 // sorted by sym, source, source_time, a `date` column in place of the partition, and `rid`, each row's

@@ -97,7 +97,7 @@ def test_the_row_number_overlay_names_the_plants_row_id_columns():
 def test_every_process_that_runs_the_sort_loads_the_overlay_after_wdb():
     for proc in ("wdb1", "sort1", "sortworker1", "sortworker2"):
         before, after = procs.VENDORED_LOAD_OVERLAY[proc]
-        assert after == (procs.ROW_IDS_LOAD,) and before == (), proc
+        assert after == procs.ROW_IDS_LOAD and before == (), proc
 
 
 ROWID_Q = r"""
@@ -105,14 +105,14 @@ ROWID_Q = r"""
 .proc.getconfigfile:{enlist `:none.csv};
 system "l ",getenv`DBW;
 .sort.getsortcsv hsym `$getenv`CSV;
-system "l ",getenv`OVERLAY;
+system each "l ",/:":" vs getenv`OVERLAY;
 db:hsym `$getenv`DB;
 dir:` sv db,`2026.01.01`market_data`;
 / arrival order, no attribute, the row number as the writer left it: null
 n:12;
 t0:2026.01.01D10:00:00;
 t:([] time:t0+1000000000*til n; sym:n#`b`a`c; source:n#`y`x;
-    source_time:t0+1000000000*n-til n; rid:n#0N);
+    source_time:t0+1000000000*n-til n; bid:n#1 0n 2; ask:n#0n 3 4 5f; rid:n#0N; two_sided_rid:n#0N);
 dir set .Q.en[db;t];
 .sort.sorttab (`market_data;enlist dir);
 r:get dir;
@@ -120,6 +120,11 @@ s:select sym, source, source_time from r;
 -1 "SORTED|",string s~`sym`source`source_time xasc s;
 -1 "ATTR|",string attr r`sym;
 -1 "RID|",string (r`rid)~til n;
+/ a row's pointer: the latest row of its (sym; source) run at or before it with both sides (#3000)
+ok:(not null r`bid) & not null r`ask;
+near:{[r;i] ((r`sym)=r[`sym] i) & ((r`source)=r[`source] i) & (til count r)<=i};
+want:{[r;ok;near;i] w:where ok & near[r;i]; $[count w; last w; 0N]}[r;ok;near] each til n;
+-1 "PTR|",string[(r`two_sided_rid)~want],"|",string[any null want],"|",string any not null want;
 / a table with no row-number column is sorted as before and nothing else is written
 other:hsym `$getenv[`DB],"/2026.01.01/quote/";
 other set .Q.en[db;([] time:2026.01.01D10:00:00+1000000000*3 1 2; sym:`b`a`c)];
@@ -128,6 +133,15 @@ o:get other;
 -1 "OTHER|",string (select sym, time from o)~`sym`time xasc select sym, time from o;
 exit 0
 """
+
+
+def _overlay_files() -> list[str]:
+    """The files the sort processes load before the row numbers, as paths in this checkout."""
+    out = []
+    for p in procs.ROW_IDS_LOAD:
+        rel = p.replace("${UQF_ROOT}/", "").replace("${UQF_SCRIPTS}/", "scripts/")
+        out.append(str(ROOT / rel))
+    return out
 
 
 def test_torqs_end_of_day_sort_is_followed_by_the_row_numbers(tmp_path, q_binary, kdbx):
@@ -142,7 +156,10 @@ def test_torqs_end_of_day_sort_is_followed_by_the_row_numbers(tmp_path, q_binary
             **env,
             "DBW": str(DBWRITEUTILS),
             "CSV": str(SORT_CSV),
-            "OVERLAY": str(ROW_IDS),
+            "OVERLAY": ":".join(
+                str(ROOT / p.replace("${UQF_ROOT}/", "").replace("${UQF_SCRIPTS}/", "scripts/"))
+                for p in procs.ROW_IDS_LOAD
+            ),
             "DB": str(db),
         },
         capture_output=True,
@@ -155,6 +172,7 @@ def test_torqs_end_of_day_sort_is_followed_by_the_row_numbers(tmp_path, q_binary
     assert "SORTED|1" in out, out + r.stderr
     assert "ATTR|p" in out, out
     assert "RID|1" in out, "each row numbered by its position after the sort"
+    assert "PTR|1|1|1" in out, "and each condition's pointer, null where none passes yet"
     assert "OTHER|1" in out, out
 
 

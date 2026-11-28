@@ -37,7 +37,7 @@ BUILD = r"""
 \l src/etl/plant_registry.q
 \l src/etl/plant_tables.q
 root:hsym `$first .z.x;
-d:delete bid, ask, rid from 0#.qetl.plant.market_data;
+d:delete bid, ask, rid, two_sided_rid from 0#.qetl.plant.market_data;
 rows:{[d;day;n]
     t0:`timestamp$day;
     t:flip (cols d)!{[n;v] n#first v}[n;] each d cols d;
@@ -67,7 +67,13 @@ system"l ",first .z.x;
     bids:top'[t`bid_prices;t`bid_sizes];
     asks:top'[t`ask_prices;t`ask_sizes];
     -1 "TOP|",string[d],"|",string[(t`bid)~bids],"|",string[(t`ask)~asks],"|",
-        string[any null t`bid],"|",string[any null t`ask]} each 2026.01.01 2026.01.02;
+        string[any null t`bid],"|",string[any null t`ask];
+    / each row's pointer: the latest row of its (sym; source) run at or before it with both sides
+    ok:(not null t`bid) & not null t`ask;
+    near:{[t;i] ((t`sym)=t[`sym] i) & ((t`source)=t[`source] i) & (til count t)<=i};
+    want:{[t;ok;near;i] r:where ok & near[t;i]; $[count r; last r; 0N]}[t;ok;near] each til count t;
+    -1 "PTR|",string[d],"|",string[(t`two_sided_rid)~want],"|",string[any null want],
+        "|",string[any not null want]} each 2026.01.01 2026.01.02;
 exit 0
 """
 
@@ -138,7 +144,12 @@ def test_check_reports_what_is_missing_and_out_of_order_and_changes_nothing(runt
     code, doc = _uqs(monkeypatch, "data", "check", "--json")
     assert code == 1 and doc["ok"] is False, doc
     for day in ("2026.01.01", "2026.01.02"):
-        assert sorted(doc["missing_columns"][day]["market_data"]) == ["ask", "bid", "rid"], doc
+        assert sorted(doc["missing_columns"][day]["market_data"]) == [
+            "ask",
+            "bid",
+            "rid",
+            "two_sided_rid",
+        ], doc
     parts = {(u["partition"], u["table"]): u["why"] for u in doc["unsorted"]}
     assert set(parts) == {("2026.01.01", "market_data"), ("2026.01.02", "market_data")}, doc
     assert all(w.startswith("not sorted by sym, source, source_time") for w in parts.values())
@@ -151,7 +162,12 @@ def test_the_bootstrap_fill_does_not_derive_them(runtime, monkeypatch):
     assert hdb_fill.fill_hdb_partitions(runtime) in (True, False)
     code, doc = _uqs(monkeypatch, "data", "check", "--json")
     assert code == 1
-    assert sorted(doc["missing_columns"]["2026.01.01"]["market_data"]) == ["ask", "bid", "rid"]
+    assert sorted(doc["missing_columns"]["2026.01.01"]["market_data"]) == [
+        "ask",
+        "bid",
+        "rid",
+        "two_sided_rid",
+    ]
     assert doc["unsorted"], "and rewrites no partition"
 
 
@@ -171,6 +187,9 @@ def test_apply_derives_the_flat_top_sorts_and_numbers_the_rows(
     tops = [line.split("|") for line in out.splitlines() if line.startswith("TOP|")]
     # bid and ask are the first level where it is a price; the fixture withdraws some of each
     assert all(t[2:] == ["1", "1", "1", "1"] for t in tops), tops
+    # the pointer column equals a scan: null before a run's first passing row, set after
+    ptrs = [line.split("|") for line in out.splitlines() if line.startswith("PTR|")]
+    assert len(ptrs) == 2 and all(p[2:] == ["1", "1", "1"] for p in ptrs), ptrs
 
 
 def test_a_second_apply_changes_nothing(runtime, monkeypatch):

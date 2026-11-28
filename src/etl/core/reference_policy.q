@@ -118,7 +118,7 @@
         .qetl.reference.policy.refuse[label;r`rule_id;"sources ",(", " sv string src except bv)," are not among variant ",string[r`reference_variant],"'s venues"]];
     venues:$[`all~src; bv; src];
     stale:$[null r`max_age; base`stale; r`max_age];
-    def:`venues`stale`offset`transform`combine`params!(venues;stale;base`offset;base`transform;base`combine;(base`params),r`parameters);
+    def:`venues`stale`offset`transform`combine`params`match!(venues;stale;base`offset;base`transform;base`combine;(base`params),r`parameters;base`match);
     .qetl.reference.complete[`$string[label],".",string r`rule_id;def]}
 
 / A policy's rules, validated and canonical: every cell checked, weekdays expanded Monday first, selectors sorted,

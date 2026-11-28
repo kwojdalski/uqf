@@ -212,13 +212,13 @@
         ".qetl.verify.check_retries[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.12D00:00:00.000000000]`status";
         ".qetl.verify.check_conflict[`demo_deals_backfill;.qpipe.source.demo_deals.fixture[];2026.09.11D00:00:00.000000000;2026.09.16D00:00:00.000000000]`status";
         ".qetl.verify.check_coverage[`demo_deals_backfill;2026.09.11D00:00:00.000000000;2026.09.14D00:00:00.000000000;3]`status";
-        ".qetl.mapped.newest[enlist[`market]!enlist `crypto]";
+        ".qetl.mapped.newest[`order`market!(`sym`source`source_time;`crypto)]";
         ".odbc.bind[]";
         ".odbc.open \"DRIVER=DuckDB;Database=:memory:\"";
         ".odbc.close h";
         ".odbc.eval[h; \"select 1 as a\"]";
         ".odbc.tables h";
-        "count .qetl.mapped.last_tops[`before`read_from!(2026.09.17D00:00:00;2026.09.10D00:00:00)]");
+        "count .qetl.mapped.last_tops[`order`before`read_from!(`sym`source`source_time;2026.09.17D00:00:00;2026.09.10D00:00:00)]");
     reason:(
         "sends .u.upd over a tickerplant handle";
         "sends .u.upd over a tickerplant handle";

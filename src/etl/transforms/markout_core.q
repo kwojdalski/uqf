@@ -574,7 +574,7 @@
     fr:.qpipe.transform.markout_core.frame[domain;spec;exe];
     lg:.qpipe.transform.markout_core.chain_legs[fr];
     / the input is read as it is - checked, never sorted or copied (a mapped partition must stay mapped)
-    tob:.qetl.mapped.require_arranged[`markout_core;md];
+    tob:.qetl.mapped.require_arranged[`markout_core;.qetl.mapped.market_order[];md];
     ma:spec`max_age;
     vr:spec`reference;
     / t0 and t1 are priced independently: under a policy, each instant selects its own rule
@@ -619,7 +619,7 @@
 / @return md itself when arranged, else its rows sorted by sym, source, source_time with p# on sym
 / @eg attr .qpipe.transform.markout_core.arranged[([] source_time:2#2026.09.17D10:00:00.000000000; sym:`GBPUSD`EURUSD; source:2#`a; bid:2#1f; ask:2#2f; clock:2#`venue)]`sym  ->  `p
 .qpipe.transform.markout_core.arranged:{[md]
-    $[count .qetl.mapped.arranged md; .qetl.mapped.arrange md; md]}
+    $[count .qetl.mapped.arranged[.qetl.mapped.market_order[];md]; .qetl.mapped.arrange[.qetl.mapped.market_order[];md]; md]}
 
 / Score executions against a top of book that may arrive in any order: `calc` after `arranged`. What a domain's
 / transform calls, so a live buffer and a twin's read take the same road; `calc` stays the strict core.
