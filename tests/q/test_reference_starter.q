@@ -81,9 +81,9 @@
     .qunit.assertEquals[((.qetl.reference.describe `micro_median)`params);(`symbol$())!();"a transform without parameters records none"]};
 
 .qt.qetl.reference.starter.test_a_depth_variant_refuses_books_that_are_not_a_slice:{[t]
-    flat:.qetl.mapped.arrange ([] sym:enlist `EURUSD; source:enlist `a; source_time:enlist 2026.09.17D10:00:00; bid:enlist 1.0; ask:enlist 2.0; clock:enlist `venue);
+    flat:.qetl.mapped.arrange[`market_data] ([] sym:enlist `EURUSD; source:enlist `a; source_time:enlist 2026.09.17D10:00:00; bid:enlist 1.0; ask:enlist 2.0; clock:enlist `venue);
     r:@[{.qetl.reference.at[`micro_median;x;0Wn;enlist `EURUSD;enlist 2026.09.17D10:00:01;enlist `venue]};flat;{[e] e}];
-    .qunit.assertTrue[r like "reference: micro_median reads depth, so the books must carry*";"naming the variant and what is missing"]};
+    .qunit.assertTrue[r like "reference: micro_median reads bid, ask, bid_sizes, ask_sizes, so the books must carry*";"naming the variant and what is missing"]};
 
 .qt.qetl.reference.starter.test_adding_a_variant_is_one_declaration:{[t]
     / the whole change: one declaration. The median of the micro-price over venue b alone.

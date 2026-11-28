@@ -32,7 +32,7 @@ top_chunk:1000000
 / @param etl the src/etl directory, as a string ending in "/"
 load_etl:{[etl]
     if[`order_partition in key `.qetl.io; :(::)];
-    needed:etl,/:("core/status.q";"core/backfill_state.q";"core/log.q";"core/io_hdb.q";"plant_registry.q";"plant_tables.q");
+    needed:etl,/:("core/status.q";"core/backfill_state.q";"core/log.q";"core/io_hdb.q";"core/mapped_books.q";"core/mapped_pointers.q";"plant_registry.q";"plant_tables.q");
     if[any ()~/:key each hsym each `$needed; '"hdb_sort_lib: no src/etl at ",etl];
     system each "l ",/:needed;}
 
@@ -64,7 +64,9 @@ row_ids_reason:{[dir;tbl]
     n:count ids;
     starts:top_chunk*til ceiling n%top_chunk;
     ok:all {[ids;n;s] i:s+til top_chunk&n-s; all i=ids i}[ids;n] each starts;
-    $[ok; ""; string[col]," does not hold each row's position"]}
+    if[not ok; :string[col]," does not hold each row's position"];
+    / the pointer columns of the table's declared conditions (#3000) lie on the same order
+    .qetl.mapped.pointers.reason[dir;tbl]}
 
 / Is the table directory in the order its rule declares, with each column's attribute and its
 / row numbers right? A rule naming a column the partition lacks is not judged.

@@ -56,6 +56,7 @@
 \l src/etl/core/materialisation_versions.q
 \l src/etl/core/mapped_books.q
 \l src/etl/core/mapped_depth.q
+\l src/etl/core/mapped_pointers.q
 \l src/etl/core/reference_variant.q
 \l src/etl/core/reference_library.q
 \l src/etl/core/variant_run.q

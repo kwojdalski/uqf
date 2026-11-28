@@ -84,7 +84,7 @@ if[not `nested in key `.qetl.plant; '"plant_tables.q: load src/etl/plant_registr
 / guess. The column is LAST, so a partition filled afterwards has the same
 / column order as one written from this declaration, and a positional reader
 / of the older columns does not move.
-.qetl.plant.market_data:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); market:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); clock:`symbol$(); bid:`float$(); ask:`float$(); rid:`long$())
+.qetl.plant.market_data:([]time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); market:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); clock:`symbol$(); bid:`float$(); ask:`float$(); rid:`long$(); two_sided_rid:`long$())
 .qetl.plant.nested[`market_data;`bid_prices`bid_sizes`ask_prices`ask_sizes!"FFFF"];
 
 / bid, ask and rid (#2288), after clock by the same convention: the book's level-0 top FLAT (null for a side the
@@ -97,11 +97,21 @@ if[not `nested in key `.qetl.plant; '"plant_tables.q: load src/etl/plant_registr
 / (io_hdb.q), by TorQ's end-of-day sort (scripts/processes/uqs_row_ids.q) and by `uqs data check --apply`.
 .qetl.plant.row_ids:enlist[`market_data]!enlist `rid
 
+/ two_sided_rid (#3000), after rid: the POINTER of the condition `two_sided` - a book both sides of which quote. Each row holds the
+/ rid of the latest row of its (sym; source) run at or before it that passes, null if none; written with the rid by the same three
+/ writers (io_hdb.q, uqs_row_ids.q, `uqs data check --apply`). A reference variant whose SELECT asks for a two-sided book reads it
+/ at the book the search found and then at that rid: two indexed reads, never a scan of the window.
+.qetl.plant.condition[`market_data;`two_sided;"(not null bid) & not null ask"];
+
 / The flat columns of market_data rows: the ladders' level 0 as bid and ask, and a null rid; the ONE place a mapping gets them.
 / @param rows market_data rows with the four ladders
-/ @return the rows with bid, ask (float) and rid (long) as their last columns
+/ @return the rows with bid, ask (float), rid (long) and each condition's pointer (long, null until the partition is sorted) as their last columns
 / @eg .qetl.plant.with_flat[([] bid_prices:enlist 1.1 1.09; bid_sizes:enlist 1e6 1e6; ask_prices:enlist `float$(); ask_sizes:enlist `float$())]`bid  ->  enlist 1.1
-.qetl.plant.with_flat:{[rows] $[count rows; (rows,'.qf.mkt.top_sides rows),'([] rid:(count rows)#0N); update bid:`float$(), ask:`float$(), rid:`long$() from rows]}
+.qetl.plant.with_flat:{[rows]
+    pc:.qetl.plant.pointer_cols`market_data;
+    n:count rows;
+    flat:$[n; .qf.mkt.top_sides rows; ([] bid:`float$(); ask:`float$())];
+    rows,'flat,'flip (`rid,pc)!(1+count pc)#enlist n#0N}
 
 / Complete per-pair snapshots; level provenance stays aligned with prices and sizes.
 .qetl.plant.superbook:([]time:`timestamp$(); sym:`g#`symbol$(); as_of:`timestamp$(); bid_prices:(); bid_sizes:(); bid_sources:(); bid_times:(); ask_prices:(); ask_sizes:(); ask_sources:(); ask_times:())

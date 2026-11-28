@@ -115,7 +115,7 @@
 
 .qt.qpipe.job.posbook.last_tops:{[rows;before;lookback]
     `market_data set .qt.support.stand_in_market_data rows;
-    r:@[{.qetl.mapped.last_tops x};`before`read_from!(before;before-lookback);{[e] `threw,e}];
+    r:@[{.qetl.mapped.last_tops x};`order`before`read_from!(.qetl.mapped.market_order[];before;before-lookback);{[e] `threw,e}];
     ![`.;();0b;enlist `market_data];
     if[`threw~first r; 'last r];
     r}

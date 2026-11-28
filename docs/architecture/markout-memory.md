@@ -19,13 +19,13 @@ and the numbers that show it holds.
   100 million rows a day the heap's high-water mark went from 64MB to 192MB
   around one `aj` of 200 probes, and it grows with the sym's rows. A two-key
   `aj` (`sym`, time) does not copy but cannot tell sources apart.
-- So `.qetl.mapped.asof` does the search itself: it finds each `(sym; source)`
-  run by galloping (a few elements, never a column) and runs every probe's
-  binary search over its run's `source_time` in lockstep, `log2(longest run)`
-  rounds of one gather each. It returns exactly what `aj` returns -
-  `tests/q/test_mapped_books.q` holds the two equal on a market of three days,
-  three sources and withdrawn sides - and its heap, and its high-water mark, do
-  not move with the number of rows.
+- So `.qetl.mapped.asof` does the search itself: it finds each equality-key run
+  (for `market_data`, `(sym; source)`) by galloping (a few elements, never a
+  column) and runs every probe's binary search over its run's as-of column
+  (`source_time`) in lockstep, `log2(longest run)` rounds of one gather each. It
+  returns exactly what `aj` returns - `tests/q/test_mapped_books.q` holds the
+  two equal on a market of three days, three sources and withdrawn sides - and
+  its heap, and its high-water mark, do not move with the number of rows.
 
 ## The layout it relies on
 
@@ -39,13 +39,26 @@ and the numbers that show it holds.
   rows only - never the day's - and refuses a `rid` whose row does not carry the
   flat top the match did. Nothing on a markout's path calls it (a gate refuses
   it); it is the other half of the column.
-- **Sorted.** By `sym`, `source`, `source_time`, with `p#` on `sym`. uqf's own
-  finish (`.qetl.io.finish_parts`) writes it from the plant's declared sort
-  rule, and TorQ's end-of-day sort writes it from `scripts/torqconfig/sort.csv`
-  (KDBSERVCONFIG puts that file ahead of `lib/torq`'s, which is never edited),
-  after which `scripts/processes/uqs_row_ids.q` numbers the rows.
+- **Pointer columns (#3000).** `two_sided_rid`, after `rid`: see "Match and
+  conditions" below.
+- **Sorted, and the sort is the declaration.** By `sym`, `source`,
+  `source_time`, with `p#` on `sym`. uqf's own finish (`.qetl.io.finish_parts`)
+  writes it from the plant's declared sort rule, and TorQ's end-of-day sort
+  writes it from `scripts/torqconfig/sort.csv` (KDBSERVCONFIG puts that file
+  ahead of `lib/torq`'s, which is never edited), after which
+  `scripts/processes/uqs_row_ids.q` numbers the rows.
   `uqs data compress --report` reads the same `sort.csv`, so it names any
-  partition not in this order.
+  partition not in this order. Nothing in the search names those columns
+  (#3000): `arranged`, `require_arranged`, `arrange`, `runs`, `asof` and
+  `asof_where` take the order from the table's declared sort
+  (`.qetl.plant.sorting`), as a table name (`.qetl.mapped.order_of` reads it) or
+  as the columns themselves - the HDB, which never loads the plant, is handed
+  them. **Every sort column but the last is an equality key** (the first parted,
+  runs found by galloping, generalised from `(sym; source)` to n keys); **the
+  last is the as-of column.** `market_data`'s declared order is unchanged, so
+  its results are bit for bit what they were; `tests/q/test_mapped_match.q`
+  searches tables declared `region, sym, venue, ts` and `sym, time` by the same
+  code and holds them to a scan.
 - A `(sym; source)` is on one clock: the clock belongs to the feed that writes
   the source.
 
@@ -141,19 +154,118 @@ Reference prices may be wanted in a thousand ways, and a stored column per way
 is impossible at the size market data runs to. A variant is a declaration, so a
 list of them factors, and the market is touched once:
 
-1. **SELECT** - per distinct (venue set, offset) the as-of search over the flat
-   keys (`tob_at`); the staleness only filters the matched books afterwards. It
+1. **SELECT** - per distinct (venue set, offset, match) the as-of search over
+   the flat keys (`tob_at`); without a match the staleness only filters the
+   matched books afterwards (with one it bounds the search, see below). It
    returns the books and their `rid`s.
 2. **DEDUPE** - the distinct books across every variant.
 3. **GATHER ONCE** - `.qetl.mapped.gather` (in the process that maps
-   `market_data`) reads the ladders of those books in one `depth_at` call,
-   through their `rid`s: a slice of k rows x depth. `.qetl.mapped.depth_reads`
-   counts the rows read and the gather refuses to return unless the count equals
-   the distinct books; `scripts/gates/check.py variant-gather` refuses variant
-   code that names `market_data`, a second ladder reader, and a gather that
-   stops deduping or counting.
+   `market_data`) reads the columns the variants' transforms declare - the union
+   over the variants run - for those books in one `depth_at` call, through their
+   `rid`s: a slice of k rows x those columns. `.qetl.mapped.depth_reads` counts
+   the rows read and the gather refuses to return unless the count equals the
+   distinct books; `scripts/gates/check.py variant-gather` refuses variant code
+   that names `market_data`, a second reader of the extra columns, and a gather
+   that stops deduping or counting.
 4. **TRANSFORM** - each distinct (transform, parameters) once over the slice.
 5. **COMBINE** - each variant's, across the books matched to each instant.
+
+**Declared columns (#3000).** A transform declares the `market_data` columns it
+reads as a symbol list, `needs`:
+
+```q
+.qetl.reference.add_transform[`micro;`bid`ask`bid_sizes`ask_sizes;(`symbol$())!();{[slice;unused_params] ...}];
+```
+
+`` `top `` and `` `depth `` are gone (nothing aliases them); `top` is
+`` `bid`ask ``, the ladder transforms list the ladders they read. A column
+`market_data` does not have is refused at registration, by name. A transform
+whose list holds no ladder runs over the books a SELECT matched (they carry its
+columns); one that does runs once over the gathered slice, which carries every
+column in the union, and is read by `rid`. The gather reads, beyond the flat top
+the search itself returns, exactly the union of the variants' `needs` -
+`market`, `time`, a ladder - for the matched books' `rid`s: memory proportional
+to the matched books and the columns declared, never to the market. A promoted
+variant's weight `w` is declared but is not stored in `market_data`: the mapped
+gather refuses it by name, and it runs over books that carry it
+(`.qetl.variant.flat`).
+
+**Match and conditions (#3000).** A variant's SELECT may carry `match`, a
+dictionary the matched book must satisfy. It may name exactly two kinds of
+column, and nothing else:
+
+  | key                         | value                    | means                                                        |
+  | ---                         | ---                      | ---                                                          |
+  | an equality key of the sort | a value, or a list       | only those runs are searched (no read at all)                |
+  | a declared condition        | `1b`                     | the latest book in the run that passes it                    |
+
+```q
+.qetl.reference.register[`two_sided;`venues`stale`offset`transform`combine`match!(
+    `all;0D00:00:30;0D;`top;`best;enlist[`two_sided]!enlist 1b)];
+```
+
+**A condition is declared on the plant table, beside its sorting**, as a q
+expression over the table's flat columns:
+
+```q
+.qetl.plant.condition[`market_data;`two_sided;"(not null bid) & not null ask"];
+```
+
+and the table declares its pointer column, `two_sided_rid` (long), in its own
+line. The partition writer stores, for each row, **the rid of the latest row of
+the same run - the same equality keys of the declared sort - at or before it
+that passes the condition, null if none**: `.qetl.mapped.pointer`, two running
+maxima over the partition's columns (the latest passing position, cut off at
+each run's first row), one vectorised pass at write time. Three writers store
+it, by the one function `.qetl.mapped.pointers.write`, beside the rid: uqf's own
+finish (`.qetl.io.assign_row_ids`), TorQ's end-of-day sort
+(`scripts/processes/uqs_row_ids.q`, which now loads the plant and refuses to
+load without it) and `uqs data check --apply` (which also checks a partition's
+pointers against its rows). A partition written before the column existed is
+refused by the search with the same fix-it message as one without `bid`: *run
+`uqs data check --apply`*.
+
+**The search.** Bisection on the as-of column finds the latest book at or before
+the instant; the match then costs one indexed read of `<name>_rid` at that book
+and one read of the as-of column at the pointer, for the staleness bound (a
+pointer older than the variant's `stale` is no book). A constant number of reads
+per probe, however long the stretch of failing books - no loop over the window
+anywhere. A match that names anything else is refused at registration, by name:
+a stored column that is no key and no declared condition, a ladder, the as-of
+column, a condition with any value but `1b`, or a second condition (the latest
+row passing two conditions is not derivable from two pointers: declare their
+conjunction as a condition of its own). Declaring one is a table edit and a
+migration, which is the point: a condition nobody declared has no pointer, and
+answering it would be a scan of the window per probe.
+
+`asof_where` is the search and `aj` is still not: a three-key `aj` copies the
+first key's columns into the heap. The staleness joins the SELECT group of a
+variant with a match, since it bounds which pointer counts.
+`tests/q/test_mapped_match.q` holds the pointer equal to a scan (run boundaries,
+null when none) and the search equal to a scan, and runs the same code over
+tables declared `region, sym, venue, ts` and `sym, time`;
+`tests/q/test_variant_columns.q` holds a variant with a match, and one declaring
+`market`, equal to a scan through the gather and through books in memory alike.
+
+**Compression.** `market_data` IS written compressed (gzip, block 17, level 6,
+after three days: `src/etl/compression_policy.q`), and a compressed column is
+not mapped but inflated a block at a time on access, so the claim is measured
+there too. `tests/q/run_mapped_heap.q compress` compresses every column of the
+built HDB as the policy does and `measure_match` is run on it:
+
+  | rows a day  | plain: heap added, resident growth | compressed: heap added, resident growth | on disk, plain -> compressed |
+  | ---         | ---                                | ---                                     | ---                          |
+  | 200,000     | 314,384 B, 5.5 MB                  | 314,384 B, 6.8 MB                       | 17.5 MB -> 5.4 MB            |
+  | 2,000,000   | 314,384 B, 35.8 MB                 | 314,384 B, 39.0 MB                      | 172 MB -> 49 MB              |
+  | 10,000,000  | 314,384 B, 16.6 MB                 | 314,384 B, 18.8 MB                      | (not kept)                   |
+
+The heap `.Q.w[]` counts is the same on the compressed partition, and is flat in
+the market on both. The resident set (read with `ps`, so it includes the pages a
+search touches and the blocks it inflates) is noisy - first-touch faults of the
+mapping dominate it, and it does not rise with the market (10,000,000 rows is
+below 2,000,000) - and compressed runs a few MB above plain from the blocks
+inflated. `tests/q/test_mapped_heap.q` asserts the heap for both; the resident
+set is reported, not asserted.
 
 The cost is (fills x horizons x venues) x (depth + distinct transforms) and does
 not depend on the size of the market or on the number of variants beyond the
@@ -168,12 +280,14 @@ nothing else changes) and a test:
 ```
 
 The registry validates the spec (venues, staleness, offset, a registered
-transform and combine, parameters of the transform's own names and types). The
-starter set, beside #1 `best_top`: `micro_median` (micro-price, median across
-venues), `vwap_1m_best` (`vwap[1,000,000]`, best across venues), `sizew_mid`
-(size-weighted mid across venues), `median_top` (median across venues) and
-`depth3_wmean` (top-3 depth-weighted). Each has a hand-computed test in
-`tests/q/test_reference_starter.q`. New transforms and combines are
+transform and combine, parameters of the transform's own names and types, a
+match on stored flat columns). The stored definition carries the transform's
+`needs` and the `match`, so a changed column list or condition is a changed
+`config_id`. The starter set, beside #1 `best_top`: `micro_median` (micro-price,
+median across venues), `vwap_1m_best` (`vwap[1,000,000]`, best across venues),
+`sizew_mid` (size-weighted mid across venues), `median_top` (median across
+venues) and `depth3_wmean` (top-3 depth-weighted). Each has a hand-computed test
+in `tests/q/test_reference_starter.q`. New transforms and combines are
 `.qetl.reference.add_transform` / an entry in `.qetl.reference.combines`
 (`reference_library.q`).
 
@@ -191,6 +305,15 @@ transform's answer as flat columns (`bid`, `ask`, `w`) from the variant's own
 transform function, and `.qetl.variant.promote` registers the same SELECT and
 COMBINE over the `stored` transform. `tests/q/test_variant_run.q` holds the two
 bit-identical.
+
+**Measured, a condition and declared columns**
+(`tests/q/run_mapped_heap.q measure_match`, KDB-X, 1,000 probes, the latest
+`two_sided` book within an hour, `market` and `time` read by `rid`, a quarter of
+the books one-sided): 314,384 B of heap at 200,000, 2,000,000 and 10,000,000
+rows a day (2,432, 3,756 and 3,951 books matched; `.Q.w[]` allocates in powers
+of two, so the figure steps rather than rising), against about 6 MB for the same
+books selected with a `where` beyond the date. See Compression above for the
+compressed partition.
 
 **Measured** (`tests/q/run_mapped_heap.q measure_variants`, KDB-X, 500
 executions priced against a market of 200,000 rows a day with three-level
@@ -227,7 +350,16 @@ arranges and numbers the buffer exactly as the gathered slice is, then
 evaluates, so a live job and a bounded run price a variant alike
 (`tests/q/test_variant_run.q` holds them equal). Variants of the flat top work
 on today's buffer; a variant that reads depth needs the buffer to carry the
-ladders, and says so by name when it does not.
+ladders, and says so by name when it does not - and in general a buffer must
+carry every column the variants declare (`needs`) and every column their
+conditions read, or `.qetl.variant.live` refuses it, naming the columns and the
+variants that read them (#3000). The buffer's pointers are made as the slice is
+made: `.qetl.variant.slice` arranges the buffer and runs the writer's own pass
+(`.qetl.mapped.pointer`) over it, so a condition's pointer in a live buffer is
+the one a partition would hold. That is one vectorised pass over the bounded
+buffer per evaluation - not state kept between appends, because the buffer is
+re-sorted into run order for every evaluation anyway and an incrementally kept
+"last passing rid per run" would be rebuilt by that sort.
 
 ## Migrating an HDB
 

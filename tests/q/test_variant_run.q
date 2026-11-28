@@ -74,7 +74,7 @@
     md:.qt.qetl.variant.books[3000;23];
     tg:.qt.qetl.variant.targets[1500;24];
     sl:.qetl.variant.slice md;
-    flat:.qetl.mapped.arrange select sym, source, source_time, bid, ask, clock from md;
+    flat:.qetl.mapped.arrange[`market_data] select sym, source, source_time, bid, ask, clock from md;
     in_list:(.qetl.variant.evaluate[.qt.qetl.variant.declared[];sl;0D00:00:05;tg`sym;tg`time;tg`clock])`best_top;
     alone:.qetl.reference.at[`best_top;flat;0D00:00:05;tg`sym;tg`time;tg`clock];
     .qunit.assertEquals[in_list;alone;"variant #1 over the gathered slice equals variant #1 over the bare flat top"]};
@@ -128,8 +128,8 @@
     .qunit.assertEquals[live;gathered;"a buffer in arrival order and the gathered slice price every declared variant alike"]};
 
 .qt.qetl.variant.test_a_depth_variant_over_books_without_ladders_is_refused_by_name:{[t]
-    flat:.qetl.mapped.arrange ([] sym:enlist `EURUSD; source:enlist `a; source_time:enlist 2026.09.17D10:00:00; bid:enlist 1.0; ask:enlist 2.0; clock:enlist `venue);
-    .qunit.assertThrows[.qetl.variant.evaluate[`micro_median;flat;0Wn;enlist `EURUSD;enlist 2026.09.17D10:00:01;];enlist `venue;"reference: micro_median reads depth, so the books must carry*";"naming the variant and what the books lack"]};
+    flat:.qetl.mapped.arrange[`market_data] ([] sym:enlist `EURUSD; source:enlist `a; source_time:enlist 2026.09.17D10:00:00; bid:enlist 1.0; ask:enlist 2.0; clock:enlist `venue);
+    .qunit.assertThrows[.qetl.variant.evaluate[`micro_median;flat;0Wn;enlist `EURUSD;enlist 2026.09.17D10:00:01;];enlist `venue;"reference: micro_median reads bid, ask, bid_sizes, ask_sizes, so the books must carry bid_sizes, ask_sizes, rid*";"naming the variant and what the books lack"]};
 
 .qt.qetl.variant.test_the_long_layout_has_a_variant_key_and_one_row_per_variant_and_target:{[t]
     md:.qt.qetl.variant.books[500;29];

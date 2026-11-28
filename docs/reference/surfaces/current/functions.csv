@@ -713,25 +713,40 @@ qetl.log.ch,err,function,3,channel text fields
 qetl.log.ch,info,function,3,channel text fields
 qetl.log.ch,trc,function,3,channel text fields
 qetl.log.ch,warn,function,3,channel text fields
-qetl.mapped,arrange,function,1,tob
-qetl.mapped,arranged,function,1,tob
-qetl.mapped,asof,function,2,tob probes
+qetl.mapped,arrange,function,2,order tob
+qetl.mapped,arranged,function,2,order tob
+qetl.mapped,asof,function,3,order tob probes
+qetl.mapped,asof_where,function,5,order tob probes extra match
 qetl.mapped,columns,value,,
+qetl.mapped,computable,function,1,tob
+qetl.mapped,condition_reads,function,1,columns
 qetl.mapped,depth_at,function,1,arg
 qetl.mapped,depth_reads,value,,
 qetl.mapped,full_check_rows,value,,
 qetl.mapped,gather,function,1,arg
+qetl.mapped,keys_for,function,3,order tob firsts
 qetl.mapped,last_tops,function,1,arg
+qetl.mapped,market_conditions,function,1,
+qetl.mapped,market_order,function,1,
+qetl.mapped,nested,value,,
 qetl.mapped,newest,function,1,arg
-qetl.mapped,order,value,,
+qetl.mapped,order_of,function,1,x
 qetl.mapped,plain,function,1,x
+qetl.mapped,pointer,function,2,keycols ok
+qetl.mapped,pointers,dict,,
 qetl.mapped,probes,function,3,legs t0 horizons
 qetl.mapped,read_books,function,5,h probes read_from skew venues
-qetl.mapped,require_arranged,function,2,who tob
-qetl.mapped,runs,function,2,tob syms
+qetl.mapped,require_arranged,function,3,who order tob
+qetl.mapped,require_match,function,5,who order types conditions match
+qetl.mapped,roles,value,,
+qetl.mapped,runs,function,3,order tob firsts
 qetl.mapped,sample_pairs,value,,
-qetl.mapped,sources_for,function,2,tob syms
+qetl.mapped,stored,dict,,
 qetl.mapped,tob_at,function,1,arg
+qetl.mapped,with_pointers,function,3,order tob names
+qetl.mapped.pointers,compute,function,2,dir tbl
+qetl.mapped.pointers,reason,function,2,dir tbl
+qetl.mapped.pointers,write,function,2,dir tbl
 qetl.once,codes,dict,,
 qetl.once,conclude,function,6,ctx outcome reason units rows detail
 qetl.once,context,function,3,instance job kind
@@ -763,6 +778,10 @@ qetl.plant,ccy_exposure,table,,
 qetl.plant,client_flow,table,,
 qetl.plant,clocks,value,,
 qetl.plant,columns,function,2,t cs
+qetl.plant,condition,function,3,table_name name expr
+qetl.plant,condition_ok,function,2,rows expr
+qetl.plant,condition_reads,function,2,table_name expr
+qetl.plant,conditions,dict,,
 qetl.plant,config_change,table,,
 qetl.plant,connections,table,,
 qetl.plant,cross_arbitrage,table,,
@@ -805,6 +824,8 @@ qetl.plant,order_routing,table,,
 qetl.plant,orders,table,,
 qetl.plant,own,function,1,
 qetl.plant,packets,table,,
+qetl.plant,pointer_col,function,1,name
+qetl.plant,pointer_cols,function,1,table_name
 qetl.plant,position,table,,
 qetl.plant,position_open,table,,
 qetl.plant,predictions,table,,
@@ -887,8 +908,11 @@ qetl.reference,level_price,function,3,n prices sizes
 qetl.reference,policies,dict,,
 qetl.reference,policy,dict,,
 qetl.reference,priced,function,7,label def tob max_age syms times clocks
+qetl.reference,promoted,value,,
+qetl.reference,reads_depth,function,1,needs
 qetl.reference,register,function,2,name def
-qetl.reference,require_slice,function,2,variant tob
+qetl.reference,require_needs,function,2,who needs
+qetl.reference,require_slice,function,3,variant needs tob
 qetl.reference,stored,value,,
 qetl.reference,top_size,function,1,slice
 qetl.reference,transform,function,1,name
@@ -1151,7 +1175,6 @@ qetl.uptime,mine,value,,
 qetl.uptime,period,value,,
 qetl.uptime,sessions,function,1,
 qetl.uptime,twins,function,1,job
-qetl.variant,depth_cols,value,,
 qetl.variant,evaluate,function,6,names tob max_age syms times clocks
 qetl.variant,flat,function,2,name slice
 qetl.variant,key_of,function,1,x

@@ -25,19 +25,22 @@
     if[`threw~first r; 'last r];
     r}
 
+/ SELECT groups as the gather takes them: a list of (venues; offset; match; limit), here with no match.
+.qt.qetl.mapped.gather.groups:{[venues;offset] {(x;y;(`symbol$())!();0Nn)}'[venues;offset]}
+
 .qt.qetl.mapped.gather.arg:{[groups]
     p:([] sym:12#`EURUSD`GBPUSD`USDJPY; time:2026.09.16D00:00:00+(12*0D01:00:00*til 12));
-    `probes`read_from`skew`groups`cols!(p;2026.09.14D00:00:00;1;groups;`bid_prices`bid_sizes`ask_prices`ask_sizes)}
+    `order`probes`read_from`skew`groups`cols!(`sym`source`source_time;p;2026.09.14D00:00:00;1;groups;`bid_prices`bid_sizes`ask_prices`ask_sizes)}
 
 .qt.qetl.mapped.gather.test_the_gather_reads_the_ladders_of_the_distinct_books_across_every_select_and_nothing_else:{[t]
     md:.qt.qetl.mapped.gather.market[3000;31];
-    groups:([] venues:(`all;enlist `a;`a`b;`all); offset:0D 0D 0D00:00:30 0D00:05:00);
+    groups:.qt.qetl.mapped.gather.groups[(`all;enlist `a;`a`b;`all);0D 0D 0D00:00:30 0D00:05:00];
     arg:.qt.qetl.mapped.gather.arg groups;
     r:.qt.qetl.mapped.gather.with_market[md;{[a]
         before:.qetl.mapped.depth_reads;
         g:.qetl.mapped.gather a;
         / what each SELECT matches on its own
-        one:{[a;gr] p:update time:time-gr`offset from a`probes; .qetl.mapped.tob_at`probes`read_from`skew`venues!(p;(a`read_from)-gr`offset;a`skew;gr`venues)}[a] each a`groups;
+        one:{[a;gr] p:update time:time-gr 1 from a`probes; .qetl.mapped.tob_at`order`probes`read_from`skew`venues!(`sym`source`source_time;p;(a`read_from)-gr 1;a`skew;gr 0)}[a] each a`groups;
         `slice`reads`counted`each_alone`union!(g`slice;g`reads;.qetl.mapped.depth_reads-before;sum count each one;count select distinct date, rid from raze one)};enlist arg];
     .qunit.assertEquals[r`reads;r`union;"the ladder rows read are the distinct books the SELECTs matched"];
     .qunit.assertEquals[r`counted;r`reads;"and the process's own counter agrees"];
@@ -49,8 +52,8 @@
 
 .qt.qetl.mapped.gather.test_asking_for_a_select_twice_reads_nothing_more:{[t]
     md:.qt.qetl.mapped.gather.market[3000;32];
-    once:.qt.qetl.mapped.gather.arg ([] venues:enlist `all; offset:enlist 0D);
-    many:.qt.qetl.mapped.gather.arg ([] venues:50#`all; offset:50#0D);
+    once:.qt.qetl.mapped.gather.arg (.qt.qetl.mapped.gather.groups[enlist `all;enlist 0D]);
+    many:.qt.qetl.mapped.gather.arg (.qt.qetl.mapped.gather.groups[50#`all;50#0D]);
     a:.qt.qetl.mapped.gather.with_market[md;{[x] .qetl.mapped.gather x};enlist once];
     b:.qt.qetl.mapped.gather.with_market[md;{[x] .qetl.mapped.gather x};enlist many];
     .qunit.assertEquals[b`reads;a`reads;"fifty copies of the same SELECT read the same ladders as one"];
@@ -59,15 +62,15 @@
 .qt.qetl.mapped.gather.test_the_counter_would_see_a_read_beyond_the_deduped_rids:{[t]
     md:.qt.qetl.mapped.gather.market[3000;33];
     r:.qt.qetl.mapped.gather.with_market[md;{[a]
-        b:.qetl.mapped.tob_at`probes`read_from`skew`venues!(a`probes;a`read_from;a`skew;`all);
+        b:.qetl.mapped.tob_at`order`probes`read_from`skew`venues!(`sym`source`source_time;a`probes;a`read_from;a`skew;`all);
         before:.qetl.mapped.depth_reads;
         .qetl.mapped.depth_at`books`cols!(b,b;`bid_prices);
-        `books`read!(count b;.qetl.mapped.depth_reads-before)};enlist .qt.qetl.mapped.gather.arg ([] venues:enlist `all; offset:enlist 0D)];
+        `books`read!(count b;.qetl.mapped.depth_reads-before)};enlist .qt.qetl.mapped.gather.arg (.qt.qetl.mapped.gather.groups[enlist `all;enlist 0D])];
     .qunit.assertEquals[r`read;2*r`books;"the control: the same books twice are read twice, and the counter says so - the gather's equality check could fail"]};
 
 .qt.qetl.mapped.gather.test_with_no_depth_variant_no_ladder_is_read:{[t]
     md:.qt.qetl.mapped.gather.market[3000;34];
-    arg:.qt.qetl.mapped.gather.arg ([] venues:enlist `all; offset:enlist 0D);
+    arg:.qt.qetl.mapped.gather.arg (.qt.qetl.mapped.gather.groups[enlist `all;enlist 0D]);
     r:.qt.qetl.mapped.gather.with_market[md;{[a]
         before:.qetl.mapped.depth_reads;
         g:.qetl.mapped.gather a;

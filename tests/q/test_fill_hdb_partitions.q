@@ -516,7 +516,7 @@
 
 / market_data as the plant declares it now: the flat top and the row number after clock.
 .qt.qproc.fillhdb.md_schema:
-    "market_data:([] time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); market:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); clock:`symbol$(); bid:`float$(); ask:`float$(); rid:`long$())\n"
+    "market_data:([] time:`timestamp$(); sym:`g#`symbol$(); source:`symbol$(); market:`symbol$(); source_time:`timestamp$(); bid_prices:(); bid_sizes:(); ask_prices:(); ask_sizes:(); clock:`symbol$(); bid:`float$(); ask:`float$(); rid:`long$(); two_sided_rid:`long$())\n"
 
 / An HDB as it was before the flat top: market_data in arrival order with no bid, ask or rid. Three sources
 / across two syms, in time order, so within a sym the sources interleave - not the declared order. One book has
@@ -552,8 +552,8 @@
     m:.qt.qproc.fillhdb.run_migrating[root;.qt.qproc.fillhdb.md_schema;root,".status"];
     .qunit.assertEquals[m 1;0;"the migration runs clean"];
     c:.qt.qproc.fillhdb.md_cols[root;2026.01.01];
-    .qunit.assertEquals[key[c] except `time`sym`source`market`source_time`bid_prices`bid_sizes`ask_prices`ask_sizes`clock;`bid`ask`rid;"the flat top and the row number are added, after clock"];
-    .qunit.assertEquals[last key c;`rid;"and the row number is last"];
+    .qunit.assertEquals[key[c] except `time`sym`source`market`source_time`bid_prices`bid_sizes`ask_prices`ask_sizes`clock;`bid`ask`rid`two_sided_rid;"the flat top, the row number and the pointer of the two-sided condition are added, after clock"];
+    .qunit.assertEquals[last key c;`two_sided_rid;"and the pointer is last"];
     n:count c`sym;
     .qunit.assertEquals[n;9;"no row lost"];
     o:`sym`source`source_time xasc flip `sym`source`source_time!c`sym`source`source_time;
@@ -567,6 +567,11 @@
     asks:{$[x[2]; x 0; 0n]}each flip (first each c`ask_prices;first each c`ask_sizes;ok'[c`ask_prices;c`ask_sizes]);
     .qunit.assertEquals[c`bid;"f"$bids;"bid is the first bid level where it is a price, null where the side is withdrawn"];
     .qunit.assertEquals[c`ask;"f"$asks;"ask likewise, and a zero-size level is no price"];
+    / the pointer: the latest row of the row's (sym; source) run at or before it with both sides, null where none
+    pass:(not null c`bid) & not null c`ask;
+    want:{[c;pass;i] w:where pass & ((c`sym)=c[`sym] i) & ((c`source)=c[`source] i) & (til count c`sym)<=i; $[count w; last w; 0N]}[c;pass] each til n;
+    .qunit.assertEquals[c`two_sided_rid;want;"each row points at the latest passing row of its run, null where none has passed yet"];
+    .qunit.assertTrue[(any null want) and any not null want;"the fixture has runs that start failing and recover"];
     .qunit.assertTrue[any null c`bid;"the fixture holds a withdrawn bid"];
     .qunit.assertTrue[any null c`ask;"and a zero-size ask level"];
     again:.qt.qproc.fillhdb.snapshot[root,"/2026.01.01"];

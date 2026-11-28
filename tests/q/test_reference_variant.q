@@ -39,7 +39,7 @@
 .qt.qetl.reference.test_variant_one_is_best_across_venues_on_the_targets_own_clock_and_on_any:{[t]
     md:.qt.qetl.reference.books[3000;11];
     tg:.qt.qetl.reference.targets[2000;12];
-    tob:.qetl.mapped.arrange select sym, source, source_time, bid, ask, clock from md;
+    tob:.qetl.mapped.arrange[`market_data] select sym, source, source_time, bid, ask, clock from md;
     {[md;tg;tob;ma]
         r:.qetl.reference.at[`best_top;tob;ma;tg`sym;tg`time;tg`clock];
         lv:.qt.qetl.reference.legacy[md;tg;ma;`venue];
@@ -52,7 +52,7 @@
     .qunit.assertTrue[all null ((r`same) where (tg`sym)=`NOBOOK)`mid;"a sym with no book is unpriced, not an error"]};
 
 .qt.qetl.reference.test_a_target_with_no_sym_or_no_books_is_null_and_an_empty_table_prices_nothing:{[t]
-    tob:.qetl.mapped.arrange select sym, source, source_time, bid, ask, clock from .qt.qetl.reference.books[100;13];
+    tob:.qetl.mapped.arrange[`market_data] select sym, source, source_time, bid, ask, clock from .qt.qetl.reference.books[100;13];
     r:.qetl.reference.at[`best_top;tob;0Wn;``EURUSD;2#2026.09.17D10:05:00;2#`venue];
     .qunit.assertTrue[null first (r`same)`mid;"a null sym is no target"];
     e:.qetl.reference.at[`best_top;0#tob;0Wn;enlist `EURUSD;enlist 2026.09.17D10:05:00;enlist `venue];
@@ -61,7 +61,7 @@
 .qt.qetl.reference.test_a_rate_book_is_one_sources_latest_within_max_age_with_both_sides:{[t]
     md:([] sym:4#`USDJPY; source:`a`a`a`b; source_time:2026.09.17D10:00:00 2026.09.17D10:00:03 2026.09.17D10:00:04 2026.09.17D10:00:05;
         bid:150 151 0n 99f; ask:150.5 151.5 152 99.5; clock:4#`venue);
-    tob:.qetl.mapped.arrange md;
+    tob:.qetl.mapped.arrange[`market_data] md;
     r:.qetl.reference.book_at[tob;0D00:00:05;`a;`USDJPY;2026.09.17D10:00:04 2026.09.17D10:00:03 2026.09.17D10:00:20;`venue`venue`venue];
     .qunit.assertEquals[r`live;010b;"the 10:00:04 book has no bid so is no rate; 10:00:03 is the latest at 10:00:03; 10:00:20 is past max_age"];
     .qunit.assertEquals[(r`quoted) 1;2026.09.17D10:00:03;"and says which book it was"];
@@ -89,7 +89,7 @@
 .qt.qetl.reference.test_the_select_narrows_by_venue_staleness_and_offset:{[t]
     md:([] sym:4#`EURUSD; source:`a`a`b`b; source_time:2026.09.17D10:00:00 2026.09.17D10:00:08 2026.09.17D10:00:01 2026.09.17D10:00:07;
         bid:1.0 1.2 1.1 1.3; ask:2.0 2.2 2.1 2.3; clock:4#`venue);
-    tob:.qetl.mapped.arrange md;
+    tob:.qetl.mapped.arrange[`market_data] md;
     at:{[tob;v;ma;tm] first ((.qetl.reference.at[v;tob;ma;enlist `EURUSD;enlist tm;enlist `venue])`same)`bid};
     .qetl.reference.register[`only_a;.qt.qetl.reference.def_of[enlist[`venues]!enlist enlist `a]];
     .qetl.reference.register[`loose;.qt.qetl.reference.def_of[enlist[`stale]!enlist 0D00:00:09]];
@@ -105,7 +105,7 @@
 
 .qt.qetl.reference.test_a_combine_and_a_transform_plug_in_by_name:{[t]
     md:([] sym:2#`EURUSD; source:`a`b; source_time:2#2026.09.17D10:00:00; bid:1.0 1.2; ask:2.0 2.2; clock:2#`venue);
-    tob:.qetl.mapped.arrange md;
+    tob:.qetl.mapped.arrange[`market_data] md;
     / the WORST bid across venues instead of the best: a different COMBINE, the same SELECT and TRANSFORM
     `.qetl.reference.combines set .qetl.reference.combines,enlist[`worst]!enlist {[tid;px;n]
         g:0!select b:min bid, a:max ask by tid from ([] tid:tid; bid:px`bid; ask:px`ask);
@@ -143,7 +143,7 @@
     dom:.qpipe.transform.markout_core.fixture_domain;
     sp:.qpipe.transform.markout_core.fixture_spec;
     tm:2026.09.17D10:00:00;
-    md:.qetl.mapped.arrange ([] source_time:(tm-0D00:00:01;tm-0D00:00:01;tm+0D00:00:09;tm+0D00:00:09); sym:4#`$"BTC-USDT"; source:`a`b`a`b;
+    md:.qetl.mapped.arrange[`market_data] ([] source_time:(tm-0D00:00:01;tm-0D00:00:01;tm+0D00:00:09;tm+0D00:00:09); sym:4#`$"BTC-USDT"; source:`a`b`a`b;
         bid:61990 61995 62010 62015f; ask:62010 62005 62030 62025f; clock:4#`venue);
     e:([] source_time:enlist tm; venue:enlist `x; sym:enlist `$"BTC-USDT"; side:enlist 1; size:enlist 0.5; price:enlist 61998f; fill_id:enlist `c1; clock:enlist `venue);
     .qetl.reference.register[`only_a;.qt.qetl.reference.def_of[enlist[`venues]!enlist enlist `a]];

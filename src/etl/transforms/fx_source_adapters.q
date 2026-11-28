@@ -212,4 +212,4 @@
         ([] sym:2#`EURUSD; source:`LPA`LPB; market:2#`fx; source_time:2#2026.09.17D10:00:00;
             bid_prices:(1.0999 1.0998;`float$()); bid_sizes:(1e6 2e6;`float$());
             ask_prices:(1.1001 1.1002;enlist 1.1005); ask_sizes:(1e6 2e6;enlist 1e6); clock:2#`venue;
-            bid:1.0999 0n; ask:1.1001 1.1005; rid:2#0N)))];
+            bid:1.0999 0n; ask:1.1001 1.1005; rid:2#0N; two_sided_rid:2#0N)))];

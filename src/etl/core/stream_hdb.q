@@ -36,7 +36,7 @@
          $[$[-6h=type h; not null h; .qetl.declared.callable h];
             (1b;.qetl.source.ipc_call[h;{[a] .qetl.mapped.last_tops a};enlist x]);
             (0b;"no HDB handle - this process has none")]};
-        `before`read_from!(before;before-lookback);{(0b;x)}];
+        `order`before`read_from!(.qetl.mapped.market_order[];before;before-lookback);{(0b;x)}];
     if[not first r;
         .qetl.log.ch.warn[`lifecycle;"could not read the previous day's books from the HDB - the job knows only what today's log holds";
             (enlist[`before]!enlist before),enlist[`reason]!enlist last r];

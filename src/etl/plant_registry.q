@@ -259,6 +259,69 @@
     `.qetl.plant.sort_rules upsert ([] table:(count rule)#table_name; column:key rule; att:value rule);
     table_name}
 
+/ ------------------------------------------------------ CONDITIONS (#3000)
+/ .
+/ A reference may ask for "the latest book that also satisfies a condition" - a two-sided book. A scan for it is a
+/ loop over the window's rows per probe, so the condition is answered at WRITE time instead: a table declares it here,
+/ beside its sorting, as a q expression over the table's flat columns, and the partition writer stores a POINTER column
+/ `<name>_rid` beside the rows: each row's pointer is the position (rid) of the latest row of the SAME RUN - the same
+/ equality keys of the declared sort - at or before it that passes the condition, null if none. A search that has found
+/ the latest row at or before an instant reads that row's pointer: one indexed read, however long the failing stretch.
+/ The pointer column is declared in the table's own line (long, after rid), so the schema, the partition and a
+/ migration (`uqs data check --apply`) all see it.
+
+/ Declared conditions: (table; name) -> the expression, as text.
+.qetl.plant.conditions:([table:`symbol$(); name:`symbol$()] expr:())
+
+/ A condition's pointer column.
+/ @param name the condition's name
+/ @return `<name>_rid
+/ @eg .qetl.plant.pointer_col `two_sided  ->  `two_sided_rid
+.qetl.plant.pointer_col:{[name] `$string[name],"_rid"}
+
+/ The pointer columns of a table's declared conditions, in declaration order.
+/ @param table_name the table, as a symbol
+/ @return a symbol list, empty when the table declares none
+/ @eg .qetl.plant.pointer_cols `no_such_table  ->  `symbol$()
+.qetl.plant.pointer_cols:{[table_name] `symbol$.qetl.plant.pointer_col each exec name from .qetl.plant.conditions where table=table_name}
+
+/ The columns of a table a condition's expression reads.
+/ @param table_name the table, as a symbol
+/ @param expr the expression, as text
+/ @return the table's columns the expression names
+/ @eg .qetl.plant.condition_reads[`market_data;"(not null bid) & not null ask"]  ->  `bid`ask
+.qetl.plant.condition_reads:{[table_name;expr]
+    leaves:{$[0h=type x; raze .z.s each x; 11h=abs type x; (),x; ()]};
+    (cols .qetl.plant.schema table_name) inter distinct leaves parse expr}
+
+/ Which rows of a table pass a declared condition.
+/ @param rows the table's rows, with at least the columns the condition reads
+/ @param expr the expression, as text
+/ @return a boolean per row
+/ @eg .qetl.plant.condition_ok[([] bid:1 0n; ask:2 3f);"(not null bid) & not null ask"]  ->  10b
+.qetl.plant.condition_ok:{[rows;expr] (?[rows;();0b;enlist[`ok]!enlist parse expr])`ok}
+
+/ Declare a condition of a table. Call it after the table's line and its sorting.
+/ @param table_name the table, as a symbol
+/ @param name the condition's name; its pointer column is `<name>_rid`
+/ @param expr a q expression over the table's flat columns, as text, giving a boolean per row
+/ @return table_name
+/ @throws error when the table has no declared sort, the pointer column is not declared long in the table, the expression reads no column or one that is nested, or the name is taken
+/ @eg @[{.qetl.plant.condition[`mkt_orderbook;`eg_cond;"count[i]#1b"]};::;{[e] e like "condition: mkt_orderbook*"}]  ->  1b
+.qetl.plant.condition:{[table_name;name;expr]
+    if[not (10h=type expr) and 0<count expr; '"condition: ",string[table_name],".",string[name],"'s expression must be q text, e.g. \"(not null bid) & not null ask\""];
+    if[not table_name in exec table from .qetl.plant.sort_rules; '"condition: ",string[table_name]," declares no sorting - a condition's pointer lives inside a run of the declared sort"];
+    pc:.qetl.plant.pointer_col name;
+    m:exec c!t from 0!meta .qetl.plant.schema table_name;
+    if[not pc in key m; '"condition: ",string[table_name]," has no column ",string[pc]," - declare it (long) in the table's line, after rid"];
+    if[not m[pc]="j"; '"condition: ",string[pc]," must be a long column"];
+    if[(table_name;name) in key .qetl.plant.conditions; '"condition: ",string[table_name],".",string[name]," is already declared"];
+    reads:.qetl.plant.condition_reads[table_name;expr];
+    if[0=count reads; '"condition: ",string[table_name],".",string[name]," reads no column of the table"];
+    if[count bad:reads inter .qetl.plant.nested_columns table_name; '"condition: ",string[name]," reads ",(", " sv string bad),", which holds a list per row - a condition reads flat columns"];
+    `.qetl.plant.conditions upsert ([] table:enlist table_name; name:enlist name; expr:enlist expr);
+    table_name}
+
 / ------------------------------------------------------ EQUIVALENCE BASIS
 / .
 / Several jobs can fill one table - a polling feed and a backfill. They share its

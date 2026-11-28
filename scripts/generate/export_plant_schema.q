@@ -23,7 +23,7 @@
 .qetl.plant.adopt_attached .qetl.plant.vendored_path;
 
 / The plant's own keyed registries, which are not tables a process holds.
-.qschema.registries:`elements`sort_rules;
+.qschema.registries:`elements`sort_rules`conditions;
 
 / Keyed tables bound in .qetl.plant other than the registries. A tickerplant
 / table is unkeyed, so one of these is refused rather than dropped in silence.

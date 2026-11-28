@@ -71,3 +71,29 @@
     big:.qt.qetl.mapped.heap.run[`build_deep;`measure_depth;10*n;500];
     .qunit.assertTrue[(small`out)>0;"matched books' ladders were read"];
     .qunit.assertTrue[(big`used)<(1.25*small`used)+500000;"ten times the market, the same heap: ",string[small`used]," -> ",string big`used]};
+
+/ The heap of a match and its declared columns, the partition rebuilt (and, where asked, compressed) at each size.
+.qt.qetl.mapped.heap.match_run:{[compressed;rows;n]
+    dir:.qt.qetl.mapped.heap.scratch[];
+    .qt.qetl.mapped.heap.child[`build;dir;rows;n];
+    if[compressed; .qt.qetl.mapped.heap.child[`compress;dir;rows;n]];
+    r:.qt.qetl.mapped.heap.child[`measure_match;dir;rows;n];
+    system "rm -rf ",dir;
+    r}
+
+.qt.qetl.mapped.heap.test_a_match_and_the_columns_a_transform_declares_are_flat_as_the_market_grows:{[t]
+    n:.qt.qetl.mapped.heap.rows[];
+    small:.qt.qetl.mapped.heap.match_run[0b;n;1000];
+    big:.qt.qetl.mapped.heap.match_run[0b;10*n;1000];
+    .qunit.assertTrue[(small`out)>0;"the match found books, and the gather read exactly their rows (the child refuses otherwise)"];
+    .qunit.assertTrue[(big`used)<(1.25*small`used)+1000000;"ten times the market, the same heap: ",string[small`used]," -> ",string big`used];
+    / the heap follows the books matched, which a denser market has more of, and not the rows
+    .qunit.assertTrue[(big`used)<(2*small`used)*(big`out)%small`out;"per matched book: ",string[(small`used)%small`out]," B -> ",string (big`used)%big`out]}
+
+.qt.qetl.mapped.heap.test_the_same_holds_for_a_compressed_partition:{[t]
+    n:.qt.qetl.mapped.heap.rows[];
+    small:.qt.qetl.mapped.heap.match_run[1b;n;1000];
+    big:.qt.qetl.mapped.heap.match_run[1b;10*n;1000];
+    .qunit.assertTrue[(small`out)>0;"the match found books on the compressed partition"];
+    .qunit.assertTrue[(big`used)<(1.25*small`used)+1000000;"ten times the market, compressed, the same heap: ",string[small`used]," -> ",string big`used];
+    .qunit.assertTrue[(big`used)<=(1.25*small`used)+1000000;"and the match, as compressed as the policy writes it, adds the heap the plain one does"]}
