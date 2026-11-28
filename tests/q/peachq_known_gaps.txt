@@ -19,6 +19,7 @@ platform: Linux-x86_64
 .qt.qdev.cbench.test_a_compressed_copy_reads_back_equal_and_leaves_the_source  # peachq-lacks: -19!, which writes the compressed copy under test (#2153)
 .qt.qdev.cbench.test_a_mixed_setting_writes_each_column_its_own  # peachq-lacks: -19!, which writes each column of the copy under test (#2153)
 .qt.qdev.cbench.test_the_command_prints_setting_by_shape_and_never_writes_the_hdb  # peachq-lacks: -19! ('nyi), which writes every candidate's compressed copy, so only `current` is measured and no setting table is printed; it is a KDB-X tool (#2153, #2297)
+.qt.qetl.mapped.heap.test_the_same_holds_for_a_compressed_partition  # peachq-lacks: -19!, which compresses the synthetic HDB's columns the way the compression policy writes market_data (#3000)
 
 .qt.qetl.source.local.test_a_nested_symbol_list_column_is_decoded_row_by_row  # peachq-lacks: set of a splayed table with an enumerated nested symbol-list column ('type), so the fixture cannot be written
 
