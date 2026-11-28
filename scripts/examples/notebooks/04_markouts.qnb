@@ -1,0 +1,755 @@
+{
+ "qnb": 1,
+ "cells": [
+  {
+   "kind": "markdown",
+   "source": [
+    "# 4. Markouts: one fill, step by step",
+    "",
+    "Notebook 2 introduced the markout with one library function. This one takes apart the markout **pipeline** - the code under `src/etl/` that the live markout jobs and their backfills run - and runs each step on its own, in the order the pipeline runs them:",
+    "",
+    "1. what a markout is, and its sign;",
+    "2. the **probes**: the instants the market is asked about;",
+    "3. the **as-of search**: the latest book at or before each probe;",
+    "4. the **reference**: one price per instant, built as SELECT x TRANSFORM x COMBINE;",
+    "5. a **reference policy**: a different reference by time of day;",
+    "6. **scoring**: the result rows, their statuses and their `config_id`;",
+    "7. the three **layouts** of a result: long, wide and nested;",
+    "8. the **live job** and the **batch** path, on the same fills.",
+    "",
+    "The market is synthetic and small: one crypto pair, three venues, a book every two seconds. The domain is crypto because it is the simplest (one leg, nothing to invert), but the core that scores it is the same one FX and equities use.",
+    "",
+    "**To run it:** start `q` from the repository root, connect q-lint to that process, and use **Run All**. The last section records a configuration snapshot, so the first cell points the status directory at a new, empty temporary directory and refuses to run inside a TorQ process. Use a scratch q process."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "if[()~key `:src/init.q; '\"start q from the uqf repository root: this notebook loads src/init.q by a relative path\"];",
+    "if[`proc in key `; '\"this is a TorQ process: run this notebook in a scratch q process, not one that belongs to a stack\"];",
+    "/ the configuration snapshot section 8 records goes to a new, empty directory - never a deployment's",
+    "setenv[`UQF_STATUS_DIR;first system \"mktemp -d\"];",
+    "\\l src/init.q",
+    "\\l src/etl/init.q",
+    "`status_directory`variants!(.qetl.status.status_dir[];key .qetl.reference.variants)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## The market and the fills",
+    "",
+    "Three venues quote `BTC-USDT`, and the market drifts up two USDT a second. `ex_a` is five either side of the drift, `ex_b` three above it and tighter, with more size bid than offered, and `ex_c` six below it and wide - and `ex_c` stops quoting a few seconds in. Every book has three levels."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "t0:2026.09.15D11:59:55.000000000;",
+    "pair:`$\"BTC-USDT\";",
+    "/ one venue's book: level 0 at mid -/+ half, then two more levels a dollar further out, each holding more",
+    "book:{[src;tm;mid;half;bsz;asz]",
+    "    `source_time`sym`source`bid`ask`clock`bid_prices`bid_sizes`ask_prices`ask_sizes!(tm;pair;src;mid-half;mid+half;`venue;",
+    "        mid-half+0 1 2f;bsz*1 2 3f;mid+half+0 1 2f;asz*1 2 3f)};",
+    "drift:{[tm] 62000f+2f*(tm-t0)%0D00:00:01};",
+    "venue_books:{[src;times;shift;half;bsz;asz] book[src;;;half;bsz;asz] .' flip (times;shift+drift times)};",
+    "market:.qetl.mapped.arrange raze (",
+    "    venue_books[`ex_a;t0+0D00:00:02*-2+til 12;0f;5f;1f;1f];",
+    "    venue_books[`ex_b;t0+0D00:00:01+0D00:00:02*-2+til 12;3f;3f;2f;0.5];",
+    "    venue_books[`ex_c;t0+0D00:00:02*-2+til 4;-6f;8f;1f;1f]);",
+    "/ the markout core reads only the flat top of book: no ladders",
+    "tob:.qetl.mapped.columns#market;",
+    "select books:count i, first_book:min source_time, last_book:max source_time by source from tob"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @chart line",
+    "/ @title Each venue's mid (USDT), by time",
+    "stamps:asc distinct tob`source_time;",
+    "mid_of:{[v] (exec source_time!0.5*(bid+ask) from tob where source=v) stamps};",
+    "([] time:stamps),'flip `ex_a`ex_b`ex_c!mid_of each `ex_a`ex_b`ex_c"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Two shapes of the same {{q: count tob}} books. `market` carries the ladders; `tob`, the **top of book**, is what the markout core takes: `sym`, `source`, `source_time`, the level-0 `bid` and `ask` stored flat, and the `clock` the time is stamped on. Both are **arranged** - sorted by `sym`, `source`, `source_time`, with the `p#` attribute on `sym` - which is the order the HDB stores `market_data` in. The core checks that order and never sorts: on a real day the table is a memory-mapped partition, and a sort would copy it into memory.",
+    "",
+    "Five fills. `f1` buys and `f2` sells while all three venues quote. `f3` buys before the first book. `f4` is stamped on the `receipt` clock (when the plant received it) rather than the venue's. `f5` is a symbol that is not `BASE-QUOTE`."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "tape:([] source_time:t0+0D00:00:01 0D00:00:03 -0D00:00:10 0D00:00:02 0D00:00:01; venue:`ex_a`ex_b`ex_a`ex_b`ex_a;",
+    "    sym:pair,pair,pair,pair,`BTCUSDT; side:1 -1 1 1 1; size:0.5 0.3 0.2 0.1 0.1; price:62006 61998 61975 62004 62006f;",
+    "    fee:3.1 1.9 1.2 0.6 0.6; fee_ccy:5#`USDT; fill_id:`f1`f2`f3`f4`f5; clock:`venue`venue`venue`receipt`venue);",
+    "tape"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## 1. What a markout is, and its sign",
+    "",
+    "A markout compares a fill's price with a **reference** price some time later, the **horizon**. In the core it is one line, the `move`:",
+    "",
+    "> `move = side x (reference - price)`",
+    "",
+    "`side` is `1` for a buy and `-1` for a sell, so a positive move always means the market went the fill's way. Suppose a buy and a sell both done at 62,000, and ten seconds later the reference is 62,010:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "hand:{[side;price;ref] side*(ref-price)};",
+    "`buy_move`sell_move!(hand[1;62000f;62010f];hand[-1;62000f;62010f])"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The buy made +10 and the sell -10: same market, opposite sides, opposite verdicts. Everything below is about what \"the reference\" is - which books, read how, combined how - and what a row says when there is none.",
+    "",
+    "The rules every scored row follows are one dictionary, the **spec**. This is the live crypto job's own (`src/etl/transforms/crypto_markout_outputs.q`):"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "spec:.qpipe.transform.crypto_markout_outputs.job_spec;",
+    "dom:.qpipe.transform.crypto_markout.domain;",
+    "spec"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Two horizons, one and ten seconds. Results in USD, with USDT declared worth exactly 1 USD. `max_age`: a book older than five seconds at an instant does not count. `dom` is the crypto **domain**: the functions that tell the core how an instrument is priced, so that the core itself never parses a symbol.",
+    "",
+    "## 2. Probes: what the market is asked",
+    "",
+    "Before anything is priced, the domain says which market syms each fill is priced from - its **legs**. A crypto pair is one leg, itself; `f5` has none, so it can never be scored:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    ".qpipe.transform.markout_core.legs_of[dom;spec;tape]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The core does not score such a fill and does not hide it either: `unscoreable` names it, with the reason, so a bounded run can count it and a live job log it."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    ".qpipe.transform.markout_core.unscoreable[dom;spec;tape]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "A **probe** is one (sym, instant) the market is asked about: each leg at the fill itself, and at every horizon after it. For `f1` and `f2` that is two fills x three instants:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "two:select from tape where fill_id in `f1`f2;",
+    "probes:.qetl.mapped.probes[(.qpipe.transform.markout_core.legs_of[dom;spec;two]);two`source_time;spec`horizons];",
+    "probes"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "And each probe is asked of **every venue** the sym has:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "venues:exec source from .qetl.mapped.sources_for[tob;enlist pair];",
+    "probes_by_venue:ungroup update source:(count probes)#enlist venues from select sym, source_time:time from probes;",
+    "probes_by_venue"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "{{q: count probes}} probes x {{q: count venues}} venues = {{q: count probes_by_venue}} questions. That is the whole cost of a markout against the market: it grows with fills x horizons x venues, never with the size of the market.",
+    "",
+    "## 3. The as-of search: the latest book at or before",
+    "",
+    "`.qetl.mapped.asof` answers each question with the latest book of that (sym, venue) **at or before** the instant - never a later one. `quoted` is the matched book's own time, and `age` is how old it was when asked:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "f1_horizon:t0+0D00:00:11;",
+    "matched:update age:source_time-quoted from .qetl.mapped.asof[tob;probes_by_venue];",
+    "matched"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Look at the probe at {{q: f1_horizon}}, `f1`'s ten-second horizon. `ex_a` answers with a book a second old and `ex_b` with one from that instant, but `ex_c`'s answer is its last book, from {{q: last exec source_time from tob where source=`ex_c}} - {{q: (exec first `long$age from matched where source=`ex_c, source_time=f1_horizon) div 1000000000}} seconds old, past the five-second `max_age`. The as-of search returns it; the reference in the next section will refuse to use it. A venue that went quiet must not set the price."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "select source, quoted, bid, ask, age, counts:age<=spec`max_age from matched where source_time=f1_horizon"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Where there is no book at or before the instant, the answer is null, not the next book. `f3` was done before any venue quoted:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    ".qetl.mapped.asof[tob;([] sym:3#pair; source:venues; source_time:3#t0-0D00:00:10)]"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The search is not `aj`. It finds each (sym, venue) run by binary search and bisects all the probes in lockstep, so it reads a handful of elements per probe and copies no column - the reason it exists is in `docs/architecture/markout-memory.md`. What it needs in return is a table already in order, and it refuses one that is not rather than sorting it:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "unsorted:`source_time xasc tob;",
+    "refused_order:.[.qetl.mapped.require_arranged;(`notebook;unsorted);{x}];",
+    "refused_order"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## 4. The reference: SELECT x TRANSFORM x COMBINE",
+    "",
+    "The matched books become **one price per instant** in three independent steps, and a **variant** names one of each:",
+    "",
+    "- **SELECT** - which books count: the venues, how stale a book may be, how far to shift the instant. This is the as-of search above, plus the staleness filter.",
+    "- **TRANSFORM** - a price from **one** book: its level-0 bid and ask (`top`), its micro-price (`micro`), the price of filling a size (`vwap`), ...",
+    "- **COMBINE** - one price from the books **across venues**: the best bid and ask (`best`), the median (`median`), a weighted mean (`wmean`).",
+    "",
+    "The default, variant #1, is `best_top`: every venue within `max_age`, level 0, the highest bid and the lowest ask."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "([] variant:`best_top`median_top`micro_median) ,' {[v] `venues`stale`transform`combine#.qetl.reference.def v} each `best_top`median_top`micro_median"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Here is its SELECT at `f1`'s ten-second horizon. Two books, not three - `ex_c`'s is too old:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "chosen:.qetl.reference.chosen[.qetl.reference.def `best_top;tob;spec`max_age;enlist pair;enlist f1_horizon;enlist `venue];",
+    "select source, quoted, bid, ask from chosen"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "and the COMBINE of those two books: the best bid is `ex_b`'s, the best ask is `ex_a`'s, and the reference is their mid."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "best:.qetl.reference.at[`best_top;tob;spec`max_age;enlist pair;enlist f1_horizon;enlist `venue]`same;",
+    "best"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The reference at {{q: f1_horizon}} is **{{q: first best`mid}}** under `best_top`. (`at` returns it twice: `same` from books on the instant's own clock, `any` from every book. The difference is how the core tells a clock mismatch from a gap, in section 6.)",
+    "",
+    "Change only the COMBINE - the median across venues instead of the best - and the same two books give a different price:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "median_ref:.qetl.reference.at[`median_top;tob;spec`max_age;enlist pair;enlist f1_horizon;enlist `venue]`same;",
+    "median_ref"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "**{{q: first median_ref`mid}}**: the median of each side - with two books, the average of the two - so no single venue's quote sets either side.",
+    "",
+    "Change the TRANSFORM too - `micro_median` reads each venue's micro-price, the mid leaned toward the thinner side, so it needs the **sizes**, which the flat top of book does not have. Asked of `tob` it refuses by name:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "refused_depth:.[.qetl.reference.at;(`micro_median;tob;spec`max_age;enlist pair;enlist f1_horizon;enlist `venue);{x}];",
+    "refused_depth"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Given the books with their ladders - a **slice**, numbered so a book's row is its `rid` - it prices:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "slice:.qetl.variant.slice market;",
+    "micro_ref:.qetl.reference.at[`micro_median;slice;spec`max_age;enlist pair;enlist f1_horizon;enlist `venue]`same;",
+    "micro_ref"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "**{{q: first micro_ref`mid}}**. `ex_b` shows more size bid than offered, so its micro-price leans up, toward its ask.",
+    "",
+    "A desk may want many references at once. `.qetl.variant.evaluate` prices a list of variants with one SELECT per distinct venue set and staleness, each transform once, and one combine per variant - here four variants at both of `f1`'s horizons:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "four:`best_top`median_top`micro_median`sizew_mid;",
+    "f1_times:t0+0D00:00:02 0D00:00:11;",
+    "many:.qetl.variant.long .qetl.variant.evaluate[four;slice;spec`max_age;2#pair;f1_times;2#`venue];",
+    "update instant:f1_times row from many"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "A variant is a declaration (`src/etl/core/variants/reference_starter.q`): adding one needs no new column and no backfill.",
+    "",
+    "## 5. A reference policy: a variant per instant",
+    "",
+    "A **policy** chooses the venues and the variant by the instant: UTC time of day, weekday and instrument. Say the desk trusts `best_top` over every venue in the morning, and from noon wants the median over `ex_a` and `ex_b` only; at the weekend, `best_top` all day:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "rules:([] rule_id:`morning`afternoon`weekend; priority:10 10 0;",
+    "    active_from:00:00 12:00 00:00; active_to:12:00 24:00 24:00;",
+    "    weekdays:`weekdays`weekdays`all; instrument_selector:3#`all;",
+    "    sources:(`all;`ex_a`ex_b;`all); reference_variant:`best_top`median_top`best_top; max_age:3#0Nn; parameters:3#enlist ());",
+    ".qetl.reference.policy.register[`sessions;rules];",
+    "rules"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "`register` does more than store the table: it **proves** that every instrument, weekday and time of day falls under exactly one top rule. Leave out the weekend row and Saturday is uncovered, so it refuses:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "gap:select from rules where rule_id<>`weekend;",
+    "refused_gap:@[.qetl.reference.policy.register[`gappy];gap;{x}];",
+    "refused_gap"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Selection is on the instant being priced. `f1` was done at {{q: `second$t0+0D00:00:01}} on a Tuesday - morning - but its ten-second horizon falls after noon. The same instant on a Saturday is the weekend's:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "asked:(t0+0D00:00:01;f1_horizon;f1_horizon+4D);",
+    "([] instant:asked; rule:.qetl.reference.policy.select[`sessions;3#pair;asked])"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "So one row can be priced by two rules: its execution instant (`ref_t0`) by `morning`, its horizon (`ref_t1`) by `afternoon`. Scored under the policy, `f1`'s ten-second reference is the median over `ex_a` and `ex_b` - the {{q: first median_ref`mid}} of section 4 - while its execution reference is still `best_top`'s:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "under_policy:.qpipe.transform.markout_core.score[dom;spec,enlist[`reference]!enlist `sessions;tape;tob];",
+    "select fill_id, horizon, ref_t0, ref_t1, move, status from under_policy where kind=`total, fill_id in `f1`f2"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "A row does not carry its rule. It is re-derived from the policy the run recorded, so a historical row can always say which rule priced it:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "lineage:.qetl.reference.policy.lineage[.qetl.reference.policy.describe `sessions;under_policy`sym;under_policy`source_time;under_policy[`source_time]+under_policy`horizon];",
+    "distinct (select fill_id, horizon from under_policy),'lineage"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## 6. Scoring: the rows and what they say",
+    "",
+    "`markout_core.score` runs all of the above for every fill and horizon. One row per (fill, horizon, **component**): `total` is the move from the fill to the horizon, `side x (ref_t1 - price)`; `execution` is the move from the fill to the market at that instant, `side x (ref_t0 - price)` - what was paid against the reference on the spot."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "scored:.qpipe.transform.markout_core.score[dom;spec;tape;tob];",
+    "f1_total:first select from scored where fill_id=`f1, horizon=0D00:00:10, kind=`total;",
+    "select fill_id, horizon, kind, side, price, ref_t0, ref_t1, move, quote_amount, rate, report_amount, status from scored"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "{{q: count scored}} rows: four fills x two horizons x two components. `f5` has none - it was excluded, with its reason, in section 2. Reading the rest:",
+    "",
+    "- **`f1`**, the buy, made **{{q: f1_total`move}}** USDT a coin at ten seconds; on 0.5 BTC that is `quote_amount` {{q: f1_total`quote_amount}} USDT, and at the declared rate of 1 the `report_amount` is the same in USD. At one second it was still -2: it paid above the reference.",
+    "- **`f2`**, the sell, is **{{q: exec first move from scored where fill_id=`f2, horizon=0D00:00:10, kind=`total}}** at ten seconds: the market rose after it sold.",
+    "- **`f3`** came before any book. Its execution reference is null, so every `execution` row and the one-second `total` are **`unavailable`**, with no move. At ten seconds there are books, and the `total` row is `ok`. A status belongs to a row, not to a fill.",
+    "- **`f4`** is on the `receipt` clock, and every book here is on the `venue` clock. The core never scores across clocks, and the row names the cause: **`clock_mismatch`** - books exist, just not on its clock. That is what the `same`/`any` pair of section 4 is for.",
+    "",
+    "The statuses take precedence in that order: `unavailable`, then `clock_mismatch`, then `no_rate`, then `ok`."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "select rows:count i by status, kind from scored"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "### `no_rate`, and why the spec is part of every row",
+    "",
+    "Drop the declared USDT rate from the spec. The moves are still known in USDT, but not in USD:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "spec_no_rate:(enlist `rates) _ spec;",
+    "no_rate:.qpipe.transform.markout_core.score[dom;spec_no_rate;tape;tob];",
+    "select fill_id, horizon, kind, move, quote_amount, report_amount, status from no_rate where fill_id=`f1"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "`move` and `quote_amount` are kept; only `report_amount` is null, and the status says why: **`no_rate`**.",
+    "",
+    "Every row also carries a **`config_id`**: the digest of the whole configuration that produced it - the horizons, `max_age`, the reporting currency and rates, the domain and its revision, the reference. The rows above and the ones before them were scored under different specs, so their ids differ. Each run here has one:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "runs:`default`best_top_named`median_top`micro_median`no_rate`policy;",
+    "ids:(scored;",
+    "    .qpipe.transform.markout_core.score[dom;spec,enlist[`reference]!enlist `best_top;tape;tob];",
+    "    .qpipe.transform.markout_core.score[dom;spec,enlist[`reference]!enlist `median_top;tape;tob];",
+    "    .qpipe.transform.markout_core.score[dom;spec,enlist[`reference]!enlist `micro_median;tape;slice];",
+    "    no_rate;",
+    "    under_policy) @\\: `config_id;",
+    "([] run:runs; config_id:first each ids; ids_in_run:count each distinct each ids)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Read down the column. A different reference is a different configuration, so `median_top`, `micro_median` and the policy each get their own id: a result scored against one reference can never be mistaken for one scored against another. Naming `best_top` explicitly changes nothing - it **is** the default, variant #1, and the id is the one the live job stamps ({{q: .qpipe.transform.crypto_markout_outputs.config_id}}).",
+    "",
+    "The id is not a lookup: it is computed from the content, so the calculation stays pure. What it digests is this dictionary - `reference` appears only when it is not the default:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "`default`median_top!{[s] .qpipe.transform.config_markout.content[dom;s]} each (spec;spec,enlist[`reference]!enlist `median_top)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "A job records (pins) that content in the status directory **before** it publishes rows naming it, and a reader resolves a row's `config_id` back to it - section 8 does.",
+    "",
+    "## 7. Layouts: long, wide, nested - and back",
+    "",
+    "The result is stored **long**, as above: a row per (fill, horizon, component). Two other layouts are read from it, never recalculated. A layout spec says which columns are per fill, per (fill, horizon) and per component:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "layout:.qpipe.transform.markout_layouts.core_spec[cols scored;([] kind:enlist `execution; step:enlist 0);`symbol$()];",
+    "`execution`horizon`own`per_execution#layout"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "**Wide** is a row per (fill, horizon). The `total` component keeps its measure names, and every other component's are prefixed - so the execution move becomes `execution_move`:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "wide_rows:.qpipe.transform.markout_layouts.wide[layout;scored];",
+    "select fill_id, horizon, ref_t0, ref_t1, move, status, execution_move, execution_status from wide_rows"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "**Nested** is a row per fill. What is one value per fill stays an atom; everything else is a list with an item per horizon, aligned by position:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "nested_rows:.qpipe.transform.markout_layouts.nested[layout;scored];",
+    "select fill_id, side, price, horizon, ref_t1, move, status from nested_rows"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "{{q: count scored}} long rows, {{q: count wide_rows}} wide, {{q: count nested_rows}} nested. And each goes back to exactly the long rows it came from - nothing dropped, nothing reordered:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "`wide_to_long`nested_to_long!(",
+    "    scored~.qpipe.transform.markout_layouts.long[layout;wide_rows];",
+    "    scored~.qpipe.transform.markout_layouts.long[layout;.qpipe.transform.markout_layouts.unnest nested_rows])"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## 8. Live and batch: one calculation, two roads",
+    "",
+    "The live job `crypto_markout` (`src/etl/streaming/crypto_markout.q`) is a **horizon job**: it buffers fills and books as they arrive, and on a timer scores every fill whose horizons are covered. Its bounded twin reads a window from the HDB and scores it at once. Both call the same transform, so they cannot score differently. Here the live job runs without a stack: its publish is wired to a recorder, as notebook 3 did with the feed, and it is fed the same fills and books by hand.",
+    "",
+    "A live job refuses to publish rows whose configuration is not recorded, so its snapshot is pinned first - exactly what its `on_start` does:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "pinned:.qpipe.transform.crypto_markout_outputs.pin[];",
+    "/ a second Run All starts from empty buffers and an empty memory of what was scored",
+    ".qetl.job.stream.reset `crypto_markout;",
+    "received:();",
+    ".qetl.job.stream.wire[`crypto_markout;{[t;rows] received,:enlist (t;rows); count rows}];",
+    ".qpipe.job.crypto_markout.on_batch[`market_data;`source_time xasc market];",
+    ".qpipe.job.crypto_markout.on_batch[`executions;tape];",
+    "kept:count .qpipe.job.crypto_markout.pending;",
+    "`pinned`fills_pending`books_held!(pinned;kept;count .qpipe.job.crypto_markout.history)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "It kept {{q: kept}} fills: `f5` was dropped on arrival, since nothing could ever score it. Now a tick at 12:00:30, well past every horizon:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "early_tick:2026.09.15D12:00:30.000000000;",
+    "d_live:.qetl.job.stream.horizons.def `crypto_markout;",
+    ".qpipe.job.crypto_markout.score_ready early_tick;",
+    "published_early:count received;",
+    "waiting:([] fill_id:.qpipe.job.crypto_markout.pending`fill_id; why_not:.qetl.job.stream.horizons.why_not_ready[d_live;.qpipe.job.crypto_markout.history;.qpipe.job.crypto_markout.pending;early_tick]);",
+    "waiting"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Nothing was published. `f1`, `f2` and `f4` wait for **every** venue to reach the horizon, and `ex_c` stopped quoting: its books may only be late, still in flight. It waits for that until the horizon plus the job's `lateness` ({{q: d_live`lateness}}) has passed on the plant clock, and then scores without it. (`f3` waits for something else: a book at or before the fill itself.) A minute later:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "late_tick:2026.09.15D12:01:00.000000000;",
+    ".qpipe.job.crypto_markout.score_ready late_tick;",
+    "live_rows:raze received[;1];",
+    "`published_rows`fills!(count live_rows;distinct live_rows`fill_id)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "`f1`, `f2` and `f4` were scored. `f3` was not: the live job needs a book **at or before** a fill before it scores it, and there was none. It holds `f3` until it gives up on it, and records why:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    ".qpipe.job.crypto_markout.score_ready late_tick+0D00:10;",
+    "select fill_id, expired_at, reason from .qpipe.job.crypto_markout.expired"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The batch road, on the same fills and books, is one call. It scores `f3` (the rows of section 6); for every fill both roads scored, the rows are identical, column for column - including the crypto measures `markout_bps` and `markout_net_bps`, and the `config_id`:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "batch_rows:.qpipe.transform.crypto_markout_outputs.live[tape;tob];",
+    "same_rows:live_rows~select from batch_rows where fill_id<>`f3;",
+    "`batch_rows`live_rows`identical_where_both_scored!(count batch_rows;count live_rows;same_rows)"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    "select fill_id, horizon, kind, move, markout_bps, markout_net_bps, status, config_id from live_rows where kind=`total"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "And the `config_id` on those rows resolves to the snapshot pinned above, read back from the status directory:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "/ @grid",
+    ".qpipe.transform.config_markout.params live_rows"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Holding this notebook to its word",
+    "",
+    "`tests/qrun/test_worked_examples.py` runs every notebook in this folder on each change. The cell below turns the claims made above into checks."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "row:{[t;f;h;k] first select from t where fill_id=f, horizon=h, kind=k};",
+    "at_10:0D00:00:10;",
+    "at_1:0D00:00:01;",
+    "f3_rows:select from scored where fill_id=`f3;",
+    "claims:(",
+    "    (\"the market holds 28 books from three venues, and ex_c's last is 11:59:57\";(28=count tob) and (venues~`ex_a`ex_b`ex_c) and (t0+0D00:00:02)=last exec source_time from tob where source=`ex_c);",
+    "    (\"by hand, the buy made +10 and the sell -10\";(10f=hand[1;62000f;62010f]) and -10f=hand[-1;62000f;62010f]);",
+    "    (\"f5 has no legs and is unscoreable as no_route\";(0=count (.qpipe.transform.markout_core.legs_of[dom;spec;tape]) 4) and (enlist[`f5]~exec fill_id from .qpipe.transform.markout_core.unscoreable[dom;spec;tape]) and `no_route~first .qpipe.transform.markout_core.unscoreable[dom;spec;tape]`reason);",
+    "    (\"two fills give 6 probes and 18 questions over three venues\";(6=count probes) and 18=count probes_by_venue);",
+    "    (\"at f1's horizon ex_c's book is 9s old and the others within max_age\";(0D00:00:09=exec first age from matched where source=`ex_c, source_time=f1_horizon) and (0D00:00:01 0D~exec age from matched where source in `ex_a`ex_b, source_time=f1_horizon));",
+    "    (\"no venue has a book at or before f3\";all null exec quoted from .qetl.mapped.asof[tob;([] sym:3#pair; source:venues; source_time:3#t0-0D00:00:10)]);",
+    "    (\"an unsorted table is refused, not sorted\";refused_order like \"*not arranged for an as-of join*\");",
+    "    (\"best_top selects ex_a and ex_b only, and prices 62022 / 62025, mid 62023.5\";(`ex_a`ex_b~exec source from chosen) and (62022 62025 62023.5~value first best));",
+    "    (\"median_top prices 62022.5 and micro_median 62023.4\";(62022.5=first median_ref`mid) and 1e-6>abs 62023.4-first micro_ref`mid);",
+    "    (\"micro_median refuses the flat top of book, naming depth\";refused_depth like \"*micro_median reads depth*\");",
+    "    (\"four variants at two instants give eight prices\";(8=count many) and four~distinct many`variant);",
+    "    (\"a policy without the weekend rule is refused as a gap on Saturday\";(refused_gap like \"*no rule covers*\") and refused_gap like \"*on sat*\");",
+    "    (\"the policy picks morning, afternoon, weekend\";`morning`afternoon`weekend~.qetl.reference.policy.select[`sessions;3#pair;asked]);",
+    "    (\"under the policy f1's ten-second reference is the median 62022.5 and its execution reference best_top's 62002\";(62022.5=row[under_policy;`f1;at_10;`total]`ref_t1) and 62002f=row[under_policy;`f1;at_10;`total]`ref_t0);",
+    "    (\"the lineage names morning at t0 and afternoon at f1's ten-second t1\";`morning`afternoon~value first select ref_rule_t0, ref_rule_t1 from ((select fill_id, horizon from under_policy),'lineage) where fill_id=`f1, horizon=at_10);",
+    "    (\"16 rows are scored, none for f5\";(16=count scored) and not `f5 in scored`fill_id);",
+    "    (\"f1's ten-second total moved +17.5, worth 8.75 USDT and 8.75 USD\";(17.5=f1_total`move) and (8.75=f1_total`quote_amount) and 8.75=f1_total`report_amount);",
+    "    (\"f1 was -2 at one second, and f2 -29.5 at ten\";(-2f=row[scored;`f1;at_1;`total]`move) and -29.5=row[scored;`f2;at_10;`total]`move);",
+    "    (\"f3 is unavailable except its ten-second total, which is ok at +25\";((`unavailable`unavailable`ok`unavailable)~f3_rows`status) and (25f=row[scored;`f3;at_10;`total]`move) and all null exec move from f3_rows where status=`unavailable);",
+    "    (\"every f4 row is clock_mismatch\";all `clock_mismatch=exec status from scored where fill_id=`f4);",
+    "    (\"without a rate, f1 keeps move and quote_amount and loses report_amount, as no_rate\";(all `no_rate=exec status from no_rate where fill_id=`f1) and (all null exec report_amount from no_rate where fill_id=`f1) and (exec quote_amount from scored where fill_id=`f1)~exec quote_amount from no_rate where fill_id=`f1);",
+    "    (\"each run carries one config_id\";all 1=count each distinct each ids);",
+    "    (\"naming best_top keeps the default id, which is the live job's\";(ids[0;0]=ids[1;0]) and ids[0;0]=.qpipe.transform.crypto_markout_outputs.config_id);",
+    "    (\"a different reference or rate gives a different id\";(5=count distinct first each ids) and not any ids[0;0]=first each 2_ids);",
+    "    (\"the snapshot content names a reference only when it is not the default\";(not `reference in key .qpipe.transform.config_markout.content[dom;spec]) and `reference in key .qpipe.transform.config_markout.content[dom;spec,enlist[`reference]!enlist `median_top]);",
+    "    (\"16 long rows are 8 wide and 4 nested, and both go back exactly\";(8=count wide_rows) and (4=count nested_rows) and (`execution_move in cols wide_rows) and (scored~.qpipe.transform.markout_layouts.long[layout;wide_rows]) and scored~.qpipe.transform.markout_layouts.long[layout;.qpipe.transform.markout_layouts.unnest nested_rows]);",
+    "    (\"the live job kept four fills and published nothing at 12:00:30\";(4=kept) and 0=published_early);",
+    "    (\"at 12:00:30 f1, f2 and f4 wait for a venue to reach the horizon, f3 for a book at or before it\";(`f1`f2`f3`f4~waiting`fill_id) and (all {x like \"a source has not reached*\"} each exec why_not from waiting where fill_id<>`f3) and first[exec why_not from waiting where fill_id=`f3] like \"no source_time at or before*\");",
+    "    (\"at 12:01 it published 12 rows, for f1, f2 and f4\";(0=published_early) and (12=count live_rows) and `f1`f2`f4~distinct live_rows`fill_id);",
+    "    (\"f3 expired for want of a book at or before it\";(enlist[`f3]~exec fill_id from .qpipe.job.crypto_markout.expired) and (first exec string reason from .qpipe.job.crypto_markout.expired) like \"no source_time at or before*\");",
+    "    (\"the batch scored 16 rows, and the 12 both roads scored are identical\";(16=count batch_rows) and same_rows);",
+    "    (\"the live rows' config_id resolves to the pinned snapshot\";(pinned~distinct live_rows`config_id) and pinned~exec config_id from .qpipe.transform.config_markout.params live_rows));",
+    "broken:claims[;0] where not claims[;1];",
+    "if[count broken; '\"notebook 4 no longer holds: \",\"; \" sv broken];",
+    "`claims_checked`all_hold!(count claims;1b)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Where next",
+    "",
+    "- **The contract:** `docs/architecture/markout-contract.md` - every core column, the status vocabulary, the spec keys, the clock rule.",
+    "- **Memory:** `docs/architecture/markout-memory.md` - why the market is mapped and never copied, and what variants cost at scale.",
+    "- **The code, in the order above:** `src/etl/core/mapped_books.q` (probes and the as-of search), `reference_variant.q` and `reference_library.q` (variants), `reference_policy.q`, `src/etl/transforms/markout_core.q` (scoring), `config_markout.q`, `markout_layouts.q`, and `src/etl/core/horizon.q` (the live job's kind).",
+    "- **The other domains:** `src/etl/transforms/fx_domain.q` routes a pair through several legs and splits the move across them; `eq_domain.q` prices an equity."
+   ]
+  }
+ ]
+}
