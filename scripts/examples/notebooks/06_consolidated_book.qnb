@@ -1,0 +1,273 @@
+{
+ "qnb": 1,
+ "cells": [
+  {
+   "kind": "markdown",
+   "source": [
+    "# 6. The consolidated book",
+    "",
+    "A markout is scored against a **reference**: where the market stood at an instant. A reference is SELECT x TRANSFORM x COMBINE (`src/etl/core/reference_variant.q`): which books count, a price read from each book, and how the venues' prices are folded into one. The usual transforms reduce each venue's book to a bid and an ask *before* the venues meet, so no step ever sees two venues' depth together.",
+    "",
+    "This notebook is about the combines that do: **consolidated micro** and **consolidated VWAP** price off the *consolidated book*, every venue's ladders merged. They give different numbers, not just different code.",
+    "",
+    "The ideas to take away:",
+    "",
+    "1. Merge the ladders first, price second - a per-venue price combined afterwards is a different, and worse, answer.",
+    "2. The consolidated micro-price always lies inside the tradeable touch; a per-venue one need not.",
+    "3. Every case the numbers cannot answer is a **null with a reason**, never a guess: depth that cannot fill, a crossed touch, venues of different markets.",
+    "4. The cost is instants x venues x levels, so a batch over a limit is split, not grown.",
+    "",
+    "**To run it:** start `q` from the repository root, connect q-lint to that process, and use **Run All**. It loads the ETL tree and registers a few variants named `cb_*`; use a scratch q process."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "if[()~key `:src/init.q; '\"start q from the uqf repository root: this notebook loads src/init.q by a relative path\"];",
+    "if[`proc in key `; '\"this is a TorQ process: run this notebook in a scratch q process, not one that belongs to a stack\"];",
+    "setenv[`UQF_STATUS_DIR;first system \"mktemp -d\"];",
+    "\\l src/init.q",
+    "\\l src/etl/init.q",
+    "/ one book: a venue's two ladders, best first, at the notebook's one instant",
+    "cb_t0:2026.09.17D10:00:00;",
+    "cb_book:{[src;bp;bs;ap;as_]",
+    "    ([] sym:enlist `BTCUSDT; source:enlist src; source_time:enlist cb_t0; clock:enlist `venue; bid:enlist first bp; ask:enlist first ap;",
+    "        bid_prices:enlist bp; bid_sizes:enlist bs; ask_prices:enlist ap; ask_sizes:enlist as_)};",
+    "/ a variant on the transform that passes ladders through: venues, staleness and offset are the SELECT",
+    "cb_register:{[nm;comb;params] .qetl.reference.register[nm;`venues`stale`offset`transform`combine`params!(`all;`spec;0D;`ladders;comb;params)]};",
+    "/ what a variant prices over some books at cb_t0 + 1 second (each book is a table of one row)",
+    "cb_price:{[nm;books] first ((.qetl.variant.evaluate[enlist nm;.qetl.variant.slice raze books;0D00:01:00;enlist `BTCUSDT;enlist cb_t0+0D00:00:01;enlist `venue])nm)`same};",
+    "`loaded`variants!(1b;count .qetl.reference.variants)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Two venues, one size",
+    "",
+    "Venue A offers 1 at 100.0 and 2 at 100.5; venue B offers 2 at 100.1 and 2 at 100.6 (their bids are far away and play no part). We want to **buy 3**."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "cb_a:cb_book[`venue_a;enlist 99f;enlist 5f;100 100.5;1 2f];",
+    "cb_b:cb_book[`venue_b;enlist 98f;enlist 5f;100.1 100.6;2 2f];",
+    "cb_va:.qetl.reference.fill_price[3f;100 100.5;1 2f];",
+    "cb_vb:.qetl.reference.fill_price[3f;100.1 100.6;2 2f];",
+    "cb_mean:avg cb_va,cb_vb;",
+    "cb_med:med cb_va,cb_vb;",
+    "cb_best:min cb_va,cb_vb;",
+    "cb_register[`cb_vwap3;`consolidated_vwap;enlist[`qty]!enlist 3f];",
+    "cb_consolidated:cb_price[`cb_vwap3;(cb_a;cb_b)];",
+    "cb_cons_buy:first cb_consolidated`ask;",
+    "/ @grid",
+    "([] way:`venue_a_alone`venue_b_alone`mean`median`best_of_the_two`consolidated; buy_3_at:cb_va,cb_vb,cb_mean,cb_med,cb_best,cb_cons_buy)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "On each venue alone the price of 3 is A: {{q: cb_va}} and B: {{q: cb_vb}}. Folding those two numbers - by mean, by median, by best - gives {{q: cb_mean}}, {{q: cb_med}} and {{q: cb_best}}.",
+    "",
+    "On the consolidated book the 3 is filled cheapest first across both venues: 1 at 100.0, then 2 at 100.1 - **{{q: cb_cons_buy}}**. The per-venue answers are 20 to 27 basis points away."
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "The sell side is the mirror image: `bid` is the price of selling the quantity into the merged bids, dearest first, and `mid` is the midpoint of the two. Here the bids hold 5 each on both venues, so selling 3 is a fill off the best bid: {{q: first cb_consolidated`bid}}, and the mid is {{q: first cb_consolidated`mid}}."
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## The micro-price and the touch",
+    "",
+    "The **micro-price** leans the mid toward the thinner side: (bid x ask size + ask x bid size) / (bid size + ask size) at the touch. On one venue it is a fine number. Across venues it can lie *outside* the market you could trade."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "cb_ma:cb_book[`venue_a;enlist 100f;enlist 9f;enlist 100.2;enlist 1f];",
+    "cb_mb:cb_book[`venue_b;enlist 99f;enlist 4f;enlist 100.1;enlist 3f];",
+    "cb_micro_a:((100f*1f)+(100.2*9f))%10f;",
+    "cb_register[`cb_micro;`consolidated_micro;(`symbol$())!()];",
+    "cb_cm:first (cb_price[`cb_micro;(cb_ma;cb_mb)])`mid;",
+    "cb_best_ask:100.1;",
+    "cb_touch_bid:100f;",
+    "/ @grid",
+    "([] what:`venue_a_micro`consolidated_micro`best_ask_anywhere`best_bid_anywhere; price:cb_micro_a,cb_cm,cb_best_ask,cb_touch_bid)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Venue A quotes 100.0 x 9 against 100.2 x 1, so its own micro-price is **{{q: cb_micro_a}}**. But venue B offers 100.1 x 3. Nobody needs to pay 100.18 when 100.1 is on offer: A's micro-price is above the best ask anywhere ({{q: cb_best_ask}}).",
+    "",
+    "The **consolidated micro-price** is built on the cross-venue touch - the highest bid anywhere ({{q: cb_touch_bid}}), the lowest ask anywhere ({{q: cb_best_ask}}) - with the sizes at each price summed over every venue: it is **{{q: cb_cm}}**, inside the touch by construction."
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Ties at the touch add up"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "cb_ta:cb_book[`venue_a;100 99f;2 5f;enlist 101f;enlist 3f];",
+    "cb_tb:cb_book[`venue_b;enlist 100f;enlist 6f;enlist 101f;enlist 1f];",
+    "cb_tie_bid_size:2f+6f;",
+    "cb_tie_ask_size:3f+1f;",
+    "cb_tie_micro:first (cb_price[`cb_micro;(cb_ta;cb_tb)])`mid;",
+    "cb_tie_micro"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "When two venues quote the *same* price at the top, the touch size is the sum - that is what you could really trade at that price. Venue A bids 100 x 2 (and 99 x 5) and offers 101 x 3; venue B bids 100 x 6 and offers 101 x 1. The touch is 100 x **{{q: cb_tie_bid_size}}** against 101 x **{{q: cb_tie_ask_size}}**, so the micro-price is (100 x {{q: cb_tie_ask_size}} + 101 x {{q: cb_tie_bid_size}}) / {{q: cb_tie_bid_size+cb_tie_ask_size}} = **{{q: cb_tie_micro}}**. A level *behind* the touch (A's 99 x 5) adds nothing to it."
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Not enough depth: null, never extrapolated"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "cb_da:cb_book[`venue_a;100 99f;1 1f;101 102f;1 1f];",
+    "cb_db:cb_book[`venue_b;enlist 98f;enlist 1f;enlist 103f;enlist 1f];",
+    "cb_register[`cb_fit3;`consolidated_vwap;enlist[`qty]!enlist 3f];",
+    "cb_register[`cb_fit4;`consolidated_vwap;enlist[`qty]!enlist 4f];",
+    "cb_fit3:first (cb_price[`cb_fit3;(cb_da;cb_db)])`ask;",
+    "cb_fit4:first (cb_price[`cb_fit4;(cb_da;cb_db)])`ask;",
+    "/ the reason an instant is null: one symbol per target",
+    "cb_why:.qetl.reference.reasons[`cb_fit4;.qetl.variant.slice raze (cb_da;cb_db);0D00:01:00;enlist `BTCUSDT;enlist cb_t0+0D00:00:01;enlist `venue];",
+    "cb_why"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Ask to buy 4 where the two venues show only three asks between them (101, 102 and 103, one each). The visible book cannot fill it, and the answer is **null** with the reason `insufficient_depth` - the price is never extended past the last level. Three fits: {{q: cb_fit3}}. Four does not: {{q: cb_fit4}}; the reason is {{q: first cb_why}}."
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## A crossed touch: a declared policy"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "cb_ca:cb_book[`venue_a;enlist 101f;enlist 1f;enlist 102f;enlist 1f];",
+    "cb_cb:cb_book[`venue_b;enlist 99f;enlist 1f;enlist 100f;enlist 1f];",
+    "cb_register[`cb_cross_null;`consolidated_micro;enlist[`crossed]!enlist `null];",
+    "cb_register[`cb_cross_as_is;`consolidated_micro;enlist[`crossed]!enlist `as_is];",
+    "cb_cross_default:first (cb_price[`cb_cross_null;(cb_ca;cb_cb)])`mid;",
+    "cb_cross_asis:first (cb_price[`cb_cross_as_is;(cb_ca;cb_cb)])`mid;",
+    "cb_cross_why:.qetl.reference.reasons[`cb_cross_null;.qetl.variant.slice raze (cb_ca;cb_cb);0D00:01:00;enlist `BTCUSDT;enlist cb_t0+0D00:00:01;enlist `venue];",
+    "`default_is_null`as_is`reason!(null cb_cross_default;cb_cross_asis;first cb_cross_why)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "Two venues can disagree so badly that one's bid is above the other's ask. Here A bids 101 and offers 102, B bids 99 and offers 100: the consolidated touch is 101 against 100, **crossed**. A price off a crossed book is a price nobody could have traded, so the default is `crossed:`null`: the instant is null, reason `{{q: first cb_cross_why}}`. A variant that prefers a number can declare `crossed:`as_is`, and the formulas run on the crossed touch: {{q: cb_cross_asis}}. Either way the choice is written in the variant, not guessed."
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Stale venues and different markets",
+    "",
+    "Two more rules keep the merge honest. **Staleness is applied per venue before merging**: a venue whose book is older than the variant allows is simply not in the consolidated book, so an old quote cannot set the touch. And **books of different markets are not merged** - a spot size and a perpetual-contract size are not the same unit. A venue list that spans two markets is refused when the variant is registered:"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "cb_refused:@[{.qetl.reference.register[`cb_mixed;`venues`stale`offset`transform`combine!(`XNAS`binance_spot;`spec;0D;`ladders;`consolidated_micro)]; \"not refused\"};::;{x}];",
+    "cb_xa:cb_book[`XNAS;enlist 100f;enlist 1f;enlist 101f;enlist 1f];",
+    "cb_xb:cb_book[`binance_spot;enlist 100f;enlist 1f;enlist 101f;enlist 1f];",
+    "cb_mixed_why:.qetl.reference.reasons[`cb_micro;.qetl.variant.slice raze (cb_xa;cb_xb);0D00:01:00;enlist `BTCUSDT;enlist cb_t0+0D00:00:01;enlist `venue];",
+    "/ the stale venue: ten minutes old against a 5 second limit, then a 20 minute one",
+    "cb_old:update source_time:cb_t0-0D00:10:00 from cb_book[`venue_b;enlist 100.5;enlist 1f;enlist 100.6;enlist 1f];",
+    "cb_fresh_only:first (.qetl.variant.evaluate[enlist `cb_micro;.qetl.variant.slice cb_ma;0D00:00:05;enlist `BTCUSDT;enlist cb_t0+0D00:00:01;enlist `venue][`cb_micro])[`same]`mid;",
+    "cb_with_stale:first (.qetl.variant.evaluate[enlist `cb_micro;.qetl.variant.slice raze (cb_ma;cb_old);0D00:00:05;enlist `BTCUSDT;enlist cb_t0+0D00:00:01;enlist `venue][`cb_micro])[`same]`mid;",
+    "`refused`stale_venue_changed_nothing!(cb_refused;cb_fresh_only=cb_with_stale)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "`{{q: cb_refused}}`",
+    "",
+    "and with `` `all `` venues an instant whose books span two markets is null, reason `{{q: first cb_mixed_why}}`."
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## The batch limit"
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "cb_register[`cb_cap;`consolidated_vwap;`qty`max_instants!(2f;7)];",
+    "cb_register[`cb_nocap;`consolidated_vwap;`qty`max_instants!(2f;1000)];",
+    "cb_n:25;",
+    "cb_times:cb_t0+0D00:00:01*1+til cb_n;",
+    "cb_slice:.qetl.variant.slice raze (cb_a;cb_b);",
+    "cb_split:.qetl.variant.evaluate[enlist `cb_cap;cb_slice;0D00:01:00;cb_n#`BTCUSDT;cb_times;cb_n#`venue];",
+    "cb_whole:.qetl.variant.evaluate[enlist `cb_nocap;cb_slice;0D00:01:00;cb_n#`BTCUSDT;cb_times;cb_n#`venue];",
+    "cb_split_equal:((cb_split`cb_cap)`same)~((cb_whole`cb_nocap)`same);",
+    "`limit`instants`equal!(.qetl.reference.instant_limit enlist `cb_cap;cb_n;cb_split_equal)"
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "A consolidated combine holds every matched book's ladders at once, so its cost is instants x venues x levels. Each variant carries `max_instants` (here {{q: .qetl.reference.instant_limit enlist `cb_cap}}), and a larger batch is **split into pieces of that size**, never grown. Over 25 instants the pieces price exactly what one pass does: {{q: cb_split_equal}}. On the mapped market `.qetl.variant.run` checks the limit *before* the ladders are gathered, so a big batch never holds more than one piece's ladders."
+   ]
+  },
+  {
+   "kind": "markdown",
+   "source": [
+    "## Where next",
+    "",
+    "- **The design and the rules in one table:** `docs/architecture/markout-memory.md`, the section on consolidated-book combines.",
+    "- **The code:** `src/etl/core/reference_consolidated.q`, whose header states each rule; `tests/q/test_reference_consolidated.q` checks both combines against a brute-force merge written with plain loops.",
+    "- **Out of scope here:** fees and venue access. A venue you cannot trade on still sets the touch until a per-venue adjustment is declared."
+   ]
+  },
+  {
+   "kind": "code",
+   "source": [
+    "claims:(",
+    "    (\"venue A alone buys 3 at 100.333 and B at 100.267\";(1e-9>abs cb_va-100.33333333333333) and 1e-9>abs cb_vb-100.26666666666667);",
+    "    (\"folding those per venue gives 100.267 to 100.30\";(1e-9>abs cb_best-100.26666666666667) and (1e-9>abs cb_mean-100.3));",
+    "    (\"the consolidated buy of 3 is 100.067\";1e-9>abs cb_cons_buy-100.06666666666667);",
+    "    (\"venue A's own micro is 100.18, above the best ask anywhere\";(1e-9>abs cb_micro_a-100.18) and cb_micro_a>cb_best_ask);",
+    "    (\"the consolidated micro is 100.075 and inside the touch\";(1e-9>abs cb_cm-100.075) and (cb_cm>=cb_touch_bid) and cb_cm<=cb_best_ask);",
+    "    (\"a tie at the touch sums the sizes\";1e-9>abs cb_tie_micro-((100f*4f)+(101f*8f))%12f);",
+    "    (\"three fits and four is null with its reason\";(1e-9>abs cb_fit3-102f) and (null cb_fit4) and `insufficient_depth~first cb_why);",
+    "    (\"a crossed touch is null by default and priced as_is when declared\";(null cb_cross_default) and (1e-9>abs cb_cross_asis-100.5) and `crossed~first cb_cross_why);",
+    "    (\"venues of two markets are refused, and mixed books are null with their reason\";(cb_refused like \"reference: cb_mixed merges venues of different markets*\") and `mixed_market~first cb_mixed_why);",
+    "    (\"a stale venue changed nothing\";cb_fresh_only=cb_with_stale);",
+    "    (\"a batch over the limit is split and prices the same\";(7=.qetl.reference.instant_limit enlist `cb_cap) and cb_split_equal));",
+    "broken:claims[;0] where not claims[;1];",
+    "if[count broken; '\"notebook 6 no longer holds: \",\"; \" sv broken];",
+    "`claims_checked`all_hold!(count claims;1b)"
+   ]
+  }
+ ]
+}
